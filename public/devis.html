@@ -648,23 +648,9 @@ function showToast(msg) {
 
 // Init
 loadDocs();
-
-// Prefill depuis Pipeline
-const prefillRaw = localStorage.getItem('mup_devis_prefill');
-if(prefillRaw) {
-  localStorage.removeItem('mup_devis_prefill');
-  const pf = JSON.parse(prefillRaw);
-  const num = '2026-' + String(docs.length + 1).padStart(3,'0');
-  const today = new Date().toISOString().split('T')[0];
-  const d = { id:'d'+Date.now(), type:'devis', num, name:pf.name||'', co:pf.co||'', email:pf.email||'', addr:pf.address||'', date:today, validity:30, status:'draft', tva:20, notes:'Paiement à 30 jours à réception de facture. Acompte de 30% à la signature.', lines:[{desc:'',qty:1,pu:pf.val||''}] };
-  docs.unshift(d);
-  saveDocs();
-  renderList();
-  selectDoc(d.id);
-} else {
-  renderList();
-  if(docs.length) selectDoc(docs[0].id);
-}
+renderList();
+// Sélectionner le premier par défaut
+if(docs.length) selectDoc(docs[0].id);
 
 // Date par défaut
 document.getElementById('e-date').value = new Date().toISOString().split('T')[0];

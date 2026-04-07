@@ -94,7 +94,7 @@
   .card-action:hover{color:#fff;}
 
   /* ── PROSPECTS CARD ── */
-  .prospects-card{grid-column:1/2;grid-row:3;}
+  /* prospects-card removed */
   .prospect-item{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;}
   .prospect-item:last-child{border-bottom:none;}
   .prospect-item:hover{background:var(--surface);}
@@ -110,7 +110,7 @@
   .tag-cold{background:rgba(174,174,178,.12);color:var(--muted);}
 
   /* ── MAP CARD ── */
-  .map-card{grid-column:2/3;grid-row:3;}
+  .map-card{grid-column:1/3;grid-row:3;}
   .map-box{height:300px;position:relative;overflow:hidden;border-bottom-left-radius:16px;border-bottom-right-radius:16px;}
   .leaflet-container{font-family:var(--font)!important;}
   .leaflet-tile-pane{filter:grayscale(100%) contrast(1.1);}
@@ -281,8 +281,7 @@
     .cal-card  {grid-column:1!important;grid-row:1!important;}
     .mail-card {grid-column:1!important;grid-row:2!important;}
     .crm-card  {grid-column:1!important;grid-row:3!important;}
-    .prospects-card{grid-column:1!important;grid-row:4!important;}
-    .map-card  {grid-column:1!important;grid-row:5!important;}
+    .map-card  {grid-column:1!important;grid-row:4!important;}
 
     /* Pipeline: scroll horizontal */
     .crm-board{
@@ -341,8 +340,7 @@
     .cal-card  {grid-column:1!important;grid-row:1!important;}
     .mail-card {grid-column:1!important;grid-row:2!important;}
     .crm-card  {grid-column:1!important;grid-row:3!important;}
-    .prospects-card{grid-column:1!important;grid-row:4!important;}
-    .map-card  {grid-column:1!important;grid-row:5!important;}
+    .map-card  {grid-column:1!important;grid-row:4!important;}
 
     /* Pipeline scroll */
     .crm-board{
@@ -396,8 +394,7 @@
     /* Ligne 2: Pipeline pleine largeur */
     .crm-card  {grid-column:1/3!important;grid-row:2!important;}
     /* Ligne 3: Prospects + Carte */
-    .prospects-card{grid-column:1/2!important;grid-row:3!important;}
-    .map-card  {grid-column:2/3!important;grid-row:3!important;}
+    .map-card  {grid-column:1/3!important;grid-row:3!important;}
 
     /* Pipeline scroll propre */
     .crm-board{
@@ -544,24 +541,11 @@
     <!-- GRID -->
     <div class="grid-main">
 
-      <!-- ── PROSPECTS ── -->
-      <div class="card prospects-card" style="animation:fadeUp .4s ease both">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Prospects</div>
-            
-          </div>
-          <span class="card-action">Voir tout <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
-        </div>
-
-        <div id="dash-prospects"></div>
-      </div>
-
-      <!-- ── MAP ── -->
+      <!-- ── MAP (pleine largeur) ── -->
       <div class="card map-card" style="animation:fadeUp .4s .05s ease both">
         <div class="card-header">
           <div>
-            <div class="card-title">Localisation des prospects</div>
+            <div class="card-title">Localisation pipeline</div>
             
           </div>
 
@@ -630,62 +614,60 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-// ── MAP ──
-const map = L.map('dashboard-map', {
-  center: [50.5, 4.0],
+// ── MAP — pipeline addresses from localStorage ──
+var map = L.map('dashboard-map', {
+  center: [46.5, 2.5],
   zoom: 5,
   zoomControl: true,
   attributionControl: false
 });
-
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 18,
-  opacity: 0.85
+  maxZoom: 18, opacity: 0.85
 }).addTo(map);
-
 L.control.attribution({ prefix: '© OpenStreetMap' }).addTo(map);
-setTimeout(() => map.invalidateSize(), 100);
+setTimeout(function(){ map.invalidateSize(); }, 100);
 
-const pins = [
-  { lat: 48.8566, lng: 2.3522, label: 'Paris', count: 18, color: '#0BBCD4' },
-  { lat: 51.5074, lng: -0.1278, label: 'Londres', count: 2, color: '#0BBCD4' },
-  { lat: 50.8503, lng: 4.3517, label: 'Bruxelles', count: 14, color: '#0891A8' },
-  { lat: 50.1109, lng: 8.6821, label: 'Frankfurt', count: 9, color: '#0891A8' },
-  { lat: 41.3874, lng: 2.1686, label: 'Barcelone', count: 3, color: '#0BBCD4' },
-  { lat: 48.1351, lng: 11.5820, label: 'Munich', count: 2, color: '#0BBCD4' },
-  { lat: 52.5200, lng: 13.4050, label: 'Berlin', count: 2, color: '#0BBCD4' },
-  { lat: 53.5488, lng: 9.9872, label: 'Hamburg', count: 1, color: '#0BBCD4' },
-];
-
-pins.forEach(p => {
-  const dotSize = p.count >= 15 ? 18 : p.count >= 8 ? 13 : p.count >= 3 ? 10 : 7;
-  const dotColor = p.count >= 15 ? '#0BBCD4' : p.count >= 8 ? '#0891A8' : p.count >= 3 ? '#06687A' : '#E5E5EA';
-  const icon = L.divIcon({
-    className: '',
-    html: `<div style="
-      width:${dotSize}px;height:${dotSize}px;
-      border-radius:50%;
-      background:${dotColor};
-      border:2px solid rgba(255,255,255,.9);
-      box-shadow:0 2px 6px rgba(0,0,0,.3);
-    "></div>`,
-    iconSize: [dotSize, dotSize],
-    iconAnchor: [dotSize/2, dotSize/2]
+(function(){
+  var cards = [];
+  try { var r = localStorage.getItem('mup_pipeline'); if(r) cards = JSON.parse(r); } catch(e){}
+  var addresses = {};
+  cards.forEach(function(c){
+    if(!c.address) return;
+    if(!addresses[c.address]) addresses[c.address] = { label: c.address, names: [], count: 0 };
+    addresses[c.address].names.push(c.co || c.name || '');
+    addresses[c.address].count++;
   });
-  const marker = L.marker([p.lat, p.lng], { icon }).addTo(map);
-  marker.bindPopup(`
-    <div class="map-popup">
-      <div class="mp-name">${p.label}</div>
-      <div class="mp-meta">${p.count} prospect${p.count > 1 ? 's' : ''} · ${p.count >= 10 ? 'Haute densité' : p.count >= 5 ? 'Densité moyenne' : 'Faible densité'}</div>
-      <div class="mp-foot">
-        <span class="statut-badge" style="background:rgba(11,188,212,.12);color:#0BBCD4">
-          ${p.count} écrans
-        </span>
-      </div>
-    </div>
-  `, { maxWidth: 220, closeButton: false, offset: [0, -8] });
-  marker.on('mouseover', function() { this.openPopup(); });
-});
+  var keys = Object.keys(addresses);
+  if(!keys.length) return;
+  var bounds = [];
+  var pending = keys.length;
+  keys.forEach(function(addr){
+    var info = addresses[addr];
+    fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(addr) + '&limit=1')
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(data.length){
+          var lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
+          bounds.push([lat, lng]);
+          var sz = info.count >= 5 ? 16 : info.count >= 2 ? 12 : 8;
+          var icon = L.divIcon({
+            className: '',
+            html: '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:#0BBCD4;border:2px solid rgba(255,255,255,.9);box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>',
+            iconSize: [sz, sz], iconAnchor: [sz/2, sz/2]
+          });
+          var names = info.names.slice(0,3).join(', ');
+          L.marker([lat, lng], { icon: icon }).addTo(map)
+            .bindPopup('<div class="map-popup"><div class="mp-name">' + info.label + '</div><div class="mp-meta">' + info.count + ' fiche' + (info.count>1?'s':'') + '</div><div style="font-size:11px;color:var(--muted);margin-top:4px">' + names + '</div></div>', { maxWidth: 240, closeButton: false, offset: [0, -8] })
+            .on('mouseover', function(){ this.openPopup(); });
+        }
+        pending--;
+        if(pending <= 0 && bounds.length){
+          map.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
+        }
+      })
+      .catch(function(){ pending--; });
+  });
+})();
 </script>
 
 <script>
@@ -991,21 +973,7 @@ function closeSidebar(){
     }).join('');
   }
 
-  // Prospects list
-  var prospects=[];
-  try{var rp=localStorage.getItem('mup_prospects');if(rp)prospects=JSON.parse(rp);}catch(e){}
-  var dashP=document.getElementById('dash-prospects');
-  if(dashP){
-    var show=prospects.slice(0,5);
-    if(!show.length){
-      dashP.innerHTML='<div style="padding:24px 18px;text-align:center;color:var(--muted2);font-size:12px;">Aucun prospect</div>';
-    } else {
-      dashP.innerHTML=show.map(function(p){
-        var initials=((p.name||p.company||'??').split(' ').map(function(w){return(w[0]||'');}).join('').toUpperCase()).slice(0,2);
-        return '<div class="prospect-item"><div class="pi-av" style="background:rgba(174,174,178,.12);color:var(--muted)">'+initials+'</div><div class="pi-info"><div class="pi-name">'+esc(p.name||p.company)+'</div><div class="pi-meta">'+esc(p.company||'')+(p.location?' — '+esc(p.location):'')+'</div></div><div class="pi-right"></div></div>';
-      }).join('');
-    }
-  }
+  // (prospects list removed)
 
   // CRM board — matches pipeline.html design
   var board=document.getElementById('dash-crm-board');

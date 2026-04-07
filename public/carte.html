@@ -30,7 +30,8 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .sb-badge{margin-left:auto;font-size:9px;font-weight:800;font-family:var(--mono);background:var(--text);color:#fff;border-radius:6px;padding:1px 6px}
 
 /* SHELL */
-.shell{flex:1;position:relative;height:100vh;overflow:hidden}
+.shell{flex:1;position:relative;height:100vh;overflow:hidden;transition:margin-right .25s ease}
+.shell.tour-open{margin-right:280px}
 #map{width:100%;height:100%}
 
 /* LEAFLET OVERRIDES */
@@ -61,7 +62,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .user-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;background:#2563eb;animation:pulse 2s ease-out infinite;opacity:.4}
 
 /* TOUR PANEL */
-.tour-panel{position:absolute;top:12px;left:232px;z-index:800;background:var(--card);border:1px solid var(--border);border-radius:14px;width:280px;max-height:calc(100vh - 24px);display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.1);transform:translateX(-320px);transition:transform .25s ease;overflow:hidden}
+.tour-panel{position:fixed;right:0;top:0;bottom:0;width:280px;z-index:800;background:var(--card);border-left:1px solid var(--border);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease;overflow:hidden}
 .tour-panel.open{transform:translateX(0)}
 .tour-hdr{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .tour-title{font-size:13px;font-weight:700;color:var(--text)}
@@ -326,7 +327,11 @@ function renderTour(){
 }
 
 function toggleTourPanel(){
-  document.getElementById('tour-panel').classList.toggle('open');
+  var panel=document.getElementById('tour-panel');
+  var shell=document.querySelector('.shell');
+  panel.classList.toggle('open');
+  shell.classList.toggle('tour-open');
+  setTimeout(function(){map.invalidateSize();},300);
 }
 
 function clearTour(){

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MUP — Carte</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FFFFFF;--surface:#F5F5F7;--surface2:#EBEBF0;
+  --card:#FFFFFF;--border:#E8E8ED;--border2:#C7C7CC;
+  --text:#1D1D1F;--muted:#6E6E73;--muted2:#AEAEB2;
+  --green:#1D8348;--orange:#B84C00;--red:#CC0000;
+  --blue:#0A66C2;--purple:#4338CA;
+  --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+  --mono:'Geist Mono','SF Mono','Menlo',monospace;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoothing:antialiased;display:flex}
+
+/* SIDEBAR */
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 10px;flex-shrink:0;height:100vh;overflow-y:auto}
+.sb-label{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);padding:10px 8px 5px;margin-top:6px}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;font-size:12.5px;font-weight:500;color:var(--muted);transition:all .12s;text-decoration:none;cursor:pointer}
+.sb-item:hover{color:var(--text);background:var(--surface2)}
+.sb-item.active{color:var(--text);background:var(--card);font-weight:600;border:1px solid var(--border)}
+.sb-icon{width:22px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-badge{margin-left:auto;font-size:9px;font-weight:800;font-family:var(--mono);background:var(--text);color:#fff;border-radius:6px;padding:1px 6px}
+
+/* SHELL */
+.shell{flex:1;position:relative;height:100vh;overflow:hidden}
+#map{width:100%;height:100%}
+
+/* LEAFLET OVERRIDES */
+.leaflet-container{font-family:var(--font)!important}
+.leaflet-tile-pane{filter:grayscale(100%) contrast(1.1)}
+.leaflet-popup-content-wrapper{border-radius:12px!important;border:1px solid var(--border)!important;box-shadow:0 10px 28px rgba(0,0,0,.12)!important;padding:0!important;overflow:hidden}
+.leaflet-popup-content{margin:0!important;width:auto!important}
+.leaflet-popup-tip-container{display:none!important}
+
+/* POPUP CARD */
+.pop{padding:12px 14px;width:220px;font-family:var(--font)}
+.pop-bar{height:3px;border-radius:10px 10px 0 0;margin:-12px -14px 10px}
+.pop-name{font-size:13px;font-weight:700;color:var(--text);margin-bottom:1px}
+.pop-co{font-size:11.5px;color:var(--muted);margin-bottom:6px}
+.pop-foot{display:flex;align-items:center;justify-content:space-between}
+.pop-val{font-size:12px;font-weight:800;font-family:var(--mono);color:var(--text)}
+.pop-days{font-size:10px;font-weight:600;color:var(--muted2);background:var(--surface);border-radius:4px;padding:2px 6px}
+.pop-stage{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;margin-top:6px}
+.pop-progress{display:flex;align-items:center;gap:2px;margin-top:8px}
+.pop-actions{display:flex;gap:6px;margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
+.pop-btn{flex:1;padding:5px 0;border-radius:7px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:10px;font-weight:600;cursor:pointer;color:var(--text);text-align:center;transition:all .12s}
+.pop-btn:hover{border-color:var(--text);background:var(--surface)}
+.pop-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
+
+/* USER LOCATION PULSE */
+@keyframes pulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(3);opacity:0}}
+.user-dot{width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 2px 8px rgba(37,99,235,.4);position:relative}
+.user-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;background:#2563eb;animation:pulse 2s ease-out infinite;opacity:.4}
+
+/* TOUR PANEL */
+.tour-panel{position:absolute;top:12px;left:232px;z-index:800;background:var(--card);border:1px solid var(--border);border-radius:14px;width:280px;max-height:calc(100vh - 24px);display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.1);transform:translateX(-320px);transition:transform .25s ease;overflow:hidden}
+.tour-panel.open{transform:translateX(0)}
+.tour-hdr{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.tour-title{font-size:13px;font-weight:700;color:var(--text)}
+.tour-count{font-size:10px;font-weight:800;font-family:var(--mono);color:var(--muted2);background:var(--surface);border-radius:5px;padding:2px 7px}
+.tour-body{flex:1;overflow-y:auto;padding:8px}
+.tour-body::-webkit-scrollbar{width:3px}
+.tour-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.tour-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:6px;background:var(--surface)}
+.tour-num{width:22px;height:22px;border-radius:7px;background:var(--text);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tour-info{flex:1;min-width:0}
+.tour-info-name{font-size:11.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tour-info-dist{font-size:10px;color:var(--muted);font-family:var(--mono)}
+.tour-remove{width:20px;height:20px;border-radius:6px;border:none;background:none;cursor:pointer;color:var(--muted2);display:flex;align-items:center;justify-content:center;transition:color .12s;flex-shrink:0}
+.tour-remove:hover{color:var(--red)}
+.tour-footer{padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0}
+.tour-clear{width:100%;padding:7px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .12s}
+.tour-clear:hover{border-color:var(--red);color:var(--red)}
+
+/* MAP CONTROLS */
+.map-toolbar{position:absolute;top:12px;right:12px;z-index:800;display:flex;gap:6px}
+.map-btn{padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.95);backdrop-filter:blur(10px);font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:6px;transition:all .12s;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.map-btn:hover{border-color:var(--text)}
+.map-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
+
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar"></aside>
+
+<div class="shell">
+  <div id="map"></div>
+
+  <div class="map-toolbar">
+    <button class="map-btn" id="btn-locate" onclick="locateUser()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+      Ma position
+    </button>
+    <button class="map-btn" id="btn-tour" onclick="toggleTourPanel()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      Tournée <span id="tour-badge" style="display:none;font-size:9px;font-weight:800;background:#fff;color:var(--text);border-radius:4px;padding:1px 5px;margin-left:2px">0</span>
+    </button>
+  </div>
+
+  <div class="tour-panel" id="tour-panel">
+    <div class="tour-hdr">
+      <span class="tour-title">Tournée</span>
+      <span class="tour-count" id="tour-count">0 fiches</span>
+    </div>
+    <div class="tour-body" id="tour-body"></div>
+    <div class="tour-footer">
+      <button class="tour-clear" onclick="clearTour()">Vider la tournée</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+var STAGES=[
+  {id:'prospects',name:'Prospects',color:'#CC0000'},
+  {id:'linkedin',name:'LinkedIn',color:'#0A66C2'},
+  {id:'mailing',name:'Mailing',color:'#B84C00'},
+  {id:'phoning',name:'Phoning',color:'#4338CA'},
+  {id:'visio',name:'Visio',color:'#7C3AED'},
+  {id:'rdv',name:'RDV',color:'#0BBCD4'},
+  {id:'devis',name:'Devis',color:'#F59E0B'},
+  {id:'nego',name:'Négociation',color:'#EA580C'},
+  {id:'won',name:'Gagné',color:'#1D8348'},
+  {id:'lost',name:'Disqualifié',color:'#AEAEB2'}
+];
+function stageIdx(col){for(var i=0;i<STAGES.length;i++){if(STAGES[i].id===col)return i;}return -1;}
+function stageColor(col){var s=STAGES.find(function(x){return x.id===col;});return s?s.color:'#AEAEB2';}
+function stageName(col){var s=STAGES.find(function(x){return x.id===col;});return s?s.name:col;}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function progressHtml(col){
+  var cur=stageIdx(col);if(cur<0)return '';
+  var h='<div class="pop-progress">';
+  for(var i=0;i<9;i++){
+    var done=i<cur,isCur=i===cur;
+    var op=done||isCur?'1':'.2';
+    var bg=done||isCur?STAGES[i].color:'#C7C7CC';
+    var shadow=isCur?';box-shadow:0 0 0 2px #fff,0 0 0 3px '+STAGES[i].color:'';
+    h+='<div style="width:7px;height:7px;border-radius:50%;background:'+bg+';opacity:'+op+shadow+'" title="'+STAGES[i].name+'"></div>';
+    if(i<8)h+='<div style="flex:1;height:1px;background:'+(done?'#C7C7CC':'#E8E8ED')+'"></div>';
+  }
+  return h+'</div>';
+}
+
+// State
+var map=L.map('map',{center:[46.5,2.5],zoom:5,zoomControl:true,attributionControl:false});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,opacity:0.85}).addTo(map);
+L.control.attribution({prefix:'© OpenStreetMap'}).addTo(map);
+
+var cards=[];
+try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r);}catch(e){}
+
+var markers={}; // id -> {marker, card, latlng}
+var tourIds=[]; // selected card ids
+var userLatLng=null;
+var userMarker=null;
+var proximityCircle=null;
+var highlightedMarkers=[];
+
+// Geocode & place all cards
+var withAddr=cards.filter(function(c){return c.address;});
+var addrMap={};
+withAddr.forEach(function(c){
+  if(!addrMap[c.address])addrMap[c.address]=[];
+  addrMap[c.address].push(c);
+});
+
+var bounds=[];
+var pending=Object.keys(addrMap).length;
+if(!pending) pending=-1; // no addresses
+
+Object.keys(addrMap).forEach(function(addr){
+  fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(addr)+'&limit=1')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.length){
+        var lat=parseFloat(data[0].lat),lng=parseFloat(data[0].lon);
+        bounds.push([lat,lng]);
+        addrMap[addr].forEach(function(c,idx){
+          var jitter=addrMap[addr].length>1?(idx-addrMap[addr].length/2)*0.0004:0;
+          var clat=lat+jitter,clng=lng+jitter;
+          var col=stageColor(c.col);
+          var icon=L.divIcon({
+            className:'',
+            html:'<div style="width:20px;height:20px;border-radius:50%;background:'+col+';border:3px solid rgba(255,255,255,.9);box-shadow:0 2px 6px rgba(0,0,0,.3);transition:transform .15s"></div>',
+            iconSize:[20,20],iconAnchor:[10,10]
+          });
+          var val=c.val>=1000?Math.round(c.val/1000)+'k\u20AC':(c.val?c.val+'\u20AC':'\u2014');
+          var inTour=tourIds.indexOf(String(c.id))!==-1;
+          var popup='<div class="pop">'
+            +'<div class="pop-bar" style="background:'+col+'"></div>'
+            +'<div class="pop-name">'+esc(c.co||c.name)+'</div>'
+            +'<div class="pop-co">'+esc(c.co&&c.name?c.name:'')+'</div>'
+            +'<div class="pop-foot"><span class="pop-val">'+val+'</span><span class="pop-days">J+'+(c.days||0)+'</span></div>'
+            +'<div class="pop-stage" style="background:'+col+'22;color:'+col+'">'+stageName(c.col)+'</div>'
+            +progressHtml(c.col)
+            +'<div class="pop-actions">'
+            +'<button class="pop-btn" onclick="showProximity(\''+c.id+'\')">Proximité</button>'
+            +'<button class="pop-btn'+(inTour?' active':'')+'" id="tour-btn-'+c.id+'" onclick="toggleTour(\''+c.id+'\')">'+( inTour?'Retiré':'+ Tournée')+'</button>'
+            +'</div>'
+            +'</div>';
+          var m=L.marker([clat,clng],{icon:icon}).addTo(map).bindPopup(popup,{maxWidth:240,closeButton:false,offset:[0,-8]});
+          markers[String(c.id)]={marker:m,card:c,latlng:[clat,clng]};
+        });
+      }
+      pending--;
+      if(pending<=0&&bounds.length){
+        map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
+      }
+    })
+    .catch(function(){pending--;});
+});
+
+// Geolocation
+function locateUser(){
+  if(!navigator.geolocation){return;}
+  document.getElementById('btn-locate').classList.add('active');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    userLatLng=[pos.coords.latitude,pos.coords.longitude];
+    if(userMarker)map.removeLayer(userMarker);
+    var icon=L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]});
+    userMarker=L.marker(userLatLng,{icon:icon,zIndexOffset:1000}).addTo(map);
+    map.setView(userLatLng,11);
+    renderTour();
+  },function(){
+    document.getElementById('btn-locate').classList.remove('active');
+  },{enableHighAccuracy:true});
+}
+
+// Proximity
+function showProximity(id){
+  var info=markers[String(id)];
+  if(!info)return;
+  // Remove previous
+  if(proximityCircle)map.removeLayer(proximityCircle);
+  highlightedMarkers.forEach(function(m){m.setOpacity(1);});
+  highlightedMarkers=[];
+
+  var center=info.latlng;
+  proximityCircle=L.circle(center,{radius:30000,color:stageColor(info.card.col),fillOpacity:0.06,weight:2,dashArray:'6 4'}).addTo(map);
+
+  // Dim all, highlight those in radius
+  Object.keys(markers).forEach(function(mid){
+    var m=markers[mid];
+    var dist=map.distance(L.latLng(center),L.latLng(m.latlng));
+    if(dist>30000&&mid!==String(id)){
+      m.marker.setOpacity(0.25);
+      highlightedMarkers.push(m.marker);
+    }
+  });
+  map.fitBounds(proximityCircle.getBounds(),{padding:[30,30]});
+}
+
+// Tour
+function toggleTour(id){
+  var idx=tourIds.indexOf(String(id));
+  if(idx!==-1){tourIds.splice(idx,1);}
+  else{tourIds.push(String(id));}
+  renderTour();
+  // Update popup button if open
+  var btn=document.getElementById('tour-btn-'+id);
+  if(btn){
+    var inTour=tourIds.indexOf(String(id))!==-1;
+    btn.textContent=inTour?'Retiré':'+ Tournée';
+    btn.className='pop-btn'+(inTour?' active':'');
+  }
+  // Show panel if items
+  if(tourIds.length&&!document.getElementById('tour-panel').classList.contains('open')){
+    toggleTourPanel();
+  }
+}
+
+function renderTour(){
+  var body=document.getElementById('tour-body');
+  var badge=document.getElementById('tour-badge');
+  var count=document.getElementById('tour-count');
+  badge.style.display=tourIds.length?'inline':'none';
+  badge.textContent=tourIds.length;
+  count.textContent=tourIds.length+' fiche'+(tourIds.length>1?'s':'');
+  var btnTour=document.getElementById('btn-tour');
+  btnTour.classList.toggle('active',tourIds.length>0);
+
+  if(!tourIds.length){
+    body.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Cliquez "+ Tournée" sur un point pour commencer</div>';
+    return;
+  }
+
+  // Sort by distance from user if available
+  var items=tourIds.map(function(id){
+    var info=markers[id];
+    if(!info)return null;
+    var dist=null;
+    if(userLatLng){
+      dist=map.distance(L.latLng(userLatLng),L.latLng(info.latlng));
+    }
+    return{id:id,card:info.card,dist:dist};
+  }).filter(Boolean);
+
+  if(userLatLng){
+    items.sort(function(a,b){return(a.dist||0)-(b.dist||0);});
+  }
+
+  body.innerHTML=items.map(function(it,i){
+    var distStr=it.dist!==null?(it.dist>=1000?Math.round(it.dist/1000)+' km':Math.round(it.dist)+' m'):'—';
+    return '<div class="tour-item">'
+      +'<div class="tour-num">'+(i+1)+'</div>'
+      +'<div class="tour-info">'
+      +'<div class="tour-info-name">'+esc(it.card.co||it.card.name)+'</div>'
+      +'<div class="tour-info-dist">'+distStr+'</div>'
+      +'</div>'
+      +'<button class="tour-remove" onclick="toggleTour(\''+it.id+'\')">'
+      +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'
+      +'</button>'
+      +'</div>';
+  }).join('');
+}
+
+function toggleTourPanel(){
+  document.getElementById('tour-panel').classList.toggle('open');
+}
+
+function clearTour(){
+  tourIds=[];
+  renderTour();
+  // Reset proximity
+  if(proximityCircle){map.removeLayer(proximityCircle);proximityCircle=null;}
+  highlightedMarkers.forEach(function(m){m.setOpacity(1);});
+  highlightedMarkers=[];
+}
+
+renderTour();
+</script>
+<script src="/sidebar.js"></script>
+</body>
+</html>

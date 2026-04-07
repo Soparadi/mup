@@ -196,13 +196,13 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .p-card-row a:hover{text-decoration:underline}
 .p-card-row .empty{color:var(--muted2);font-size:11px}
 .p-card-foot{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)}
-.p-card-foot .btn-odoo{
+.p-card-foot .btn-export{
   padding:4px 10px;border-radius:6px;border:none;
   background:#7C3AED;color:#fff;font-family:var(--font);
   font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.3px;
   transition:background .12s;
 }
-.p-card-foot .btn-odoo:hover{background:#6D28D9}
+.p-card-foot .btn-export:hover{background:#6D28D9}
 .p-card-foot .btn-edit{
   padding:4px 10px;border-radius:6px;border:1px solid var(--border);
   background:var(--bg);color:var(--text);font-family:var(--font);
@@ -211,18 +211,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .p-card-foot .btn-edit:hover{border-color:var(--text)}
 .p-card-foot .spacer{margin-left:auto}
 
-/* STATUS BADGES */
-.badge{
-  display:inline-flex;align-items:center;gap:4px;
-  padding:2px 8px;border-radius:20px;
-  font-size:10px;font-weight:700;letter-spacing:.3px;
-  white-space:nowrap;
-}
-.badge-hot{background:#FFF0F0;color:#CC0000}
-.badge-warm{background:#FFF4EC;color:#B84C00}
-.badge-cold{background:var(--blue-bg);color:var(--blue)}
-.badge-new{background:#F0F0FF;color:#5050CC}
-.badge-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+/* SECTOR PILL (badges removed) */
 
 /* SECTOR PILL */
 .sector{
@@ -557,7 +546,7 @@ tbody tr:hover .td-actions{opacity:1}
         </button>
         <button class="btn btn-outline" onclick="exportOdoo()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Export Odoo
+          Export
         </button>
         <button class="btn btn-dark" onclick="openImport('manual')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -600,15 +589,6 @@ tbody tr:hover .td-actions{opacity:1}
         </div>
         <div class="dp-body">
           <div class="dp-section">
-            <div class="dp-section-title">Statut</div>
-            <select class="dp-status-select" id="dp-status-sel" onchange="updateStatus()">
-              <option value="new">🆕 Nouveau</option>
-              <option value="hot">🔥 Hot</option>
-              <option value="warm">⚡ Warm</option>
-              <option value="cold">❄️ Cold</option>
-            </select>
-          </div>
-          <div class="dp-section">
             <div class="dp-section-title">Contact</div>
             <div class="dp-row"><div class="dp-ico">👤</div><div class="dp-val" id="dp-director">—</div></div>
             <div class="dp-row"><div class="dp-ico">✉️</div><div class="dp-val" id="dp-email">—</div></div>
@@ -623,7 +603,7 @@ tbody tr:hover .td-actions{opacity:1}
               <button class="dp-act dp-act-outline" onclick="copyPhone()">📞 Copier tél.</button>
             </div>
             <div class="dp-actions" style="margin-top:6px">
-              <button class="dp-act dp-act-dark" onclick="moveToOdoo()">Envoyer Odoo</button>
+              <button class="dp-act dp-act-dark" onclick="moveToOdoo()">Exporter</button>
             </div>
           </div>
           <div class="dp-section dp-notes">
@@ -709,15 +689,6 @@ tbody tr:hover .td-actions{opacity:1}
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Statut</label>
-            <select class="form-select" id="f-status">
-              <option value="new">🆕 Nouveau</option>
-              <option value="hot">🔥 Hot</option>
-              <option value="warm">⚡ Warm</option>
-              <option value="cold">❄️ Cold</option>
-            </select>
-          </div>
-          <div class="form-group">
             <label class="form-label">Site web</label>
             <input class="form-input" id="f-website" placeholder="https://…">
           </div>
@@ -798,7 +769,7 @@ function renderAll(){
     (p.email||'').toLowerCase().includes(q)||
     (p.location||'').toLowerCase().includes(q)
   );
-  if(currentStatusFilter!=='all') list = list.filter(p=>p.status===currentStatusFilter);
+  // status filter removed
   list.sort((a,b)=>{
     const va=(a[sortField]||'').toString().toLowerCase();
     const vb=(b[sortField]||'').toString().toLowerCase();
@@ -836,8 +807,7 @@ function renderAll(){
         <div class="p-card-row">${icoM} ${p.email?`<a href="mailto:${esc(p.email)}" onclick="event.stopPropagation()">${esc(p.email)}</a>`:'<span class="empty">—</span>'}</div>
       </div>
       <div class="p-card-foot">
-        <button class="btn-odoo" onclick="event.stopPropagation();exportSingleOdoo(${p.id})">Odoo</button>
-        ${statusBadge(p.status)}
+        <button class="btn-export" onclick="event.stopPropagation();exportSingleOdoo(${p.id})">Export</button>
         <span class="spacer"></span>
         <button class="btn-edit" onclick="event.stopPropagation();openDetail(${p.id})">Modifier</button>
       </div>
@@ -855,15 +825,10 @@ function exportSingleOdoo(id){
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download='prospect_odoo_'+id+'.csv';a.click();
   URL.revokeObjectURL(url);
-  toast('Export Odoo téléchargé');
+  toast('Export téléchargé');
 }
 
-function statusBadge(s){
-  const m={hot:'badge-hot 🔥 Hot',warm:'badge-warm ⚡ Warm',cold:'badge-cold ❄️ Cold',new:'badge-new 🆕 Nouveau'};
-  const d=m[s]||'badge-new 🆕 Nouveau';
-  const [cls,...rest]=d.split(' ');
-  return `<span class="badge ${cls}"><span class="badge-dot"></span>${rest.join(' ')}</span>`;
-}
+function statusBadge(s){ return ''; }
 function sourceIco(s){
   if(!s)return '';
   if(/linkedin/i.test(s))return '💼';
@@ -930,7 +895,6 @@ function openDetail(id){
   if(!p)return;
   document.getElementById('dp-name').textContent=p.name;
   document.getElementById('dp-co').textContent=p.company;
-  document.getElementById('dp-status-sel').value=p.status||'new';
   document.getElementById('dp-director').textContent=p.director||p.name;
   document.getElementById('dp-email').innerHTML=p.email?`<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>`:'<span style="color:var(--muted2)">Non renseigné</span>';
   document.getElementById('dp-phone').textContent=p.phone||'—';
@@ -964,7 +928,7 @@ function copyPhone(){
   const p=prospects.find(x=>x.id===selectedId);
   if(p&&p.phone)copyText(p.phone,'Tél.');
 }
-function moveToOdoo(){toast('✅ Prospect envoyé vers Odoo');}
+function moveToOdoo(){toast('Prospect exporté');}
 
 // ── IMPORT MODAL ──
 function openImport(tab){
@@ -1093,7 +1057,7 @@ function confirmImport(){
       phone:document.getElementById('f-phone').value.trim(),
       location:document.getElementById('f-loc').value.trim(),
       sector:document.getElementById('f-sector').value,
-      status:document.getElementById('f-status').value,
+      status:'new',
       website:document.getElementById('f-website').value.trim(),
       source:document.getElementById('f-source').value,
       notes:document.getElementById('f-notes').value.trim(),
@@ -1143,7 +1107,7 @@ function exportOdoo(){
   const a=document.createElement('a');
   a.href=url;a.download='prospects_odoo.csv';a.click();
   URL.revokeObjectURL(url);
-  toast('Export Odoo téléchargé');
+  toast('Export téléchargé');
 }
 
 // ── DELETE ──

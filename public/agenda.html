@@ -520,7 +520,7 @@ function saveEvent() {
   if(!title) { document.getElementById('m-title').focus(); return; }
   if(editingId) {
     const e = events.find(x => x.id === editingId);
-    if(e) { e.title=title; e.contact=document.getElementById('m-contact').value.trim(); e.start=document.getElementById('m-start').value; e.end=document.getElementById('m-end').value; e.type=modalType; e.notes=document.getElementById('m-notes').value.trim(); }
+    if(e) { e.title=title; e.contact=document.getElementById('m-contact').value.trim(); e.date=dateKey(selectedDay); e.start=document.getElementById('m-start').value; e.end=document.getElementById('m-end').value; e.type=modalType; e.notes=document.getElementById('m-notes').value.trim(); }
   } else {
     events.push({ id:'e'+Date.now(), date:dateKey(selectedDay), start:document.getElementById('m-start').value, end:document.getElementById('m-end').value, title, contact:document.getElementById('m-contact').value.trim(), type:modalType, notes:document.getElementById('m-notes').value.trim() });
   }
@@ -528,19 +528,20 @@ function saveEvent() {
   closeModal();
   renderCal();
   renderDay();
-  // Sync to pipeline if linked to a card
+  // Sync to pipeline — by select or by event id
   var pipeId = document.getElementById('m-pipeline-card')?.value;
-  if(pipeId) {
-    try {
-      var pipe = JSON.parse(localStorage.getItem('mup_pipeline') || '[]');
-      var card = pipe.find(function(x) { return String(x.id) === String(pipeId); });
-      if(card) {
-        card.rdvDate = dateKey(selectedDay);
-        card.rdvTime = document.getElementById('m-start').value || '';
-        localStorage.setItem('mup_pipeline', JSON.stringify(pipe));
-      }
-    } catch(e) {}
-  }
+  var evtId = editingId || null;
+  try {
+    var pipe = JSON.parse(localStorage.getItem('mup_pipeline') || '[]');
+    var card = null;
+    if(pipeId) card = pipe.find(function(x){ return String(x.id) === String(pipeId); });
+    if(!card && evtId) card = pipe.find(function(x){ return String(x.id) === String(evtId); });
+    if(card) {
+      card.rdvDate = editingId ? (events.find(function(x){return x.id===editingId;})?.date || dateKey(selectedDay)) : dateKey(selectedDay);
+      card.rdvTime = document.getElementById('m-start').value || '';
+      localStorage.setItem('mup_pipeline', JSON.stringify(pipe));
+    }
+  } catch(e) {}
 }
 
 // Fermer modal en cliquant outside

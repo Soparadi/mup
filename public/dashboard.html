@@ -828,10 +828,14 @@ const CAL_EVENTS = {};
     var raw = localStorage.getItem('mup_agenda');
     if(!raw) return;
     var events = JSON.parse(raw);
-    events.forEach(function(e){
+    // Deduplicate by id — keep last
+    var deduped = {};
+    events.forEach(function(e){ if(e.id) deduped[e.id]=e; else deduped['_'+Math.random()]=e; });
+    Object.keys(deduped).forEach(function(k){
+      var e=deduped[k];
       if(!e.date) return;
       if(!CAL_EVENTS[e.date]) CAL_EVENTS[e.date] = [];
-      CAL_EVENTS[e.date].push({ title: e.title || '', sub: e.contact || '', time: e.start || '' });
+      CAL_EVENTS[e.date].push({ id: e.id||'', title: e.title || '', sub: e.contact || '', time: e.start || '' });
     });
   } catch(e){}
 })();
@@ -1025,7 +1029,15 @@ function closeSidebar(){
     if(agRaw) {
       var agAll = JSON.parse(agRaw);
       var todayStr = new Date().toISOString().slice(0,10);
-      todayAgenda = agAll.filter(function(ev) { return ev.date === todayStr; });
+      var filtered = agAll.filter(function(ev) { return ev.date === todayStr; });
+      // Deduplicate by id — keep last occurrence (most recent)
+      var seen = {};
+      for(var i=filtered.length-1;i>=0;i--){
+        var key=filtered[i].id||('no-id-'+i);
+        if(seen[key]){filtered.splice(i,1);}
+        else{seen[key]=true;}
+      }
+      todayAgenda = filtered;
     }
   } catch(e) {}
 

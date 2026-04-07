@@ -477,7 +477,7 @@ function renderCard(c, color) {
       <button class="kcard-btn" onclick="event.stopPropagation();deleteCard('${c.id}')" title="Supprimer">🗑</button>
     </div>
     <div class="kcard-name">${esc(c.co||c.name)}</div>
-    <div class="kcard-co">${esc(c.co?c.name:"")}</div>
+    <div class="kcard-co">${esc(c.co&&c.name?c.name:'')}</div>
     <div class="kcard-foot">
       <div class="kcard-val">${val}</div>
       <div class="kcard-days">J+${c.days||0}</div>
@@ -713,7 +713,7 @@ function importFromProspects() {
     const prospects = JSON.parse(raw);
     prospects.forEach(p => {
       if(!cards.find(c=>String(c.id)===String(p.id))) {
-        cards.push({ id:p.id, name:p.name||p.nom||'', co:p.co||p.ville||'', val:0, col:'prospects', email:p.email||'', tel:p.phone||p.tel||'', notes:'', days:0, src:'Prospects', activity:[] });
+        cards.push({ id:String(p.id), name:p.name||p.contact_name||p.nom||'', co:p.company||p.co||p.partner_name||'', email:p.email||p.email_from||'', tel:p.phone||p.tel||p.mobile||'', address:p.location||p.address||p.city||p.ville||'', val:0, col:'prospects', notes:p.notes||p.description||'', days:0, src:p.source||'Prospects', activity:[] });
       }
     });
     save(); renderKanban();

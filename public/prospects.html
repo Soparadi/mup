@@ -384,6 +384,9 @@ tbody tr:hover .td-actions{opacity:1}
 .dp-val{font-size:12.5px;color:var(--text);line-height:1.4}
 .dp-val a{color:var(--blue);text-decoration:none}
 .dp-val a:hover{text-decoration:underline}
+.dp-social-input{width:100%;border:none;border-bottom:1px solid var(--border);background:none;font-family:var(--font);font-size:12px;color:var(--text);padding:3px 0;outline:none;transition:border-color .15s}
+.dp-social-input:focus{border-color:var(--text)}
+.dp-social-input::placeholder{color:var(--muted2);font-size:11px}
 .dp-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 .dp-act{
   flex:1;height:32px;border-radius:7px;
@@ -599,11 +602,11 @@ tbody tr:hover .td-actions{opacity:1}
             <div class="dp-row"><div class="dp-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg></div><div class="dp-val" id="dp-website">—</div></div>
             <div class="dp-row"><div class="dp-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div><div class="dp-val" id="dp-loc">—</div></div>
           </div>
-          <div class="dp-section" id="dp-socials-section" style="display:none">
+          <div class="dp-section">
             <div class="dp-section-title">Réseaux sociaux</div>
-            <div class="dp-row" id="dp-linkedin-row" style="display:none"><div class="dp-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></div><div class="dp-val" id="dp-linkedin">—</div></div>
-            <div class="dp-row" id="dp-facebook-row" style="display:none"><div class="dp-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></div><div class="dp-val" id="dp-facebook">—</div></div>
-            <div class="dp-row" id="dp-instagram-row" style="display:none"><div class="dp-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></div><div class="dp-val" id="dp-instagram">—</div></div>
+            <div class="dp-row"><div class="dp-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></div><div class="dp-val" style="flex:1"><input id="dp-linkedin" class="dp-social-input" placeholder="LinkedIn URL" onblur="saveSocial()"></div></div>
+            <div class="dp-row"><div class="dp-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></div><div class="dp-val" style="flex:1"><input id="dp-facebook" class="dp-social-input" placeholder="Facebook URL" onblur="saveSocial()"></div></div>
+            <div class="dp-row"><div class="dp-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></div><div class="dp-val" style="flex:1"><input id="dp-instagram" class="dp-social-input" placeholder="Instagram URL" onblur="saveSocial()"></div></div>
           </div>
           <div class="dp-section">
             <div class="dp-section-title">Actions rapides</div>
@@ -919,18 +922,10 @@ function openDetail(id){
   document.getElementById('dp-phone').textContent=p.phone||'—';
   document.getElementById('dp-website').innerHTML=p.website?`<a href="https://${p.website.replace(/^https?:\/\//,'')}" target="_blank">${esc(p.website)}</a>`:'—';
   document.getElementById('dp-loc').textContent=p.location||'—';
-  // Socials
-  var hasSocial=p.linkedin||p.facebook||p.instagram;
-  document.getElementById('dp-socials-section').style.display=hasSocial?'':'none';
-  var liRow=document.getElementById('dp-linkedin-row');
-  liRow.style.display=p.linkedin?'':'none';
-  document.getElementById('dp-linkedin').innerHTML=p.linkedin?`<a href="${esc(p.linkedin)}" target="_blank">${esc(p.linkedin.replace(/^https?:\/\//,''))}</a>`:'—';
-  var fbRow=document.getElementById('dp-facebook-row');
-  fbRow.style.display=p.facebook?'':'none';
-  document.getElementById('dp-facebook').innerHTML=p.facebook?`<a href="${esc(p.facebook)}" target="_blank">${esc(p.facebook.replace(/^https?:\/\//,''))}</a>`:'—';
-  var igRow=document.getElementById('dp-instagram-row');
-  igRow.style.display=p.instagram?'':'none';
-  document.getElementById('dp-instagram').innerHTML=p.instagram?`<a href="${esc(p.instagram)}" target="_blank">${esc(p.instagram.replace(/^https?:\/\//,''))}</a>`:'—';
+  // Socials (editable inputs)
+  document.getElementById('dp-linkedin').value=p.linkedin||'';
+  document.getElementById('dp-facebook').value=p.facebook||'';
+  document.getElementById('dp-instagram').value=p.instagram||'';
   document.getElementById('dp-notes').value=p.notes||'';
   document.getElementById('detail-panel').classList.add('open');
   renderAll();
@@ -950,6 +945,15 @@ function saveNote(){
   if(!selectedId)return;
   const p=prospects.find(x=>x.id===selectedId);
   if(p){p.notes=document.getElementById('dp-notes').value;save();syncToPipeline(p);}
+}
+function saveSocial(){
+  if(!selectedId)return;
+  const p=prospects.find(x=>x.id===selectedId);
+  if(!p)return;
+  p.linkedin=document.getElementById('dp-linkedin').value.trim();
+  p.facebook=document.getElementById('dp-facebook').value.trim();
+  p.instagram=document.getElementById('dp-instagram').value.trim();
+  save();syncToPipeline(p);renderAll();
 }
 
 function syncToPipeline(p){

@@ -102,14 +102,14 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 /* ── FICHE DÉTAIL ── */
 .detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:400;display:none}
 .detail-overlay.open{display:block}
-.detail-panel{position:fixed;right:0;top:0;bottom:0;width:520px;background:var(--card);border-left:1px solid var(--border);z-index:401;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
+.detail-panel{position:fixed;right:0;top:0;bottom:0;width:380px;background:var(--card);border-left:1px solid var(--border);z-index:401;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
 .detail-panel.open{transform:none}
-.detail-hdr{padding:20px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.detail-hdr{padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
 .detail-name{font-size:20px;font-weight:800;letter-spacing:-.4px;margin-bottom:2px}
 .detail-co{font-size:13px;color:var(--muted);margin-bottom:10px}
 .detail-badges{display:flex;gap:6px;flex-wrap:wrap}
 .detail-badge{padding:3px 9px;border-radius:6px;font-size:10.5px;font-weight:700}
-.detail-body{flex:1;overflow-y:auto;padding:18px 24px 24px;display:flex;flex-direction:column;gap:18px}
+.detail-body{flex:1;overflow-y:auto;padding:16px 20px 20px;display:flex;flex-direction:column;gap:16px}
 .detail-section{display:flex;flex-direction:column;gap:8px}
 .detail-section-title{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted2);margin-bottom:2px}
 .detail-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text)}
@@ -172,21 +172,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<aside class="sidebar">
-  <div class="sb-logo">
-    <div class="sb-logo-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg></div>
-    <span class="sb-logo-name">MUP</span>
-  </div>
-  <div class="sb-label">Navigation</div>
-  <a class="sb-item" href="/dashboard"><div class="sb-icon" style="background:var(--surface2)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>Dashboard</a>
-  <a class="sb-item" href="/leads"><div class="sb-icon" style="background:rgba(249,115,22,.12);color:#ea580c"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>Leads</a>
-  <a class="sb-item" href="/prospects"><div class="sb-icon" style="background:rgba(204,0,0,.1);color:var(--red)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>Prospects</a>
-  <a class="sb-item active" href="/pipeline"><div class="sb-icon" style="background:rgba(67,56,202,.12);color:#4338CA"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>Pipeline</a>
-  <a class="sb-item" href="/contacts"><div class="sb-icon" style="background:rgba(10,102,194,.12);color:#0A66C2"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>Contacts</a>
-  <a class="sb-item" href="/agenda"><div class="sb-icon" style="background:rgba(29,131,72,.12);color:#1D8348"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>Agenda</a>
-  <a class="sb-item" href="/dashboard"><div class="sb-icon" style="background:rgba(184,76,0,.12);color:#B84C00"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>Mail</a>
-</aside>
+<aside class="sidebar" id="sidebar"></aside>
 
 <!-- SHELL -->
 <div class="shell">
@@ -294,16 +280,34 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   </div>
   <div class="detail-body">
 
-    <!-- INFOS CONTACT -->
+    <!-- 1) INFOS CONTACT -->
     <div class="detail-section">
       <div class="detail-section-title">Informations de contact</div>
       <div class="info-grid" id="d-info-grid"></div>
     </div>
 
-    <!-- ACTIONS RAPIDES -->
+    <!-- 2) CARTE LEAFLET -->
+    <div class="detail-section" id="d-map-section" style="display:none">
+      <div class="detail-section-title">Localisation</div>
+      <div id="detail-map"></div>
+    </div>
+
+    <!-- 3) TIMELINE -->
+    <div class="detail-section">
+      <div class="detail-section-title">Timeline</div>
+      <div class="timeline-line" id="d-timeline"></div>
+    </div>
+
+    <!-- 4) NOTES -->
+    <div class="detail-section">
+      <div class="detail-section-title">Notes</div>
+      <textarea class="notes-area" id="d-notes" placeholder="Ajouter des notes…" onblur="saveNotes()"></textarea>
+    </div>
+
+    <!-- 5) ACTIONS RAPIDES -->
     <div class="detail-section">
       <div class="detail-section-title">Actions rapides</div>
-      <div class="quick-actions" id="d-quick-actions">
+      <div class="quick-actions">
         <button class="quick-btn" onclick="quickAction('mailing')">
           <div class="quick-btn-ico" style="background:rgba(184,76,0,.1);color:#B84C00">✉️</div>
           Mailing
@@ -335,30 +339,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
         <option value="won">Gagné ✓</option>
         <option value="lost">Disqualifié</option>
       </select>
-    </div>
-
-    <!-- HISTORIQUE ÉCHANGES -->
-    <div class="detail-section">
-      <div class="detail-section-title">Historique des échanges</div>
-      <div id="d-history"></div>
-    </div>
-
-    <!-- TIMELINE ACTIVITÉ -->
-    <div class="detail-section">
-      <div class="detail-section-title">Timeline d'activité</div>
-      <div class="timeline-line" id="d-timeline"></div>
-    </div>
-
-    <!-- NOTES -->
-    <div class="detail-section">
-      <div class="detail-section-title">Notes</div>
-      <textarea class="notes-area" id="d-notes" placeholder="Ajouter des notes…" onblur="saveNotes()"></textarea>
-    </div>
-
-    <!-- CARTE -->
-    <div class="detail-section" id="d-map-section" style="display:none">
-      <div class="detail-section-title">Localisation</div>
-      <div id="detail-map"></div>
     </div>
 
     <!-- ACTIONS FICHE -->
@@ -624,38 +604,7 @@ function openDetail(id) {
   // Move select
   document.getElementById('d-move').value = c.col||'leads';
 
-  // History (filter activity for exchanges)
-  const exchanges = (c.activity||[]).filter(a => {
-    const t = a.txt.toLowerCase();
-    return t.includes('mail') || t.includes('appel') || t.includes('phoning') || t.includes('visio') || t.includes('rdv') || t.includes('mailing');
-  }).slice(-8).reverse();
-
-  const historyIcons = { mail:'✉️', mailing:'✉️', appel:'📞', phoning:'📞', visio:'📹', rdv:'📅' };
-  const historyColors = { mail:'rgba(184,76,0,.1)', mailing:'rgba(184,76,0,.1)', appel:'rgba(67,56,202,.1)', phoning:'rgba(67,56,202,.1)', visio:'rgba(124,58,237,.1)', rdv:'rgba(11,188,212,.1)' };
-
-  function getExchangeType(txt) {
-    const t = txt.toLowerCase();
-    if(t.includes('mailing') || t.includes('mail')) return 'mail';
-    if(t.includes('phoning') || t.includes('appel')) return 'appel';
-    if(t.includes('visio')) return 'visio';
-    if(t.includes('rdv')) return 'rdv';
-    return 'mail';
-  }
-
-  document.getElementById('d-history').innerHTML = exchanges.length
-    ? exchanges.map(a => {
-        const type = getExchangeType(a.txt);
-        return `<div class="history-item">
-          <div class="history-ico" style="background:${historyColors[type]||'var(--surface)'}">${historyIcons[type]||'📌'}</div>
-          <div class="history-content">
-            <div class="history-title">${esc(a.txt)}</div>
-          </div>
-          <div class="history-date">${esc(a.date)}</div>
-        </div>`;
-      }).join('')
-    : '<div style="font-size:12px;color:var(--muted2);font-style:italic">Aucun échange enregistré</div>';
-
-  // Timeline (all activity)
+  // Timeline (all activity + auto-generated entry date)
   const allActs = (c.activity||[]).slice(-12).reverse();
   function getTimelineType(txt) {
     const t = txt.toLowerCase();
@@ -666,9 +615,11 @@ function openDetail(id) {
     if(t.includes('déplacé') || t.includes('move')) return 'type-move';
     return 'type-note';
   }
-  document.getElementById('d-timeline').innerHTML = allActs.length
-    ? allActs.map(a => `<div class="tl-item ${getTimelineType(a.txt)}"><div class="tl-txt">${esc(a.txt)}</div><div class="tl-date">${esc(a.date)}</div></div>`).join('')
-    : '<div style="font-size:12px;color:var(--muted2);font-style:italic;padding-left:0">Aucune activité</div>';
+  // Add pipeline entry as first event
+  const entryDate = c.created || new Date(parseInt(c.id.replace('c',''))||Date.now()).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
+  const entryItem = `<div class="tl-item type-move"><div class="tl-txt">Ajouté au pipeline</div><div class="tl-date">${esc(entryDate)}</div></div>`;
+  const tlItems = allActs.map(a => `<div class="tl-item ${getTimelineType(a.txt)}"><div class="tl-txt">${esc(a.txt)}</div><div class="tl-date">${esc(a.date)}</div></div>`).join('');
+  document.getElementById('d-timeline').innerHTML = (tlItems || '') + entryItem;
 
   // Notes (editable)
   document.getElementById('d-notes').value = c.notes||'';
@@ -779,5 +730,6 @@ load();
 importFromProspects();
 renderKanban();
 </script>
+<script src="/sidebar.js"></script>
 </body>
 </html>

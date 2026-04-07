@@ -725,9 +725,21 @@ function renderSchedule(){
   var total=included.length+1;
   badge.style.display='inline';
   badge.textContent=total;
-  var retourMins=anchorArrival+visitMin;
   count.textContent=total+' étape'+(total>1?'s':'');
   btnTour.classList.add('active');
+
+  // Temps libre avant RDV
+  var tempsLibre='';
+  if(anchorDeadline!==Infinity){
+    var libre=anchorDeadline-anchorArrival;
+    if(libre>0){
+      var lh=Math.floor(libre/60);
+      var lm=Math.round(libre%60);
+      tempsLibre=lh?lh+'h'+(lm?' '+String(lm).padStart(2,'0'):''):lm+' min';
+    } else {
+      tempsLibre='0 min';
+    }
+  }
 
   // Add summary bar
   var summaryEl=document.getElementById('tour-summary');
@@ -735,9 +747,15 @@ function renderSchedule(){
     summaryEl=document.createElement('div');
     summaryEl.id='tour-summary';
     summaryEl.className='sched-summary';
+    summaryEl.style.flexDirection='column';
+    summaryEl.style.gap='4px';
     document.getElementById('tour-panel').insertBefore(summaryEl,document.querySelector('.tour-footer'));
   }
-  summaryEl.innerHTML='<span><strong>'+Math.round(totalDist/1000)+' km</strong> total</span><span>Retour ~ <strong>'+fmtTime(retourMins)+'</strong></span>';
+  var sumHtml='<div style="display:flex;justify-content:space-between"><span><strong>'+Math.round(totalDist/1000)+' km</strong> total</span><span>Arrivée RDV · <strong>'+fmtTime(anchorArrival).replace(':','h')+'</strong></span></div>';
+  if(tempsLibre&&anchorDeadline!==Infinity){
+    sumHtml+='<div style="display:flex;justify-content:space-between;color:var(--green)"><span>Temps libre</span><strong>'+tempsLibre+' avant '+fmtTime(anchorDeadline).replace(':','h')+'</strong></div>';
+  }
+  summaryEl.innerHTML=sumHtml;
 }
 </script>
 <script src="/sidebar.js"></script>

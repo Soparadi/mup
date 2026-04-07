@@ -864,14 +864,20 @@ pins.forEach(p => {
 const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const TODAY = new Date();
 
-// Events data keyed by YYYY-MM-DD
-const CAL_EVENTS = {
-  '2026-03-03': [{ title: 'RDV L. Morin — Présentation', sub: 'Hôtel Le Grand, Paris', time: '14h00' }],
-  '2026-03-05': [{ title: 'Appel S. Clément — Suivi', sub: 'Domaine Viticole, Bordeaux', time: '10h30' }],
-  '2026-03-11': [{ title: 'Démo R. Benet — Barcelone', sub: 'Finca Can Mora', time: '16h00' }],
-  '2026-03-17': [{ title: 'Réunion équipe', sub: 'Paris — Siège', time: '09h00' }],
-  '2026-03-26': [{ title: 'Suivi H. Vandenberg', sub: 'Château Lafleur, Bruges', time: '11h00' }],
-};
+// Events data keyed by YYYY-MM-DD — loaded from agenda localStorage
+const CAL_EVENTS = {};
+(function(){
+  try {
+    var raw = localStorage.getItem('mup_agenda');
+    if(!raw) return;
+    var events = JSON.parse(raw);
+    events.forEach(function(e){
+      if(!e.date) return;
+      if(!CAL_EVENTS[e.date]) CAL_EVENTS[e.date] = [];
+      CAL_EVENTS[e.date].push({ title: e.title || '', sub: e.contact || '', time: e.start || '' });
+    });
+  } catch(e){}
+})();
 
 let calYear = TODAY.getFullYear();
 let calMonth = TODAY.getMonth();

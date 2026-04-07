@@ -147,7 +147,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)">Départ</span>
-        <input type="time" id="tour-depart-time" value="09:00" style="margin-left:auto;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;font-family:var(--font);font-size:11px;color:var(--text);background:var(--surface);outline:none;width:80px" onchange="recalcSchedule()">
+        <input type="time" id="tour-depart-time" value="09:00" style="margin-left:auto;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;font-family:var(--font);font-size:11px;color:var(--text);background:var(--surface);outline:none;width:80px" onchange="recalcSchedule(false)">
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -599,6 +599,7 @@ function calcTour(){
 }
 
 var tourLegs=[];
+var stopDurations={}; // id -> minutes (per-stop override)
 
 function updateDurLabel(){
   var v=parseInt(document.getElementById('visit-dur').value);
@@ -614,7 +615,24 @@ function fmtTime(mins){
 
 function fmtDist(m){return m>=1000?Math.round(m/1000)+' km':Math.round(m)+' m';}
 
-function recalcSchedule(){renderSchedule();}
+function recalcSchedule(resetIndividual){
+  if(resetIndividual!==false) stopDurations={};
+  renderSchedule();
+}
+
+function getStopDur(id){
+  if(stopDurations[id]!==undefined) return stopDurations[id];
+  return parseInt(document.getElementById('visit-dur').value)||45;
+}
+
+function adjStopDur(id,delta){
+  var cur=getStopDur(id);
+  var nv=Math.max(15,Math.min(240,cur+delta));
+  stopDurations[id]=nv;
+  recalcSchedule(false);
+}
+
+function fmtDur(m){return m>=60?(Math.floor(m/60)+'h'+(m%60?' '+String(m%60).padStart(2,'0'):'')):m+' min';}
 
 function renderSchedule(){
   if(!anchorCard||!startLatLng){return;}
@@ -654,14 +672,15 @@ function renderSchedule(){
     var legTime=tourLegs[legIdx]?tourLegs[legIdx].duration/60:0;
 
     var arrivalMins=Math.ceil((currentMins+legTime)/30)*30;
-    var departureMins=arrivalMins+visitMin;
+    var thisDur=getStopDur(s.id);
+    var departureMins=arrivalMins+thisDur;
 
     // Check: can we still reach anchor on time after this visit?
-    var lastLegIdx=i+1; // leg from this stop to next (or anchor)
+    var lastLegIdx=i+1;
     var remainingLegs=0;
     for(var k=lastLegIdx;k<tourLegs.length;k++) remainingLegs+=tourLegs[k]?tourLegs[k].duration/60:0;
-    // Time needed for remaining visits
-    var remainingVisits=(tourStops.length-i-1)*visitMin;
+    var remainingVisits=0;
+    for(var k=i+1;k<tourStops.length;k++) remainingVisits+=getStopDur(tourStops[k].id);
     var estAnchorArrival=departureMins+remainingLegs+remainingVisits;
 
     var tooLate=anchorDeadline!==Infinity&&estAnchorArrival>anchorDeadline;
@@ -685,6 +704,12 @@ function renderSchedule(){
         +(tel?'<div class="sched-tel"><a href="tel:'+esc(tel.replace(/\s/g,''))+'">'+esc(tel)+'</a></div>':'')
         +'</div>'
         +'<div class="sched-badge" style="background:'+col+'22;color:'+col+'">'+stageName(s.card.col)+'</div>'
+        +'</div>'
+        +'<div style="display:flex;align-items:center;gap:6px;padding:4px 10px 6px;margin-bottom:5px;font-size:10px;color:var(--muted)">'
+        +'<button onclick="event.stopPropagation();adjStopDur(\''+s.id+'\',-15)" style="width:20px;height:20px;border-radius:5px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center">−</button>'
+        +'<span style="font-family:var(--mono);font-weight:700;font-size:11px;color:var(--text);min-width:42px;text-align:center">'+fmtDur(thisDur)+'</span>'
+        +'<button onclick="event.stopPropagation();adjStopDur(\''+s.id+'\',15)" style="width:20px;height:20px;border-radius:5px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center">+</button>'
+        +'<span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted2)">Départ · '+fmtTime(departureMins)+'</span>'
         +'</div>';
       currentMins=departureMins;
     }

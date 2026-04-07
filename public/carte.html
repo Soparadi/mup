@@ -653,7 +653,7 @@ function renderSchedule(){
     var legDist=tourLegs[legIdx]?tourLegs[legIdx].distance:0;
     var legTime=tourLegs[legIdx]?tourLegs[legIdx].duration/60:0;
 
-    var arrivalMins=currentMins+legTime;
+    var arrivalMins=Math.ceil((currentMins+legTime)/30)*30;
     var departureMins=arrivalMins+visitMin;
 
     // Check: can we still reach anchor on time after this visit?
@@ -704,7 +704,7 @@ function renderSchedule(){
   var anchorLeg=tourLegs[tourLegs.length-1];
   var anchorDist=anchorLeg?anchorLeg.distance:0;
   var anchorTime=anchorLeg?anchorLeg.duration/60:0;
-  var anchorArrival=currentMins+anchorTime;
+  var anchorArrival=Math.ceil((currentMins+anchorTime)/30)*30;
   totalDist+=anchorDist;
 
   var anchorDistLabel=anchorDist<2000?'< 2 km':fmtDist(anchorDist);

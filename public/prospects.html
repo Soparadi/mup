@@ -175,31 +175,41 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 /* ── TABLE ── */
 .table-wrap{
   flex:1;overflow:auto;margin:12px 24px 20px;
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);box-shadow:var(--shadow-sm);
+  padding:4px;
 }
-table{width:100%;border-collapse:collapse;font-size:12.5px}
-thead th{
-  padding:12px 14px;
-  background:var(--bg);
-  border-bottom:1px solid var(--border);
-  text-align:left;font-size:10px;font-weight:700;
-  letter-spacing:.8px;text-transform:uppercase;color:var(--muted2);
-  position:sticky;top:0;z-index:10;white-space:nowrap;cursor:pointer;
-  user-select:none;transition:color .12s;
+.cards-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:14px;
 }
-thead th:hover{color:var(--muted)}
-thead th.sorted{color:var(--text)}
-tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer}
-tbody tr:last-child{border-bottom:none}
-tbody tr:hover{background:var(--bg)}
-tbody tr.selected{background:var(--blue-bg)}
-td{padding:16px 14px;vertical-align:middle}
-.td-name{font-weight:600;color:var(--text);font-size:13px}
-.td-co{font-size:11px;color:var(--muted);margin-top:1px}
-.td-email{color:var(--text);font-size:12.5px}
-.td-phone{color:var(--muted);font-size:12.5px}
-.td-loc{font-size:12px;color:var(--muted)}
+.p-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:16px;cursor:pointer;transition:box-shadow .15s,border-color .15s;
+  display:flex;flex-direction:column;gap:12px;
+}
+.p-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08);border-color:var(--border2)}
+.p-card-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.p-card-title{font-size:14px;font-weight:700;color:var(--text);line-height:1.3}
+.p-card-loc{font-size:12px;color:var(--muted);margin-top:2px}
+.p-card-body{display:flex;flex-direction:column;gap:6px}
+.p-card-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);min-height:20px}
+.p-card-row svg{flex-shrink:0;color:var(--muted2)}
+.p-card-row a{color:var(--blue);text-decoration:none}
+.p-card-row a:hover{text-decoration:underline}
+.p-card-row .empty{color:var(--muted2);font-size:11px}
+.p-card-foot{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)}
+.p-card-foot .btn-odoo{
+  padding:4px 10px;border-radius:6px;border:none;
+  background:#7C3AED;color:#fff;font-family:var(--font);
+  font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.3px;
+  transition:background .12s;
+}
+.p-card-foot .btn-odoo:hover{background:#6D28D9}
+.p-card-foot .btn-edit{
+  padding:4px 10px;border-radius:6px;border:1px solid var(--border);
+  background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:10px;font-weight:600;cursor:pointer;transition:all .12s;
+}
+.p-card-foot .btn-edit:hover{border-color:var(--text)}
+.p-card-foot .spacer{margin-left:auto}
 
 /* STATUS BADGES */
 .badge{
@@ -576,21 +586,7 @@ tbody tr:hover .td-actions{opacity:1}
           <div class="empty-sub">Importez un fichier CSV ou ajoutez des prospects manuellement pour démarrer votre prospection.</div>
           <button class="btn btn-import" style="margin-top:8px" onclick="openImport('csv')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Charger des prospects</button>
         </div>
-        <table id="prospects-table" style="display:none">
-          <thead>
-            <tr>
-              <th onclick="sortBy('sector')" style="width:160px">Secteur</th>
-              <th onclick="sortBy('company')" style="width:200px">Société</th>
-              <th onclick="sortBy('name')" style="width:160px">Nom</th>
-              <th style="width:220px">Email</th>
-              <th style="width:140px">Tél.</th>
-              <th onclick="sortBy('location')" style="width:140px">Localisation</th>
-              <th onclick="sortBy('source')">Source</th>
-              <th style="width:60px"></th>
-            </tr>
-          </thead>
-          <tbody id="prospects-tbody"></tbody>
-        </table>
+        <div id="prospects-grid" class="cards-grid" style="display:none"></div>
       </div>
 
       <!-- DETAIL PANEL -->
@@ -810,36 +806,56 @@ function renderAll(){
   });
   filteredProspects=list;
   document.getElementById('count-label').textContent=list.length+' prospect(s)';
-  const tbody=document.getElementById('prospects-tbody');
-  const table=document.getElementById('prospects-table');
+  const grid=document.getElementById('prospects-grid');
   const empty=document.getElementById('empty-state');
   if(!list.length){
-    table.style.display='none';
+    grid.style.display='none';
     empty.style.display='flex';
     return;
   }
-  table.style.display='table';
+  grid.style.display='grid';
   empty.style.display='none';
-  tbody.innerHTML=list.map(p=>`
-    <tr onclick="openDetail(${p.id})" class="${selectedId===p.id?'selected':''}">
-      <td>${p.sector?`<span class="sector">${esc(p.sector)}</span>`:'<span style="color:var(--muted2);font-size:11px">—</span>'}</td>
-      <td><div class="td-name">${esc(p.company)}</div></td>
-      <td>
-        <div style="font-size:12.5px;font-weight:500;color:var(--text)">${esc(p.name)}</div>
-        ${p.notes?`<div class="td-co" style="font-style:italic;font-size:10px">Note</div>`:''}
-      </td>
-      <td class="td-email">${p.email?esc(p.email):'<span style="color:var(--muted2);font-size:11px">—</span>'}</td>
-      <td class="td-phone">${p.phone||'<span style="color:var(--muted2);font-size:11px">—</span>'}</td>
-      <td class="td-loc">${p.location||'—'}</td>
-      <td><span class="source-tag">${esc(p.source||'—')}</span></td>
-      <td>
-        <div class="td-actions">
-          ${p.email?`<div class="act-btn" onclick="event.stopPropagation();copyText('${esc(p.email)}','Email')" title="Copier email"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>`:''}
-          <div class="act-btn" onclick="event.stopPropagation();deletePros(${p.id})" title="Supprimer">🗑</div>
+  const icoP='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  const icoT='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+  const icoG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>';
+  const icoM='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+  grid.innerHTML=list.map(p=>{
+    const loc=[p.location,p.zip].filter(Boolean).join(' ');
+    return `<div class="p-card" onclick="openDetail(${p.id})">
+      <div class="p-card-hdr">
+        <div>
+          <div class="p-card-title">${esc(p.company||p.name)}</div>
+          ${loc?`<div class="p-card-loc">${esc(loc)}</div>`:''}
         </div>
-      </td>
-    </tr>
-  `).join('');
+        ${p.sector?`<span class="sector">${esc(p.sector)}</span>`:''}
+      </div>
+      <div class="p-card-body">
+        <div class="p-card-row">${icoP} ${p.name?esc(p.name):'<span class="empty">—</span>'}</div>
+        <div class="p-card-row">${icoT} ${p.phone?esc(p.phone):'<span class="empty">—</span>'}</div>
+        <div class="p-card-row">${icoG} ${p.website?`<a href="${esc(p.website)}" target="_blank" onclick="event.stopPropagation()">${esc(p.website.replace(/^https?:\/\//,''))}</a>`:'<span class="empty">—</span>'}</div>
+        <div class="p-card-row">${icoM} ${p.email?`<a href="mailto:${esc(p.email)}" onclick="event.stopPropagation()">${esc(p.email)}</a>`:'<span class="empty">—</span>'}</div>
+      </div>
+      <div class="p-card-foot">
+        <button class="btn-odoo" onclick="event.stopPropagation();exportSingleOdoo(${p.id})">Odoo</button>
+        ${statusBadge(p.status)}
+        <span class="spacer"></span>
+        <button class="btn-edit" onclick="event.stopPropagation();openDetail(${p.id})">Modifier</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function exportSingleOdoo(id){
+  const p=prospects.find(x=>x.id===id);
+  if(!p)return;
+  const pri=p.status==='hot'?'2':p.status==='warm'?'1':'0';
+  const lines=['id,name,partner_name,email_from,phone,city,description,priority'];
+  lines.push(['','Agence Event - '+(p.company||p.name),p.company||p.name,p.email||'',p.phone||'',p.location||'',(p.notes||'').replace(/,/g,';'),pri].map(v=>'"'+v+'"').join(','));
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='prospect_odoo_'+id+'.csv';a.click();
+  URL.revokeObjectURL(url);
+  toast('Export Odoo téléchargé');
 }
 
 function statusBadge(s){

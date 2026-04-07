@@ -3,2431 +3,1144 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prospect — Leads B2B par secteur</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<title>Prospects — NeoXperiences CRM</title>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-<!-- Leaflet CSS + JS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- MarkerCluster -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <style>
-/* ═══════════════════════════════════════════════
-   DESIGN TOKENS — aligned with Homepage
-═══════════════════════════════════════════════ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-:root {
-  --bg:#FFFFFF; --surface:#F5F5F7; --surface2:#EBEBF0;
-  --card:#FFFFFF; --border:#E8E8ED; --border2:#C7C7CC;
-  --text:#1D1D1F; --muted:#6E6E73; --muted2:#AEAEB2;
-  --green:#1D8348; --orange:#B84C00; --red:#CC0000;
-  --blue:#0A66C2; --purple:#4338CA;
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F5F5F7;
+  --surface:#FFFFFF;
+  --surface2:#EBEBF0;
+  --card:#FFFFFF;
+  --border:#E8E8ED;
+  --border2:#C7C7CC;
+  --text:#1D1D1F;
+  --muted:#6E6E73;
+  --muted2:#AEAEB2;
+  --green:#1D8348;
+  --green-bg:#EDF7F2;
+  --orange:#B84C00;
+  --orange-bg:#FFF4EC;
+  --red:#CC0000;
+  --red-bg:#FFF0F0;
+  --blue:#0A66C2;
+  --blue-bg:#EEF3FD;
+  --accent:#1D1D1F;
   --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
   --mono:'Geist Mono','SF Mono','Menlo',monospace;
-  /* legacy alias for JS that references old vars */
-  --black:#1D1D1F; --white:#FFFFFF;
-  --g50:#F5F5F7; --g100:#EBEBF0; --g200:#E8E8ED;
-  --g400:#AEAEB2; --g600:#6E6E73; --g800:#3A3A3C;
-  --accent:#B84C00; --accent-l:#FFF3E0;
-  --green-l:#E6F4EC;
-  --blue-l:#E8F0FA;
-  --warm:#FFFFFF;
-  --border:#E8E8ED;
-  --radius:12px;
-}
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 15px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
-}
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-
-@keyframes fadeUp  { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:none} }
-@keyframes fadeIn  { from{opacity:0} to{opacity:1} }
-@keyframes shimmer { 0%{background-position:200% center} 100%{background-position:-200% center} }
-@keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.4} }
-@keyframes spin    { to{transform:rotate(360deg)} }
-@keyframes ping    { 0%{transform:scale(1);opacity:1} 100%{transform:scale(2.4);opacity:0} }
-
-/* ═══════════════════════════════════════════════
-   LAYOUT
-═══════════════════════════════════════════════ */
-.shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
-
-/* ═══════════════════════════════════════════════
-   SIDEBAR
-═══════════════════════════════════════════════ */
-.sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.sb-label { font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted2); padding: 10px 10px 6px; margin-top: 8px; }
-.sb-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 9px; cursor: pointer; font-size: 12.5px; font-weight: 500; color: var(--muted); transition: all .12s; text-decoration: none; }
-.sb-item:hover { color: var(--text); background: var(--surface2); }
-.sb-item.active { color: var(--text); background: var(--card); border: 1px solid var(--border); font-weight: 600; }
-.sb-icon { width: 22px; height: 22px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; flex-shrink: 0; }
-.sb-badge { margin-left: auto; font-size: 9px; font-weight: 800; font-family: var(--mono); background: var(--text); color: #fff; border-radius: 6px; padding: 1px 6px; }
-
-main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column; overflow-y: auto; }
-
-/* ═══════════════════════════════════════════════
-   SEARCH ENGINE
-═══════════════════════════════════════════════ */
-.search-engine {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 20px; padding: 28px 32px 24px;
-  max-width: 900px; margin: 0 auto 32px;
-  width: calc(100% - 96px);
-  box-shadow: 0 4px 24px rgba(0,0,0,.06);
-}
-.search-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-.field-label {
-  font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
-  text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
-  display: flex; align-items: center; gap: 6px;
-}
-.label-sub {
-  font-weight: 400; text-transform: none; letter-spacing: 0;
-  font-size: 11px; color: var(--muted2);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 16px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.04);
+  --shadow-lg:0 16px 48px rgba(0,0,0,.12),0 4px 12px rgba(0,0,0,.06);
+  --radius:10px;
 }
 
-/* search input */
-.sip { position: relative; }
-.sip .loup {
-  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-  color: var(--muted2); pointer-events: none;
-  transition: color .2s, transform .25s cubic-bezier(.34,1.56,.64,1); z-index: 2;
-}
-.sip:focus-within .loup { color: var(--text); transform: translateY(-50%) scale(1.1); }
-.sip input {
-  width: 100%; padding: 12px 38px 12px 44px;
-  font-family: var(--font); font-size: 13.5px; font-weight: 500;
-  color: var(--text); background: var(--card);
-  border: 1.5px solid var(--border); border-radius: 12px;
-  outline: none; transition: border-color .15s, background .15s, box-shadow .15s;
-}
-.sip input::placeholder { color: var(--muted); font-weight: 400; }
-.sip input:focus {
-  background: var(--card); border-color: var(--text);
-  box-shadow: 0 0 0 3px rgba(29,29,31,.06);
-}
-.sip input.locked { border-color: var(--border2); background: var(--surface); }
-.sip .clr {
-  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-  width: 20px; height: 20px; border-radius: 50%;
-  background: var(--surface2); border: none;
-  display: none; align-items: center; justify-content: center;
-  cursor: pointer; color: var(--muted); transition: all .12s;
-}
-.sip .clr:hover { background: var(--border2); color: var(--text); }
-.sip .clr.show { display: flex; }
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoothing:antialiased;display:flex}
 
-/* autocomplete dropdown */
-.acd {
-  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
-  background: var(--card); border: 1.5px solid var(--border);
-  border-radius: 14px; box-shadow: 0 16px 48px rgba(0,0,0,.15);
-  z-index: 500; max-height: 300px; overflow-y: auto; display: none;
+/* ── TOPBAR ── */
+.topbar{
+  height:52px;background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 20px;gap:10px;flex-shrink:0;z-index:50;
 }
-.acd.open { display: block; }
-.acd::-webkit-scrollbar { width: 4px; }
-.acd::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-.acd-sec {
-  padding: 8px 12px 4px; font-size: 10px; font-weight: 700;
-  letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted2);
-  background: var(--surface); border-bottom: 1px solid var(--border);
-}
-.acd-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; cursor: pointer;
-  border-bottom: 1px solid var(--border); transition: background .1s;
-}
-.acd-item:last-child { border-bottom: none; }
-.acd-item:hover, .acd-item.focus { background: var(--surface); }
-.acd-code {
-  font-size: 10px; font-weight: 700; font-family: var(--mono);
-  color: var(--muted2); background: var(--surface);
-  border: 1px solid var(--border); border-radius: 5px;
-  padding: 2px 6px; flex-shrink: 0;
-}
-.acd-label { font-size: 13px; font-weight: 500; flex: 1; line-height: 1.3; }
-.acd-hl { background: #FEF08A; border-radius: 2px; padding: 0 1px; }
-.acd-empty { padding: 20px; text-align: center; font-size: 13px; color: var(--muted2); }
-
-/* NAF chip */
-.nchip { display: none; margin-top: 8px; align-items: center; gap: 6px; }
-.nchip.show { display: flex; }
-.nchip-l {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--text); color: #fff;
-  font-size: 11.5px; font-weight: 700;
-  padding: 4px 10px 4px 12px; border-radius: 20px;
-  font-family: var(--font);
-}
-.nchip-l button {
-  background: none; border: none; color: rgba(255,255,255,.5);
-  cursor: pointer; font-size: 16px; line-height: 1; padding: 0 0 0 2px;
-}
-.nchip-l button:hover { color: #fff; }
-
-/* region select */
-.sel-w { position: relative; }
-.sel-w select {
-  width: 100%; appearance: none;
-  background: var(--card); border: 1.5px solid var(--border);
-  border-radius: 12px; padding: 12px 40px 12px 14px;
-  font-family: var(--font); font-size: 13.5px; font-weight: 500;
-  color: var(--text); outline: none; cursor: pointer;
-  transition: border-color .15s, box-shadow .15s;
-}
-.sel-w select:focus {
-  border-color: var(--text);
-  box-shadow: 0 0 0 3px rgba(29,29,31,.06);
-}
-.sel-arr { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--muted2); }
-
-/* search footer */
-.sfooter { display: flex; align-items: center; gap: 16px; padding-top: 16px; border-top: 1px solid var(--border); flex-wrap: wrap; }
-.shint { font-size: 13px; color: var(--muted); flex: 1; min-width: 0; }
-.sfooter-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-
-/* toggle */
-.toggle-wrap {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13px; font-weight: 500; color: var(--muted);
-  cursor: pointer; user-select: none;
-}
-.toggle-wrap input[type=checkbox] { display: none; }
-.tog {
-  width: 36px; height: 20px; background: var(--surface2);
-  border-radius: 10px; position: relative; transition: background .2s; flex-shrink: 0;
-}
-.tog::after {
-  content: ''; position: absolute; width: 14px; height: 14px;
-  background: #fff; border-radius: 50%; top: 3px; left: 3px;
-  transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.25);
-}
-.toggle-wrap input:checked + .tog { background: var(--text); }
-.toggle-wrap input:checked + .tog::after { transform: translateX(16px); }
-
-/* generate button */
-.btn-go {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 11px 22px; border-radius: 12px; border: none;
-  background: var(--border2); color: var(--muted);
-  font-family: var(--font); font-size: 13.5px; font-weight: 700;
-  cursor: not-allowed; transition: all .18s; white-space: nowrap;
-}
-.btn-go.active { background: var(--text); color: #fff; cursor: pointer; }
-.btn-go.active:hover { background: #000; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.2); }
-.btn-go.loading { background: #000; color: #fff; cursor: wait; }
-.spinner {
-  width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3);
-  border-top-color: #fff; border-radius: 50%;
-  animation: spin .7s linear infinite; display: none;
+.topbar-title{font-size:13px;font-weight:700;color:var(--muted);flex:1}
+.pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--green);position:relative;flex-shrink:0}
+.pulse-dot::before{content:'';position:absolute;inset:-3px;border-radius:50%;background:var(--green);animation:ping 2s ease-out infinite;opacity:.3}
+@keyframes ping{0%{transform:scale(1);opacity:.3}70%{transform:scale(1.8);opacity:0}100%{transform:scale(2);opacity:0}}
+.topbar-avatar{
+  width:30px;height:30px;background:var(--bg);border:1px solid var(--border);
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:800;color:var(--muted);cursor:pointer;
 }
 
-/* ═══════════════════════════════════════════════
-   STATS BAR
-═══════════════════════════════════════════════ */
-.stats-bar {
-  display: flex; align-items: center; padding: 14px 48px;
-  background: var(--surface); border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto; gap: 0;
-  opacity: 0; transform: translateY(-8px);
-  transition: all .3s ease; pointer-events: none;
-}
-.stats-bar.show { opacity: 1; transform: none; pointer-events: auto; }
-.si { display: flex; flex-direction: column; align-items: center; padding: 0 24px; flex-shrink: 0; }
-.sv {
-  font-size: 21px; font-weight: 900; letter-spacing: -0.8px;
-  line-height: 1; color: var(--text); font-family: var(--font);
-}
-.sl { font-size: 11px; color: var(--muted); margin-top: 3px; font-weight: 500; white-space: nowrap; }
-.sdiv { width: 1px; height: 34px; background: var(--border); flex-shrink: 0; }
-.fchips { display: flex; gap: 8px; margin-left: auto; padding-left: 20px; flex-shrink: 0; }
-.chip {
-  display: flex; align-items: center; gap: 5px;
-  padding: 4px 10px; border-radius: 20px;
-  font-size: 11px; font-weight: 600;
-  border: 1px solid;
-}
-.cd { width: 5px; height: 5px; border-radius: 50%; }
-.c1 { background: rgba(29,131,72,.08); color: var(--green); border-color: rgba(29,131,72,.2); }
-.c1 .cd { background: var(--green); }
-.c2 { background: rgba(10,102,194,.08); color: var(--blue); border-color: rgba(10,102,194,.2); }
-.c2 .cd { background: var(--blue); }
-.c3 { background: rgba(184,76,0,.08); color: var(--orange); border-color: rgba(184,76,0,.2); }
-.c3 .cd { background: var(--orange); }
+/* ── SHELL ── */
+.shell{display:flex;flex:1;overflow:hidden;height:100vh}
 
-/* ═══════════════════════════════════════════════
-   ERROR BANNER
-═══════════════════════════════════════════════ */
-.err-banner {
-  display: none; background: #FFF3F0; border: 1px solid #FCCAC7;
-  border-radius: 12px; padding: 12px 20px;
-  margin: 16px 48px; font-size: 13px; color: var(--red);
-  align-items: center; gap: 10px;
+/* ── SIDEBAR ── */
+.sidebar{
+  width:220px;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  padding:0 0 16px;flex-shrink:0;
+  height:100%;overflow-y:auto;
 }
-.err-banner.show { display: flex; }
-.err-retry {
-  margin-left: auto; padding: 6px 14px; border-radius: 8px;
-  border: 1px solid #FCCAC7; background: #fff;
-  font-size: 12px; font-weight: 600; color: var(--red); cursor: pointer;
-  font-family: var(--font);
+.sb-logo{
+  display:flex;align-items:center;gap:10px;
+  padding:16px 12px 14px;
+  border-bottom:1px solid var(--border);margin-bottom:8px;
 }
-.err-retry:hover { background: #FFF3F0; }
+.sb-logo-icon{
+  width:28px;height:28px;background:var(--text);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.sb-logo-name{font-size:14px;font-weight:800;letter-spacing:-.3px;color:var(--text)}
+.sb-label{
+  font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted2);padding:10px 14px 5px;
+}
+.sb-item{
+  display:flex;align-items:center;gap:9px;
+  padding:7px 10px;margin:0 4px;border-radius:9px;
+  cursor:pointer;font-size:13px;font-weight:500;
+  color:var(--muted);transition:all .12s;text-decoration:none;
+  border:none;background:none;font-family:var(--font);width:calc(100% - 8px);text-align:left;
+}
+.sb-item:hover{color:var(--text);background:var(--bg)}
+.sb-item.active{color:var(--text);background:var(--bg);font-weight:600}
+.sb-icon{
+  width:26px;height:26px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.sb-badge{
+  margin-left:auto;font-size:10px;font-weight:800;font-family:var(--mono);
+  background:var(--text);color:#fff;border-radius:6px;padding:1px 6px;min-width:20px;text-align:center;
+}
+.sb-badge.blue{background:var(--blue)}
+.sb-sep{height:1px;background:var(--border);margin:6px 12px}
 
-/* ═══════════════════════════════════════════════
-   CONTENT AREA — map + results
-═══════════════════════════════════════════════ */
-.content-area { display: grid; grid-template-columns: 1fr 420px; flex: 1; }
+/* ── MAIN CONTENT ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
 
-/* map column */
-.map-col {
-  position: sticky; top: 56px; height: calc(100vh - 56px);
-  display: flex; flex-direction: column;
-  border-right: 1px solid var(--border);
+/* ── PAGE HEADER ── */
+.page-header{
+  padding:20px 24px 0;
+  display:flex;align-items:flex-start;justify-content:space-between;
+  gap:16px;flex-shrink:0;
 }
-.map-hdr {
-  padding: 14px 20px 12px; border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--card); flex-shrink: 0;
+.page-title-block{}
+.page-title{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--text)}
+.page-subtitle{font-size:12.5px;color:var(--muted);margin-top:2px}
+
+.header-actions{display:flex;align-items:center;gap:8px}
+
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 14px;border-radius:8px;
+  font-family:var(--font);font-size:12.5px;font-weight:600;
+  cursor:pointer;transition:all .15s;border:none;white-space:nowrap;
 }
-.map-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
-.map-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
-.map-leg { display: flex; gap: 12px; }
-.leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); font-weight: 500; }
-.leg-dot { width: 8px; height: 8px; border-radius: 50%; }
-.dot-h { background: #CC0000; }
-.dot-w { background: #F59E0B; }
-.dot-c { background: var(--muted2); }
-#map { flex: 1; }
-.geo-bar {
-  position: absolute; bottom: 0; left: 0; height: 3px;
-  background: var(--text); transition: width .4s ease;
-  z-index: 11; border-radius: 0 2px 2px 0;
+.btn-outline{
+  background:var(--surface);color:var(--muted);
+  border:1px solid var(--border);
+}
+.btn-outline:hover{border-color:var(--border2);color:var(--text);background:var(--bg)}
+.btn-dark{background:var(--text);color:#fff}
+.btn-dark:hover{background:#000;transform:translateY(-1px);box-shadow:var(--shadow-md)}
+.btn-import{
+  background:var(--surface);color:var(--muted);
+  border:1.5px dashed var(--border2);
+}
+.btn-import:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
+
+/* ── KPI ROW ── */
+.kpi-row{
+  display:flex;gap:10px;padding:16px 24px 0;flex-shrink:0;
+}
+.kpi{
+  flex:1;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow-sm);
+}
+.kpi-label{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted2);margin-bottom:4px}
+.kpi-val{font-size:20px;font-weight:800;font-family:var(--mono);letter-spacing:-.5px;color:var(--text)}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.kpi-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}
+
+/* ── TOOLBAR ── */
+.toolbar{
+  display:flex;align-items:center;gap:8px;
+  padding:14px 24px 0;flex-shrink:0;
+}
+.search-wrap{position:relative;flex:1;max-width:320px}
+.search-wrap input{
+  width:100%;height:34px;padding:0 12px 0 34px;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  font-family:var(--font);font-size:13px;color:var(--text);outline:none;
+  transition:border-color .15s;
+}
+.search-wrap input:focus{border-color:var(--border2)}
+.search-wrap input::placeholder{color:var(--muted2)}
+.search-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted2);font-size:13px;pointer-events:none}
+.filter-btn{
+  height:34px;padding:0 12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  font-family:var(--font);font-size:12px;font-weight:500;color:var(--muted);
+  cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:5px;
+}
+.filter-btn:hover{border-color:var(--border2);color:var(--text)}
+.filter-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
+.filter-sep{width:1px;height:20px;background:var(--border);margin:0 2px}
+.count-label{font-size:12px;color:var(--muted);margin-left:auto;font-family:var(--mono)}
+
+/* ── TABLE ── */
+.table-wrap{
+  flex:1;overflow:auto;margin:12px 24px 20px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow-sm);
+}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{
+  padding:12px 14px;
+  background:var(--bg);
+  border-bottom:1px solid var(--border);
+  text-align:left;font-size:10px;font-weight:700;
+  letter-spacing:.8px;text-transform:uppercase;color:var(--muted2);
+  position:sticky;top:0;z-index:10;white-space:nowrap;cursor:pointer;
+  user-select:none;transition:color .12s;
+}
+thead th:hover{color:var(--muted)}
+thead th.sorted{color:var(--text)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--bg)}
+tbody tr.selected{background:var(--blue-bg)}
+td{padding:16px 14px;vertical-align:middle}
+.td-name{font-weight:600;color:var(--text);font-size:13px}
+.td-co{font-size:11px;color:var(--muted);margin-top:1px}
+.td-email{color:var(--text);font-size:12.5px}
+.td-phone{color:var(--muted);font-size:12.5px}
+.td-loc{font-size:12px;color:var(--muted)}
+
+/* STATUS BADGES */
+.badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:20px;
+  font-size:10px;font-weight:700;letter-spacing:.3px;
+  white-space:nowrap;
+}
+.badge-hot{background:#FFF0F0;color:#CC0000}
+.badge-warm{background:#FFF4EC;color:#B84C00}
+.badge-cold{background:var(--blue-bg);color:var(--blue)}
+.badge-new{background:#F0F0FF;color:#5050CC}
+.badge-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* SECTOR PILL */
+.sector{
+  display:inline-block;padding:4px 10px;
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:6px;font-size:11px;font-weight:500;color:var(--muted);
+  white-space:nowrap;
 }
 
-/* results column */
-.res-col { display: flex; flex-direction: column; background: var(--bg); }
-.res-hdr {
-  padding: 14px 20px 12px; border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--card); position: sticky; top: 0; z-index: 10; flex-shrink: 0;
-}
-.res-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
-.res-count { font-size: 12px; color: var(--muted); font-family: var(--mono); }
-.res-panel { overflow-y: auto; flex: 1; position: relative; }
-.res-panel::-webkit-scrollbar { width: 4px; }
-.res-panel::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-/* context banner */
-.res-context {
-  padding: 8px 20px; background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  font-size: 11px; color: var(--muted);
-  display: none; align-items: center; gap: 6px; flex-wrap: wrap;
-}
-.res-context.show { display: flex; }
-.res-context strong { color: var(--text); font-weight: 700; }
-.res-context .naf-tag {
-  font-size: 10px; font-weight: 700; font-family: var(--mono);
-  color: var(--muted2); background: var(--surface2);
-  border: 1px solid var(--border); border-radius: 5px;
-  padding: 2px 7px;
+/* SOURCE TAG */
+.source-tag{
+  display:inline-block;padding:4px 10px;
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:20px;font-size:11px;font-weight:500;color:var(--muted);
+  white-space:nowrap;
 }
 
-/* skeleton */
-.skel-wrap { padding: 16px; display: none; flex-direction: column; gap: 12px; }
-.skel-wrap.show { display: flex; }
-.skel {
-  background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
-  background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 12px;
+/* ACTIONS COL */
+.td-actions{display:flex;align-items:center;gap:4px;opacity:0;transition:opacity .12s}
+tbody tr:hover .td-actions{opacity:1}
+.act-btn{
+  width:26px;height:26px;border-radius:6px;
+  background:var(--bg);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;cursor:pointer;transition:all .12s;
+}
+.act-btn:hover{border-color:var(--border2);background:var(--surface)}
+
+/* ── EMPTY STATE ── */
+.empty-state{
+  flex:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;
+  text-align:center;padding:40px;
+}
+.empty-icon{font-size:36px;opacity:.3}
+.empty-title{font-size:16px;font-weight:700;color:var(--text)}
+.empty-sub{font-size:13px;color:var(--muted);max-width:320px;line-height:1.5}
+
+/* ── IMPORT MODAL ── */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.4);backdrop-filter:blur(4px);
+  z-index:200;display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{
+  background:var(--surface);border-radius:14px;
+  box-shadow:var(--shadow-lg);width:520px;max-width:calc(100vw - 40px);
+  max-height:90vh;overflow-y:auto;
+  transform:translateY(12px);transition:transform .2s;
+}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-header{
+  padding:20px 24px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.modal-title{font-size:16px;font-weight:800;letter-spacing:-.3px}
+.modal-close{
+  width:28px;height:28px;border-radius:7px;background:var(--bg);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;
+  transition:all .12s;
+}
+.modal-close:hover{background:var(--border);color:var(--text)}
+.modal-body{padding:20px 24px}
+.modal-tabs{
+  display:flex;gap:4px;margin-bottom:20px;
+  background:var(--bg);border-radius:8px;padding:3px;
+}
+.modal-tab{
+  flex:1;padding:7px;border-radius:6px;
+  font-family:var(--font);font-size:12.5px;font-weight:600;
+  cursor:pointer;border:none;background:none;color:var(--muted);
+  transition:all .12s;text-align:center;
+}
+.modal-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
+
+/* IMPORT TABS CONTENT */
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* Drop zone */
+.drop-zone{
+  border:2px dashed var(--border2);border-radius:10px;padding:32px;
+  text-align:center;cursor:pointer;transition:all .2s;background:var(--bg);
+  position:relative;
+}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--blue);background:var(--blue-bg)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{font-size:28px;margin-bottom:10px}
+.drop-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px}
+.drop-sub{font-size:12px;color:var(--muted)}
+.drop-sub span{color:var(--blue);font-weight:600}
+
+/* CSV preview */
+.csv-preview{
+  margin-top:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;
+  display:none;
+}
+.csv-preview.visible{display:block}
+.csv-preview table{width:100%;font-size:11.5px}
+.csv-preview thead th{
+  padding:7px 10px;background:var(--bg);border-bottom:1px solid var(--border);
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2);
+  cursor:default;
+}
+.csv-preview tbody td{padding:6px 10px;border-bottom:1px solid var(--border)}
+.csv-preview tbody tr:last-child td{border-bottom:none}
+.csv-info{
+  display:flex;align-items:center;gap:8px;margin-top:10px;
+  font-size:12px;color:var(--muted);
+}
+.csv-info strong{color:var(--green);font-weight:700}
+
+/* Manual form */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group.full{grid-column:1/-1}
+.form-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.form-input{
+  height:36px;padding:0 10px;
+  background:var(--bg);border:1px solid var(--border);border-radius:7px;
+  font-family:var(--font);font-size:13px;color:var(--text);outline:none;
+  transition:border-color .15s;
+}
+.form-input:focus{border-color:var(--border2);background:var(--surface)}
+.form-select{
+  height:36px;padding:0 10px;
+  background:var(--bg);border:1px solid var(--border);border-radius:7px;
+  font-family:var(--font);font-size:13px;color:var(--text);outline:none;
+  cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23AEAEB2'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  padding-right:28px;
 }
 
-/* empty state */
-.empty { padding: 60px 20px; text-align: center; display: none; }
-.empty.show { display: block; }
-.empty-ico { font-size: 36px; margin-bottom: 16px; }
-.empty-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
-.empty-sub { font-size: 14px; color: var(--muted); line-height: 1.6; }
+/* Modal footer */
+.modal-footer{
+  padding:14px 24px 20px;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:16px;
+}
 
-/* page loader */
-.page-loader { padding: 20px; text-align: center; display: none; }
-.page-loader.show { display: block; }
-.page-loader span { font-size: 12px; color: var(--muted); }
+/* ── DETAIL PANEL ── */
+.detail-panel{
+  width:0;background:var(--surface);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:width .2s ease;flex-shrink:0;
+}
+.detail-panel.open{width:320px}
+.dp-header{
+  padding:16px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.dp-name{font-size:15px;font-weight:800;letter-spacing:-.3px}
+.dp-co{font-size:12px;color:var(--muted);margin-top:1px}
+.dp-close{
+  width:26px;height:26px;border-radius:6px;background:var(--bg);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;
+  transition:all .12s;flex-shrink:0;
+}
+.dp-close:hover{background:var(--border)}
+.dp-body{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.dp-section{}
+.dp-section-title{font-size:9px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);margin-bottom:8px}
+.dp-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
+.dp-ico{width:16px;font-size:12px;flex-shrink:0;margin-top:1px;color:var(--muted2)}
+.dp-val{font-size:12.5px;color:var(--text);line-height:1.4}
+.dp-val a{color:var(--blue);text-decoration:none}
+.dp-val a:hover{text-decoration:underline}
+.dp-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.dp-act{
+  flex:1;height:32px;border-radius:7px;
+  font-family:var(--font);font-size:12px;font-weight:600;
+  cursor:pointer;transition:all .12s;border:none;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+}
+.dp-act-outline{background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+.dp-act-outline:hover{border-color:var(--border2);color:var(--text)}
+.dp-act-dark{background:var(--text);color:#fff}
+.dp-act-dark:hover{background:#000}
+.dp-notes textarea{
+  width:100%;height:72px;padding:8px 10px;
+  background:var(--bg);border:1px solid var(--border);border-radius:7px;
+  font-family:var(--font);font-size:12px;color:var(--text);resize:vertical;outline:none;
+  transition:border-color .15s;
+}
+.dp-notes textarea:focus{border-color:var(--border2)}
+.dp-status-select{
+  width:100%;height:30px;padding:0 8px;
+  background:var(--bg);border:1px solid var(--border);border-radius:7px;
+  font-family:var(--font);font-size:12px;color:var(--text);cursor:pointer;outline:none;
+}
 
-/* ═══════════════════════════════════════════════
-   CARDS
-═══════════════════════════════════════════════ */
-.card {
-  padding: 18px 20px; border-bottom: 1px solid var(--border);
-  background: var(--card); animation: fadeUp .3s ease both;
-  transition: background .15s;
+/* ── TOAST ── */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--text);color:#fff;padding:10px 18px;border-radius:9px;
+  font-size:13px;font-weight:600;z-index:300;
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1);box-shadow:var(--shadow-md);
+  display:flex;align-items:center;gap:8px;
 }
-.card:hover { background: var(--surface); }
-.card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 10px; }
-.cn { font-size: 13.5px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
-.cs { font-size: 11px; color: var(--muted); }
-.badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-.badge {
-  padding: 3px 8px; border-radius: 5px;
-  font-size: 10px; font-weight: 700; white-space: nowrap;
-}
-.b-hot   { background: rgba(204,0,0,.08); color: var(--red); }
-.b-warm  { background: rgba(245,158,11,.1); color: #B45309; }
-.b-cold  { background: var(--surface2); color: var(--muted); }
-.b-complete   { background: rgba(29,131,72,.1); color: var(--green); }
-.b-incomplete { background: var(--surface2); color: var(--muted); }
-.b-geo-pend   { background: var(--surface2); color: var(--muted2); animation: pulse 1.4s ease-in-out infinite; }
-.b-geo-ok     { background: rgba(29,131,72,.1); color: var(--green); }
-.b-geo-fail   { background: rgba(245,158,11,.1); color: #B45309; }
-.naf-badge {
-  font-size: 10px; font-weight: 700; font-family: var(--mono);
-  color: var(--muted2); background: var(--surface);
-  border: 1px solid var(--border); border-radius: 5px;
-  padding: 2px 7px; display: inline-block; margin-bottom: 4px;
-}
-.cinfo { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
-.ir { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.5; }
-.ico { width: 16px; flex-shrink: 0; text-align: center; font-size: 11px; }
-.missing { color: var(--muted2); font-style: italic; }
-.csoc { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
-.st {
-  padding: 3px 8px; border-radius: 5px;
-  font-size: 10px; font-weight: 600; font-family: var(--mono);
-  background: var(--surface); border: 1px solid var(--border); color: var(--muted2);
-}
-.st.on { background: var(--text); border-color: var(--text); color: #fff; }
-.cact { display: flex; gap: 8px; }
-.ba {
-  padding: 7px 12px; border-radius: 8px; border: 1.5px solid var(--border);
-  background: var(--card); font-family: var(--font); font-size: 12px; font-weight: 600;
-  cursor: pointer; color: var(--muted); transition: all .15s;
-}
-.ba:hover { border-color: var(--border2); color: var(--text); }
-.ba.pr { background: var(--text); color: #fff; border-color: var(--text); }
-.ba.pr:hover { background: #000; }
+.toast.show{transform:translateX(-50%) translateY(0)}
 
-/* ═══════════════════════════════════════════════
-   EXPORT BAR
-═══════════════════════════════════════════════ */
-.exp-bar {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  background: var(--text); color: #fff;
-  display: flex; align-items: center; gap: 12px; padding: 14px 48px;
-  transform: translateY(100%); transition: transform .3s ease; z-index: 50;
-}
-.exp-bar.show { transform: none; }
-.exp-txt { flex: 1; font-size: 13px; font-weight: 500; }
-.bexp {
-  padding: 8px 18px; border-radius: 8px; border: none;
-  font-family: var(--font); font-size: 12px; font-weight: 700;
-  cursor: pointer; transition: opacity .15s;
-}
-.bexp:hover { opacity: .85; }
-.bexp-csv { background: var(--green); color: #fff; }
-.bexp-alt { background: rgba(255,255,255,.15); color: #fff; }
-.fpad { height: 80px; }
-
-/* ═══════════════════════════════════════════════
-   LEAFLET OVERRIDES
-═══════════════════════════════════════════════ */
-.leaflet-container { font-family: var(--font) !important; }
-.leaflet-popup-content-wrapper {
-  border-radius: 14px !important; border: 1px solid var(--border) !important;
-  box-shadow: 0 12px 32px rgba(0,0,0,.14) !important;
-  padding: 0 !important; overflow: hidden;
-}
-.leaflet-popup-content { margin: 0 !important; width: auto !important; }
-.leaflet-popup-tip-container { display: none !important; }
-
-/* marker cluster */
-.marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
-  background: rgba(29,29,31,.12) !important;
-}
-.marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
-  background: rgba(29,29,31,.75) !important; color: #fff !important; font-weight: 800 !important;
-}
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted2)}
 </style>
 </head>
 <body>
 
+<!-- SHELL -->
 <div class="shell">
 
-  <aside class="sidebar" id="sidebar"></aside>
-
-<main>
-
-  <!-- ── SEARCH ENGINE ── -->
-  <div class="search-engine">
-    <div class="search-row">
-
-      <!-- secteur -->
-      <div>
-        <div class="field-label">Secteur professionnel <span class="label-sub">— métier, activité ou code APE</span></div>
-        <div style="position:relative">
-          <div class="sip" id="sip">
-            <svg class="loup" width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.8"/>
-              <path d="M12 12l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-            <input type="text" id="inp-sector"
-              placeholder="opticien, traiteur, agence événementielle, 9602A…"
-              autocomplete="off" spellcheck="false"
-              oninput="onSectorInput(this.value)"
-              onkeydown="onSectorKey(event)"
-              onfocus="onSectorFocus()"/>
-            <button class="clr" id="btn-clr" onclick="clearSector()">
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              </svg>
-            </button>
-          </div>
-          <div class="acd" id="acd"></div>
-          <div class="nchip" id="nchip">
-            <span class="nchip-l">
-              <span id="nchip-txt"></span>
-              <button onclick="clearSector()">×</button>
-            </span>
-          </div>
-        </div>
+  <!-- SIDEBAR — identique dashboard -->
+  <aside class="sidebar">
+    <!-- Logo -->
+    <div class="sb-logo">
+      <div class="sb-logo-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
       </div>
+      <span class="sb-logo-name">MUP</span>
+    </div>
 
-      <!-- région -->
-      <div>
-        <div class="field-label">Région & Zone géographique <span class="label-sub">— 13 régions</span></div>
-        <div class="sel-w">
-          <select id="sel-region" onchange="onRegionChange()">
-            <option value="">Choisir une région…</option>
-            <option value="ile-de-france">Île-de-France</option>
-            <option value="auvergne-rhone-alpes">Auvergne-Rhône-Alpes</option>
-            <option value="nouvelle-aquitaine">Nouvelle-Aquitaine</option>
-            <option value="occitanie">Occitanie</option>
-            <option value="hauts-de-france">Hauts-de-France</option>
-            <option value="grand-est">Grand Est</option>
-            <option value="paca">Provence-Alpes-Côte d'Azur</option>
-            <option value="pays-de-la-loire">Pays de la Loire</option>
-            <option value="normandie">Normandie</option>
-            <option value="bretagne">Bretagne</option>
-            <option value="bourgogne-franche-comte">Bourgogne-Franche-Comté</option>
-            <option value="centre-val-de-loire">Centre-Val de Loire</option>
-            <option value="corse">Corse</option>
-          </select>
-          <svg class="sel-arr" width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
+    <div class="sb-label">Navigation</div>
+
+    <!-- Dashboard -->
+    <button class="sb-item" onclick="navTo('dashboard')">
+      <div class="sb-icon" style="background:rgba(29,29,31,.08);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1D1D1F" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       </div>
+      Dashboard
+    </button>
 
-    </div><!-- /search-row -->
+    <!-- Leads -->
+    <button class="sb-item" onclick="navTo('leads')">
+      <div class="sb-icon" style="background:rgba(251,191,36,.15);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      Leads
+    </button>
 
-    <div class="sfooter">
-      <div class="shint" id="hint">Tapez un métier ou un code APE, puis choisissez une région</div>
-      <div class="sfooter-right">
-        <!-- toggle fiches complètes -->
-        <label class="toggle-wrap" title="N'afficher que les fiches avec email + site + téléphone">
-          <input type="checkbox" id="chk-complete" onchange="onToggleComplete(this.checked)">
-          <span class="tog"></span>
-          <span>Fiches complètes</span>
-        </label>
-        <!-- bouton générer -->
-        <button class="btn-go" id="btn-go" onclick="startSearch()">
-          <svg id="ico-search" width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M10.5 10.5l2.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <div class="spinner" id="spinner"></div>
-          <span id="btn-lbl">Générer mes leads</span>
+    <!-- Prospects — ACTIF -->
+    <button class="sb-item active" onclick="navTo('prospects')">
+      <div class="sb-icon" style="background:rgba(204,0,0,.10);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#CC0000" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      Prospects
+    </button>
+
+    <!-- Pipeline -->
+    <button class="sb-item" onclick="navTo('pipeline')">
+      <div class="sb-icon" style="background:rgba(99,102,241,.12);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      </div>
+      Pipeline
+    </button>
+
+    <!-- Contacts -->
+    <button class="sb-item" onclick="navTo('contacts')">
+      <div class="sb-icon" style="background:rgba(10,102,194,.12);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0A66C2" stroke-width="2.5" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      Contacts
+      <span class="sb-badge">12</span>
+    </button>
+
+    <!-- Agenda -->
+    <button class="sb-item" onclick="navTo('agenda')">
+      <div class="sb-icon" style="background:rgba(29,131,72,.12);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </div>
+      Agenda
+    </button>
+
+    <!-- Carte -->
+    <button class="sb-item" onclick="navTo('carte')">
+      <div class="sb-icon" style="background:rgba(11,188,212,.12);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0BBCD4" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg>
+      </div>
+      Carte
+    </button>
+
+    <!-- Mail -->
+    <button class="sb-item" onclick="navTo('mail')">
+      <div class="sb-icon" style="background:rgba(184,76,0,.12);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      </div>
+      Mail
+      <span class="sb-badge blue">4</span>
+    </button>
+
+    <!-- Devis & Factures -->
+    <button class="sb-item" onclick="navTo('devis')">
+      <div class="sb-icon" style="background:rgba(29,131,72,.10);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      </div>
+      Devis &amp; Factures
+    </button>
+
+    <!-- Partenaires -->
+    <button class="sb-item" onclick="navTo('partenaires')">
+      <div class="sb-icon" style="background:rgba(99,102,241,.10);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6366F1" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      Partenaires
+    </button>
+
+    <!-- Frais -->
+    <button class="sb-item" onclick="navTo('frais')">
+      <div class="sb-icon" style="background:rgba(184,76,0,.10);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      </div>
+      Frais
+    </button>
+
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main-content">
+
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+      <div class="page-title-block">
+        <div class="page-title">Prospects</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-import" onclick="openImport('csv')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Charger des prospects
+        </button>
+        <button class="btn btn-outline" onclick="exportOdoo()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Export Odoo
+        </button>
+        <button class="btn btn-dark" onclick="openImport('manual')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nouveau
         </button>
       </div>
     </div>
-  </div><!-- /search-engine -->
 
-  <!-- ── ERROR BANNER ── -->
-  <div class="err-banner" id="err-banner">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" flex-shrink="0">
-      <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
-      <path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>
-    <span id="err-msg">Erreur de chargement</span>
-    <button class="err-retry" onclick="retryLastPage()">Réessayer</button>
-  </div>
-
-  <!-- ── STATS BAR ── -->
-  <div class="stats-bar" id="stats-bar">
-    <div class="si"><div class="sv" id="st-total">—</div><div class="sl">Établissements SIRENE</div></div>
-    <div class="sdiv"></div>
-    <div class="si"><div class="sv" id="st-complete">—</div><div class="sl">Fiches complètes</div></div>
-    <div class="sdiv"></div>
-    <div class="si"><div class="sv" id="st-hot">—</div><div class="sl">Leads prioritaires</div></div>
-    <div class="sdiv"></div>
-    <div class="si"><div class="sv" id="st-email">—</div><div class="sl">Taux email pro</div></div>
-    <div class="sdiv"></div>
-    <div class="si"><div class="sv" id="st-geo" style="color:var(--green)">0</div><div class="sl">📍 Localisés</div></div>
-    <div class="sdiv"></div>
-    <div class="si"><div class="sv" id="st-noloc" style="color:var(--accent)">0</div><div class="sl">⚠️ Non localisés</div></div>
-    <div class="fchips">
-      <div class="chip c1"><span class="cd"></span>SIRENE</div>
-      <div class="chip c2"><span class="cd"></span>BAN / OSM</div>
-      <div class="chip c3"><span class="cd"></span>Scan web</div>
-    </div>
-  </div>
-
-  <!-- ── CONTENT ── -->
-  <div class="content-area">
-
-    <!-- carte -->
-    <div class="map-col">
-      <div class="map-hdr">
-        <div>
-          <div class="map-title">Carte de prospection</div>
-          <div class="map-sub" id="map-sub">Sélectionnez un secteur et une région</div>
-        </div>
-        <div class="map-leg">
-          <div class="leg-item"><span class="leg-dot dot-h"></span>Prioritaire</div>
-          <div class="leg-item"><span class="leg-dot dot-w"></span>Tiède</div>
-          <div class="leg-item"><span class="leg-dot dot-c"></span>Normal</div>
-        </div>
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="search-ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#AEAEB2" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        <input type="text" id="search-input" placeholder="Chercher un prospect, une société…" oninput="filterProspects()">
       </div>
-      <div id="map" style="position:relative"></div>
-      <div class="geo-bar" id="geo-bar" style="width:0%"></div>
+      <span class="count-label" id="count-label">0 prospect(s)</span>
     </div>
 
-    <!-- résultats -->
-    <div class="res-col">
-      <div class="res-hdr">
-        <div class="res-title">Leads générés</div>
-        <div class="res-count" id="res-count">0 résultats</div>
-      </div>
-      <!-- contexte de recherche strict -->
-      <div class="res-context" id="res-context">
-        Résultats pour&nbsp;:
-        <span class="naf-tag" id="ctx-naf"></span>
-        <strong id="ctx-label"></strong>
-        —&nbsp;Région :
-        <strong id="ctx-region"></strong>
-      </div>
-      <div class="res-panel" id="res-panel">
-        <!-- skeleton -->
-        <div class="skel-wrap" id="skel">
-          <div class="skel" style="height:180px"></div>
-          <div class="skel" style="height:155px;animation-delay:.12s"></div>
-          <div class="skel" style="height:168px;animation-delay:.24s"></div>
+    <!-- CONTENT AREA -->
+    <div style="display:flex;flex:1;overflow:hidden;gap:0">
+
+      <!-- TABLE WRAP -->
+      <div class="table-wrap" id="table-wrap">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#AEAEB2" stroke-width="1.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <div class="empty-title">Aucun prospect pour l'instant</div>
+          <div class="empty-sub">Importez un fichier CSV ou ajoutez des prospects manuellement pour démarrer votre prospection.</div>
+          <button class="btn btn-import" style="margin-top:8px" onclick="openImport('csv')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Charger des prospects</button>
         </div>
-        <!-- empty state -->
-        <div class="empty show" id="empty">
-          <div class="empty-ico">🔍</div>
-          <div class="empty-title">Aucun lead généré</div>
-          <div class="empty-sub">Tapez un métier et choisissez une région pour démarrer.<br>Les données proviennent de SIRENE (INSEE), enrichies par BAN et scan web.</div>
+        <table id="prospects-table" style="display:none">
+          <thead>
+            <tr>
+              <th onclick="sortBy('sector')" style="width:160px">Secteur</th>
+              <th onclick="sortBy('company')" style="width:200px">Société</th>
+              <th onclick="sortBy('name')" style="width:160px">Nom</th>
+              <th style="width:220px">Email</th>
+              <th style="width:140px">Tél.</th>
+              <th onclick="sortBy('location')" style="width:140px">Localisation</th>
+              <th onclick="sortBy('source')">Source</th>
+              <th style="width:60px"></th>
+            </tr>
+          </thead>
+          <tbody id="prospects-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- DETAIL PANEL -->
+      <div class="detail-panel" id="detail-panel">
+        <div class="dp-header">
+          <div>
+            <div class="dp-name" id="dp-name">—</div>
+            <div class="dp-co" id="dp-co">—</div>
+          </div>
+          <div class="dp-close" onclick="closeDetail()">✕</div>
         </div>
-        <!-- cards injected here -->
-        <div id="cards"></div>
-        <!-- infinite scroll loader -->
-        <div class="page-loader" id="page-loader">
-          <span>Chargement de la page suivante…</span>
+        <div class="dp-body">
+          <div class="dp-section">
+            <div class="dp-section-title">Statut</div>
+            <select class="dp-status-select" id="dp-status-sel" onchange="updateStatus()">
+              <option value="new">🆕 Nouveau</option>
+              <option value="hot">🔥 Hot</option>
+              <option value="warm">⚡ Warm</option>
+              <option value="cold">❄️ Cold</option>
+            </select>
+          </div>
+          <div class="dp-section">
+            <div class="dp-section-title">Contact</div>
+            <div class="dp-row"><div class="dp-ico">👤</div><div class="dp-val" id="dp-director">—</div></div>
+            <div class="dp-row"><div class="dp-ico">✉️</div><div class="dp-val" id="dp-email">—</div></div>
+            <div class="dp-row"><div class="dp-ico">📞</div><div class="dp-val" id="dp-phone">—</div></div>
+            <div class="dp-row"><div class="dp-ico">🌐</div><div class="dp-val" id="dp-website">—</div></div>
+            <div class="dp-row"><div class="dp-ico">📍</div><div class="dp-val" id="dp-loc">—</div></div>
+          </div>
+          <div class="dp-section">
+            <div class="dp-section-title">Actions rapides</div>
+            <div class="dp-actions">
+              <button class="dp-act dp-act-outline" onclick="copyEmail()">Copier email</button>
+              <button class="dp-act dp-act-outline" onclick="copyPhone()">📞 Copier tél.</button>
+            </div>
+            <div class="dp-actions" style="margin-top:6px">
+              <button class="dp-act dp-act-dark" onclick="moveToOdoo()">Envoyer Odoo</button>
+            </div>
+          </div>
+          <div class="dp-section dp-notes">
+            <div class="dp-section-title">Notes</div>
+            <textarea id="dp-notes" placeholder="Ajouter une note…" oninput="saveNote()"></textarea>
+          </div>
         </div>
       </div>
-    </div>
 
-  </div><!-- /content-area -->
-
-  <div class="exp-bar" id="exp-bar">
-    <div class="exp-txt">
-      <strong id="exp-count">—</strong> leads chargés · <span id="exp-complete">—</span> fiches complètes
-      <span style="color:var(--g400);font-size:11px;margin-left:8px;">SIRENE · BAN · Scan web</span>
-    </div>
-    <button class="bexp bexp-csv" onclick="exportCSV()">↓ Export CSV</button>
-    <button class="bexp bexp-alt">⬡ JSON</button>
-  </div>
-
-  <div class="fpad"></div>
-</main>
-</div><!-- .shell -->
-
-<!-- HIDDEN NAF SELECT — used only to build the fuzzy search index -->
-<div style="display:none" aria-hidden="true">
-<select id="sector-select">
-<option value=""></option>
-            <!-- A — AGRICULTURE, SYLVICULTURE ET PÊCHE -->
-            <optgroup label="A — Agriculture, sylviculture et pêche">
-              <option value="0111Z">Culture de céréales (0111Z)</option>
-              <option value="0112Z">Culture de légumineuses (0112Z)</option>
-              <option value="0113Z">Culture de légumes (0113Z)</option>
-              <option value="0114Z">Culture de canne à sucre (0114Z)</option>
-              <option value="0115Z">Culture de tabac (0115Z)</option>
-              <option value="0116Z">Culture de plantes à fibres (0116Z)</option>
-              <option value="0119Z">Autres cultures non permanentes (0119Z)</option>
-              <option value="0121Z">Culture de la vigne (0121Z)</option>
-              <option value="0122Z">Culture de fruits tropicaux (0122Z)</option>
-              <option value="0123Z">Culture d'agrumes (0123Z)</option>
-              <option value="0124Z">Culture de fruits à pépins et noyaux (0124Z)</option>
-              <option value="0125Z">Culture d'autres fruits d'arbres (0125Z)</option>
-              <option value="0126Z">Culture de fruits oléagineux (0126Z)</option>
-              <option value="0127Z">Culture de plantes à boissons (0127Z)</option>
-              <option value="0128Z">Culture de plantes à épices (0128Z)</option>
-              <option value="0129Z">Autres cultures permanentes (0129Z)</option>
-              <option value="0130Z">Reproduction de plantes (0130Z)</option>
-              <option value="0141Z">Élevage de vaches laitières (0141Z)</option>
-              <option value="0142Z">Élevage d'autres bovins (0142Z)</option>
-              <option value="0143Z">Élevage de chevaux (0143Z)</option>
-              <option value="0144Z">Élevage d'ovins et caprins (0144Z)</option>
-              <option value="0145Z">Élevage de porcins (0145Z)</option>
-              <option value="0146Z">Élevage de volailles (0146Z)</option>
-              <option value="0149Z">Élevage d'autres animaux (0149Z)</option>
-              <option value="0150Z">Culture et élevage associés (0150Z)</option>
-              <option value="0161Z">Activités de soutien aux cultures (0161Z)</option>
-              <option value="0162Z">Activités de soutien à l'élevage (0162Z)</option>
-              <option value="0163Z">Traitement des récoltes (0163Z)</option>
-              <option value="0164Z">Traitement des semences (0164Z)</option>
-              <option value="0170Z">Chasse et piégeage (0170Z)</option>
-              <option value="0210Z">Sylviculture et exploitation forestière (0210Z)</option>
-              <option value="0220Z">Exploitation forestière (0220Z)</option>
-              <option value="0230Z">Récolte de produits forestiers (0230Z)</option>
-              <option value="0240Z">Services de soutien à l'exploitation forestière (0240Z)</option>
-              <option value="0311Z">Pêche en mer (0311Z)</option>
-              <option value="0312Z">Pêche en eau douce (0312Z)</option>
-              <option value="0321Z">Aquaculture en mer (0321Z)</option>
-              <option value="0322Z">Aquaculture en eau douce (0322Z)</option>
-            </optgroup>
-
-            <!-- B — INDUSTRIES EXTRACTIVES -->
-            <optgroup label="B — Industries extractives">
-              <option value="0510Z">Extraction de houille (0510Z)</option>
-              <option value="0610Z">Extraction de pétrole brut (0610Z)</option>
-              <option value="0620Z">Extraction de gaz naturel (0620Z)</option>
-              <option value="0710Z">Extraction de minerais de fer (0710Z)</option>
-              <option value="0721Z">Extraction de minerais d'uranium (0721Z)</option>
-              <option value="0729Z">Extraction d'autres minerais (0729Z)</option>
-              <option value="0811Z">Extraction de pierres ornementales (0811Z)</option>
-              <option value="0812Z">Exploitation de gravières (0812Z)</option>
-              <option value="0891Z">Extraction de minéraux chimiques (0891Z)</option>
-              <option value="0893Z">Extraction de sel (0893Z)</option>
-              <option value="0899Z">Autres industries extractives (0899Z)</option>
-              <option value="0910Z">Services pétroliers (0910Z)</option>
-              <option value="0990Z">Services aux autres industries extractives (0990Z)</option>
-            </optgroup>
-
-            <!-- C — INDUSTRIE MANUFACTURIÈRE -->
-            <optgroup label="C — Industrie alimentaire">
-              <option value="1011Z">Transformation et conservation de viande de boucherie (1011Z)</option>
-              <option value="1012Z">Transformation de volailles (1012Z)</option>
-              <option value="1013A">Préparation industrielle de produits à base de viande (1013A)</option>
-              <option value="1013B">Charcuterie (1013B)</option>
-              <option value="1020Z">Transformation de poissons (1020Z)</option>
-              <option value="1031Z">Transformation de pommes de terre (1031Z)</option>
-              <option value="1032Z">Préparation de jus de fruits (1032Z)</option>
-              <option value="1039A">Autre transformation de légumes (1039A)</option>
-              <option value="1039B">Transformation de fruits (1039B)</option>
-              <option value="1041A">Fabrication d'huiles et graisses brutes (1041A)</option>
-              <option value="1041B">Fabrication d'huiles et graisses raffinées (1041B)</option>
-              <option value="1042Z">Fabrication de margarine (1042Z)</option>
-              <option value="1051A">Fabrication de lait liquide (1051A)</option>
-              <option value="1051B">Fabrication de lait concentré (1051B)</option>
-              <option value="1051C">Fabrication de fromages (1051C)</option>
-              <option value="1051D">Fabrication d'autres produits laitiers (1051D)</option>
-              <option value="1052Z">Fabrication de glaces et sorbets (1052Z)</option>
-              <option value="1061A">Meunerie (1061A)</option>
-              <option value="1061B">Autres activités de travail des grains (1061B)</option>
-              <option value="1062Z">Fabrication de produits amylacés (1062Z)</option>
-              <option value="1071A">Fabrication industrielle de pain (1071A)</option>
-              <option value="1071B">Cuisson de produits de boulangerie (1071B)</option>
-              <option value="1071C">Boulangerie et boulangerie-pâtisserie (1071C)</option>
-              <option value="1071D">Pâtisserie (1071D)</option>
-              <option value="1072Z">Fabrication de biscuits et gâteaux (1072Z)</option>
-              <option value="1073Z">Fabrication de pâtes alimentaires (1073Z)</option>
-              <option value="1081Z">Fabrication de sucre (1081Z)</option>
-              <option value="1082Z">Fabrication de cacao et chocolat (1082Z)</option>
-              <option value="1083Z">Transformation du thé et café (1083Z)</option>
-              <option value="1084Z">Fabrication de condiments (1084Z)</option>
-              <option value="1085Z">Fabrication de plats préparés (1085Z)</option>
-              <option value="1086Z">Fabrication d'aliments homogénéisés (1086Z)</option>
-              <option value="1089Z">Fabrication d'autres produits alimentaires (1089Z)</option>
-              <option value="1091Z">Fabrication d'aliments pour animaux de ferme (1091Z)</option>
-              <option value="1092Z">Fabrication d'aliments pour animaux de compagnie (1092Z)</option>
-              <option value="1101Z">Production de boissons alcooliques distillées (1101Z)</option>
-              <option value="1102A">Fabrication de vins effervescents (1102A)</option>
-              <option value="1102B">Vinification (1102B)</option>
-              <option value="1103Z">Fabrication de cidre et vins de fruits (1103Z)</option>
-              <option value="1104Z">Production d'autres boissons fermentées (1104Z)</option>
-              <option value="1105Z">Fabrication de bière (1105Z)</option>
-              <option value="1106Z">Fabrication de malt (1106Z)</option>
-              <option value="1107A">Industrie des eaux de table (1107A)</option>
-              <option value="1107B">Production de boissons rafraîchissantes (1107B)</option>
-              <option value="1200Z">Fabrication de produits à base de tabac (1200Z)</option>
-            </optgroup>
-
-            <optgroup label="C — Textile, habillement, cuir">
-              <option value="1310Z">Préparation de fibres textiles (1310Z)</option>
-              <option value="1320Z">Tissage de textiles (1320Z)</option>
-              <option value="1330Z">Ennoblissement textile (1330Z)</option>
-              <option value="1391Z">Fabrication d'étoffes à mailles (1391Z)</option>
-              <option value="1392Z">Fabrication d'articles textiles (1392Z)</option>
-              <option value="1393Z">Fabrication de tapis et moquettes (1393Z)</option>
-              <option value="1394Z">Fabrication de ficelles et filets (1394Z)</option>
-              <option value="1395Z">Fabrication de non-tissés (1395Z)</option>
-              <option value="1396Z">Fabrication de textiles techniques (1396Z)</option>
-              <option value="1399Z">Fabrication d'autres textiles (1399Z)</option>
-              <option value="1411Z">Fabrication de vêtements en cuir (1411Z)</option>
-              <option value="1412Z">Fabrication de vêtements de travail (1412Z)</option>
-              <option value="1413Z">Fabrication de vêtements de dessus (1413Z)</option>
-              <option value="1414Z">Fabrication de vêtements de dessous (1414Z)</option>
-              <option value="1419Z">Fabrication d'autres vêtements (1419Z)</option>
-              <option value="1420Z">Fabrication d'articles en fourrure (1420Z)</option>
-              <option value="1431Z">Fabrication de bas et chaussettes (1431Z)</option>
-              <option value="1439Z">Fabrication d'autres articles à mailles (1439Z)</option>
-              <option value="1511Z">Apprêt et tannage des cuirs (1511Z)</option>
-              <option value="1512Z">Fabrication d'articles de voyage (1512Z)</option>
-              <option value="1520Z">Fabrication de chaussures (1520Z)</option>
-            </optgroup>
-
-            <optgroup label="C — Bois, papier, imprimerie">
-              <option value="1610A">Sciage et rabotage du bois (1610A)</option>
-              <option value="1610B">Imprégnation du bois (1610B)</option>
-              <option value="1621Z">Fabrication de placage et panneaux (1621Z)</option>
-              <option value="1622Z">Fabrication de parquets assemblés (1622Z)</option>
-              <option value="1623Z">Fabrication de charpentes (1623Z)</option>
-              <option value="1624Z">Fabrication d'emballages en bois (1624Z)</option>
-              <option value="1629Z">Fabrication d'objets en bois (1629Z)</option>
-              <option value="1711Z">Fabrication de pâte à papier (1711Z)</option>
-              <option value="1712Z">Fabrication de papier et carton (1712Z)</option>
-              <option value="1721A">Fabrication de carton ondulé (1721A)</option>
-              <option value="1721B">Fabrication de cartonnages (1721B)</option>
-              <option value="1721C">Fabrication d'emballages en papier (1721C)</option>
-              <option value="1722Z">Fabrication d'articles en papier (1722Z)</option>
-              <option value="1723Z">Fabrication d'articles de papeterie (1723Z)</option>
-              <option value="1724Z">Fabrication de papiers peints (1724Z)</option>
-              <option value="1729Z">Fabrication d'autres articles en papier (1729Z)</option>
-              <option value="1811Z">Imprimerie de journaux (1811Z)</option>
-              <option value="1812Z">Autre imprimerie (1812Z)</option>
-              <option value="1813Z">Activités de prépresse (1813Z)</option>
-              <option value="1814Z">Reliure et activités connexes (1814Z)</option>
-              <option value="1820Z">Reproduction d'enregistrements (1820Z)</option>
-            </optgroup>
-
-            <optgroup label="C — Chimie, pharmacie, plastique">
-              <option value="1910Z">Cokéfaction (1910Z)</option>
-              <option value="1920Z">Raffinage du pétrole (1920Z)</option>
-              <option value="2011Z">Fabrication de gaz industriels (2011Z)</option>
-              <option value="2012Z">Fabrication de colorants (2012Z)</option>
-              <option value="2013A">Engrais et produits azotés (2013A)</option>
-              <option value="2013B">Autres produits chimiques de base (2013B)</option>
-              <option value="2014Z">Fabrication d'autres produits chimiques organiques (2014Z)</option>
-              <option value="2015Z">Fabrication de produits azotés (2015Z)</option>
-              <option value="2016Z">Fabrication de matières plastiques (2016Z)</option>
-              <option value="2017Z">Fabrication de caoutchouc synthétique (2017Z)</option>
-              <option value="2020Z">Fabrication de pesticides (2020Z)</option>
-              <option value="2030Z">Fabrication de peintures et vernis (2030Z)</option>
-              <option value="2041Z">Fabrication de savons et détergents (2041Z)</option>
-              <option value="2042Z">Fabrication de parfums et cosmétiques (2042Z)</option>
-              <option value="2051Z">Fabrication de produits explosifs (2051Z)</option>
-              <option value="2052Z">Fabrication de colles (2052Z)</option>
-              <option value="2053Z">Fabrication d'huiles essentielles (2053Z)</option>
-              <option value="2059Z">Fabrication d'autres produits chimiques (2059Z)</option>
-              <option value="2060Z">Fabrication de fibres artificielles (2060Z)</option>
-              <option value="2110Z">Fabrication de produits pharmaceutiques (2110Z)</option>
-              <option value="2120Z">Fabrication de médicaments (2120Z)</option>
-              <option value="2211Z">Fabrication et rechapage de pneumatiques (2211Z)</option>
-              <option value="2219Z">Fabrication d'autres articles en caoutchouc (2219Z)</option>
-              <option value="2221Z">Fabrication de plaques en matières plastiques (2221Z)</option>
-              <option value="2222Z">Fabrication d'emballages en plastique (2222Z)</option>
-              <option value="2223Z">Fabrication d'éléments en plastique pour construction (2223Z)</option>
-              <option value="2229A">Fabrication de pièces techniques en plastique (2229A)</option>
-              <option value="2229B">Fabrication de produits de consommation en plastique (2229B)</option>
-            </optgroup>
-
-            <optgroup label="C — Métallurgie, fabrication métallique">
-              <option value="2410Z">Sidérurgie (2410Z)</option>
-              <option value="2420Z">Fabrication de tubes et tuyaux en acier (2420Z)</option>
-              <option value="2431Z">Étirage à froid de barres (2431Z)</option>
-              <option value="2432Z">Laminage à froid de feuillards (2432Z)</option>
-              <option value="2433Z">Profilage à froid par formage ou pliage (2433Z)</option>
-              <option value="2434Z">Tréfilage à froid (2434Z)</option>
-              <option value="2441Z">Production de métaux précieux (2441Z)</option>
-              <option value="2442Z">Métallurgie de l'aluminium (2442Z)</option>
-              <option value="2443Z">Métallurgie du plomb, zinc ou étain (2443Z)</option>
-              <option value="2444Z">Métallurgie du cuivre (2444Z)</option>
-              <option value="2445Z">Métallurgie des autres métaux non ferreux (2445Z)</option>
-              <option value="2446Z">Élaboration et transformation de matières nucléaires (2446Z)</option>
-              <option value="2451Z">Fonderie de fonte (2451Z)</option>
-              <option value="2452Z">Fonderie d'acier (2452Z)</option>
-              <option value="2453Z">Fonderie de métaux légers (2453Z)</option>
-              <option value="2454Z">Fonderie d'autres métaux non ferreux (2454Z)</option>
-              <option value="2511Z">Fabrication de structures métalliques (2511Z)</option>
-              <option value="2512Z">Fabrication de portes et fenêtres en métal (2512Z)</option>
-              <option value="2521Z">Fabrication de radiateurs et chaudières (2521Z)</option>
-              <option value="2529Z">Fabrication d'autres réservoirs et conteneurs (2529Z)</option>
-              <option value="2530Z">Fabrication de générateurs de vapeur (2530Z)</option>
-              <option value="2540Z">Fabrication d'armes et munitions (2540Z)</option>
-              <option value="2550A">Forge, estampage, matriçage (2550A)</option>
-              <option value="2550B">Découpage, emboutissage (2550B)</option>
-              <option value="2561Z">Traitement et revêtement des métaux (2561Z)</option>
-              <option value="2562A">Décolletage (2562A)</option>
-              <option value="2562B">Mécanique industrielle (2562B)</option>
-              <option value="2571Z">Fabrication de coutellerie (2571Z)</option>
-              <option value="2572Z">Fabrication de serrures et ferrures (2572Z)</option>
-              <option value="2573A">Fabrication de moules et modèles (2573A)</option>
-              <option value="2573B">Fabrication d'autres outillages (2573B)</option>
-              <option value="2591Z">Fabrication de fûts et emballages métalliques (2591Z)</option>
-              <option value="2592Z">Fabrication d'emballages métalliques légers (2592Z)</option>
-              <option value="2593Z">Fabrication d'articles en fil métallique (2593Z)</option>
-              <option value="2594Z">Fabrication de vis et de boulons (2594Z)</option>
-              <option value="2599A">Fabrication d'articles métalliques ménagers (2599A)</option>
-              <option value="2599B">Fabrication d'autres articles métalliques (2599B)</option>
-            </optgroup>
-
-            <optgroup label="C — Électronique, équipements électriques">
-              <option value="2611Z">Fabrication de composants électroniques (2611Z)</option>
-              <option value="2612Z">Fabrication de cartes électroniques assemblées (2612Z)</option>
-              <option value="2620Z">Fabrication d'ordinateurs (2620Z)</option>
-              <option value="2630Z">Fabrication d'équipements de communication (2630Z)</option>
-              <option value="2640Z">Fabrication de produits électroniques grand public (2640Z)</option>
-              <option value="2651A">Fabrication d'équipements d'aide à la navigation (2651A)</option>
-              <option value="2651B">Fabrication d'instrumentation scientifique (2651B)</option>
-              <option value="2652Z">Horlogerie (2652Z)</option>
-              <option value="2660Z">Fabrication d'équipements d'irradiation médicale (2660Z)</option>
-              <option value="2670Z">Fabrication de matériels optique et photographique (2670Z)</option>
-              <option value="2680Z">Fabrication de supports magnétiques et optiques (2680Z)</option>
-              <option value="2711Z">Fabrication de moteurs électriques (2711Z)</option>
-              <option value="2712Z">Fabrication de matériel de distribution électrique (2712Z)</option>
-              <option value="2713Z">Fabrication de matériel d'installation électrique (2713Z)</option>
-              <option value="2720Z">Fabrication de piles et accumulateurs (2720Z)</option>
-              <option value="2731Z">Fabrication de câbles de fibres optiques (2731Z)</option>
-              <option value="2732Z">Fabrication d'autres fils et câbles électroniques (2732Z)</option>
-              <option value="2733Z">Fabrication de matériel d'installation électrique (2733Z)</option>
-              <option value="2740Z">Fabrication de lampes et appareils d'éclairage (2740Z)</option>
-              <option value="2751Z">Fabrication d'appareils électroménagers (2751Z)</option>
-              <option value="2752Z">Fabrication d'appareils ménagers non électriques (2752Z)</option>
-              <option value="2790Z">Fabrication d'autres matériels électriques (2790Z)</option>
-            </optgroup>
-
-            <optgroup label="C — Machines, équipements industriels">
-              <option value="2811Z">Fabrication de moteurs et turbines (2811Z)</option>
-              <option value="2812Z">Fabrication d'équipements hydrauliques (2812Z)</option>
-              <option value="2813Z">Fabrication de pompes et compresseurs (2813Z)</option>
-              <option value="2814Z">Fabrication d'articles de robinetterie (2814Z)</option>
-              <option value="2815Z">Fabrication d'engrenages et d'organes mécaniques (2815Z)</option>
-              <option value="2821Z">Fabrication de fours et brûleurs (2821Z)</option>
-              <option value="2822Z">Fabrication de matériels de levage (2822Z)</option>
-              <option value="2823Z">Fabrication de machines de bureau (2823Z)</option>
-              <option value="2824Z">Fabrication d'outillage portatif à moteur (2824Z)</option>
-              <option value="2825Z">Fabrication d'équipements aérauliques (2825Z)</option>
-              <option value="2829A">Fabrication d'équipements d'emballage (2829A)</option>
-              <option value="2829B">Fabrication d'autres machines d'usage général (2829B)</option>
-              <option value="2830Z">Fabrication de machines agricoles (2830Z)</option>
-              <option value="2841Z">Fabrication de machines-outils pour le travail des métaux (2841Z)</option>
-              <option value="2849Z">Fabrication d'autres machines-outils (2849Z)</option>
-              <option value="2891Z">Fabrication de machines pour la métallurgie (2891Z)</option>
-              <option value="2892Z">Fabrication de machines pour l'extraction (2892Z)</option>
-              <option value="2893Z">Fabrication de machines agroalimentaires (2893Z)</option>
-              <option value="2894Z">Fabrication de machines pour le textile (2894Z)</option>
-              <option value="2895Z">Fabrication de machines pour le papier (2895Z)</option>
-              <option value="2896Z">Fabrication de machines pour le plastique (2896Z)</option>
-              <option value="2899A">Fabrication de machines d'imprimerie (2899A)</option>
-              <option value="2899B">Fabrication d'autres machines spécialisées (2899B)</option>
-              <option value="2910Z">Construction de véhicules automobiles (2910Z)</option>
-              <option value="2920Z">Fabrication de carrosseries automobiles (2920Z)</option>
-              <option value="2931Z">Fabrication d'équipements électriques automobiles (2931Z)</option>
-              <option value="2932Z">Fabrication d'autres équipements automobiles (2932Z)</option>
-              <option value="3011Z">Construction de navires de commerce (3011Z)</option>
-              <option value="3012Z">Construction de bateaux de plaisance (3012Z)</option>
-              <option value="3020Z">Construction de locomotives (3020Z)</option>
-              <option value="3030Z">Construction aéronautique et spatiale (3030Z)</option>
-              <option value="3040Z">Construction de véhicules militaires (3040Z)</option>
-              <option value="3091Z">Fabrication de motocycles (3091Z)</option>
-              <option value="3092Z">Fabrication de bicyclettes (3092Z)</option>
-              <option value="3099Z">Fabrication d'autres équipements de transport (3099Z)</option>
-              <option value="3101Z">Fabrication de meubles de bureau (3101Z)</option>
-              <option value="3102Z">Fabrication de meubles de cuisine (3102Z)</option>
-              <option value="3103Z">Fabrication de matelas (3103Z)</option>
-              <option value="3109A">Fabrication de sièges d'ameublement (3109A)</option>
-              <option value="3109B">Fabrication d'autres meubles et industries connexes (3109B)</option>
-              <option value="3211Z">Frappe de monnaie (3211Z)</option>
-              <option value="3212Z">Fabrication d'articles de joaillerie (3212Z)</option>
-              <option value="3213Z">Fabrication d'articles de bijouterie fantaisie (3213Z)</option>
-              <option value="3220Z">Fabrication d'instruments de musique (3220Z)</option>
-              <option value="3230Z">Fabrication d'articles de sport (3230Z)</option>
-              <option value="3240Z">Fabrication de jeux et jouets (3240Z)</option>
-              <option value="3250A">Fabrication de matériel médico-chirurgical (3250A)</option>
-              <option value="3250B">Fabrication de lunettes (3250B)</option>
-              <option value="3291Z">Fabrication d'articles de brosserie (3291Z)</option>
-              <option value="3299Z">Autres industries manufacturières n.c.a. (3299Z)</option>
-              <option value="3311Z">Réparation de produits en métal (3311Z)</option>
-              <option value="3312Z">Réparation de machines et équipements (3312Z)</option>
-              <option value="3313Z">Réparation de matériels électroniques (3313Z)</option>
-              <option value="3314Z">Réparation d'équipements électriques (3314Z)</option>
-              <option value="3315Z">Réparation de navires et bateaux (3315Z)</option>
-              <option value="3316Z">Réparation d'aéronefs (3316Z)</option>
-              <option value="3317Z">Réparation de matériels de transport (3317Z)</option>
-              <option value="3319Z">Réparation d'autres équipements (3319Z)</option>
-              <option value="3320A">Installation de structures métalliques (3320A)</option>
-              <option value="3320B">Installation de machines industrielles (3320B)</option>
-              <option value="3320C">Conception d'ensemble et assemblage d'équipements (3320C)</option>
-              <option value="3320D">Installation d'équipements électriques (3320D)</option>
-            </optgroup>
-
-            <!-- D — ÉNERGIE -->
-            <optgroup label="D — Production et distribution d'énergie">
-              <option value="3511Z">Production d'électricité (3511Z)</option>
-              <option value="3512Z">Transport d'électricité (3512Z)</option>
-              <option value="3513Z">Distribution d'électricité (3513Z)</option>
-              <option value="3514Z">Commerce d'électricité (3514Z)</option>
-              <option value="3521Z">Production de combustibles gazeux (3521Z)</option>
-              <option value="3522Z">Distribution de combustibles gazeux (3522Z)</option>
-              <option value="3523Z">Commerce de combustibles gazeux (3523Z)</option>
-              <option value="3530Z">Production et distribution de vapeur (3530Z)</option>
-              <option value="3600Z">Captage, traitement et distribution d'eau (3600Z)</option>
-              <option value="3700Z">Collecte et traitement des eaux usées (3700Z)</option>
-              <option value="3811Z">Collecte des déchets non dangereux (3811Z)</option>
-              <option value="3812Z">Collecte des déchets dangereux (3812Z)</option>
-              <option value="3821Z">Traitement et élimination des déchets non dangereux (3821Z)</option>
-              <option value="3822Z">Traitement et élimination des déchets dangereux (3822Z)</option>
-              <option value="3831Z">Démantèlement d'épaves (3831Z)</option>
-              <option value="3832Z">Récupération de déchets triés (3832Z)</option>
-              <option value="3900Z">Dépollution et gestion des déchets (3900Z)</option>
-            </optgroup>
-
-            <!-- F — CONSTRUCTION -->
-            <optgroup label="F — Construction & BTP">
-              <option value="4110A">Promotion immobilière de logements (4110A)</option>
-              <option value="4110B">Promotion immobilière d'autres bâtiments (4110B)</option>
-              <option value="4110C">Promotion immobilière de lotissements (4110C)</option>
-              <option value="4110D">Promotion immobilière de zones industrielles (4110D)</option>
-              <option value="4120A">Construction de maisons individuelles (4120A)</option>
-              <option value="4120B">Construction d'autres bâtiments (4120B)</option>
-              <option value="4211Z">Construction de routes et autoroutes (4211Z)</option>
-              <option value="4212Z">Construction de voies ferrées (4212Z)</option>
-              <option value="4213A">Construction d'ouvrages d'art (4213A)</option>
-              <option value="4213B">Construction de ponts et tunnels (4213B)</option>
-              <option value="4221Z">Construction de réseaux pour fluides (4221Z)</option>
-              <option value="4222Z">Construction de réseaux électriques (4222Z)</option>
-              <option value="4291Z">Construction d'ouvrages maritimes (4291Z)</option>
-              <option value="4299Z">Construction d'autres ouvrages de génie civil (4299Z)</option>
-              <option value="4311Z">Travaux de démolition (4311Z)</option>
-              <option value="4312A">Travaux de terrassement courants (4312A)</option>
-              <option value="4312B">Travaux de terrassement spécialisés (4312B)</option>
-              <option value="4313Z">Forages et sondages (4313Z)</option>
-              <option value="4321A">Travaux d'installation électrique dans tous locaux (4321A)</option>
-              <option value="4321B">Travaux d'installation électrique sur la voie publique (4321B)</option>
-              <option value="4322A">Travaux d'installation d'eau et de gaz (4322A)</option>
-              <option value="4322B">Travaux d'installation d'équipements thermiques (4322B)</option>
-              <option value="4329A">Travaux d'isolation (4329A)</option>
-              <option value="4329B">Autres travaux d'installation (4329B)</option>
-              <option value="4331Z">Travaux de plâtrerie (4331Z)</option>
-              <option value="4332A">Travaux de menuiserie bois et PVC (4332A)</option>
-              <option value="4332B">Travaux de menuiserie métallique et serrurerie (4332B)</option>
-              <option value="4332C">Agencement de lieux de vente (4332C)</option>
-              <option value="4333Z">Travaux de revêtement des sols et murs (4333Z)</option>
-              <option value="4334Z">Travaux de peinture et vitrerie (4334Z)</option>
-              <option value="4339Z">Autres travaux de finition (4339Z)</option>
-              <option value="4391A">Travaux de charpente (4391A)</option>
-              <option value="4391B">Travaux de couverture par éléments (4391B)</option>
-              <option value="4399A">Travaux d'étanchéification (4399A)</option>
-              <option value="4399B">Travaux de montage de structures métalliques (4399B)</option>
-              <option value="4399C">Travaux de maçonnerie générale (4399C)</option>
-              <option value="4399D">Autres travaux spécialisés de construction (4399D)</option>
-              <option value="4399E">Location de matériel de construction (4399E)</option>
-            </optgroup>
-
-            <!-- G — COMMERCE -->
-            <optgroup label="G — Commerce de gros alimentaire">
-              <option value="4611Z">Agents en matières premières agricoles (4611Z)</option>
-              <option value="4612A">Agents en combustibles (4612A)</option>
-              <option value="4613Z">Agents en bois et matériaux de construction (4613Z)</option>
-              <option value="4614Z">Agents en machines et équipements industriels (4614Z)</option>
-              <option value="4615Z">Agents en meubles et articles ménagers (4615Z)</option>
-              <option value="4616Z">Agents en textiles et habillement (4616Z)</option>
-              <option value="4617A">Agents en produits alimentaires (4617A)</option>
-              <option value="4618Z">Agents spécialisés dans le commerce d'autres produits (4618Z)</option>
-              <option value="4619A">Centrales d'achats alimentaires (4619A)</option>
-              <option value="4619B">Autres intermédiaires du commerce (4619B)</option>
-              <option value="4621Z">Commerce de gros de céréales (4621Z)</option>
-              <option value="4622Z">Commerce de gros de fleurs et plantes (4622Z)</option>
-              <option value="4623Z">Commerce de gros d'animaux vivants (4623Z)</option>
-              <option value="4624Z">Commerce de gros de cuirs et peaux (4624Z)</option>
-              <option value="4631Z">Commerce de gros de fruits et légumes (4631Z)</option>
-              <option value="4632A">Commerce de gros de viandes (4632A)</option>
-              <option value="4632B">Commerce de gros de produits de la mer (4632B)</option>
-              <option value="4633Z">Commerce de gros de produits laitiers (4633Z)</option>
-              <option value="4634Z">Commerce de gros de boissons (4634Z)</option>
-              <option value="4635Z">Commerce de gros de tabac (4635Z)</option>
-              <option value="4636Z">Commerce de gros de sucre, chocolat (4636Z)</option>
-              <option value="4637Z">Commerce de gros de café, thé, cacao (4637Z)</option>
-              <option value="4638A">Commerce de gros de poissons (4638A)</option>
-              <option value="4638B">Commerce de gros alimentaire spécialisé (4638B)</option>
-              <option value="4639A">Commerce de gros de produits surgelés (4639A)</option>
-              <option value="4639B">Commerce de gros alimentaire non spécialisé (4639B)</option>
-            </optgroup>
-
-            <optgroup label="G — Commerce de gros non alimentaire">
-              <option value="4641Z">Commerce de gros de textiles (4641Z)</option>
-              <option value="4642Z">Commerce de gros d'habillement (4642Z)</option>
-              <option value="4643Z">Commerce de gros d'appareils électroménagers (4643Z)</option>
-              <option value="4644Z">Commerce de gros de vaisselle et verrerie (4644Z)</option>
-              <option value="4645Z">Commerce de gros de parfumerie (4645Z)</option>
-              <option value="4646Z">Commerce de gros de produits pharmaceutiques (4646Z)</option>
-              <option value="4647Z">Commerce de gros de meubles (4647Z)</option>
-              <option value="4648Z">Commerce de gros d'articles d'horlogerie (4648Z)</option>
-              <option value="4649Z">Commerce de gros d'articles ménagers (4649Z)</option>
-              <option value="4651Z">Commerce de gros d'ordinateurs (4651Z)</option>
-              <option value="4652Z">Commerce de gros de composants électroniques (4652Z)</option>
-              <option value="4661Z">Commerce de gros de matériel agricole (4661Z)</option>
-              <option value="4662Z">Commerce de gros de machines-outils (4662Z)</option>
-              <option value="4663Z">Commerce de gros de machines pour les mines (4663Z)</option>
-              <option value="4664Z">Commerce de gros de machines pour le textile (4664Z)</option>
-              <option value="4665Z">Commerce de gros de mobilier de bureau (4665Z)</option>
-              <option value="4666Z">Commerce de gros d'autres machines de bureau (4666Z)</option>
-              <option value="4669A">Commerce de gros de matériels électriques (4669A)</option>
-              <option value="4669B">Commerce de gros de fournitures industrielles (4669B)</option>
-              <option value="4669C">Commerce de gros de matériaux de construction (4669C)</option>
-              <option value="4671Z">Commerce de gros de combustibles (4671Z)</option>
-              <option value="4672Z">Commerce de gros de métaux (4672Z)</option>
-              <option value="4673A">Commerce de gros de bois et de matériaux (4673A)</option>
-              <option value="4673B">Commerce de gros d'appareils sanitaires (4673B)</option>
-              <option value="4674A">Commerce de gros de quincaillerie (4674A)</option>
-              <option value="4674B">Commerce de gros de fournitures pour plomberie (4674B)</option>
-              <option value="4675Z">Commerce de gros de produits chimiques (4675Z)</option>
-              <option value="4676Z">Commerce de gros d'autres produits intermédiaires (4676Z)</option>
-              <option value="4677Z">Commerce de gros de déchets et débris (4677Z)</option>
-              <option value="4690Z">Commerce de gros non spécialisé (4690Z)</option>
-            </optgroup>
-
-            <optgroup label="G — Commerce de détail">
-              <option value="4711A">Supermarchés (4711A)</option>
-              <option value="4711B">Hypermarchés (4711B)</option>
-              <option value="4711C">Supérettes (4711C)</option>
-              <option value="4711D">Épiceries (4711D)</option>
-              <option value="4711E">Hard-discount (4711E)</option>
-              <option value="4711F">Grands magasins (4711F)</option>
-              <option value="4719A">Autres commerces de détail alimentaires (4719A)</option>
-              <option value="4719B">Magasins multi-rayons de petite surface (4719B)</option>
-              <option value="4721Z">Commerce de détail de fruits et légumes (4721Z)</option>
-              <option value="4722Z">Commerce de détail de viandes (4722Z)</option>
-              <option value="4723Z">Commerce de détail de poissons (4723Z)</option>
-              <option value="4724Z">Commerce de détail de pain, pâtisserie (4724Z)</option>
-              <option value="4725Z">Commerce de détail de boissons (4725Z)</option>
-              <option value="4726Z">Commerce de détail de tabac (4726Z)</option>
-              <option value="4729Z">Autres commerces de détail alimentaires spécialisés (4729Z)</option>
-              <option value="4730Z">Commerce de détail de carburants (4730Z)</option>
-              <option value="4741Z">Commerce de détail d'ordinateurs (4741Z)</option>
-              <option value="4742Z">Commerce de détail de télécommunications (4742Z)</option>
-              <option value="4743Z">Commerce de détail de matériels audio et vidéo (4743Z)</option>
-              <option value="4751Z">Commerce de détail de textiles (4751Z)</option>
-              <option value="4752A">Commerce de détail de quincaillerie (4752A)</option>
-              <option value="4752B">Commerce de détail de matériaux de construction (4752B)</option>
-              <option value="4753Z">Commerce de détail de tapis et revêtements (4753Z)</option>
-              <option value="4754Z">Commerce de détail d'appareils électroménagers (4754Z)</option>
-              <option value="4759A">Commerce de détail de meubles (4759A)</option>
-              <option value="4759B">Commerce de détail d'autres équipements du foyer (4759B)</option>
-              <option value="4761Z">Commerce de détail de livres (4761Z)</option>
-              <option value="4762Z">Commerce de détail de journaux et papeterie (4762Z)</option>
-              <option value="4763Z">Commerce de détail d'enregistrements musicaux (4763Z)</option>
-              <option value="4764Z">Commerce de détail d'articles de sport (4764Z)</option>
-              <option value="4765Z">Commerce de détail de jeux et jouets (4765Z)</option>
-              <option value="4771Z">Commerce de détail d'habillement (4771Z)</option>
-              <option value="4772A">Commerce de détail de la chaussure (4772A)</option>
-              <option value="4772B">Commerce de détail de maroquinerie (4772B)</option>
-              <option value="4773Z">Commerce de détail de produits pharmaceutiques (4773Z)</option>
-              <option value="4774Z">Commerce de détail d'articles médicaux (4774Z)</option>
-              <option value="4775Z">Commerce de détail de parfumerie et beauté (4775Z)</option>
-              <option value="4776Z">Commerce de détail de fleurs et plantes (4776Z)</option>
-              <option value="4777Z">Commerce de détail d'articles d'horlogerie (4777Z)</option>
-              <option value="4778A">Commerces de détail d'optique (4778A)</option>
-              <option value="4778B">Commerces de détail de charbons et combustibles (4778B)</option>
-              <option value="4778C">Autres commerces de détail spécialisés (4778C)</option>
-              <option value="4779Z">Commerce de détail de biens d'occasion (4779Z)</option>
-              <option value="4781Z">Commerce de détail alimentaire sur marchés (4781Z)</option>
-              <option value="4782Z">Commerce de détail de textiles sur marchés (4782Z)</option>
-              <option value="4789Z">Autres commerces de détail sur marchés (4789Z)</option>
-              <option value="4791A">Vente à distance sur catalogue général (4791A)</option>
-              <option value="4791B">Vente à distance sur catalogue spécialisé (4791B)</option>
-              <option value="4799A">Vente à domicile (4799A)</option>
-              <option value="4799B">Vente par automates (4799B)</option>
-            </optgroup>
-
-            <optgroup label="G — Automobile">
-              <option value="4511Z">Commerce de voitures et véhicules légers (4511Z)</option>
-              <option value="4519Z">Commerce d'autres véhicules automobiles (4519Z)</option>
-              <option value="4520A">Entretien et réparation de véhicules (4520A)</option>
-              <option value="4520B">Réparation de carrosseries (4520B)</option>
-              <option value="4531Z">Commerce de gros d'équipements automobiles (4531Z)</option>
-              <option value="4532Z">Commerce de détail d'équipements automobiles (4532Z)</option>
-              <option value="4540Z">Commerce et réparation de motocycles (4540Z)</option>
-            </optgroup>
-
-            <!-- H — TRANSPORT -->
-            <optgroup label="H — Transport & Logistique">
-              <option value="4910Z">Transport ferroviaire interurbain (4910Z)</option>
-              <option value="4920Z">Transports ferroviaires de fret (4920Z)</option>
-              <option value="4931Z">Transports urbains et suburbains (4931Z)</option>
-              <option value="4932Z">Taxis (4932Z)</option>
-              <option value="4939A">Transports routiers réguliers (4939A)</option>
-              <option value="4939B">Autres transports routiers de voyageurs (4939B)</option>
-              <option value="4941A">Transports routiers de fret interurbains (4941A)</option>
-              <option value="4941B">Transports routiers de fret de proximité (4941B)</option>
-              <option value="4941C">Location de camions avec chauffeur (4941C)</option>
-              <option value="4942Z">Déménagement (4942Z)</option>
-              <option value="4950Z">Transports par conduites (4950Z)</option>
-              <option value="5010Z">Transports maritimes (5010Z)</option>
-              <option value="5020Z">Transports fluviaux (5020Z)</option>
-              <option value="5030Z">Transports aériens de passagers (5030Z)</option>
-              <option value="5040Z">Transports aériens de fret (5040Z)</option>
-              <option value="5110Z">Transports aériens de passagers (5110Z)</option>
-              <option value="5121Z">Transports aériens de fret (5121Z)</option>
-              <option value="5122Z">Transports spatiaux (5122Z)</option>
-              <option value="5210A">Entreposage et stockage frigorifique (5210A)</option>
-              <option value="5210B">Entreposage et stockage non frigorifique (5210B)</option>
-              <option value="5221Z">Services auxiliaires des transports terrestres (5221Z)</option>
-              <option value="5222Z">Services auxiliaires des transports par eau (5222Z)</option>
-              <option value="5223Z">Services auxiliaires des transports aériens (5223Z)</option>
-              <option value="5224A">Manutention portuaire (5224A)</option>
-              <option value="5224B">Manutention non portuaire (5224B)</option>
-              <option value="5229A">Messagerie, fret express (5229A)</option>
-              <option value="5229B">Affrètement et organisation des transports (5229B)</option>
-              <option value="5310Z">Activités de poste (5310Z)</option>
-              <option value="5320Z">Autres activités de courrier (5320Z)</option>
-            </optgroup>
-
-            <!-- I — HÉBERGEMENT ET RESTAURATION -->
-            <optgroup label="I — Hébergement & Restauration">
-              <option value="5510Z">Hôtels et hébergement similaire (5510Z)</option>
-              <option value="5520Z">Hébergement touristique (5520Z)</option>
-              <option value="5530Z">Terrains de camping et parcs (5530Z)</option>
-              <option value="5590Z">Autres hébergements (5590Z)</option>
-              <option value="5610A">Restauration traditionnelle (5610A)</option>
-              <option value="5610B">Restauration rapide (5610B)</option>
-              <option value="5610C">Restauration de type cafétéria (5610C)</option>
-              <option value="5621Z">Traiteurs (5621Z)</option>
-              <option value="5629A">Restauration collective (5629A)</option>
-              <option value="5629B">Autres services de restauration (5629B)</option>
-              <option value="5630Z">Débits de boissons (5630Z)</option>
-            </optgroup>
-
-            <!-- J — INFORMATION ET COMMUNICATION -->
-            <optgroup label="J — Édition, audiovisuel, télécommunications">
-              <option value="5811Z">Édition de livres (5811Z)</option>
-              <option value="5812Z">Édition de répertoires (5812Z)</option>
-              <option value="5813Z">Édition de journaux (5813Z)</option>
-              <option value="5814Z">Édition de revues et périodiques (5814Z)</option>
-              <option value="5819Z">Autres activités d'édition (5819Z)</option>
-              <option value="5821Z">Édition de jeux électroniques (5821Z)</option>
-              <option value="5829A">Édition de logiciels systèmes et de réseau (5829A)</option>
-              <option value="5829B">Édition de logiciels outils de développement (5829B)</option>
-              <option value="5829C">Édition de logiciels applicatifs (5829C)</option>
-              <option value="5911A">Production de films (5911A)</option>
-              <option value="5911B">Production de programmes de télévision (5911B)</option>
-              <option value="5911C">Production de films institutionnels (5911C)</option>
-              <option value="5912Z">Post-production cinématographique (5912Z)</option>
-              <option value="5913A">Distribution de films (5913A)</option>
-              <option value="5913B">Édition et distribution vidéo (5913B)</option>
-              <option value="5914Z">Projection de films (5914Z)</option>
-              <option value="5920Z">Enregistrement sonore et édition musicale (5920Z)</option>
-              <option value="6010Z">Édition et diffusion de programmes radio (6010Z)</option>
-              <option value="6020A">Edition de chaînes généralistes (6020A)</option>
-              <option value="6020B">Edition de chaînes thématiques (6020B)</option>
-              <option value="6110Z">Télécommunications filaires (6110Z)</option>
-              <option value="6120Z">Télécommunications sans fil (6120Z)</option>
-              <option value="6130Z">Télécommunications par satellite (6130Z)</option>
-              <option value="6190Z">Autres activités de télécommunication (6190Z)</option>
-              <option value="6201Z">Programmation informatique (6201Z)</option>
-              <option value="6202A">Conseil en systèmes et logiciels informatiques (6202A)</option>
-              <option value="6202B">Tierce maintenance de systèmes et d'applications (6202B)</option>
-              <option value="6203Z">Gestion d'installations informatiques (6203Z)</option>
-              <option value="6209Z">Autres activités informatiques (6209Z)</option>
-              <option value="6311Z">Traitement de données (6311Z)</option>
-              <option value="6312Z">Portails Internet (6312Z)</option>
-              <option value="6391Z">Activités des agences de presse (6391Z)</option>
-              <option value="6399Z">Autres services d'information (6399Z)</option>
-            </optgroup>
-
-            <!-- K — ACTIVITÉS FINANCIÈRES -->
-            <optgroup label="K — Finance, assurance, immobilier">
-              <option value="6411Z">Activités de banque centrale (6411Z)</option>
-              <option value="6419Z">Autres intermédiations monétaires (6419Z)</option>
-              <option value="6420Z">Activités des sociétés holding (6420Z)</option>
-              <option value="6430Z">Fonds de placement (6430Z)</option>
-              <option value="6491Z">Crédit-bail (6491Z)</option>
-              <option value="6492Z">Autre distribution de crédit (6492Z)</option>
-              <option value="6499Z">Autres activités financières (6499Z)</option>
-              <option value="6511Z">Assurance vie (6511Z)</option>
-              <option value="6512Z">Autres assurances (6512Z)</option>
-              <option value="6520Z">Réassurance (6520Z)</option>
-              <option value="6530Z">Caisses de retraite (6530Z)</option>
-              <option value="6611Z">Administration de marchés financiers (6611Z)</option>
-              <option value="6612Z">Courtage de valeurs mobilières (6612Z)</option>
-              <option value="6619A">Supports juridiques de gestion de patrimoine (6619A)</option>
-              <option value="6619B">Autres activités auxiliaires de services financiers (6619B)</option>
-              <option value="6621Z">Évaluation des risques et dommages (6621Z)</option>
-              <option value="6622Z">Activités des agents et courtiers d'assurances (6622Z)</option>
-              <option value="6629Z">Autres activités auxiliaires d'assurance (6629Z)</option>
-              <option value="6630Z">Gestion de fonds (6630Z)</option>
-              <option value="6810Z">Activités des marchands de biens immobiliers (6810Z)</option>
-              <option value="6820A">Location de logements (6820A)</option>
-              <option value="6820B">Location de terrains et d'autres biens immobiliers (6820B)</option>
-              <option value="6831Z">Agences immobilières (6831Z)</option>
-              <option value="6832A">Administration d'immeubles résidentiels (6832A)</option>
-              <option value="6832B">Administration de biens immobiliers non résidentiels (6832B)</option>
-              <option value="6833Z">Syndics de copropriété (6833Z)</option>
-            </optgroup>
-
-            <!-- M — ACTIVITÉS SPÉCIALISÉES -->
-            <optgroup label="M — Services professionnels & Conseil">
-              <option value="6910Z">Activités juridiques (6910Z)</option>
-              <option value="6920Z">Activités comptables (6920Z)</option>
-              <option value="7010Z">Activités des sièges sociaux (7010Z)</option>
-              <option value="7021Z">Conseil en relations publiques (7021Z)</option>
-              <option value="7022Z">Conseil en gestion d'entreprise (7022Z)</option>
-              <option value="7111Z">Activités d'architecture (7111Z)</option>
-              <option value="7112A">Activité des géomètres (7112A)</option>
-              <option value="7112B">Ingénierie, études techniques (7112B)</option>
-              <option value="7120A">Contrôle technique automobile (7120A)</option>
-              <option value="7120B">Analyses, essais et inspections techniques (7120B)</option>
-              <option value="7211Z">Recherche-développement en biotechnologie (7211Z)</option>
-              <option value="7219Z">Autre recherche-développement en sciences physiques (7219Z)</option>
-              <option value="7220Z">Recherche-développement en sciences humaines (7220Z)</option>
-              <option value="7311Z">Activités des agences de publicité (7311Z)</option>
-              <option value="7312Z">Régies publicitaires (7312Z)</option>
-              <option value="7320Z">Études de marché et sondages (7320Z)</option>
-              <option value="7410Z">Activités spécialisées de design (7410Z)</option>
-              <option value="7420Z">Activités photographiques (7420Z)</option>
-              <option value="7430Z">Traduction et interprétation (7430Z)</option>
-              <option value="7490A">Activité des économistes de la construction (7490A)</option>
-              <option value="7490B">Activités spécialisées, scientifiques et techniques diverses (7490B)</option>
-              <option value="7500Z">Activités vétérinaires (7500Z)</option>
-              <option value="7711A">Location de courte durée de véhicules automobiles (7711A)</option>
-              <option value="7711B">Location de longue durée de véhicules automobiles (7711B)</option>
-              <option value="7712Z">Location et location-bail de camions (7712Z)</option>
-              <option value="7721Z">Location et location-bail d'articles de loisirs (7721Z)</option>
-              <option value="7722Z">Location de cassettes vidéo (7722Z)</option>
-              <option value="7729Z">Location et location-bail d'autres biens personnels (7729Z)</option>
-              <option value="7731Z">Location de machines agricoles (7731Z)</option>
-              <option value="7732Z">Location de machines pour la construction (7732Z)</option>
-              <option value="7733Z">Location de machines de bureau (7733Z)</option>
-              <option value="7734Z">Location de matériels de transport par eau (7734Z)</option>
-              <option value="7735Z">Location de matériels de transport aérien (7735Z)</option>
-              <option value="7739Z">Location et location-bail d'autres machines (7739Z)</option>
-              <option value="7740Z">Location-bail de propriété intellectuelle (7740Z)</option>
-              <option value="7810Z">Activités des agences de placement de main-d'œuvre (7810Z)</option>
-              <option value="7820Z">Activités des agences de travail temporaire (7820Z)</option>
-              <option value="7830Z">Autre mise à disposition de ressources humaines (7830Z)</option>
-              <option value="7911Z">Activités des agences de voyage (7911Z)</option>
-              <option value="7912Z">Activités des voyagistes (7912Z)</option>
-              <option value="7990Z">Autres services de réservation (7990Z)</option>
-              <option value="8010Z">Activités de sécurité privée (8010Z)</option>
-              <option value="8020Z">Activités de systèmes de sécurité (8020Z)</option>
-              <option value="8030Z">Activités d'enquête (8030Z)</option>
-              <option value="8110Z">Activités combinées de soutien lié aux bâtiments (8110Z)</option>
-              <option value="8121Z">Nettoyage courant des bâtiments (8121Z)</option>
-              <option value="8122Z">Autres activités de nettoyage (8122Z)</option>
-              <option value="8129A">Désinfection, désinsectisation et dératisation (8129A)</option>
-              <option value="8129B">Autres activités de nettoyage (8129B)</option>
-              <option value="8130Z">Services d'aménagement paysager (8130Z)</option>
-              <option value="8211Z">Services administratifs combinés de bureau (8211Z)</option>
-              <option value="8219A">Photocopie (8219A)</option>
-              <option value="8219B">Autres activités de soutien aux entreprises (8219B)</option>
-              <option value="8220Z">Activités de centres d'appels (8220Z)</option>
-              <option value="8230Z">Organisation de foires et salons (8230Z)</option>
-              <option value="8291Z">Activités des agences de recouvrement de créances (8291Z)</option>
-              <option value="8292Z">Activités de conditionnement (8292Z)</option>
-              <option value="8299Z">Autres activités de soutien aux entreprises (8299Z)</option>
-            </optgroup>
-
-            <!-- O — ADMINISTRATION PUBLIQUE -->
-            <optgroup label="O/P — Administration, enseignement">
-              <option value="8411Z">Administration publique générale (8411Z)</option>
-              <option value="8412Z">Administration publique (tutelle) (8412Z)</option>
-              <option value="8413Z">Administration publique (activités économiques) (8413Z)</option>
-              <option value="8421Z">Affaires étrangères (8421Z)</option>
-              <option value="8422Z">Défense nationale (8422Z)</option>
-              <option value="8423Z">Justice (8423Z)</option>
-              <option value="8424Z">Activités d'ordre public et de sécurité (8424Z)</option>
-              <option value="8425Z">Services du feu et de secours (8425Z)</option>
-              <option value="8430Z">Sécurité sociale obligatoire (8430Z)</option>
-              <option value="8510Z">Enseignement pré-primaire (8510Z)</option>
-              <option value="8520Z">Enseignement primaire (8520Z)</option>
-              <option value="8531Z">Enseignement secondaire général (8531Z)</option>
-              <option value="8532Z">Enseignement secondaire technique (8532Z)</option>
-              <option value="8541Z">Enseignement post-secondaire non supérieur (8541Z)</option>
-              <option value="8542Z">Enseignement supérieur (8542Z)</option>
-              <option value="8551Z">Enseignement de disciplines sportives (8551Z)</option>
-              <option value="8552Z">Enseignement culturel (8552Z)</option>
-              <option value="8553Z">Enseignement de la conduite (8553Z)</option>
-              <option value="8559A">Formation continue d'adultes (8559A)</option>
-              <option value="8559B">Autres enseignements (8559B)</option>
-              <option value="8560Z">Activités de soutien à l'enseignement (8560Z)</option>
-            </optgroup>
-
-            <!-- Q — SANTÉ -->
-            <optgroup label="Q — Santé humaine & Action sociale">
-              <option value="8610Z">Activités hospitalières (8610Z)</option>
-              <option value="8621Z">Activité des médecins généralistes (8621Z)</option>
-              <option value="8622A">Activités de radiodiagnostic et de radiothérapie (8622A)</option>
-              <option value="8622B">Activités chirurgicales (8622B)</option>
-              <option value="8622C">Autres activités des médecins spécialistes (8622C)</option>
-              <option value="8623Z">Pratique dentaire (8623Z)</option>
-              <option value="8690A">Ambulances (8690A)</option>
-              <option value="8690B">Laboratoires d'analyses médicales (8690B)</option>
-              <option value="8690C">Centres de collecte et banques d'organes (8690C)</option>
-              <option value="8690D">Activités des infirmiers et sages-femmes (8690D)</option>
-              <option value="8690E">Activités des professionnels de la rééducation (8690E)</option>
-              <option value="8690F">Activités de santé humaine non classées (8690F)</option>
-              <option value="8711Z">Hébergement médicalisé pour personnes âgées (8711Z)</option>
-              <option value="8712Z">Hébergement médicalisé pour adultes handicapés (8712Z)</option>
-              <option value="8713Z">Hébergement médicalisé pour enfants handicapés (8713Z)</option>
-              <option value="8714Z">Hébergement médicalisé pour personnes dépendantes (8714Z)</option>
-              <option value="8720A">Hébergement social pour handicapés mentaux (8720A)</option>
-              <option value="8720B">Hébergement social pour toxicomanes (8720B)</option>
-              <option value="8730A">Hébergement social pour personnes âgées (8730A)</option>
-              <option value="8730B">Hébergement social pour adultes (8730B)</option>
-              <option value="8790A">Hébergement social pour enfants en difficultés (8790A)</option>
-              <option value="8790B">Hébergement social pour adultes en difficultés (8790B)</option>
-              <option value="8810A">Aide à domicile (8810A)</option>
-              <option value="8810B">Accueil ou accompagnement sans hébergement d'adultes (8810B)</option>
-              <option value="8810C">Aide par le travail (8810C)</option>
-              <option value="8891A">Accueil de jeunes enfants (8891A)</option>
-              <option value="8891B">Accueil ou accompagnement sans hébergement d'enfants (8891B)</option>
-              <option value="8899A">Autre accueil ou accompagnement sans hébergement (8899A)</option>
-              <option value="8899B">Action sociale sans hébergement n.c.a. (8899B)</option>
-            </optgroup>
-
-            <!-- R — ARTS ET LOISIRS -->
-            <optgroup label="R — Arts, spectacles, sports & Loisirs">
-              <option value="9001Z">Arts du spectacle vivant (9001Z)</option>
-              <option value="9002Z">Activités de soutien au spectacle vivant (9002Z)</option>
-              <option value="9003A">Création artistique relevant des arts plastiques (9003A)</option>
-              <option value="9003B">Autre création artistique (9003B)</option>
-              <option value="9004Z">Gestion de salles de spectacles (9004Z)</option>
-              <option value="9011Z">Gestion de bibliothèques (9011Z)</option>
-              <option value="9012Z">Gestion de musées (9012Z)</option>
-              <option value="9013Z">Gestion de sites et monuments historiques (9013Z)</option>
-              <option value="9014Z">Gestion de jardins botaniques (9014Z)</option>
-              <option value="9021Z">Activités des jeux de hasard et d'argent (9021Z)</option>
-              <option value="9312Z">Activités de clubs de sports (9312Z)</option>
-              <option value="9313Z">Activités des centres de culture physique (9313Z)</option>
-              <option value="9319Z">Autres activités sportives (9319Z)</option>
-              <option value="9321Z">Activités des parcs d'attractions (9321Z)</option>
-              <option value="9329Z">Autres activités récréatives et de loisirs (9329Z)</option>
-            </optgroup>
-
-            <!-- S — AUTRES SERVICES -->
-            <optgroup label="S — Services aux particuliers">
-              <option value="9411Z">Activités des organisations patronales (9411Z)</option>
-              <option value="9412Z">Activités des organisations professionnelles (9412Z)</option>
-              <option value="9420Z">Activités des syndicats de salariés (9420Z)</option>
-              <option value="9491Z">Activités des organisations religieuses (9491Z)</option>
-              <option value="9492Z">Activités des organisations politiques (9492Z)</option>
-              <option value="9499Z">Autres organisations (9499Z)</option>
-              <option value="9511Z">Réparation d'ordinateurs et d'équipements périphériques (9511Z)</option>
-              <option value="9512Z">Réparation d'équipements de communication (9512Z)</option>
-              <option value="9521Z">Réparation de produits électroniques (9521Z)</option>
-              <option value="9522Z">Réparation d'appareils électroménagers (9522Z)</option>
-              <option value="9523Z">Réparation de chaussures et d'articles en cuir (9523Z)</option>
-              <option value="9524Z">Réparation de meubles et d'équipements du foyer (9524Z)</option>
-              <option value="9525Z">Réparation d'articles d'horlogerie et de bijouterie (9525Z)</option>
-              <option value="9529Z">Réparation d'autres biens personnels (9529Z)</option>
-              <option value="9601A">Blanchisserie-teinturerie de gros (9601A)</option>
-              <option value="9601B">Blanchisserie-teinturerie de détail (9601B)</option>
-              <option value="9602A">Coiffure (9602A)</option>
-              <option value="9602B">Soins de beauté (9602B)</option>
-              <option value="9603Z">Services funéraires (9603Z)</option>
-              <option value="9604Z">Entretien corporel (9604Z)</option>
-              <option value="9609Z">Autres services personnels n.c.a. (9609Z)</option>
-              <option value="9700Z">Activités des ménages en tant qu'employeurs (9700Z)</option>
-              <option value="9810Z">Activités indifférenciées des ménages (9810Z)</option>
-              <option value="9820Z">Activités indifférenciées des ménages producteurs (9820Z)</option>
-</select>
+    </div><!-- /content area -->
+  </main>
 </div>
 
+<!-- IMPORT MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Charger des prospects</div>
+      <div class="modal-close" onclick="closeModal()">✕</div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-tabs">
+        <button class="modal-tab active" onclick="switchModalTab('csv',this)">Import CSV</button>
+        <button class="modal-tab" onclick="switchModalTab('manual',this)">Manuel</button>
+        <button class="modal-tab" onclick="switchModalTab('paste',this)">Coller données</button>
+      </div>
+
+      <!-- CSV TAB -->
+      <div class="tab-panel active" id="tab-csv">
+        <div class="drop-zone" id="drop-zone">
+          <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" onchange="handleFileSelect(this)">
+          <div class="drop-icon">📄</div>
+          <div class="drop-title">Glisser un fichier CSV ici</div>
+          <div class="drop-sub">ou <span>cliquer pour parcourir</span> · CSV, Excel acceptés</div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+          <strong>Colonnes reconnues :</strong> nom, société, email, téléphone, adresse, secteur, statut, site web, directeur, siren
+        </div>
+        <div class="csv-preview" id="csv-preview">
+          <table>
+            <thead id="csv-thead"></thead>
+            <tbody id="csv-tbody"></tbody>
+          </table>
+        </div>
+        <div class="csv-info" id="csv-info" style="display:none">
+          <strong id="csv-count">0</strong> prospects détectés — prêts à importer
+        </div>
+      </div>
+
+      <!-- MANUAL TAB -->
+      <div class="tab-panel" id="tab-manual">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Prénom Nom *</label>
+            <input class="form-input" id="f-name" placeholder="Jean Dupont">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Société *</label>
+            <input class="form-input" id="f-company" placeholder="Event Pro SARL">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input class="form-input" id="f-email" type="email" placeholder="jean@eventpro.fr">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Téléphone</label>
+            <input class="form-input" id="f-phone" placeholder="06 12 34 56 78">
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Adresse / Localisation</label>
+            <input class="form-input" id="f-loc" placeholder="Rennes (35), Bretagne">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Secteur</label>
+            <select class="form-select" id="f-sector">
+              <option value="">Sélectionner…</option>
+              <option>Agence événementielle</option>
+              <option>Hôtellerie / MICE</option>
+              <option>Domaine viticole</option>
+              <option>Collectivité</option>
+              <option>Entreprise / CSE</option>
+              <option>Autre</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Statut</label>
+            <select class="form-select" id="f-status">
+              <option value="new">🆕 Nouveau</option>
+              <option value="hot">🔥 Hot</option>
+              <option value="warm">⚡ Warm</option>
+              <option value="cold">❄️ Cold</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Site web</label>
+            <input class="form-input" id="f-website" placeholder="https://…">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Source</label>
+            <select class="form-select" id="f-source">
+              <option>Prospection perso</option>
+              <option>MUP</option>
+              <option>LinkedIn</option>
+              <option>Salon Morbihan Event Pro</option>
+              <option>CELI</option>
+              <option>Référence</option>
+              <option>Societe.com</option>
+              <option>Autre</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Notes</label>
+            <input class="form-input" id="f-notes" placeholder="Contexte, remarques…">
+          </div>
+        </div>
+      </div>
+
+      <!-- PASTE TAB -->
+      <div class="tab-panel" id="tab-paste">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">
+          Collez du texte structuré (depuis Excel, un email, un annuaire). Le système détecte automatiquement les champs.
+        </div>
+        <textarea id="paste-input" style="width:100%;height:180px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:12px;resize:vertical;outline:none;color:var(--text)" placeholder="Coller ici : nom, société, email, tél, ville…&#10;&#10;Ex:&#10;Marie Dupont · Event Agency · marie@ea.fr · 06 12 34 56 78 · Nantes&#10;Pierre Martin · Château du Loire · p.martin@chateau.com · Angers"></textarea>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted)">Séparateurs détectés : virgule, point-virgule, tabulation, ·</div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-dark" id="modal-confirm-btn" onclick="confirmImport()">
+        Importer
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
 <script>
-'use strict';
-/*
- * ═══════════════════════════════════════════════════════════════
- * CHANGELOG — Mode Strict NAF
- * ───────────────────────────────────────────────────────────────
- * 1. Verrouillage NAF : `selectedNAFCode/Label` (globals) — seuls
- *    pickNAF() peut les écrire ; toute frappe clavier invalide
- *    le verrou (nafLocked=false) et désactive le bouton.
- * 2. Triple barrière filtrage : B1 (fetchLeads/API), B2 (loadPage
- *    avant rendu), B3 (boucle DOM), B4 (file de géocodage) —
- *    aucun item hors NAF ne peut atteindre la carte ou la liste.
- * 3. Mock corrigé : chaque item reçoit naf=selectedNAFCode et
- *    nafLabel=selectedNAFLabel (jamais inventés). Génération en
- *    boucle pour garantir pageSize items si onlyComplete=true.
- * 4. `hasMore` calculé via `S.loaded < S.total` (plus de dépend.
- *    sur items.length === pageSize) → pagination stable avec filtre.
- * 5. Contexte visible : hint = "✓ CODE — Label · Région" ; banner
- *    au-dessus des résultats ; badge NAF sur chaque fiche.
- * ═══════════════════════════════════════════════════════════════
- */
-// ════════════════════════════════════════════════════════════════
-// CONSTANTS & CONFIG
-// ════════════════════════════════════════════════════════════════
-var API_BASE    = '/api/leads';       // swap to absolute URL for prod
-var PAGE_SIZE   = 50;
-var CLUSTER_THR = 200;                // switch to clustering above this
-var GEO_PFX     = 'geo3_';
-var GEO_TTL     = 30 * 24 * 60 * 60 * 1000;
+// ── STATE ──
+let prospects = [];
+let filteredProspects = [];
+let selectedId = null;
+let currentStatusFilter = 'all';
+let sortField = 'name';
+let sortDir = 1;
+let csvParsed = [];
+let activeModalTab = 'csv';
 
-// ════════════════════════════════════════════════════════════════
-// STATE
-// ════════════════════════════════════════════════════════════════
-// ── selectedNAFCode / selectedNAFLabel ─────────────────────────
-// These are the ONE TRUE source for the current NAF selection.
-// They are ONLY written by pickNAF() and clearSector().
-// S.naf / S.nafLabel simply mirror them — never written from raw text.
-var selectedNAFCode  = '';   // e.g. '8230Z'
-var selectedNAFLabel = '';   // e.g. 'Organisation de foires et salons professionnels'
+// ── SAMPLE DATA ──
+const SAMPLE = [
+  {id:1,name:'Marie Lebreton',company:'Event Bretagne',email:'m.lebreton@eventbretagne.fr',phone:'06 12 34 56 78',location:'Rennes (35)',sector:'Agence événementielle',status:'hot',website:'eventbretagne.fr',source:'Prospection perso',director:'Marie Lebreton',notes:'Intéressée par le Neo Fast pour ses team buildings'},
+  {id:2,name:'Thomas Garnier',company:'Château des Deux Rives',email:'contact@deuxrives.fr',phone:'02 41 78 90 12',location:'Angers (49)',sector:'Domaine viticole',status:'warm',website:'chateau-deuxrives.fr',source:'MUP',director:'Thomas Garnier',notes:''},
+  {id:3,name:'Sophie Naji',company:'Pop Event',email:'',phone:'06 78 23 45 67',location:'Inguiniel (56)',sector:'Agence événementielle',status:'cold',website:'',source:'LinkedIn',director:'Sophie Naji',notes:''},
+  {id:4,name:'Olivier Raulot',company:'Team Pro Events',email:'o.raulot@teampro.fr',phone:'06 34 56 12 89',location:'Plouhinec (56)',sector:'Agence événementielle',status:'hot',website:'teampro.fr',source:'Salon Morbihan Event Pro',director:'Olivier Raulot',notes:'Relance prévue semaine prochaine'},
+  {id:5,name:'Cécile Morin',company:'Grand Hôtel de Nantes',email:'c.morin@grandhôtel-nantes.com',phone:'02 40 67 45 23',location:'Nantes (44)',sector:'Hôtellerie / MICE',status:'warm',website:'grandhôtel-nantes.com',source:'LinkedIn',director:'Cécile Morin',notes:''},
+];
 
-var S = {
-  // ── Query (locked — only pickNAF/clearSector may change these)
-  naf:           '',   // mirrors selectedNAFCode
-  nafLabel:      '',   // mirrors selectedNAFLabel
-  nafLocked:     false,// true only after pickNAF(); reset by clearSector() or typing
-  region:        '',
-  onlyComplete:  false,
-
-  // pagination
-  page:         1,
-  total:        0,
-  totalComplete:0,
-  hotCount:     0,
-  loaded:       0,      // items rendered so far
-  loading:      false,
-  hasMore:      true,
-  lastFailPage: 0,
-
-  // leads buffer (all loaded, for export)
-  buffer:       [],
-
-  // geocoding
-  nGeoOk:       0,
-  nGeoFail:     0,
-  lastNomTs:    0,
-
-  // map
-  useCluster:   false
-};
-
-// ════════════════════════════════════════════════════════════════
-// MAP INIT
-// ════════════════════════════════════════════════════════════════
-var map = L.map('map', { center:[46.8,2.3], zoom:5, zoomControl:true, scrollWheelZoom:false });
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution:'© OpenStreetMap contributors', maxZoom:19
-}).addTo(map);
-
-var mcGroup = null;   // MarkerClusterGroup (lazy init)
-var plainGrp = L.layerGroup().addTo(map);
-
-var REGIONS = {
-  'ile-de-france':          { center:[48.85,2.35],  zoom:10, label:'Île-de-France' },
-  'auvergne-rhone-alpes':   { center:[45.75,4.85],  zoom:8,  label:'Auvergne-Rhône-Alpes' },
-  'nouvelle-aquitaine':     { center:[44.55,0.32],  zoom:7,  label:'Nouvelle-Aquitaine' },
-  'occitanie':              { center:[43.6,1.44],   zoom:8,  label:'Occitanie' },
-  'hauts-de-france':        { center:[50.4,3.07],   zoom:8,  label:'Hauts-de-France' },
-  'grand-est':              { center:[48.69,6.18],  zoom:8,  label:'Grand Est' },
-  'paca':                   { center:[43.93,6.07],  zoom:8,  label:"PACA" },
-  'pays-de-la-loire':       { center:[47.76,-0.77], zoom:8,  label:'Pays de la Loire' },
-  'normandie':              { center:[49.18,0.37],  zoom:8,  label:'Normandie' },
-  'bretagne':               { center:[48.2,-2.9],   zoom:8,  label:'Bretagne' },
-  'bourgogne-franche-comte':{ center:[47.05,4.84],  zoom:8,  label:'Bourgogne-Franche-Comté' },
-  'centre-val-de-loire':    { center:[47.75,1.67],  zoom:8,  label:'Centre-Val de Loire' },
-  'corse':                  { center:[42.03,9.01],  zoom:8,  label:'Corse' }
-};
-
-// ════════════════════════════════════════════════════════════════
-// GEOCODING ENGINE  (BAN primary · Nominatim fallback · LS cache)
-// ════════════════════════════════════════════════════════════════
-function _geoKey(s) {
-  var h=0; for(var i=0;i<s.length;i++) h=Math.imul(31,h)+s.charCodeAt(i)|0;
-  return GEO_PFX+Math.abs(h).toString(36);
-}
-function geoGet(addr) {
-  try {
-    var r=localStorage.getItem(_geoKey(addr)); if(!r) return undefined;
-    var e=JSON.parse(r);
-    if(Date.now()-e.ts>GEO_TTL){ localStorage.removeItem(_geoKey(addr)); return undefined; }
-    return e.v;
-  } catch(e){ return undefined; }
-}
-function geoSet(addr,v) {
-  try{ localStorage.setItem(_geoKey(addr), JSON.stringify({ts:Date.now(),v:v})); } catch(e){}
-}
-function sleep(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
-
-async function geocodeBAN(addr) {
-  try {
-    var r = await fetch(
-      'https://api-adresse.data.gouv.fr/search/?q='+encodeURIComponent(addr)+'&limit=1&autocomplete=0',
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if(!r.ok) return null;
-    var j = await r.json();
-    var f = j.features && j.features[0];
-    if(!f || f.properties.score < 0.38) return null;
-    return { lat:f.geometry.coordinates[1], lng:f.geometry.coordinates[0], src:'BAN' };
-  } catch(e){ return null; }
+// ── INIT ──
+function init(){
+  prospects = [...SAMPLE];
+  renderAll();
+  updateKPIs();
+  updateBadges();
 }
 
-async function geocodeNominatim(addr) {
-  var wait = 1050 - (Date.now() - S.lastNomTs);
-  if(wait > 0) await sleep(wait);
-  S.lastNomTs = Date.now();
-  try {
-    var r = await fetch(
-      'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=fr&q='+encodeURIComponent(addr),
-      { headers:{'User-Agent':'ProspectApp/1.0'}, signal: AbortSignal.timeout(6000) }
-    );
-    if(!r.ok) return null;
-    var j = await r.json();
-    if(!j[0]) return null;
-    return { lat:parseFloat(j[0].lat), lng:parseFloat(j[0].lon), src:'OSM' };
-  } catch(e){ return null; }
-}
-
-async function geocode(addr) {
-  var cached = geoGet(addr);
-  if(cached !== undefined) return cached;
-  var res = (await geocodeBAN(addr)) || (await geocodeNominatim(addr));
-  geoSet(addr, res);
-  return res;
-}
-
-// ════════════════════════════════════════════════════════════════
-// API LAYER
-// Expects: GET /api/leads?naf=&region=&page=&pageSize=&onlyComplete=
-// Returns: { total, totalComplete, hotCount, items:[...] }
-//
-// MOCK (used when real API returns 404/network error in dev)
-// Remove the mock block and keep only fetchLeads() when backend ready
-// ════════════════════════════════════════════════════════════════
-
-// ── Mock data generator (delete when real API is ready) ────────
-var _MOCK_FIRST=['Marie','Jean','Pierre','Sophie','Laurent','Isabelle','François','Nathalie','Thomas','Éric'];
-var _MOCK_LAST=['Martin','Bernard','Dubois','Robert','Durand','Leroy','Moreau','Simon','Garcia','Roux'];
-var _MOCK_STREETS=['rue','avenue','boulevard','impasse','allée','place'];
-var _MOCK_STRN=['de la République','du Général de Gaulle','Victor Hugo','Jean Jaurès','du Commerce','des Arts'];
-var _MOCK_CITIES={
-  'ile-de-france':[['Paris','75001'],['Paris','75008'],['Boulogne-Billancourt','92100'],['Versailles','78000'],['Nanterre','92000']],
-  'auvergne-rhone-alpes':[['Lyon','69001'],['Grenoble','38000'],['Saint-Étienne','42000'],['Clermont-Ferrand','63000'],['Annecy','74000']],
-  'nouvelle-aquitaine':[['Bordeaux','33000'],['Limoges','87000'],['Poitiers','86000'],['Pau','64000'],['La Rochelle','17000']],
-  'occitanie':[['Toulouse','31000'],['Montpellier','34000'],['Nîmes','30000'],['Perpignan','66000'],['Albi','81000']],
-  'hauts-de-france':[['Lille','59000'],['Amiens','80000'],['Roubaix','59100'],['Dunkerque','59140'],['Arras','62000']],
-  'grand-est':[['Strasbourg','67000'],['Reims','51100'],['Metz','57000'],['Nancy','54000'],['Colmar','68000']],
-  'paca':[['Marseille','13001'],['Nice','06000'],['Toulon','83000'],['Aix-en-Provence','13100'],['Avignon','84000']],
-  'pays-de-la-loire':[['Nantes','44000'],['Le Mans','72000'],['Angers','49000'],['Saint-Nazaire','44600']],
-  'normandie':[['Rouen','76000'],['Caen','14000'],['Le Havre','76600'],['Évreux','27000']],
-  'bretagne':[['Rennes','35000'],['Brest','29200'],['Quimper','29000'],['Lorient','56100'],['Vannes','56000'],['Saint-Malo','35400']],
-  'bourgogne-franche-comte':[['Dijon','21000'],['Besançon','25000'],['Belfort','90000'],['Auxerre','89000']],
-  'centre-val-de-loire':[['Orléans','45000'],['Tours','37000'],['Bourges','18000'],['Blois','41000']],
-  'corse':[['Ajaccio','20000'],['Bastia','20200'],['Porto-Vecchio','20137']]
-};
-var _MOCK_TOTALS = {
-  '9602A':{'bretagne':312,'ile-de-france':1840,'auvergne-rhone-alpes':923,'paca':677,'occitanie':541,'hauts-de-france':489,'nouvelle-aquitaine':463,'grand-est':401,'pays-de-la-loire':388,'normandie':275,'bourgogne-franche-comte':198,'centre-val-de-loire':187,'corse':52},
-  '4778A':{'bretagne':78,'ile-de-france':412,'auvergne-rhone-alpes':201,'paca':156},
-  '5610A':{'bretagne':541,'ile-de-france':3120,'auvergne-rhone-alpes':1640},
-  '8621Z':{'bretagne':189,'ile-de-france':2180,'auvergne-rhone-alpes':987}
-};
-var _rnd = function(a){return a[Math.floor(Math.random()*a.length)];};
-var _ri  = function(a,b){return Math.floor(Math.random()*(b-a+1))+a;};
-
-function _mockGenItem(naf, nafLabel, region, idx) {
-  var fn=_rnd(_MOCK_FIRST), ln=_rnd(_MOCK_LAST);
-  var npfx={
-    '9602A':['Salon','Studio','Coiffure','L\'Atelier'],
-    '5610A':['Le Bistrot','Brasserie','Chez','Auberge'],
-    '4778A':['Optique','Vision','Lumière'],
-    '8230Z':['Évènements','Organisation','Forum','Le Salon'],
-    default:['Groupe','Cabinet','Société','Établissements']
-  };
-  var p=(npfx[naf]||npfx.default);
-  var name=_rnd(p)+' '+_rnd(_MOCK_LAST);
-  var slug=name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');
-  var domain=slug.substring(0,16)+_rnd(['.fr','.com','.eu']);
-  var hasSite=Math.random()>.18, hasEmail=Math.random()>.28, hasPhone=Math.random()>.05;
-  var prio=Math.random()>.62?'hot':Math.random()>.42?'warm':'cold';
-  var cities=_MOCK_CITIES[region]||_MOCK_CITIES['bretagne'];
-  var city=_rnd(cities);
-  var addr=_ri(1,150)+' '+_rnd(_MOCK_STREETS)+' '+_rnd(_MOCK_STRN)+', '+city[1]+' '+city[0];
-  var complete = hasSite && hasEmail && hasPhone;
-  return {
-    id:       Math.random().toString(36).substr(2,9),
-    name:     name,
-    // naf and nafLabel ALWAYS come from the locked selection — never invented
-    naf:      naf,
-    nafLabel: nafLabel || NAF_LABELS[naf] || naf,
-    sector:   nafLabel || NAF_LABELS[naf] || naf,
-    siren:    ''+_ri(100000000,999999999),
-    siret:    ''+_ri(100000000,999999999)+_ri(10000,99999),
-    director: fn+' '+ln,
-    address:  addr,
-    lat:null, lng:null, geoStatus:'pending', geoSrc:null,
-    phone:    hasPhone?'0'+_ri(1,9)+' '+_ri(10,99)+' '+_ri(10,99)+' '+_ri(10,99)+' '+_ri(10,99):null,
-    website:  hasSite?'https://www.'+domain:null,
-    email:    (hasSite&&hasEmail)?'contact@'+domain:null,
-    socials:  ['facebook','instagram','linkedin','youtube','tiktok'].filter(function(){return Math.random()>.55;}),
-    priority: prio,
-    capital:  _ri(1,500)*1000+' €',
-    forme:    _rnd(['SARL','SAS','EURL','SA','SASU']),
-    created:  ''+_ri(1995,2023),
-    complete: complete,
-    source:   'SIRENE'
-  };
-}
-
-function _mockFetch(naf, nafLabel, region, page, pageSize, onlyComplete) {
-  return new Promise(function(resolve) {
-    setTimeout(function() {
-      var baseTotal = (_MOCK_TOTALS[naf]&&_MOCK_TOTALS[naf][region])
-        ? _MOCK_TOTALS[naf][region]
-        : _ri(60, 380);
-
-      // When onlyComplete, the "total" the API returns is already filtered
-      var filteredTotal = onlyComplete ? Math.round(baseTotal * 0.38) : baseTotal;
-      var hotCount      = Math.round(filteredTotal * 0.22);
-
-      var offset     = (page - 1) * pageSize;
-      var remaining  = Math.max(0, filteredTotal - offset);
-      var toGenerate = Math.min(pageSize, remaining);
-
-      var items = [];
-      var attempts = 0;
-      var maxAttempts = toGenerate * 6; // safety cap to avoid infinite loop
-      while(items.length < toGenerate && attempts < maxAttempts) {
-        attempts++;
-        var item = _mockGenItem(naf, nafLabel, region, offset + items.length);
-        // onlyComplete: keep generating until we fill the page
-        if(!onlyComplete || item.complete) {
-          items.push(item);
-        }
-      }
-
-      resolve({
-        total:         filteredTotal,   // total already reflects onlyComplete filter
-        totalComplete: onlyComplete ? filteredTotal : Math.round(baseTotal * 0.38),
-        hotCount:      hotCount,
-        items:         items
-      });
-    }, 280 + Math.random()*180);
+function renderAll(){
+  let list = [...prospects];
+  const q = document.getElementById('search-input').value.toLowerCase();
+  if(q) list = list.filter(p=>
+    p.name.toLowerCase().includes(q)||
+    p.company.toLowerCase().includes(q)||
+    (p.email||'').toLowerCase().includes(q)||
+    (p.location||'').toLowerCase().includes(q)
+  );
+  if(currentStatusFilter!=='all') list = list.filter(p=>p.status===currentStatusFilter);
+  list.sort((a,b)=>{
+    const va=(a[sortField]||'').toString().toLowerCase();
+    const vb=(b[sortField]||'').toString().toLowerCase();
+    return va<vb?-sortDir:va>vb?sortDir:0;
   });
-}
-// ── End mock ────────────────────────────────────────────────────
-
-/**
- * fetchLeads — real API call with mock fallback
- * Returns Promise<{ total, totalComplete, hotCount, items }>
- *
- * STRICT CONTRACT: every item in items[] MUST have item.naf === naf.
- * This is enforced both in the mock and as a front-end safety filter here.
- */
-async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
-  var url = API_BASE
-    + '?naf='          + encodeURIComponent(naf)
-    + '&region='       + encodeURIComponent(region)
-    + '&page='         + page
-    + '&pageSize='     + pageSize
-    + '&onlyComplete=' + (onlyComplete ? 'true' : 'false');
-
-  try {
-    var resp = await fetch(url, { signal: AbortSignal.timeout(12000) });
-
-    if(resp.status === 404 || resp.status === 0) {
-      console.warn('[Prospect] API unavailable — using mock data');
-      return _mockFetch(naf, nafLabel, region, page, pageSize, onlyComplete);
-    }
-
-    if(!resp.ok) throw new Error('HTTP ' + resp.status);
-    var data = await resp.json();
-
-    if(typeof data.total !== 'number' || !Array.isArray(data.items)) {
-      throw new Error('Invalid API response shape');
-    }
-
-    // ── BARRIER 1: strict NAF filter on real API response ──────────
-    data.items = data.items.filter(function(it) {
-      if(it.naf !== naf) {
-        console.warn('[Prospect] Discarded item with wrong NAF:', it.naf, '≠', naf, it);
-        return false;
-      }
-      return true;
-    });
-    return data;
-
-  } catch(err) {
-    if(err.name === 'TypeError' || err.name === 'AbortError') {
-      console.warn('[Prospect] Network error — using mock data:', err.message);
-      return _mockFetch(naf, nafLabel, region, page, pageSize, onlyComplete);
-    }
-    throw err;
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
-// MAP HELPERS
-// ════════════════════════════════════════════════════════════════
-function _resetMapLayers() {
-  if(mcGroup) { map.removeLayer(mcGroup); mcGroup = null; }
-  plainGrp.clearLayers();
-  S.useCluster = false;
-}
-
-function _ensureCluster() {
-  if(!mcGroup) {
-    mcGroup = L.markerClusterGroup({
-      maxClusterRadius: 50,
-      showCoverageOnHover: false,
-      iconCreateFunction: function(cluster) {
-        var n = cluster.getChildCount();
-        var sz = n < 10 ? 32 : n < 50 ? 38 : 44;
-        return L.divIcon({
-          html: '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:rgba(29,29,31,.75);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-size:11px;font-weight:700;color:#fff">'+n+'</div>',
-          className:'', iconSize:[sz,sz]
-        });
-      }
-    });
-    map.addLayer(mcGroup);
-  }
-}
-
-function addMarker(lead) {
-  if(!lead.lat || !lead.lng) return;
-  var color = lead.priority==='hot' ? '#e8341c' : lead.priority==='warm' ? '#f59e0b' : '#94a3b8';
-  var r     = lead.priority==='hot' ? 9 : 7;
-
-  var popup = '<div style="font-family:var(--font);min-width:210px">'
-    +'<strong style="font-family:var(--font);font-size:13px">'+esc(lead.name)+'</strong>'
-    +'<br><span style="font-size:11px;color:#888">'+esc(lead.sector)+'</span>'
-    +'<hr style="border:none;border-top:1px solid #eee;margin:8px 0">'
-    +'<div style="font-size:12px;line-height:1.8">'
-    +'👤 '+esc(lead.director||'—')+'<br>'
-    +'📞 '+(lead.phone||'<i style="color:#aaa">Non renseigné</i>')+'<br>'
-    +'✉️ <span style="color:#1a7a4a">'+(lead.email||'<i style="color:#aaa">—</i>')+'</span><br>'
-    +'📍 <span style="font-size:11px;color:#666">'+esc(lead.address)+'</span>'
-    +'</div>'
-    +'<div style="margin-top:6px;font-size:10px;color:#aaa">Source: '+esc(lead.geoSrc||'—')+' · '+esc(lead.source||'SIRENE')+'</div>'
-    +'</div>';
-
-  if(S.useCluster) {
-    _ensureCluster();
-    var m = L.circleMarker([lead.lat,lead.lng],{radius:r,fillColor:color,color:'#fff',weight:2,opacity:1,fillOpacity:.88});
-    m.bindPopup(popup,{maxWidth:280});
-    mcGroup.addLayer(m);
-  } else {
-    var m2 = L.circleMarker([lead.lat,lead.lng],{radius:r,fillColor:color,color:'#fff',weight:2,opacity:1,fillOpacity:.88});
-    m2.bindPopup(popup,{maxWidth:280});
-    plainGrp.addLayer(m2);
-  }
-}
-
-function switchToCluster() {
-  if(S.useCluster) return;
-  S.useCluster = true;
-  _ensureCluster();
-  // Move all existing plain markers into cluster
-  var lyrs = [];
-  plainGrp.eachLayer(function(l){ lyrs.push(l); });
-  lyrs.forEach(function(l){ plainGrp.removeLayer(l); mcGroup.addLayer(l); });
-}
-
-// ════════════════════════════════════════════════════════════════
-// GEOCODING QUEUE — background, non-blocking
-// ════════════════════════════════════════════════════════════════
-var _geoQ = [];
-var _geoRunning = false;
-
-function enqueueGeo(lead) {
-  _geoQ.push(lead);
-  if(!_geoRunning) _runGeoQueue();
-}
-
-async function _runGeoQueue() {
-  _geoRunning = true;
-  while(_geoQ.length > 0) {
-    var lead = _geoQ.shift();
-
-    // BARRIER 4: don't geocode/place marker if this lead's NAF no longer matches
-    // (can happen if user relaunched with different NAF while geo was running)
-    if(lead.naf !== selectedNAFCode) {
-      var stBadge = document.getElementById('geo-'+lead.id);
-      if(stBadge) stBadge.parentElement && stBadge.closest('.card') && stBadge.closest('.card').remove();
-      continue;
-    }
-
-    var res = await geocode(lead.address);
-    if(res) {
-      lead.lat = res.lat; lead.lng = res.lng; lead.geoSrc = res.src; lead.geoStatus = 'ok';
-      S.nGeoOk++;
-      addMarker(lead);
-      // switch to cluster if threshold crossed
-      if(!S.useCluster && S.nGeoOk > CLUSTER_THR) switchToCluster();
-      var badge = document.getElementById('geo-'+lead.id);
-      if(badge){ badge.className='badge b-geo-ok'; badge.innerHTML='📍 '+res.src; }
-    } else {
-      lead.geoStatus = 'failed'; S.nGeoFail++;
-      var badge2 = document.getElementById('geo-'+lead.id);
-      if(badge2){ badge2.className='badge b-geo-fail'; badge2.textContent='⚠️ Non localisé'; }
-    }
-    // Update live counters
-    document.getElementById('st-geo').textContent   = S.nGeoOk;
-    document.getElementById('st-noloc').textContent = S.nGeoFail;
-    var total = S.nGeoOk + S.nGeoFail;
-    if(S.total > 0) {
-      document.getElementById('geo-bar').style.width = Math.min(100,Math.round(total/Math.min(S.loaded,200)*100))+'%';
-      document.getElementById('map-sub').textContent =
-        'Géocodage '+total+'/'+Math.min(S.loaded,200)+' · '+S.nGeoOk+' localisés';
-    }
-    await sleep(150);
-  }
-  _geoRunning = false;
-  // Fade out geo bar
-  setTimeout(function(){
-    var b = document.getElementById('geo-bar');
-    b.style.transition = 'opacity .6s'; b.style.opacity = '0';
-    setTimeout(function(){ b.style.width='0%'; b.style.opacity='1'; b.style.transition='width .4s ease'; }, 700);
-  }, 1200);
-  var rd = REGIONS[S.region];
-  document.getElementById('map-sub').textContent =
-    S.nGeoOk+' leads localisés'+(rd?' en '+rd.label:'')+(S.nGeoFail?' · '+S.nGeoFail+' non localisés':'');
-}
-
-// ════════════════════════════════════════════════════════════════
-// CARD RENDERING
-// ════════════════════════════════════════════════════════════════
-var SOCIALS_LIST = ['facebook','instagram','linkedin','youtube','tiktok'];
-
-function createCard(lead, idx) {
-  var div = document.createElement('div');
-  div.className = 'card';
-  div.id = 'card-'+lead.id;
-  div.style.animationDelay = Math.min(idx, 8) * 0.05 + 's';
-
-  var prioBadge = lead.priority==='hot' ? '<span class="badge b-hot">🔥 Prioritaire</span>'
-                : lead.priority==='warm'? '<span class="badge b-warm">⚡ Tiède</span>'
-                :                         '<span class="badge b-cold">❄️ Normal</span>';
-
-  var completeBadge = lead.complete
-    ? '<span class="badge b-complete">✓ Fiche complète</span>'
-    : '<span class="badge b-incomplete">⚠ Partielle</span>';
-
-  var soc = SOCIALS_LIST.map(function(s){
-    return '<span class="st'+(lead.socials&&lead.socials.indexOf(s)>=0?' on':'')+'">'+s[0].toUpperCase()+s.slice(1)+'</span>';
-  }).join('');
-
-  var emailHtml = lead.email
-    ? '<span style="color:var(--green);font-weight:500">'+esc(lead.email)+'</span>'
-    : '<span class="missing">Email non trouvé</span>';
-
-  var siteHtml = lead.website
-    ? '<span style="color:var(--blue)">'+esc(lead.website)+'</span>'
-    : '<span class="missing">Site non trouvé</span>';
-
-  var phoneHtml = lead.phone || '<span class="missing">Tél. non trouvé</span>';
-
-  div.innerHTML =
-    '<div class="card-top">'
-      +'<div>'
-        +'<div class="cn">'+esc(lead.name)+'</div>'
-        +'<div class="naf-badge">'+esc(lead.naf||S.naf)+' — '+esc(lead.nafLabel||lead.sector||S.nafLabel)+'</div>'
-        +'<div class="cs">'+(lead.forme||'')+(lead.created?' · '+lead.created:'')+'</div>'
-      +'</div>'
-      +'<div class="badges">'+prioBadge+completeBadge
-        +'<span class="badge b-geo-pend" id="geo-'+lead.id+'">⏳ Géocodage</span>'
-      +'</div>'
-    +'</div>'
-    +'<div class="cinfo">'
-      +'<div class="ir"><span class="ico">👤</span><span>'+esc(lead.director||'—')+'</span></div>'
-      +'<div class="ir"><span class="ico">📞</span><span>'+phoneHtml+'</span></div>'
-      +'<div class="ir"><span class="ico">✉️</span><span>'+emailHtml+'</span></div>'
-      +'<div class="ir"><span class="ico">🌐</span><span>'+siteHtml+'</span></div>'
-      +'<div class="ir"><span class="ico">📍</span><span style="font-size:11px">'+esc(lead.address)+'</span></div>'
-    +'</div>'
-    +'<div class="csoc">'+soc+'</div>'
-    +'<div class="cact">'
-      +(lead.email?'<button class="ba" onclick="cp(\''+lead.email+'\',\'Email\')">Copier email</button>':'')
-      +(lead.phone?'<button class="ba" onclick="cp(\''+lead.phone+'\',\'Tél.\')">Copier tél.</button>':'')
-      +'<button class="ba pr" style="margin-left:auto">Exporter</button>'
-    +'</div>';
-
-  return div;
-}
-
-// ════════════════════════════════════════════════════════════════
-// LOAD PAGE — core pagination unit
-// ════════════════════════════════════════════════════════════════
-async function loadPage(page) {
-  if(S.loading) return;
-
-  // ── HARD GUARD: only proceed if NAF was explicitly locked ───────
-  if(!S.nafLocked || !selectedNAFCode || !S.region) {
-    console.error('[Prospect] loadPage aborted — NAF not locked. selectedNAFCode="'+selectedNAFCode+'" nafLocked='+S.nafLocked);
-    setBtnReady();
+  filteredProspects=list;
+  document.getElementById('count-label').textContent=list.length+' prospect(s)';
+  const tbody=document.getElementById('prospects-tbody');
+  const table=document.getElementById('prospects-table');
+  const empty=document.getElementById('empty-state');
+  if(!list.length){
+    table.style.display='none';
+    empty.style.display='flex';
     return;
   }
-
-  S.loading = true;
-  S.lastFailPage = 0;
-
-  // Snapshot at load time — detect stale async callbacks
-  var loadNaf      = selectedNAFCode;
-  var loadNafLabel = selectedNAFLabel;
-  var loadRegion   = S.region;
-
-  var isFirstPage = (page === 1);
-  if(isFirstPage) {
-    document.getElementById('skel').classList.add('show');
-    document.getElementById('empty').classList.remove('show');
-    document.getElementById('res-context').classList.remove('show');
-    document.getElementById('cards').innerHTML = '';
-    document.getElementById('geo-bar').style.width = '0%';
-    document.getElementById('geo-bar').style.opacity = '1';
-  } else {
-    document.getElementById('page-loader').classList.add('show');
-  }
-  hideError();
-
-  try {
-    var data = await fetchLeads(loadNaf, loadNafLabel, loadRegion, page, PAGE_SIZE, S.onlyComplete);
-
-    // ── STALE GUARD: NAF or region changed while fetching → discard ──
-    if(loadNaf !== selectedNAFCode || loadRegion !== S.region) {
-      console.warn('[Prospect] Stale page discarded. Loaded for "'+loadNaf+'" but current is "'+selectedNAFCode+'"');
-      S.loading = false;
-      return;
-    }
-
-    if(isFirstPage) {
-      S.total         = data.total;
-      S.totalComplete = data.totalComplete;
-      S.hotCount      = data.hotCount;
-      S.nGeoOk        = 0;
-      S.nGeoFail      = 0;
-      S.buffer        = [];
-      S.loaded        = 0;
-      _geoQ           = [];   // flush any pending geo from previous search
-      _geoRunning     = false; // allow geo queue to restart
-      _resetMapLayers();
-      var rd = REGIONS[S.region];
-      if(rd) map.setView(rd.center, rd.zoom);
-      updateStats();
-
-      // Update context banner
-      var regionEl = document.getElementById('sel-region');
-      var regionLabel = regionEl.options[regionEl.selectedIndex].text;
-      document.getElementById('ctx-naf').textContent    = S.naf;
-      document.getElementById('ctx-label').textContent  = S.nafLabel;
-      document.getElementById('ctx-region').textContent = regionLabel;
-      document.getElementById('res-context').classList.add('show');
-    }
-
-    var rawItems = data.items || [];
-
-    // ── BARRIER 2: strict front-end NAF filter (second line of defence) ──
-    // Even if mock or API sends wrong items, they are silently dropped here.
-    var rejected = 0;
-    var items = rawItems.filter(function(it) {
-      if(it.naf !== loadNaf) {
-        rejected++;
-        return false;
-      }
-      return true;
-    });
-    if(rejected > 0) {
-      console.warn('[Prospect] BARRIER-2 dropped ' + rejected + ' items with naf ≠ "' + loadNaf + '"');
-    }
-
-    // hasMore based purely on counts, NOT items.length (correct for onlyComplete)
-    S.hasMore = (S.loaded + items.length) < S.total;
-    S.page = page;
-
-    // Render cards — BARRIER 3: last-chance NAF check before DOM insertion
-    var frag = document.createDocumentFragment();
-    var cardOffset = S.loaded;
-    items.forEach(function(lead, i) {
-      // BARRIER 3: final guard — should never trigger if B1+B2 work, but guarantees UI purity
-      if(lead.naf !== loadNaf) {
-        console.error('[Prospect] BARRIER-3 blocked render for naf="'+lead.naf+'"');
-        return;
-      }
-      S.buffer.push(lead);
-      frag.appendChild(createCard(lead, cardOffset + i));
-      enqueueGeo(lead);
-    });
-    document.getElementById('cards').appendChild(frag);
-    S.loaded += items.length;
-
-    updateCountDisplay();
-    updateExportBar();
-
-    if(isFirstPage) {
-      document.getElementById('stats-bar').classList.add('show');
-      document.getElementById('skel').classList.remove('show');
-      if(items.length === 0) {
-        document.getElementById('empty').classList.add('show');
-        document.getElementById('empty').querySelector('.empty-title').textContent = 'Aucun résultat';
-        document.getElementById('empty').querySelector('.empty-sub').textContent =
-          'Aucun établissement trouvé pour ' + loadNaf + ' dans cette région.'
-          + (S.onlyComplete ? ' Essayez sans le filtre "fiches complètes".' : '');
-      }
-    }
-
-  } catch(err) {
-    console.error('[Prospect] loadPage error:', err);
-    S.lastFailPage = page;
-    showError('Erreur de chargement (page ' + page + '). Vérifiez votre connexion ou que l\'API est déployée.');
-    if(isFirstPage) {
-      document.getElementById('skel').classList.remove('show');
-    }
-  } finally {
-    S.loading = false;
-    document.getElementById('page-loader').classList.remove('show');
-    if(page === 1) setBtnReady();
-  }
+  table.style.display='table';
+  empty.style.display='none';
+  tbody.innerHTML=list.map(p=>`
+    <tr onclick="openDetail(${p.id})" class="${selectedId===p.id?'selected':''}">
+      <td>${p.sector?`<span class="sector">${esc(p.sector)}</span>`:'<span style="color:var(--muted2);font-size:11px">—</span>'}</td>
+      <td><div class="td-name">${esc(p.company)}</div></td>
+      <td>
+        <div style="font-size:12.5px;font-weight:500;color:var(--text)">${esc(p.name)}</div>
+        ${p.notes?`<div class="td-co" style="font-style:italic;font-size:10px">Note</div>`:''}
+      </td>
+      <td class="td-email">${p.email?esc(p.email):'<span style="color:var(--muted2);font-size:11px">—</span>'}</td>
+      <td class="td-phone">${p.phone||'<span style="color:var(--muted2);font-size:11px">—</span>'}</td>
+      <td class="td-loc">${p.location||'—'}</td>
+      <td><span class="source-tag">${esc(p.source||'—')}</span></td>
+      <td>
+        <div class="td-actions">
+          ${p.email?`<div class="act-btn" onclick="event.stopPropagation();copyText('${esc(p.email)}','Email')" title="Copier email"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>`:''}
+          <div class="act-btn" onclick="event.stopPropagation();deletePros(${p.id})" title="Supprimer">🗑</div>
+        </div>
+      </td>
+    </tr>
+  `).join('');
 }
 
-// ════════════════════════════════════════════════════════════════
-// INFINITE SCROLL
-// ════════════════════════════════════════════════════════════════
-document.getElementById('res-panel').addEventListener('scroll', function() {
-  var el = this;
-  if(S.loading || !S.hasMore) return;
-  var pct = (el.scrollTop + el.clientHeight) / el.scrollHeight;
-  if(pct >= 0.80) {
-    loadPage(S.page + 1);
-  }
+function statusBadge(s){
+  const m={hot:'badge-hot 🔥 Hot',warm:'badge-warm ⚡ Warm',cold:'badge-cold ❄️ Cold',new:'badge-new 🆕 Nouveau'};
+  const d=m[s]||'badge-new 🆕 Nouveau';
+  const [cls,...rest]=d.split(' ');
+  return `<span class="badge ${cls}"><span class="badge-dot"></span>${rest.join(' ')}</span>`;
+}
+function sourceIco(s){
+  if(!s)return '';
+  if(/linkedin/i.test(s))return '💼';
+  if(/salon/i.test(s))return '🎪';
+  if(/societe/i.test(s))return '🏢';
+  if(/référence/i.test(s))return '⭐';
+  return '📌';
+}
+
+// ── KPIS ──
+function updateKPIs(){
+  const total=prospects.length;
+  const hot=prospects.filter(p=>p.status==='hot').length;
+  const warm=prospects.filter(p=>p.status==='warm').length;
+  const emails=prospects.filter(p=>p.email).length;
+  document.getElementById('kpi-total').textContent=total;
+  document.getElementById('kpi-hot').textContent=hot;
+  document.getElementById('kpi-warm').textContent=warm;
+  document.getElementById('kpi-emails').textContent=emails;
+  document.getElementById('kpi-value').textContent= total ? (total*450)+'€/mois' : '—';
+}
+function updateBadges(){
+  // badges are in filter toolbar, updated via count-label
+  // also update filter button labels dynamically
+  const counts={
+    all:prospects.length,
+    hot:prospects.filter(p=>p.status==='hot').length,
+    warm:prospects.filter(p=>p.status==='warm').length,
+    cold:prospects.filter(p=>p.status==='cold').length,
+    new:prospects.filter(p=>p.status==='new').length,
+  };
+  document.querySelectorAll('.filter-btn[data-status]').forEach(btn=>{
+    const s=btn.dataset.status;
+    const n=counts[s];
+    if(s!=='all')btn.style.position='relative';
+  });
+}
+
+// ── FILTERS ──
+function filterByStatus(el,status){
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  currentStatusFilter=status;
+  renderAll();
+}
+function filterProspects(){renderAll()}
+function setView(v){
+  currentStatusFilter=v;
+  document.querySelectorAll('.filter-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.status===v);
+  });
+  renderAll();
+}
+function sortBy(field){
+  if(sortField===field)sortDir*=-1;
+  else{sortField=field;sortDir=1;}
+  renderAll();
+}
+
+// ── DETAIL PANEL ──
+function openDetail(id){
+  selectedId=id;
+  const p=prospects.find(x=>x.id===id);
+  if(!p)return;
+  document.getElementById('dp-name').textContent=p.name;
+  document.getElementById('dp-co').textContent=p.company;
+  document.getElementById('dp-status-sel').value=p.status||'new';
+  document.getElementById('dp-director').textContent=p.director||p.name;
+  document.getElementById('dp-email').innerHTML=p.email?`<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>`:'<span style="color:var(--muted2)">Non renseigné</span>';
+  document.getElementById('dp-phone').textContent=p.phone||'—';
+  document.getElementById('dp-website').innerHTML=p.website?`<a href="https://${p.website.replace(/^https?:\/\//,'')}" target="_blank">${esc(p.website)}</a>`:'—';
+  document.getElementById('dp-loc').textContent=p.location||'—';
+  document.getElementById('dp-notes').value=p.notes||'';
+  document.getElementById('detail-panel').classList.add('open');
+  renderAll();
+}
+function closeDetail(){
+  selectedId=null;
+  document.getElementById('detail-panel').classList.remove('open');
+  renderAll();
+}
+function updateStatus(){
+  if(!selectedId)return;
+  const p=prospects.find(x=>x.id===selectedId);
+  if(p){p.status=document.getElementById('dp-status-sel').value;}
+  renderAll();updateKPIs();updateBadges();
+}
+function saveNote(){
+  if(!selectedId)return;
+  const p=prospects.find(x=>x.id===selectedId);
+  if(p)p.notes=document.getElementById('dp-notes').value;
+}
+function copyEmail(){
+  const p=prospects.find(x=>x.id===selectedId);
+  if(p&&p.email)copyText(p.email,'Email');
+}
+function copyPhone(){
+  const p=prospects.find(x=>x.id===selectedId);
+  if(p&&p.phone)copyText(p.phone,'Tél.');
+}
+function moveToOdoo(){toast('✅ Prospect envoyé vers Odoo');}
+
+// ── IMPORT MODAL ──
+function openImport(tab){
+  document.getElementById('modal-overlay').classList.add('open');
+  switchModalTab(tab, document.querySelectorAll('.modal-tab')[tab==='csv'?0:tab==='manual'?1:2]);
+}
+function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
+function handleOverlayClick(e){if(e.target===document.getElementById('modal-overlay'))closeModal();}
+function switchModalTab(tab, el){
+  activeModalTab=tab;
+  document.querySelectorAll('.modal-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  const btn=document.getElementById('modal-confirm-btn');
+  btn.textContent=tab==='csv'?'Importer le fichier':tab==='manual'?'Ajouter le prospect':'Importer les données';
+}
+
+// ── CSV IMPORT ──
+function handleFileSelect(input){
+  const file=input.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    parseCSV(text);
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+// Drag & drop
+const dz=document.getElementById('drop-zone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault();dz.classList.remove('drag-over');
+  const file=e.dataTransfer.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>parseCSV(ev.target.result);
+  reader.readAsText(file,'UTF-8');
 });
 
-// ════════════════════════════════════════════════════════════════
-// UI STATE HELPERS
-// ════════════════════════════════════════════════════════════════
-function updateStats() {
-  document.getElementById('st-total').textContent    = S.total.toLocaleString('fr-FR');
-  document.getElementById('st-complete').textContent = S.totalComplete.toLocaleString('fr-FR');
-  document.getElementById('st-hot').textContent      = S.hotCount.toLocaleString('fr-FR');
-  var rate = S.total > 0 ? Math.round(S.totalComplete / S.total * 100) : 0;
-  document.getElementById('st-email').textContent    = rate + '%';
-}
-
-function updateCountDisplay() {
-  document.getElementById('res-count').textContent =
-    S.loaded.toLocaleString('fr-FR') + ' / ' + S.total.toLocaleString('fr-FR') + ' résultats';
-}
-
-function updateExportBar() {
-  document.getElementById('exp-count').textContent   = S.loaded.toLocaleString('fr-FR');
-  document.getElementById('exp-complete').textContent = Math.round(S.loaded * S.totalComplete / Math.max(S.total,1))+' fiches complètes';
-  document.getElementById('exp-bar').classList.add('show');
-}
-
-function updateHint() {
-  var btn  = document.getElementById('btn-go');
-  var hint = document.getElementById('hint');
-  // Button is only active if NAF is explicitly locked AND region chosen
-  if(S.nafLocked && S.naf && S.region) {
-    btn.classList.add('active');
-    var rl = document.getElementById('sel-region');
-    hint.textContent = '✓ ' + S.naf + ' — ' + S.nafLabel + ' · ' + rl.options[rl.selectedIndex].text;
-    hint.style.color = 'var(--green)';
-  } else if(S.nafLocked && S.naf) {
-    btn.classList.remove('active');
-    hint.textContent = S.naf + ' sélectionné — choisissez une région';
-    hint.style.color = 'var(--black)';
-  } else if(S.region && !S.nafLocked) {
-    btn.classList.remove('active');
-    hint.textContent = 'Région choisie — tapez un métier et sélectionnez une suggestion';
-    hint.style.color = 'var(--g600)';
-  } else {
-    btn.classList.remove('active');
-    hint.textContent = 'Tapez un métier ou un code APE, sélectionnez une suggestion, puis choisissez une région';
-    hint.style.color = '';
-  }
-}
-
-function setBtnLoading() {
-  var btn = document.getElementById('btn-go');
-  btn.classList.remove('active'); btn.classList.add('loading');
-  document.getElementById('ico-search').style.display = 'none';
-  document.getElementById('spinner').style.display    = 'block';
-  document.getElementById('btn-lbl').textContent      = 'Chargement…';
-}
-
-function setBtnReady() {
-  var btn = document.getElementById('btn-go');
-  btn.classList.remove('loading'); btn.classList.add('active');
-  document.getElementById('ico-search').style.display = '';
-  document.getElementById('spinner').style.display    = 'none';
-  document.getElementById('btn-lbl').textContent      = 'Relancer';
-}
-
-function showError(msg) {
-  document.getElementById('err-msg').textContent = msg;
-  document.getElementById('err-banner').classList.add('show');
-}
-function hideError() {
-  document.getElementById('err-banner').classList.remove('show');
-}
-
-// ════════════════════════════════════════════════════════════════
-// EVENT HANDLERS
-// ════════════════════════════════════════════════════════════════
-function startSearch() {
-  var btn = document.getElementById('btn-go');
-  // ── Triple guard: lock, code, region ALL required ───────────────
-  if(!S.nafLocked || !selectedNAFCode || !S.naf || !S.region) {
-    // Should never happen (button is inactive), but belt-and-suspenders
-    showError('Veuillez sélectionner un secteur dans la liste de suggestions et choisir une région.');
-    return;
-  }
-  if(!btn.classList.contains('active')) return;
-  setBtnLoading();
-  document.getElementById('exp-bar').classList.remove('show');
-  document.getElementById('stats-bar').classList.remove('show');
-  loadPage(1);
-}
-
-function retryLastPage() {
-  if(S.lastFailPage > 0) loadPage(S.lastFailPage);
-}
-
-function onRegionChange() {
-  S.region = document.getElementById('sel-region').value;
-  updateHint();
-}
-
-function onToggleComplete(checked) {
-  S.onlyComplete = checked;
-  // Re-run only if a valid locked search is already active
-  if(S.nafLocked && S.naf && S.region && S.loaded > 0) {
-    setBtnLoading();
-    loadPage(1);
-  }
-}
-
-function showToast(msg) {
-  var t = document.createElement('div');
-  t.style.cssText = 'position:fixed;bottom:88px;left:50%;transform:translateX(-50%);background:var(--black);color:white;padding:10px 20px;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:600;z-index:9999;pointer-events:none;';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(function(){ t.remove(); }, 2200);
-}
-
-function cp(v, label) {
-  navigator.clipboard.writeText(v).then(function(){ showToast(label+' copié ✓'); });
-}
-
-function esc(s) {
-  if(!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// ════════════════════════════════════════════════════════════════
-// EXPORT CSV
-// ════════════════════════════════════════════════════════════════
-function exportCSV() {
-  if(!S.buffer.length) return;
-  var h = ['Entreprise','Secteur','SIREN','SIRET','Forme','Capital','Dirigeant','Adresse',
-           'Téléphone','Site','Email','Facebook','Instagram','LinkedIn','YouTube','TikTok',
-           'Latitude','Longitude','Source geo','Priorité','Fiche complète','Source données'];
-  var rows = S.buffer.map(function(l) {
-    return [
-      l.name, l.sector, l.siren, l.siret, l.forme||'', l.capital||'',
-      l.director||'', l.address, l.phone||'', l.website||'', l.email||'',
-      l.socials&&l.socials.indexOf('facebook')>=0?'Oui':'Non',
-      l.socials&&l.socials.indexOf('instagram')>=0?'Oui':'Non',
-      l.socials&&l.socials.indexOf('linkedin')>=0?'Oui':'Non',
-      l.socials&&l.socials.indexOf('youtube')>=0?'Oui':'Non',
-      l.socials&&l.socials.indexOf('tiktok')>=0?'Oui':'Non',
-      l.lat||'', l.lng||'', l.geoSrc||'', l.priority,
-      l.complete?'Oui':'Non', l.source||'SIRENE'
-    ].map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(',');
-  });
-  var csv = [h.join(',')].concat(rows).join('\n');
-  var a   = document.createElement('a');
-  a.href  = URL.createObjectURL(new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'}));
-  a.download = 'leads_'+S.naf+'_'+S.region+'_'+new Date().toISOString().slice(0,10)+'.csv';
-  a.click();
-  showToast(S.buffer.length+' fiches exportées ✓');
-}
-
-// ════════════════════════════════════════════════════════════════
-// NAF FUZZY SEARCH ENGINE
-// ════════════════════════════════════════════════════════════════
-var NAF_INDEX = [];
-var NAF_LABELS = {};
-var _acIdx = -1;
-var _acList = [];
-
-var SYNONYMS = {
-  'opticien':['4778A','8690F'],'optique':['4778A','3250B'],'lunettes':['4778A'],
-  'coiffeur':['9602A'],'coiffure':['9602A'],'esthetique':['9602B'],'esthétique':['9602B'],
-  'esthéticienne':['9602B'],'spa':['9604Z'],'beaute':['9602B','9604Z'],'beauté':['9602B','9604Z'],
-  'boulanger':['1071C'],'boulangerie':['1071A','1071C'],'patisserie':['1071D','1072Z'],'pâtisserie':['1071D','1072Z'],
-  'boucher':['4722Z','1013B'],'boucherie':['4722Z'],'fleuriste':['4776Z'],
-  'pharmacie':['4773Z'],'pharmacien':['4773Z'],'dentiste':['8623Z'],
-  'medecin':['8621Z'],'médecin':['8621Z'],'generaliste':['8621Z'],'chirurgien':['8622B'],
-  'kine':['8690E'],'kiné':['8690E'],'infirmier':['8690D'],'veterinaire':['7500Z'],'vétérinaire':['7500Z'],
-  'taxi':['4932Z'],'vtc':['4932Z'],'demenagement':['4942Z'],'déménagement':['4942Z'],
-  'plombier':['4322A'],'electricien':['4321A'],'électricien':['4321A'],
-  'menuisier':['4332A'],'peintre':['4334Z'],'macon':['4399C'],'maçon':['4399C'],
-  'couvreur':['4391A'],'charpentier':['4391A'],'architecte':['7111Z'],'geometre':['7112A'],
-  'avocat':['6910Z'],'notaire':['6910Z'],'comptable':['6920Z'],'expert-comptable':['6920Z'],
-  'agence immobiliere':['6831Z'],'agence immobilière':['6831Z'],
-  'agence evenementielle':['8230Z'],'agence événementielle':['8230Z'],
-  'evenementiel':['8230Z'],'événementiel':['8230Z'],'traiteur':['5621Z'],
-  'restaurant':['5610A','5610B'],'cafe':['5630Z'],'café':['5630Z'],'bar':['5630Z'],
-  'hotel':['5510Z'],'hôtel':['5510Z'],'supermarche':['4711A'],'épicerie':['4711D'],
-  'librairie':['4761Z'],'auto-ecole':['8553Z'],'auto-école':['8553Z'],
-  'formation':['8559A','8559B'],'informatique':['6201Z','6202A'],'developpeur':['6201Z'],'développeur':['6201Z'],
-  'webdesign':['7410Z'],'designer':['7410Z'],'photographe':['7420Z'],
-  'publicite':['7311Z'],'publicité':['7311Z'],'marketing':['7311Z'],
-  'recrutement':['7810Z'],'securite':['8010Z'],'sécurité':['8010Z'],
-  'nettoyage':['8121Z','8122Z'],'jardinage':['8130Z'],'paysagiste':['8130Z'],
-  'transport':['4941A','4941B'],'imprimerie':['1812Z'],
-  'bijouterie':['4777Z'],'horlogerie':['4777Z'],'garage':['4520A'],'garagiste':['4520A'],
-  'carrosserie':['4520B'],'concessionnaire':['4511Z'],
-  'salle de sport':['9313Z'],'fitness':['9313Z'],'gym':['9313Z'],
-  'creche':['8891A'],'crèche':['8891A'],'ecole':['8520Z'],'école':['8520Z']
+const FIELD_MAP={
+  'nom':'name','name':'name','prénom nom':'name',
+  'société':'company','company':'company','entreprise':'company','agence':'company',
+  'email':'email','e-mail':'email','mail':'email','courriel':'email',
+  'téléphone':'phone','telephone':'phone','tél':'phone','tel':'phone','phone':'phone','mobile':'phone',
+  'adresse':'location','localisation':'location','ville':'location','location':'location','commune':'location',
+  'secteur':'sector','activité':'sector','sector':'sector',
+  'statut':'status','status':'status','priorité':'status',
+  'site':'website','website':'website','site web':'website','url':'website',
+  'directeur':'director','dirigeant':'director','contact':'director','director':'director',
+  'siren':'siren','siret':'siren','n° siren':'siren',
+  'notes':'notes','remarques':'notes','note':'notes',
 };
 
-function _norm(s) {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+function parseCSV(text){
+  // Detect separator
+  const firstLine=text.split('\n')[0];
+  let sep=',';
+  if(firstLine.split(';').length>firstLine.split(',').length)sep=';';
+  else if(firstLine.split('\t').length>firstLine.split(',').length)sep='\t';
+
+  const lines=text.trim().split('\n').map(l=>l.replace(/\r/g,''));
+  if(lines.length<2){toast('⚠️ Fichier vide ou invalide');return;}
+
+  const headers=lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/['"]/g,''));
+  const mapped=headers.map(h=>FIELD_MAP[h]||h);
+
+  csvParsed=lines.slice(1).filter(l=>l.trim()).map((line,idx)=>{
+    const vals=line.split(sep).map(v=>v.trim().replace(/^["']|["']$/g,''));
+    const obj={id:Date.now()+idx,status:'new'};
+    mapped.forEach((field,i)=>{if(vals[i])obj[field]=vals[i];});
+    if(!obj.name&&!obj.company)return null;
+    return obj;
+  }).filter(Boolean);
+
+  // Show preview (max 4 rows)
+  const previewFields=['name','company','email','phone','location','status'];
+  const pf=previewFields.filter(f=>csvParsed.some(r=>r[f]));
+  const thead=document.getElementById('csv-thead');
+  const tbody=document.getElementById('csv-tbody');
+  thead.innerHTML='<tr>'+pf.map(f=>`<th>${f}</th>`).join('')+'</tr>';
+  tbody.innerHTML=csvParsed.slice(0,4).map(r=>
+    '<tr>'+pf.map(f=>`<td>${r[f]||'—'}</td>`).join('')+'</tr>'
+  ).join('');
+  document.getElementById('csv-preview').classList.add('visible');
+  document.getElementById('csv-info').style.display='flex';
+  document.getElementById('csv-count').textContent=csvParsed.length;
 }
-function _score(q, item) {
-  var qn=_norm(q), code=item.code.toLowerCase(), lb=item.ln;
-  if(code===qn || code.replace(/[^a-z0-9]/g,'')=== qn.replace(/[^a-z0-9]/g,'')) return 100;
-  if(code.startsWith(qn)) return 95;
-  var syns=SYNONYMS[qn]||[];
-  if(syns.indexOf(item.code)>=0) return 90;
-  for(var k in SYNONYMS){ if(SYNONYMS[k].indexOf(item.code)>=0 && k.indexOf(qn)>=0 && qn.length>=3) return 75; }
-  var words=lb.split(' '), qw=qn.split(' ').filter(function(w){return w.length>=2;});
-  if(qw.length>0 && qw.every(function(w){return words.some(function(x){return x.startsWith(w);});})) return 80;
-  if(lb.indexOf(qn)>=0 && qn.length>=3) return 70;
-  var pc=qw.filter(function(w){return lb.indexOf(w)>=0&&w.length>=3;}).length;
-  if(pc>0) return 40+pc*10;
-  return 0;
+
+// ── CONFIRM IMPORT ──
+function confirmImport(){
+  if(activeModalTab==='csv'){
+    if(!csvParsed.length){toast('⚠️ Aucune donnée à importer');return;}
+    prospects=[...prospects,...csvParsed];
+    toast(`✅ ${csvParsed.length} prospect(s) importé(s)`);
+    csvParsed=[];
+    document.getElementById('csv-preview').classList.remove('visible');
+    document.getElementById('csv-info').style.display='none';
+    document.getElementById('csv-file-input').value='';
+  } else if(activeModalTab==='manual'){
+    const name=document.getElementById('f-name').value.trim();
+    const company=document.getElementById('f-company').value.trim();
+    if(!name&&!company){toast('⚠️ Nom ou société requis');return;}
+    const p={
+      id:Date.now(),
+      name:name||company,
+      company:company||name,
+      email:document.getElementById('f-email').value.trim(),
+      phone:document.getElementById('f-phone').value.trim(),
+      location:document.getElementById('f-loc').value.trim(),
+      sector:document.getElementById('f-sector').value,
+      status:document.getElementById('f-status').value,
+      website:document.getElementById('f-website').value.trim(),
+      source:document.getElementById('f-source').value,
+      notes:document.getElementById('f-notes').value.trim(),
+      director:name||company,
+    };
+    prospects.push(p);
+    // reset form
+    ['f-name','f-company','f-email','f-phone','f-loc','f-website','f-notes'].forEach(id=>document.getElementById(id).value='');
+    toast('✅ Prospect ajouté');
+  } else if(activeModalTab==='paste'){
+    const raw=document.getElementById('paste-input').value.trim();
+    if(!raw){toast('⚠️ Aucune donnée');return;}
+    const lines=raw.split('\n').filter(l=>l.trim());
+    const added=lines.map((line,idx)=>{
+      const parts=line.split(/[,;·\t]+/).map(s=>s.trim()).filter(Boolean);
+      const email=parts.find(s=>/\S+@\S+\.\S+/.test(s));
+      const phone=parts.find(s=>/^[\d\s\+\(\)\-\.]{8,}$/.test(s.replace(/\s/g,'')));
+      const name=parts[0]||'';
+      const company=parts[1]||'';
+      const loc=parts.find(s=>!/\S+@/.test(s)&&!/^\d/.test(s.replace(/\s/g,''))&&s!==name&&s!==company);
+      return {id:Date.now()+idx,name,company,email:email||'',phone:phone||'',location:loc||'',status:'new',source:'Collé',director:name};
+    });
+    prospects=[...prospects,...added];
+    document.getElementById('paste-input').value='';
+    toast(`✅ ${added.length} prospect(s) importé(s)`);
+  }
+  closeModal();
+  renderAll();updateKPIs();updateBadges();
 }
-function _hl(text, q) {
-  var n=_norm(text), qn=_norm(q), i=n.indexOf(qn);
-  if(i<0) return esc(text);
-  return esc(text.slice(0,i))+'<span class="acd-hl">'+esc(text.slice(i,i+qn.length))+'</span>'+esc(text.slice(i+qn.length));
+
+// ── EXPORT ODOO ──
+function exportOdoo(){
+  const lines=['id,name,partner_name,email_from,phone,city,description,priority'];
+  prospects.forEach(p=>{
+    const pri=p.status==='hot'?'2':p.status==='warm'?'1':'0';
+    lines.push([
+      '','Agence Event - '+(p.company||p.name),
+      p.company||p.name,
+      p.email||'',p.phone||'',p.location||'',
+      (p.notes||'').replace(/,/g,';'),pri
+    ].map(v=>'"'+v+'"').join(','));
+  });
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='prospects_odoo.csv';a.click();
+  URL.revokeObjectURL(url);
+  toast('Export Odoo téléchargé');
 }
-function buildIndex() {
-  NAF_INDEX = [];
-  document.querySelectorAll('#sector-select option[value]').forEach(function(o){
-    if(!o.value) return;
-    var label = o.text.replace(/\s*\([^)]+\)\s*$/,'').trim();
-    NAF_INDEX.push({code:o.value, label:label, ln:_norm(label)});
-    NAF_LABELS[o.value] = label;
+
+// ── DELETE ──
+function deletePros(id){
+  prospects=prospects.filter(p=>p.id!==id);
+  if(selectedId===id)closeDetail();
+  renderAll();updateKPIs();updateBadges();
+  toast('🗑 Prospect supprimé');
+}
+
+// ── UTILS ──
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function copyText(txt,label){
+  navigator.clipboard.writeText(txt).then(()=>toast(`${label} copié`)).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast(`${label} copié`);
   });
 }
-function searchNAF(q) {
-  if(!q||q.trim().length<2) return [];
-  return NAF_INDEX
-    .map(function(x){ return Object.assign({},x,{sc:_score(q,x)}); })
-    .filter(function(x){ return x.sc>0; })
-    .sort(function(a,b){ return b.sc-a.sc; })
-    .slice(0,12);
+let toastTimer;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),2400);
 }
-function renderAC(q,results) {
-  var dd=document.getElementById('acd');
-  if(!results.length){ dd.innerHTML='<div class="acd-empty">Aucun résultat pour "'+esc(q)+'"</div>'; dd.classList.add('open'); return; }
-  var hot=results.filter(function(r){return r.sc>=80;}), other=results.filter(function(r){return r.sc<80;});
-  var html='';
-  if(hot.length){ html+='<div class="acd-sec">Meilleurs résultats</div>'; hot.forEach(function(r,i){ html+=_renderItem(r,q); }); }
-  if(other.length){ html+='<div class="acd-sec">Autres résultats</div>'; other.forEach(function(r){ html+=_renderItem(r,q); }); }
-  dd.innerHTML=html; dd.classList.add('open'); _acIdx=-1;
-}
-function _renderItem(r,q) {
-  return '<div class="acd-item" data-code="'+esc(r.code)+'" data-label="'+esc(r.label)+'" onmousedown="pickNAF(\''+esc(r.code)+'\',\''+r.label.replace(/'/g,"\\'")+'\')">'
-    +'<span class="acd-code">'+esc(r.code)+'</span>'
-    +'<span class="acd-label">'+_hl(r.label,q)+'</span>'
-    +'</div>';
-}
-function onSectorInput(v) {
-  document.getElementById('btn-clr').classList.toggle('show', v.length > 0);
+function navTo(p){toast(`→ Navigation vers ${p} (à intégrer dans dashboard_v7.html)`)}
 
-  // ── Invalidate the lock as soon as the user types anything ──────
-  // A new selection from autocomplete is required before search is allowed.
-  if(S.nafLocked) {
-    selectedNAFCode  = '';
-    selectedNAFLabel = '';
-    S.naf       = '';
-    S.nafLabel  = '';
-    S.nafLocked = false;
-    document.getElementById('inp-sector').classList.remove('locked');
-    document.getElementById('nchip').classList.remove('show');
-  }
-
-  updateHint();
-  if(v.trim().length < 2) { document.getElementById('acd').classList.remove('open'); return; }
-  _acList = searchNAF(v);
-  renderAC(v, _acList);
-}
-function onSectorFocus() {
-  var v=document.getElementById('inp-sector').value;
-  if(v.trim().length>=2){ _acList=searchNAF(v); renderAC(v,_acList); }
-}
-function onSectorKey(e) {
-  var dd=document.getElementById('acd'), items=dd.querySelectorAll('.acd-item');
-  if(!items.length) return;
-  if(e.key==='ArrowDown'){ e.preventDefault(); _acIdx=Math.min(_acIdx+1,items.length-1); _updFocus(items); }
-  else if(e.key==='ArrowUp'){ e.preventDefault(); _acIdx=Math.max(_acIdx-1,0); _updFocus(items); }
-  else if(e.key==='Enter'){ e.preventDefault(); if(_acIdx>=0&&items[_acIdx]){ var el=items[_acIdx]; pickNAF(el.dataset.code,el.dataset.label); } }
-  else if(e.key==='Escape'){ dd.classList.remove('open'); }
-}
-function _updFocus(items) {
-  items.forEach(function(el,i){ el.classList.toggle('focus',i===_acIdx); if(i===_acIdx) el.scrollIntoView({block:'nearest'}); });
-}
-function pickNAF(code, label) {
-  // ── Lock the selection ──────────────────────────────────────────
-  selectedNAFCode  = code;
-  selectedNAFLabel = label;
-  S.naf      = code;
-  S.nafLabel = label;
-  S.nafLocked = true;
-
-  // Update input field — add locked class so user sees it's confirmed
-  var inp = document.getElementById('inp-sector');
-  inp.value = label;
-  inp.classList.add('locked');
-
-  document.getElementById('btn-clr').classList.add('show');
-  document.getElementById('acd').classList.remove('open');
-  document.getElementById('nchip-txt').textContent = code + ' — ' + label;
-  document.getElementById('nchip').classList.add('show');
-  updateHint();
-}
-function clearSector() {
-  selectedNAFCode  = '';
-  selectedNAFLabel = '';
-  S.naf       = '';
-  S.nafLabel  = '';
-  S.nafLocked = false;
-  var inp = document.getElementById('inp-sector');
-  inp.value = '';
-  inp.classList.remove('locked');
-  document.getElementById('btn-clr').classList.remove('show');
-  document.getElementById('acd').classList.remove('open');
-  document.getElementById('nchip').classList.remove('show');
-  updateHint();
-}
-document.addEventListener('click',function(e){
-  if(!e.target.closest('#sip')&&!e.target.closest('#acd'))
-    document.getElementById('acd').classList.remove('open');
-});
-
-// ════════════════════════════════════════════════════════════════
-// INIT
-// ════════════════════════════════════════════════════════════════
-if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',buildIndex);
-else buildIndex();
+init();
 </script>
-<script src="/sidebar.js"></script>
 </body>
 </html>

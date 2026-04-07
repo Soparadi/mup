@@ -288,8 +288,9 @@ Object.keys(addrMap).forEach(function(addr){
             +'<div class="pop-stage" style="background:'+col+'22;color:'+col+'">'+stageName(c.col)+'</div>'
             +progressHtml(c.col)
             +(c.rdvDate?'<div style="font-size:11px;color:var(--text);margin-top:8px;padding:6px 8px;background:var(--surface);border-radius:6px;font-weight:600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0BBCD4" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+formatRdvDate(c.rdvDate,c.rdvTime)+'</div>':'')
+            +(c.tel?'<div style="margin-top:8px;font-size:11px"><a href="tel:'+esc(c.tel.replace(/\s/g,''))+'" style="color:var(--blue);text-decoration:none;display:flex;align-items:center;gap:5px" onclick="event.stopPropagation()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'+esc(c.tel)+'</a></div>':'')
             +'<div class="pop-actions">'
-            +'<button class="pop-btn" onclick="showProximity(\''+c.id+'\')">Proximité</button>'
+            +'<button class="pop-btn" onclick="scrollToStop(\''+c.id+'\')">Voir dans le panneau</button>'
             +'</div>'
             +'</div>';
           var m=L.marker([clat,clng],{icon:icon,zIndexOffset:isRdv?500:0}).addTo(map).bindPopup(popup,{maxWidth:240,closeButton:false,offset:[0,-10]});
@@ -450,6 +451,13 @@ function flyTo(id){
   if(!info) return;
   map.setView(info.latlng,13);
   info.marker.openPopup();
+}
+
+function scrollToStop(id){
+  // Open panel if closed
+  if(!document.getElementById('tour-panel').classList.contains('open')) toggleTourPanel();
+  var el=document.getElementById('sched-'+id);
+  if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.boxShadow='0 0 0 2px var(--text)';setTimeout(function(){el.style.boxShadow='';},1500);}
 }
 
 function toggleTourPanel(){
@@ -667,11 +675,13 @@ function renderSchedule(){
       totalDist+=legDist;
       var col=stageColor(s.card.col);
       var tel=s.card.tel||'';
-      html+='<div class="sched-item" style="cursor:pointer" onclick="flyTo(\''+s.id+'\')">'
+      var distLabel=legDist<2000?'< 2 km':fmtDist(legDist);
+      var timeLabel=legDist<2000?'< 2 min':Math.round(legTime)+' min';
+      html+='<div class="sched-item" id="sched-'+s.id+'" style="cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+s.id+'\')">'
         +'<div class="sched-time">'+fmtTime(arrivalMins)+'</div>'
         +'<div class="sched-dot" style="background:'+col+'"></div>'
         +'<div class="sched-info"><div class="sched-name">'+esc(s.card.co||s.card.name)+'</div>'
-        +'<div class="sched-meta">'+fmtDist(legDist)+' · '+Math.round(legTime)+' min</div>'
+        +'<div class="sched-meta">'+distLabel+' · '+timeLabel+'</div>'
         +(tel?'<div class="sched-tel"><a href="tel:'+esc(tel.replace(/\s/g,''))+'">'+esc(tel)+'</a></div>':'')
         +'</div>'
         +'<div class="sched-badge" style="background:'+col+'22;color:'+col+'">'+stageName(s.card.col)+'</div>'
@@ -697,11 +707,13 @@ function renderSchedule(){
   var anchorArrival=currentMins+anchorTime;
   totalDist+=anchorDist;
 
-  html+='<div class="sched-item" style="border-color:#0BBCD4;background:rgba(11,188,212,.06);cursor:pointer" onclick="flyTo(\''+anchorCard.id+'\')">'
+  var anchorDistLabel=anchorDist<2000?'< 2 km':fmtDist(anchorDist);
+  var anchorTimeLabel=anchorDist<2000?'< 2 min':Math.round(anchorTime)+' min';
+  html+='<div class="sched-item" id="sched-'+anchorCard.id+'" style="border-color:#0BBCD4;background:rgba(11,188,212,.06);cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+anchorCard.id+'\')">'
     +'<div class="sched-time" style="color:#0BBCD4">'+fmtTime(anchorArrival)+'</div>'
     +'<div class="sched-dot" style="background:#0BBCD4"></div>'
     +'<div class="sched-info"><div class="sched-name">'+esc(anchorCard.card.co||anchorCard.card.name)+'</div>'
-    +'<div class="sched-meta">'+fmtDist(anchorDist)+' · '+Math.round(anchorTime)+' min</div>'
+    +'<div class="sched-meta">'+anchorDistLabel+' · '+anchorTimeLabel+'</div>'
     +'<div class="sched-meta" style="color:#0BBCD4;font-weight:600">RDV — '+formatRdvDate(anchorCard.card.rdvDate,anchorCard.card.rdvTime)+'</div>'
     +'</div>'
     +'<div class="sched-badge" style="background:rgba(11,188,212,.12);color:#0BBCD4">RDV</div>'

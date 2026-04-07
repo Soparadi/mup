@@ -326,6 +326,12 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       <textarea class="notes-area" id="d-notes" placeholder="Ajouter des notes…" onblur="saveNotes()"></textarea>
     </div>
 
+    <!-- RDV PLANIFIÉ -->
+    <div class="detail-section" id="d-rdv-section">
+      <div class="detail-section-title">Rendez-vous</div>
+      <div id="d-rdv-content"></div>
+    </div>
+
     <!-- 5) ACTIONS RAPIDES -->
     <div class="detail-section">
       <div class="detail-section-title">Actions rapides</div>
@@ -540,7 +546,9 @@ function onDrop(e, colId) {
     card.col = colId;
     save();
     renderKanban();
-    logActivity(dragId, 'Déplacé vers ' + COLS.find(c=>c.id===colId)?.name);
+    var now = new Date();
+    var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    logActivity(dragId, 'Déplacé vers ' + COLS.find(c=>c.id===colId)?.name+' à '+timeStr);
   }
   dragId = null;
 }
@@ -653,6 +661,23 @@ function openDetail(id) {
   // Notes (editable)
   document.getElementById('d-notes').value = c.notes||'';
 
+  // RDV section
+  var rdvSection = document.getElementById('d-rdv-section');
+  var rdvContent = document.getElementById('d-rdv-content');
+  var isRdvCol = (c.col === 'rdv');
+  var showRdv = ['linkedin','mailing','phoning','visio','rdv','nego','devis'].indexOf(c.col) !== -1;
+  if(showRdv) {
+    rdvSection.style.display = '';
+    var hasRdv = c.rdvDate || isRdvCol;
+    if(isRdvCol || c.rdvDate) {
+      rdvContent.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:4px"><input type="date" id="d-rdv-date" value="'+(c.rdvDate||'')+'" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none" onchange="saveRdv()"><input type="time" id="d-rdv-time" value="'+(c.rdvTime||'')+'" style="width:100px;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none" onchange="saveRdv()"></div>';
+    } else {
+      rdvContent.innerHTML = '<button onclick="showRdvInputs()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--text);transition:all .12s">Planifier un RDV</button>';
+    }
+  } else {
+    rdvSection.style.display = 'none';
+  }
+
   // Map
   const mapSection = document.getElementById('d-map-section');
   if(c.address) {
@@ -691,6 +716,51 @@ function saveNotes() {
   if(!currentId) return;
   const c = cards.find(x=>x.id===currentId);
   if(c) { c.notes = document.getElementById('d-notes').value.trim(); save(); syncToProspects(c); }
+}
+
+function showRdvInputs() {
+  var c = cards.find(x=>String(x.id)===String(currentId));
+  if(!c) return;
+  var rdvContent = document.getElementById('d-rdv-content');
+  rdvContent.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:4px"><input type="date" id="d-rdv-date" value="" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none" onchange="saveRdv()"><input type="time" id="d-rdv-time" value="" style="width:100px;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none" onchange="saveRdv()"></div>';
+  document.getElementById('d-rdv-date').focus();
+}
+
+function saveRdv() {
+  if(!currentId) return;
+  var c = cards.find(x=>String(x.id)===String(currentId));
+  if(!c) return;
+  var dateEl = document.getElementById('d-rdv-date');
+  var timeEl = document.getElementById('d-rdv-time');
+  if(!dateEl) return;
+  c.rdvDate = dateEl.value || '';
+  c.rdvTime = timeEl ? timeEl.value || '' : '';
+  save();
+  // Sync to mup_agenda
+  syncRdvToAgenda(c);
+  logActivity(currentId, 'RDV planifié le ' + (c.rdvDate || '—') + (c.rdvTime ? ' à ' + c.rdvTime : ''));
+}
+
+function syncRdvToAgenda(c) {
+  var agenda = [];
+  try { var r = localStorage.getItem('mup_agenda'); if(r) agenda = JSON.parse(r); } catch(e) {}
+  // Remove existing entry for this card
+  agenda = agenda.filter(function(ev) { return String(ev.id) !== String(c.id); });
+  // Add new if date exists
+  if(c.rdvDate) {
+    agenda.push({
+      id: String(c.id),
+      title: c.co || c.name || '',
+      contact: c.name || '',
+      date: c.rdvDate,
+      start: c.rdvTime || '',
+      end: '',
+      type: 'rdv',
+      col: c.col,
+      notes: ''
+    });
+  }
+  localStorage.setItem('mup_agenda', JSON.stringify(agenda));
 }
 
 function saveSocials() {
@@ -746,7 +816,7 @@ function quickAction(type) {
 function moveCard(colId) {
   if(!currentId) return;
   const c = cards.find(x=>x.id===currentId);
-  if(c) { c.col=colId; logActivity(currentId,'Déplacé vers '+COLS.find(x=>x.id===colId)?.name); save(); renderKanban(); }
+  if(c) { c.col=colId; var now = new Date(); var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); logActivity(currentId,'Déplacé vers '+COLS.find(x=>x.id===colId)?.name+' à '+timeStr); save(); renderKanban(); }
 }
 function editCurrentCard() { closeDetail(); editCard(currentId); }
 function deleteCurrentCard() { if(confirm('Supprimer cette fiche ?')) { deleteCard(currentId); } }

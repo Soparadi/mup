@@ -210,7 +210,8 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     <div class="modal-body">
       <div class="frow">
         <div class="flabel">Titre</div>
-        <input class="finput" id="m-title" placeholder="Ex : RDV Laurent Morin">
+        <select class="finput" id="m-pipeline-card" onchange="fillFromPipeline()"><option value="">-- Choisir une fiche pipeline --</option></select>
+        <input class="finput" id="m-title" placeholder="Ou saisir un titre libre" style="margin-top:6px">
       </div>
       <div class="frow">
         <div class="flabel">Contact / Société</div>
@@ -265,6 +266,37 @@ let events = [];
 function loadEvents() {
   const stored = localStorage.getItem('mup_agenda');
   if(stored) { try { events = JSON.parse(stored); } catch(e) { events = []; } }
+  // Also import RDV from pipeline
+  try {
+    var pipe = localStorage.getItem('mup_pipeline');
+    if(pipe) {
+      var cards = JSON.parse(pipe);
+      cards.forEach(function(c) {
+        if(!c.rdvDate) return;
+        // Check if already exists
+        var exists = events.find(function(ev) { return String(ev.id) === String(c.id); });
+        if(!exists) {
+          events.push({
+            id: String(c.id),
+            title: c.co || c.name || '',
+            contact: c.name || '',
+            date: c.rdvDate,
+            start: c.rdvTime || '',
+            end: '',
+            type: 'rdv',
+            col: c.col || '',
+            notes: ''
+          });
+        } else {
+          // Update existing
+          exists.date = c.rdvDate;
+          exists.start = c.rdvTime || exists.start;
+          exists.title = c.co || c.name || exists.title;
+          exists.contact = c.name || exists.contact;
+        }
+      });
+    }
+  } catch(e) {}
   if(!events.length) events = MOCK_EVENTS;
 }
 
@@ -433,6 +465,33 @@ function openModal(hour) {
   selType(document.querySelector('.type-pill[data-type="rdv"]'));
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(() => document.getElementById('m-title').focus(), 100);
+  // Populate pipeline cards select
+  var sel = document.getElementById('m-pipeline-card');
+  if(sel) {
+    var html = '<option value="">-- Choisir une fiche pipeline --</option>';
+    try {
+      var pipe = localStorage.getItem('mup_pipeline');
+      if(pipe) {
+        JSON.parse(pipe).forEach(function(c) {
+          html += '<option value="'+c.id+'">'+((c.co||c.name)||'Sans nom')+'</option>';
+        });
+      }
+    } catch(e) {}
+    sel.innerHTML = html;
+  }
+}
+
+function fillFromPipeline() {
+  var sel = document.getElementById('m-pipeline-card');
+  if(!sel || !sel.value) return;
+  try {
+    var pipe = JSON.parse(localStorage.getItem('mup_pipeline') || '[]');
+    var c = pipe.find(function(x) { return String(x.id) === String(sel.value); });
+    if(c) {
+      document.getElementById('m-title').value = c.co || c.name || '';
+      document.getElementById('m-contact').value = c.name || '';
+    }
+  } catch(e) {}
 }
 
 function editEvent(id) {
@@ -469,6 +528,19 @@ function saveEvent() {
   closeModal();
   renderCal();
   renderDay();
+  // Sync to pipeline if linked to a card
+  var pipeId = document.getElementById('m-pipeline-card')?.value;
+  if(pipeId) {
+    try {
+      var pipe = JSON.parse(localStorage.getItem('mup_pipeline') || '[]');
+      var card = pipe.find(function(x) { return String(x.id) === String(pipeId); });
+      if(card) {
+        card.rdvDate = dateKey(selectedDay);
+        card.rdvTime = document.getElementById('m-start').value || '';
+        localStorage.setItem('mup_pipeline', JSON.stringify(pipe));
+      }
+    } catch(e) {}
+  }
 }
 
 // Fermer modal en cliquant outside

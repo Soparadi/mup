@@ -835,6 +835,21 @@ const CAL_EVENTS = {};
     });
   } catch(e){}
 })();
+(function(){
+  try {
+    var raw = localStorage.getItem('mup_pipeline');
+    if(!raw) return;
+    var cards = JSON.parse(raw);
+    cards.forEach(function(c){
+      if(!c.rdvDate) return;
+      if(!CAL_EVENTS[c.rdvDate]) CAL_EVENTS[c.rdvDate] = [];
+      var exists = CAL_EVENTS[c.rdvDate].find(function(ev){ return String(ev.id) === String(c.id); });
+      if(!exists) {
+        CAL_EVENTS[c.rdvDate].push({ id: String(c.id), title: (c.co||c.name||'RDV'), sub: c.name||'', time: c.rdvTime||'' });
+      }
+    });
+  } catch(e){}
+})();
 
 let calYear = TODAY.getFullYear();
 let calMonth = TODAY.getMonth();
@@ -1002,13 +1017,34 @@ function closeSidebar(){
     {id:'devis',label:'Devis',color:'#0BBCD4'},
     {id:'rdv',label:'RDV',color:'#4338CA'},
   ];
+
+  // Load today's RDV from agenda
+  var todayAgenda = [];
+  try {
+    var agRaw = localStorage.getItem('mup_agenda');
+    if(agRaw) {
+      var agAll = JSON.parse(agRaw);
+      var todayStr = new Date().toISOString().slice(0,10);
+      todayAgenda = agAll.filter(function(ev) { return ev.date === todayStr; });
+    }
+  } catch(e) {}
+
   var todayGrid=document.getElementById('today-grid');
   if(todayGrid){
     todayGrid.innerHTML=todayCols.map(function(tc,i){
-      var colCards=cards.filter(function(c){return c.col===tc.id;}).slice(0,3);
       var border=i<todayCols.length-1?'border-right:1px solid var(--border);':'';
-      var items=colCards.length?colCards.map(function(c){return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(c.co||c.name)+'</div><div class="today-meta">'+esc(c.name||'')+'</div></div></div>';}).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
-      var count=cards.filter(function(c){return c.col===tc.id;}).length;
+      var items='';
+      var count=0;
+      if(tc.id==='rdv'){
+        count=todayAgenda.length;
+        items=todayAgenda.length?todayAgenda.slice(0,3).map(function(ev){
+          return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(ev.title||'RDV')+'</div><div class="today-meta">'+esc(ev.contact||'')+(ev.start?' · '+ev.start:'')+'</div></div></div>';
+        }).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
+      } else {
+        var colCards=cards.filter(function(c){return c.col===tc.id;}).slice(0,3);
+        count=cards.filter(function(c){return c.col===tc.id;}).length;
+        items=colCards.length?colCards.map(function(c){return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(c.co||c.name)+'</div><div class="today-meta">'+esc(c.name||'')+'</div></div></div>';}).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
+      }
       return '<div style="padding:14px 18px;'+border+'"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted2);">'+tc.label+'</div><span style="font-size:16px;font-weight:900;color:'+tc.color+';">'+count+'</span></div>'+items+'</div>';
     }).join('');
   }

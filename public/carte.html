@@ -139,6 +139,20 @@ function stageColor(col){var s=STAGES.find(function(x){return x.id===col;});retu
 function stageName(col){var s=STAGES.find(function(x){return x.id===col;});return s?s.name:col;}
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
+function formatRdvDate(dateStr, timeStr) {
+  if(!dateStr) return '';
+  var JOURS=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  var MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  var parts=dateStr.split('-');
+  var d=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
+  var jour=JOURS[d.getDay()];
+  var num=d.getDate();
+  var mois=MOIS[d.getMonth()];
+  var result=jour+' '+num+' '+mois;
+  if(timeStr) result+=' · '+timeStr.replace(':','h');
+  return result;
+}
+
 function progressHtml(col){
   var cur=stageIdx(col);if(cur<0)return '';
   var h='<div class="pop-progress">';
@@ -203,7 +217,7 @@ Object.keys(addrMap).forEach(function(addr){
           var jitter=addrMap[addr].length>1?(idx-addrMap[addr].length/2)*0.0004:0;
           var clat=lat+jitter,clng=lng+jitter;
           var col=stageColor(c.col);
-          var isRdv=c.col==='rdv';
+          var isRdv=!!c.rdvDate;
           var sz=isRdv?28:20;
           var bw=isRdv?4:3;
           var icon=L.divIcon({
@@ -219,6 +233,7 @@ Object.keys(addrMap).forEach(function(addr){
             +'<div class="pop-foot"><span class="pop-val">'+val+'</span><span class="pop-days">J+'+(c.days||0)+'</span></div>'
             +'<div class="pop-stage" style="background:'+col+'22;color:'+col+'">'+stageName(c.col)+'</div>'
             +progressHtml(c.col)
+            +(c.rdvDate?'<div style="font-size:11px;color:var(--text);margin-top:8px;padding:6px 8px;background:var(--surface);border-radius:6px;font-weight:600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0BBCD4" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+formatRdvDate(c.rdvDate,c.rdvTime)+'</div>':'')
             +'<div class="pop-actions">'
             +'<button class="pop-btn" onclick="showProximity(\''+c.id+'\')">Proximité</button>'
             +'</div>'
@@ -248,7 +263,7 @@ function autoShowRdv(){
   var rdvCards=[];
   Object.keys(markers).forEach(function(id){
     var m=markers[id];
-    if(m.card.col==='rdv') rdvCards.push(m);
+    if(m.card.rdvDate) rdvCards.push(m);
   });
   if(!rdvCards.length) return;
 
@@ -262,7 +277,7 @@ function autoShowRdv(){
     // Find all non-RDV cards in radius
     Object.keys(markers).forEach(function(mid){
       var m=markers[mid];
-      if(m.card.col==='rdv') return;
+      if(m.card.rdvDate) return;
       var dist=map.distance(L.latLng(rdv.latlng),L.latLng(m.latlng));
       if(dist<=30000&&rdvPanelIds.indexOf(mid)===-1){
         rdvPanelIds.push(mid);

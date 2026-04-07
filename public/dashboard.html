@@ -628,44 +628,84 @@ L.control.attribution({ prefix: '© OpenStreetMap' }).addTo(map);
 setTimeout(function(){ map.invalidateSize(); }, 100);
 
 (function(){
-  var cards = [];
-  try { var r = localStorage.getItem('mup_pipeline'); if(r) cards = JSON.parse(r); } catch(e){}
-  var addresses = {};
-  cards.forEach(function(c){
-    if(!c.address) return;
-    if(!addresses[c.address]) addresses[c.address] = { label: c.address, names: [], count: 0 };
-    addresses[c.address].names.push(c.co || c.name || '');
-    addresses[c.address].count++;
+  var STAGES=[
+    {id:'prospects',color:'#CC0000'},{id:'linkedin',color:'#0A66C2'},
+    {id:'mailing',color:'#B84C00'},{id:'phoning',color:'#4338CA'},
+    {id:'visio',color:'#7C3AED'},{id:'rdv',color:'#0BBCD4'},
+    {id:'devis',color:'#F59E0B'},{id:'nego',color:'#EA580C'},
+    {id:'won',color:'#1D8348'}
+  ];
+  function stageIdx(col){ for(var i=0;i<STAGES.length;i++){if(STAGES[i].id===col)return i;} return -1; }
+  function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function progressHtml(col){
+    var cur=stageIdx(col);
+    if(cur<0) return '';
+    var h='<div style="display:flex;align-items:center;gap:2px;margin-top:8px">';
+    for(var i=0;i<STAGES.length;i++){
+      var done=i<cur,isCur=i===cur;
+      var op=done||isCur?'1':'.2';
+      var bg=done||isCur?STAGES[i].color:'#C7C7CC';
+      var shadow=isCur?';box-shadow:0 0 0 2px #fff,0 0 0 3px '+STAGES[i].color:'';
+      h+='<div style="width:7px;height:7px;border-radius:50%;background:'+bg+';opacity:'+op+shadow+'" title="'+STAGES[i].id+'"></div>';
+      if(i<STAGES.length-1) h+='<div style="flex:1;height:1px;background:'+(done?'#C7C7CC':'#E8E8ED')+'"></div>';
+    }
+    h+='</div>';
+    return h;
+  }
+
+  var cards=[];
+  try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r);}catch(e){}
+  var withAddr=cards.filter(function(c){return c.address;});
+  if(!withAddr.length) return;
+
+  // Group by address for geocoding, but keep individual cards
+  var addrMap={};
+  withAddr.forEach(function(c){
+    if(!addrMap[c.address]) addrMap[c.address]={cards:[]};
+    addrMap[c.address].cards.push(c);
   });
-  var keys = Object.keys(addresses);
-  if(!keys.length) return;
-  var bounds = [];
-  var pending = keys.length;
-  keys.forEach(function(addr){
-    var info = addresses[addr];
-    fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(addr) + '&limit=1')
-      .then(function(r){ return r.json(); })
+
+  var bounds=[];
+  var pending=Object.keys(addrMap).length;
+  Object.keys(addrMap).forEach(function(addr){
+    var group=addrMap[addr];
+    fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(addr)+'&limit=1')
+      .then(function(r){return r.json();})
       .then(function(data){
         if(data.length){
-          var lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
-          bounds.push([lat, lng]);
-          var sz = info.count >= 5 ? 16 : info.count >= 2 ? 12 : 8;
-          var icon = L.divIcon({
-            className: '',
-            html: '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:#0BBCD4;border:2px solid rgba(255,255,255,.9);box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>',
-            iconSize: [sz, sz], iconAnchor: [sz/2, sz/2]
+          var lat=parseFloat(data[0].lat),lng=parseFloat(data[0].lon);
+          bounds.push([lat,lng]);
+          // One marker per card, slightly offset if multiple at same address
+          group.cards.forEach(function(c,idx){
+            var jitter=group.cards.length>1?(idx-group.cards.length/2)*0.0003:0;
+            var col=STAGES.find(function(s){return s.id===c.col;});
+            var dotColor=col?col.color:'#0BBCD4';
+            var icon=L.divIcon({
+              className:'',
+              html:'<div style="width:10px;height:10px;border-radius:50%;background:'+dotColor+';border:2px solid rgba(255,255,255,.9);box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>',
+              iconSize:[10,10],iconAnchor:[5,5]
+            });
+            var val=c.val>=1000?Math.round(c.val/1000)+'k\u20AC':(c.val?c.val+'\u20AC':'\u2014');
+            var popup='<div style="font-family:var(--font);width:200px;padding:10px 12px">'
+              +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">'+esc(c.co||c.name)+'</div>'
+              +'<div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">'+esc(c.co&&c.name?c.name:'')+'</div>'
+              +'<div style="display:flex;justify-content:space-between;align-items:center">'
+              +'<span style="font-size:12px;font-weight:800;font-family:var(--mono);color:var(--text)">'+val+'</span>'
+              +'<span style="font-size:10px;font-weight:600;color:var(--muted2);background:var(--surface);border-radius:4px;padding:2px 6px">J+'+(c.days||0)+'</span>'
+              +'</div>'
+              +progressHtml(c.col)
+              +'</div>';
+            L.marker([lat+jitter,lng+jitter],{icon:icon}).addTo(map)
+              .bindPopup(popup,{maxWidth:220,closeButton:false,offset:[0,-6]})
+              .on('mouseover',function(){this.openPopup();});
           });
-          var names = info.names.slice(0,3).join(', ');
-          L.marker([lat, lng], { icon: icon }).addTo(map)
-            .bindPopup('<div class="map-popup"><div class="mp-name">' + info.label + '</div><div class="mp-meta">' + info.count + ' fiche' + (info.count>1?'s':'') + '</div><div style="font-size:11px;color:var(--muted);margin-top:4px">' + names + '</div></div>', { maxWidth: 240, closeButton: false, offset: [0, -8] })
-            .on('mouseover', function(){ this.openPopup(); });
         }
         pending--;
-        if(pending <= 0 && bounds.length){
-          map.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
+        if(pending<=0&&bounds.length){
+          map.fitBounds(bounds,{padding:[30,30],maxZoom:12});
         }
       })
-      .catch(function(){ pending--; });
+      .catch(function(){pending--;});
   });
 })();
 </script>

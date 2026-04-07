@@ -104,18 +104,18 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     </button>
     <button class="map-btn" id="btn-tour" onclick="toggleTourPanel()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-      Tournée <span id="tour-badge" style="display:none;font-size:9px;font-weight:800;background:#fff;color:var(--text);border-radius:4px;padding:1px 5px;margin-left:2px">0</span>
+      RDV <span id="tour-badge" style="display:none;font-size:9px;font-weight:800;background:#fff;color:var(--text);border-radius:4px;padding:1px 5px;margin-left:2px">0</span>
     </button>
   </div>
 
   <div class="tour-panel" id="tour-panel">
     <div class="tour-hdr">
-      <span class="tour-title">Tournée</span>
+      <span class="tour-title">RDV</span>
       <span class="tour-count" id="tour-count">0 fiches</span>
     </div>
     <div class="tour-body" id="tour-body"></div>
     <div class="tour-footer">
-      <button class="tour-clear" onclick="clearTour()">Vider la tournée</button>
+      <button class="tour-clear" onclick="clearTour()">Effacer</button>
     </div>
   </div>
 </div>
@@ -162,11 +162,23 @@ var cards=[];
 try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r);}catch(e){}
 
 var markers={}; // id -> {marker, card, latlng}
-var tourIds=[]; // selected card ids
+var rdvPanelIds=[]; // ids shown in RDV panel
 var userLatLng=null;
 var userMarker=null;
-var proximityCircle=null;
-var highlightedMarkers=[];
+var proximityCircles=[]; // array of L.circle
+var dimmedMarkers=[]; // markers set to low opacity
+
+function resetOverlays(){
+  proximityCircles.forEach(function(c){map.removeLayer(c);});
+  proximityCircles=[];
+  dimmedMarkers.forEach(function(m){m.setOpacity(1);});
+  dimmedMarkers=[];
+}
+
+// Click on map background → reset
+map.on('click',function(){
+  resetOverlays();
+});
 
 // Geocode & place all cards
 var withAddr=cards.filter(function(c){return c.address;});
@@ -178,7 +190,7 @@ withAddr.forEach(function(c){
 
 var bounds=[];
 var pending=Object.keys(addrMap).length;
-if(!pending) pending=-1; // no addresses
+if(!pending) pending=-1;
 
 Object.keys(addrMap).forEach(function(addr){
   fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(addr)+'&limit=1')
@@ -191,13 +203,15 @@ Object.keys(addrMap).forEach(function(addr){
           var jitter=addrMap[addr].length>1?(idx-addrMap[addr].length/2)*0.0004:0;
           var clat=lat+jitter,clng=lng+jitter;
           var col=stageColor(c.col);
+          var isRdv=c.col==='rdv';
+          var sz=isRdv?28:20;
+          var bw=isRdv?4:3;
           var icon=L.divIcon({
             className:'',
-            html:'<div style="width:20px;height:20px;border-radius:50%;background:'+col+';border:3px solid rgba(255,255,255,.9);box-shadow:0 2px 6px rgba(0,0,0,.3);transition:transform .15s"></div>',
-            iconSize:[20,20],iconAnchor:[10,10]
+            html:'<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:'+bw+'px solid rgba(255,255,255,.9);box-shadow:0 2px 8px rgba(0,0,0,.35);transition:transform .15s"></div>',
+            iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]
           });
           var val=c.val>=1000?Math.round(c.val/1000)+'k\u20AC':(c.val?c.val+'\u20AC':'\u2014');
-          var inTour=tourIds.indexOf(String(c.id))!==-1;
           var popup='<div class="pop">'
             +'<div class="pop-bar" style="background:'+col+'"></div>'
             +'<div class="pop-name">'+esc(c.co||c.name)+'</div>'
@@ -207,143 +221,178 @@ Object.keys(addrMap).forEach(function(addr){
             +progressHtml(c.col)
             +'<div class="pop-actions">'
             +'<button class="pop-btn" onclick="showProximity(\''+c.id+'\')">Proximité</button>'
-            +'<button class="pop-btn'+(inTour?' active':'')+'" id="tour-btn-'+c.id+'" onclick="toggleTour(\''+c.id+'\')">'+( inTour?'Retiré':'+ Tournée')+'</button>'
             +'</div>'
             +'</div>';
-          var m=L.marker([clat,clng],{icon:icon}).addTo(map).bindPopup(popup,{maxWidth:240,closeButton:false,offset:[0,-8]});
+          var m=L.marker([clat,clng],{icon:icon,zIndexOffset:isRdv?500:0}).addTo(map).bindPopup(popup,{maxWidth:240,closeButton:false,offset:[0,-10]});
           markers[String(c.id)]={marker:m,card:c,latlng:[clat,clng]};
         });
       }
       pending--;
-      if(pending<=0&&bounds.length){
-        map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
+      if(pending<=0){
+        if(bounds.length) map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
+        // Auto-show RDV cards with proximity
+        autoShowRdv();
       }
     })
-    .catch(function(){pending--;});
+    .catch(function(){
+      pending--;
+      if(pending<=0&&bounds.length){
+        map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
+        autoShowRdv();
+      }
+    });
 });
+
+// Auto-detect RDV cards and show their proximity + panel
+function autoShowRdv(){
+  var rdvCards=[];
+  Object.keys(markers).forEach(function(id){
+    var m=markers[id];
+    if(m.card.col==='rdv') rdvCards.push(m);
+  });
+  if(!rdvCards.length) return;
+
+  rdvPanelIds=[];
+
+  // Draw 30km circle for each RDV card and collect nearby prospects
+  rdvCards.forEach(function(rdv){
+    var circle=L.circle(rdv.latlng,{radius:30000,color:'#0BBCD4',fillOpacity:0.05,weight:2,dashArray:'6 4'}).addTo(map);
+    proximityCircles.push(circle);
+
+    // Find all non-RDV cards in radius
+    Object.keys(markers).forEach(function(mid){
+      var m=markers[mid];
+      if(m.card.col==='rdv') return;
+      var dist=map.distance(L.latLng(rdv.latlng),L.latLng(m.latlng));
+      if(dist<=30000&&rdvPanelIds.indexOf(mid)===-1){
+        rdvPanelIds.push(mid);
+      }
+    });
+  });
+
+  // Add RDV cards themselves to panel
+  rdvCards.forEach(function(rdv){
+    var id=String(rdv.card.id);
+    if(rdvPanelIds.indexOf(id)===-1) rdvPanelIds.unshift(id);
+    else{
+      var idx=rdvPanelIds.indexOf(id);
+      rdvPanelIds.splice(idx,1);
+      rdvPanelIds.unshift(id);
+    }
+  });
+
+  renderPanel();
+
+  // Open panel automatically
+  if(rdvPanelIds.length&&!document.getElementById('tour-panel').classList.contains('open')){
+    toggleTourPanel();
+  }
+}
 
 // Geolocation
 function locateUser(){
-  if(!navigator.geolocation){return;}
+  if(!navigator.geolocation) return;
   document.getElementById('btn-locate').classList.add('active');
   navigator.geolocation.getCurrentPosition(function(pos){
     userLatLng=[pos.coords.latitude,pos.coords.longitude];
-    if(userMarker)map.removeLayer(userMarker);
+    if(userMarker) map.removeLayer(userMarker);
     var icon=L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]});
     userMarker=L.marker(userLatLng,{icon:icon,zIndexOffset:1000}).addTo(map);
     map.setView(userLatLng,11);
-    renderTour();
+    renderPanel();
   },function(){
     document.getElementById('btn-locate').classList.remove('active');
   },{enableHighAccuracy:true});
 }
 
-// Proximity
+// Proximity for a single card
 function showProximity(id){
+  resetOverlays();
   var info=markers[String(id)];
-  if(!info)return;
-  // Remove previous
-  if(proximityCircle)map.removeLayer(proximityCircle);
-  highlightedMarkers.forEach(function(m){m.setOpacity(1);});
-  highlightedMarkers=[];
-
+  if(!info) return;
   var center=info.latlng;
-  proximityCircle=L.circle(center,{radius:30000,color:stageColor(info.card.col),fillOpacity:0.06,weight:2,dashArray:'6 4'}).addTo(map);
+  var circle=L.circle(center,{radius:30000,color:stageColor(info.card.col),fillOpacity:0.06,weight:2,dashArray:'6 4'}).addTo(map);
+  proximityCircles.push(circle);
 
-  // Dim all, highlight those in radius
+  // Dim those outside radius
   Object.keys(markers).forEach(function(mid){
     var m=markers[mid];
     var dist=map.distance(L.latLng(center),L.latLng(m.latlng));
     if(dist>30000&&mid!==String(id)){
       m.marker.setOpacity(0.25);
-      highlightedMarkers.push(m.marker);
+      dimmedMarkers.push(m.marker);
     }
   });
-  map.fitBounds(proximityCircle.getBounds(),{padding:[30,30]});
+  map.fitBounds(circle.getBounds(),{padding:[30,30]});
 }
 
-// Tour
-function toggleTour(id){
-  var idx=tourIds.indexOf(String(id));
-  if(idx!==-1){tourIds.splice(idx,1);}
-  else{tourIds.push(String(id));}
-  renderTour();
-  // Update popup button if open
-  var btn=document.getElementById('tour-btn-'+id);
-  if(btn){
-    var inTour=tourIds.indexOf(String(id))!==-1;
-    btn.textContent=inTour?'Retiré':'+ Tournée';
-    btn.className='pop-btn'+(inTour?' active':'');
-  }
-  // Show panel if items
-  if(tourIds.length&&!document.getElementById('tour-panel').classList.contains('open')){
-    toggleTourPanel();
-  }
-}
-
-function renderTour(){
+// Panel rendering
+function renderPanel(){
   var body=document.getElementById('tour-body');
   var badge=document.getElementById('tour-badge');
   var count=document.getElementById('tour-count');
-  badge.style.display=tourIds.length?'inline':'none';
-  badge.textContent=tourIds.length;
-  count.textContent=tourIds.length+' fiche'+(tourIds.length>1?'s':'');
+  badge.style.display=rdvPanelIds.length?'inline':'none';
+  badge.textContent=rdvPanelIds.length;
+  count.textContent=rdvPanelIds.length+' fiche'+(rdvPanelIds.length>1?'s':'');
   var btnTour=document.getElementById('btn-tour');
-  btnTour.classList.toggle('active',tourIds.length>0);
+  btnTour.classList.toggle('active',rdvPanelIds.length>0);
 
-  if(!tourIds.length){
-    body.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Cliquez "+ Tournée" sur un point pour commencer</div>';
+  if(!rdvPanelIds.length){
+    body.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Aucun RDV dans le pipeline</div>';
     return;
   }
 
-  // Sort by distance from user if available
-  var items=tourIds.map(function(id){
+  var items=rdvPanelIds.map(function(id){
     var info=markers[id];
-    if(!info)return null;
+    if(!info) return null;
     var dist=null;
-    if(userLatLng){
-      dist=map.distance(L.latLng(userLatLng),L.latLng(info.latlng));
-    }
-    return{id:id,card:info.card,dist:dist};
+    if(userLatLng) dist=map.distance(L.latLng(userLatLng),L.latLng(info.latlng));
+    return{id:id,card:info.card,dist:dist,latlng:info.latlng,isRdv:info.card.col==='rdv'};
   }).filter(Boolean);
 
-  if(userLatLng){
-    items.sort(function(a,b){return(a.dist||0)-(b.dist||0);});
-  }
+  if(userLatLng) items.sort(function(a,b){return(a.dist||0)-(b.dist||0);});
 
   body.innerHTML=items.map(function(it,i){
-    var distStr=it.dist!==null?(it.dist>=1000?Math.round(it.dist/1000)+' km':Math.round(it.dist)+' m'):'—';
-    return '<div class="tour-item">'
-      +'<div class="tour-num">'+(i+1)+'</div>'
+    var distStr=it.dist!==null?(it.dist>=1000?Math.round(it.dist/1000)+' km':Math.round(it.dist)+' m'):'';
+    var col=stageColor(it.card.col);
+    var label=it.isRdv?'RDV':'Prospect';
+    return '<div class="tour-item" style="cursor:pointer;'+(it.isRdv?'border-color:#0BBCD4;background:rgba(11,188,212,.04)':'')+'" onclick="flyTo(\''+it.id+'\')">'
+      +'<div class="tour-num" style="background:'+col+'">'+(i+1)+'</div>'
       +'<div class="tour-info">'
       +'<div class="tour-info-name">'+esc(it.card.co||it.card.name)+'</div>'
-      +'<div class="tour-info-dist">'+distStr+'</div>'
+      +'<div class="tour-info-dist">'+label+(distStr?' · '+distStr:'')+'</div>'
       +'</div>'
-      +'<button class="tour-remove" onclick="toggleTour(\''+it.id+'\')">'
-      +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'
-      +'</button>'
       +'</div>';
   }).join('');
+}
+
+function flyTo(id){
+  var info=markers[String(id)];
+  if(!info) return;
+  map.setView(info.latlng,13);
+  info.marker.openPopup();
 }
 
 function toggleTourPanel(){
   var panel=document.getElementById('tour-panel');
   var shell=document.querySelector('.shell');
+  var isOpen=panel.classList.contains('open');
   panel.classList.toggle('open');
   shell.classList.toggle('tour-open');
+  // If closing, reset overlays
+  if(isOpen){
+    resetOverlays();
+  }
   setTimeout(function(){map.invalidateSize();},300);
 }
 
 function clearTour(){
-  tourIds=[];
-  renderTour();
-  // Reset proximity
-  if(proximityCircle){map.removeLayer(proximityCircle);proximityCircle=null;}
-  highlightedMarkers.forEach(function(m){m.setOpacity(1);});
-  highlightedMarkers=[];
+  rdvPanelIds=[];
+  resetOverlays();
+  renderPanel();
 }
 
-renderTour();
+renderPanel();
 </script>
 <script src="/sidebar.js"></script>
 </body>

@@ -994,16 +994,18 @@ dz.addEventListener('drop',e=>{
 
 const FIELD_MAP={
   'nom':'name','name':'name','prénom nom':'name',
-  'société':'company','company':'company','entreprise':'company','agence':'company',
-  'email':'email','e-mail':'email','mail':'email','courriel':'email',
+  'société':'company','company':'company','entreprise':'company','agence':'company','partner_name':'company',
+  'email':'email','e-mail':'email','mail':'email','courriel':'email','email_from':'email',
   'téléphone':'phone','telephone':'phone','tél':'phone','tel':'phone','phone':'phone','mobile':'phone',
-  'adresse':'location','localisation':'location','ville':'location','location':'location','commune':'location',
-  'secteur':'sector','activité':'sector','sector':'sector',
+  'adresse':'location','localisation':'location','ville':'location','location':'location','commune':'location','city':'location',
+  'zip':'zip',
+  'secteur':'sector','activité':'sector','sector':'sector','industry_id/name':'sector',
   'statut':'status','status':'status','priorité':'status',
   'site':'website','website':'website','site web':'website','url':'website',
   'directeur':'director','dirigeant':'director','contact':'director','director':'director',
   'siren':'siren','siret':'siren','n° siren':'siren',
-  'notes':'notes','remarques':'notes','note':'notes',
+  'notes':'notes','remarques':'notes','note':'notes','description':'notes',
+  'source_id/name':'source','contact_name':'name',
 };
 
 function parseCSV(text){
@@ -1023,6 +1025,9 @@ function parseCSV(text){
     const vals=line.split(sep).map(v=>v.trim().replace(/^["']|["']$/g,''));
     const obj={id:Date.now()+idx,status:'new'};
     mapped.forEach((field,i)=>{if(vals[i])obj[field]=vals[i];});
+    // Strip Odoo export prefix
+    if(obj.name&&obj.name.startsWith('Agence Event - '))obj.name=obj.name.replace('Agence Event - ','');
+    if(obj.company&&obj.company.startsWith('Agence Event - '))obj.company=obj.company.replace('Agence Event - ','');
     if(!obj.name&&!obj.company)return null;
     return obj;
   }).filter(Boolean);

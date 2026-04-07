@@ -514,7 +514,7 @@ function onDragLeave(e, colId) {
 function onDrop(e, colId) {
   e.preventDefault();
   if(!dragId) return;
-  const card = cards.find(c => c.id === dragId);
+  const card = cards.find(c => String(c.id) === String(dragId));
   if(card) {
     card.col = colId;
     save();
@@ -540,7 +540,7 @@ function openModal(colId) {
   setTimeout(() => document.getElementById('m-name').focus(), 100);
 }
 function editCard(id) {
-  const c = cards.find(x=>x.id===id);
+  const c = cards.find(x=>String(x.id)===String(id));
   if(!c) return;
   editingId = id;
   document.getElementById('m-name').value = c.name||'';
@@ -559,7 +559,7 @@ function saveCard() {
   const name = document.getElementById('m-name').value.trim();
   if(!name) { document.getElementById('m-name').focus(); return; }
   if(editingId) {
-    const c = cards.find(x=>x.id===editingId);
+    const c = cards.find(x=>String(x.id)===String(editingId));
     if(c) { c.name=name; c.co=document.getElementById('m-co').value.trim(); c.address=document.getElementById('m-addr').value.trim(); c.val=parseInt(document.getElementById('m-val').value)||0; c.email=document.getElementById('m-email').value.trim(); c.tel=document.getElementById('m-tel').value.trim(); c.notes=document.getElementById('m-notes').value.trim(); c.col=document.getElementById('m-col').value; }
   } else {
     cards.push({ id:'c'+Date.now(), name, co:document.getElementById('m-co').value.trim(), address:document.getElementById('m-addr').value.trim(), val:parseInt(document.getElementById('m-val').value)||0, email:document.getElementById('m-email').value.trim(), tel:document.getElementById('m-tel').value.trim(), notes:document.getElementById('m-notes').value.trim(), col:document.getElementById('m-col').value, days:0, src:'Manuel', activity:[] });
@@ -567,7 +567,7 @@ function saveCard() {
   save(); closeModal(); renderKanban();
 }
 function deleteCard(id) {
-  cards = cards.filter(c=>c.id!==id);
+  cards = cards.filter(c=>String(c.id)!==String(id));
   save(); renderKanban(); closeDetail();
 }
 
@@ -577,7 +577,7 @@ let detailMarker = null;
 
 function openDetail(id) {
   currentId = id;
-  const c = cards.find(x=>x.id===id);
+  const c = cards.find(x=>String(x.id)===String(id));
   if(!c) return;
   const col = COLS.find(x=>x.id===c.col);
   const val = c.val>=1000?Math.round(c.val/1000)+'k€':(c.val?c.val+'€':'—');
@@ -660,13 +660,13 @@ function closeDetail() {
 
 function saveNotes() {
   if(!currentId) return;
-  const c = cards.find(x=>x.id===currentId);
+  const c = cards.find(x=>String(x.id)===String(currentId));
   if(c) { c.notes = document.getElementById('d-notes').value.trim(); save(); }
 }
 
 function quickAction(type) {
   if(!currentId) return;
-  const c = cards.find(x=>x.id===currentId);
+  const c = cards.find(x=>String(x.id)===String(currentId));
   if(!c) return;
   const labels = { mailing:'Mailing envoyé', phoning:'Appel effectué', rdv:'RDV planifié' };
   logActivity(currentId, labels[type]||type);
@@ -683,13 +683,13 @@ function quickAction(type) {
 }
 function moveCard(colId) {
   if(!currentId) return;
-  const c = cards.find(x=>x.id===currentId);
+  const c = cards.find(x=>String(x.id)===String(currentId));
   if(c) { c.col=colId; logActivity(currentId,'Déplacé vers '+COLS.find(x=>x.id===colId)?.name); save(); renderKanban(); }
 }
 function editCurrentCard() { closeDetail(); editCard(currentId); }
 function deleteCurrentCard() { if(confirm('Supprimer cette fiche ?')) { deleteCard(currentId); } }
 function logActivity(id, txt) {
-  const c = cards.find(x=>x.id===id);
+  const c = cards.find(x=>String(x.id)===String(id));
   if(!c) return;
   if(!c.activity) c.activity=[];
   const now = new Date();
@@ -712,7 +712,7 @@ function importFromProspects() {
   try {
     const prospects = JSON.parse(raw);
     prospects.forEach(p => {
-      if(!cards.find(c=>c.id===p.id)) {
+      if(!cards.find(c=>String(c.id)===String(p.id))) {
         cards.push({ id:p.id, name:p.name||p.nom||'', co:p.co||p.ville||'', val:0, col:'prospects', email:p.email||'', tel:p.phone||p.tel||'', notes:'', days:0, src:'Prospects', activity:[] });
       }
     });

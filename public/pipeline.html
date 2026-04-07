@@ -287,9 +287,25 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     </div>
 
     <!-- RÉSEAUX SOCIAUX -->
-    <div class="detail-section" id="d-socials-section" style="display:none">
+    <div class="detail-section">
       <div class="detail-section-title">Réseaux sociaux</div>
-      <div id="d-socials" style="display:flex;gap:8px"></div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          <input id="d-linkedin" placeholder="LinkedIn URL" style="flex:1;border:none;border-bottom:1px solid var(--border);background:none;font-family:var(--font);font-size:12px;color:var(--text);padding:4px 0;outline:none" onblur="saveSocials()">
+          <a id="d-linkedin-link" href="#" target="_blank" style="display:none;color:var(--blue)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+          <input id="d-facebook" placeholder="Facebook URL" style="flex:1;border:none;border-bottom:1px solid var(--border);background:none;font-family:var(--font);font-size:12px;color:var(--text);padding:4px 0;outline:none" onblur="saveSocials()">
+          <a id="d-facebook-link" href="#" target="_blank" style="display:none;color:var(--blue)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+          <input id="d-instagram" placeholder="Instagram URL" style="flex:1;border:none;border-bottom:1px solid var(--border);background:none;font-family:var(--font);font-size:12px;color:var(--text);padding:4px 0;outline:none" onblur="saveSocials()">
+          <a id="d-instagram-link" href="#" target="_blank" style="display:none;color:var(--blue)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+        </div>
+      </div>
     </div>
 
     <!-- 2) CARTE LEAFLET -->
@@ -606,14 +622,13 @@ function openDetail(id) {
   if(!infoHtml) infoHtml = '<div style="font-size:12px;color:var(--muted2);font-style:italic">Aucune info</div>';
   document.getElementById('d-info-grid').innerHTML = infoHtml;
 
-  // Socials
-  var hasSocials = c.linkedin||c.facebook||c.instagram;
-  document.getElementById('d-socials-section').style.display = hasSocials?'':'none';
-  var socialsHtml = '';
-  if(c.linkedin) socialsHtml += `<a href="${esc(c.linkedin)}" target="_blank" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);text-decoration:none;color:var(--text);font-size:11px;font-weight:600;transition:all .12s"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg> LinkedIn</a>`;
-  if(c.facebook) socialsHtml += `<a href="${esc(c.facebook)}" target="_blank" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);text-decoration:none;color:var(--text);font-size:11px;font-weight:600;transition:all .12s"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg> Facebook</a>`;
-  if(c.instagram) socialsHtml += `<a href="${esc(c.instagram)}" target="_blank" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);text-decoration:none;color:var(--text);font-size:11px;font-weight:600;transition:all .12s"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg> Instagram</a>`;
-  document.getElementById('d-socials').innerHTML = socialsHtml;
+  // Socials (editable)
+  document.getElementById('d-linkedin').value = c.linkedin||'';
+  document.getElementById('d-facebook').value = c.facebook||'';
+  document.getElementById('d-instagram').value = c.instagram||'';
+  var liLink=document.getElementById('d-linkedin-link'); liLink.href=c.linkedin||'#'; liLink.style.display=c.linkedin?'':'none';
+  var fbLink=document.getElementById('d-facebook-link'); fbLink.href=c.facebook||'#'; fbLink.style.display=c.facebook?'':'none';
+  var igLink=document.getElementById('d-instagram-link'); igLink.href=c.instagram||'#'; igLink.style.display=c.instagram?'':'none';
 
   // Move select
   document.getElementById('d-move').value = c.col||'leads';
@@ -675,7 +690,40 @@ function closeDetail() {
 function saveNotes() {
   if(!currentId) return;
   const c = cards.find(x=>x.id===currentId);
-  if(c) { c.notes = document.getElementById('d-notes').value.trim(); save(); }
+  if(c) { c.notes = document.getElementById('d-notes').value.trim(); save(); syncToProspects(c); }
+}
+
+function saveSocials() {
+  if(!currentId) return;
+  const c = cards.find(x=>String(x.id)===String(currentId));
+  if(!c) return;
+  c.linkedin = document.getElementById('d-linkedin').value.trim();
+  c.facebook = document.getElementById('d-facebook').value.trim();
+  c.instagram = document.getElementById('d-instagram').value.trim();
+  // Update link icons
+  var liLink=document.getElementById('d-linkedin-link'); liLink.href=c.linkedin||'#'; liLink.style.display=c.linkedin?'':'none';
+  var fbLink=document.getElementById('d-facebook-link'); fbLink.href=c.facebook||'#'; fbLink.style.display=c.facebook?'':'none';
+  var igLink=document.getElementById('d-instagram-link'); igLink.href=c.instagram||'#'; igLink.style.display=c.instagram?'':'none';
+  save();
+  syncToProspects(c);
+}
+
+function syncToProspects(c) {
+  try {
+    var raw = localStorage.getItem('mup_prospects');
+    if(!raw) return;
+    var prospects = JSON.parse(raw);
+    var p = prospects.find(function(x){ return String(x.id)===String(c.id); });
+    if(!p) return;
+    if(c.email) p.email = c.email;
+    if(c.tel) p.phone = c.tel;
+    if(c.address) p.location = c.address;
+    if(c.notes) p.notes = c.notes;
+    if(c.linkedin !== undefined) p.linkedin = c.linkedin;
+    if(c.facebook !== undefined) p.facebook = c.facebook;
+    if(c.instagram !== undefined) p.instagram = c.instagram;
+    localStorage.setItem('mup_prospects', JSON.stringify(prospects));
+  } catch(e) {}
 }
 
 function quickAction(type) {

@@ -101,6 +101,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     <button class="map-btn" id="btn-locate" onclick="locateUser()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
       Ma position
+      <span id="locate-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#22c55e;animation:pulse 2s ease-out infinite;flex-shrink:0"></span>
     </button>
     <button class="map-btn" id="btn-tour" onclick="toggleTourPanel()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
@@ -178,6 +179,7 @@ try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r);}catch(e
 var markers={}; // id -> {marker, card, latlng}
 var rdvPanelIds=[]; // ids shown in RDV panel
 var userLatLng=null;
+var watchId=null;
 var userMarker=null;
 var proximityCircles=[]; // array of L.circle
 var dimmedMarkers=[]; // markers set to low opacity
@@ -307,8 +309,14 @@ function autoShowRdv(){
 // Geolocation
 function locateUser(){
   if(!navigator.geolocation) return;
-  document.getElementById('btn-locate').classList.add('active');
-  navigator.geolocation.getCurrentPosition(function(pos){
+  if(watchId!==null){
+    navigator.geolocation.clearWatch(watchId);
+    watchId=null;
+    document.getElementById('btn-locate').classList.remove('active');
+    document.getElementById('locate-dot').style.display='none';
+    return;
+  }
+  watchId=navigator.geolocation.watchPosition(function(pos){
     userLatLng=[pos.coords.latitude,pos.coords.longitude];
     if(userMarker) map.removeLayer(userMarker);
     var icon=L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]});
@@ -316,8 +324,12 @@ function locateUser(){
     map.setView(userLatLng,11);
     renderPanel();
   },function(){
+    watchId=null;
     document.getElementById('btn-locate').classList.remove('active');
-  },{enableHighAccuracy:true});
+    document.getElementById('locate-dot').style.display='none';
+  },{enableHighAccuracy:false,maximumAge:10000});
+  document.getElementById('btn-locate').classList.add('active');
+  document.getElementById('locate-dot').style.display='inline-block';
 }
 
 // Proximity for a single card

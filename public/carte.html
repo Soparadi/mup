@@ -87,6 +87,21 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .map-btn:hover{border-color:var(--text)}
 .map-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
 
+/* SCHEDULE ITEMS */
+.sched-item{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:5px;background:var(--surface);transition:opacity .2s}
+.sched-item.excluded{opacity:.35;background:var(--surface2)}
+.sched-time{font-size:11px;font-weight:800;font-family:var(--mono);color:var(--text);min-width:38px;flex-shrink:0;line-height:1.4}
+.sched-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.sched-info{flex:1;min-width:0}
+.sched-name{font-size:11.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sched-meta{font-size:10px;color:var(--muted);font-family:var(--mono)}
+.sched-tel{font-size:10px;color:var(--muted2);margin-top:1px}
+.sched-tel a{color:var(--blue);text-decoration:none}
+.sched-tel a:hover{text-decoration:underline}
+.sched-badge{font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0}
+.sched-summary{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;flex-shrink:0}
+.sched-summary strong{color:var(--text);font-family:var(--mono)}
+
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:600;z-index:9000;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
@@ -127,6 +142,19 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     <div class="tour-hdr">
       <span class="tour-title">RDV</span>
       <span class="tour-count" id="tour-count">0 fiches</span>
+    </div>
+    <div id="tour-controls" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)">Départ</span>
+        <input type="time" id="tour-depart-time" value="09:00" style="margin-left:auto;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;font-family:var(--font);font-size:11px;color:var(--text);background:var(--surface);outline:none;width:80px" onchange="recalcSchedule()">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)">Durée visite</span>
+        <span id="visit-dur-label" style="margin-left:auto;font-size:11px;font-weight:700;font-family:var(--mono);color:var(--text)">45 min</span>
+      </div>
+      <input type="range" id="visit-dur" min="15" max="480" step="15" value="45" oninput="updateDurLabel();recalcSchedule()" style="width:100%;margin-top:4px;accent-color:var(--text)">
     </div>
     <div class="tour-body" id="tour-body"></div>
     <div class="tour-footer">
@@ -534,68 +562,170 @@ function calcTour(){
       ordered.forEach(function(s){waypoints.push(s.latlng[1]+','+s.latlng[0]);});
       waypoints.push(anchorCard.latlng[1]+','+anchorCard.latlng[0]);
 
-      fetch(OSRM+'/route/v1/driving/'+waypoints.join(';')+'?overview=full&geometries=geojson')
+      fetch(OSRM+'/route/v1/driving/'+waypoints.join(';')+'?overview=full&geometries=geojson&steps=false&annotations=distance,duration')
         .then(function(r){return r.json();})
         .then(function(route){
           if(!route.routes||!route.routes.length){toast('Impossible de calculer l\'itinéraire');return;}
-          // Draw route
           if(routeLine)map.removeLayer(routeLine);
           var geojson=route.routes[0].geometry;
           routeLine=L.geoJSON(geojson,{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
 
-          // Update panel
-          rdvPanelIds=[];
-          ordered.forEach(function(s){rdvPanelIds.push(s.id);});
-          rdvPanelIds.push(anchorCard.id);
-
-          // Render panel with distances from route
+          // Store leg data
+          tourLegs=route.routes[0].legs||[];
           var totalDist=route.routes[0].distance;
           var totalTime=route.routes[0].duration;
-          renderTourPanel(ordered,anchorCard,totalDist,totalTime);
 
-          // Open panel
+          // Show controls & render
+          document.getElementById('tour-controls').style.display='';
+          renderSchedule();
+
           if(!document.getElementById('tour-panel').classList.contains('open')){
             toggleTourPanel();
           }
-
-          // Fit map to route
           map.fitBounds(routeLine.getBounds(),{padding:[60,60]});
-          toast('Tournée calculée — '+(totalDist>=1000?Math.round(totalDist/1000)+' km':Math.round(totalDist)+' m')+' · '+Math.round(totalTime/60)+' min');
+          toast('Tournée calculée — '+Math.round(totalDist/1000)+' km · '+Math.round(totalTime/60)+' min');
         })
         .catch(function(){toast('Erreur de calcul itinéraire');});
     })
     .catch(function(){toast('Erreur de géocodage');});
 }
 
-function renderTourPanel(stops,anchor,totalDist,totalTime){
+var tourLegs=[];
+
+function updateDurLabel(){
+  var v=parseInt(document.getElementById('visit-dur').value);
+  var label=v>=60?(Math.floor(v/60)+'h'+(v%60?(' '+String(v%60).padStart(2,'0')):'')):v+' min';
+  document.getElementById('visit-dur-label').textContent=label;
+}
+
+function fmtTime(mins){
+  var h=Math.floor(mins/60)%24;
+  var m=Math.round(mins%60);
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+function fmtDist(m){return m>=1000?Math.round(m/1000)+' km':Math.round(m)+' m';}
+
+function recalcSchedule(){renderSchedule();}
+
+function renderSchedule(){
+  if(!anchorCard||!startLatLng){return;}
   var body=document.getElementById('tour-body');
   var badge=document.getElementById('tour-badge');
   var count=document.getElementById('tour-count');
-  var total=stops.length+1;
-  badge.style.display='inline';
-  badge.textContent=total;
-  count.textContent=total+' étape'+(total>1?'s':'')+' · '+Math.round(totalDist/1000)+' km · '+Math.round(totalTime/60)+' min';
-  document.getElementById('btn-tour').classList.add('active');
+  var btnTour=document.getElementById('btn-tour');
 
-  var html='<div class="tour-item" style="border-color:#1D1D1F;background:rgba(29,29,31,.04)">'
-    +'<div class="tour-num" style="background:#1D1D1F">D</div>'
-    +'<div class="tour-info"><div class="tour-info-name">Départ</div><div class="tour-info-dist">'+esc(document.getElementById('tour-start-addr').value)+'</div></div></div>';
+  var visitMin=parseInt(document.getElementById('visit-dur').value)||45;
+  var departParts=(document.getElementById('tour-depart-time').value||'09:00').split(':');
+  var currentMins=parseInt(departParts[0])*60+parseInt(departParts[1]);
 
-  stops.forEach(function(s,i){
+  // RDV anchor deadline
+  var anchorDeadline=Infinity;
+  if(anchorCard.card.rdvTime){
+    var ap=anchorCard.card.rdvTime.split(':');
+    anchorDeadline=parseInt(ap[0])*60+parseInt(ap[1]);
+  }
+
+  var totalDist=0;
+  var html='';
+
+  // Départ
+  html+='<div class="sched-item" style="border-color:#1D1D1F;background:rgba(29,29,31,.04)">'
+    +'<div class="sched-time">'+fmtTime(currentMins)+'</div>'
+    +'<div class="sched-dot" style="background:#1D1D1F"></div>'
+    +'<div class="sched-info"><div class="sched-name">Départ</div>'
+    +'<div class="sched-meta">'+esc(document.getElementById('tour-start-addr').value)+'</div></div></div>';
+
+  var included=[];
+  var excluded=[];
+
+  // Each stop
+  tourStops.forEach(function(s,i){
+    var legIdx=i; // leg 0 = start->stop0, leg 1 = stop0->stop1, etc.
+    var legDist=tourLegs[legIdx]?tourLegs[legIdx].distance:0;
+    var legTime=tourLegs[legIdx]?tourLegs[legIdx].duration/60:0;
+
+    var arrivalMins=currentMins+legTime;
+    var departureMins=arrivalMins+visitMin;
+
+    // Check: can we still reach anchor on time after this visit?
+    var lastLegIdx=i+1; // leg from this stop to next (or anchor)
+    var remainingLegs=0;
+    for(var k=lastLegIdx;k<tourLegs.length;k++) remainingLegs+=tourLegs[k]?tourLegs[k].duration/60:0;
+    // Time needed for remaining visits
+    var remainingVisits=(tourStops.length-i-1)*visitMin;
+    var estAnchorArrival=departureMins+remainingLegs+remainingVisits;
+
+    var tooLate=anchorDeadline!==Infinity&&estAnchorArrival>anchorDeadline;
+
+    if(tooLate){
+      excluded.push(s);
+      // Dim marker on map
+      if(markers[s.id])markers[s.id].marker.setOpacity(0.2);
+    } else {
+      included.push(s);
+      totalDist+=legDist;
+      var col=stageColor(s.card.col);
+      var tel=s.card.tel||'';
+      html+='<div class="sched-item" style="cursor:pointer" onclick="flyTo(\''+s.id+'\')">'
+        +'<div class="sched-time">'+fmtTime(arrivalMins)+'</div>'
+        +'<div class="sched-dot" style="background:'+col+'"></div>'
+        +'<div class="sched-info"><div class="sched-name">'+esc(s.card.co||s.card.name)+'</div>'
+        +'<div class="sched-meta">'+fmtDist(legDist)+' · '+Math.round(legTime)+' min</div>'
+        +(tel?'<div class="sched-tel"><a href="tel:'+esc(tel.replace(/\s/g,''))+'">'+esc(tel)+'</a></div>':'')
+        +'</div>'
+        +'<div class="sched-badge" style="background:'+col+'22;color:'+col+'">'+stageName(s.card.col)+'</div>'
+        +'</div>';
+      currentMins=departureMins;
+    }
+  });
+
+  // Excluded stops (grayed)
+  excluded.forEach(function(s){
     var col=stageColor(s.card.col);
-    html+='<div class="tour-item" style="cursor:pointer" onclick="flyTo(\''+s.id+'\')">'
-      +'<div class="tour-num" style="background:'+col+'">'+(i+1)+'</div>'
-      +'<div class="tour-info"><div class="tour-info-name">'+esc(s.card.co||s.card.name)+'</div>'
-      +'<div class="tour-info-dist">'+stageName(s.card.col)+'</div></div></div>';
+    html+='<div class="sched-item excluded">'
+      +'<div class="sched-time" style="color:var(--muted2)">—</div>'
+      +'<div class="sched-dot" style="background:var(--border2)"></div>'
+      +'<div class="sched-info"><div class="sched-name" style="color:var(--muted2)">'+esc(s.card.co||s.card.name)+'</div>'
+      +'<div class="sched-meta">Exclu (retard RDV)</div></div></div>';
   });
 
   // Anchor (RDV)
-  html+='<div class="tour-item" style="cursor:pointer;border-color:#0BBCD4;background:rgba(11,188,212,.06)" onclick="flyTo(\''+anchor.id+'\')">'
-    +'<div class="tour-num" style="background:#0BBCD4"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>'
-    +'<div class="tour-info"><div class="tour-info-name">'+esc(anchor.card.co||anchor.card.name)+'</div>'
-    +'<div class="tour-info-dist" style="color:#0BBCD4;font-weight:600">RDV — '+formatRdvDate(anchor.card.rdvDate,anchor.card.rdvTime)+'</div></div></div>';
+  var anchorLeg=tourLegs[tourLegs.length-1];
+  var anchorDist=anchorLeg?anchorLeg.distance:0;
+  var anchorTime=anchorLeg?anchorLeg.duration/60:0;
+  var anchorArrival=currentMins+anchorTime;
+  totalDist+=anchorDist;
+
+  html+='<div class="sched-item" style="border-color:#0BBCD4;background:rgba(11,188,212,.06);cursor:pointer" onclick="flyTo(\''+anchorCard.id+'\')">'
+    +'<div class="sched-time" style="color:#0BBCD4">'+fmtTime(anchorArrival)+'</div>'
+    +'<div class="sched-dot" style="background:#0BBCD4"></div>'
+    +'<div class="sched-info"><div class="sched-name">'+esc(anchorCard.card.co||anchorCard.card.name)+'</div>'
+    +'<div class="sched-meta">'+fmtDist(anchorDist)+' · '+Math.round(anchorTime)+' min</div>'
+    +'<div class="sched-meta" style="color:#0BBCD4;font-weight:600">RDV — '+formatRdvDate(anchorCard.card.rdvDate,anchorCard.card.rdvTime)+'</div>'
+    +'</div>'
+    +'<div class="sched-badge" style="background:rgba(11,188,212,.12);color:#0BBCD4">RDV</div>'
+    +'</div>';
 
   body.innerHTML=html;
+
+  // Summary
+  var total=included.length+1;
+  badge.style.display='inline';
+  badge.textContent=total;
+  var retourMins=anchorArrival+visitMin;
+  count.textContent=total+' étape'+(total>1?'s':'');
+  btnTour.classList.add('active');
+
+  // Add summary bar
+  var summaryEl=document.getElementById('tour-summary');
+  if(!summaryEl){
+    summaryEl=document.createElement('div');
+    summaryEl.id='tour-summary';
+    summaryEl.className='sched-summary';
+    document.getElementById('tour-panel').insertBefore(summaryEl,document.querySelector('.tour-footer'));
+  }
+  summaryEl.innerHTML='<span><strong>'+Math.round(totalDist/1000)+' km</strong> total</span><span>Retour ~ <strong>'+fmtTime(retourMins)+'</strong></span>';
 }
 </script>
 <script src="/sidebar.js"></script>

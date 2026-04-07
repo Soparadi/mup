@@ -781,9 +781,13 @@ let activeModalTab = 'csv';
 // ── SAMPLE DATA ──
 const SAMPLE = [];
 
+function save(){ localStorage.setItem('mup_prospects', JSON.stringify(prospects)); }
+
 // ── INIT ──
 function init(){
-  prospects = [...SAMPLE];
+  const stored = localStorage.getItem('mup_prospects');
+  if(stored){ try{ prospects = JSON.parse(stored); }catch(e){ prospects = [...SAMPLE]; } }
+  else { prospects = [...SAMPLE]; }
   renderAll();
   updateKPIs();
   updateBadges();
@@ -1042,6 +1046,7 @@ function confirmImport(){
   if(activeModalTab==='csv'){
     if(!csvParsed.length){toast('⚠️ Aucune donnée à importer');return;}
     prospects=[...prospects,...csvParsed];
+    save();
     toast(`✅ ${csvParsed.length} prospect(s) importé(s)`);
     csvParsed=[];
     document.getElementById('csv-preview').classList.remove('visible');
@@ -1066,6 +1071,7 @@ function confirmImport(){
       director:name||company,
     };
     prospects.push(p);
+    save();
     // reset form
     ['f-name','f-company','f-email','f-phone','f-loc','f-website','f-notes'].forEach(id=>document.getElementById(id).value='');
     toast('✅ Prospect ajouté');
@@ -1083,6 +1089,7 @@ function confirmImport(){
       return {id:Date.now()+idx,name,company,email:email||'',phone:phone||'',location:loc||'',status:'new',source:'Collé',director:name};
     });
     prospects=[...prospects,...added];
+    save();
     document.getElementById('paste-input').value='';
     toast(`✅ ${added.length} prospect(s) importé(s)`);
   }
@@ -1113,6 +1120,7 @@ function exportOdoo(){
 // ── DELETE ──
 function deletePros(id){
   prospects=prospects.filter(p=>p.id!==id);
+  save();
   if(selectedId===id)closeDetail();
   renderAll();updateKPIs();updateBadges();
   toast('🗑 Prospect supprimé');

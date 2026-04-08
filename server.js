@@ -18,7 +18,7 @@ async function getInseeToken() {
   if(!id || !secret) return null
   try {
     const creds = Buffer.from(id + ':' + secret).toString('base64')
-    const r = await fetch('https://auth.insee.net/auth/realms/apim-gravitee/protocol/openid-connect/token', {
+    const r = await fetch('https://auth.insee.net/auth/realms/apim-gravitee-realm/protocol/openid-connect/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + creds },
       body: 'grant_type=client_credentials'

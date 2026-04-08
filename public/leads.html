@@ -1640,9 +1640,15 @@ function _getExistingSirets() {
 async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   var regionCode = REGION_CODES[region] || '';
 
+  // Convert NAF code: 4778A → 47.78A (API requires dot after 2 digits)
+  var nafDotted = naf;
+  if(naf && naf.length >= 4 && naf.indexOf('.') === -1) {
+    nafDotted = naf.substring(0,2) + '.' + naf.substring(2);
+  }
+
   // Try activite_principale first, fallback to q= if NAF code rejected
   var url = '/api/search'
-    + '?activite_principale=' + encodeURIComponent(naf)
+    + '?activite_principale=' + encodeURIComponent(nafDotted)
     + (regionCode ? '&region=' + regionCode : '')
     + '&per_page=' + pageSize
     + '&page=' + page;
@@ -1652,10 +1658,12 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
 
-    // If API rejects the NAF code, retry with text search
+    // If API rejects the NAF code, retry with simplified text search
     if(data.erreur || !data.results || !Array.isArray(data.results)) {
+      // Use first 2 significant words from nafLabel
+      var searchTerms = (nafLabel || naf).replace(/[^a-zA-ZÀ-ÿ\s]/g,'').split(/\s+/).filter(function(w){return w.length>3;}).slice(0,2).join(' ');
       var fallbackUrl = '/api/search'
-        + '?q=' + encodeURIComponent(nafLabel || naf)
+        + '?q=' + encodeURIComponent(searchTerms || nafLabel || naf)
         + (regionCode ? '&region=' + regionCode : '')
         + '&per_page=' + pageSize
         + '&page=' + page;

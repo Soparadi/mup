@@ -289,7 +289,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 /* ═══════════════════════════════════════════════
    CONTENT AREA — map + results
 ═══════════════════════════════════════════════ */
-.content-area { display: grid; grid-template-columns: 1fr 420px; flex: 1; }
+.content-area { display: grid; grid-template-columns: 40fr 60fr; flex: 1; }
 
 /* map column */
 .map-col {
@@ -606,7 +606,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
     <!-- résultats -->
     <div class="res-col">
       <div class="res-hdr">
-        <div class="res-title">Leads générés</div>
+        <div class="res-title" id="res-title">Leads générés</div>
         <div class="res-count" id="res-count">0 résultats</div>
       </div>
       <!-- contexte de recherche strict -->
@@ -632,22 +632,26 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
         </div>
         <!-- cards injected here -->
         <div id="cards"></div>
-        <!-- infinite scroll loader -->
-        <div class="page-loader" id="page-loader">
-          <span>Chargement de la page suivante…</span>
+        <!-- pagination -->
+        <div class="page-loader" id="page-loader" style="display:none">
+          <span>Chargement…</span>
+        </div>
+        <div id="pagination" style="display:none;padding:16px;display:flex;align-items:center;justify-content:center;gap:12px;border-top:1px solid var(--border)">
+          <button onclick="prevPage()" id="btn-prev" style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--text);transition:all .12s" disabled>← Précédente</button>
+          <span id="page-info" style="font-size:11px;font-weight:700;font-family:var(--mono);color:var(--muted)">Page 1 / 1</span>
+          <button onclick="nextPage()" id="btn-next" style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--text);transition:all .12s">Suivante →</button>
         </div>
       </div>
     </div>
 
   </div><!-- /content-area -->
 
-  <div class="exp-bar" id="exp-bar">
+  <div class="exp-bar" id="exp-bar" style="display:none">
     <div class="exp-txt">
-      <strong id="exp-count">—</strong> leads chargés · <span id="exp-complete">—</span> fiches complètes
-      <span style="color:var(--g400);font-size:11px;margin-left:8px;">SIRENE · BAN · Scan web</span>
+      <strong id="exp-count">—</strong> leads chargés
+      <span style="color:var(--g400);font-size:11px;margin-left:8px;">SIRENE · BAN</span>
     </div>
-    <button class="bexp bexp-csv" onclick="exportCSV()">↓ Export CSV</button>
-    <button class="bexp bexp-alt">⬡ JSON</button>
+    <!-- export buttons removed -->
   </div>
 
   <div class="fpad"></div>
@@ -1472,7 +1476,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 // CONSTANTS & CONFIG
 // ════════════════════════════════════════════════════════════════
 var API_BASE    = '/api'; // proxy local
-var PAGE_SIZE   = 100;
+var PAGE_SIZE   = 10;
 var CLUSTER_THR = 200;                // switch to clustering above this
 var GEO_PFX     = 'geo3_';
 var GEO_TTL     = 30 * 24 * 60 * 60 * 1000;
@@ -1948,51 +1952,56 @@ function createCard(lead, idx) {
   div.id = 'card-'+lead.id;
   div.style.animationDelay = Math.min(idx, 8) * 0.05 + 's';
 
-  var prioBadge = lead.priority==='hot' ? '<span class="badge b-hot">🔥 Prioritaire</span>'
-                : lead.priority==='warm'? '<span class="badge b-warm">⚡ Tiède</span>'
-                :                         '<span class="badge b-cold">❄️ Normal</span>';
-
   var completeBadge = lead.complete
-    ? '<span class="badge b-complete">✓ Fiche complète</span>'
-    : '<span class="badge b-incomplete">⚠ Partielle</span>';
+    ? '<span class="badge b-complete" style="font-size:9px">Complète</span>'
+    : '<span class="badge b-incomplete" style="font-size:9px">Partielle</span>';
+
+  // Extract city and postal code from address
+  var addrParts = (lead.address||'').match(/(\d{5})\s+(.+?)$/);
+  var cp = addrParts ? addrParts[1] : '';
+  var ville = addrParts ? addrParts[2] : lead.address || '';
+  var dept = cp ? cp.substring(0,2) : '';
 
   var soc = SOCIALS_LIST.map(function(s){
-    return '<span class="st'+(lead.socials&&lead.socials.indexOf(s)>=0?' on':'')+'">'+s[0].toUpperCase()+s.slice(1)+'</span>';
+    var on = lead.socials && lead.socials.indexOf(s) >= 0;
+    return '<span class="st'+(on?' on':'')+'" style="font-size:10px">'+s[0].toUpperCase()+s.slice(1)+'</span>';
   }).join('');
 
+  var phoneHtml = lead.phone
+    ? '<a href="tel:'+esc(lead.phone.replace(/\s/g,''))+'" style="color:var(--blue);text-decoration:none">'+esc(lead.phone)+'</a>'
+    : '<span class="missing">Non renseigné</span>';
+
   var emailHtml = lead.email
-    ? '<span style="color:var(--green);font-weight:500">'+esc(lead.email)+'</span>'
-    : '<span class="missing">Email non trouvé</span>';
+    ? '<a href="mailto:'+esc(lead.email)+'" style="color:var(--blue);text-decoration:none">'+esc(lead.email)+'</a>'
+    : '<span class="missing">Non renseigné</span>';
 
   var siteHtml = lead.website
-    ? '<span style="color:var(--blue)">'+esc(lead.website)+'</span>'
-    : '<span class="missing">Site non trouvé</span>';
-
-  var phoneHtml = lead.phone || '<span class="missing">Tél. non trouvé</span>';
+    ? '<a href="'+esc(lead.website)+'" target="_blank" style="color:var(--blue);text-decoration:none">'+esc(lead.website.replace(/^https?:\/\//,''))+'</a>'
+    : '<span class="missing">Non renseigné</span>';
 
   div.innerHTML =
     '<div class="card-top">'
-      +'<div>'
-        +'<div class="cn">'+esc(lead.name)+'</div>'
-        +'<div class="naf-badge">'+esc(lead.naf||S.naf)+' — '+esc(lead.nafLabel||lead.sector||S.nafLabel)+'</div>'
-        +'<div class="cs">'+(lead.forme||'')+(lead.created?' · '+lead.created:'')+'</div>'
+      +'<div style="flex:1">'
+        +'<div class="cn" style="font-size:15px;font-weight:700">'+esc(lead.name)+'</div>'
+        +'<div style="display:flex;align-items:center;gap:6px;margin-top:3px">'
+          +'<span style="font-size:12px;color:var(--muted)">'+esc(ville)+'</span>'
+          +(cp?'<span style="font-size:10px;color:var(--muted2);font-family:var(--mono)">'+cp+'</span>':'')
+          +(dept?'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--surface2);color:var(--muted)">'+dept+'</span>':'')
+        +'</div>'
       +'</div>'
-      +'<div class="badges">'+prioBadge+completeBadge
-        +'<span class="badge b-geo-pend" id="geo-'+lead.id+'">⏳ Géocodage</span>'
+      +'<div class="badges">'+completeBadge
+        +'<span class="badge b-geo-pend" id="geo-'+lead.id+'" style="font-size:9px">Géo…</span>'
       +'</div>'
     +'</div>'
     +'<div class="cinfo">'
-      +'<div class="ir"><span class="ico">👤</span><span>'+esc(lead.director||'—')+'</span></div>'
-      +'<div class="ir"><span class="ico">📞</span><span>'+phoneHtml+'</span></div>'
-      +'<div class="ir"><span class="ico">✉️</span><span>'+emailHtml+'</span></div>'
-      +'<div class="ir"><span class="ico">🌐</span><span>'+siteHtml+'</span></div>'
-      +'<div class="ir"><span class="ico">📍</span><span style="font-size:11px">'+esc(lead.address)+'</span></div>'
+      +'<div class="ir"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>'+esc(lead.director||'—')+'</span></div>'
+      +'<div class="ir"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>'+phoneHtml+'</span></div>'
+      +'<div class="ir"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg><span>'+siteHtml+'</span></div>'
+      +'<div class="ir"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span>'+emailHtml+'</span></div>'
     +'</div>'
     +'<div class="csoc">'+soc+'</div>'
     +'<div class="cact">'
-      +(lead.email?'<button class="ba" onclick="cp(\''+lead.email+'\',\'Email\')">Copier email</button>':'')
-      +(lead.phone?'<button class="ba" onclick="cp(\''+lead.phone+'\',\'Tél.\')">Copier tél.</button>':'')
-      +'<button class="ba pr" style="margin-left:auto">Exporter</button>'
+      +'<button class="ba pr" onclick="addToProspects(\''+lead.id+'\')">Ajouter aux Prospects</button>'
     +'</div>';
 
   return div;
@@ -2062,6 +2071,7 @@ async function loadPage(page) {
       var regionLabel = regionEl.options[regionEl.selectedIndex].text;
       document.getElementById('ctx-naf').textContent    = S.naf;
       document.getElementById('ctx-label').textContent  = S.nafLabel;
+      document.getElementById('res-title').textContent = S.nafLabel || 'Leads générés';
       document.getElementById('ctx-region').textContent = regionLabel;
       document.getElementById('res-context').classList.add('show');
     }
@@ -2088,6 +2098,8 @@ async function loadPage(page) {
     console.log('[Leads] page='+page+' rawItems='+rawItems.length+' afterBarrier='+items.length+' loaded='+(S.loaded+items.length)+' total='+S.total+' hasMore='+S.hasMore);
 
     // Render cards — BARRIER 3: last-chance NAF check before DOM insertion
+    // Pagination mode: clear cards for each page
+    if(!isFirstPage) { document.getElementById('cards').innerHTML = ''; S.buffer = []; S.loaded = 0; }
     var frag = document.createDocumentFragment();
     var cardOffset = S.loaded;
     items.forEach(function(lead, i) {
@@ -2104,6 +2116,7 @@ async function loadPage(page) {
     S.loaded += items.length;
 
     updateCountDisplay();
+    updatePagination();
     updateExportBar();
 
     if(isFirstPage) {
@@ -2135,14 +2148,7 @@ async function loadPage(page) {
 // ════════════════════════════════════════════════════════════════
 // INFINITE SCROLL
 // ════════════════════════════════════════════════════════════════
-document.getElementById('res-panel').addEventListener('scroll', function() {
-  var el = this;
-  if(S.loading || !S.hasMore) return;
-  var pct = (el.scrollTop + el.clientHeight) / el.scrollHeight;
-  if(pct >= 0.80) {
-    loadPage(S.page + 1);
-  }
-});
+// Infinite scroll removed — using pagination buttons instead
 
 // ════════════════════════════════════════════════════════════════
 // UI STATE HELPERS
@@ -2155,6 +2161,26 @@ function updateStats() {
   document.getElementById('st-email').textContent    = rate + '%';
 }
 
+function prevPage() {
+  if(S.page <= 1) return;
+  document.getElementById('cards').innerHTML = '';
+  S.loaded = 0;
+  loadPage(S.page - 1);
+}
+function nextPage() {
+  if(!S.hasMore) return;
+  document.getElementById('cards').innerHTML = '';
+  S.loaded = 0;
+  loadPage(S.page + 1);
+}
+function updatePagination() {
+  var totalPages = Math.max(1, Math.ceil(S.total / PAGE_SIZE));
+  document.getElementById('page-info').textContent = 'Page ' + S.page + ' / ' + totalPages;
+  document.getElementById('btn-prev').disabled = S.page <= 1;
+  document.getElementById('btn-next').disabled = S.page >= totalPages;
+  document.getElementById('pagination').style.display = 'flex';
+  document.getElementById('res-panel').scrollTop = 0;
+}
 function updateCountDisplay() {
   document.getElementById('res-count').textContent =
     S.loaded.toLocaleString('fr-FR') + ' / ' + S.total.toLocaleString('fr-FR') + ' résultats';
@@ -2260,6 +2286,41 @@ function showToast(msg) {
 
 function cp(v, label) {
   navigator.clipboard.writeText(v).then(function(){ showToast(label+' copié ✓'); });
+}
+
+function addToProspects(leadId) {
+  var lead = S.buffer.find(function(l){ return l.id === leadId; });
+  if(!lead) return;
+  var prospects = [];
+  try { var r = localStorage.getItem('mup_prospects'); if(r) prospects = JSON.parse(r); } catch(e){}
+  if(prospects.find(function(p){ return String(p.siren) === String(lead.siren) || String(p.siret) === String(lead.siret); })) {
+    showToast('Déjà dans les prospects');
+    return;
+  }
+  prospects.push({
+    id: Date.now(),
+    name: lead.director || lead.name,
+    company: lead.name,
+    email: lead.email || '',
+    phone: lead.phone || '',
+    location: lead.address || '',
+    sector: lead.nafLabel || lead.sector || '',
+    siren: lead.siren || '',
+    siret: lead.siret || '',
+    website: lead.website || '',
+    source: 'SIRENE',
+    notes: '',
+    status: 'new',
+    director: lead.director || ''
+  });
+  localStorage.setItem('mup_prospects', JSON.stringify(prospects));
+  showToast(lead.name + ' ajouté aux prospects');
+  // Grey out the button
+  var card = document.getElementById('card-' + leadId);
+  if(card) {
+    var btn = card.querySelector('.ba.pr');
+    if(btn) { btn.textContent = 'Ajouté'; btn.disabled = true; btn.style.opacity = '.5'; }
+  }
 }
 
 function esc(s) {

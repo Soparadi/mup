@@ -1678,9 +1678,52 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     var existing = _getExistingSirets();
     var items = [];
 
+    // Map region code to department prefixes for local filtering
+    var regionDepts = {
+      '11':['75','77','78','91','92','93','94','95'],
+      '24':['18','28','36','37','41','45'],
+      '27':['21','25','39','58','70','71','89','90'],
+      '28':['14','27','50','61','76'],
+      '32':['02','59','60','62','80'],
+      '44':['08','10','51','52','54','55','57','67','68','88'],
+      '52':['44','49','53','72','85'],
+      '53':['22','29','35','56'],
+      '75':['16','17','19','23','24','33','40','47','64','79','86','87'],
+      '76':['09','11','12','30','31','32','34','46','48','65','66','81','82'],
+      '84':['01','03','07','15','26','38','42','43','63','69','73','74'],
+      '93':['04','05','06','13','83','84'],
+      '94':['2A','2B','20']
+    };
+    var allowedDepts = regionDepts[regionCode] || [];
+
     data.results.forEach(function(r) {
-      // Get the matching establishment
-      var etab = r.siege || (r.matching_etablissements && r.matching_etablissements[0]) || {};
+      // Pick the best local establishment: matching_etablissements in target region first
+      var matching = r.matching_etablissements || [];
+      var localEtab = null;
+
+      // 1. Search matching_etablissements for one in the target region
+      for(var i=0;i<matching.length;i++){
+        var cp = matching[i].code_postal || '';
+        var dept = cp.substring(0,2);
+        if(allowedDepts.length && allowedDepts.indexOf(dept) !== -1){
+          localEtab = matching[i];
+          break;
+        }
+      }
+
+      // 2. If no local match found, check if siege is in target region
+      if(!localEtab && r.siege){
+        var siegeCp = r.siege.code_postal || '';
+        var siegeDept = siegeCp.substring(0,2);
+        if(!allowedDepts.length || allowedDepts.indexOf(siegeDept) !== -1){
+          localEtab = r.siege;
+        }
+      }
+
+      // 3. Fallback: first matching_etablissement, then siege
+      if(!localEtab) localEtab = matching[0] || r.siege || {};
+
+      var etab = localEtab;
       var siren = r.siren || '';
       var siret = etab.siret || '';
 
@@ -1698,11 +1741,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       var name = r.nom_complet || r.nom_raison_sociale || '';
       var dirigeants = r.dirigeants || [];
       var dir = dirigeants.length ? (dirigeants[0].prenom||'') + ' ' + (dirigeants[0].nom||'') : '';
-      var hasPhone = false, hasEmail = false, hasSite = false;
-      var phone = null, email = null, website = null;
 
-      // Complements from matching etablissements if available
-      var complete = false;
       var nafEtab = (etab.activite_principale || r.activite_principale || '').replace('.','');
       var nafLabelEtab = etab.libelle_activite_principale || r.libelle_activite_principale || nafLabel || '';
 
@@ -1722,15 +1761,15 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
         lat: lat, lng: lng,
         geoStatus: (lat && lng) ? 'ok' : 'pending',
         geoSrc: (lat && lng) ? 'api' : null,
-        phone: phone,
-        website: website,
-        email: email,
+        phone: null,
+        website: null,
+        email: null,
         socials: [],
         priority: 'cold',
         capital: r.capital ? r.capital + ' \u20AC' : '',
         forme: r.nature_juridique || '',
         created: r.date_creation || '',
-        complete: complete,
+        complete: false,
         source: 'SIRENE'
       });
     });

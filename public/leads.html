@@ -2084,6 +2084,7 @@ async function loadPage(page) {
     // hasMore based purely on counts, NOT items.length (correct for onlyComplete)
     S.hasMore = (S.loaded + items.length) < S.total;
     S.page = page;
+    console.log('[Leads] page='+page+' rawItems='+rawItems.length+' afterBarrier='+items.length+' loaded='+(S.loaded+items.length)+' total='+S.total+' hasMore='+S.hasMore);
 
     // Render cards — BARRIER 3: last-chance NAF check before DOM insertion
     var frag = document.createDocumentFragment();

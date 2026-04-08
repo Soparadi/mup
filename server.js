@@ -55,14 +55,17 @@ app.get('/api/search', async (req, res) => {
 app.get('/api/sirene/search', async (req, res) => {
   const token = await getInseeToken()
   if(!token) return res.status(503).json({ error: 'INSEE auth indisponible' })
-  const q = req.query.q || ''
+  let q = req.query.q || ''
+  // Convert NAF codes without dots: 8230Z → 82.30Z in the query
+  q = q.replace(/activitePrincipaleEtablissement:(\d{2})(\d{2}[A-Z])/g, 'activitePrincipaleEtablissement:$1.$2')
   const nombre = Math.min(parseInt(req.query.nombre) || 20, 100)
   const debut = parseInt(req.query.debut) || 0
   try {
+    console.log('[INSEE] Search:', q.substring(0, 120), 'nombre:', nombre, 'debut:', debut)
     const r = await fetch('https://api.insee.fr/api-sirene/3.11/siret?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut, {
       headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
     })
-    if(!r.ok) return res.status(r.status).json({ error: 'Recherche INSEE échouée' })
+    if(!r.ok) { const body = await r.text(); console.error('[INSEE] Search error:', r.status, body.substring(0,200)); return res.status(r.status).json({ error: 'Recherche INSEE échouée' }) }
     const data = await r.json()
     res.json(data)
   } catch(e) {

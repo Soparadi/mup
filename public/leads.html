@@ -1639,6 +1639,8 @@ function _getExistingSirets() {
  */
 async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   var regionCode = REGION_CODES[region] || '';
+
+  // Try activite_principale first, fallback to q= if NAF code rejected
   var url = '/api/search'
     + '?activite_principale=' + encodeURIComponent(naf)
     + (regionCode ? '&region=' + regionCode : '')
@@ -1650,8 +1652,19 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
 
-    if(!data.results || !Array.isArray(data.results)) {
-      throw new Error('Invalid API response');
+    // If API rejects the NAF code, retry with text search
+    if(data.erreur || !data.results || !Array.isArray(data.results)) {
+      var fallbackUrl = '/api/search'
+        + '?q=' + encodeURIComponent(nafLabel || naf)
+        + (regionCode ? '&region=' + regionCode : '')
+        + '&per_page=' + pageSize
+        + '&page=' + page;
+      var resp2 = await fetch(fallbackUrl, { signal: AbortSignal.timeout(15000) });
+      if(!resp2.ok) throw new Error('HTTP ' + resp2.status);
+      data = await resp2.json();
+      if(!data.results || !Array.isArray(data.results)) {
+        throw new Error('Aucun résultat');
+      }
     }
 
     var existing = _getExistingSirets();

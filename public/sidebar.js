@@ -19,12 +19,12 @@
   var el = document.getElementById('sidebar');
   if (!el) return;
 
-  var html = '<div style="padding:16px 10px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);margin-bottom:8px;">'
+  var html = '<a href="/dashboard" style="text-decoration:none;display:flex;align-items:center;gap:10px;padding:16px 10px 12px;border-bottom:1px solid var(--border);margin-bottom:8px;">'
     + '<div style="width:28px;height:28px;background:var(--text);border-radius:8px;display:flex;align-items:center;justify-content:center;">'
     + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>'
     + '</div>'
     + '<span style="font-size:14px;font-weight:800;color:var(--text);letter-spacing:-.3px;">MUP</span>'
-    + '</div>'
+    + '</a>'
     + '<div class="sb-label">Navigation</div>';
 
   for (var i = 0; i < ITEMS.length; i++) {

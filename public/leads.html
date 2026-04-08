@@ -1472,7 +1472,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 // CONSTANTS & CONFIG
 // ════════════════════════════════════════════════════════════════
 var API_BASE    = '/api'; // proxy local
-var PAGE_SIZE   = 25;
+var PAGE_SIZE   = 100;
 var CLUSTER_THR = 200;                // switch to clustering above this
 var GEO_PFX     = 'geo3_';
 var GEO_TTL     = 30 * 24 * 60 * 60 * 1000;
@@ -1633,163 +1633,178 @@ function _getExistingSirets() {
   return sirets;
 }
 
+// Department lists per region code
+var REGION_DEPTS = {
+  '11':['75','77','78','91','92','93','94','95'],
+  '24':['18','28','36','37','41','45'],
+  '27':['21','25','39','58','70','71','89','90'],
+  '28':['14','27','50','61','76'],
+  '32':['02','59','60','62','80'],
+  '44':['08','10','51','52','54','55','57','67','68','88'],
+  '52':['44','49','53','72','85'],
+  '53':['22','29','35','56'],
+  '75':['16','17','19','23','24','33','40','47','64','79','86','87'],
+  '76':['09','11','12','30','31','32','34','46','48','65','66','81','82'],
+  '84':['01','03','07','15','26','38','42','43','63','69','73','74'],
+  '93':['04','05','06','13','83','84'],
+  '94':['2A','2B','20']
+};
+
 /**
- * fetchLeads — real API calls to recherche-entreprises.api.gouv.fr
+ * fetchLeads — INSEE SIRENE V3 primary, recherche-entreprises fallback
  * Returns Promise<{ total, totalComplete, hotCount, items }>
  */
 async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   var regionCode = REGION_CODES[region] || '';
-
-  // Convert NAF code: 4778A → 47.78A (API requires dot after 2 digits)
   var nafDotted = naf;
   if(naf && naf.length >= 4 && naf.indexOf('.') === -1) {
     nafDotted = naf.substring(0,2) + '.' + naf.substring(2);
   }
+  var existing = _getExistingSirets();
+  var depts = REGION_DEPTS[regionCode] || [];
 
-  // Try activite_principale first, fallback to q= if NAF code rejected
-  var url = '/api/search'
-    + '?activite_principale=' + encodeURIComponent(nafDotted)
-    + (regionCode ? '&region=' + regionCode : '')
-    + '&per_page=' + pageSize
-    + '&page=' + page;
-
+  // ── TRY INSEE SIRENE V3 FIRST ──
   try {
-    var resp = await fetch(url);
-    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    var q = 'activitePrincipaleEtablissement:' + nafDotted + ' AND etatAdministratifEtablissement:A';
+    if(depts.length) {
+      q += ' AND (' + depts.map(function(d){ return 'codePostalEtablissement:' + d + '*'; }).join(' OR ') + ')';
+    }
+    var nombre = 100;
+    var debut = (page - 1) * nombre;
+    var inseeUrl = '/api/sirene/search?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut;
+
+    var resp = await fetch(inseeUrl);
+    if(resp.status === 503 || resp.status === 502) throw new Error('INSEE_UNAVAILABLE');
+    if(!resp.ok) throw new Error('INSEE HTTP ' + resp.status);
     var data = await resp.json();
 
-    // If API rejects the NAF code, retry with simplified text search
-    if(data.erreur || !data.results || !Array.isArray(data.results)) {
-      console.warn('[Leads] NAF rejected, falling back to text search. Error:', data.erreur);
-      var searchTerms = (nafLabel || naf).replace(/[^a-zA-ZÀ-ÿ\s]/g,'').split(/\s+/).filter(function(w){return w.length>3;}).slice(0,2).join(' ');
-      var fallbackUrl = '/api/search'
-        + '?q=' + encodeURIComponent(searchTerms || nafLabel || naf)
-        + (regionCode ? '&region=' + regionCode : '')
-        + '&per_page=' + pageSize
-        + '&page=' + page;
-      var resp2 = await fetch(fallbackUrl);
-      if(!resp2.ok) throw new Error('HTTP ' + resp2.status);
-      data = await resp2.json();
-      if(!data.results || !Array.isArray(data.results)) {
-        throw new Error('Aucun résultat');
-      }
-    }
+    if(data.error || !data.etablissements) throw new Error('INSEE_UNAVAILABLE');
 
-    var existing = _getExistingSirets();
+    var total = (data.header && data.header.total) || 0;
     var items = [];
 
-    // Map region code to department prefixes for local filtering
-    var regionDepts = {
-      '11':['75','77','78','91','92','93','94','95'],
-      '24':['18','28','36','37','41','45'],
-      '27':['21','25','39','58','70','71','89','90'],
-      '28':['14','27','50','61','76'],
-      '32':['02','59','60','62','80'],
-      '44':['08','10','51','52','54','55','57','67','68','88'],
-      '52':['44','49','53','72','85'],
-      '53':['22','29','35','56'],
-      '75':['16','17','19','23','24','33','40','47','64','79','86','87'],
-      '76':['09','11','12','30','31','32','34','46','48','65','66','81','82'],
-      '84':['01','03','07','15','26','38','42','43','63','69','73','74'],
-      '93':['04','05','06','13','83','84'],
-      '94':['2A','2B','20']
-    };
-    var allowedDepts = regionDepts[regionCode] || [];
-
-    data.results.forEach(function(r) {
-      // Pick the best local establishment: matching_etablissements in target region first
-      var matching = r.matching_etablissements || [];
-      var localEtab = null;
-
-      // 1. Search matching_etablissements for one in the target region
-      for(var i=0;i<matching.length;i++){
-        var cp = matching[i].code_postal || '';
-        var dept = cp.substring(0,2);
-        if(allowedDepts.length && allowedDepts.indexOf(dept) !== -1){
-          localEtab = matching[i];
-          break;
-        }
-      }
-
-      // 2. If no local match found, check if siege is in target region
-      if(!localEtab && r.siege){
-        var siegeCp = r.siege.code_postal || '';
-        var siegeDept = siegeCp.substring(0,2);
-        if(!allowedDepts.length || allowedDepts.indexOf(siegeDept) !== -1){
-          localEtab = r.siege;
-        }
-      }
-
-      // 3. Fallback: first matching_etablissement, then siege
-      if(!localEtab) localEtab = matching[0] || r.siege || {};
-
-      var etab = localEtab;
-      var siren = r.siren || '';
+    data.etablissements.forEach(function(etab) {
       var siret = etab.siret || '';
-
-      // Skip if already in prospects/pipeline
+      var siren = etab.siren || '';
       if(existing[siren] || existing[siret]) return;
 
-      var addr = '';
-      if(etab.adresse) addr = etab.adresse;
-      else if(etab.geo_adresse) addr = etab.geo_adresse;
-      else {
-        var parts = [etab.numero_voie, etab.type_voie, etab.libelle_voie, etab.code_postal, etab.libelle_commune].filter(Boolean);
-        addr = parts.join(' ');
-      }
+      var ul = etab.uniteLegale || {};
+      var adr = etab.adresseEtablissement || {};
+      var periodes = etab.periodesEtablissement || [];
+      var nafEtab = periodes.length ? (periodes[0].activitePrincipaleEtablissement || '').replace('.','') : naf;
 
-      var name = r.nom_complet || r.nom_raison_sociale || '';
-      var dirigeants = r.dirigeants || [];
-      var dir = dirigeants.length ? (dirigeants[0].prenom||'') + ' ' + (dirigeants[0].nom||'') : '';
+      var name = ul.denominationUniteLegale || ul.denominationUsuelle1UniteLegale || '';
+      if(!name && ul.prenom1UniteLegale) name = ul.prenom1UniteLegale + ' ' + (ul.nomUniteLegale || '');
+      var dir = '';
+      if(ul.prenom1UniteLegale) dir = ul.prenom1UniteLegale + ' ' + (ul.nomUniteLegale || '');
 
-      var nafEtab = (etab.activite_principale || r.activite_principale || '').replace('.','');
-      var nafLabelEtab = etab.libelle_activite_principale || r.libelle_activite_principale || nafLabel || '';
-
-      var lat = etab.latitude ? parseFloat(etab.latitude) : null;
-      var lng = etab.longitude ? parseFloat(etab.longitude) : null;
+      var addrParts = [adr.numeroVoieEtablissement, adr.typeVoieEtablissement, adr.libelleVoieEtablissement, adr.codePostalEtablissement, adr.libelleCommuneEtablissement].filter(Boolean);
+      var addr = addrParts.join(' ');
 
       items.push({
         id: siret || siren || Math.random().toString(36).substr(2,9),
-        name: name,
+        name: name.trim() || 'Sans nom',
         naf: nafEtab || naf,
-        nafLabel: nafLabelEtab,
-        sector: nafLabelEtab,
+        nafLabel: nafLabel || '',
+        sector: nafLabel || '',
         siren: siren,
         siret: siret,
         director: dir.trim(),
         address: addr,
-        lat: lat, lng: lng,
-        geoStatus: (lat && lng) ? 'ok' : 'pending',
-        geoSrc: (lat && lng) ? 'api' : null,
-        phone: null,
-        website: null,
-        email: null,
+        lat: null, lng: null,
+        geoStatus: 'pending',
+        geoSrc: null,
+        phone: null, website: null, email: null,
         socials: [],
         priority: 'cold',
-        capital: r.capital ? r.capital + ' \u20AC' : '',
-        forme: r.nature_juridique || '',
-        created: r.date_creation || '',
+        capital: '',
+        forme: ul.categorieJuridiqueUniteLegale || '',
+        created: ul.dateCreationUniteLegale || etab.dateCreationEtablissement || '',
         complete: false,
-        source: 'SIRENE'
+        source: 'INSEE'
+      });
+    });
+
+    console.log('[Leads] INSEE returned', items.length, 'items, total:', total);
+    return {
+      total: total,
+      totalComplete: Math.round(total * 0.3),
+      hotCount: Math.round(total * 0.15),
+      items: items
+    };
+
+  } catch(inseeErr) {
+    console.warn('[Leads] INSEE unavailable, falling back to recherche-entreprises:', inseeErr.message);
+  }
+
+  // ── FALLBACK: recherche-entreprises.api.gouv.fr ──
+  try {
+    var url = '/api/search'
+      + '?activite_principale=' + encodeURIComponent(nafDotted)
+      + (regionCode ? '&region=' + regionCode : '')
+      + '&per_page=25&page=' + page;
+
+    var resp = await fetch(url);
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+
+    if(data.erreur || !data.results || !Array.isArray(data.results)) {
+      var searchTerms = (nafLabel || naf).replace(/[^a-zA-ZÀ-ÿ\s]/g,'').split(/\s+/).filter(function(w){return w.length>3;}).slice(0,2).join(' ');
+      var resp2 = await fetch('/api/search?q=' + encodeURIComponent(searchTerms || nafLabel || naf) + (regionCode ? '&region=' + regionCode : '') + '&per_page=25&page=' + page);
+      if(!resp2.ok) throw new Error('HTTP ' + resp2.status);
+      data = await resp2.json();
+      if(!data.results || !Array.isArray(data.results)) throw new Error('Aucun résultat');
+    }
+
+    var items = [];
+    var allowedDepts = depts;
+
+    data.results.forEach(function(r) {
+      var matching = r.matching_etablissements || [];
+      var localEtab = null;
+      for(var i=0;i<matching.length;i++){
+        var cp = matching[i].code_postal || '';
+        if(allowedDepts.length && allowedDepts.indexOf(cp.substring(0,2)) !== -1){ localEtab = matching[i]; break; }
+      }
+      if(!localEtab && r.siege){
+        var sCp = r.siege.code_postal || '';
+        if(!allowedDepts.length || allowedDepts.indexOf(sCp.substring(0,2)) !== -1) localEtab = r.siege;
+      }
+      if(!localEtab) localEtab = matching[0] || r.siege || {};
+      var etab = localEtab;
+      var siren = r.siren || '';
+      var siret = etab.siret || '';
+      if(existing[siren] || existing[siret]) return;
+
+      var addr = etab.adresse || etab.geo_adresse || [etab.numero_voie, etab.type_voie, etab.libelle_voie, etab.code_postal, etab.libelle_commune].filter(Boolean).join(' ');
+      var name = r.nom_complet || r.nom_raison_sociale || '';
+      var dirigeants = r.dirigeants || [];
+      var dir = dirigeants.length ? (dirigeants[0].prenom||'') + ' ' + (dirigeants[0].nom||'') : '';
+      var nafEtab = (etab.activite_principale || r.activite_principale || '').replace('.','');
+
+      items.push({
+        id: siret || siren || Math.random().toString(36).substr(2,9),
+        name: name, naf: nafEtab || naf, nafLabel: etab.libelle_activite_principale || nafLabel || '',
+        sector: etab.libelle_activite_principale || nafLabel || '',
+        siren: siren, siret: siret, director: dir.trim(), address: addr,
+        lat: etab.latitude ? parseFloat(etab.latitude) : null,
+        lng: etab.longitude ? parseFloat(etab.longitude) : null,
+        geoStatus: etab.latitude ? 'ok' : 'pending', geoSrc: etab.latitude ? 'api' : null,
+        phone: null, website: null, email: null, socials: [],
+        priority: 'cold', capital: r.capital ? r.capital + ' \u20AC' : '',
+        forme: r.nature_juridique || '', created: r.date_creation || '',
+        complete: false, source: 'SIRENE'
       });
     });
 
     var total = data.total_results || data.total || items.length;
-    var hotCount = Math.round(total * 0.15);
-
-    if(onlyComplete) {
-      items = items.filter(function(it){ return it.complete; });
-    }
-
     return {
-      total: onlyComplete ? Math.round(total * 0.3) : total,
-      totalComplete: Math.round(total * 0.3),
-      hotCount: hotCount,
-      items: items
+      total: total, totalComplete: Math.round(total * 0.3),
+      hotCount: Math.round(total * 0.15), items: items
     };
 
   } catch(err) {
-    console.error('[Leads] API error:', err.message, err.stack);
+    console.error('[Leads] All APIs failed:', err.message);
     throw err;
   }
 }

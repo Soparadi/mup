@@ -1654,20 +1654,20 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     + '&page=' + page;
 
   try {
-    var resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    var resp = await fetch(url);
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
 
     // If API rejects the NAF code, retry with simplified text search
     if(data.erreur || !data.results || !Array.isArray(data.results)) {
-      // Use first 2 significant words from nafLabel
+      console.warn('[Leads] NAF rejected, falling back to text search. Error:', data.erreur);
       var searchTerms = (nafLabel || naf).replace(/[^a-zA-ZÀ-ÿ\s]/g,'').split(/\s+/).filter(function(w){return w.length>3;}).slice(0,2).join(' ');
       var fallbackUrl = '/api/search'
         + '?q=' + encodeURIComponent(searchTerms || nafLabel || naf)
         + (regionCode ? '&region=' + regionCode : '')
         + '&per_page=' + pageSize
         + '&page=' + page;
-      var resp2 = await fetch(fallbackUrl, { signal: AbortSignal.timeout(15000) });
+      var resp2 = await fetch(fallbackUrl);
       if(!resp2.ok) throw new Error('HTTP ' + resp2.status);
       data = await resp2.json();
       if(!data.results || !Array.isArray(data.results)) {
@@ -1750,8 +1750,8 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     };
 
   } catch(err) {
-    console.error('[Leads] API error:', err.message);
-    throw new Error('Service temporairement indisponible, réessayez dans quelques instants');
+    console.error('[Leads] API error:', err.message, err.stack);
+    throw err;
   }
 }
 

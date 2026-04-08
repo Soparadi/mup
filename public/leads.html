@@ -87,7 +87,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
   width: calc(100% - 96px);
   box-shadow: 0 4px 24px rgba(0,0,0,.06);
 }
-.search-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.search-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
 .field-label {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
@@ -523,6 +523,14 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
           <svg class="sel-arr" width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
+        </div>
+      </div>
+
+      <!-- ville / département -->
+      <div>
+        <div class="field-label">Ville / Département <span class="label-sub">— optionnel</span></div>
+        <div class="sel-w">
+          <input type="text" id="inp-city" placeholder="Rennes, 35, Brest…" style="width:100%;border:none;background:none;font-family:var(--font);font-size:13px;color:var(--text);outline:none;padding:0">
         </div>
       </div>
 
@@ -1667,7 +1675,16 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   // ── TRY INSEE SIRENE V3 FIRST ──
   try {
     var q = 'activitePrincipaleEtablissement:' + nafDotted + ' AND etatAdministratifEtablissement:A';
-    if(depts.length) {
+    // City/department filter
+    var cityInput = (document.getElementById('inp-city')?.value || '').trim();
+    if(cityInput) {
+      // Check if it's a department number (2 digits)
+      if(/^\d{2}$/.test(cityInput)) {
+        q += ' AND codePostalEtablissement:' + cityInput + '*';
+      } else {
+        q += ' AND libelleCommuneEtablissement:' + cityInput.toUpperCase();
+      }
+    } else if(depts.length) {
       q += ' AND (' + depts.map(function(d){ return 'codePostalEtablissement:' + d + '*'; }).join(' OR ') + ')';
     }
     var nombre = 100;
@@ -1740,9 +1757,11 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
 
   // ── FALLBACK: recherche-entreprises.api.gouv.fr ──
   try {
+    var cityFallback = (document.getElementById('inp-city')?.value || '').trim();
     var url = '/api/search'
       + '?activite_principale=' + encodeURIComponent(nafDotted)
       + (regionCode ? '&region=' + regionCode : '')
+      + (cityFallback ? '&q=' + encodeURIComponent(cityFallback) : '')
       + '&per_page=25&page=' + page;
 
     var resp = await fetch(url);

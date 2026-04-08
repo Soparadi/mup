@@ -7,6 +7,31 @@ const app = express()
 
 app.use(express.static(join(__dirname, 'public')))
 
+// ── INSEE OAuth2 token cache ──
+let inseeToken = null
+let inseeTokenExpires = 0
+
+async function getInseeToken() {
+  if(inseeToken && Date.now() < inseeTokenExpires) return inseeToken
+  const id = process.env.INSEE_CLIENT_ID
+  const secret = process.env.INSEE_CLIENT_SECRET
+  if(!id || !secret) return null
+  try {
+    const creds = Buffer.from(id + ':' + secret).toString('base64')
+    const r = await fetch('https://auth.insee.net/auth/realms/apim-gravitee/protocol/openid-connect/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + creds },
+      body: 'grant_type=client_credentials'
+    })
+    if(!r.ok) { console.error('[INSEE] Token error:', r.status); return null }
+    const data = await r.json()
+    inseeToken = data.access_token
+    inseeTokenExpires = Date.now() + (data.expires_in - 60) * 1000
+    console.log('[INSEE] Token obtained, expires in', data.expires_in, 's')
+    return inseeToken
+  } catch(e) { console.error('[INSEE] Token fetch failed:', e.message); return null }
+}
+
 // ── API proxies ──
 app.get('/api/search', async (req, res) => {
   const params = new URLSearchParams()
@@ -22,6 +47,41 @@ app.get('/api/search', async (req, res) => {
     res.json(data)
   } catch(e) {
     res.status(502).json({ error: 'Service temporairement indisponible' })
+  }
+})
+
+// ── INSEE SIRENE enrichment by SIRET ──
+app.get('/api/sirene/:siret', async (req, res) => {
+  const token = await getInseeToken()
+  if(!token) return res.status(503).json({ error: 'INSEE auth indisponible' })
+  try {
+    const r = await fetch('https://api.insee.fr/entreprises/sirene/V3.11/siret/' + encodeURIComponent(req.params.siret), {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
+    })
+    if(!r.ok) return res.status(r.status).json({ error: 'SIRET non trouvé' })
+    const data = await r.json()
+    res.json(data)
+  } catch(e) {
+    res.status(502).json({ error: 'INSEE indisponible' })
+  }
+})
+
+// ── INSEE SIRENE search ──
+app.get('/api/sirene/search', async (req, res) => {
+  const token = await getInseeToken()
+  if(!token) return res.status(503).json({ error: 'INSEE auth indisponible' })
+  const q = req.query.q || ''
+  const nombre = Math.min(parseInt(req.query.nombre) || 20, 100)
+  const debut = parseInt(req.query.debut) || 0
+  try {
+    const r = await fetch('https://api.insee.fr/entreprises/sirene/V3.11/siret?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut, {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
+    })
+    if(!r.ok) return res.status(r.status).json({ error: 'Recherche INSEE échouée' })
+    const data = await r.json()
+    res.json(data)
+  } catch(e) {
+    res.status(502).json({ error: 'INSEE indisponible' })
   }
 })
 

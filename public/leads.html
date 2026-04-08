@@ -1674,8 +1674,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     var inseeUrl = '/api/sirene/search?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut;
 
     var resp = await fetch(inseeUrl);
-    if(resp.status === 503 || resp.status === 502) throw new Error('INSEE_UNAVAILABLE');
-    if(!resp.ok) throw new Error('INSEE HTTP ' + resp.status);
+    if(!resp.ok) throw new Error('INSEE_UNAVAILABLE');
     var data = await resp.json();
 
     if(data.error || !data.etablissements) throw new Error('INSEE_UNAVAILABLE');

@@ -584,7 +584,7 @@
             <div class="card-title">Pipeline</div>
             <div class="card-sub" id="dash-pipeline-sub">0€ en cours</div>
           </div>
-          <span class="card-action">Gérer <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+          <span class="card-action" style="cursor:pointer" onclick="window.location.href='/pipeline'">Gérer <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
         </div>
         <div class="crm-board" id="dash-crm-board"></div>
       </div>
@@ -697,7 +697,8 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
               +'</div>';
             L.marker([lat+jitter,lng+jitter],{icon:icon}).addTo(map)
               .bindPopup(popup,{maxWidth:220,closeButton:false,offset:[0,-6]})
-              .on('mouseover',function(){this.openPopup();});
+              .on('mouseover',function(){this.openPopup();})
+              .on('click',function(){window.location.href='/carte';});
           });
         }
         pending--;
@@ -930,7 +931,7 @@ function renderEvents(el) {
     const isToday = ev.key === dateKey(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
     const dateLabel = `${pad(d)}/${pad(m)}`;
     const dayLabel = isToday ? 'Auj.' : ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'][new Date(y,m-1,d).getDay()];
-    return `<div class="cal-ev">
+    return `<div class="cal-ev" style="cursor:pointer" onclick="window.location.href='/agenda'">
       <div style="flex-shrink:0;text-align:center;min-width:38px;">
         <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${isToday ? 'var(--green)' : 'var(--muted2)'};">${dayLabel}</div>
         <div style="font-size:13px;font-weight:900;font-family:var(--font);color:var(--text);line-height:1.2;">${pad(d)}/${pad(m)}</div>
@@ -1072,7 +1073,7 @@ function closeSidebar(){
       var totalStr=total>=1000?Math.round(total/1000)+'k\u20AC':(total?total+'\u20AC':'\u2014');
       var cardsHtml=colCards.map(function(c){
         var val=c.val>=1000?Math.round(c.val/1000)+'k\u20AC':(c.val?c.val+'\u20AC':'\u2014');
-        return '<div class="crm-kcard">'
+        return '<div class="crm-kcard" style="cursor:pointer" onclick="window.location.href=\'/pipeline\'">'
           +'<div class="ck-bar" style="background:'+col.color+'"></div>'
           +'<div class="ck-name">'+esc(c.co||c.name)+'</div>'
           +'<div class="ck-co">'+esc(c.co&&c.name?c.name:'')+'</div>'

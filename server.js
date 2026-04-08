@@ -67,9 +67,9 @@ app.get('/api/sirene/search', async (req, res) => {
   const inseeUrl = 'https://api.insee.fr/api-sirene/3.11/siret?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut
   try {
     console.log('[INSEE] Calling:', inseeUrl.substring(0, 200))
-    const r = await fetch(inseeUrl, {
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
-    })
+    const hdrs = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
+    if(process.env.INSEE_API_KEY) hdrs['X-Gravitee-Api-Key'] = process.env.INSEE_API_KEY
+    const r = await fetch(inseeUrl, { headers: hdrs })
     console.log('[INSEE] Response:', r.status, r.headers.get('content-type'))
     if(!r.ok) { const body = await r.text(); console.error('[INSEE] Search error:', r.status, body.substring(0,300)); return res.status(r.status).json({ error: 'Recherche INSEE échouée' }) }
     const data = await r.json()
@@ -86,9 +86,9 @@ app.get('/api/sirene/:siret', async (req, res) => {
   const token = await getInseeToken()
   if(!token) return res.status(503).json({ error: 'INSEE auth indisponible' })
   try {
-    const r = await fetch('https://api.insee.fr/api-sirene/3.11/siret/' + encodeURIComponent(req.params.siret), {
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
-    })
+    const hdrs2 = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
+    if(process.env.INSEE_API_KEY) hdrs2['X-Gravitee-Api-Key'] = process.env.INSEE_API_KEY
+    const r = await fetch('https://api.insee.fr/api-sirene/3.11/siret/' + encodeURIComponent(req.params.siret), { headers: hdrs2 })
     if(!r.ok) return res.status(r.status).json({ error: 'SIRET non trouvé' })
     const data = await r.json()
     res.json(data)

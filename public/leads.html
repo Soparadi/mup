@@ -1690,7 +1690,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       var ul = etab.uniteLegale || {};
       var adr = etab.adresseEtablissement || {};
       var periodes = etab.periodesEtablissement || [];
-      var nafEtab = periodes.length ? (periodes[0].activitePrincipaleEtablissement || '').replace('.','') : naf;
+      var nafEtab = periodes.length ? (periodes[0].activitePrincipaleEtablissement || '').replace(/\./g,'') : naf;
 
       var name = ul.denominationUniteLegale || ul.denominationUsuelle1UniteLegale || '';
       if(!name && ul.prenom1UniteLegale) name = ul.prenom1UniteLegale + ' ' + (ul.nomUniteLegale || '');
@@ -1724,6 +1724,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       });
     });
 
+    console.log('[INSEE raw items]', items.length, 'nafEtab examples:', data.etablissements.slice(0,3).map(function(e){ return e.periodesEtablissement && e.periodesEtablissement[0] ? e.periodesEtablissement[0].activitePrincipaleEtablissement : '?'; }));
     console.log('[Leads] INSEE returned', items.length, 'items, total:', total);
     return {
       total: total,
@@ -2071,7 +2072,7 @@ async function loadPage(page) {
     // Even if mock or API sends wrong items, they are silently dropped here.
     var rejected = 0;
     var items = rawItems.filter(function(it) {
-      if(it.naf !== loadNaf) {
+      if(it.naf && loadNaf && it.naf.replace(/\./g,'') !== loadNaf.replace(/\./g,'')) {
         rejected++;
         return false;
       }

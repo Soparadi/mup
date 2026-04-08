@@ -289,7 +289,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 /* ═══════════════════════════════════════════════
    CONTENT AREA — map + results
 ═══════════════════════════════════════════════ */
-.content-area { display: flex; flex: 1; height: calc(100vh - 280px); overflow: hidden; }
+.content-area { display: flex; flex: 1; height: calc(100vh - 200px); overflow: hidden; }
 
 /* map column */
 .map-col {
@@ -310,7 +310,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 .dot-h { background: #CC0000; }
 .dot-w { background: #F59E0B; }
 .dot-c { background: var(--muted2); }
-#map { flex: 1; }
+#map { flex: 1; height: 100%; min-height: 0; }
 .geo-bar {
   position: absolute; bottom: 0; left: 0; height: 3px;
   background: var(--text); transition: width .4s ease;
@@ -375,7 +375,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
   aspect-ratio: 1/1; border-radius: 12px; border: 1px solid var(--border);
   padding: 12px; background: var(--card); animation: fadeUp .3s ease both;
   transition: all .15s; display: flex; flex-direction: column; justify-content: space-between;
-  overflow: hidden;
+  overflow: hidden; max-width: 100%;
 }
 .card:hover { border-color: var(--border2); box-shadow: 0 2px 12px rgba(0,0,0,.06); }
 .card-top { margin-bottom: 6px; }
@@ -629,15 +629,15 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
         </div>
         <!-- cards injected here -->
         <div id="cards"></div>
-        <!-- pagination -->
         <div class="page-loader" id="page-loader" style="display:none">
           <span>Chargement…</span>
         </div>
-        <div id="pagination" style="display:none;padding:16px;display:flex;align-items:center;justify-content:center;gap:12px;border-top:1px solid var(--border)">
-          <button onclick="prevPage()" id="btn-prev" style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--text);transition:all .12s" disabled>← Précédente</button>
-          <span id="page-info" style="font-size:11px;font-weight:700;font-family:var(--mono);color:var(--muted)">Page 1 / 1</span>
-          <button onclick="nextPage()" id="btn-next" style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--text);transition:all .12s">Suivante →</button>
-        </div>
+      </div>
+      <!-- pagination fixed at bottom of res-col -->
+      <div id="pagination" style="display:none;padding:10px 16px;align-items:center;justify-content:center;gap:12px;border-top:1px solid var(--border);background:var(--card);flex-shrink:0">
+        <button onclick="prevPage()" id="btn-prev" style="padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--text)" disabled>←</button>
+        <span id="page-info" style="font-size:11px;font-weight:700;font-family:var(--mono);color:var(--muted)">Page 1 / 1</span>
+        <button onclick="nextPage()" id="btn-next" style="padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--text)">→</button>
       </div>
     </div>
 

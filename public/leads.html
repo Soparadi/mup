@@ -1471,7 +1471,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 // ════════════════════════════════════════════════════════════════
 // CONSTANTS & CONFIG
 // ════════════════════════════════════════════════════════════════
-var API_BASE    = 'https://recherche-entreprises.api.gouv.fr'; // real API
+var API_BASE    = '/api'; // proxy local
 var PAGE_SIZE   = 50;
 var CLUSTER_THR = 200;                // switch to clustering above this
 var GEO_PFX     = 'geo3_';
@@ -1567,7 +1567,7 @@ function sleep(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
 async function geocodeBAN(addr) {
   try {
     var r = await fetch(
-      'https://api-adresse.data.gouv.fr/search/?q='+encodeURIComponent(addr)+'&limit=1&autocomplete=0',
+      '/api/geocode?q='+encodeURIComponent(addr),
       { signal: AbortSignal.timeout(5000) }
     );
     if(!r.ok) return null;
@@ -1639,12 +1639,11 @@ function _getExistingSirets() {
  */
 async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   var regionCode = REGION_CODES[region] || '';
-  var url = 'https://recherche-entreprises.api.gouv.fr/search'
+  var url = '/api/search'
     + '?activite_principale=' + encodeURIComponent(naf)
     + (regionCode ? '&region=' + regionCode : '')
     + '&per_page=' + pageSize
-    + '&page=' + page
-    + '&mtm_campaign=mup';
+    + '&page=' + page;
 
   try {
     var resp = await fetch(url, { signal: AbortSignal.timeout(15000) });

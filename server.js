@@ -54,21 +54,29 @@ app.get('/api/search', async (req, res) => {
 // ── INSEE SIRENE search (must be before :siret route) ──
 app.get('/api/sirene/search', async (req, res) => {
   const token = await getInseeToken()
-  if(!token) return res.status(503).json({ error: 'INSEE auth indisponible' })
+  console.log('[INSEE] token:', token ? 'OK ('+token.substring(0,20)+'...)' : 'NULL')
+  if(!token) {
+    console.error('[INSEE] No token — CLIENT_ID:', process.env.INSEE_CLIENT_ID ? 'present' : 'MISSING', 'SECRET:', process.env.INSEE_CLIENT_SECRET ? 'present' : 'MISSING')
+    return res.status(503).json({ error: 'INSEE auth indisponible' })
+  }
   let q = req.query.q || ''
   // Convert NAF codes without dots: 8230Z → 82.30Z in the query
   q = q.replace(/activitePrincipaleEtablissement:(\d{2})(\d{2}[A-Z])/g, 'activitePrincipaleEtablissement:$1.$2')
   const nombre = Math.min(parseInt(req.query.nombre) || 20, 100)
   const debut = parseInt(req.query.debut) || 0
+  const inseeUrl = 'https://api.insee.fr/api-sirene/3.11/siret?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut
   try {
-    console.log('[INSEE] Search:', q.substring(0, 120), 'nombre:', nombre, 'debut:', debut)
-    const r = await fetch('https://api.insee.fr/api-sirene/3.11/siret?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut, {
+    console.log('[INSEE] Calling:', inseeUrl.substring(0, 200))
+    const r = await fetch(inseeUrl, {
       headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
     })
-    if(!r.ok) { const body = await r.text(); console.error('[INSEE] Search error:', r.status, body.substring(0,200)); return res.status(r.status).json({ error: 'Recherche INSEE échouée' }) }
+    console.log('[INSEE] Response:', r.status, r.headers.get('content-type'))
+    if(!r.ok) { const body = await r.text(); console.error('[INSEE] Search error:', r.status, body.substring(0,300)); return res.status(r.status).json({ error: 'Recherche INSEE échouée' }) }
     const data = await r.json()
+    console.log('[INSEE] Success: total=', data.header?.total, 'etablissements=', data.etablissements?.length)
     res.json(data)
   } catch(e) {
+    console.error('[INSEE] Fetch crash:', e.message)
     res.status(502).json({ error: 'INSEE indisponible' })
   }
 })

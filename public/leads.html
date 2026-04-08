@@ -1703,7 +1703,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
 
       // Complements from matching etablissements if available
       var complete = false;
-      var nafEtab = etab.activite_principale || r.activite_principale || '';
+      var nafEtab = (etab.activite_principale || r.activite_principale || '').replace('.','');
       var nafLabelEtab = etab.libelle_activite_principale || r.libelle_activite_principale || nafLabel || '';
 
       var lat = etab.latitude ? parseFloat(etab.latitude) : null;

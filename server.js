@@ -59,7 +59,7 @@ app.get('/api/sirene/search', async (req, res) => {
   const nombre = Math.min(parseInt(req.query.nombre) || 20, 100)
   const debut = parseInt(req.query.debut) || 0
   try {
-    const r = await fetch('https://api.insee.fr/entreprises/sirene/V3.11/siret?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut, {
+    const r = await fetch('https://api.insee.fr/api-sirene/3.11/siret?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut, {
       headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
     })
     if(!r.ok) return res.status(r.status).json({ error: 'Recherche INSEE échouée' })
@@ -75,7 +75,7 @@ app.get('/api/sirene/:siret', async (req, res) => {
   const token = await getInseeToken()
   if(!token) return res.status(503).json({ error: 'INSEE auth indisponible' })
   try {
-    const r = await fetch('https://api.insee.fr/entreprises/sirene/V3.11/siret/' + encodeURIComponent(req.params.siret), {
+    const r = await fetch('https://api.insee.fr/api-sirene/3.11/siret/' + encodeURIComponent(req.params.siret), {
       headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
     })
     if(!r.ok) return res.status(r.status).json({ error: 'SIRET non trouvé' })

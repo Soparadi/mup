@@ -1471,7 +1471,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 // ════════════════════════════════════════════════════════════════
 // CONSTANTS & CONFIG
 // ════════════════════════════════════════════════════════════════
-var API_BASE    = '/api/leads';       // swap to absolute URL for prod
+var API_BASE    = 'https://recherche-entreprises.api.gouv.fr'; // real API
 var PAGE_SIZE   = 50;
 var CLUSTER_THR = 200;                // switch to clustering above this
 var GEO_PFX     = 'geo3_';
@@ -1611,163 +1611,127 @@ async function geocode(addr) {
 // Remove the mock block and keep only fetchLeads() when backend ready
 // ════════════════════════════════════════════════════════════════
 
-// ── Mock data generator (delete when real API is ready) ────────
-var _MOCK_FIRST=['Marie','Jean','Pierre','Sophie','Laurent','Isabelle','François','Nathalie','Thomas','Éric'];
-var _MOCK_LAST=['Martin','Bernard','Dubois','Robert','Durand','Leroy','Moreau','Simon','Garcia','Roux'];
-var _MOCK_STREETS=['rue','avenue','boulevard','impasse','allée','place'];
-var _MOCK_STRN=['de la République','du Général de Gaulle','Victor Hugo','Jean Jaurès','du Commerce','des Arts'];
-var _MOCK_CITIES={
-  'ile-de-france':[['Paris','75001'],['Paris','75008'],['Boulogne-Billancourt','92100'],['Versailles','78000'],['Nanterre','92000']],
-  'auvergne-rhone-alpes':[['Lyon','69001'],['Grenoble','38000'],['Saint-Étienne','42000'],['Clermont-Ferrand','63000'],['Annecy','74000']],
-  'nouvelle-aquitaine':[['Bordeaux','33000'],['Limoges','87000'],['Poitiers','86000'],['Pau','64000'],['La Rochelle','17000']],
-  'occitanie':[['Toulouse','31000'],['Montpellier','34000'],['Nîmes','30000'],['Perpignan','66000'],['Albi','81000']],
-  'hauts-de-france':[['Lille','59000'],['Amiens','80000'],['Roubaix','59100'],['Dunkerque','59140'],['Arras','62000']],
-  'grand-est':[['Strasbourg','67000'],['Reims','51100'],['Metz','57000'],['Nancy','54000'],['Colmar','68000']],
-  'paca':[['Marseille','13001'],['Nice','06000'],['Toulon','83000'],['Aix-en-Provence','13100'],['Avignon','84000']],
-  'pays-de-la-loire':[['Nantes','44000'],['Le Mans','72000'],['Angers','49000'],['Saint-Nazaire','44600']],
-  'normandie':[['Rouen','76000'],['Caen','14000'],['Le Havre','76600'],['Évreux','27000']],
-  'bretagne':[['Rennes','35000'],['Brest','29200'],['Quimper','29000'],['Lorient','56100'],['Vannes','56000'],['Saint-Malo','35400']],
-  'bourgogne-franche-comte':[['Dijon','21000'],['Besançon','25000'],['Belfort','90000'],['Auxerre','89000']],
-  'centre-val-de-loire':[['Orléans','45000'],['Tours','37000'],['Bourges','18000'],['Blois','41000']],
-  'corse':[['Ajaccio','20000'],['Bastia','20200'],['Porto-Vecchio','20137']]
+// ── REGION CODE MAPPING for recherche-entreprises API ────────
+var REGION_CODES = {
+  'ile-de-france':'11','centre-val-de-loire':'24','bourgogne-franche-comte':'27',
+  'normandie':'28','hauts-de-france':'32','grand-est':'44','pays-de-la-loire':'52',
+  'bretagne':'53','nouvelle-aquitaine':'75','occitanie':'76',
+  'auvergne-rhone-alpes':'84','paca':'93','corse':'94'
 };
-var _MOCK_TOTALS = {
-  '9602A':{'bretagne':312,'ile-de-france':1840,'auvergne-rhone-alpes':923,'paca':677,'occitanie':541,'hauts-de-france':489,'nouvelle-aquitaine':463,'grand-est':401,'pays-de-la-loire':388,'normandie':275,'bourgogne-franche-comte':198,'centre-val-de-loire':187,'corse':52},
-  '4778A':{'bretagne':78,'ile-de-france':412,'auvergne-rhone-alpes':201,'paca':156},
-  '5610A':{'bretagne':541,'ile-de-france':3120,'auvergne-rhone-alpes':1640},
-  '8621Z':{'bretagne':189,'ile-de-france':2180,'auvergne-rhone-alpes':987}
-};
-var _rnd = function(a){return a[Math.floor(Math.random()*a.length)];};
-var _ri  = function(a,b){return Math.floor(Math.random()*(b-a+1))+a;};
 
-function _mockGenItem(naf, nafLabel, region, idx) {
-  var fn=_rnd(_MOCK_FIRST), ln=_rnd(_MOCK_LAST);
-  var npfx={
-    '9602A':['Salon','Studio','Coiffure','L\'Atelier'],
-    '5610A':['Le Bistrot','Brasserie','Chez','Auberge'],
-    '4778A':['Optique','Vision','Lumière'],
-    '8230Z':['Évènements','Organisation','Forum','Le Salon'],
-    default:['Groupe','Cabinet','Société','Établissements']
-  };
-  var p=(npfx[naf]||npfx.default);
-  var name=_rnd(p)+' '+_rnd(_MOCK_LAST);
-  var slug=name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');
-  var domain=slug.substring(0,16)+_rnd(['.fr','.com','.eu']);
-  var hasSite=Math.random()>.18, hasEmail=Math.random()>.28, hasPhone=Math.random()>.05;
-  var prio=Math.random()>.62?'hot':Math.random()>.42?'warm':'cold';
-  var cities=_MOCK_CITIES[region]||_MOCK_CITIES['bretagne'];
-  var city=_rnd(cities);
-  var addr=_ri(1,150)+' '+_rnd(_MOCK_STREETS)+' '+_rnd(_MOCK_STRN)+', '+city[1]+' '+city[0];
-  var complete = hasSite && hasEmail && hasPhone;
-  return {
-    id:       Math.random().toString(36).substr(2,9),
-    name:     name,
-    // naf and nafLabel ALWAYS come from the locked selection — never invented
-    naf:      naf,
-    nafLabel: nafLabel || NAF_LABELS[naf] || naf,
-    sector:   nafLabel || NAF_LABELS[naf] || naf,
-    siren:    ''+_ri(100000000,999999999),
-    siret:    ''+_ri(100000000,999999999)+_ri(10000,99999),
-    director: fn+' '+ln,
-    address:  addr,
-    lat:null, lng:null, geoStatus:'pending', geoSrc:null,
-    phone:    hasPhone?'0'+_ri(1,9)+' '+_ri(10,99)+' '+_ri(10,99)+' '+_ri(10,99)+' '+_ri(10,99):null,
-    website:  hasSite?'https://www.'+domain:null,
-    email:    (hasSite&&hasEmail)?'contact@'+domain:null,
-    socials:  ['facebook','instagram','linkedin','youtube','tiktok'].filter(function(){return Math.random()>.55;}),
-    priority: prio,
-    capital:  _ri(1,500)*1000+' €',
-    forme:    _rnd(['SARL','SAS','EURL','SA','SASU']),
-    created:  ''+_ri(1995,2023),
-    complete: complete,
-    source:   'SIRENE'
-  };
+// ── DEDUPLICATION against existing prospects/pipeline ────────
+function _getExistingSirets() {
+  var sirets = {};
+  try {
+    var p = localStorage.getItem('mup_prospects');
+    if(p) JSON.parse(p).forEach(function(x){ if(x.siren) sirets[x.siren]=true; if(x.siret) sirets[x.siret]=true; });
+  } catch(e){}
+  try {
+    var k = localStorage.getItem('mup_pipeline');
+    if(k) JSON.parse(k).forEach(function(x){ if(x.siren) sirets[x.siren]=true; if(x.siret) sirets[x.siret]=true; });
+  } catch(e){}
+  return sirets;
 }
-
-function _mockFetch(naf, nafLabel, region, page, pageSize, onlyComplete) {
-  return new Promise(function(resolve) {
-    setTimeout(function() {
-      var baseTotal = (_MOCK_TOTALS[naf]&&_MOCK_TOTALS[naf][region])
-        ? _MOCK_TOTALS[naf][region]
-        : _ri(60, 380);
-
-      // When onlyComplete, the "total" the API returns is already filtered
-      var filteredTotal = onlyComplete ? Math.round(baseTotal * 0.38) : baseTotal;
-      var hotCount      = Math.round(filteredTotal * 0.22);
-
-      var offset     = (page - 1) * pageSize;
-      var remaining  = Math.max(0, filteredTotal - offset);
-      var toGenerate = Math.min(pageSize, remaining);
-
-      var items = [];
-      var attempts = 0;
-      var maxAttempts = toGenerate * 6; // safety cap to avoid infinite loop
-      while(items.length < toGenerate && attempts < maxAttempts) {
-        attempts++;
-        var item = _mockGenItem(naf, nafLabel, region, offset + items.length);
-        // onlyComplete: keep generating until we fill the page
-        if(!onlyComplete || item.complete) {
-          items.push(item);
-        }
-      }
-
-      resolve({
-        total:         filteredTotal,   // total already reflects onlyComplete filter
-        totalComplete: onlyComplete ? filteredTotal : Math.round(baseTotal * 0.38),
-        hotCount:      hotCount,
-        items:         items
-      });
-    }, 280 + Math.random()*180);
-  });
-}
-// ── End mock ────────────────────────────────────────────────────
 
 /**
- * fetchLeads — real API call with mock fallback
+ * fetchLeads — real API calls to recherche-entreprises.api.gouv.fr
  * Returns Promise<{ total, totalComplete, hotCount, items }>
- *
- * STRICT CONTRACT: every item in items[] MUST have item.naf === naf.
- * This is enforced both in the mock and as a front-end safety filter here.
  */
 async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
-  var url = API_BASE
-    + '?naf='          + encodeURIComponent(naf)
-    + '&region='       + encodeURIComponent(region)
-    + '&page='         + page
-    + '&pageSize='     + pageSize
-    + '&onlyComplete=' + (onlyComplete ? 'true' : 'false');
+  var regionCode = REGION_CODES[region] || '';
+  var url = 'https://recherche-entreprises.api.gouv.fr/search'
+    + '?activite_principale=' + encodeURIComponent(naf)
+    + (regionCode ? '&region=' + regionCode : '')
+    + '&per_page=' + pageSize
+    + '&page=' + page
+    + '&mtm_campaign=mup';
 
   try {
-    var resp = await fetch(url, { signal: AbortSignal.timeout(12000) });
-
-    if(resp.status === 404 || resp.status === 0) {
-      console.warn('[Prospect] API unavailable — using mock data');
-      return _mockFetch(naf, nafLabel, region, page, pageSize, onlyComplete);
-    }
-
+    var resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
 
-    if(typeof data.total !== 'number' || !Array.isArray(data.items)) {
-      throw new Error('Invalid API response shape');
+    if(!data.results || !Array.isArray(data.results)) {
+      throw new Error('Invalid API response');
     }
 
-    // ── BARRIER 1: strict NAF filter on real API response ──────────
-    data.items = data.items.filter(function(it) {
-      if(it.naf !== naf) {
-        console.warn('[Prospect] Discarded item with wrong NAF:', it.naf, '≠', naf, it);
-        return false;
+    var existing = _getExistingSirets();
+    var items = [];
+
+    data.results.forEach(function(r) {
+      // Get the matching establishment
+      var etab = r.siege || (r.matching_etablissements && r.matching_etablissements[0]) || {};
+      var siren = r.siren || '';
+      var siret = etab.siret || '';
+
+      // Skip if already in prospects/pipeline
+      if(existing[siren] || existing[siret]) return;
+
+      var addr = '';
+      if(etab.adresse) addr = etab.adresse;
+      else if(etab.geo_adresse) addr = etab.geo_adresse;
+      else {
+        var parts = [etab.numero_voie, etab.type_voie, etab.libelle_voie, etab.code_postal, etab.libelle_commune].filter(Boolean);
+        addr = parts.join(' ');
       }
-      return true;
+
+      var name = r.nom_complet || r.nom_raison_sociale || '';
+      var dirigeants = r.dirigeants || [];
+      var dir = dirigeants.length ? (dirigeants[0].prenom||'') + ' ' + (dirigeants[0].nom||'') : '';
+      var hasPhone = false, hasEmail = false, hasSite = false;
+      var phone = null, email = null, website = null;
+
+      // Complements from matching etablissements if available
+      var complete = false;
+      var nafEtab = etab.activite_principale || r.activite_principale || '';
+      var nafLabelEtab = etab.libelle_activite_principale || r.libelle_activite_principale || nafLabel || '';
+
+      var lat = etab.latitude ? parseFloat(etab.latitude) : null;
+      var lng = etab.longitude ? parseFloat(etab.longitude) : null;
+
+      items.push({
+        id: siret || siren || Math.random().toString(36).substr(2,9),
+        name: name,
+        naf: nafEtab || naf,
+        nafLabel: nafLabelEtab,
+        sector: nafLabelEtab,
+        siren: siren,
+        siret: siret,
+        director: dir.trim(),
+        address: addr,
+        lat: lat, lng: lng,
+        geoStatus: (lat && lng) ? 'ok' : 'pending',
+        geoSrc: (lat && lng) ? 'api' : null,
+        phone: phone,
+        website: website,
+        email: email,
+        socials: [],
+        priority: 'cold',
+        capital: r.capital ? r.capital + ' \u20AC' : '',
+        forme: r.nature_juridique || '',
+        created: r.date_creation || '',
+        complete: complete,
+        source: 'SIRENE'
+      });
     });
-    return data;
+
+    var total = data.total_results || data.total || items.length;
+    var hotCount = Math.round(total * 0.15);
+
+    if(onlyComplete) {
+      items = items.filter(function(it){ return it.complete; });
+    }
+
+    return {
+      total: onlyComplete ? Math.round(total * 0.3) : total,
+      totalComplete: Math.round(total * 0.3),
+      hotCount: hotCount,
+      items: items
+    };
 
   } catch(err) {
-    if(err.name === 'TypeError' || err.name === 'AbortError') {
-      console.warn('[Prospect] Network error — using mock data:', err.message);
-      return _mockFetch(naf, nafLabel, region, page, pageSize, onlyComplete);
-    }
-    throw err;
+    console.error('[Leads] API error:', err.message);
+    throw new Error('Service temporairement indisponible, réessayez dans quelques instants');
   }
 }
 
@@ -2082,7 +2046,7 @@ async function loadPage(page) {
   } catch(err) {
     console.error('[Prospect] loadPage error:', err);
     S.lastFailPage = page;
-    showError('Erreur de chargement (page ' + page + '). Vérifiez votre connexion ou que l\'API est déployée.');
+    showError(err.message || 'Service temporairement indisponible, réessayez dans quelques instants');
     if(isFirstPage) {
       document.getElementById('skel').classList.remove('show');
     }

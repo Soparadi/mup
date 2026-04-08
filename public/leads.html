@@ -1986,6 +1986,14 @@ function createCard(lead, idx) {
   if(lead.phone) infoRows+='<div class="ir">'+icoT+'<span><a href="tel:'+esc(lead.phone.replace(/\s/g,''))+'" style="color:var(--blue);text-decoration:none">'+esc(lead.phone)+'</a></span></div>';
   if(lead.website) infoRows+='<div class="ir">'+icoG+'<span><a href="'+esc(lead.website)+'" target="_blank" style="color:var(--blue);text-decoration:none;font-size:10px">'+esc(lead.website.replace(/^https?:\/\//,'').substring(0,28))+'</a></span></div>';
   if(lead.email) infoRows+='<div class="ir">'+icoM+'<span><a href="mailto:'+esc(lead.email)+'" style="color:var(--blue);text-decoration:none;font-size:10px">'+esc(lead.email)+'</a></span></div>';
+  if(lead.address) infoRows+='<div class="ir"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span style="font-size:10px;color:var(--muted)">'+esc(lead.address)+'</span></div>';
+  // SIRENE details
+  var details=[];
+  if(lead.siret){var s=lead.siret;details.push('SIRET '+s.replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4'));}
+  if(lead.created){var y=lead.created.substring(0,4);if(y&&y!=='null')details.push('Créée en '+y);}
+  if(lead.forme)details.push(lead.forme);
+  if(lead.capital)details.push(lead.capital);
+  if(details.length) infoRows+='<div style="font-size:10px;color:var(--muted);margin-top:2px;line-height:1.4">'+esc(details.join(' · '))+'</div>';
 
   div.innerHTML =
     '<div class="card-top">'

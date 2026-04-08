@@ -14,7 +14,7 @@ app.get('/api/search', async (req, res) => {
   if(req.query.region) params.set('region', req.query.region)
   if(req.query.code_naf) params.set('activite_principale', req.query.code_naf)
   if(req.query.activite_principale) params.set('activite_principale', req.query.activite_principale)
-  if(req.query.per_page) params.set('per_page', req.query.per_page)
+  if(req.query.per_page) params.set('per_page', Math.min(parseInt(req.query.per_page)||10, 25))
   if(req.query.page) params.set('page', req.query.page)
   try {
     const r = await fetch('https://recherche-entreprises.api.gouv.fr/search?' + params.toString())

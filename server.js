@@ -15,7 +15,8 @@ async function getInseeToken() {
   if(inseeToken && Date.now() < inseeTokenExpires) return inseeToken
   const id = process.env.INSEE_CLIENT_ID
   const secret = process.env.INSEE_CLIENT_SECRET
-  if(!id || !secret) return null
+  console.log('[INSEE] ID present:', !!id, 'Secret present:', !!secret, 'ID:', id ? id.substring(0,8)+'...' : 'MISSING')
+  if(!id || !secret) { console.error('[INSEE] Missing credentials'); return null }
   try {
     const creds = Buffer.from(id + ':' + secret).toString('base64')
     const r = await fetch('https://auth.insee.net/auth/realms/apim-gravitee/protocol/openid-connect/token', {
@@ -23,7 +24,7 @@ async function getInseeToken() {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + creds },
       body: 'grant_type=client_credentials'
     })
-    if(!r.ok) { console.error('[INSEE] Token error:', r.status); return null }
+    if(!r.ok) { const body = await r.text(); console.error('[INSEE] Token error:', r.status, body.substring(0,200)); return null }
     const data = await r.json()
     inseeToken = data.access_token
     inseeTokenExpires = Date.now() + (data.expires_in - 60) * 1000

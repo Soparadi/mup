@@ -510,7 +510,7 @@ function calcTour(){
 
   // 1. Geocode start address
   console.log('[Tour] Geocoding start address:', addr);
-  fetch('/api/geocode?q='+encodeURIComponent(addr))
+  fetch('/api/geocode?q='+encodeURIComponent(addr)+'&type=municipality')
     .then(function(r){return r.json();})
     .then(function(data){
       if(!data.features||!data.features.length){toast('Adresse introuvable');console.error('[Tour] No geocode results for:', addr);return;}

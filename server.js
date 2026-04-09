@@ -99,9 +99,18 @@ app.get('/api/sirene/:siret', async (req, res) => {
 
 app.get('/api/geocode', async (req, res) => {
   const q = req.query.q || ''
+  const type = req.query.type || ''
   try {
-    const r = await fetch('https://api-adresse.data.gouv.fr/search/?q=' + encodeURIComponent(q) + '&limit=1')
-    const data = await r.json()
+    // Try with type filter first (municipality for cities)
+    let url = 'https://api-adresse.data.gouv.fr/search/?q=' + encodeURIComponent(q) + '&limit=1'
+    if(type) url += '&type=' + type
+    let r = await fetch(url)
+    let data = await r.json()
+    // If no result with type filter, retry without
+    if(type && (!data.features || !data.features.length)) {
+      r = await fetch('https://api-adresse.data.gouv.fr/search/?q=' + encodeURIComponent(q) + '&limit=1')
+      data = await r.json()
+    }
     res.json(data)
   } catch(e) {
     res.status(502).json({ error: 'Géocodage indisponible' })

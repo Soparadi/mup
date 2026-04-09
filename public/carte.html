@@ -317,10 +317,15 @@ Object.keys(addrMap).forEach(function(addr){
 // Auto-detect RDV cards and show their proximity + panel
 function autoShowRdv(){
   var rdvCards=[];
+  // Debug: log all cards with rdvDate
   Object.keys(markers).forEach(function(id){
     var m=markers[id];
+    if(m.card.rdvDate){
+      console.log('[RDV debug]', m.card.co||m.card.name, 'rdvDate:', JSON.stringify(m.card.rdvDate), 'type:', typeof m.card.rdvDate, 'isUpcoming:', isUpcoming(m.card.rdvDate));
+    }
     if(m.card.rdvDate&&isUpcoming(m.card.rdvDate)) rdvCards.push(m);
   });
+  console.log('[RDV] Found', rdvCards.length, 'upcoming RDV cards');
   if(!rdvCards.length) return;
 
   rdvPanelIds=[];
@@ -594,7 +599,7 @@ function calcTour(){
           if(!document.getElementById('tour-panel').classList.contains('open')){
             toggleTourPanel();
           }
-          map.fitBounds(routeLine.getBounds(),{padding:[60,60]});
+          setTimeout(function(){map.fitBounds(routeLine.getBounds(),{padding:[60,60]});},400);
           toast('Tournée calculée — '+Math.round(totalDist/1000)+' km · '+Math.round(totalTime/60)+' min');
         })
         .catch(function(){toast('Erreur de calcul itinéraire');});

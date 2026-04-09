@@ -784,7 +784,7 @@ function renderAll(){
 }
 
 function exportSingleOdoo(id){
-  const p=prospects.find(x=>x.id===id);
+  const p=prospects.find(x=>String(x.id)===String(id));
   if(!p)return;
   const pri=p.status==='hot'?'2':p.status==='warm'?'1':'0';
   const lines=['id,name,partner_name,email_from,phone,city,description,priority'];
@@ -851,8 +851,8 @@ function sortBy(field){
 
 // ── DETAIL PANEL ──
 function openDetail(id){
-  selectedId=id;
-  const p=prospects.find(x=>x.id===id);
+  selectedId=String(id);
+  const p=prospects.find(x=>String(x.id)===String(id));
   if(!p)return;
   document.getElementById('dp-name').textContent=p.company||p.name||'';
   document.getElementById('dp-co').textContent='';
@@ -879,7 +879,7 @@ function openDetail(id){
 
 function saveAllFields(){
   if(!selectedId)return;
-  const p=prospects.find(x=>x.id===selectedId);
+  const p=prospects.find(x=>String(x.id)===String(selectedId));
   if(!p)return;
   p.company=document.getElementById('dp-company').value.trim();
   p.sector=document.getElementById('dp-sector').value.trim();
@@ -900,7 +900,6 @@ function saveAllFields(){
   p.lastContact=document.getElementById('dp-lastContact').value;
   p.notes=document.getElementById('dp-notes').value;
   save();
-  syncToPipeline(p);
   // Update header
   document.getElementById('dp-name').textContent=p.company||p.contact||'';
   document.getElementById('dp-director-sub').textContent=p.contact||'';
@@ -914,32 +913,32 @@ function closeDetail(){
 }
 function updateStatus(){
   if(!selectedId)return;
-  const p=prospects.find(x=>x.id===selectedId);
-  if(p){save();syncToPipeline(p);}
+  const p=prospects.find(x=>String(x.id)===String(selectedId));
+  if(p){save();}
   renderAll();updateKPIs();updateBadges();
 }
 function saveNote(){
   if(!selectedId)return;
-  const p=prospects.find(x=>x.id===selectedId);
-  if(p){p.notes=document.getElementById('dp-notes').value;save();syncToPipeline(p);}
+  const p=prospects.find(x=>String(x.id)===String(selectedId));
+  if(p){p.notes=document.getElementById('dp-notes').value;save();}
 }
 function saveSocial(){
   if(!selectedId)return;
-  const p=prospects.find(x=>x.id===selectedId);
+  const p=prospects.find(x=>String(x.id)===String(selectedId));
   if(!p)return;
   p.linkedin=document.getElementById('dp-linkedin').value.trim();
   p.facebook=document.getElementById('dp-facebook').value.trim();
   p.instagram=document.getElementById('dp-instagram').value.trim();
-  save();syncToPipeline(p);renderAll();
+  save();renderAll();
 }
 
 function syncToPipeline(p){ /* now same store */ }
 function copyEmail(){
-  const p=prospects.find(x=>x.id===selectedId);
+  const p=prospects.find(x=>String(x.id)===String(selectedId));
   if(p&&p.email)copyText(p.email,'Email');
 }
 function copyPhone(){
-  const p=prospects.find(x=>x.id===selectedId);
+  const p=prospects.find(x=>String(x.id)===String(selectedId));
   if(p&&p.phone)copyText(p.phone,'Tél.');
 }
 function moveToOdoo(){toast('Prospect exporté');}

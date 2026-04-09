@@ -428,7 +428,7 @@ function renderPanel(){
     if(!info) return null;
     var dist=null;
     if(userLatLng) dist=map.distance(L.latLng(userLatLng),L.latLng(info.latlng));
-    return{id:id,card:info.card,dist:dist,latlng:info.latlng,isRdv:info.card.col==='rdv'};
+    return{id:id,card:info.card,dist:dist,latlng:info.latlng,isRdv:!!info.card.rdvDate&&isUpcoming(info.card.rdvDate)};
   }).filter(Boolean);
 
   if(userLatLng) items.sort(function(a,b){return(a.dist||0)-(b.dist||0);});
@@ -504,12 +504,14 @@ function calcTour(){
   if(!addr){toast('Saisir une adresse de départ');return;}
 
   // 1. Geocode start address
-  fetch('https://api-adresse.data.gouv.fr/search/?q='+encodeURIComponent(addr)+'&limit=1')
+  console.log('[Tour] Geocoding start address:', addr);
+  fetch('/api/geocode?q='+encodeURIComponent(addr))
     .then(function(r){return r.json();})
     .then(function(data){
-      if(!data.features||!data.features.length){toast('Adresse introuvable');return;}
+      if(!data.features||!data.features.length){toast('Adresse introuvable');console.error('[Tour] No geocode results for:', addr);return;}
       var coords=data.features[0].geometry.coordinates;
       startLatLng=[coords[1],coords[0]]; // lat,lng
+      console.log('[Tour] Start geocoded:', addr, '→', startLatLng, 'label:', data.features[0].properties?.label);
 
       // Place start marker
       if(startMarker)map.removeLayer(startMarker);
@@ -525,7 +527,7 @@ function calcTour(){
       var allCards=[];
       try{var r2=localStorage.getItem('mup_pipeline');if(r2)allCards=JSON.parse(r2);}catch(e){}
       for(var i=0;i<allCards.length;i++){
-        if(allCards[i].rdvDate&&allCards[i].col!=='lost'){
+        if(allCards[i].rdvDate&&isUpcoming(allCards[i].rdvDate)&&allCards[i].col!=='lost'){
           var mid=String(allCards[i].id);
           if(markers[mid]){
             anchorCard={card:allCards[i],latlng:markers[mid].latlng,id:mid};
@@ -570,6 +572,7 @@ function calcTour(){
       var waypoints=[startLatLng[1]+','+startLatLng[0]]; // lng,lat for OSRM
       ordered.forEach(function(s){waypoints.push(s.latlng[1]+','+s.latlng[0]);});
       waypoints.push(anchorCard.latlng[1]+','+anchorCard.latlng[0]);
+      console.log('[Tour] OSRM waypoints:', waypoints.length, 'start:', waypoints[0], 'end:', waypoints[waypoints.length-1]);
 
       fetch(OSRM+'/route/v1/driving/'+waypoints.join(';')+'?overview=full&geometries=geojson&steps=false&annotations=distance,duration')
         .then(function(r){return r.json();})

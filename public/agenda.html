@@ -271,7 +271,7 @@ function loadEvents() {
   try {
     var pipe = localStorage.getItem('mup_pipeline');
     if(pipe) {
-      var cards = JSON.parse(pipe);
+      var cards = JSON.parse(pipe).map(function(c){if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;c.co=c.company||'';c.name=c.contact||'';return c;});
       cards.forEach(function(c) {
         if(!c.rdvDate) return;
         // Check if already exists

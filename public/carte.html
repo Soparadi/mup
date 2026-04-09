@@ -226,8 +226,14 @@ var map=L.map('map',{center:[46.5,2.5],zoom:5,zoomControl:true,attributionContro
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,opacity:0.85}).addTo(map);
 L.control.attribution({prefix:'© OpenStreetMap'}).addTo(map);
 
+function migrateCard(c){
+  if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
+  if(!c.company&&c.contact)c.company=c.contact;if(c.tel&&!c.phone)c.phone=c.tel;
+  if(c.location&&!c.address)c.address=c.location;if(c.director&&!c.contact)c.contact=c.director;
+  c.co=c.company||'';c.name=c.contact||'';c.tel=c.phone||'';return c;
+}
 var cards=[];
-try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r);}catch(e){}
+try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r).map(migrateCard);}catch(e){}
 
 var markers={}; // id -> {marker, card, latlng}
 var rdvPanelIds=[]; // ids shown in RDV panel

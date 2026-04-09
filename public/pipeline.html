@@ -448,14 +448,33 @@ function load() {
       const parsed = JSON.parse(s);
       // Reset si données mockées avec anciens noms courts (A. Fournier etc.)
       const hasOld = parsed.some(c => c.name && c.name.length <= 12 && c.name.includes('.'));
-      cards = hasOld ? MOCK : parsed;
+      cards = (hasOld ? MOCK : parsed).map(migrateCard);
       if(hasOld) localStorage.removeItem('mup_pipeline');
-    } catch(e) { cards = MOCK; }
+    } catch(e) { cards = MOCK.map(migrateCard); }
   } else {
-    cards = MOCK;
+    cards = MOCK.map(migrateCard);
   }
 }
 function save() { localStorage.setItem('mup_pipeline', JSON.stringify(cards)); }
+
+function migrateCard(c){
+  // Rename old fields
+  if(c.co && !c.company) c.company = c.co;
+  if(c.name && !c.contact) c.contact = c.name;
+  if(!c.company && c.contact) c.company = c.contact;
+  if(c.tel && !c.phone) c.phone = c.tel;
+  if(c.location && !c.address) c.address = c.location;
+  if(c.director && !c.contact) c.contact = c.director;
+  // Keep backward compat aliases
+  c.co = c.company || '';
+  c.name = c.contact || '';
+  c.tel = c.phone || '';
+  // Init new fields
+  if(!c.emailStatus) c.emailStatus = 'new';
+  if(!c.lastContact) c.lastContact = '';
+  if(!c.tags) c.tags = [];
+  return c;
+}
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 

@@ -654,8 +654,14 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
     return h;
   }
 
+  function migrateCard(c){
+    if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
+    if(!c.company&&c.contact)c.company=c.contact;if(c.tel&&!c.phone)c.phone=c.tel;
+    if(c.location&&!c.address)c.address=c.location;if(c.director&&!c.contact)c.contact=c.director;
+    c.co=c.company||'';c.name=c.contact||'';c.tel=c.phone||'';return c;
+  }
   var cards=[];
-  try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r);}catch(e){}
+  try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r).map(migrateCard);}catch(e){}
   var withAddr=cards.filter(function(c){return c.address;});
   if(!withAddr.length) return;
 
@@ -846,7 +852,7 @@ const CAL_EVENTS = {};
   try {
     var raw = localStorage.getItem('mup_pipeline');
     if(!raw) return;
-    var cards = JSON.parse(raw);
+    var cards = JSON.parse(raw).map(function(c){if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;c.co=c.company||'';c.name=c.contact||'';return c;});
     cards.forEach(function(c){
       if(!c.rdvDate||!isUpcoming(c.rdvDate)) return;
       if(!CAL_EVENTS[c.rdvDate]) CAL_EVENTS[c.rdvDate] = [];
@@ -986,8 +992,14 @@ function closeSidebar(){
   function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
   // Load pipeline
+  function migrateCard(c){
+    if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
+    if(!c.company&&c.contact)c.company=c.contact;if(c.tel&&!c.phone)c.phone=c.tel;
+    if(c.location&&!c.address)c.address=c.location;if(c.director&&!c.contact)c.contact=c.director;
+    c.co=c.company||'';c.name=c.contact||'';c.tel=c.phone||'';return c;
+  }
   var cards=[];
-  try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r);}catch(e){}
+  try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r).map(migrateCard);}catch(e){}
 
   var COLS=[
     {id:'prospects',name:'Prospects',color:'#CC0000'},

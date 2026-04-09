@@ -672,11 +672,30 @@ const SAMPLE = [];
 
 function save(){ localStorage.setItem('mup_prospects', JSON.stringify(prospects)); }
 
+function migrateProspect(p){
+  if(p.name && !p.contact) p.contact = p.name;
+  if(p.company && !p.contact) p.contact = p.company;
+  if(!p.company && p.contact) p.company = p.contact;
+  if(p.tel && !p.phone) p.phone = p.tel;
+  if(p.location && !p.address) p.address = p.location;
+  if(p.director && !p.contact) p.contact = p.director;
+  // Backward compat aliases
+  p.name = p.contact || p.name || '';
+  p.tel = p.phone || '';
+  p.location = p.address || p.location || '';
+  p.director = p.contact || p.director || '';
+  // Init new fields
+  if(!p.emailStatus) p.emailStatus = 'new';
+  if(!p.lastContact) p.lastContact = '';
+  if(!p.tags) p.tags = [];
+  return p;
+}
+
 // ── INIT ──
 function init(){
   const stored = localStorage.getItem('mup_prospects');
-  if(stored){ try{ prospects = JSON.parse(stored); }catch(e){ prospects = [...SAMPLE]; } }
-  else { prospects = [...SAMPLE]; }
+  if(stored){ try{ prospects = JSON.parse(stored); prospects = prospects.map(migrateProspect); }catch(e){ prospects = [...SAMPLE]; prospects = prospects.map(migrateProspect); } }
+  else { prospects = [...SAMPLE]; prospects = prospects.map(migrateProspect); }
   renderAll();
   updateKPIs();
   updateBadges();

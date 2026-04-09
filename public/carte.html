@@ -262,11 +262,25 @@ var pending=Object.keys(addrMap).length;
 if(!pending) pending=-1;
 
 Object.keys(addrMap).forEach(function(addr){
-  fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(addr)+'&limit=1')
+  // Try BAN first, fallback to Nominatim
+  fetch('/api/geocode?q='+encodeURIComponent(addr))
     .then(function(r){return r.json();})
-    .then(function(data){
-      if(data.length){
-        var lat=parseFloat(data[0].lat),lng=parseFloat(data[0].lon);
+    .then(function(banData){
+      if(banData.features&&banData.features.length){
+        var coords=banData.features[0].geometry.coordinates;
+        return {lat:coords[1],lng:coords[0]};
+      }
+      // Fallback Nominatim
+      return fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(addr)+'&limit=1')
+        .then(function(r2){return r2.json();})
+        .then(function(nomData){
+          if(nomData.length) return {lat:parseFloat(nomData[0].lat),lng:parseFloat(nomData[0].lon)};
+          return null;
+        });
+    })
+    .then(function(geo){
+      if(geo){
+        var lat=geo.lat,lng=geo.lng;
         bounds.push([lat,lng]);
         addrMap[addr].forEach(function(c,idx){
           var jitter=addrMap[addr].length>1?(idx-addrMap[addr].length/2)*0.0004:0;

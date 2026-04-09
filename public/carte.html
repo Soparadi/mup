@@ -173,6 +173,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
+function isUpcoming(dateStr){if(!dateStr)return false;var today=new Date();today.setHours(0,0,0,0);return new Date(dateStr+'T00:00:00')>=today;}
 var OSRM='https://router.project-osrm.org';
 
 var STAGES=[
@@ -271,7 +272,7 @@ Object.keys(addrMap).forEach(function(addr){
           var jitter=addrMap[addr].length>1?(idx-addrMap[addr].length/2)*0.0004:0;
           var clat=lat+jitter,clng=lng+jitter;
           var col=stageColor(c.col);
-          var isRdv=!!c.rdvDate;
+          var isRdv=!!c.rdvDate&&isUpcoming(c.rdvDate);
           var sz=isRdv?28:20;
           var bw=isRdv?4:3;
           var icon=L.divIcon({
@@ -318,7 +319,7 @@ function autoShowRdv(){
   var rdvCards=[];
   Object.keys(markers).forEach(function(id){
     var m=markers[id];
-    if(m.card.rdvDate) rdvCards.push(m);
+    if(m.card.rdvDate&&isUpcoming(m.card.rdvDate)) rdvCards.push(m);
   });
   if(!rdvCards.length) return;
 
@@ -332,7 +333,7 @@ function autoShowRdv(){
     // Find all non-RDV cards in radius
     Object.keys(markers).forEach(function(mid){
       var m=markers[mid];
-      if(m.card.rdvDate) return;
+      if(m.card.rdvDate&&isUpcoming(m.card.rdvDate)) return;
       var dist=map.distance(L.latLng(rdv.latlng),L.latLng(m.latlng));
       if(dist<=30000&&rdvPanelIds.indexOf(mid)===-1){
         rdvPanelIds.push(mid);

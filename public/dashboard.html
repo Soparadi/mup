@@ -802,6 +802,7 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
 </script>
 
 <script>
+function isUpcoming(dateStr){if(!dateStr)return false;var today=new Date();today.setHours(0,0,0,0);return new Date(dateStr+'T00:00:00')>=today;}
 // ── TODAY ──
 (function(){
   const now = new Date();
@@ -847,7 +848,7 @@ const CAL_EVENTS = {};
     if(!raw) return;
     var cards = JSON.parse(raw);
     cards.forEach(function(c){
-      if(!c.rdvDate) return;
+      if(!c.rdvDate||!isUpcoming(c.rdvDate)) return;
       if(!CAL_EVENTS[c.rdvDate]) CAL_EVENTS[c.rdvDate] = [];
       var exists = CAL_EVENTS[c.rdvDate].find(function(ev){ return String(ev.id) === String(c.id); });
       if(!exists) {

@@ -1896,8 +1896,6 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     var url = '/api/search'
       + '?activite_principale=' + encodeURIComponent(nafDotted)
       + (regionCode ? '&region=' + regionCode : '')
-      + (villeFb ? '&q=' + encodeURIComponent(villeFb) : '')
-      + (deptFb ? '&code_postal=' + deptFb : '')
       + '&per_page=25&page=' + page;
 
     var resp = await fetch(url);
@@ -1913,7 +1911,9 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     }
 
     var items = [];
-    var allowedDepts = depts;
+    // If specific dept selected, restrict to that dept only
+    var allowedDepts = deptFb ? [deptFb] : depts;
+    var filterVille = villeFb ? villeFb.toUpperCase() : '';
 
     data.results.forEach(function(r) {
       var matching = r.matching_etablissements || [];
@@ -1926,7 +1926,11 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
         var sCp = r.siege.code_postal || '';
         if(!allowedDepts.length || allowedDepts.indexOf(sCp.substring(0,2)) !== -1) localEtab = r.siege;
       }
+      // If dept selected, skip if no local etab found in that dept
+      if(deptFb && !localEtab) return;
       if(!localEtab) localEtab = matching[0] || r.siege || {};
+      // Ville filter: skip if commune doesn't match
+      if(filterVille && (localEtab.libelle_commune||'').toUpperCase().indexOf(filterVille)===-1) return;
       var etab = localEtab;
       var siren = r.siren || '';
       var siret = etab.siret || '';
@@ -1953,7 +1957,10 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       });
     });
 
-    var total = data.total_results || data.total || items.length;
+    var apiTotal = data.total_results || data.total || items.length;
+    // If dept/ville filter active, use items.length as total estimate
+    var total = (deptFb || filterVille) ? Math.max(items.length, apiTotal) : apiTotal;
+    if((deptFb || filterVille) && items.length < 25) total = items.length; // last page
     return {
       total: total, totalComplete: Math.round(total * 0.3),
       hotCount: Math.round(total * 0.15), items: items

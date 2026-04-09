@@ -680,7 +680,18 @@ let activeModalTab = 'csv';
 // ── SAMPLE DATA ──
 const SAMPLE = [];
 
-function save(){ localStorage.setItem('mup_prospects', JSON.stringify(prospects)); }
+function save(){
+  // Read full pipeline, update matching cards, save back
+  var full = [];
+  try { var r = localStorage.getItem('mup_pipeline'); if(r) full = JSON.parse(r); } catch(e) {}
+  // Update existing cards from prospects array
+  prospects.forEach(function(p) {
+    var idx = full.findIndex(function(c) { return String(c.id) === String(p.id); });
+    if(idx !== -1) full[idx] = p;
+    else full.push(p);
+  });
+  localStorage.setItem('mup_pipeline', JSON.stringify(full));
+}
 
 function migrateProspect(p){
   if(p.name && !p.contact) p.contact = p.name;
@@ -703,9 +714,10 @@ function migrateProspect(p){
 
 // ── INIT ──
 function init(){
-  const stored = localStorage.getItem('mup_prospects');
-  if(stored){ try{ prospects = JSON.parse(stored); prospects = prospects.map(migrateProspect); }catch(e){ prospects = [...SAMPLE]; prospects = prospects.map(migrateProspect); } }
-  else { prospects = [...SAMPLE]; prospects = prospects.map(migrateProspect); }
+  localStorage.removeItem('mup_prospects');
+  const stored = localStorage.getItem('mup_pipeline');
+  if(stored){ try{ prospects = JSON.parse(stored); prospects = prospects.map(migrateProspect); prospects = prospects.filter(function(p){ return p.col !== 'won' && p.col !== 'lost'; }); }catch(e){ prospects = [...SAMPLE]; prospects = prospects.map(migrateProspect); prospects = prospects.filter(function(p){ return p.col !== 'won' && p.col !== 'lost'; }); } }
+  else { prospects = [...SAMPLE]; prospects = prospects.map(migrateProspect); prospects = prospects.filter(function(p){ return p.col !== 'won' && p.col !== 'lost'; }); }
   renderAll();
   updateKPIs();
   updateBadges();
@@ -921,25 +933,7 @@ function saveSocial(){
   save();syncToPipeline(p);renderAll();
 }
 
-function syncToPipeline(p){
-  try{
-    var raw=localStorage.getItem('mup_pipeline');
-    if(!raw)return;
-    var cards=JSON.parse(raw);
-    var card=cards.find(function(c){return String(c.id)===String(p.id);});
-    if(!card)return;
-    card.email=p.email||'';
-    card.tel=p.phone||p.tel||'';
-    card.address=p.location||p.address||'';
-    card.notes=p.notes||'';
-    card.co=p.company||card.co||'';
-    card.name=p.name||card.name||'';
-    if(p.linkedin)card.linkedin=p.linkedin;
-    if(p.facebook)card.facebook=p.facebook;
-    if(p.instagram)card.instagram=p.instagram;
-    localStorage.setItem('mup_pipeline',JSON.stringify(cards));
-  }catch(e){}
-}
+function syncToPipeline(p){ /* now same store */ }
 function copyEmail(){
   const p=prospects.find(x=>x.id===selectedId);
   if(p&&p.email)copyText(p.email,'Email');

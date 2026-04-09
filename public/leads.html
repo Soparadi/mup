@@ -1637,10 +1637,6 @@ var REGION_CODES = {
 function _getExistingSirets() {
   var sirets = {};
   try {
-    var p = localStorage.getItem('mup_prospects');
-    if(p) JSON.parse(p).forEach(function(x){ if(x.siren) sirets[x.siren]=true; if(x.siret) sirets[x.siret]=true; });
-  } catch(e){}
-  try {
     var k = localStorage.getItem('mup_pipeline');
     if(k) JSON.parse(k).forEach(function(x){ if(x.siren) sirets[x.siren]=true; if(x.siret) sirets[x.siret]=true; });
   } catch(e){}
@@ -2170,7 +2166,7 @@ function createCard(lead, idx) {
     +'<div class="cinfo">'+infoRows+'</div>'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;gap:4px">'
       +'<div class="badges">'+completeBadge+'<span class="badge b-geo-pend" id="geo-'+lead.id+'">Géo</span></div>'
-      +'<button class="ba pr" onclick="addToProspects(\''+lead.id+'\')" style="font-size:10px;padding:5px 8px">+ Prospects</button>'
+      +'<button class="ba pr" onclick="addToPipeline(\''+lead.id+'\')" style="font-size:10px;padding:5px 8px">+ Pipeline</button>'
     +'</div>';
 
   return div;
@@ -2458,21 +2454,25 @@ function cp(v, label) {
   navigator.clipboard.writeText(v).then(function(){ showToast(label+' copié ✓'); });
 }
 
-function addToProspects(leadId) {
+function addToPipeline(leadId) {
   var lead = S.buffer.find(function(l){ return l.id === leadId; });
   if(!lead) return;
-  var prospects = [];
-  try { var r = localStorage.getItem('mup_prospects'); if(r) prospects = JSON.parse(r); } catch(e){}
-  if(prospects.find(function(p){ return String(p.siren) === String(lead.siren) || String(p.siret) === String(lead.siret); })) {
-    showToast('Déjà dans les prospects');
+  var cards = [];
+  try { var r = localStorage.getItem('mup_pipeline'); if(r) cards = JSON.parse(r); } catch(e){}
+  if(cards.find(function(c){ return (lead.siren && String(c.siren) === String(lead.siren)) || (lead.siret && String(c.siret) === String(lead.siret)); })) {
+    showToast('Déjà dans le pipeline');
     return;
   }
-  prospects.push({
-    id: Date.now(),
+  cards.push({
+    id: String(Date.now()),
     name: lead.director || lead.name,
+    co: lead.name,
     company: lead.name,
+    contact: lead.director || '',
     email: lead.email || '',
     phone: lead.phone || '',
+    tel: lead.phone || '',
+    address: lead.address || '',
     location: lead.address || '',
     sector: lead.nafLabel || lead.sector || '',
     siren: lead.siren || '',
@@ -2480,11 +2480,13 @@ function addToProspects(leadId) {
     website: lead.website || '',
     source: 'SIRENE',
     notes: '',
-    status: 'new',
-    director: lead.director || ''
+    col: 'prospects',
+    val: 0,
+    days: 0,
+    activity: []
   });
-  localStorage.setItem('mup_prospects', JSON.stringify(prospects));
-  showToast(lead.name + ' ajouté aux prospects');
+  localStorage.setItem('mup_pipeline', JSON.stringify(cards));
+  showToast(lead.name + ' ajouté au pipeline');
   // Grey out the button
   var card = document.getElementById('card-' + leadId);
   if(card) {

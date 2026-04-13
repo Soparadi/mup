@@ -2608,6 +2608,16 @@ function searchNAF(q) {
     .sort(function(a,b){ return b.sc-a.sc; })
     .slice(0,12);
 }
+function fallbackLabelSearch(q) {
+  var qn = _norm(q);
+  var results = [];
+  NAF_INDEX.forEach(function(item) {
+    if (item.ln.includes(qn) && qn.length >= 3) {
+      results.push(Object.assign({}, item, {sc: 50}));
+    }
+  });
+  return results.slice(0, 8);
+}
 function renderAC(q,results) {
   var dd=document.getElementById('acd');
   if(!results.length){ dd.innerHTML='<div class="acd-empty">Aucun résultat pour "'+esc(q)+'"</div>'; dd.classList.add('open'); return; }
@@ -2641,11 +2651,14 @@ function onSectorInput(v) {
   updateHint();
   if(v.trim().length < 2) { document.getElementById('acd').classList.remove('open'); return; }
   _acList = searchNAF(v);
+  if (_acList.length === 0 && v.trim().length >= 3) {
+    _acList = fallbackLabelSearch(v);
+  }
   renderAC(v, _acList);
 }
 function onSectorFocus() {
   var v=document.getElementById('inp-sector').value;
-  if(v.trim().length>=2){ _acList=searchNAF(v); renderAC(v,_acList); }
+  if(v.trim().length>=2){ _acList=searchNAF(v); if(_acList.length===0&&v.trim().length>=3){_acList=fallbackLabelSearch(v);} renderAC(v,_acList); }
 }
 function onSectorKey(e) {
   var dd=document.getElementById('acd'), items=dd.querySelectorAll('.acd-item');

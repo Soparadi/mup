@@ -2412,8 +2412,8 @@ function hideError() {
 // ════════════════════════════════════════════════════════════════
 function startSearch() {
   var btn = document.getElementById('btn-go');
-  var nafResult = searchNAF(document.getElementById('naf-search').value);
-  var nafCode = nafResult ? nafResult.codes[0] : document.getElementById('naf-search').value;
+  var nafCode = document.getElementById('naf-hint').dataset.nafCode
+                || document.getElementById('naf-search').value;
 
   if(!nafCode || !S.region) {
     showError('Veuillez sélectionner un secteur et choisir une région.');
@@ -2421,7 +2421,8 @@ function startSearch() {
   }
 
   selectedNAFCode  = nafCode;
-  selectedNAFLabel = nafResult ? nafResult.label : nafCode;
+  var hintEl = document.getElementById('naf-hint');
+  selectedNAFLabel = (hintEl.dataset.nafCode && hintEl.textContent) ? hintEl.textContent.replace(/^→\s*/, '').replace(/\s*\([^)]*\)\s*$/, '') : nafCode;
   S.naf      = nafCode;
   S.nafLabel = selectedNAFLabel;
   S.nafLocked = true;
@@ -2716,14 +2717,17 @@ else buildIndex();
 document.getElementById('naf-search').addEventListener('input', function() {
   var result = searchNAF(this.value);
   var hint = document.getElementById('naf-hint');
-  if (result) {
+  if (result && result.codes && result.codes.length) {
     hint.textContent = '→ ' + result.label + ' (' + result.codes.join(', ') + ')';
     hint.style.color = '#1A7F4B';
+    hint.dataset.nafCode = result.codes[0];
   } else if (this.value.length > 1) {
     hint.textContent = 'Métier non trouvé — essaie un autre terme';
     hint.style.color = '#C84B00';
+    hint.dataset.nafCode = '';
   } else {
     hint.textContent = '';
+    hint.dataset.nafCode = '';
   }
 });
 </script>

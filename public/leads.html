@@ -456,6 +456,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
   background: rgba(29,29,31,.75) !important; color: #fff !important; font-weight: 800 !important;
 }
 </style>
+<script src="/naf_dictionnaire.js"></script>
 </head>
 <body>
 
@@ -478,12 +479,13 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
               <circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.8"/>
               <path d="M12 12l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
-            <input type="text" id="inp-sector"
-              placeholder="opticien, traiteur, 9602A…"
-              autocomplete="off" spellcheck="false"
-              oninput="onSectorInput(this.value)"
-              onkeydown="onSectorKey(event)"
-              onfocus="onSectorFocus()"/>
+            <input
+              type="text"
+              id="naf-search"
+              placeholder="Tapez un métier : kiné, coiffeur, vigneron..."
+              autocomplete="off"
+            >
+            <div id="naf-hint" style="font-size:12px;color:#1A7F4B;margin-top:4px;min-height:18px"></div>
             <button class="clr" id="btn-clr" onclick="clearSector()">
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -2410,12 +2412,20 @@ function hideError() {
 // ════════════════════════════════════════════════════════════════
 function startSearch() {
   var btn = document.getElementById('btn-go');
-  // ── Triple guard: lock, code, region ALL required ───────────────
-  if(!S.nafLocked || !selectedNAFCode || !S.naf || !S.region) {
-    // Should never happen (button is inactive), but belt-and-suspenders
-    showError('Veuillez sélectionner un secteur dans la liste de suggestions et choisir une région.');
+  var nafResult = searchNAF(document.getElementById('naf-search').value);
+  var nafCode = nafResult ? nafResult.codes[0] : document.getElementById('naf-search').value;
+
+  if(!nafCode || !S.region) {
+    showError('Veuillez sélectionner un secteur et choisir une région.');
     return;
   }
+
+  selectedNAFCode  = nafCode;
+  selectedNAFLabel = nafResult ? nafResult.label : nafCode;
+  S.naf      = nafCode;
+  S.nafLabel = selectedNAFLabel;
+  S.nafLocked = true;
+
   if(!btn.classList.contains('active')) return;
   setBtnLoading();
   document.getElementById('exp-bar').classList.remove('show');
@@ -2701,6 +2711,21 @@ document.addEventListener('click',function(e){
 // ════════════════════════════════════════════════════════════════
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',buildIndex);
 else buildIndex();
+
+// ── NAF dictionnaire search (naf_dictionnaire.js) ──
+document.getElementById('naf-search').addEventListener('input', function() {
+  var result = searchNAF(this.value);
+  var hint = document.getElementById('naf-hint');
+  if (result) {
+    hint.textContent = '→ ' + result.label + ' (' + result.codes.join(', ') + ')';
+    hint.style.color = '#1A7F4B';
+  } else if (this.value.length > 1) {
+    hint.textContent = 'Métier non trouvé — essaie un autre terme';
+    hint.style.color = '#C84B00';
+  } else {
+    hint.textContent = '';
+  }
+});
 </script>
 <script src="/sidebar.js"></script>
 </body>

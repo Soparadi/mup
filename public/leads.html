@@ -1827,7 +1827,15 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
 
     if(data.error || !data.etablissements) throw new Error('INSEE_UNAVAILABLE');
 
-    var total = (data.header && data.header.total) || 0;
+    var itemCount = (data.etablissements || []).length;
+    var total;
+    var totalEstimated = false;
+    if (itemCount < nombre) {
+      total = debut + itemCount;
+    } else {
+      total = debut + itemCount + 1;
+      totalEstimated = true;
+    }
     var items = [];
 
     data.etablissements.forEach(function(etab) {
@@ -1876,6 +1884,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     console.log('[Leads] INSEE returned', items.length, 'items, total:', total);
     return {
       total: total,
+      totalEstimated: totalEstimated,
       totalComplete: Math.round(total * 0.3),
       hotCount: Math.round(total * 0.15),
       items: items
@@ -2217,9 +2226,10 @@ async function loadPage(page) {
     }
 
     if(isFirstPage) {
-      S.total         = data.total;
-      S.totalComplete = data.totalComplete;
-      S.hotCount      = data.hotCount;
+      S.total          = data.total;
+      S.totalEstimated = data.totalEstimated || false;
+      S.totalComplete  = data.totalComplete;
+      S.hotCount       = data.hotCount;
       S.nGeoOk        = 0;
       S.nGeoFail      = 0;
       S.buffer        = [];
@@ -2347,8 +2357,9 @@ function updatePagination() {
   document.getElementById('res-panel').scrollTop = 0;
 }
 function updateCountDisplay() {
-  document.getElementById('res-count').textContent = S.total.toLocaleString('fr-FR') + ' résultats';
-  document.getElementById('res-title').textContent = (S.nafLabel || 'Leads') + ' · ' + S.total.toLocaleString('fr-FR');
+  var suffix = S.totalEstimated ? '+' : '';
+  document.getElementById('res-count').textContent = S.total.toLocaleString('fr-FR') + suffix + ' résultats';
+  document.getElementById('res-title').textContent = (S.nafLabel || 'Leads') + ' · ' + S.total.toLocaleString('fr-FR') + suffix;
 }
 
 function updateExportBar() {

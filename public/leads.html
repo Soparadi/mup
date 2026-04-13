@@ -1805,7 +1805,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
 
   // ── TRY INSEE SIRENE V3 FIRST ──
   try {
-    var q = 'activitePrincipaleEtablissement:' + nafDotted + ' AND etatAdministratifEtablissement:A';
+    var q = 'activitePrincipaleEtablissement:' + nafDotted + ' AND etatAdministratifEtablissement:A AND uniteLegale.etatAdministratifUniteLegale:A';
     // Department + ville filter from selects
     var selectedDept = (document.getElementById('sel-dept')?.value || '').trim();
     var selectedVille = (document.getElementById('sel-ville')?.value || '').trim();
@@ -1846,6 +1846,18 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       var ul = etab.uniteLegale || {};
       var adr = etab.adresseEtablissement || {};
       var periodes = etab.periodesEtablissement || [];
+
+      // Exclure si unité légale fermée
+      var etatUL = (ul.etatAdministratifUniteLegale) || '';
+      if (etatUL === 'C') return;
+
+      // Exclure établissements fermés
+      var etatEtab = '';
+      if (periodes.length) {
+        etatEtab = periodes[0].etatAdministratifEtablissement || '';
+      }
+      if (etatEtab === 'F') return;
+
       var nafEtab = periodes.length ? (periodes[0].activitePrincipaleEtablissement || '').replace(/\./g,'') : naf;
 
       var name = ul.denominationUniteLegale || ul.denominationUsuelle1UniteLegale || '';

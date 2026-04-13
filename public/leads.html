@@ -2477,35 +2477,30 @@ Object.assign(NAF_DICT, NAF_DICT_EXT);
 // ── MOTEUR DE RECHERCHE ──
 function searchNAF(query) {
   if (!query || query.trim().length < 2) return null;
-  const q = query.toLowerCase()
+  var q = query.toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .trim();
-
-  // 1. Correspondance exacte
-  for (const [key, val] of Object.entries(NAF_DICT)) {
-    const k = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    if (k === q) return val;
+  var entries = Object.entries(NAF_DICT);
+  // 1. Exacte
+  for (var i=0; i<entries.length; i++) {
+    var k = entries[i][0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    if (k === q) return entries[i][1];
   }
-
   // 2. Commence par
-  for (const [key, val] of Object.entries(NAF_DICT)) {
-    const k = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    if (k.startsWith(q) || q.startsWith(k)) return val;
+  for (var i=0; i<entries.length; i++) {
+    var k = entries[i][0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    if (k.startsWith(q) || q.startsWith(k)) return entries[i][1];
   }
-
   // 3. Contient
-  for (const [key, val] of Object.entries(NAF_DICT)) {
-    const k = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    if (k.includes(q) || q.includes(k)) return val;
+  for (var i=0; i<entries.length; i++) {
+    var k = entries[i][0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    if (k.includes(q) || q.includes(k)) return entries[i][1];
   }
-
-  // 4. Recherche dans les labels
-  for (const [key, val] of Object.entries(NAF_DICT)) {
-    const lbl = val.label.toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    if (lbl.includes(q)) return val;
+  // 4. Label
+  for (var i=0; i<entries.length; i++) {
+    var lbl = entries[i][1].label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    if (lbl.includes(q)) return entries[i][1];
   }
-
   return null;
 }
 
@@ -3660,7 +3655,7 @@ function buildIndex() {
     NAF_LABELS[o.value] = label;
   });
 }
-function searchNAF(q) {
+function searchNAFIndex(q) {
   if(!q||q.trim().length<2) return [];
   return NAF_INDEX
     .map(function(x){ return Object.assign({},x,{sc:_score(q,x)}); })
@@ -3700,12 +3695,12 @@ function onSectorInput(v) {
 
   updateHint();
   if(v.trim().length < 2) { document.getElementById('acd').classList.remove('open'); return; }
-  _acList = searchNAF(v);
+  _acList = searchNAFIndex(v);
   renderAC(v, _acList);
 }
 function onSectorFocus() {
   var v=document.getElementById('inp-sector').value;
-  if(v.trim().length>=2){ _acList=searchNAF(v); renderAC(v,_acList); }
+  if(v.trim().length>=2){ _acList=searchNAFIndex(v); renderAC(v,_acList); }
 }
 function onSectorKey(e) {
   var dd=document.getElementById('acd'), items=dd.querySelectorAll('.acd-item');

@@ -178,41 +178,40 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   padding:4px;
 }
 .cards-grid{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:14px;
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0;
 }
 .p-card{
-  background:var(--surface);border:1px solid var(--border);border-radius:12px;
-  padding:16px;cursor:pointer;transition:box-shadow .15s,border-color .15s;
-  display:flex;flex-direction:column;gap:12px;
+  border-radius:12px;border:1px solid var(--border);
+  background:#FFFFFF;overflow:hidden;max-width:100%;
+  display:flex;flex-direction:column;height:100%;
+  cursor:pointer;transition:box-shadow .15s,border-color .15s;
 }
 .p-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08);border-color:var(--border2)}
-.p-card-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-.p-card-title{font-size:14px;font-weight:700;color:var(--text);line-height:1.3}
-.p-card-loc{font-size:12px;color:var(--muted);margin-top:2px}
-.p-card-body{display:flex;flex-direction:column;gap:6px}
-.p-card-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);min-height:20px}
-.p-card-row svg{flex-shrink:0;color:var(--muted2)}
-.p-card-row a{color:var(--blue);text-decoration:none}
-.p-card-row a:hover{text-decoration:underline}
-.p-card-row .empty{color:var(--muted2);font-size:11px}
-.p-card-foot{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)}
-.p-card-foot .btn-export{
-  padding:4px 10px;border-radius:6px;border:none;
-  background:#7C3AED;color:#fff;font-family:var(--font);
-  font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.3px;
-  transition:background .12s;
-}
-.p-card-foot .btn-export:hover{background:#6D28D9}
-.p-card-foot .btn-edit{
-  padding:4px 10px;border-radius:6px;border:1px solid var(--border);
-  background:var(--bg);color:var(--text);font-family:var(--font);
-  font-size:10px;font-weight:600;cursor:pointer;transition:all .12s;
-}
-.p-card-foot .btn-edit:hover{border-color:var(--text)}
-.p-card-foot .spacer{margin-left:auto}
-.p-card-socials{display:flex;gap:6px;align-items:center}
-.p-card-socials a{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;border:1px solid var(--border);color:var(--muted2);transition:all .12s}
-.p-card-socials a:hover{border-color:var(--text);color:var(--text)}
+.cc-header{background:#1D1D1F;color:#fff;padding:16px}
+.cc-naf{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:8px}
+.cc-name{font-size:16px;font-weight:800;text-transform:uppercase;line-height:1.2;margin-bottom:4px;word-break:break-word}
+.cc-director{font-size:12px;color:rgba(255,255,255,.7);line-height:1.3}
+.cc-body{padding:16px;display:flex;flex-direction:column;gap:16px}
+.cc-section-label{display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#999;padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.cc-section-label > span{font-weight:700;color:var(--muted2)}
+.cc-row{display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--text);line-height:1.4;padding:4px 0}
+.cc-row svg{flex-shrink:0;margin-top:1px}
+.cc-row a{color:var(--text);text-decoration:none;word-break:break-word}
+.cc-row a:hover{text-decoration:underline}
+.cc-empty{font-style:italic;color:#AEAEB2}
+.cc-id{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:0;font-size:12px}
+.cc-id dt{color:var(--muted);font-weight:500}
+.cc-id dd{margin:0;color:var(--text);font-weight:600;font-family:var(--mono)}
+.cc-socials{display:flex;gap:10px;align-items:center}
+.cc-social-tile{width:32px;height:32px;border-radius:8px;background:#F5F5F7;display:flex;align-items:center;justify-content:center;color:#AEAEB2;text-decoration:none;transition:background .12s}
+.cc-social-tile.active{cursor:pointer}
+.cc-social-tile.active.linkedin{color:#0A66C2}
+.cc-social-tile.active.facebook{color:#1877F2}
+.cc-social-tile.active.instagram{color:#E4405F}
+.cc-social-tile.active.whatsapp{color:#25D366}
+.cc-social-tile.active:hover{background:#EBEBF0}
+.cc-edit-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:14px;background:#1D1D1F;color:#fff;border:0;border-radius:10px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;margin:auto 12px 12px;width:calc(100% - 24px);transition:background .15s}
+.cc-edit-btn:hover{background:#000}
 
 /* SECTOR PILL (badges removed) */
 
@@ -739,7 +738,7 @@ function renderAll(){
     return va<vb?-sortDir:va>vb?sortDir:0;
   });
   filteredProspects=list;
-  document.getElementById('count-label').textContent=list.length+' prospect(s)';
+  document.getElementById('count-label').textContent=list.length+' contact(s)';
   const grid=document.getElementById('prospects-grid');
   const empty=document.getElementById('empty-state');
   if(!list.length){
@@ -749,36 +748,60 @@ function renderAll(){
   }
   grid.style.display='grid';
   empty.style.display='none';
-  const icoP='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
-  const icoT='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
-  const icoG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>';
-  const icoM='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+  const svgBuilding='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/></svg>';
+  const svgPhone='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#CC0000" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>';
+  const svgMail='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+  const svgPin='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+  const svgLinkedin='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>';
+  const svgFacebook='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>';
+  const svgInstagram='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
+  const svgWhatsapp='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
+  const EMPTY='<span class="cc-empty">—</span>';
+  function socialTile(url, kind, svg, label){
+    const u=esc(url||'');
+    if(u){
+      return `<a class="cc-social-tile active ${kind}" href="${u}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="${label}">${svg}</a>`;
+    }
+    return `<span class="cc-social-tile" title="${label} non renseigné">${svg}</span>`;
+  }
   grid.innerHTML=list.map(p=>{
-    const loc=[p.location,p.zip].filter(Boolean).join(' ');
+    const siretFmt=p.siret?String(p.siret).replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4'):'';
+    const company=p.company||p.name||'—';
+    const director=p.company&&p.name?p.name:'';
+    const waUrl=p.whatsapp?(p.whatsapp.startsWith('http')?p.whatsapp:'https://wa.me/'+p.whatsapp.replace(/\s/g,'')):'';
     return `<div class="p-card" onclick="openDetail(${p.id})">
-      <div class="p-card-hdr">
-        <div>
-          <div class="p-card-title">${esc(p.company||p.name)}</div>
-          ${loc?`<div class="p-card-loc">${esc(loc)}</div>`:''}
+      <div class="cc-header">
+        <div class="cc-naf">${svgBuilding}<span>${esc(p.sector||'Activité')}</span></div>
+        <div class="cc-name">${esc(company)}</div>
+        <div class="cc-director">${director?esc(director):EMPTY}</div>
+      </div>
+      <div class="cc-body">
+        <div class="cc-section">
+          <div class="cc-section-label"><span>Contact</span></div>
+          <div class="cc-row">${svgPhone}${p.phone?`<a href="tel:${esc(p.phone.replace(/\s/g,''))}" onclick="event.stopPropagation()">${esc(p.phone)}</a>`:EMPTY}</div>
+          <div class="cc-row">${svgMail}${p.email?`<a href="mailto:${esc(p.email)}" onclick="event.stopPropagation()">${esc(p.email)}</a>`:EMPTY}</div>
+          <div class="cc-row">${svgPin}${p.location?`<span>${esc([p.location,p.zip].filter(Boolean).join(' '))}</span>`:EMPTY}</div>
         </div>
-        ${p.sector?`<span class="sector">${esc(p.sector)}</span>`:''}
-      </div>
-      <div class="p-card-body">
-        <div class="p-card-row">${icoP} ${p.name?esc(p.name):'<span class="empty">—</span>'}</div>
-        <div class="p-card-row">${icoT} ${p.phone?esc(p.phone):'<span class="empty">—</span>'}</div>
-        <div class="p-card-row">${icoG} ${p.website?`<a href="${esc(p.website)}" target="_blank" onclick="event.stopPropagation()">${esc(p.website.replace(/^https?:\/\//,''))}</a>`:'<span class="empty">—</span>'}</div>
-        <div class="p-card-row">${icoM} ${p.email?`<a href="mailto:${esc(p.email)}" onclick="event.stopPropagation()">${esc(p.email)}</a>`:'<span class="empty">—</span>'}</div>
-      </div>
-      <div class="p-card-foot">
-        <div class="p-card-socials">
-          ${p.whatsapp?`<a href="https://wa.me/${esc(p.whatsapp.replace(/\s/g,''))}" target="_blank" onclick="event.stopPropagation()" title="WhatsApp"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></a>`:''}
-          ${p.linkedin?`<a href="${esc(p.linkedin)}" target="_blank" onclick="event.stopPropagation()" title="LinkedIn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></a>`:''}
-          ${p.facebook?`<a href="${esc(p.facebook)}" target="_blank" onclick="event.stopPropagation()" title="Facebook"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></a>`:''}
-          ${p.instagram?`<a href="${esc(p.instagram)}" target="_blank" onclick="event.stopPropagation()" title="Instagram"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></a>`:''}
+        <div class="cc-section">
+          <div class="cc-section-label"><span>Réseaux sociaux</span></div>
+          <div class="cc-socials">
+            ${socialTile(p.linkedin,'linkedin',svgLinkedin,'LinkedIn')}
+            ${socialTile(p.facebook,'facebook',svgFacebook,'Facebook')}
+            ${socialTile(p.instagram,'instagram',svgInstagram,'Instagram')}
+            ${socialTile(waUrl,'whatsapp',svgWhatsapp,'WhatsApp')}
+          </div>
         </div>
-        <span class="spacer"></span>
-        <button class="btn-edit" onclick="event.stopPropagation();openDetail(${p.id})">Modifier</button>
+        <div class="cc-section">
+          <div class="cc-section-label"><span>Identité légale</span><span>INSEE</span></div>
+          <dl class="cc-id">
+            <dt>SIRET</dt><dd>${siretFmt?esc(siretFmt):EMPTY}</dd>
+            <dt>Forme</dt><dd>${p.forme?esc(p.forme):EMPTY}</dd>
+            <dt>Code NAF</dt><dd>${p.naf?esc(p.naf):EMPTY}</dd>
+            <dt>Effectif</dt><dd>${p.effectif?esc(p.effectif):EMPTY}</dd>
+          </dl>
+        </div>
       </div>
+      <button class="cc-edit-btn" onclick="event.stopPropagation();openDetail(${p.id})">Modifier</button>
     </div>`;
   }).join('');
 }
@@ -1054,7 +1077,7 @@ function confirmImport(){
     if(!csvParsed.length){toast('Aucune donnée à importer');return;}
     prospects=[...prospects,...csvParsed];
     save();
-    toast(`${csvParsed.length} prospect(s) importé(s)`);
+    toast(`${csvParsed.length} contact(s) importé(s)`);
     csvParsed=[];
     document.getElementById('csv-preview').classList.remove('visible');
     document.getElementById('csv-info').style.display='none';
@@ -1101,7 +1124,7 @@ function confirmImport(){
     prospects=[...prospects,...added];
     save();
     document.getElementById('paste-input').value='';
-    toast(`${added.length} prospect(s) importé(s)`);
+    toast(`${added.length} contact(s) importé(s)`);
   }
   closeModal();
   renderAll();updateKPIs();updateBadges();

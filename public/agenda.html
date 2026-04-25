@@ -177,7 +177,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
           <div class="day-name" id="day-name">Lundi 6 avril 2026</div>
         </div>
         <div class="day-weather" id="day-weather">
-          <div class="day-weather-ico" id="weather-ico">⛅</div>
+          <div class="day-weather-ico" id="weather-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8 6 6 0 0 0-11.6 1.6 4 4 0 0 0 1 7.9z"/><path d="M12 2v2M4.93 4.93l1.41 1.41M2 12h2"/></svg></div>
           <div class="day-weather-info">
             <div class="day-weather-temp" id="weather-temp">—°</div>
             <div class="day-weather-desc" id="weather-desc">Chargement…</div>
@@ -230,11 +230,11 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       <div class="frow">
         <div class="flabel">Type</div>
         <div class="type-pills">
-          <span class="type-pill sel" data-type="rdv" onclick="selType(this)">📅 RDV</span>
-          <span class="type-pill" data-type="visio" onclick="selType(this)">📹 Visio</span>
-          <span class="type-pill" data-type="appel" onclick="selType(this)">📞 Appel</span>
-          <span class="type-pill" data-type="devis" onclick="selType(this)">📄 Devis</span>
-          <span class="type-pill" data-type="perso" onclick="selType(this)">⭐ Perso</span>
+          <span class="type-pill sel" data-type="rdv" onclick="selType(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>RDV</span>
+          <span class="type-pill" data-type="visio" onclick="selType(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>Visio</span>
+          <span class="type-pill" data-type="appel" onclick="selType(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>Appel</span>
+          <span class="type-pill" data-type="devis" onclick="selType(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Devis</span>
+          <span class="type-pill" data-type="perso" onclick="selType(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Perso</span>
         </div>
       </div>
       <div class="frow">
@@ -405,7 +405,14 @@ function renderDay() {
 
     let evtsHtml = '';
     hEvts.forEach(e => {
-      const typeEmoji = {rdv:'📅',visio:'📹',appel:'📞',devis:'📄',perso:'⭐'}[e.type]||'📅';
+      const typeIcons = {
+        rdv:    '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+        visio:  '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+        appel:  '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>',
+        devis:  '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+        perso:  '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+      };
+      const typeEmoji = typeIcons[e.type] || typeIcons.rdv;
       evtsHtml += `
         <div class="evt-block type-${e.type}" onclick="editEvent('${e.id}')">
           <div class="evt-time-tag">${e.start}–${e.end}</div>
@@ -579,7 +586,7 @@ async function fetchWeather() {
     const temp = Math.round(d.current.temperature_2m);
     const code = d.current.weathercode;
     const { ico, desc } = weatherCode(code);
-    document.getElementById('weather-ico').textContent  = ico;
+    document.getElementById('weather-ico').innerHTML    = ico;
     document.getElementById('weather-temp').textContent = temp + '°C';
     document.getElementById('weather-desc').textContent = desc;
   } catch(e) {
@@ -588,16 +595,17 @@ async function fetchWeather() {
 }
 
 function weatherCode(c) {
-  if(c === 0)           return { ico:'☀️',  desc:'Ensoleillé' };
-  if(c <= 2)            return { ico:'🌤️',  desc:'Peu nuageux' };
-  if(c === 3)           return { ico:'☁️',  desc:'Couvert' };
-  if(c <= 48)           return { ico:'🌫️',  desc:'Brouillard' };
-  if(c <= 57)           return { ico:'🌧️',  desc:'Bruine' };
-  if(c <= 67)           return { ico:'🌧️',  desc:'Pluie' };
-  if(c <= 77)           return { ico:'❄️',  desc:'Neige' };
-  if(c <= 82)           return { ico:'🌦️',  desc:'Averses' };
-  if(c <= 99)           return { ico:'⛈️',  desc:'Orages' };
-  return { ico:'🌡️', desc:'—' };
+  const SVG_WEATHER = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8 6 6 0 0 0-11.6 1.6 4 4 0 0 0 1 7.9z"/></svg>';
+  if(c === 0)           return { ico:SVG_WEATHER, desc:'Ensoleillé' };
+  if(c <= 2)            return { ico:SVG_WEATHER, desc:'Peu nuageux' };
+  if(c === 3)           return { ico:SVG_WEATHER, desc:'Couvert' };
+  if(c <= 48)           return { ico:SVG_WEATHER, desc:'Brouillard' };
+  if(c <= 57)           return { ico:SVG_WEATHER, desc:'Bruine' };
+  if(c <= 67)           return { ico:SVG_WEATHER, desc:'Pluie' };
+  if(c <= 77)           return { ico:SVG_WEATHER, desc:'Neige' };
+  if(c <= 82)           return { ico:SVG_WEATHER, desc:'Averses' };
+  if(c <= 99)           return { ico:SVG_WEATHER, desc:'Orages' };
+  return { ico:SVG_WEATHER, desc:'—' };
 }
 
 loadEvents();

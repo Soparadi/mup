@@ -67,6 +67,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .kcard-bar{height:3px;border-radius:2px;margin-bottom:8px;margin-left:-12px;margin-right:-12px;margin-top:-10px;border-radius:8px 8px 0 0}
 .kcard-name{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:2px;line-height:1.3}
 .kcard-co{font-size:11px;color:var(--muted);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-naf-pill{display:inline-block;font-size:9px;font-weight:600;color:#6E6E73;background:#F5F5F7;border-radius:4px;padding:2px 6px;margin:4px 0 6px 0;letter-spacing:0.5px;text-transform:uppercase;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kcard-foot{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .kcard-val{font-size:11.5px;font-weight:800;font-family:var(--mono);color:var(--text)}
 .kcard-days{font-size:10px;font-weight:600;color:var(--muted2);background:var(--surface);border-radius:5px;padding:2px 6px}
@@ -716,6 +717,7 @@ function renderCard(c, color) {
     </div>
     <div class="kcard-name">${esc(c.co||c.name)}</div>
     <div class="kcard-co">${esc(c.co&&c.name?c.name:'')}</div>
+    ${(c.sector||c.naf_label||c.naf)?`<div class="card-naf-pill">${esc(c.sector||c.naf_label||c.naf)}</div>`:''}
     <div class="kcard-foot">
       <div class="kcard-val">${val}</div>
       <div class="kcard-days">J+${c.days||0}</div>

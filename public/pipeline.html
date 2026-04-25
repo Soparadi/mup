@@ -1414,31 +1414,33 @@ renderKanban();
     }
   };
 
-  // ── HOOK sur openDetail existante pour basculer en focus ──
+  // ── HOOK sur openDetail : tout clic sur card active le mode focus plein écran ──
   const originalOpenDetail = window.openDetail;
   window.openDetail = function(id){
     if(originalOpenDetail) originalOpenDetail(id);
     const c = window.cards?.find(x => String(x.id) === String(id));
-    if(c && focusMode){
+    if(c){
+      focusMode = true;
       if(c.col !== focusColumnId){
         focusColumnId = c.col;
         renderFocusColumn(c.col);
       }
+      document.body.classList.add('focus-mode');
       setTimeout(() => enrichFicheWithActions(c), 100);
     }
   };
 
-  // ── HOOK sur closeDetail (en mode focus, ferme aussi le focus) ──
+  // ── HOOK sur closeDetail : ferme aussi le mode focus ──
   const originalCloseDetail = window.closeDetail;
   window.closeDetail = function(){
     if(originalCloseDetail) originalCloseDetail();
-    // En mode focus : ne pas sortir automatiquement du focus, 
-    // l'utilisateur peut continuer à cliquer sur d'autres cards
+    focusMode = false;
+    focusColumnId = null;
+    document.body.classList.remove('focus-mode');
   };
 
   // ── INIT après chargement DOM ──
   function init(){
-    injectFocusToggle();
     injectFocusWrap();
     injectNextActionBlock();
     

@@ -727,7 +727,7 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
     const parser = new DOMParser();
     const xml = parser.parseFromString(data.contents, 'text/xml');
     const items = Array.from(xml.querySelectorAll('item')).slice(0, 12);
-    const headlines = items.map(i => i.querySelector('title')?.textContent || '').filter(Boolean);
+    const headlines = items.map(i => (i.querySelector('title')?.textContent || '').replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}]/gu, '').trim()).filter(Boolean);
     const track = document.getElementById('news-track');
     if (headlines.length && track) {
       // Build single set, duplicate for seamless loop

@@ -1,14 +1,1236 @@
 <!DOCTYPE html>
+<!--
+  SCHÉMA mup_frais (occurrences) :
+  {
+    id, category, amountTTC, amountHT, amountTVA, tvaRate,
+    tvaRecuperablePct, tvaRecuperable,
+    date (YYYY-MM-DD), description, cardId?, location?, photoData?,
+    recurrentId?,         // si généré depuis une règle récurrente
+    _modifiedFromRecurrent?, // l'utilisateur a édité l'occurrence
+    createdAt, updatedAt
+  }
+
+  SCHÉMA mup_frais_recurrents (règles) :
+  {
+    id, category, amountTTC, description, vendor?,
+    dayOfMonth (1-28),    // jour du mois où le frais s'applique
+    startDate, endDate?,  // période de validité
+    active: true,
+    skippedMonths: []     // YYYY-MM des mois où l'occurrence a été supprimée manuellement
+    createdAt, updatedAt
+  }
+
+  Génération auto silencieuse au chargement : pour chaque règle active,
+  créer les occurrences manquantes depuis startDate jusqu'à aujourd'hui.
+-->
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>MUP — Frais</title>
-<link rel="stylesheet" href="/sidebar.css">
-<style>body{margin:0;font-family:-apple-system,sans-serif;display:flex;min-height:100vh;background:#F5F5F7}main{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#6E6E73}h1{font-size:32px;color:#1D1D1F;margin:0 0 8px}p{font-size:14px;margin:0}</style>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --bg:#FFFFFF; --surface:#F5F5F7; --surface2:#EBEBF0;
+    --card:#FFFFFF; --border:#E8E8ED; --border2:#C7C7CC;
+    --text:#1D1D1F; --muted:#6E6E73; --muted2:#AEAEB2;
+    --green:#1D8348; --orange:#B84C00; --red:#CC0000;
+    --blue:#0A66C2; --purple:#4338CA;
+    --cyan:#0BBCD4; --amber:#F59E0B; --violet:#7C3AED;
+    --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+    --mono:'Geist Mono','SF Mono','Menlo',monospace;
+  }
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;display:flex;min-height:100vh;}
+  ::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+  main{flex:1;overflow-y:auto;height:100vh;}
+
+  .page-header{background:var(--text);color:#fff;padding:28px 36px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;}
+  .page-title{font-size:24px;font-weight:800;letter-spacing:-.4px;}
+  .header-actions{display:flex;align-items:center;gap:10px;}
+  .btn-new{background:#fff;color:var(--text);border:none;padding:9px 16px;border-radius:9px;font-family:var(--font);font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
+  .btn-new:hover{background:var(--surface);}
+  .btn-new.alt{background:rgba(255,255,255,.12);color:#fff;}
+  .btn-new.alt:hover{background:rgba(255,255,255,.2);}
+  .btn-icon{background:rgba(255,255,255,.08);border:none;color:#fff;width:34px;height:34px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
+  .btn-icon:hover{background:rgba(255,255,255,.14);}
+
+  .container{padding:24px 36px 60px;display:flex;flex-direction:column;gap:18px;}
+
+  /* KPI */
+  .grid-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px 14px;display:flex;flex-direction:column;gap:3px;border-left:3px solid var(--border);}
+  .kpi-card.k-mois{border-left-color:#B84C00;} .kpi-card.k-mois .kpi-value{color:#B84C00;}
+  .kpi-card.k-ytd{border-left-color:var(--text);} .kpi-card.k-ytd .kpi-value{color:var(--text);}
+  .kpi-card.k-tva{border-left-color:#1D8348;} .kpi-card.k-tva .kpi-value{color:#1D8348;}
+  .kpi-card.k-rdv{border-left-color:#0A66C2;} .kpi-card.k-rdv .kpi-value{color:#0A66C2;}
+  .kpi-label{font-size:9.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px;line-height:1;}
+  .kpi-value{font-size:26px;font-weight:900;line-height:1;letter-spacing:-.6px;font-family:var(--font);margin-top:6px;}
+  .kpi-sub{font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:3px;letter-spacing:.2px;}
+
+  /* Cards */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+  .card-header-light{padding:18px 22px 8px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+  .card-header-light h3{font-size:17px;font-weight:800;letter-spacing:-.3px;color:var(--text);margin:0;}
+  .card-subtitle{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.4px;}
+  .card-body{padding:0 22px 22px;}
+
+  /* Toggle */
+  .view-toggle{display:inline-flex;gap:2px;background:var(--surface);border-radius:8px;padding:3px;}
+  .view-toggle button{background:transparent;border:none;color:var(--muted);font-family:var(--font);font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:6px 12px;border-radius:6px;cursor:pointer;transition:all .15s;}
+  .view-toggle button.active{background:#fff;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.06);}
+
+  /* Bar chart 12 mois */
+  .chart12{display:flex;align-items:flex-end;justify-content:space-between;gap:6px;height:200px;padding:0 4px;margin-bottom:14px;position:relative;}
+  .chart12-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;cursor:pointer;}
+  .chart12-amount{font-size:10px;font-weight:700;font-family:var(--mono);color:var(--text);min-height:14px;letter-spacing:-.2px;text-align:center;line-height:1;}
+  .chart12-amount.empty{color:var(--muted2);font-weight:500;}
+  .chart12-track{flex:1;width:100%;display:flex;align-items:flex-end;background:var(--surface);border-radius:5px 5px 0 0;overflow:hidden;}
+  .chart12-fill{width:100%;background:#B84C00;border-radius:5px 5px 0 0;transition:height .4s;min-height:2px;}
+  .chart12-fill.empty{background:var(--surface2);min-height:2px;}
+  .chart12-col.is-current .chart12-fill{background:var(--text);}
+  .chart12-col:hover .chart12-fill{opacity:.8;}
+  .chart12-label{font-size:9.5px;font-weight:700;font-family:var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);text-align:center;line-height:1;}
+  .chart12-col.is-current .chart12-label{color:var(--text);font-weight:800;}
+  .chart12-totals{display:flex;justify-content:space-between;align-items:center;padding-top:14px;border-top:1px solid var(--border);font-size:11px;}
+  .chart12-totals-cell{display:flex;flex-direction:column;gap:2px;}
+  .chart12-totals-lbl{font-size:9.5px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);}
+  .chart12-totals-val{font-size:16px;font-weight:800;font-family:var(--font);color:var(--text);letter-spacing:-.3px;}
+  .chart12-totals-val.green{color:var(--green);}
+  .chart12-totals-val.orange{color:#B84C00;}
+
+  /* Timeline */
+  .timeline-month{margin-bottom:18px;}
+  .timeline-month-header{display:flex;justify-content:space-between;align-items:baseline;padding:0 0 8px;border-bottom:2px solid var(--text);margin-bottom:10px;}
+  .timeline-month-name{font-size:13px;font-weight:800;letter-spacing:-.2px;color:var(--text);text-transform:capitalize;}
+  .timeline-month-total{font-size:14px;font-weight:800;font-family:var(--mono);color:#B84C00;letter-spacing:-.3px;}
+  .timeline-row{display:grid;grid-template-columns:60px 90px 1fr 70px 110px 100px 30px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
+  .timeline-row:last-child{border-bottom:none;}
+  .timeline-date{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:600;}
+  .timeline-cat{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:5px;text-align:center;justify-self:start;}
+  .timeline-desc{color:var(--text);font-weight:500;}
+  .timeline-desc-sub{font-size:10.5px;color:var(--muted);margin-top:2px;}
+  .timeline-rec-badge{font-size:8.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);background:var(--surface2);padding:2px 6px;border-radius:4px;justify-self:start;}
+  .timeline-rec-badge.empty{visibility:hidden;}
+  .timeline-amount{font-family:var(--mono);font-weight:800;font-size:13px;color:var(--text);text-align:right;}
+  .timeline-tva{font-family:var(--mono);font-size:11px;color:var(--green);text-align:right;font-weight:600;}
+  .timeline-tva.zero{color:var(--muted2);}
+  .timeline-actions{display:flex;justify-content:flex-end;gap:4px;}
+  .timeline-action-btn{background:var(--surface);border:none;width:24px;height:24px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);}
+  .timeline-action-btn:hover{background:var(--surface2);color:var(--text);}
+  .timeline-empty{padding:40px 0;text-align:center;color:var(--muted2);font-size:13px;}
+
+  /* Catégories couleurs */
+  .cat-essence{background:rgba(204,0,0,.10);color:var(--red);}
+  .cat-restaurant{background:rgba(245,158,11,.14);color:#854F0B;}
+  .cat-hotel{background:rgba(10,102,194,.10);color:var(--blue);}
+  .cat-peage{background:rgba(67,56,202,.10);color:var(--purple);}
+  .cat-parking{background:rgba(11,188,212,.12);color:#077E91;}
+  .cat-fournitures{background:rgba(124,58,237,.10);color:var(--violet);}
+  .cat-telecom{background:rgba(29,131,72,.10);color:var(--green);}
+  .cat-autre{background:var(--surface2);color:var(--muted);}
+
+  /* CALENDRIER MOIS */
+  .month-nav{display:flex;align-items:center;gap:10px;}
+  .month-nav-btn{background:var(--surface);border:none;width:30px;height:30px;border-radius:7px;cursor:pointer;color:var(--text);display:inline-flex;align-items:center;justify-content:center;}
+  .month-nav-btn:hover{background:var(--surface2);}
+  .month-nav-label{font-size:13px;font-weight:800;letter-spacing:-.2px;text-transform:capitalize;min-width:140px;text-align:center;}
+  .calmonth-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+  .calmonth-dayname{font-size:9.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted2);text-align:center;padding:6px 0 2px;}
+  .calmonth-cell{aspect-ratio:1;background:var(--surface);border-radius:9px;padding:6px 8px;position:relative;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;justify-content:space-between;border:1px solid transparent;}
+  .calmonth-cell:hover{border-color:var(--border2);}
+  .calmonth-cell.has-data{background:#fff;border-color:var(--border);}
+  .calmonth-cell.is-today{background:var(--text);}
+  .calmonth-cell.is-today .calmonth-day,
+  .calmonth-cell.is-today .calmonth-amount{color:#fff;}
+  .calmonth-cell.is-today .calmonth-cat-dot{border-color:var(--text);}
+  .calmonth-cell.outside{opacity:.35;}
+  .calmonth-day{font-size:13px;font-weight:700;color:var(--text);font-family:var(--mono);}
+  .calmonth-amount{font-size:11px;font-weight:800;color:#B84C00;font-family:var(--mono);letter-spacing:-.2px;line-height:1.1;}
+  .calmonth-cell.is-today .calmonth-amount{color:#fff;}
+  .calmonth-dots{display:flex;gap:3px;flex-wrap:wrap;align-items:center;margin-top:auto;}
+  .calmonth-cat-dot{width:7px;height:7px;border-radius:50%;border:1.5px solid #fff;flex-shrink:0;}
+  .calmonth-more{font-size:9px;font-weight:700;font-family:var(--mono);color:var(--muted);}
+
+  /* MODAL DAY DETAIL */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:950;}
+  .modal-overlay.show{display:flex;}
+  .modal-card{background:#fff;border-radius:14px;width:560px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;}
+  .modal-card-header{padding:20px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+  .modal-card-title{font-size:17px;font-weight:800;letter-spacing:-.3px;text-transform:capitalize;}
+  .modal-card-body{flex:1;overflow-y:auto;padding:18px 22px;}
+
+  /* DRAWER (saisie + récurrents) */
+  .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:900;}
+  .drawer-overlay.show{display:block;}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:480px;max-width:92vw;background:#fff;z-index:901;transform:translateX(100%);transition:transform .25s;display:flex;flex-direction:column;}
+  .drawer.show{transform:translateX(0);}
+  .drawer-header{padding:22px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+  .drawer-title{font-size:18px;font-weight:800;letter-spacing:-.3px;}
+  .drawer-close{background:none;border:none;cursor:pointer;color:var(--muted);width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;}
+  .drawer-close:hover{background:var(--surface);color:var(--text);}
+  .drawer-body{flex:1;overflow-y:auto;padding:22px 24px;}
+  .drawer-footer{padding:18px 24px;border-top:1px solid var(--border);display:flex;gap:10px;}
+  .drawer-footer button{flex:1;padding:11px;border-radius:9px;border:none;cursor:pointer;font-family:var(--font);font-weight:700;font-size:13px;}
+  .drawer-footer .primary{background:var(--text);color:#fff;}
+  .drawer-footer .secondary{background:var(--surface);color:var(--text);}
+
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+  .field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13px;background:#fff;color:var(--text);}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--text);}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  .field-help{font-size:10.5px;color:var(--muted2);margin-top:3px;}
+
+  .cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .cat-btn{padding:10px 6px;border:1px solid var(--border);background:#fff;border-radius:8px;cursor:pointer;font-family:var(--font);font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);transition:all .15s;text-align:center;}
+  .cat-btn:hover{border-color:var(--text);color:var(--text);}
+  .cat-btn.active{background:var(--text);color:#fff;border-color:var(--text);}
+
+  .photo-upload{border:2px dashed var(--border);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .15s;}
+  .photo-upload:hover{border-color:var(--text);background:var(--surface);}
+  .photo-upload-icon{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;background:var(--surface);border-radius:50%;color:var(--muted);margin-bottom:8px;}
+  .photo-upload-text{font-size:12px;color:var(--muted);font-weight:600;}
+  .photo-preview{position:relative;}
+  .photo-preview img{width:100%;border-radius:9px;display:block;}
+  .photo-remove{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);color:#fff;border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+  .tva-recap{background:var(--surface);border-radius:9px;padding:12px 14px;margin:10px 0 14px;}
+  .tva-recap-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;}
+  .tva-recap-row.total{padding-top:8px;border-top:1px solid var(--border2);margin-top:6px;font-weight:700;}
+  .tva-recap-lbl{color:var(--muted);}
+  .tva-recap-val{font-family:var(--mono);font-weight:700;color:var(--text);}
+  .tva-recap-val.green{color:var(--green);}
+
+  .suggest-prospect{background:rgba(245,158,11,.08);border:1px dashed var(--amber);border-radius:9px;padding:11px 12px;font-size:11.5px;color:#854F0B;margin-top:8px;display:flex;align-items:center;gap:8px;}
+  .suggest-prospect strong{color:var(--text);}
+  .suggest-actions{display:flex;gap:6px;margin-left:auto;}
+  .suggest-actions button{font-size:10px;font-weight:700;padding:4px 9px;border-radius:5px;border:none;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;}
+  .suggest-yes{background:var(--text);color:#fff;}
+  .suggest-no{background:#fff;color:var(--muted);border:1px solid var(--border);}
+
+  /* RÉCURRENTS list */
+  .rec-row{display:grid;grid-template-columns:90px 1fr 60px 110px 30px;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
+  .rec-row:last-child{border-bottom:none;}
+  .rec-cat{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:5px;text-align:center;justify-self:start;}
+  .rec-desc{font-weight:600;color:var(--text);}
+  .rec-desc-sub{font-size:10.5px;color:var(--muted);margin-top:2px;font-family:var(--mono);}
+  .rec-day{font-family:var(--mono);font-weight:700;font-size:11px;color:var(--muted);text-align:center;background:var(--surface);padding:4px 8px;border-radius:5px;justify-self:end;}
+  .rec-amount{font-family:var(--mono);font-weight:800;font-size:13px;color:#B84C00;text-align:right;}
+
+  .placeholder-banner{padding:10px 12px;background:rgba(245,158,11,.08);border:1px dashed var(--amber);border-radius:9px;font-size:11px;color:#854F0B;display:flex;align-items:center;gap:8px;}
+</style>
 </head>
 <body>
+
 <aside id="sidebar" class="sidebar"></aside>
-<main><h1>Frais</h1><p>Bientôt disponible</p></main>
+
+<main>
+  <div class="page-header">
+    <div class="page-title">Frais</div>
+    <div class="header-actions">
+      <button class="btn-icon" id="btn-export" title="Exporter en CSV">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+      <button class="btn-icon" id="btn-settings" title="Paramètres TVA">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button class="btn-new alt" id="btn-new-rec">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Frais récurrent
+      </button>
+      <button class="btn-new" id="btn-new">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nouveau frais
+      </button>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- KPI -->
+    <div class="grid-kpi">
+      <div class="kpi-card k-mois">
+        <div class="kpi-label">Ce mois</div>
+        <div class="kpi-value" id="kpi-mois">— €</div>
+        <div class="kpi-sub" id="kpi-mois-sub">— frais saisis</div>
+      </div>
+      <div class="kpi-card k-ytd">
+        <div class="kpi-label">Total YTD</div>
+        <div class="kpi-value" id="kpi-ytd">— €</div>
+        <div class="kpi-sub" id="kpi-ytd-sub">depuis 1er janvier</div>
+      </div>
+      <div class="kpi-card k-tva">
+        <div class="kpi-label">TVA récupérable</div>
+        <div class="kpi-value" id="kpi-tva">— €</div>
+        <div class="kpi-sub" id="kpi-tva-sub">cumul YTD</div>
+      </div>
+      <div class="kpi-card k-rdv">
+        <div class="kpi-label">Coût moyen / RDV</div>
+        <div class="kpi-value" id="kpi-rdv">— €</div>
+        <div class="kpi-sub" id="kpi-rdv-sub">RDV honorés</div>
+      </div>
+    </div>
+
+    <!-- Bar chart 12 mois -->
+    <div class="card">
+      <div class="card-header-light">
+        <h3>Évolution mensuelle</h3>
+        <span class="card-subtitle">12 derniers mois · clic sur une barre pour zoomer</span>
+      </div>
+      <div class="card-body">
+        <div class="chart12" id="chart12"></div>
+        <div class="chart12-totals" id="chart12-totals"></div>
+      </div>
+    </div>
+
+    <!-- Détail (toggle 3 vues) -->
+    <div class="card">
+      <div class="card-header-light">
+        <h3>Détail des frais</h3>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <div class="month-nav" id="month-nav" style="display:none;">
+            <button class="month-nav-btn" id="month-prev"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <div class="month-nav-label" id="month-label">—</div>
+            <button class="month-nav-btn" id="month-next"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+          </div>
+          <div class="view-toggle" id="view-toggle">
+            <button data-view="timeline" class="active">Timeline</button>
+            <button data-view="month">Mois</button>
+            <button data-view="rec">Récurrents</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="detail-view"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- DRAWER FRAIS PONCTUEL -->
+<div class="drawer-overlay" id="drawer-overlay"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div class="drawer-title" id="drawer-title">Nouveau frais</div>
+    <button class="drawer-close" id="drawer-close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="field">
+      <label>Catégorie</label>
+      <div class="cat-grid" id="cat-grid"></div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Montant TTC</label>
+        <input type="number" id="f-amount" step="0.01" min="0" placeholder="0,00 €" />
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="f-date" />
+      </div>
+    </div>
+    <div class="tva-recap" id="tva-recap" style="display:none;">
+      <div class="tva-recap-row"><span class="tva-recap-lbl">HT</span><span class="tva-recap-val" id="tva-ht">— €</span></div>
+      <div class="tva-recap-row"><span class="tva-recap-lbl" id="tva-rate-lbl">TVA</span><span class="tva-recap-val" id="tva-amount">— €</span></div>
+      <div class="tva-recap-row total"><span class="tva-recap-lbl">TVA récupérable</span><span class="tva-recap-val green" id="tva-recup">— €</span></div>
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <input type="text" id="f-desc" placeholder="ex : Plein autoroute Paris" />
+    </div>
+    <div class="field">
+      <label>Prospect lié (optionnel)</label>
+      <select id="f-card"><option value="">— Aucun</option></select>
+      <div id="suggest-prospect-wrap"></div>
+    </div>
+    <div class="field">
+      <label>Photo / Justificatif</label>
+      <input type="file" id="f-photo-input" accept="image/*" capture="environment" style="display:none;" />
+      <div id="photo-zone"></div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="secondary" id="drawer-cancel">Annuler</button>
+    <button class="primary" id="drawer-save">Enregistrer</button>
+  </div>
+</div>
+
+<!-- DRAWER RÉCURRENT -->
+<div class="drawer-overlay" id="rec-overlay"></div>
+<div class="drawer" id="rec-drawer">
+  <div class="drawer-header">
+    <div class="drawer-title" id="rec-title">Nouveau frais récurrent</div>
+    <button class="drawer-close" id="rec-close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="field">
+      <label>Catégorie</label>
+      <div class="cat-grid" id="rec-cat-grid"></div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Montant TTC mensuel</label>
+        <input type="number" id="rec-amount" step="0.01" min="0" placeholder="0,00 €" />
+      </div>
+      <div class="field">
+        <label>Jour du mois</label>
+        <input type="number" id="rec-day" min="1" max="28" placeholder="5" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <input type="text" id="rec-desc" placeholder="ex : Abonnement Free Mobile" />
+    </div>
+    <div class="field">
+      <label>Prestataire / Vendor (optionnel)</label>
+      <input type="text" id="rec-vendor" placeholder="ex : Free, Orange, OVH" />
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Date de début</label>
+        <input type="date" id="rec-start" />
+      </div>
+      <div class="field">
+        <label>Date de fin (vide = illimité)</label>
+        <input type="date" id="rec-end" />
+      </div>
+    </div>
+    <div id="rec-existing-info" style="margin-top:14px;"></div>
+  </div>
+  <div class="drawer-footer">
+    <button class="secondary" id="rec-cancel">Annuler</button>
+    <button class="primary" id="rec-save">Enregistrer</button>
+  </div>
+</div>
+
+<!-- DRAWER SETTINGS -->
+<div class="drawer-overlay" id="settings-overlay"></div>
+<div class="drawer" id="settings-drawer" style="width:420px;">
+  <div class="drawer-header">
+    <div class="drawer-title">Paramètres fiscaux</div>
+    <button class="drawer-close" id="settings-close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="field">
+      <label>Statut TVA</label>
+      <select id="set-tva">
+        <option value="false">Non assujetti (auto-entrepreneur sous seuils)</option>
+        <option value="true">Assujetti à la TVA</option>
+      </select>
+      <div class="field-help">Si assujetti, la TVA récupérable est calculée auto selon catégorie.</div>
+    </div>
+    <div class="field">
+      <label>Forme juridique</label>
+      <select id="set-forme">
+        <option value="">— Non précisé</option>
+        <option value="micro">Micro-entreprise</option>
+        <option value="ei">EI / EIRL</option>
+        <option value="sasu">SASU</option>
+        <option value="sarl">SARL / EURL</option>
+        <option value="sas">SAS</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>SIRET</label>
+      <input type="text" id="set-siret" placeholder="12345678901234" maxlength="14" />
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="secondary" id="settings-cancel">Annuler</button>
+    <button class="primary" id="settings-save">Enregistrer</button>
+  </div>
+</div>
+
+<!-- MODAL DETAIL JOUR -->
+<div class="modal-overlay" id="day-modal">
+  <div class="modal-card">
+    <div class="modal-card-header">
+      <div class="modal-card-title" id="day-modal-title">—</div>
+      <button class="drawer-close" id="day-modal-close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-card-body" id="day-modal-body"></div>
+  </div>
+</div>
+
 <script src="/sidebar.js"></script>
+<script>
+(function(){
+  /* ============ TVA TABLE ============ */
+  var TVA_TABLE = {
+    essence:     { tvaRate:20, recupPct:80,  label:'Essence' },
+    restaurant:  { tvaRate:10, recupPct:100, label:'Restaurant' },
+    hotel:       { tvaRate:10, recupPct:0,   label:'Hôtel' },
+    peage:       { tvaRate:20, recupPct:100, label:'Péage' },
+    parking:     { tvaRate:20, recupPct:100, label:'Parking' },
+    fournitures: { tvaRate:20, recupPct:100, label:'Fournitures' },
+    telecom:     { tvaRate:20, recupPct:100, label:'Télécom' },
+    autre:       { tvaRate:20, recupPct:100, label:'Autre' }
+  };
+  var CATEGORIES = Object.keys(TVA_TABLE);
+
+  /* ============ STORAGE ============ */
+  function loadJSON(k, fallback){ try{ return JSON.parse(localStorage.getItem(k) || JSON.stringify(fallback)); }catch(e){ return fallback; } }
+  function saveJSON(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+
+  var frais = loadJSON('mup_frais', []);
+  var recurrents = loadJSON('mup_frais_recurrents', []);
+  var pipeline = loadJSON('mup_pipeline', []);
+  var agenda = loadJSON('mup_agenda', []);
+  var settings = loadJSON('mup_user_settings', { tvaAssujetti:false, formeJuridique:'', siret:'' });
+  if(settings.tvaAssujetti === undefined) settings.tvaAssujetti = false;
+
+  /* ============ HELPERS ============ */
+  function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Math.round(n||0)); }
+  function fmtEur2(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0); }
+  function fmtShort(n){ if(!n) return '— €'; if(n>=1000000) return (n/1000000).toFixed(1).replace('.0','')+'M€'; if(n>=1000) return Math.round(n/1000)+'k€'; return Math.round(n)+'€'; }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function monthKey(date){ var d = new Date(date); return d.getFullYear()+'-'+pad(d.getMonth()+1); }
+  function monthLabel(date){ return new Date(date).toLocaleDateString('fr-FR',{month:'long',year:'numeric'}); }
+  function dayLabel(date){ return new Date(date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}); }
+  function fullDayLabel(date){ return new Date(date).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }
+
+  function computeTva(amountTTC, category){
+    if(!amountTTC || amountTTC <= 0) return { ht:0, tva:0, recup:0, rate:0, recupPct:0 };
+    var t = TVA_TABLE[category] || TVA_TABLE.autre;
+    var rate = settings.tvaAssujetti ? t.tvaRate : 0;
+    var recupPct = settings.tvaAssujetti ? t.recupPct : 0;
+    var ht = rate > 0 ? amountTTC / (1 + rate/100) : amountTTC;
+    var tva = amountTTC - ht;
+    return { ht:ht, tva:tva, recup:tva*(recupPct/100), rate:rate, recupPct:recupPct };
+  }
+
+  function enrichFrais(f){
+    var calc = computeTva(f.amountTTC, f.category);
+    f.amountHT = calc.ht; f.amountTVA = calc.tva;
+    f.tvaRate = calc.rate; f.tvaRecuperablePct = calc.recupPct;
+    f.tvaRecuperable = calc.recup;
+    return f;
+  }
+
+  /* ============ GÉNÉRATION OCCURRENCES RÉCURRENTES ============ */
+  function generateRecurrentOccurrences(){
+    var today = new Date(); today.setHours(0,0,0,0);
+    var existingIds = {};
+    frais.forEach(function(f){ existingIds[f.id] = true; });
+    var added = false;
+
+    recurrents.forEach(function(rule){
+      if(!rule.active) return;
+      var start = new Date(rule.startDate); start.setHours(0,0,0,0);
+      var end = rule.endDate ? new Date(rule.endDate) : today;
+      if(end > today) end = today;
+      var skipped = rule.skippedMonths || [];
+
+      var d = new Date(start.getFullYear(), start.getMonth(), 1);
+      var stop = new Date(end.getFullYear(), end.getMonth(), 1);
+      while(d <= stop){
+        var occMonth = pad(d.getMonth()+1);
+        var occYear = d.getFullYear();
+        var occDate = occYear+'-'+occMonth+'-'+pad(rule.dayOfMonth);
+        var occDateObj = new Date(occDate);
+
+        if(occDateObj >= start && occDateObj <= end && skipped.indexOf(occYear+'-'+occMonth) === -1){
+          var occId = 'fr_'+rule.id+'_'+occYear+'-'+occMonth;
+          if(!existingIds[occId]){
+            var newOcc = {
+              id: occId,
+              recurrentId: rule.id,
+              category: rule.category,
+              amountTTC: rule.amountTTC,
+              date: occDate,
+              description: rule.description + (rule.vendor ? ' — '+rule.vendor : ''),
+              cardId: null,
+              location: null,
+              photoData: null,
+              ocrStatus: null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            enrichFrais(newOcc);
+            frais.push(newOcc);
+            existingIds[occId] = true;
+            added = true;
+          }
+        }
+        d.setMonth(d.getMonth()+1);
+      }
+    });
+    if(added) saveJSON('mup_frais', frais);
+  }
+
+  /* ============ KPI ============ */
+  function renderKPI(){
+    var now = new Date();
+    var thisMonth = monthKey(now);
+    var thisYear = now.getFullYear();
+    var fThisMonth = frais.filter(function(f){ return monthKey(f.date) === thisMonth; });
+    var fYTD = frais.filter(function(f){ return new Date(f.date).getFullYear() === thisYear; });
+    var totalMois = fThisMonth.reduce(function(s,f){ return s + (f.amountTTC||0); }, 0);
+    var totalYTD = fYTD.reduce(function(s,f){ return s + (f.amountTTC||0); }, 0);
+    var tvaYTD = fYTD.reduce(function(s,f){ return s + (f.tvaRecuperable||0); }, 0);
+    var rdvHonored = agenda.filter(function(r){
+      var d = new Date(r.date || r.ts);
+      return d < now && d.getFullYear() === thisYear;
+    }).length;
+    var coutParRdv = rdvHonored > 0 ? totalYTD / rdvHonored : 0;
+
+    document.getElementById('kpi-mois').textContent = fmtEur(totalMois);
+    document.getElementById('kpi-mois-sub').textContent = fThisMonth.length + ' frais saisis';
+    document.getElementById('kpi-ytd').textContent = fmtEur(totalYTD);
+    document.getElementById('kpi-tva').textContent = settings.tvaAssujetti ? fmtEur(tvaYTD) : '—';
+    document.getElementById('kpi-tva-sub').textContent = settings.tvaAssujetti ? 'cumul YTD' : 'non assujetti';
+    document.getElementById('kpi-rdv').textContent = rdvHonored > 0 ? fmtEur(coutParRdv) : '—';
+    document.getElementById('kpi-rdv-sub').textContent = rdvHonored + ' RDV honorés';
+  }
+
+  /* ============ CHART 12 MOIS ============ */
+  function renderChart12(){
+    var now = new Date();
+    var months = [];
+    for(var i = 11; i >= 0; i--){
+      var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ year:d.getFullYear(), month:d.getMonth(), label:d.toLocaleDateString('fr-FR',{month:'short'}).replace('.','').toUpperCase(), amount:0, count:0 });
+    }
+    frais.forEach(function(f){
+      var d = new Date(f.date);
+      if(isNaN(d.getTime())) return;
+      var m = months.find(function(x){ return x.year === d.getFullYear() && x.month === d.getMonth(); });
+      if(m){ m.amount += (f.amountTTC||0); m.count++; }
+    });
+    var maxA = Math.max.apply(null, months.map(function(m){ return m.amount; })) || 1;
+    var totalAll = months.reduce(function(s,m){ return s + m.amount; }, 0);
+    var bestMonth = months.slice().sort(function(a,b){ return b.amount - a.amount; })[0];
+    var avgMonth = totalAll / 12;
+    var tvaTotal = frais.filter(function(f){
+      var d = new Date(f.date);
+      return d >= new Date(now.getFullYear(), now.getMonth()-11, 1);
+    }).reduce(function(s,f){ return s + (f.tvaRecuperable||0); }, 0);
+
+    var html = '';
+    months.forEach(function(m){
+      var isCurrent = (m.year === now.getFullYear() && m.month === now.getMonth());
+      var hasData = m.amount > 0;
+      var heightPct = hasData ? Math.max(4, (m.amount / maxA) * 100) : 0;
+      html += '<div class="chart12-col'+(isCurrent?' is-current':'')+'" data-year="'+m.year+'" data-month="'+m.month+'" title="'+m.label+' '+m.year+' : '+(hasData ? fmtEur(m.amount) + ' · ' + m.count + ' frais' : 'Aucun')+'">';
+      html += '<div class="chart12-amount'+(hasData?'':' empty')+'">'+(hasData ? fmtShort(m.amount) : '—')+'</div>';
+      html += '<div class="chart12-track">';
+      html += hasData ? '<div class="chart12-fill" style="height:'+heightPct+'%;"></div>' : '<div class="chart12-fill empty" style="height:2px;"></div>';
+      html += '</div><div class="chart12-label">'+m.label+'</div></div>';
+    });
+    document.getElementById('chart12').innerHTML = html;
+
+    document.querySelectorAll('.chart12-col').forEach(function(col){
+      col.addEventListener('click', function(){
+        var y = parseInt(this.dataset.year, 10);
+        var m = parseInt(this.dataset.month, 10);
+        currentMonthDate = new Date(y, m, 1);
+        switchView('month');
+      });
+    });
+
+    var totals = '';
+    totals += '<div class="chart12-totals-cell"><span class="chart12-totals-lbl">Total 12 mois</span><span class="chart12-totals-val orange">'+fmtEur(totalAll)+'</span></div>';
+    totals += '<div class="chart12-totals-cell"><span class="chart12-totals-lbl">TVA récupérable</span><span class="chart12-totals-val green">'+(settings.tvaAssujetti ? fmtEur(tvaTotal) : '—')+'</span></div>';
+    totals += '<div class="chart12-totals-cell"><span class="chart12-totals-lbl">Moyenne / mois</span><span class="chart12-totals-val">'+fmtEur(avgMonth)+'</span></div>';
+    totals += '<div class="chart12-totals-cell"><span class="chart12-totals-lbl">Plus gros mois</span><span class="chart12-totals-val">'+(bestMonth && bestMonth.amount > 0 ? bestMonth.label + ' · ' + fmtEur(bestMonth.amount) : '—')+'</span></div>';
+    document.getElementById('chart12-totals').innerHTML = totals;
+  }
+
+  /* ============ TIMELINE ============ */
+  var currentView = 'timeline';
+  var currentMonthDate = new Date();
+
+  function renderTimeline(){
+    if(frais.length === 0){
+      document.getElementById('detail-view').innerHTML = '<div class="timeline-empty">Aucun frais saisi. Cliquer sur <strong>+ Nouveau frais</strong> ou <strong>Frais récurrent</strong>.</div>';
+      return;
+    }
+    var sorted = frais.slice().sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+    var byMonth = {};
+    sorted.forEach(function(f){
+      var k = monthKey(f.date);
+      if(!byMonth[k]) byMonth[k] = { items:[], date:f.date };
+      byMonth[k].items.push(f);
+    });
+    var html = '';
+    Object.keys(byMonth).sort().reverse().forEach(function(k){
+      var g = byMonth[k];
+      var total = g.items.reduce(function(s,f){ return s + f.amountTTC; }, 0);
+      html += '<div class="timeline-month">';
+      html += '<div class="timeline-month-header"><div class="timeline-month-name">'+monthLabel(g.date)+'</div><div class="timeline-month-total">'+fmtEur(total)+'</div></div>';
+      g.items.forEach(function(f){ html += renderRow(f); });
+      html += '</div>';
+    });
+    document.getElementById('detail-view').innerHTML = html;
+    bindRowActions();
+  }
+
+  function renderRow(f){
+    var card = pipeline.find(function(c){ return c.id === f.cardId; });
+    var cardLbl = card ? (card.name || card.co || '') : '';
+    var isRec = !!f.recurrentId;
+    var html = '<div class="timeline-row">';
+    html += '<div class="timeline-date">'+dayLabel(f.date)+'</div>';
+    html += '<div class="timeline-cat cat-'+f.category+'">'+TVA_TABLE[f.category].label+'</div>';
+    html += '<div><div class="timeline-desc">'+(f.description || '—')+'</div>'+(cardLbl?'<div class="timeline-desc-sub">→ '+cardLbl+'</div>':'')+'</div>';
+    html += '<div class="timeline-rec-badge'+(isRec?'':' empty')+'">'+(isRec?'Récurrent':'')+'</div>';
+    html += '<div class="timeline-amount">'+fmtEur2(f.amountTTC)+'</div>';
+    html += '<div class="timeline-tva'+(f.tvaRecuperable > 0 ? '' : ' zero')+'">'+(f.tvaRecuperable > 0 ? '↗ '+fmtEur2(f.tvaRecuperable) : '—')+'</div>';
+    html += '<div class="timeline-actions">';
+    html += '<button class="timeline-action-btn" data-edit="'+f.id+'" title="Modifier"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>';
+    html += '<button class="timeline-action-btn" data-del="'+f.id+'" title="Supprimer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function bindRowActions(){
+    document.querySelectorAll('[data-del]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = this.dataset.del;
+        var f = frais.find(function(x){ return x.id === id; });
+        if(!f) return;
+        var msg = f.recurrentId ? 'Supprimer cette occurrence ? Le frais récurrent ne sera pas généré ce mois-ci.' : 'Supprimer ce frais ?';
+        if(!confirm(msg)) return;
+        if(f.recurrentId){
+          var rule = recurrents.find(function(r){ return r.id === f.recurrentId; });
+          if(rule){
+            if(!rule.skippedMonths) rule.skippedMonths = [];
+            rule.skippedMonths.push(monthKey(f.date));
+            saveJSON('mup_frais_recurrents', recurrents);
+          }
+        }
+        frais = frais.filter(function(x){ return x.id !== id; });
+        saveJSON('mup_frais', frais);
+        renderAll();
+      });
+    });
+    document.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){ openDrawer(this.dataset.edit); });
+    });
+  }
+
+  /* ============ MOIS (calendrier) ============ */
+  function renderMonth(){
+    var d = currentMonthDate;
+    var year = d.getFullYear(), month = d.getMonth();
+    document.getElementById('month-label').textContent = d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+
+    var firstDay = new Date(year, month, 1);
+    var lastDay = new Date(year, month+1, 0);
+    var dayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1; // L=0
+    var daysInMonth = lastDay.getDate();
+    var totalCells = Math.ceil((dayOfWeek + daysInMonth) / 7) * 7;
+
+    var dayNames = ['Lu','Ma','Me','Je','Ve','Sa','Di'];
+    var html = '';
+    dayNames.forEach(function(n){ html += '<div class="calmonth-dayname">'+n+'</div>'; });
+
+    var today = new Date(); today.setHours(0,0,0,0);
+    var monthFrais = frais.filter(function(f){
+      var fd = new Date(f.date);
+      return fd.getFullYear() === year && fd.getMonth() === month;
+    });
+
+    for(var i = 0; i < totalCells; i++){
+      var cellDate;
+      if(i < dayOfWeek){
+        var prevDay = new Date(year, month, -dayOfWeek + i + 1);
+        cellDate = prevDay;
+        html += '<div class="calmonth-cell outside"><div class="calmonth-day">'+prevDay.getDate()+'</div></div>';
+      } else if(i >= dayOfWeek + daysInMonth){
+        var nextDay = new Date(year, month, i - dayOfWeek - daysInMonth + 1 + daysInMonth);
+        nextDay = new Date(year, month+1, i - dayOfWeek - daysInMonth + 1);
+        html += '<div class="calmonth-cell outside"><div class="calmonth-day">'+nextDay.getDate()+'</div></div>';
+      } else {
+        var dayNum = i - dayOfWeek + 1;
+        var cell = new Date(year, month, dayNum);
+        var dayFrais = monthFrais.filter(function(f){
+          var fd = new Date(f.date);
+          return fd.getDate() === dayNum;
+        });
+        var dayTotal = dayFrais.reduce(function(s,f){ return s + f.amountTTC; }, 0);
+        var isToday = cell.getTime() === today.getTime();
+        var hasData = dayFrais.length > 0;
+        var classes = 'calmonth-cell' + (hasData ? ' has-data' : '') + (isToday ? ' is-today' : '');
+        var iso = year+'-'+pad(month+1)+'-'+pad(dayNum);
+        html += '<div class="'+classes+'" data-day="'+iso+'">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+        html += '<div class="calmonth-day">'+dayNum+'</div>';
+        if(hasData) html += '<div class="calmonth-amount">'+fmtShort(dayTotal)+'</div>';
+        html += '</div>';
+        if(hasData){
+          var cats = {};
+          dayFrais.forEach(function(f){ cats[f.category] = true; });
+          var catList = Object.keys(cats).slice(0,5);
+          html += '<div class="calmonth-dots">';
+          catList.forEach(function(c){
+            var color = catColorHex(c);
+            html += '<div class="calmonth-cat-dot" style="background:'+color+';"></div>';
+          });
+          if(Object.keys(cats).length > 5) html += '<div class="calmonth-more">+</div>';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+    }
+    document.getElementById('detail-view').innerHTML = '<div class="calmonth-grid">'+html+'</div>';
+
+    document.querySelectorAll('[data-day]').forEach(function(c){
+      c.addEventListener('click', function(){ openDayModal(this.dataset.day); });
+    });
+  }
+
+  function catColorHex(c){
+    var map = { essence:'#CC0000', restaurant:'#F59E0B', hotel:'#0A66C2', peage:'#4338CA', parking:'#0BBCD4', fournitures:'#7C3AED', telecom:'#1D8348', autre:'#AEAEB2' };
+    return map[c] || '#AEAEB2';
+  }
+
+  function openDayModal(iso){
+    var dayFrais = frais.filter(function(f){ return f.date === iso; }).sort(function(a,b){ return (a.createdAt||'').localeCompare(b.createdAt||''); });
+    var date = new Date(iso);
+    document.getElementById('day-modal-title').textContent = fullDayLabel(iso);
+    if(dayFrais.length === 0){
+      document.getElementById('day-modal-body').innerHTML = '<div style="text-align:center;color:var(--muted2);font-size:13px;padding:20px 0;">Aucun frais ce jour-là.</div>';
+    } else {
+      var total = dayFrais.reduce(function(s,f){ return s + f.amountTTC; }, 0);
+      var totalTva = dayFrais.reduce(function(s,f){ return s + (f.tvaRecuperable||0); }, 0);
+      var html = '<div style="display:flex;justify-content:space-between;padding:0 0 14px;border-bottom:1px solid var(--border);margin-bottom:10px;">';
+      html += '<div><div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">Total jour</div><div style="font-size:20px;font-weight:800;font-family:var(--mono);color:#B84C00;">'+fmtEur(total)+'</div></div>';
+      html += '<div style="text-align:right;"><div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">TVA récup</div><div style="font-size:14px;font-weight:800;font-family:var(--mono);color:var(--green);">'+(settings.tvaAssujetti ? fmtEur(totalTva) : '—')+'</div></div>';
+      html += '</div>';
+      dayFrais.forEach(function(f){ html += renderRow(f); });
+      document.getElementById('day-modal-body').innerHTML = html;
+      bindRowActions();
+    }
+    document.getElementById('day-modal').classList.add('show');
+  }
+  document.getElementById('day-modal-close').addEventListener('click', function(){ document.getElementById('day-modal').classList.remove('show'); });
+  document.getElementById('day-modal').addEventListener('click', function(e){ if(e.target.id === 'day-modal') this.classList.remove('show'); });
+
+  document.getElementById('month-prev').addEventListener('click', function(){ currentMonthDate = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth()-1, 1); renderMonth(); });
+  document.getElementById('month-next').addEventListener('click', function(){ currentMonthDate = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth()+1, 1); renderMonth(); });
+
+  /* ============ RÉCURRENTS LIST ============ */
+  function renderRecurrents(){
+    if(recurrents.length === 0){
+      document.getElementById('detail-view').innerHTML = '<div class="timeline-empty">Aucun frais récurrent. Cliquer sur <strong>Frais récurrent</strong> en haut pour automatiser tes abonnements (téléphone, internet, assurance...).</div>';
+      return;
+    }
+    var sorted = recurrents.slice().sort(function(a,b){ return a.dayOfMonth - b.dayOfMonth; });
+    var html = '<div style="margin-bottom:12px;font-size:11px;color:var(--muted);">Les occurrences sont générées automatiquement chaque mois jusqu\'à la date du jour.</div>';
+    sorted.forEach(function(r){
+      var status = r.active ? '' : ' (inactif)';
+      html += '<div class="rec-row">';
+      html += '<div class="rec-cat cat-'+r.category+'">'+TVA_TABLE[r.category].label+'</div>';
+      html += '<div><div class="rec-desc">'+r.description+status+'</div>';
+      html += '<div class="rec-desc-sub">'+(r.vendor?r.vendor+' · ':'')+'depuis '+new Date(r.startDate).toLocaleDateString('fr-FR',{month:'short',year:'2-digit'})+(r.endDate?' — '+new Date(r.endDate).toLocaleDateString('fr-FR',{month:'short',year:'2-digit'}):'')+'</div></div>';
+      html += '<div class="rec-day">le '+r.dayOfMonth+'</div>';
+      html += '<div class="rec-amount">'+fmtEur2(r.amountTTC)+' / mois</div>';
+      html += '<div class="timeline-actions">';
+      html += '<button class="timeline-action-btn" data-edit-rec="'+r.id+'"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>';
+      html += '<button class="timeline-action-btn" data-del-rec="'+r.id+'"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>';
+      html += '</div></div>';
+    });
+    document.getElementById('detail-view').innerHTML = html;
+
+    document.querySelectorAll('[data-edit-rec]').forEach(function(b){ b.addEventListener('click', function(){ openRecDrawer(this.dataset.editRec); }); });
+    document.querySelectorAll('[data-del-rec]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = this.dataset.delRec;
+        if(!confirm('Supprimer ce frais récurrent et toutes ses occurrences générées ?')) return;
+        recurrents = recurrents.filter(function(r){ return r.id !== id; });
+        frais = frais.filter(function(f){ return f.recurrentId !== id; });
+        saveJSON('mup_frais_recurrents', recurrents);
+        saveJSON('mup_frais', frais);
+        renderAll();
+      });
+    });
+  }
+
+  /* ============ TOGGLE VIEW ============ */
+  function switchView(v){
+    currentView = v;
+    document.querySelectorAll('#view-toggle button').forEach(function(b){ b.classList.toggle('active', b.dataset.view === v); });
+    document.getElementById('month-nav').style.display = (v === 'month') ? 'flex' : 'none';
+    if(v === 'timeline') renderTimeline();
+    else if(v === 'month') renderMonth();
+    else if(v === 'rec') renderRecurrents();
+  }
+  document.getElementById('view-toggle').addEventListener('click', function(e){
+    var btn = e.target.closest('button[data-view]');
+    if(btn) switchView(btn.dataset.view);
+  });
+
+  /* ============ DRAWER FRAIS PONCTUEL ============ */
+  var editingId = null, currentCategory = null, currentPhotoData = null;
+
+  function buildCatGrid(targetId, onSelect){
+    var html = '';
+    CATEGORIES.forEach(function(c){ html += '<button type="button" class="cat-btn" data-cat="'+c+'">'+TVA_TABLE[c].label+'</button>'; });
+    document.getElementById(targetId).innerHTML = html;
+    document.getElementById(targetId).querySelectorAll('.cat-btn').forEach(function(b){
+      b.addEventListener('click', function(){ onSelect(this.dataset.cat); });
+    });
+  }
+
+  function buildCardSelect(){
+    var sel = document.getElementById('f-card');
+    sel.innerHTML = '<option value="">— Aucun</option>';
+    pipeline.filter(function(c){ return c.col !== 'lost'; }).forEach(function(c){
+      var name = c.name || c.title || '—';
+      var opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = name + (c.co && c.co !== name ? ' · ' + c.co : '');
+      sel.appendChild(opt);
+    });
+  }
+
+  function updateTvaRecap(){
+    var amount = parseFloat(document.getElementById('f-amount').value) || 0;
+    var recap = document.getElementById('tva-recap');
+    if(!currentCategory || amount <= 0){ recap.style.display = 'none'; return; }
+    recap.style.display = 'block';
+    var calc = computeTva(amount, currentCategory);
+    document.getElementById('tva-ht').textContent = fmtEur2(calc.ht);
+    document.getElementById('tva-rate-lbl').textContent = settings.tvaAssujetti ? ('TVA ' + calc.rate + '%') : 'TVA (non assujetti)';
+    document.getElementById('tva-amount').textContent = fmtEur2(calc.tva);
+    document.getElementById('tva-recup').textContent = settings.tvaAssujetti ? (fmtEur2(calc.recup) + ' (' + calc.recupPct + '%)') : '—';
+  }
+
+  function suggestProspect(){
+    var date = document.getElementById('f-date').value;
+    if(!date) return;
+    var rdvsOfDay = agenda.filter(function(r){ return r.date && String(r.date).slice(0,10) === date; });
+    var wrap = document.getElementById('suggest-prospect-wrap');
+    if(rdvsOfDay.length === 1){
+      var rdv = rdvsOfDay[0];
+      var card = pipeline.find(function(c){ return c.id === (rdv.cardId || rdv.prospectId); });
+      if(card && document.getElementById('f-card').value === ''){
+        wrap.innerHTML = '<div class="suggest-prospect"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>RDV avec <strong>'+(card.name || card.co || '—')+'</strong> ce jour-là</span><div class="suggest-actions"><button class="suggest-yes" data-link="'+card.id+'">Lier</button><button class="suggest-no" data-dismiss>Ignorer</button></div></div>';
+        wrap.querySelector('[data-link]').addEventListener('click', function(){ document.getElementById('f-card').value = this.dataset.link; wrap.innerHTML = ''; });
+        wrap.querySelector('[data-dismiss]').addEventListener('click', function(){ wrap.innerHTML = ''; });
+      }
+    } else { wrap.innerHTML = ''; }
+  }
+
+  function resetPhotoZone(){
+    document.getElementById('photo-zone').innerHTML = '<div class="photo-upload" id="photo-upload-trigger"><div class="photo-upload-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><div class="photo-upload-text">Prendre une photo / Importer</div></div>';
+    document.getElementById('photo-upload-trigger').addEventListener('click', function(){ document.getElementById('f-photo-input').click(); });
+  }
+
+  function openDrawer(id){
+    editingId = id || null;
+    currentCategory = null;
+    currentPhotoData = null;
+    document.getElementById('drawer-title').textContent = id ? 'Modifier le frais' : 'Nouveau frais';
+    document.getElementById('f-amount').value = '';
+    document.getElementById('f-date').value = todayISO();
+    document.getElementById('f-desc').value = '';
+    document.getElementById('f-card').value = '';
+    document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.remove('active'); });
+    resetPhotoZone();
+    updateTvaRecap();
+    document.getElementById('suggest-prospect-wrap').innerHTML = '';
+
+    if(id){
+      var f = frais.find(function(x){ return x.id === id; });
+      if(f){
+        currentCategory = f.category;
+        document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === f.category); });
+        document.getElementById('f-amount').value = f.amountTTC;
+        document.getElementById('f-date').value = f.date;
+        document.getElementById('f-desc').value = f.description || '';
+        document.getElementById('f-card').value = f.cardId || '';
+        if(f.photoData){
+          currentPhotoData = f.photoData;
+          renderPhotoPreview(f.photoData);
+        }
+        updateTvaRecap();
+      }
+    }
+    document.getElementById('drawer').classList.add('show');
+    document.getElementById('drawer-overlay').classList.add('show');
+  }
+
+  function closeDrawer(){
+    document.getElementById('drawer').classList.remove('show');
+    document.getElementById('drawer-overlay').classList.remove('show');
+    editingId = null;
+  }
+
+  function renderPhotoPreview(data){
+    document.getElementById('photo-zone').innerHTML = '<div class="photo-preview"><img src="'+data+'" /><button type="button" class="photo-remove" id="photo-remove-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
+    document.getElementById('photo-remove-btn').addEventListener('click', function(){ currentPhotoData = null; resetPhotoZone(); });
+  }
+
+  document.getElementById('f-photo-input').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    compressImage(file).then(function(data){ currentPhotoData = data; renderPhotoPreview(data); });
+  });
+
+  function compressImage(file){
+    return new Promise(function(resolve){
+      var img = new Image();
+      var reader = new FileReader();
+      reader.onload = function(e){
+        img.onload = function(){
+          var canvas = document.createElement('canvas');
+          var maxDim = 1280;
+          var w = img.width, h = img.height;
+          if(w > maxDim || h > maxDim){
+            var ratio = Math.min(maxDim/w, maxDim/h);
+            w = Math.round(w*ratio); h = Math.round(h*ratio);
+          }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  document.getElementById('f-amount').addEventListener('input', updateTvaRecap);
+  document.getElementById('f-date').addEventListener('change', suggestProspect);
+  document.getElementById('btn-new').addEventListener('click', function(){ openDrawer(); });
+  document.getElementById('drawer-cancel').addEventListener('click', closeDrawer);
+  document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+  document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
+
+  document.getElementById('drawer-save').addEventListener('click', function(){
+    if(!currentCategory){ alert('Sélectionner une catégorie'); return; }
+    var amount = parseFloat(document.getElementById('f-amount').value);
+    if(!amount || amount <= 0){ alert('Saisir un montant valide'); return; }
+    var date = document.getElementById('f-date').value || todayISO();
+
+    if(editingId){
+      var idx = frais.findIndex(function(x){ return x.id === editingId; });
+      if(idx >= 0){
+        var existing = frais[idx];
+        if(existing.recurrentId) existing._modifiedFromRecurrent = true;
+        existing.category = currentCategory;
+        existing.amountTTC = amount;
+        existing.date = date;
+        existing.description = document.getElementById('f-desc').value.trim();
+        existing.cardId = document.getElementById('f-card').value || null;
+        existing.photoData = currentPhotoData;
+        existing.updatedAt = new Date().toISOString();
+        enrichFrais(existing);
+      }
+    } else {
+      var newF = {
+        id: 'f' + Date.now(),
+        category: currentCategory,
+        amountTTC: amount,
+        date: date,
+        description: document.getElementById('f-desc').value.trim(),
+        cardId: document.getElementById('f-card').value || null,
+        photoData: currentPhotoData,
+        ocrStatus: currentPhotoData ? 'pending' : null,
+        location: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      enrichFrais(newF);
+      frais.push(newF);
+    }
+    saveJSON('mup_frais', frais);
+    closeDrawer();
+    renderAll();
+  });
+
+  /* ============ DRAWER RÉCURRENT ============ */
+  var editingRecId = null, currentRecCategory = null;
+
+  function openRecDrawer(id){
+    editingRecId = id || null;
+    currentRecCategory = null;
+    document.getElementById('rec-title').textContent = id ? 'Modifier le frais récurrent' : 'Nouveau frais récurrent';
+    document.getElementById('rec-amount').value = '';
+    document.getElementById('rec-day').value = 5;
+    document.getElementById('rec-desc').value = '';
+    document.getElementById('rec-vendor').value = '';
+    document.getElementById('rec-start').value = todayISO();
+    document.getElementById('rec-end').value = '';
+    document.querySelectorAll('#rec-cat-grid .cat-btn').forEach(function(b){ b.classList.remove('active'); });
+    document.getElementById('rec-existing-info').innerHTML = '';
+
+    if(id){
+      var r = recurrents.find(function(x){ return x.id === id; });
+      if(r){
+        currentRecCategory = r.category;
+        document.querySelectorAll('#rec-cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === r.category); });
+        document.getElementById('rec-amount').value = r.amountTTC;
+        document.getElementById('rec-day').value = r.dayOfMonth;
+        document.getElementById('rec-desc').value = r.description;
+        document.getElementById('rec-vendor').value = r.vendor || '';
+        document.getElementById('rec-start').value = r.startDate;
+        document.getElementById('rec-end').value = r.endDate || '';
+        var occCount = frais.filter(function(f){ return f.recurrentId === id; }).length;
+        document.getElementById('rec-existing-info').innerHTML = '<div style="font-size:11px;color:var(--muted);background:var(--surface);padding:10px 12px;border-radius:8px;">'+occCount+' occurrence'+(occCount>1?'s':'')+' déjà générée'+(occCount>1?'s':'')+'.</div>';
+      }
+    }
+    document.getElementById('rec-drawer').classList.add('show');
+    document.getElementById('rec-overlay').classList.add('show');
+  }
+
+  function closeRecDrawer(){
+    document.getElementById('rec-drawer').classList.remove('show');
+    document.getElementById('rec-overlay').classList.remove('show');
+    editingRecId = null;
+  }
+
+  document.getElementById('btn-new-rec').addEventListener('click', function(){ openRecDrawer(); });
+  document.getElementById('rec-cancel').addEventListener('click', closeRecDrawer);
+  document.getElementById('rec-close').addEventListener('click', closeRecDrawer);
+  document.getElementById('rec-overlay').addEventListener('click', closeRecDrawer);
+
+  document.getElementById('rec-save').addEventListener('click', function(){
+    if(!currentRecCategory){ alert('Sélectionner une catégorie'); return; }
+    var amount = parseFloat(document.getElementById('rec-amount').value);
+    if(!amount || amount <= 0){ alert('Saisir un montant valide'); return; }
+    var day = parseInt(document.getElementById('rec-day').value, 10);
+    if(!day || day < 1 || day > 28){ alert('Jour entre 1 et 28'); return; }
+    var desc = document.getElementById('rec-desc').value.trim();
+    if(!desc){ alert('Description obligatoire'); return; }
+
+    if(editingRecId){
+      var idx = recurrents.findIndex(function(r){ return r.id === editingRecId; });
+      if(idx >= 0){
+        recurrents[idx].category = currentRecCategory;
+        recurrents[idx].amountTTC = amount;
+        recurrents[idx].dayOfMonth = day;
+        recurrents[idx].description = desc;
+        recurrents[idx].vendor = document.getElementById('rec-vendor').value.trim();
+        recurrents[idx].startDate = document.getElementById('rec-start').value || todayISO();
+        recurrents[idx].endDate = document.getElementById('rec-end').value || null;
+        recurrents[idx].updatedAt = new Date().toISOString();
+      }
+    } else {
+      var newRec = {
+        id: 'r' + Date.now(),
+        category: currentRecCategory,
+        amountTTC: amount,
+        dayOfMonth: day,
+        description: desc,
+        vendor: document.getElementById('rec-vendor').value.trim(),
+        startDate: document.getElementById('rec-start').value || todayISO(),
+        endDate: document.getElementById('rec-end').value || null,
+        active: true,
+        skippedMonths: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      recurrents.push(newRec);
+    }
+    saveJSON('mup_frais_recurrents', recurrents);
+    generateRecurrentOccurrences();
+    closeRecDrawer();
+    renderAll();
+  });
+
+  /* ============ SETTINGS ============ */
+  function openSettings(){
+    document.getElementById('set-tva').value = String(!!settings.tvaAssujetti);
+    document.getElementById('set-forme').value = settings.formeJuridique || '';
+    document.getElementById('set-siret').value = settings.siret || '';
+    document.getElementById('settings-drawer').classList.add('show');
+    document.getElementById('settings-overlay').classList.add('show');
+  }
+  function closeSettings(){
+    document.getElementById('settings-drawer').classList.remove('show');
+    document.getElementById('settings-overlay').classList.remove('show');
+  }
+  document.getElementById('btn-settings').addEventListener('click', openSettings);
+  document.getElementById('settings-cancel').addEventListener('click', closeSettings);
+  document.getElementById('settings-close').addEventListener('click', closeSettings);
+  document.getElementById('settings-overlay').addEventListener('click', closeSettings);
+  document.getElementById('settings-save').addEventListener('click', function(){
+    settings.tvaAssujetti = (document.getElementById('set-tva').value === 'true');
+    settings.formeJuridique = document.getElementById('set-forme').value;
+    settings.siret = document.getElementById('set-siret').value.trim();
+    saveJSON('mup_user_settings', settings);
+    frais.forEach(enrichFrais);
+    saveJSON('mup_frais', frais);
+    closeSettings();
+    renderAll();
+  });
+
+  /* ============ EXPORT CSV ============ */
+  document.getElementById('btn-export').addEventListener('click', function(){
+    if(frais.length === 0){ alert('Aucun frais à exporter'); return; }
+    var headers = ['Date','Catégorie','Description','Prospect','Montant TTC','Montant HT','TVA','TVA récupérable','Type','Photo'];
+    var rows = frais.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); }).map(function(f){
+      var card = pipeline.find(function(c){ return c.id === f.cardId; });
+      return [
+        f.date,
+        TVA_TABLE[f.category].label,
+        (f.description || '').replace(/"/g,'""'),
+        (card ? (card.name || card.co || '') : '').replace(/"/g,'""'),
+        (f.amountTTC||0).toFixed(2),
+        (f.amountHT||0).toFixed(2),
+        (f.amountTVA||0).toFixed(2),
+        (f.tvaRecuperable||0).toFixed(2),
+        f.recurrentId ? 'Récurrent' : 'Ponctuel',
+        f.photoData ? 'OUI' : 'NON'
+      ];
+    });
+    var csv = headers.join(';') + '\n' + rows.map(function(r){ return r.map(function(c){ return '"'+c+'"'; }).join(';'); }).join('\n');
+    var blob = new Blob([new Uint8Array([0xEF,0xBB,0xBF]), csv], { type:'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'mup-frais-'+todayISO()+'.csv'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  /* ============ STORAGE SYNC ============ */
+  window.addEventListener('storage', function(e){
+    if(['mup_frais','mup_frais_recurrents','mup_pipeline','mup_agenda','mup_user_settings'].indexOf(e.key) !== -1){
+      frais = loadJSON('mup_frais', []);
+      recurrents = loadJSON('mup_frais_recurrents', []);
+      pipeline = loadJSON('mup_pipeline', []);
+      agenda = loadJSON('mup_agenda', []);
+      settings = loadJSON('mup_user_settings', settings);
+      renderAll();
+    }
+  });
+
+  /* ============ INIT ============ */
+  function renderAll(){
+    buildCatGrid('cat-grid', function(c){
+      currentCategory = c;
+      document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === c); });
+      updateTvaRecap();
+    });
+    buildCatGrid('rec-cat-grid', function(c){
+      currentRecCategory = c;
+      document.querySelectorAll('#rec-cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === c); });
+    });
+    buildCardSelect();
+    renderKPI();
+    renderChart12();
+    if(currentView === 'timeline') renderTimeline();
+    else if(currentView === 'month') renderMonth();
+    else if(currentView === 'rec') renderRecurrents();
+  }
+
+  generateRecurrentOccurrences();
+  renderAll();
+})();
+</script>
 </body>
 </html>

@@ -87,6 +87,8 @@
 
   /* ── CARD BASE ── */
   .card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;isolation:isolate;}
+  .dash-clickable{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease;}
+  .dash-clickable:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.06);}
   .card-header{padding:14px 18px;height:56px;box-sizing:border-box;border-bottom:1px solid #000;display:flex;align-items:center;justify-content:space-between;background:#1D1D1F;border-radius:0;}
   .card-title{font-size:17px;font-weight:800;letter-spacing:-.3px;color:#fff;}
   .card-sub{font-size:11px;color:rgba(255,255,255,.5);margin-top:1px;}
@@ -542,7 +544,7 @@
     <div class="grid-main">
 
       <!-- ── MAP (pleine largeur) ── -->
-      <div class="card map-card" style="animation:fadeUp .4s .05s ease both">
+      <div class="card map-card dash-clickable" data-href="/carte" style="animation:fadeUp .4s .05s ease both">
         <div class="card-header">
           <div>
             <div class="card-title">Localisation pipeline</div>
@@ -579,7 +581,7 @@
       </div>
 
       <!-- ── CRM 5 COLONNES ── -->
-      <div class="card crm-card" style="animation:fadeUp .4s .15s ease both">
+      <div class="card crm-card dash-clickable" data-href="/pipeline" style="animation:fadeUp .4s .15s ease both">
         <div class="card-header">
           <div>
             <div class="card-title">Pipeline</div>
@@ -591,7 +593,7 @@
       </div>
 
       <!-- ── MESSAGERIE ── -->
-      <div class="card mail-card" style="animation:fadeUp .4s .2s ease both">
+      <div class="card mail-card dash-clickable" data-href="/mail" style="animation:fadeUp .4s .2s ease both">
         <div class="card-header">
           <div>
             <div style="display:flex;align-items:center;gap:8px;">
@@ -1099,6 +1101,16 @@ function closeSidebar(){
     }).join('');
   }
 })();
+</script>
+<script>
+// Navigation globale : tout bloc .dash-clickable est cliquable
+document.addEventListener('click', function(e) {
+  if (e.target.closest('a, button, input, textarea, select, .leaflet-container')) return;
+  var block = e.target.closest('.dash-clickable');
+  if (!block) return;
+  var href = block.getAttribute('data-href');
+  if (href) window.location.href = href;
+});
 </script>
 <script src="/sidebar.js"></script>
 </body>

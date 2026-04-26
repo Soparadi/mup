@@ -130,6 +130,17 @@
   .topdeal-amount.empty{color:var(--muted2);font-weight:500;}
   .topdeal-days{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right;}
   .topdeal-empty{padding:18px 0;text-align:center;color:var(--muted2);font-size:12px;}
+  .topdeal-total{display:grid;grid-template-columns:1fr 100px 100px 70px;gap:14px;align-items:center;padding:13px 0;border-top:1px solid var(--text);margin-top:2px;}
+  .topdeal-total-lbl{font-weight:700;font-size:13px;letter-spacing:.3px;color:var(--text);text-transform:uppercase;}
+  .topdeal-total-count{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right;}
+  .topdeal-total-amount{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green);text-align:right;}
+  .topdeal-total-pad{font-family:var(--mono);font-size:11px;color:var(--muted2);text-align:right;}
+  .topdeal-compare{display:flex;justify-content:space-between;align-items:center;padding:9px 0 0;}
+  .topdeal-compare-left{display:flex;align-items:baseline;gap:10px;}
+  .topdeal-compare-lbl{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;}
+  .topdeal-compare-val{font-family:var(--mono);font-size:13px;color:var(--text);font-weight:700;}
+  .topdeal-compare-ratio{font-size:11px;color:var(--muted);font-family:var(--mono);}
+  .topdeal-compare-ratio.empty{color:var(--muted2);font-style:italic;}
 
   .week-pills{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
   .week-pill{padding:14px 16px;border-radius:10px;border:1px solid var(--border);display:flex;flex-direction:column;gap:4px;}
@@ -769,6 +780,13 @@
     });
     openCards.sort(function(a,b){ return b._val - a._val; });
     var top = openCards.slice(0, 5);
+
+    // Totaux : exclure null/0, exclure won/lost (déjà filtré dans openCards)
+    var dealsWithVal = openCards.filter(function(c){ return c._val > 0; });
+    var totalOpen = dealsWithVal.reduce(function(s,c){ return s + c._val; }, 0);
+    var dealsCount = dealsWithVal.length;
+    var totalWon = pipeline.filter(function(c){ return c.col === 'won'; }).reduce(function(s,c){ return s + (parseFloat(c.val) || 0); }, 0);
+
     var html = '';
     if(top.length === 0){
       html = '<div class="topdeal-empty">Aucun deal ouvert dans le pipeline</div>';
@@ -785,6 +803,28 @@
         html += '<div class="topdeal-days">'+(c._daysSince !== null ? 'J−'+c._daysSince : '—')+'</div>';
         html += '</div>';
       });
+
+      // Ligne TOTAL
+      html += '<div class="topdeal-total">';
+      html += '<div class="topdeal-total-lbl">Total deals ouverts</div>';
+      html += '<div class="topdeal-total-count">'+dealsCount+' deal'+(dealsCount>1?'s':'')+'</div>';
+      html += '<div class="topdeal-total-amount">'+(totalOpen > 0 ? fmtEur(totalOpen) : '—')+'</div>';
+      html += '<div class="topdeal-total-pad">—</div>';
+      html += '</div>';
+
+      // Ligne CA GAGNÉ + ratio
+      var ratioHtml;
+      if(totalWon > 0){
+        var ratio = totalOpen / totalWon;
+        var ratioStr = ratio >= 10 ? Math.round(ratio) : ratio.toFixed(1).replace('.0','');
+        ratioHtml = '<span class="topdeal-compare-ratio">Pipeline = '+ratioStr+'× le CA gagné</span>';
+      } else {
+        ratioHtml = '<span class="topdeal-compare-ratio empty">Aucun deal gagné encore</span>';
+      }
+      html += '<div class="topdeal-compare">';
+      html += '<div class="topdeal-compare-left"><span class="topdeal-compare-lbl">CA gagné</span><span class="topdeal-compare-val">'+fmtEur(totalWon)+'</span></div>';
+      html += ratioHtml;
+      html += '</div>';
     }
     document.getElementById('topdeals').innerHTML = html;
   }

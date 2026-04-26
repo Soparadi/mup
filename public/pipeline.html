@@ -1210,8 +1210,28 @@ function saveRdv() {
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(e) {}
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(e) {}
 
-  // Ferme le drawer
-  if(typeof closeDetail === 'function') closeDetail();
+  // Re-render le panneau détail pour refléter le nouveau RDV (timeline, pill colonne, calendrier reset)
+  if(typeof openDetail === 'function' && currentId) {
+    openDetail(currentId);
+  }
+
+  // Feedback visuel : flash le bouton en vert pendant 1.5s
+  var saveBtn = document.getElementById('rdv-save-btn');
+  if(saveBtn) {
+    var originalBg = saveBtn.style.background;
+    var originalColor = saveBtn.style.color;
+    saveBtn.style.background = '#1D8348';
+    saveBtn.style.color = '#fff';
+    saveBtn.style.borderColor = '#1D8348';
+    var originalHTML = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> RDV enregistré';
+    setTimeout(function() {
+      saveBtn.style.background = originalBg;
+      saveBtn.style.color = originalColor;
+      saveBtn.style.borderColor = '';
+      saveBtn.innerHTML = originalHTML;
+    }, 1500);
+  }
 }
 
 function saveSocials() {

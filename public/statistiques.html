@@ -66,22 +66,17 @@
 
   .evolution-chart{height:200px;width:100%;position:relative;}
 
-  .calyear-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:14px;}
-  .calyear-cell{background:var(--surface);border-radius:9px;padding:11px 12px 12px;border:1px solid transparent;transition:all .2s;position:relative;}
-  .calyear-cell.has-data{background:#fff;border-color:var(--border);}
-  .calyear-cell.is-current{background:var(--text);}
-  .calyear-cell.is-current .calyear-month,
-  .calyear-cell.is-current .calyear-amount,
-  .calyear-cell.is-current .calyear-count{color:#fff;}
-  .calyear-month{font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);}
-  .calyear-amount{font-size:18px;font-weight:800;font-family:var(--font);letter-spacing:-.4px;color:var(--text);margin-top:4px;line-height:1.1;}
-  .calyear-amount.empty{color:var(--muted2);font-weight:500;font-size:14px;}
-  .calyear-count{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;}
-  .calyear-bar{position:absolute;left:11px;right:11px;bottom:7px;height:3px;background:var(--surface2);border-radius:2px;overflow:hidden;}
-  .calyear-bar-fill{height:100%;background:var(--green);border-radius:2px;}
-  .calyear-cell.is-current .calyear-bar{background:rgba(255,255,255,.15);}
-  .calyear-cell.is-current .calyear-bar-fill{background:#fff;}
-  .calyear-totals{display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--border);font-size:11px;}
+  .calyear-chart{display:flex;align-items:flex-end;justify-content:space-between;gap:6px;height:200px;padding:0 4px 0;margin-bottom:14px;position:relative;}
+  .calyear-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;position:relative;}
+  .calyear-bar-amount{font-size:10px;font-weight:700;font-family:var(--mono);color:var(--text);min-height:14px;letter-spacing:-.2px;text-align:center;line-height:1;}
+  .calyear-bar-amount.empty{color:var(--muted2);font-weight:500;}
+  .calyear-bar-track{flex:1;width:100%;display:flex;align-items:flex-end;background:var(--surface);border-radius:5px 5px 0 0;overflow:hidden;}
+  .calyear-bar-fill{width:100%;background:var(--green);border-radius:5px 5px 0 0;transition:height .4s;min-height:2px;}
+  .calyear-bar-fill.empty{background:var(--surface2);min-height:2px;}
+  .calyear-bar-col.is-current .calyear-bar-fill{background:var(--text);}
+  .calyear-bar-label{font-size:9.5px;font-weight:700;font-family:var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);text-align:center;line-height:1;}
+  .calyear-bar-col.is-current .calyear-bar-label{color:var(--text);font-weight:800;}
+  .calyear-totals{display:flex;justify-content:space-between;align-items:center;padding-top:14px;border-top:1px solid var(--border);font-size:11px;}
   .calyear-totals-cell{display:flex;flex-direction:column;gap:2px;}
   .calyear-totals-lbl{font-size:9.5px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);}
   .calyear-totals-val{font-size:16px;font-weight:800;font-family:var(--font);color:var(--text);letter-spacing:-.3px;}
@@ -188,6 +183,17 @@
       </div>
     </div>
 
+    <div class="card">
+      <div class="card-header-light">
+        <h3>Performance mensuelle</h3>
+        <span class="card-subtitle" id="calyear-subtitle">12 derniers mois</span>
+      </div>
+      <div class="card-body">
+        <div class="calyear-chart" id="calyear"></div>
+        <div class="calyear-totals" id="calyear-totals"></div>
+      </div>
+    </div>
+
     <div class="grid-2">
       <div class="card">
         <div class="card-header-light">
@@ -210,17 +216,6 @@
             <div class="donut-legend" id="donut-legend"></div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header-light">
-        <h3>Performance mensuelle</h3>
-        <span class="card-subtitle" id="calyear-subtitle">12 derniers mois</span>
-      </div>
-      <div class="card-body">
-        <div class="calyear-grid" id="calyear"></div>
-        <div class="calyear-totals" id="calyear-totals"></div>
       </div>
     </div>
 
@@ -583,21 +578,29 @@
     var bestMonth = months.slice().sort(function(a,b){ return b.amount - a.amount; })[0];
     var avgMonth = totalAmount / 12;
 
+    function fmtShort(n){
+      if(n === 0) return '—';
+      if(n >= 1000000) return (n/1000000).toFixed(1).replace('.0','') + 'M€';
+      if(n >= 1000) return Math.round(n/1000) + 'k€';
+      return Math.round(n) + '€';
+    }
+
     var html = '';
     months.forEach(function(m){
       var isCurrent = (m.year === now.getFullYear() && m.month === now.getMonth());
       var hasData = m.count > 0;
-      var classes = 'calyear-cell' + (hasData ? ' has-data' : '') + (isCurrent ? ' is-current' : '');
-      var amountStr = hasData ? fmtEur(m.amount) : '—';
-      var amountClass = hasData ? 'calyear-amount' : 'calyear-amount empty';
-      var barPct = hasData ? Math.max(8, (m.amount / maxAmount) * 100) : 0;
-      html += '<div class="'+classes+'">';
-      html += '<div class="calyear-month">'+m.label+' '+String(m.year).slice(2)+'</div>';
-      html += '<div class="'+amountClass+'">'+amountStr+'</div>';
-      html += '<div class="calyear-count">'+(hasData ? m.count + ' gagné' + (m.count>1?'s':'') : 'Aucun')+'</div>';
+      var heightPct = hasData ? Math.max(4, (m.amount / maxAmount) * 100) : 0;
+      var classes = 'calyear-bar-col' + (isCurrent ? ' is-current' : '');
+      html += '<div class="'+classes+'" title="'+m.label+' '+m.year+' : '+(hasData ? fmtEur(m.amount) + ' · ' + m.count + ' gagné' + (m.count>1?'s':'') : 'Aucun')+'">';
+      html += '<div class="calyear-bar-amount'+(hasData?'':' empty')+'">'+fmtShort(m.amount)+'</div>';
+      html += '<div class="calyear-bar-track">';
       if(hasData){
-        html += '<div class="calyear-bar"><div class="calyear-bar-fill" style="width:'+barPct+'%"></div></div>';
+        html += '<div class="calyear-bar-fill" style="height:'+heightPct+'%;"></div>';
+      } else {
+        html += '<div class="calyear-bar-fill empty" style="height:2px;"></div>';
       }
+      html += '</div>';
+      html += '<div class="calyear-bar-label">'+m.label+'</div>';
       html += '</div>';
     });
     document.getElementById('calyear').innerHTML = html;

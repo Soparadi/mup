@@ -253,7 +253,7 @@
           Leads
         </div>
         <div class="kpi-value" id="kpi-leads">0</div>
-        <div class="kpi-sub" id="kpi-leads-sub">0 / 10 à vie</div>
+        <div class="kpi-sub" id="kpi-leads-sub">0 / 10</div>
         <div class="plan-gauge"><div class="plan-gauge-fill" id="kpi-gauge-fill" style="width:0%;background:#6E6E73;"></div></div>
         <div class="plan-restants" id="kpi-restants">10 restants</div>
       </div>
@@ -408,6 +408,9 @@
 (function(){
   function loadJSON(key, fallback){
     try{ return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }catch(e){ return fallback; }
+  }
+  function saveJSON(key, value){
+    try{ localStorage.setItem(key, JSON.stringify(value)); return true; }catch(e){ return false; }
   }
 
   var pipeline = loadJSON('mup_pipeline', []);
@@ -607,11 +610,11 @@
     var overflow = quota && consumed > quota;
     var overBy = overflow ? consumed - quota : 0;
 
-    var periodSuffix = (plan === 'gratuit') ? '/ 10 à vie' : (plan === 'starter') ? '/ 30 ce mois' : (plan === 'pro') ? '/ 100 ce mois' : null;
+    var periodSuffix = (plan === 'gratuit') ? '/ 10' : (plan === 'starter') ? '/ 30 ce mois' : (plan === 'pro') ? '/ 100 ce mois' : null;
 
     // Sous-ligne
     if(plan === 'business'){
-      subEl.textContent = consumed + ' générés au total';
+      subEl.textContent = consumed + ' générés';
       subEl.style.color = '';
     } else if(overflow){
       subEl.innerHTML = consumed + ' ' + periodSuffix + ' · <span style="color:#E24B4A">+' + overBy + ' dépassement test</span>';
@@ -672,7 +675,7 @@
     var html = '';
     ['gratuit','starter','pro','business'].forEach(function(p){
       var cfg = PLAN_CONFIG[p];
-      var quotaTxt = cfg.quota ? cfg.quota + ' leads' + (cfg.period === 'monthly' ? ' / mois' : ' à vie') : 'Leads illimités';
+      var quotaTxt = cfg.quota ? cfg.quota + ' leads' + (cfg.period === 'monthly' ? ' / mois' : '') : 'Leads illimités';
       var isCurrent = userPlan.plan === p;
       var priceHtml = cfg.price === 0 ? 'Gratuit' : cfg.price + '€<span class="plan-card-price-suffix">/mois</span>';
       html += '<div class="plan-card' + (isCurrent ? ' current' : '') + '">';

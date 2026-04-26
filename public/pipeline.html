@@ -1787,6 +1787,47 @@ renderKanban();
     }
   };
 
+  // ── HASH URL helpers : persistance fiche ouverte (drawer / fullscreen) ──
+  function syncHashFromState(){
+    if(!window.currentId){
+      if(window.location.hash.indexOf('#/card/') === 0){
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+      return;
+    }
+    const isFs = document.body.classList.contains('focus-mode');
+    const newHash = '#/card/' + window.currentId + (isFs ? '/full' : '');
+    if(window.location.hash !== newHash){
+      history.replaceState(null, '', newHash);
+    }
+  }
+
+  function restoreFromHash(){
+    const hash = window.location.hash || '';
+    const m = hash.match(/^#\/card\/([^\/]+)(\/full)?$/);
+    if(!m) return;
+    const cardId = m[1];
+    const wantFullscreen = !!m[2];
+    const list = window.cards || [];
+    const card = list.find(c => String(c.id) === String(cardId));
+    if(!card) return;
+    // Éviter boucle si déjà ouverte dans le bon mode
+    if(String(window.currentId) === String(cardId)){
+      const isFs = document.body.classList.contains('focus-mode');
+      if(isFs === wantFullscreen) return;
+    }
+    setTimeout(() => {
+      if(typeof window.openDetail === 'function'){
+        window.openDetail(cardId);
+        if(wantFullscreen && !document.body.classList.contains('focus-mode')){
+          setTimeout(() => {
+            if(typeof window.toggleFullscreen === 'function') window.toggleFullscreen();
+          }, 100);
+        }
+      }
+    }, 50);
+  }
+
   // ── HOOK sur openDetail : drawer par défaut, render colonne focus si déjà en plein écran ──
   const originalOpenDetail = window.openDetail;
   window.openDetail = function(id){
@@ -1799,6 +1840,7 @@ renderKanban();
       }
       setTimeout(() => enrichFicheWithActions(c), 100);
     }
+    syncHashFromState();
   };
 
   // ── TOGGLE FULLSCREEN : bascule drawer ↔ mode focus plein écran ──
@@ -1814,6 +1856,7 @@ renderKanban();
         setTimeout(() => enrichFicheWithActions(c), 100);
       }
     }
+    syncHashFromState();
   };
 
   // ── HOOK sur closeDetail : ferme aussi le mode focus ──
@@ -1823,17 +1866,31 @@ renderKanban();
     focusMode = false;
     focusColumnId = null;
     document.body.classList.remove('focus-mode');
+    if(window.location.hash.indexOf('#/card/') === 0){
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
   };
 
   // ── INIT après chargement DOM ──
   function init(){
     injectFocusWrap();
     injectNextActionBlock();
-    
+
     // Raccourci clavier : F pour toggle focus
     document.addEventListener('keydown', e => {
       if(e.key === 'Escape' && focusMode){
         exitFocusMode();
+      }
+    });
+
+    // Restauration de la fiche depuis l'URL hash
+    restoreFromHash();
+    window.addEventListener('hashchange', function(){
+      const hash = window.location.hash || '';
+      if(!hash || hash === '#'){
+        if(typeof window.closeDetail === 'function') window.closeDetail();
+      } else {
+        restoreFromHash();
       }
     });
   }

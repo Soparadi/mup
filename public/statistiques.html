@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>MUP — Statistiques</title>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
   :root{
@@ -43,6 +44,7 @@
   .kpi-spark{height:24px;margin-top:4px;width:100%;opacity:.85;}
 
   .grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;}
+  .grid-1{display:grid;grid-template-columns:1fr;gap:14px;}
   .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;}
   .card-title{font-size:10px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
   .card-subtitle{font-size:10px;color:var(--muted2);font-weight:500;letter-spacing:.5px;text-transform:none;}
@@ -81,6 +83,41 @@
   .calyear-totals-lbl{font-size:9.5px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);}
   .calyear-totals-val{font-size:16px;font-weight:800;font-family:var(--font);color:var(--text);letter-spacing:-.3px;}
   .calyear-totals-val.green{color:var(--green);}
+  .calyear-target-line{position:absolute;left:0;right:0;border-top:2px dashed var(--text);z-index:2;pointer-events:none;}
+  .calyear-target-label{position:absolute;right:0;top:-18px;font-size:9.5px;font-weight:800;letter-spacing:.5px;color:var(--text);font-family:var(--mono);background:#fff;padding:0 4px;}
+  .calyear-bar-track{position:relative;}
+  .calyear-bar-ghost{position:absolute;bottom:0;left:0;right:0;background:var(--surface2);border-radius:5px 5px 0 0;opacity:.5;z-index:0;}
+  .calyear-bar-fill{position:relative;z-index:1;}
+  .calyear-progress{display:flex;align-items:center;gap:14px;padding:14px 0 0;border-top:1px solid var(--border);margin-top:14px;}
+  .calyear-progress-bar{flex:1;height:8px;background:var(--surface);border-radius:4px;overflow:hidden;}
+  .calyear-progress-fill{height:100%;background:var(--green);border-radius:4px;transition:width .4s;}
+  .calyear-progress-text{font-size:12px;font-weight:700;color:var(--text);font-family:var(--mono);min-width:160px;text-align:right;}
+  .calyear-progress-text .pct{color:var(--green);font-size:14px;}
+
+  .topdeal-row{display:grid;grid-template-columns:1fr 100px 100px 70px;gap:14px;align-items:center;padding:11px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
+  .topdeal-row:last-child{border-bottom:none;}
+  .topdeal-name{font-weight:700;color:var(--text);}
+  .topdeal-name-sub{font-size:10.5px;color:var(--muted);font-weight:500;margin-top:2px;}
+  .topdeal-stage{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:5px;text-align:center;justify-self:start;}
+  .topdeal-amount{font-family:var(--mono);font-weight:800;font-size:14px;color:var(--green);text-align:right;}
+  .topdeal-amount.empty{color:var(--muted2);font-weight:500;}
+  .topdeal-days{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right;}
+  .topdeal-empty{padding:18px 0;text-align:center;color:var(--muted2);font-size:12px;}
+
+  .week-pills{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+  .week-pill{padding:14px 16px;border-radius:10px;border:1px solid var(--border);display:flex;flex-direction:column;gap:4px;}
+  .week-pill-lbl{font-size:9.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;}
+  .week-pill-val{font-size:24px;font-weight:900;letter-spacing:-.5px;font-family:var(--font);line-height:1;}
+
+  .hotrow{display:grid;grid-template-columns:1fr 80px 90px;gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px;}
+  .hotrow:last-child{border-bottom:none;}
+  .hotrow-name{font-weight:600;color:var(--text);}
+  .hotrow-name-sub{font-size:10.5px;color:var(--muted);}
+  .hotrow-dist{font-family:var(--mono);font-weight:700;font-size:11px;color:var(--text);text-align:right;}
+  .hotrow-score{font-family:var(--mono);font-weight:800;font-size:11px;text-align:right;padding:3px 8px;border-radius:5px;justify-self:end;}
+  .hotrow-score.hot{background:rgba(29,131,72,.12);color:var(--green);}
+  .hotrow-score.warm{background:rgba(245,158,11,.12);color:#854F0B;}
+  .hotrow-score.cold{background:var(--surface);color:var(--muted);}
 
   .insight{display:flex;gap:10px;padding:11px 12px;border-radius:9px;font-size:12px;line-height:1.5;}
   .insight + .insight{margin-top:6px;}
@@ -186,15 +223,26 @@
     <div class="card">
       <div class="card-header-light">
         <h3>Performance mensuelle</h3>
-        <span class="card-subtitle" id="calyear-subtitle">12 derniers mois</span>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);">
+            <span style="font-weight:700;letter-spacing:1px;text-transform:uppercase;font-size:9.5px;">Objectif annuel</span>
+            <input type="number" id="calyear-target" placeholder="100000" style="width:90px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:11px;text-align:right;" />
+            <span style="font-family:var(--mono);font-size:11px;">€</span>
+          </div>
+          <span class="card-subtitle" id="calyear-subtitle">12 derniers mois</span>
+        </div>
       </div>
       <div class="card-body">
         <div class="calyear-chart" id="calyear"></div>
         <div class="calyear-totals" id="calyear-totals"></div>
+        <div class="calyear-progress" id="calyear-progress" style="display:none;">
+          <div class="calyear-progress-bar"><div class="calyear-progress-fill" id="calyear-progress-fill" style="width:0%;"></div></div>
+          <div class="calyear-progress-text" id="calyear-progress-text">— € / — €</div>
+        </div>
       </div>
     </div>
 
-    <div class="grid-2">
+    <div class="grid-1">
       <div class="card">
         <div class="card-header-light">
           <h3>Funnel commercial</h3>
@@ -204,18 +252,36 @@
           <div class="funnel" id="funnel"></div>
         </div>
       </div>
+    </div>
 
-      <div class="card">
-        <div class="card-header-light">
-          <h3>Répartition pipeline</h3>
-          <span class="card-subtitle" id="donut-total">— cards</span>
-        </div>
-        <div class="card-body">
-          <div class="donut-wrap">
-            <svg class="donut-svg" id="donut" viewBox="0 0 100 100"></svg>
-            <div class="donut-legend" id="donut-legend"></div>
-          </div>
-        </div>
+    <div class="card">
+      <div class="card-header-light">
+        <h3>Top deals ouverts</h3>
+        <span class="card-subtitle">Plus gros prospects en pipeline</span>
+      </div>
+      <div class="card-body">
+        <div id="topdeals"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header-light">
+        <h3>Activité cette semaine</h3>
+        <span class="card-subtitle" id="week-range">—</span>
+      </div>
+      <div class="card-body">
+        <div class="week-pills" id="week-pills"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header-light">
+        <h3>Zones chaudes</h3>
+        <span class="card-subtitle" id="hotzone-info">Cercles 30km autour des gagnés</span>
+      </div>
+      <div class="card-body">
+        <div id="hotmap" style="height:400px;border-radius:10px;overflow:hidden;background:var(--surface);"></div>
+        <div id="hotzone-list" style="margin-top:14px;"></div>
       </div>
     </div>
 
@@ -250,6 +316,7 @@
 </main>
 
 <script src="/sidebar.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 (function(){
   function loadJSON(key, fallback){
@@ -268,6 +335,16 @@
   var prospects = loadJSON('mup_prospects', []);
   var leads = loadJSON('mup_leads', []);
   var frais = loadJSON('mup_frais', []);
+  var geoCache = loadJSON('mup_geocode_cache', {});
+
+  function distKm(lat1, lon1, lat2, lon2){
+    if(lat1==null||lon1==null||lat2==null||lon2==null) return 0;
+    var R = 6371;
+    var dLat = (lat2-lat1) * Math.PI / 180;
+    var dLon = (lon2-lon1) * Math.PI / 180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
 
   var state = { period: 'month' };
 
@@ -551,12 +628,9 @@
     for(var i = 11; i >= 0; i--){
       var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       months.push({
-        date: d,
-        year: d.getFullYear(),
-        month: d.getMonth(),
+        date: d, year: d.getFullYear(), month: d.getMonth(),
         label: d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.','').toUpperCase(),
-        amount: 0,
-        count: 0
+        amount: 0, count: 0, amountN1: 0
       });
     }
 
@@ -565,18 +639,24 @@
       var wonEntry = (c.activity||[]).slice().reverse().find(function(a){ return a.toCol==='won' || a.col==='won'; });
       var wonDate = wonEntry ? new Date(wonEntry.ts || wonEntry.date) : (c.createdAt ? new Date(c.createdAt) : null);
       if(!wonDate || isNaN(wonDate.getTime()) || wonDate.getFullYear() < 2020) return;
+      var amount = parseFloat(c.val) || 0;
       var match = months.find(function(m){ return m.year === wonDate.getFullYear() && m.month === wonDate.getMonth(); });
-      if(match){
-        match.count++;
-        match.amount += parseFloat(c.val) || 0;
-      }
+      if(match){ match.count++; match.amount += amount; }
+      var matchN1 = months.find(function(m){ return m.year === wonDate.getFullYear() + 1 && m.month === wonDate.getMonth(); });
+      if(matchN1){ matchN1.amountN1 += amount; }
     });
 
-    var maxAmount = Math.max.apply(null, months.map(function(m){ return m.amount; })) || 1;
+    var allValues = [];
+    months.forEach(function(m){ allValues.push(m.amount, m.amountN1); });
+    var maxAmount = Math.max.apply(null, allValues) || 1;
     var totalAmount = months.reduce(function(s,m){ return s + m.amount; }, 0);
     var totalCount = months.reduce(function(s,m){ return s + m.count; }, 0);
     var bestMonth = months.slice().sort(function(a,b){ return b.amount - a.amount; })[0];
     var avgMonth = totalAmount / 12;
+
+    var target = parseFloat(localStorage.getItem('mup_year_target')) || 0;
+    var targetInput = document.getElementById('calyear-target');
+    if(targetInput && target > 0 && targetInput.value === '') targetInput.value = target;
 
     function fmtShort(n){
       if(n === 0) return '—';
@@ -585,24 +665,40 @@
       return Math.round(n) + '€';
     }
 
+    var maxForChart = Math.max(maxAmount, target / 12);
+    if(maxForChart === 0) maxForChart = 1;
+
     var html = '';
     months.forEach(function(m){
       var isCurrent = (m.year === now.getFullYear() && m.month === now.getMonth());
       var hasData = m.count > 0;
-      var heightPct = hasData ? Math.max(4, (m.amount / maxAmount) * 100) : 0;
+      var heightPct = hasData ? Math.max(4, (m.amount / maxForChart) * 100) : 0;
+      var ghostPct = m.amountN1 > 0 ? Math.max(2, (m.amountN1 / maxForChart) * 100) : 0;
       var classes = 'calyear-bar-col' + (isCurrent ? ' is-current' : '');
-      html += '<div class="'+classes+'" title="'+m.label+' '+m.year+' : '+(hasData ? fmtEur(m.amount) + ' · ' + m.count + ' gagné' + (m.count>1?'s':'') : 'Aucun')+'">';
+      var titleTxt = m.label + ' ' + m.year + ' : ' + (hasData ? fmtEur(m.amount) + ' · ' + m.count + ' gagné' + (m.count>1?'s':'') : 'Aucun');
+      if(m.amountN1 > 0) titleTxt += ' (N-1 : ' + fmtEur(m.amountN1) + ')';
+      html += '<div class="'+classes+'" title="'+titleTxt+'">';
       html += '<div class="calyear-bar-amount'+(hasData?'':' empty')+'">'+fmtShort(m.amount)+'</div>';
       html += '<div class="calyear-bar-track">';
+      if(ghostPct > 0){
+        html += '<div class="calyear-bar-ghost" style="height:'+ghostPct+'%;"></div>';
+      }
       if(hasData){
         html += '<div class="calyear-bar-fill" style="height:'+heightPct+'%;"></div>';
       } else {
-        html += '<div class="calyear-bar-fill empty" style="height:2px;"></div>';
+        html += '<div class="calyear-bar-fill empty" style="height:2px;background:var(--surface2);"></div>';
       }
       html += '</div>';
       html += '<div class="calyear-bar-label">'+m.label+'</div>';
       html += '</div>';
     });
+
+    if(target > 0){
+      var targetMonthly = target / 12;
+      var targetLineBottom = (targetMonthly / maxForChart) * 100;
+      html = '<div class="calyear-target-line" style="bottom:'+targetLineBottom+'%;top:auto;height:0;"><div class="calyear-target-label">CIBLE '+fmtShort(targetMonthly)+'/MOIS</div></div>' + html;
+    }
+
     document.getElementById('calyear').innerHTML = html;
 
     var totalsHtml = '';
@@ -611,12 +707,168 @@
     totalsHtml += '<div class="calyear-totals-cell"><span class="calyear-totals-lbl">Moyenne / mois</span><span class="calyear-totals-val">'+fmtEur(avgMonth)+'</span></div>';
     totalsHtml += '<div class="calyear-totals-cell"><span class="calyear-totals-lbl">Meilleur mois</span><span class="calyear-totals-val">'+(bestMonth && bestMonth.amount > 0 ? bestMonth.label + ' · ' + fmtEur(bestMonth.amount) : '—')+'</span></div>';
     document.getElementById('calyear-totals').innerHTML = totalsHtml;
+
+    var progEl = document.getElementById('calyear-progress');
+    if(target > 0 && progEl){
+      progEl.style.display = 'flex';
+      var pctVal = Math.min(100, (totalAmount / target) * 100);
+      document.getElementById('calyear-progress-fill').style.width = pctVal + '%';
+      document.getElementById('calyear-progress-text').innerHTML = fmtEur(totalAmount) + ' / ' + fmtEur(target) + ' <span class="pct">· ' + Math.round(pctVal) + '%</span>';
+    } else if(progEl){
+      progEl.style.display = 'none';
+    }
+  }
+
+  function renderTopDeals(){
+    var openCards = pipeline.filter(function(c){ return c.col !== 'won' && c.col !== 'lost'; });
+    openCards.forEach(function(c){
+      c._val = parseFloat(c.val) || 0;
+      var lastA = (c.activity||[]).slice().reverse().find(function(a){ return a.ts || a.date; });
+      var lastTs = lastA ? new Date(lastA.ts || lastA.date) : (c.createdAt ? new Date(c.createdAt) : null);
+      c._daysSince = (lastTs && !isNaN(lastTs.getTime()) && lastTs.getFullYear() >= 2020) ? Math.floor((new Date() - lastTs) / 86400000) : null;
+    });
+    openCards.sort(function(a,b){ return b._val - a._val; });
+    var top = openCards.slice(0, 5);
+    var html = '';
+    if(top.length === 0){
+      html = '<div class="topdeal-empty">Aucun deal ouvert dans le pipeline</div>';
+    } else {
+      top.forEach(function(c){
+        var col = COL_BY_ID[c.col] || { label: c.col, color: '#999' };
+        var name = c.name || c.title || '—';
+        var sub = c.co || c.contact || '';
+        var bg = 'rgba(' + parseInt(col.color.slice(1,3),16) + ',' + parseInt(col.color.slice(3,5),16) + ',' + parseInt(col.color.slice(5,7),16) + ',.12)';
+        html += '<div class="topdeal-row">';
+        html += '<div><div class="topdeal-name">'+name+'</div>'+(sub?'<div class="topdeal-name-sub">'+sub+'</div>':'')+'</div>';
+        html += '<div class="topdeal-stage" style="background:'+bg+';color:'+col.color+';">'+col.label+'</div>';
+        html += '<div class="topdeal-amount'+(c._val?'':' empty')+'">'+(c._val ? fmtEur(c._val) : '—')+'</div>';
+        html += '<div class="topdeal-days">'+(c._daysSince !== null ? 'J−'+c._daysSince : '—')+'</div>';
+        html += '</div>';
+      });
+    }
+    document.getElementById('topdeals').innerHTML = html;
+  }
+
+  function renderWeek(){
+    var now = new Date();
+    var dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    var monday = new Date(now); monday.setDate(monday.getDate() - dayOfWeek); monday.setHours(0,0,0,0);
+    var sunday = new Date(monday); sunday.setDate(sunday.getDate() + 7);
+
+    var counts = { mailing: 0, phoning: 0, visio: 0, rdv: 0, devis: 0 };
+    pipeline.forEach(function(c){
+      (c.activity||[]).forEach(function(a){
+        var ts = a.ts || a.date;
+        if(!ts) return;
+        var t = new Date(ts);
+        if(isNaN(t.getTime()) || t.getFullYear() < 2020) return;
+        if(t < monday || t >= sunday) return;
+        var type = a.type || a.toCol;
+        if(counts[type] != null) counts[type]++;
+      });
+    });
+
+    var weekRange = monday.toLocaleDateString('fr-FR',{day:'numeric',month:'short'}) + ' → ' + new Date(sunday-1).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+    document.getElementById('week-range').textContent = weekRange;
+
+    var pills = [
+      { type:'mailing', label:'Mailings', color:'#B84C00' },
+      { type:'phoning', label:'Phonings', color:'#4338CA' },
+      { type:'visio', label:'Visios', color:'#7C3AED' },
+      { type:'rdv', label:'RDV', color:'#0BBCD4' },
+      { type:'devis', label:'Devis', color:'#F59E0B' }
+    ];
+    var html = '';
+    pills.forEach(function(p){
+      html += '<div class="week-pill" style="border-left:3px solid '+p.color+';"><div class="week-pill-lbl" style="color:'+p.color+';">'+p.label+'</div><div class="week-pill-val" style="color:'+p.color+';">'+(counts[p.type]||0)+'</div></div>';
+    });
+    document.getElementById('week-pills').innerHTML = html;
+  }
+
+  var hotMap = null, hotLayers = [];
+  function renderHotZones(){
+    var won = pipeline.filter(function(c){ return c.col === 'won'; });
+    var open = pipeline.filter(function(c){ return c.col !== 'won' && c.col !== 'lost'; });
+
+    function getGeo(c){
+      if(!c.address) return null;
+      var key = c.address.trim().toLowerCase();
+      var g = geoCache[key];
+      if(g && g.lat != null) return { lat: g.lat, lon: g.lon };
+      return null;
+    }
+
+    var wonGeo = won.map(function(c){ var g = getGeo(c); return g ? { card: c, lat: g.lat, lon: g.lon } : null; }).filter(Boolean);
+    var openWithScore = open.map(function(c){
+      var g = getGeo(c);
+      if(!g) return null;
+      var nearestKm = Infinity;
+      wonGeo.forEach(function(w){
+        var d = distKm(g.lat, g.lon, w.lat, w.lon);
+        if(d < nearestKm) nearestKm = d;
+      });
+      return { card: c, lat: g.lat, lon: g.lon, nearestKm: nearestKm };
+    }).filter(Boolean);
+
+    openWithScore.sort(function(a,b){ return a.nearestKm - b.nearestKm; });
+
+    document.getElementById('hotzone-info').textContent = wonGeo.length + ' gagnés géolocalisés · ' + openWithScore.length + ' prospects scorés';
+
+    var mapEl = document.getElementById('hotmap');
+    if(typeof L === 'undefined') return;
+    if(hotMap){ try{ hotMap.remove(); }catch(e){} hotMap = null; hotLayers = []; }
+
+    var center = wonGeo.length > 0 ? [wonGeo[0].lat, wonGeo[0].lon] : (openWithScore.length > 0 ? [openWithScore[0].lat, openWithScore[0].lon] : [46.6, 2.5]);
+    hotMap = L.map(mapEl, { zoomControl:true, attributionControl:false }).setView(center, 7);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:14 }).addTo(hotMap);
+
+    var bounds = [];
+    wonGeo.forEach(function(w){
+      var circle = L.circle([w.lat, w.lon], { radius: 30000, color:'#1D8348', fillColor:'#1D8348', fillOpacity:0.12, weight:1.5, opacity:0.5 }).addTo(hotMap);
+      var marker = L.marker([w.lat, w.lon], { icon: L.divIcon({ className:'won-pin', html:'<div style="width:18px;height:18px;border-radius:50%;background:#1D8348;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);"></div>', iconSize:[18,18], iconAnchor:[9,9] })}).addTo(hotMap);
+      hotLayers.push(circle); hotLayers.push(marker);
+      bounds.push([w.lat, w.lon]);
+    });
+
+    openWithScore.forEach(function(o){
+      var col = COL_BY_ID[o.card.col] || { color: '#999' };
+      var size = o.nearestKm <= 30 ? 12 : (o.nearestKm <= 80 ? 10 : 8);
+      var op = o.nearestKm <= 30 ? 1 : (o.nearestKm <= 80 ? 0.85 : 0.6);
+      var marker = L.marker([o.lat, o.lon], { icon: L.divIcon({ className:'open-pin', html:'<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:'+col.color+';border:2px solid #fff;opacity:'+op+';"></div>', iconSize:[size,size], iconAnchor:[size/2,size/2] })}).addTo(hotMap);
+      hotLayers.push(marker);
+      bounds.push([o.lat, o.lon]);
+    });
+
+    if(bounds.length > 1){ try{ hotMap.fitBounds(bounds, { padding:[30,30], maxZoom:9 }); }catch(e){} }
+    setTimeout(function(){ if(hotMap) hotMap.invalidateSize(); }, 100);
+
+    var listHtml = '';
+    if(openWithScore.length === 0){
+      listHtml = '<div style="padding:14px 0;text-align:center;color:var(--muted2);font-size:12px;">Aucun prospect géolocalisé. Importer les adresses des prospects pour activer le scoring.</div>';
+    } else {
+      openWithScore.slice(0, 8).forEach(function(o){
+        var name = o.card.name || o.card.title || '—';
+        var sub = o.card.co || '';
+        var distLbl = isFinite(o.nearestKm) ? Math.round(o.nearestKm) + ' km' : '—';
+        var scoreClass = isFinite(o.nearestKm) && o.nearestKm <= 30 ? 'hot' : (isFinite(o.nearestKm) && o.nearestKm <= 80 ? 'warm' : 'cold');
+        var scoreLbl = isFinite(o.nearestKm) ? (o.nearestKm <= 30 ? 'CHAUD' : (o.nearestKm <= 80 ? 'TIÈDE' : 'FROID')) : '—';
+        listHtml += '<div class="hotrow"><div><div class="hotrow-name">'+name+'</div>'+(sub?'<div class="hotrow-name-sub">'+sub+'</div>':'')+'</div><div class="hotrow-dist">'+distLbl+'</div><div class="hotrow-score '+scoreClass+'">'+scoreLbl+'</div></div>';
+      });
+    }
+    document.getElementById('hotzone-list').innerHTML = listHtml;
   }
 
   function render(){
     var m = metrics();
-    renderKPI(m); renderFunnel(m); renderDonut(m); renderCalYear(); renderInsights(m); renderROI(m);
+    renderKPI(m); renderFunnel(m); renderCalYear(); renderTopDeals(); renderWeek(); renderHotZones(); renderInsights(m); renderROI(m);
   }
+
+  document.getElementById('calyear-target').addEventListener('input', function(e){
+    var v = parseFloat(e.target.value) || 0;
+    if(v > 0) localStorage.setItem('mup_year_target', String(v));
+    else localStorage.removeItem('mup_year_target');
+    renderCalYear();
+  });
 
   document.getElementById('period-toggle').addEventListener('click', function(e){
     var btn = e.target.closest('button[data-period]');
@@ -627,7 +879,7 @@
   });
 
   window.addEventListener('storage', function(e){
-    if(['mup_pipeline','mup_agenda','mup_devis','mup_docs','mup_prospects','mup_leads','mup_frais'].indexOf(e.key) !== -1){
+    if(['mup_pipeline','mup_agenda','mup_devis','mup_docs','mup_prospects','mup_leads','mup_frais','mup_geocode_cache','mup_year_target'].indexOf(e.key) !== -1){
       pipeline = loadJSON('mup_pipeline', []);
       agenda = loadJSON('mup_agenda', []);
       var docsRaw2 = loadJSON('mup_devis', null);
@@ -640,6 +892,7 @@
       prospects = loadJSON('mup_prospects', []);
       leads = loadJSON('mup_leads', []);
       frais = loadJSON('mup_frais', []);
+      geoCache = loadJSON('mup_geocode_cache', {});
       render();
     }
   });

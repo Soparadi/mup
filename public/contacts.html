@@ -178,8 +178,9 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   padding:4px;
 }
 .cards-grid{
-  display:grid;grid-template-columns:1fr 1fr !important;gap:10px;padding:10px;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;padding:10px;
 }
+.cards-grid.density-large{grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:16px}
 .p-card{
   border-radius:12px;border:1px solid var(--border);
   background:#FFFFFF;overflow:hidden;max-width:100%;
@@ -187,31 +188,48 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   cursor:pointer;transition:box-shadow .15s,border-color .15s;
 }
 .p-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08);border-color:var(--border2)}
-.cc-header{background:#1D1D1F;color:#fff;padding:16px}
-.cc-naf{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:8px}
-.cc-name{font-size:16px;font-weight:800;text-transform:uppercase;line-height:1.2;margin-bottom:4px;word-break:break-word}
-.cc-director{font-size:12px;color:rgba(255,255,255,.7);line-height:1.3}
-.cc-body{padding:16px;display:flex;flex-direction:column;gap:16px}
-.cc-section-label{display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#999;padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.cc-header{background:#1D1D1F;color:#fff;padding:12px 14px}
+.cards-grid.density-large .cc-header{padding:16px}
+.cc-naf{display:flex;align-items:center;gap:6px;font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:6px}
+.cards-grid.density-large .cc-naf{font-size:10px;letter-spacing:2px;margin-bottom:8px}
+.cc-name{font-size:14px;font-weight:800;text-transform:uppercase;line-height:1.2;margin-bottom:3px;word-break:break-word}
+.cards-grid.density-large .cc-name{font-size:16px;margin-bottom:4px}
+.cc-director{font-size:11px;color:rgba(255,255,255,.7);line-height:1.3}
+.cards-grid.density-large .cc-director{font-size:12px}
+.cc-body{padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.cards-grid.density-large .cc-body{padding:16px;gap:16px}
+.cc-section-label{display:flex;justify-content:space-between;align-items:center;font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#999;padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.cards-grid.density-large .cc-section-label{font-size:10px;letter-spacing:2px;padding-bottom:8px;margin-bottom:10px}
 .cc-section-label > span{font-weight:700;color:var(--muted2)}
-.cc-row{display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--text);line-height:1.4;padding:4px 0}
-.cc-row svg{flex-shrink:0;margin-top:1px}
+.cc-row{display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:var(--text);line-height:1.4;padding:3px 0}
+.cards-grid.density-large .cc-row{gap:10px;font-size:12px;padding:4px 0}
+.cc-row svg{flex-shrink:0;margin-top:1px;width:12px;height:12px}
+.cards-grid.density-large .cc-row svg{width:14px;height:14px}
 .cc-row a{color:var(--text);text-decoration:none;word-break:break-word}
 .cc-row a:hover{text-decoration:underline}
 .cc-empty{font-style:italic;color:#AEAEB2}
-.cc-id{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:0;font-size:12px}
+.cc-id{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:0;font-size:11px}
+.cards-grid.density-large .cc-id{gap:6px 14px;font-size:12px}
 .cc-id dt{color:var(--muted);font-weight:500}
 .cc-id dd{margin:0;color:var(--text);font-weight:600;font-family:var(--mono)}
-.cc-socials{display:flex;gap:10px;align-items:center}
-.cc-social-tile{width:32px;height:32px;border-radius:8px;background:#F5F5F7;display:flex;align-items:center;justify-content:center;color:#AEAEB2;text-decoration:none;transition:background .12s}
+.cc-socials{display:flex;gap:6px;align-items:center}
+.cards-grid.density-large .cc-socials{gap:10px}
+.cc-social-tile{width:24px;height:24px;border-radius:6px;background:#F5F5F7;display:flex;align-items:center;justify-content:center;color:#AEAEB2;text-decoration:none;transition:background .12s}
+.cards-grid.density-large .cc-social-tile{width:32px;height:32px;border-radius:8px}
+.cc-social-tile svg{width:14px;height:14px}
+.cards-grid.density-large .cc-social-tile svg{width:16px;height:16px}
 .cc-social-tile.active{cursor:pointer}
 .cc-social-tile.active.linkedin{color:#0A66C2}
 .cc-social-tile.active.facebook{color:#1877F2}
 .cc-social-tile.active.instagram{color:#E4405F}
 .cc-social-tile.active.whatsapp{color:#25D366}
 .cc-social-tile.active:hover{background:#EBEBF0}
-.cc-edit-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:14px;background:#1D1D1F;color:#fff;border:0;border-radius:10px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;margin:auto 12px 12px;width:calc(100% - 24px);transition:background .15s}
+.cc-edit-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;background:#1D1D1F;color:#fff;border:0;border-radius:8px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;margin:auto 10px 10px;width:calc(100% - 20px);transition:background .15s}
+.cards-grid.density-large .cc-edit-btn{padding:14px;border-radius:10px;font-size:13px;margin:auto 12px 12px;width:calc(100% - 24px)}
 .cc-edit-btn:hover{background:#000}
+.density-toggle{display:inline-flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:2px;margin-left:10px}
+.density-toggle button{width:30px;height:26px;border:none;background:transparent;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .12s}
+.density-toggle button.active{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.06)}
 
 /* SECTOR PILL (badges removed) */
 
@@ -462,6 +480,10 @@ tbody tr:hover .td-actions{opacity:1}
         <input type="text" id="search-input" placeholder="Chercher un contact, une société…" oninput="filterProspects()">
       </div>
       <span class="count-label" id="count-label">0 contact(s)</span>
+      <div class="density-toggle" id="density-toggle">
+        <button data-density="dense" title="Vue compacte" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
+        <button data-density="large" title="Vue détaillée" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="7"/><rect x="3" y="14" width="18" height="7"/></svg></button>
+      </div>
     </div>
 
     <!-- CONTENT AREA -->
@@ -1176,6 +1198,26 @@ function toast(msg){
 function navTo(p){window.location.href='/'+p}
 
 init();
+
+// ── DENSITY TOGGLE ──
+(function() {
+  var grid = document.getElementById('prospects-grid');
+  var toggle = document.getElementById('density-toggle');
+  if(!grid || !toggle) return;
+  var current = localStorage.getItem('mup_contacts_density') || 'dense';
+  function apply(d) {
+    grid.classList.toggle('density-large', d === 'large');
+    toggle.querySelectorAll('button').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.density === d);
+    });
+    localStorage.setItem('mup_contacts_density', d);
+  }
+  apply(current);
+  toggle.addEventListener('click', function(e) {
+    var btn = e.target.closest('button[data-density]');
+    if(btn) apply(btn.dataset.density);
+  });
+})();
 </script>
 <script src="/sidebar.js"></script>
 </body>

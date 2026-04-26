@@ -1,4 +1,31 @@
 <!DOCTYPE html>
+<!--
+  SCHÉMA LOCALSTORAGE MUP (cible migration SurrealDB)
+  ====================================================
+  mup_pipeline      : Card[] { id, col, name, co, address, val, createdAt, updatedAt, activity:[{type, ts, toCol}] }
+  mup_agenda        : Rdv[] { id, cardId, date, time, status?, createdAt }
+  mup_devis         : Doc[] { id, type:'devis'|'facture', num, name, co, addr, date, validity, status, tva, lines:[{desc,qty,pu}], notes, createdAt, updatedAt, signedAt? }
+  mup_prospects     : Prospect[] (legacy, en cours de fusion dans mup_pipeline.col='prospects')
+  mup_frais         : Frais[] { id, type, amount, date, cardId?, createdAt }
+  mup_user_settings : { homeAddress, homeLat, homeLon, costPerKm, avgSpeed, yearTarget }
+  mup_geocode_cache : { [addressKey]: { lat, lon, ts } }
+  mup_mail_unread   : number
+  mup_mail_onboarding : boolean
+  mup_contacts_density : 'dense' | 'large'
+
+  CONVENTIONS
+  -----------
+  - Tous les IDs sont des strings (pas des numbers)
+  - createdAt et updatedAt sont des strings ISO 8601 (Date.toISOString())
+  - Les références entre tables utilisent {entity}Id (cardId, prospectId, etc.)
+  - Les champs préfixés par _ sont calculés (jamais persistés)
+
+  CLÉS OBSOLÈTES (à ne pas réintroduire)
+  ---------------------------------------
+  mup_docs        → renommée mup_devis (migration auto au load)
+  mup_year_target → déplacé dans mup_user_settings.yearTarget
+  mup_leads       → supprimée (jamais alimentée en pratique)
+-->
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
@@ -325,17 +352,23 @@
 
   var pipeline = loadJSON('mup_pipeline', []);
   var agenda = loadJSON('mup_agenda', []);
-  var docsRaw = loadJSON('mup_devis', null);
-  if(docsRaw === null || (Array.isArray(docsRaw) && docsRaw.length === 0)){
-    docsRaw = loadJSON('mup_docs', []);
+  var devis = loadJSON('mup_devis', []);
+  if(!Array.isArray(devis) || devis.length === 0){
+    var legacy = loadJSON('mup_docs', []);
+    if(Array.isArray(legacy) && legacy.length > 0){
+      devis = legacy;
+      // Migration one-shot : on ré-écrit sous la nouvelle clé et on nettoie l'ancienne
+      localStorage.setItem('mup_devis', JSON.stringify(legacy));
+      localStorage.removeItem('mup_docs');
+    }
   }
-  var devis = (Array.isArray(docsRaw) ? docsRaw : []).filter(function(d){
+  devis = devis.filter(function(d){
     return d && (d.type === 'devis' || d.type === 'facture' || !d.type);
   });
   var prospects = loadJSON('mup_prospects', []);
-  var leads = loadJSON('mup_leads', []);
   var frais = loadJSON('mup_frais', []);
   var geoCache = loadJSON('mup_geocode_cache', {});
+  var settings = loadJSON('mup_user_settings', {});
 
   function distKm(lat1, lon1, lat2, lon2){
     if(lat1==null||lon1==null||lat2==null||lon2==null) return 0;
@@ -454,7 +487,7 @@
       cards: cards, byCol: byCol, won: won.length, lost: lost.length,
       revenue: revenue, avgCycle: avgCycle, closingRate: closingRate,
       lossesByStage: lossesByStage,
-      totalLeads: leads.length,
+      totalLeads: 0,
       totalProspects: prospects.length || cards.filter(function(c){ return c.col==='prospects'; }).length
     };
   }
@@ -654,7 +687,14 @@
     var bestMonth = months.slice().sort(function(a,b){ return b.amount - a.amount; })[0];
     var avgMonth = totalAmount / 12;
 
-    var target = parseFloat(localStorage.getItem('mup_year_target')) || 0;
+    var target = parseFloat((settings && settings.yearTarget) || localStorage.getItem('mup_year_target')) || 0;
+    // Migration one-shot : si la valeur était dans l'ancienne clé plate, la déplacer dans settings
+    var legacyTarget = localStorage.getItem('mup_year_target');
+    if(legacyTarget !== null && (!settings.yearTarget || settings.yearTarget === 0)){
+      settings.yearTarget = parseFloat(legacyTarget) || 0;
+      localStorage.setItem('mup_user_settings', JSON.stringify(settings));
+      localStorage.removeItem('mup_year_target');
+    }
     var targetInput = document.getElementById('calyear-target');
     if(targetInput && target > 0 && targetInput.value === '') targetInput.value = target;
 
@@ -865,8 +905,8 @@
 
   document.getElementById('calyear-target').addEventListener('input', function(e){
     var v = parseFloat(e.target.value) || 0;
-    if(v > 0) localStorage.setItem('mup_year_target', String(v));
-    else localStorage.removeItem('mup_year_target');
+    settings.yearTarget = v;
+    localStorage.setItem('mup_user_settings', JSON.stringify(settings));
     renderCalYear();
   });
 
@@ -879,20 +919,16 @@
   });
 
   window.addEventListener('storage', function(e){
-    if(['mup_pipeline','mup_agenda','mup_devis','mup_docs','mup_prospects','mup_leads','mup_frais','mup_geocode_cache','mup_year_target'].indexOf(e.key) !== -1){
+    if(['mup_pipeline','mup_agenda','mup_devis','mup_prospects','mup_frais','mup_user_settings','mup_geocode_cache'].indexOf(e.key) !== -1){
       pipeline = loadJSON('mup_pipeline', []);
       agenda = loadJSON('mup_agenda', []);
-      var docsRaw2 = loadJSON('mup_devis', null);
-      if(docsRaw2 === null || (Array.isArray(docsRaw2) && docsRaw2.length === 0)){
-        docsRaw2 = loadJSON('mup_docs', []);
-      }
-      devis = (Array.isArray(docsRaw2) ? docsRaw2 : []).filter(function(d){
-        return d && (d.type === 'devis' || d.type === 'facture' || !d.type);
-      });
+      devis = loadJSON('mup_devis', []);
+      if(!Array.isArray(devis)) devis = [];
+      devis = devis.filter(function(d){ return d && (d.type === 'devis' || d.type === 'facture' || !d.type); });
       prospects = loadJSON('mup_prospects', []);
-      leads = loadJSON('mup_leads', []);
       frais = loadJSON('mup_frais', []);
       geoCache = loadJSON('mup_geocode_cache', {});
+      settings = loadJSON('mup_user_settings', {});
       render();
     }
   });

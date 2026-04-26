@@ -337,10 +337,14 @@ let filterStat = 'all';
 let lineCount = 0;
 
 function loadDocs() {
-  const s = localStorage.getItem('mup_docs');
-  docs = s ? JSON.parse(s) : JSON.parse(JSON.stringify(MOCK_DOCS));
+  let raw = localStorage.getItem('mup_devis');
+  if(raw === null){ raw = localStorage.getItem('mup_docs'); }
+  docs = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(MOCK_DOCS));
 }
-function saveDocs() { localStorage.setItem('mup_docs', JSON.stringify(docs)); }
+function saveDocs() {
+  localStorage.setItem('mup_devis', JSON.stringify(docs));
+  localStorage.removeItem('mup_docs');
+}
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -564,7 +568,8 @@ function liveUpdate() {
 function newDoc() {
   const num = '2026-' + String(docs.length + 1).padStart(3,'0');
   const today = new Date().toISOString().split('T')[0];
-  const d = { id:'d'+Date.now(), type:'devis', num, name:'', co:'', email:'', addr:'', date:today, validity:30, status:'draft', tva:20, notes:'Paiement à 30 jours à réception de facture. Acompte de 30% à la signature.', lines:[{desc:'',qty:1,pu:''}] };
+  const nowIso = new Date().toISOString();
+  const d = { id:'d'+Date.now(), type:'devis', num, name:'', co:'', email:'', addr:'', date:today, validity:30, status:'draft', tva:20, notes:'Paiement à 30 jours à réception de facture. Acompte de 30% à la signature.', lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
   docs.unshift(d);
   saveDocs();
   currentId = d.id;
@@ -577,6 +582,8 @@ function newDoc() {
 function saveDoc() {
   if(!currentId) return;
   liveUpdate();
+  const d = docs.find(x => x.id === currentId);
+  if(d) d.updatedAt = new Date().toISOString();
   saveDocs();
   renderList();
   showToast('✓ Document enregistré');

@@ -257,7 +257,13 @@
     if(p==='year'){ var d=new Date(now); d.setFullYear(d.getFullYear()-1); return d; }
     return new Date(0);
   }
-  function inPeriod(ts, p){ if(!ts) return false; return new Date(ts) >= periodStart(p); }
+  function inPeriod(ts, p){
+    if(p === 'all') return true;
+    if(!ts) return true; // pas de date = considéré comme actif sur la période courante
+    var d = new Date(ts);
+    if(isNaN(d.getTime())) return true; // date invalide = même logique
+    return d >= periodStart(p);
+  }
   function fmtN(n){ return new Intl.NumberFormat('fr-FR').format(Math.round(n)); }
   function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Math.round(n||0)); }
 
@@ -293,9 +299,14 @@
     var p = state.period;
     var cards = pipeline.filter(function(c){
       if(p==='all') return true;
+      // Si la card a une activity avec des timestamps, on filtre sur eux
       if(c.activity && c.activity.length){
-        return c.activity.some(function(a){ return inPeriod(a.ts || a.date, p); });
+        var hasTs = c.activity.some(function(a){ return a.ts || a.date; });
+        if(hasTs){
+          return c.activity.some(function(a){ return inPeriod(a.ts || a.date, p); });
+        }
       }
+      // Sinon on tente createdAt/ts (avec inPeriod tolérant)
       return inPeriod(c.createdAt || c.ts, p);
     });
 

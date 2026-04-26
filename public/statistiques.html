@@ -80,11 +80,17 @@
 
   /* ── CHARTE FORTE (matching Dashboard) ── */
   .card{padding:0;overflow:hidden;}
+  /* Header noir : réservé UNIQUEMENT au bloc héros principal */
   .card-header{background:var(--text);color:#fff;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;}
   .card-header h3{font-size:17px;font-weight:800;letter-spacing:-.3px;color:#fff;margin:0;}
   .card-header .card-subtitle{font-size:11px;color:rgba(255,255,255,.55);font-weight:500;letter-spacing:.4px;text-transform:none;}
-  .card-body{padding:22px;}
-  .card-section-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:7px;font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;margin-bottom:14px;}
+
+  /* Header light : style Dashboard — titre noir gras sur fond blanc */
+  .card-header-light{padding:18px 22px 8px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);margin-bottom:14px;}
+  .card-header-light h3{font-size:17px;font-weight:800;letter-spacing:-.3px;color:var(--text);margin:0;}
+  .card-header-light .card-subtitle{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.4px;text-transform:none;}
+  .card-body{padding:0 22px 22px;}
+  .card-section-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:6px;font-size:9.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:12px;}
   .card-section-pill svg{flex-shrink:0;}
   .card-divider{height:1px;background:var(--border);margin:22px 0;}
   .insight{border-left:3px solid;padding-left:10px;border-radius:0 9px 9px 0;}
@@ -92,7 +98,7 @@
   .insight.warn{border-left-color:var(--amber);}
   .insight.bad{border-left-color:var(--red);}
   .kpi-card{padding:16px 18px;border-left:4px solid transparent;}
-  .kpi-label{font-size:10.5px;letter-spacing:1.6px;}
+  .kpi-label{font-size:10.5px;letter-spacing:1.6px;color:var(--muted);}
   .kpi-value{font-size:30px;font-weight:900;}
   .kpi-card.k-leads{border-left-color:#E67E00;} .kpi-card.k-leads .kpi-value{color:#E67E00;}
   .kpi-card.k-prospects{border-left-color:#4338CA;} .kpi-card.k-prospects .kpi-value{color:#4338CA;}
@@ -164,7 +170,7 @@
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-header">
+        <div class="card-header-light">
           <h3>Funnel commercial</h3>
           <span class="card-subtitle" id="funnel-period-label">Sur la période</span>
         </div>
@@ -174,7 +180,7 @@
       </div>
 
       <div class="card">
-        <div class="card-header">
+        <div class="card-header-light">
           <h3>Répartition pipeline</h3>
           <span class="card-subtitle" id="donut-total">— cards</span>
         </div>
@@ -188,7 +194,7 @@
     </div>
 
     <div class="card">
-      <div class="card-header">
+      <div class="card-header-light">
         <h3>Évolution dans le temps</h3>
         <span class="card-subtitle">Cards créées · RDV planifiés · Gagnés</span>
       </div>
@@ -199,14 +205,14 @@
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><h3>Process — ce qui fonctionne / ce qui coince</h3></div>
+        <div class="card-header-light"><h3>Process — ce qui fonctionne / ce qui coince</h3></div>
         <div class="card-body">
           <div id="insights"></div>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-header">
+        <div class="card-header-light">
           <h3>ROI par prospect gagné</h3>
           <span class="card-subtitle">Coût réel</span>
         </div>

@@ -69,8 +69,8 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .kcard-co{font-size:11px;color:var(--muted);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card-naf-pill{display:inline-block;font-size:9px;font-weight:600;color:#6E6E73;background:#F5F5F7;border-radius:4px;padding:2px 6px;margin:4px 0 6px 0;letter-spacing:0.5px;text-transform:uppercase;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kcard-foot{display:flex;align-items:center;justify-content:space-between;gap:6px}
-.kcard-val{font-size:11.5px;font-weight:800;font-family:var(--mono);color:var(--text)}
-.kcard-days{font-size:10px;font-weight:600;color:var(--muted2);background:var(--surface);border-radius:5px;padding:2px 6px}
+.kcard-val{font-size:11px;font-weight:600;font-family:var(--mono);color:#6E6E73}
+.kcard-days{font-size:10px;font-weight:600;color:var(--muted2);background:var(--surface);border-radius:5px;padding:2px 6px;margin-left:auto}
 .kcard-src{font-size:9.5px;color:var(--muted2);margin-top:4px}
 .kcard-actions{position:absolute;top:8px;right:8px;display:none;gap:3px}
 .kcard:hover .kcard-actions{display:flex}
@@ -784,10 +784,45 @@ function migrateCard(c){
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+function fmtVal(n){
+  if(!n) return '';
+  return Number(n).toLocaleString('fr-FR').replace(/,/g,'\u00A0') + '\u00A0€';
+}
+
+function startEditVal(){
+  if(!currentId) return;
+  const cell = document.getElementById('d-val-cell');
+  if(!cell) return;
+  const c = cards.find(x => x.id === currentId);
+  if(!c) return;
+  const original = c.val || 0;
+  cell.innerHTML = '<input id="d-val-input" type="number" min="0" step="1" value="'+(original||'')+'" placeholder="0" style="width:100%;border:1px solid var(--text);border-radius:6px;padding:4px 8px;font-family:var(--mono);font-size:12px;font-weight:600;outline:none;box-sizing:border-box;background:#fff;">';
+  const input = document.getElementById('d-val-input');
+  input.focus();
+  input.select();
+  let cancelled = false;
+  function commit(){
+    const v = parseInt(input.value, 10);
+    c.val = (isNaN(v) || v < 0) ? 0 : v;
+    save();
+    renderKanban();
+    openDetail(currentId);
+  }
+  function cancel(){
+    cancelled = true;
+    openDetail(currentId);
+  }
+  input.addEventListener('blur', function(){ if(!cancelled) commit(); });
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); input.blur(); }
+    else if(e.key === 'Escape'){ e.preventDefault(); cancel(); }
+  });
+}
+
 function totalInProgress() {
   const active = ['prospects','linkedin','mailing','phoning','visio','rdv','devis','nego'];
   const t = cards.filter(c=>active.includes(c.col)).reduce((s,c)=>s+(c.val||0),0);
-  return t >= 1000 ? Math.round(t/1000)+'k€' : t+'€';
+  return t > 0 ? fmtVal(t) : '0\u00A0€';
 }
 
 function renderKanban() {
@@ -817,8 +852,8 @@ function renderKanban() {
 }
 
 function renderCard(c, color) {
-  const val = c.val >= 1000 ? Math.round(c.val/1000)+'k€' : (c.val ? c.val+'€' : '—');
-  return `<div class="kcard" id="kcard-${c.id}" 
+  const valFmt = fmtVal(c.val);
+  return `<div class="kcard" id="kcard-${c.id}"
       draggable="true"
       ondragstart="onDragStart(event,'${c.id}')"
       ondragend="onDragEnd(event)"
@@ -832,7 +867,7 @@ function renderCard(c, color) {
     <div class="kcard-co">${esc(c.co&&c.name?c.name:'')}</div>
     ${(c.sector||c.naf_label||c.naf)?`<div class="card-naf-pill">${esc(c.sector||c.naf_label||c.naf)}</div>`:''}
     <div class="kcard-foot">
-      <div class="kcard-val">${val}</div>
+      ${valFmt?`<div class="kcard-val">${valFmt}</div>`:''}
       <div class="kcard-days">J+${c.days||0}</div>
     </div>
     ${renderProgress(c)}
@@ -958,9 +993,12 @@ function openDetail(id) {
   if(c.email) infoHtml += `<div class="info-item"><div class="info-item-label">Email</div><div class="info-item-val"><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div></div>`;
   if(c.tel) infoHtml += `<div class="info-item"><div class="info-item-label">Téléphone</div><div class="info-item-val"><a href="tel:${c.tel.replace(/\s/g,'')}">${esc(c.tel)}</a></div></div>`;
   if(c.address) infoHtml += `<div class="info-item"><div class="info-item-label">Localisation</div><div class="info-item-val">${esc(c.address)}</div></div>`;
-  infoHtml += `<div class="info-item"><div class="info-item-label">Valeur estimée</div><div class="info-item-val"><strong>${val}</strong></div></div>`;
+  const valDisplay = c.val ? esc(fmtVal(c.val)) : '<span style="color:var(--muted2)">—</span>';
+  infoHtml += `<div class="info-item"><div class="info-item-label">Valeur estimée</div><div class="info-item-val" id="d-val-cell" style="cursor:pointer" title="Cliquer pour éditer"><strong>${valDisplay}</strong></div></div>`;
   if(!infoHtml) infoHtml = '<div style="font-size:12px;color:var(--muted2);font-style:italic">Aucune info</div>';
   document.getElementById('d-info-grid').innerHTML = infoHtml;
+  const valCell = document.getElementById('d-val-cell');
+  if(valCell) valCell.addEventListener('click', startEditVal);
 
   // Socials (editable)
   document.getElementById('d-linkedin').value = c.linkedin||'';

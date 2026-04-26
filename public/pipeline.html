@@ -153,7 +153,13 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .tl-item.type-visio::before{background:#7C3AED}
 .tl-item.type-rdv::before{background:#0BBCD4}
 .tl-item.type-move::before{background:#1D8348}
-.tl-item.type-note::before{background:#F59E0B}
+.tl-item.type-note::before{background:#1D1D1F}
+.notes-input-wrap{display:flex;flex-direction:column;gap:8px}
+.notes-input-wrap textarea{width:100%;border:1px solid #E8E8ED;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;min-height:80px;box-sizing:border-box}
+.notes-input-wrap textarea:focus{outline:none;border-color:#1D1D1F}
+.notes-save-btn{align-self:flex-end;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1D1D1F;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:opacity 0.12s}
+.notes-save-btn:hover{opacity:0.85}
+.notes-save-btn:disabled{opacity:0.4;cursor:not-allowed}
 .tl-txt{font-size:12px;color:var(--text);font-weight:500}
 .tl-date{font-size:10px;color:var(--muted2);font-family:var(--mono)}
 
@@ -549,7 +555,13 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
     <!-- 4) NOTES -->
     <div class="detail-section">
       <div class="detail-section-title">Notes</div>
-      <textarea class="notes-area" id="d-notes" placeholder="Ajouter des notes…" onblur="saveNotes()"></textarea>
+      <div class="notes-input-wrap">
+        <textarea id="d-notes-input" placeholder="Ajouter des notes…" rows="4" onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();saveNote();}"></textarea>
+        <button class="notes-save-btn" onclick="saveNote()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Enregistrer
+        </button>
+      </div>
     </div>
 
     <!-- RDV PLANIFIÉ -->
@@ -908,10 +920,12 @@ function openDetail(id) {
   const entryDate = c.created || new Date(typeof c.id==='string'?(parseInt(c.id.replace('c',''))||Date.now()):c.id).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
   const entryItem = `<div class="tl-item type-move"><div class="tl-txt">Ajouté au pipeline</div><div class="tl-date">${esc(entryDate)}</div></div>`;
   const tlItems = allActs.map(a => `<div class="tl-item ${getTimelineType(a.txt)}"><div class="tl-txt">${esc(a.txt)}</div><div class="tl-date">${esc(a.date)}</div></div>`).join('');
-  document.getElementById('d-timeline').innerHTML = (tlItems || '') + entryItem;
+  const noteItems = (c.noteEntries||[]).slice().reverse().map(n => `<div class="tl-item type-note"><div class="tl-txt">${esc(n.text)}</div><div class="tl-date">${esc(formatNoteDate(n.createdAt))}</div></div>`).join('');
+  document.getElementById('d-timeline').innerHTML = noteItems + (tlItems || '') + entryItem;
 
-  // Notes (editable)
-  document.getElementById('d-notes').value = c.notes||'';
+  // Notes (legacy textarea — éléments removed; reset new note input)
+  const noteInput = document.getElementById('d-notes-input');
+  if(noteInput) noteInput.value = '';
 
   // RDV section
   var rdvSection = document.getElementById('d-rdv-section');
@@ -966,8 +980,39 @@ function closeDetail() {
 
 function saveNotes() {
   if(!currentId) return;
+  const el = document.getElementById('d-notes');
+  if(!el) return;
   const c = cards.find(x=>x.id===currentId);
-  if(c) { c.notes = document.getElementById('d-notes').value.trim(); save(); syncToProspects(c); }
+  if(c) { c.notes = el.value.trim(); save(); syncToProspects(c); }
+}
+
+function formatNoteDate(isoDate) {
+  const d = new Date(isoDate);
+  const months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const day = d.getDate();
+  const month = months[d.getMonth()];
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return day + ' ' + month + ' à ' + hours + ':' + minutes;
+}
+
+function saveNote() {
+  if(!currentId) return;
+  const input = document.getElementById('d-notes-input');
+  if(!input) return;
+  const text = input.value.trim();
+  if(!text) return;
+  const c = cards.find(x => String(x.id) === String(currentId));
+  if(!c) return;
+  if(!Array.isArray(c.noteEntries)) c.noteEntries = [];
+  c.noteEntries.push({
+    id: 'note_' + Date.now(),
+    text: text,
+    createdAt: new Date().toISOString()
+  });
+  save();
+  input.value = '';
+  openDetail(currentId);
 }
 
 function showRdvInputs() {

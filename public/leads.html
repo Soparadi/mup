@@ -2823,14 +2823,7 @@ else buildIndex();
   }
   var originalAddToPipeline = window.addToPipeline;
   window.addToPipeline = function(leadId){
-    var p = loadPlan();
-    var quota = PLAN_QUOTAS[p.plan];
-    var consumed = quotaConsumed(p);
-    if(quota !== null && consumed >= quota){
-      showPlafondModal(p.plan);
-      savePlan(p);
-      return;
-    }
+    // Mode test : on incrémente toujours, jamais de blocage. Hard cap reviendra avec le backend.
     var pipelineBefore = [];
     try { pipelineBefore = JSON.parse(localStorage.getItem('mup_pipeline') || '[]'); } catch(e){}
     var beforeLen = pipelineBefore.length;
@@ -2838,10 +2831,11 @@ else buildIndex();
     var pipelineAfter = [];
     try { pipelineAfter = JSON.parse(localStorage.getItem('mup_pipeline') || '[]'); } catch(e){}
     if(pipelineAfter.length > beforeLen){
+      var p = loadPlan();
       p.leadsConsumed = (p.leadsConsumed || 0) + 1;
       p.leadsConsumedThisMonth = (p.leadsConsumedThisMonth || 0) + 1;
+      savePlan(p);
     }
-    savePlan(p);
   };
 })();
 </script>

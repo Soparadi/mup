@@ -596,6 +596,7 @@
     var consumed = (plan === 'starter' || plan === 'pro') ? (userPlan.leadsConsumedThisMonth || 0) : (userPlan.leadsConsumed || 0);
     var quota = cfg.quota;
     var pillEl = document.getElementById('kpi-plan-pill');
+    var card = document.getElementById('kpi-leads-card');
     pillEl.textContent = cfg.label;
     pillEl.className = 'plan-pill ' + plan;
     document.getElementById('kpi-leads').textContent = consumed;
@@ -603,24 +604,57 @@
     var restEl = document.getElementById('kpi-restants');
     var fillEl = document.getElementById('kpi-gauge-fill');
     var ratio = quota ? consumed / quota : 0;
-    if(plan === 'gratuit'){
-      subEl.textContent = consumed + ' / 10 à vie';
-      restEl.textContent = Math.max(0, 10 - consumed) + ' restants';
-    } else if(plan === 'starter'){
-      subEl.textContent = consumed + ' / 30 ce mois';
-      restEl.textContent = Math.max(0, 30 - consumed) + ' restants ce mois · reset le 1er ' + nextMonthLabel();
-    } else if(plan === 'pro'){
-      subEl.textContent = consumed + ' / 100 ce mois';
-      restEl.textContent = Math.max(0, 100 - consumed) + ' restants ce mois · reset le 1er ' + nextMonthLabel();
-    } else {
+    var overflow = quota && consumed > quota;
+    var overBy = overflow ? consumed - quota : 0;
+
+    var periodSuffix = (plan === 'gratuit') ? '/ 10 à vie' : (plan === 'starter') ? '/ 30 ce mois' : (plan === 'pro') ? '/ 100 ce mois' : null;
+
+    // Sous-ligne
+    if(plan === 'business'){
       subEl.textContent = consumed + ' générés au total';
-      restEl.textContent = 'Plan illimité';
+      subEl.style.color = '';
+    } else if(overflow){
+      subEl.innerHTML = consumed + ' ' + periodSuffix + ' · <span style="color:#E24B4A">+' + overBy + ' dépassement test</span>';
+      subEl.style.color = '';
+    } else {
+      subEl.textContent = consumed + ' ' + periodSuffix;
+      subEl.style.color = '';
     }
-    var color = quota ? (ratio >= 0.95 ? '#E24B4A' : ratio >= 0.80 ? '#EF9F27' : planColor(plan)) : '#1D8348';
+
+    // Texte sous la jauge
+    if(plan === 'business'){
+      restEl.textContent = 'Plan illimité';
+      restEl.style.color = '';
+      restEl.style.fontStyle = '';
+    } else if(overflow){
+      restEl.textContent = 'Mode test · plafond ignoré';
+      restEl.style.color = '#E24B4A';
+      restEl.style.fontStyle = 'italic';
+    } else {
+      var rest = Math.max(0, quota - consumed);
+      if(plan === 'gratuit') restEl.textContent = rest + ' restants';
+      else restEl.textContent = rest + ' restants ce mois · reset le 1er ' + nextMonthLabel();
+      restEl.style.color = '';
+      restEl.style.fontStyle = '';
+    }
+
+    // Jauge
+    var color;
+    if(overflow) color = '#E24B4A';
+    else if(quota) color = (ratio >= 0.95 ? '#E24B4A' : ratio >= 0.80 ? '#EF9F27' : planColor(plan));
+    else color = '#1D8348';
     fillEl.style.background = color;
     fillEl.style.width = quota ? Math.min(100, ratio * 100) + '%' : '100%';
+
+    // Bordure card en mode dépassement
+    if(card){
+      if(overflow) card.style.borderLeftColor = '#E24B4A';
+      else card.style.borderLeftColor = '';
+    }
+
+    // Bannière upgrade : seulement entre 80% et 100% inclus, pas en dépassement
     var banner = document.getElementById('leads-upgrade');
-    if(plan !== 'business' && quota && ratio >= 0.80){
+    if(plan !== 'business' && quota && ratio >= 0.80 && !overflow){
       var nextPlan = plan === 'gratuit' ? 'starter' : (plan === 'starter' ? 'pro' : 'business');
       banner.style.display = 'block';
       banner.className = 'leads-upgrade upgrade-' + nextPlan;

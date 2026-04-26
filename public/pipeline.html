@@ -160,6 +160,26 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .notes-save-btn{align-self:flex-end;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1D1D1F;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:opacity 0.12s}
 .notes-save-btn:hover{opacity:0.85}
 .notes-save-btn:disabled{opacity:0.4;cursor:not-allowed}
+.rdv-section{display:flex;flex-direction:column;gap:12px}
+.rdv-calendar-wrap{background:#F5F5F7;border-radius:8px;padding:12px}
+.rdv-cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.rdv-cal-nav{background:transparent;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;color:#6E6E73}
+.rdv-cal-nav:hover{background:#EBEBF0;color:#1D1D1F}
+.rdv-cal-title{font-size:13px;font-weight:600;color:#1D1D1F;text-transform:capitalize}
+.rdv-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.rdv-cal-day-label{text-align:center;font-size:9px;font-weight:700;color:#AEAEB2;padding:4px 0;text-transform:uppercase;letter-spacing:1px}
+.rdv-cal-day{text-align:center;padding:6px 0;font-size:12px;color:#1D1D1F;cursor:pointer;border-radius:6px;transition:background 0.1s}
+.rdv-cal-day:hover{background:#EBEBF0}
+.rdv-cal-day.other-month{color:#DDD}
+.rdv-cal-day.today{font-weight:700;color:#4338CA}
+.rdv-cal-day.selected{background:#1D1D1F;color:#fff;font-weight:700}
+.rdv-time-wrap{display:flex;flex-direction:column;gap:4px}
+.rdv-time-label{font-size:9px;font-weight:700;color:#AEAEB2;letter-spacing:1px;text-transform:uppercase}
+.rdv-time-input{border:1px solid #E8E8ED;border-radius:8px;padding:8px 12px;font-family:inherit;font-size:13px}
+.rdv-time-input:focus{outline:none;border-color:#1D1D1F}
+.rdv-save-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;background:#1D1D1F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity 0.12s}
+.rdv-save-btn:hover{opacity:0.85}
+.rdv-save-btn:disabled{opacity:0.4;cursor:not-allowed}
 .tl-txt{font-size:12px;color:var(--text);font-weight:500}
 .tl-date{font-size:10px;color:var(--muted2);font-family:var(--mono)}
 
@@ -567,7 +587,30 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
     <!-- RDV PLANIFIÉ -->
     <div class="detail-section" id="d-rdv-section">
       <div class="detail-section-title">Rendez-vous</div>
-      <div id="d-rdv-content"></div>
+      <div id="d-rdv-content">
+        <div class="rdv-section">
+          <div class="rdv-calendar-wrap">
+            <div class="rdv-cal-header">
+              <button class="rdv-cal-nav" onclick="rdvCalPrev()" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <div class="rdv-cal-title" id="rdv-cal-title">—</div>
+              <button class="rdv-cal-nav" onclick="rdvCalNext()" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+            <div class="rdv-cal-grid" id="rdv-cal-grid"></div>
+          </div>
+          <div class="rdv-time-wrap">
+            <label class="rdv-time-label">Heure</label>
+            <input type="time" id="rdv-time-input" value="14:00" class="rdv-time-input">
+          </div>
+          <button class="rdv-save-btn" id="rdv-save-btn" onclick="saveRdv()" type="button" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Enregistrer le RDV
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- 5) ACTIONS RAPIDES -->
@@ -927,19 +970,16 @@ function openDetail(id) {
   const noteInput = document.getElementById('d-notes-input');
   if(noteInput) noteInput.value = '';
 
-  // RDV section
+  // RDV section — calendrier inline + heure + bouton enregistrer
   var rdvSection = document.getElementById('d-rdv-section');
-  var rdvContent = document.getElementById('d-rdv-content');
-  var isRdvCol = (c.col === 'rdv');
   var showRdv = ['linkedin','mailing','phoning','visio','rdv','nego','devis'].indexOf(c.col) !== -1;
   if(showRdv) {
     rdvSection.style.display = '';
-    var hasRdv = c.rdvDate || isRdvCol;
-    if(isRdvCol || c.rdvDate) {
-      rdvContent.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:4px"><input type="date" id="d-rdv-date" value="'+(c.rdvDate||'')+'" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none" onchange="saveRdv()"><input type="time" id="d-rdv-time" value="'+(c.rdvTime||'')+'" style="width:100px;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none" onchange="saveRdv()"></div>';
-    } else {
-      rdvContent.innerHTML = '<button onclick="showRdvInputs()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--text);transition:all .12s">Planifier un RDV</button>';
-    }
+    rdvCalDate = new Date();
+    rdvSelectedDate = null;
+    var timeInput = document.getElementById('rdv-time-input');
+    if(timeInput) timeInput.value = c.rdvTime || '14:00';
+    renderRdvCalendar();
   } else {
     rdvSection.style.display = 'none';
   }
@@ -1015,49 +1055,140 @@ function saveNote() {
   openDetail(currentId);
 }
 
-function showRdvInputs() {
-  var c = cards.find(x=>String(x.id)===String(currentId));
-  if(!c) return;
-  var rdvContent = document.getElementById('d-rdv-content');
-  rdvContent.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:4px"><input type="date" id="d-rdv-date" value="" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none" onchange="saveRdv()"><input type="time" id="d-rdv-time" value="" style="width:100px;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none" onchange="saveRdv()"></div>';
-  document.getElementById('d-rdv-date').focus();
+// ── CALENDRIER RDV INLINE ──
+let rdvCalDate = new Date();
+let rdvSelectedDate = null;
+
+function renderRdvCalendar() {
+  const year = rdvCalDate.getFullYear();
+  const month = rdvCalDate.getMonth();
+  const months = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const titleEl = document.getElementById('rdv-cal-title');
+  if(titleEl) titleEl.textContent = months[month] + ' ' + year;
+  const grid = document.getElementById('rdv-cal-grid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  ['L','M','M','J','V','S','D'].forEach(d => {
+    const lbl = document.createElement('div');
+    lbl.className = 'rdv-cal-day-label';
+    lbl.textContent = d;
+    grid.appendChild(lbl);
+  });
+  const firstDay = new Date(year, month, 1);
+  let startDay = firstDay.getDay() - 1;
+  if(startDay < 0) startDay = 6;
+  const prevMonthDays = new Date(year, month, 0).getDate();
+  for(let i = startDay - 1; i >= 0; i--) {
+    const d = document.createElement('div');
+    d.className = 'rdv-cal-day other-month';
+    d.textContent = prevMonthDays - i;
+    grid.appendChild(d);
+  }
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  for(let i = 1; i <= daysInMonth; i++) {
+    const d = document.createElement('div');
+    d.className = 'rdv-cal-day';
+    d.textContent = i;
+    if(i === today.getDate() && month === today.getMonth() && year === today.getFullYear()) d.classList.add('today');
+    if(rdvSelectedDate && rdvSelectedDate.getDate() === i && rdvSelectedDate.getMonth() === month && rdvSelectedDate.getFullYear() === year) d.classList.add('selected');
+    d.onclick = function(){ selectRdvDay(year, month, i); };
+    grid.appendChild(d);
+  }
+  const totalCells = grid.children.length - 7;
+  const remaining = (7 - (totalCells % 7)) % 7;
+  for(let i = 1; i <= remaining; i++) {
+    const d = document.createElement('div');
+    d.className = 'rdv-cal-day other-month';
+    d.textContent = i;
+    grid.appendChild(d);
+  }
+  const btn = document.getElementById('rdv-save-btn');
+  if(btn) btn.disabled = !rdvSelectedDate;
 }
+
+function selectRdvDay(year, month, day) {
+  rdvSelectedDate = new Date(year, month, day);
+  renderRdvCalendar();
+}
+function rdvCalPrev() { rdvCalDate.setMonth(rdvCalDate.getMonth() - 1); renderRdvCalendar(); }
+function rdvCalNext() { rdvCalDate.setMonth(rdvCalDate.getMonth() + 1); renderRdvCalendar(); }
 
 function saveRdv() {
+  if(!rdvSelectedDate) { alert('Sélectionnez une date dans le calendrier'); return; }
   if(!currentId) return;
-  var c = cards.find(x=>String(x.id)===String(currentId));
+  const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
-  var dateEl = document.getElementById('d-rdv-date');
-  var timeEl = document.getElementById('d-rdv-time');
-  if(!dateEl) return;
-  c.rdvDate = dateEl.value || '';
-  c.rdvTime = timeEl ? timeEl.value || '' : '';
-  save();
-  // Sync to mup_agenda
-  syncRdvToAgenda(c);
-  logActivity(currentId, 'RDV planifié le ' + (c.rdvDate || '—') + (c.rdvTime ? ' à ' + c.rdvTime : ''));
-}
+  const timeInput = document.getElementById('rdv-time-input');
+  const time = timeInput ? timeInput.value : '14:00';
+  if(!time) { alert('Sélectionnez une heure'); return; }
 
-function syncRdvToAgenda(c) {
-  var agenda = [];
-  try { var r = localStorage.getItem('mup_agenda'); if(r) agenda = JSON.parse(r); } catch(e) {}
-  // Remove existing entry for this card
-  agenda = agenda.filter(function(ev) { return String(ev.id) !== String(c.id); });
-  // Add new if date exists
-  if(c.rdvDate) {
-    agenda.push({
-      id: String(c.id),
-      title: c.co || c.name || '',
-      contact: c.name || '',
-      date: c.rdvDate,
-      start: c.rdvTime || '',
-      end: '',
-      type: 'rdv',
-      col: c.col,
-      notes: ''
-    });
-  }
+  // Date format YYYY-MM-DD pour compat avec mup_agenda
+  const yyyy = rdvSelectedDate.getFullYear();
+  const mm = String(rdvSelectedDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(rdvSelectedDate.getDate()).padStart(2, '0');
+  const dateStr = yyyy + '-' + mm + '-' + dd;
+
+  // Date ISO pour card.rdvs
+  const [hh, mn] = time.split(':');
+  const rdvIso = new Date(rdvSelectedDate);
+  rdvIso.setHours(parseInt(hh, 10), parseInt(mn, 10), 0, 0);
+
+  // Push dans card.rdvs (array structuré)
+  const rdv = {
+    id: 'rdv_' + Date.now(),
+    contactId: String(c.id),
+    contactName: c.co || c.name || '',
+    address: c.address || '',
+    lat: c.lat || null,
+    lng: c.lng || null,
+    date: rdvIso.toISOString(),
+    hour: time,
+    type: 'RDV',
+    colonne: c.col || '',
+    createdAt: new Date().toISOString()
+  };
+  if(!Array.isArray(c.rdvs)) c.rdvs = [];
+  c.rdvs.push(rdv);
+
+  // Backcompat : c.rdvDate / c.rdvTime (lus par /agenda)
+  c.rdvDate = dateStr;
+  c.rdvTime = time;
+  save();
+
+  // Sync mup_agenda — format compatible avec /agenda (date YYYY-MM-DD, start HH:MM)
+  let agenda = [];
+  try { const r = localStorage.getItem('mup_agenda'); if(r) agenda = JSON.parse(r); } catch(e) {}
+  agenda = agenda.filter(ev => String(ev.id) !== String(c.id));
+  agenda.push({
+    id: String(c.id),
+    title: c.co || c.name || '',
+    contact: c.name || '',
+    date: dateStr,
+    start: time,
+    end: '',
+    type: 'rdv',
+    col: c.col,
+    notes: ''
+  });
   localStorage.setItem('mup_agenda', JSON.stringify(agenda));
+
+  // Note synthétique horodatée dans timeline
+  if(!Array.isArray(c.noteEntries)) c.noteEntries = [];
+  const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+  c.noteEntries.push({
+    id: 'tl_' + Date.now(),
+    text: 'RDV planifié le ' + rdvSelectedDate.getDate() + ' ' + monthsShort[rdvSelectedDate.getMonth()] + ' à ' + time,
+    createdAt: new Date().toISOString(),
+    rdvId: rdv.id
+  });
+  save();
+
+  // Notifie autres onglets
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(e) {}
+
+  // Ferme le drawer
+  if(typeof closeDetail === 'function') closeDetail();
 }
 
 function saveSocials() {

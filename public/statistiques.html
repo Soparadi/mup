@@ -236,7 +236,13 @@
 
   var pipeline = loadJSON('mup_pipeline', []);
   var agenda = loadJSON('mup_agenda', []);
-  var devis = loadJSON('mup_devis', []);
+  var docsRaw = loadJSON('mup_devis', null);
+  if(docsRaw === null || (Array.isArray(docsRaw) && docsRaw.length === 0)){
+    docsRaw = loadJSON('mup_docs', []);
+  }
+  var devis = (Array.isArray(docsRaw) ? docsRaw : []).filter(function(d){
+    return d && (d.type === 'devis' || d.type === 'facture' || !d.type);
+  });
   var prospects = loadJSON('mup_prospects', []);
   var leads = loadJSON('mup_leads', []);
   var frais = loadJSON('mup_frais', []);
@@ -254,6 +260,20 @@
   function inPeriod(ts, p){ if(!ts) return false; return new Date(ts) >= periodStart(p); }
   function fmtN(n){ return new Intl.NumberFormat('fr-FR').format(Math.round(n)); }
   function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Math.round(n||0)); }
+
+  function devisTotal(d){
+    if(d.amount != null && !isNaN(parseFloat(d.amount))) return parseFloat(d.amount);
+    if(d.total != null && !isNaN(parseFloat(d.total))) return parseFloat(d.total);
+    if(Array.isArray(d.lines)){
+      var ht = d.lines.reduce(function(s,l){
+        var q = parseFloat(l.qty)||0, p = parseFloat(l.pu)||0;
+        return s + (q * p);
+      }, 0);
+      var tva = parseFloat(d.tva) || 0;
+      return Math.round(ht * (1 + tva/100));
+    }
+    return 0;
+  }
 
   var COLS = [
     {id:'prospects',label:'Prospects',color:'#CC0000'},
@@ -502,10 +522,16 @@
   });
 
   window.addEventListener('storage', function(e){
-    if(['mup_pipeline','mup_agenda','mup_devis','mup_prospects','mup_leads','mup_frais'].indexOf(e.key) !== -1){
+    if(['mup_pipeline','mup_agenda','mup_devis','mup_docs','mup_prospects','mup_leads','mup_frais'].indexOf(e.key) !== -1){
       pipeline = loadJSON('mup_pipeline', []);
       agenda = loadJSON('mup_agenda', []);
-      devis = loadJSON('mup_devis', []);
+      var docsRaw2 = loadJSON('mup_devis', null);
+      if(docsRaw2 === null || (Array.isArray(docsRaw2) && docsRaw2.length === 0)){
+        docsRaw2 = loadJSON('mup_docs', []);
+      }
+      devis = (Array.isArray(docsRaw2) ? docsRaw2 : []).filter(function(d){
+        return d && (d.type === 'devis' || d.type === 'facture' || !d.type);
+      });
       prospects = loadJSON('mup_prospects', []);
       leads = loadJSON('mup_leads', []);
       frais = loadJSON('mup_frais', []);

@@ -680,6 +680,21 @@ function stageIndex(colId) {
   return STAGES.findIndex(s => s.id === colId);
 }
 
+// Auto-advance avec règle no-regress + terminaux figés (won/lost)
+function advanceCardColumn(card, targetColId) {
+  if(!card) return false;
+  if(card.col === 'lost' || card.col === 'won') return false;
+  const currentIdx = stageIndex(card.col);
+  const targetIdx = stageIndex(targetColId);
+  if(targetIdx <= currentIdx) return false;
+  card.col = targetColId;
+  const targetName = STAGES.find(s => s.id === targetColId)?.name || targetColId;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  logActivity(card.id, 'Déplacé vers ' + targetName + ' à ' + timeStr);
+  return true;
+}
+
 function renderProgress(card) {
   const current = stageIndex(card.col);
   if(card.col === 'lost') {
@@ -1184,8 +1199,15 @@ function saveRdv() {
   });
   save();
 
+  // Auto-advance colonne pipeline (règle no-regress + terminaux figés)
+  if(advanceCardColumn(c, 'rdv')) {
+    save();
+    renderKanban();
+  }
+
   // Notifie autres onglets
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(e) {}
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(e) {}
 
   // Ferme le drawer
   if(typeof closeDetail === 'function') closeDetail();
@@ -1230,12 +1252,8 @@ function quickAction(type) {
   if(!c) return;
   const labels = { mailing:'Mailing envoyé', phoning:'Appel effectué', rdv:'RDV planifié' };
   logActivity(currentId, labels[type]||type);
-  // Move card to matching column if it exists and card is before it
-  const targetCol = type;
-  const currentIdx = stageIndex(c.col);
-  const targetIdx = stageIndex(targetCol);
-  if(targetIdx > currentIdx) {
-    c.col = targetCol;
+  // Auto-advance colonne (no-regress, ne sort pas de lost/won)
+  if(advanceCardColumn(c, type)) {
     save(); renderKanban();
   }
   // Refresh panel

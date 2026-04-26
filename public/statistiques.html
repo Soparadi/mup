@@ -29,11 +29,18 @@
 
   .container{padding:24px 36px 60px;display:flex;flex-direction:column;gap:18px;}
 
-  .grid-kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
-  .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;}
-  .kpi-label{font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted2);display:flex;align-items:center;gap:6px;}
-  .kpi-value{font-size:26px;font-weight:800;line-height:1.1;letter-spacing:-.5px;}
-  .kpi-sub{font-size:11px;color:var(--muted);font-family:var(--mono);}
+  .grid-kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+  .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px 14px;display:flex;flex-direction:column;gap:3px;position:relative;overflow:hidden;border-left:3px solid var(--border);}
+  .kpi-card.k-leads{border-left-color:#E67E00;} .kpi-card.k-leads .kpi-value{color:#E67E00;}
+  .kpi-card.k-prospects{border-left-color:#4338CA;} .kpi-card.k-prospects .kpi-value{color:#4338CA;}
+  .kpi-card.k-won{border-left-color:#1D8348;} .kpi-card.k-won .kpi-value{color:#1D8348;}
+  .kpi-card.k-cycle{border-left-color:#0A66C2;} .kpi-card.k-cycle .kpi-value{color:#0A66C2;}
+  .kpi-card.k-closing{border-left-color:var(--text);} .kpi-card.k-closing .kpi-value{color:var(--text);}
+  .kpi-label{font-size:9.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px;line-height:1;}
+  .kpi-label svg{flex-shrink:0;}
+  .kpi-value{font-size:32px;font-weight:900;line-height:1;letter-spacing:-.8px;font-family:var(--font);margin-top:6px;}
+  .kpi-sub{font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:3px;letter-spacing:.2px;}
+  .kpi-spark{height:24px;margin-top:4px;width:100%;opacity:.85;}
 
   .grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;}
   .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;}
@@ -58,6 +65,27 @@
   .donut-legend-val{font-family:var(--mono);font-weight:700;color:var(--text);}
 
   .evolution-chart{height:200px;width:100%;position:relative;}
+
+  .calyear-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:14px;}
+  .calyear-cell{background:var(--surface);border-radius:9px;padding:11px 12px 12px;border:1px solid transparent;transition:all .2s;position:relative;}
+  .calyear-cell.has-data{background:#fff;border-color:var(--border);}
+  .calyear-cell.is-current{background:var(--text);}
+  .calyear-cell.is-current .calyear-month,
+  .calyear-cell.is-current .calyear-amount,
+  .calyear-cell.is-current .calyear-count{color:#fff;}
+  .calyear-month{font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);}
+  .calyear-amount{font-size:18px;font-weight:800;font-family:var(--font);letter-spacing:-.4px;color:var(--text);margin-top:4px;line-height:1.1;}
+  .calyear-amount.empty{color:var(--muted2);font-weight:500;font-size:14px;}
+  .calyear-count{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;}
+  .calyear-bar{position:absolute;left:11px;right:11px;bottom:7px;height:3px;background:var(--surface2);border-radius:2px;overflow:hidden;}
+  .calyear-bar-fill{height:100%;background:var(--green);border-radius:2px;}
+  .calyear-cell.is-current .calyear-bar{background:rgba(255,255,255,.15);}
+  .calyear-cell.is-current .calyear-bar-fill{background:#fff;}
+  .calyear-totals{display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--border);font-size:11px;}
+  .calyear-totals-cell{display:flex;flex-direction:column;gap:2px;}
+  .calyear-totals-lbl{font-size:9.5px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);}
+  .calyear-totals-val{font-size:16px;font-weight:800;font-family:var(--font);color:var(--text);letter-spacing:-.3px;}
+  .calyear-totals-val.green{color:var(--green);}
 
   .insight{display:flex;gap:10px;padding:11px 12px;border-radius:9px;font-size:12px;line-height:1.5;}
   .insight + .insight{margin-top:6px;}
@@ -97,14 +125,6 @@
   .insight.good{border-left-color:var(--green);}
   .insight.warn{border-left-color:var(--amber);}
   .insight.bad{border-left-color:var(--red);}
-  .kpi-card{padding:16px 18px;border-left:4px solid transparent;}
-  .kpi-label{font-size:10.5px;letter-spacing:1.6px;color:var(--muted);}
-  .kpi-value{font-size:30px;font-weight:900;}
-  .kpi-card.k-leads{border-left-color:#E67E00;} .kpi-card.k-leads .kpi-value{color:#E67E00;}
-  .kpi-card.k-prospects{border-left-color:#4338CA;} .kpi-card.k-prospects .kpi-value{color:#4338CA;}
-  .kpi-card.k-won{border-left-color:#1D8348;} .kpi-card.k-won .kpi-value{color:#1D8348;}
-  .kpi-card.k-cycle{border-left-color:#0A66C2;} .kpi-card.k-cycle .kpi-value{color:#0A66C2;}
-  .kpi-card.k-closing{border-left-color:var(--text);} .kpi-card.k-closing .kpi-value{color:var(--text);}
 </style>
 </head>
 <body>
@@ -195,11 +215,12 @@
 
     <div class="card">
       <div class="card-header-light">
-        <h3>Évolution dans le temps</h3>
-        <span class="card-subtitle">Cards créées · RDV planifiés · Gagnés</span>
+        <h3>Performance mensuelle</h3>
+        <span class="card-subtitle" id="calyear-subtitle">12 derniers mois</span>
       </div>
       <div class="card-body">
-        <div class="evolution-chart" id="evolution"></div>
+        <div class="calyear-grid" id="calyear"></div>
+        <div class="calyear-totals" id="calyear-totals"></div>
       </div>
     </div>
 
@@ -325,11 +346,15 @@
     var revenue = won.reduce(function(s,c){ return s + (parseFloat(c.val)||0); }, 0);
 
     var cycles = won.map(function(c){
-      var created = new Date(c.createdAt || c.ts || (c.activity && c.activity[0] && c.activity[0].ts) || 0);
+      var createdRaw = c.createdAt || c.ts || (c.activity && c.activity[0] && c.activity[0].ts);
+      if(!createdRaw) return null;
+      var created = new Date(createdRaw);
+      if(isNaN(created.getTime()) || created.getFullYear() < 2020) return null;
       var wonEntry = (c.activity||[]).slice().reverse().find(function(a){ return a.toCol==='won' || a.col==='won'; });
       var wonAt = wonEntry ? new Date(wonEntry.ts || wonEntry.date) : new Date();
+      if(isNaN(wonAt.getTime())) return null;
       var days = (wonAt - created) / 86400000;
-      return days > 0 ? days : null;
+      return days > 0 && days < 730 ? days : null;
     }).filter(function(x){ return x !== null; });
     var avgCycle = cycles.length ? cycles.reduce(function(a,b){return a+b;},0)/cycles.length : null;
 
@@ -525,9 +550,69 @@
     document.getElementById('roi-placeholder').style.display = frais.length === 0 ? 'flex' : 'none';
   }
 
+  function renderCalYear(){
+    var now = new Date();
+    var months = [];
+    for(var i = 11; i >= 0; i--){
+      var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        date: d,
+        year: d.getFullYear(),
+        month: d.getMonth(),
+        label: d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.','').toUpperCase(),
+        amount: 0,
+        count: 0
+      });
+    }
+
+    pipeline.forEach(function(c){
+      if(c.col !== 'won') return;
+      var wonEntry = (c.activity||[]).slice().reverse().find(function(a){ return a.toCol==='won' || a.col==='won'; });
+      var wonDate = wonEntry ? new Date(wonEntry.ts || wonEntry.date) : (c.createdAt ? new Date(c.createdAt) : null);
+      if(!wonDate || isNaN(wonDate.getTime()) || wonDate.getFullYear() < 2020) return;
+      var match = months.find(function(m){ return m.year === wonDate.getFullYear() && m.month === wonDate.getMonth(); });
+      if(match){
+        match.count++;
+        match.amount += parseFloat(c.val) || 0;
+      }
+    });
+
+    var maxAmount = Math.max.apply(null, months.map(function(m){ return m.amount; })) || 1;
+    var totalAmount = months.reduce(function(s,m){ return s + m.amount; }, 0);
+    var totalCount = months.reduce(function(s,m){ return s + m.count; }, 0);
+    var bestMonth = months.slice().sort(function(a,b){ return b.amount - a.amount; })[0];
+    var avgMonth = totalAmount / 12;
+
+    var html = '';
+    months.forEach(function(m){
+      var isCurrent = (m.year === now.getFullYear() && m.month === now.getMonth());
+      var hasData = m.count > 0;
+      var classes = 'calyear-cell' + (hasData ? ' has-data' : '') + (isCurrent ? ' is-current' : '');
+      var amountStr = hasData ? fmtEur(m.amount) : '—';
+      var amountClass = hasData ? 'calyear-amount' : 'calyear-amount empty';
+      var barPct = hasData ? Math.max(8, (m.amount / maxAmount) * 100) : 0;
+      html += '<div class="'+classes+'">';
+      html += '<div class="calyear-month">'+m.label+' '+String(m.year).slice(2)+'</div>';
+      html += '<div class="'+amountClass+'">'+amountStr+'</div>';
+      html += '<div class="calyear-count">'+(hasData ? m.count + ' gagné' + (m.count>1?'s':'') : 'Aucun')+'</div>';
+      if(hasData){
+        html += '<div class="calyear-bar"><div class="calyear-bar-fill" style="width:'+barPct+'%"></div></div>';
+      }
+      html += '</div>';
+    });
+    document.getElementById('calyear').innerHTML = html;
+
+    var totalsHtml = '';
+    totalsHtml += '<div class="calyear-totals-cell"><span class="calyear-totals-lbl">Total 12 mois</span><span class="calyear-totals-val green">'+fmtEur(totalAmount)+'</span></div>';
+    totalsHtml += '<div class="calyear-totals-cell"><span class="calyear-totals-lbl">Closings</span><span class="calyear-totals-val">'+totalCount+'</span></div>';
+    totalsHtml += '<div class="calyear-totals-cell"><span class="calyear-totals-lbl">Moyenne / mois</span><span class="calyear-totals-val">'+fmtEur(avgMonth)+'</span></div>';
+    totalsHtml += '<div class="calyear-totals-cell"><span class="calyear-totals-lbl">Meilleur mois</span><span class="calyear-totals-val">'+(bestMonth && bestMonth.amount > 0 ? bestMonth.label + ' · ' + fmtEur(bestMonth.amount) : '—')+'</span></div>';
+    document.getElementById('calyear-totals').innerHTML = totalsHtml;
+  }
+
   function render(){
     var m = metrics();
-    renderKPI(m); renderFunnel(m); renderDonut(m); renderEvolution(m); renderInsights(m); renderROI(m);
+    renderKPI(m); renderFunnel(m); renderDonut(m); renderCalYear(); renderInsights(m); renderROI(m);
   }
 
   document.getElementById('period-toggle').addEventListener('click', function(e){

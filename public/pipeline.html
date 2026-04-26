@@ -1018,16 +1018,71 @@ function openDetail(id) {
       if(detailMap) { detailMap.remove(); detailMap = null; }
       detailMap = L.map('detail-map', { zoomControl:false, attributionControl:false }).setView([48.4, -1.75], 10);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:18 }).addTo(detailMap);
-      // Geocode address
-      fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(c.address)+'&limit=1')
-        .then(r=>r.json()).then(data=>{
-          if(data.length) {
-            const lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
-            detailMap.setView([lat, lon], 13);
-            if(detailMarker) detailMap.removeLayer(detailMarker);
-            detailMarker = L.marker([lat, lon]).addTo(detailMap).bindPopup(esc(c.address)).openPopup();
-          }
-        }).catch(()=>{});
+      detailMap.invalidateSize();
+
+      // Récupérer la couleur de la colonne pour le marker
+      var colColor = '#1D1D1F';
+      try { var stage = (typeof STAGES !== 'undefined' ? STAGES : []).find(function(s){return s.id===c.col;}); if(stage) colColor = stage.color; } catch(e){}
+
+      // Helper : place le marker et zoome
+      function placeMarker(lat, lon, label) {
+        detailMap.setView([lat, lon], 14);
+        if(detailMarker) { try { detailMap.removeLayer(detailMarker); } catch(e){} }
+        var icon = L.divIcon({
+          className: 'detail-pin',
+          html: '<div style="width:18px;height:18px;border-radius:50%;background:'+colColor+';border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25);"></div>',
+          iconSize: [18,18],
+          iconAnchor: [9,9]
+        });
+        detailMarker = L.marker([lat, lon], { icon: icon }).addTo(detailMap).bindPopup(esc(label)).openPopup();
+        detailMap.invalidateSize();
+      }
+
+      // Cache localStorage des géocodages
+      var GEO_KEY = 'mup_geocode_cache';
+      var cache = {};
+      try { cache = JSON.parse(localStorage.getItem(GEO_KEY) || '{}'); } catch(e){}
+      var cacheKey = c.address.trim().toLowerCase();
+
+      if(cache[cacheKey] && cache[cacheKey].lat && cache[cacheKey].lon) {
+        placeMarker(cache[cacheKey].lat, cache[cacheKey].lon, c.address);
+        return;
+      }
+
+      // Géocoder via Nominatim, fallback sur CP+ville si échec
+      function geocode(query, isFallback) {
+        return fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(query)+'&limit=1&countrycodes=fr')
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            if(data && data.length) {
+              var lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
+              cache[cacheKey] = { lat: lat, lon: lon, ts: Date.now() };
+              try { localStorage.setItem(GEO_KEY, JSON.stringify(cache)); } catch(e){}
+              placeMarker(lat, lon, c.address);
+              return true;
+            }
+            return false;
+          })
+          .catch(function(){ return false; });
+      }
+
+      geocode(c.address, false).then(function(ok){
+        if(ok) return;
+        // Fallback : extraire CP (5 chiffres) + ville (mots qui suivent)
+        var m = c.address.match(/(\d{5})\s*([A-Za-z\u00C0-\u017F\-\s]+)/);
+        if(m) {
+          var fallbackQuery = m[1] + ' ' + m[2].trim();
+          geocode(fallbackQuery, true).then(function(ok2){
+            if(!ok2) {
+              var mapEl = document.getElementById('detail-map');
+              if(mapEl) mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#8E8E93;font-size:12px;background:#F5F5F7;">Adresse non localisable</div>';
+            }
+          });
+        } else {
+          var mapEl = document.getElementById('detail-map');
+          if(mapEl) mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#8E8E93;font-size:12px;background:#F5F5F7;">Adresse non localisable</div>';
+        }
+      });
     }, 300);
   } else {
     mapSection.style.display = 'none';

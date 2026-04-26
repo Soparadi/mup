@@ -986,8 +986,9 @@ function openDetail(id) {
   if(noteInput) noteInput.value = '';
 
   // RDV section — calendrier inline + heure + bouton enregistrer
+  // Toujours visible sauf pour les colonnes terminales (Gagné, Disqualifié)
   var rdvSection = document.getElementById('d-rdv-section');
-  var showRdv = ['linkedin','mailing','phoning','visio','rdv','nego','devis'].indexOf(c.col) !== -1;
+  var showRdv = ['won','lost'].indexOf(c.col) === -1;
   if(showRdv) {
     rdvSection.style.display = '';
     rdvCalDate = new Date();

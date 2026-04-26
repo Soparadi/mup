@@ -173,6 +173,16 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .rdv-cal-day.other-month{color:#DDD}
 .rdv-cal-day.today{font-weight:700;color:#4338CA}
 .rdv-cal-day.selected{background:#1D1D1F;color:#fff;font-weight:700}
+.rdv-cal-day{position:relative;padding:6px 0 14px}
+.rdv-cal-dots{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);display:flex;gap:2px;align-items:center}
+.rdv-cal-dot{width:5px;height:5px;border-radius:50%;display:inline-block}
+.rdv-cal-dot.dot-rdv{background:#0BBCD4}
+.rdv-cal-dot.dot-mailing{background:#B84C00}
+.rdv-cal-dot.dot-phoning{background:#4338CA}
+.rdv-cal-dot.dot-visio{background:#7C3AED}
+.rdv-cal-dot.dot-note{background:#8E8E93}
+.rdv-cal-dot.dot-more{font-size:8px;color:#8E8E93;line-height:1;width:auto;height:auto;background:none;font-weight:700}
+.rdv-cal-day.selected .rdv-cal-dot{outline:1px solid #fff}
 .rdv-time-wrap{display:flex;flex-direction:column;gap:4px}
 .rdv-time-label{font-size:9px;font-weight:700;color:#AEAEB2;letter-spacing:1px;text-transform:uppercase}
 .rdv-time-input{border:1px solid #E8E8ED;border-radius:8px;padding:8px 12px;font-family:inherit;font-size:13px}
@@ -1075,6 +1085,86 @@ function saveNote() {
 let rdvCalDate = new Date();
 let rdvSelectedDate = null;
 
+function buildDotsByDate() {
+  const dotsByDate = {};
+  const addDot = (dateStr, type) => {
+    if(!dateStr || !type) return;
+    if(!dotsByDate[dateStr]) dotsByDate[dateStr] = new Set();
+    dotsByDate[dateStr].add(type);
+  };
+  // 1) RDV depuis mup_agenda filtré sur currentId
+  try {
+    const agenda = JSON.parse(localStorage.getItem('mup_agenda') || '[]');
+    agenda.forEach(ev => {
+      if(String(ev.id) === String(currentId) && ev.type === 'rdv' && ev.date) {
+        addDot(ev.date, 'rdv');
+      }
+    });
+  } catch(e) {}
+  // 2) c.noteEntries → notes (gris)
+  const c = cards.find(x => String(x.id) === String(currentId));
+  if(c) {
+    (c.noteEntries||[]).forEach(n => {
+      if(!n.createdAt) return;
+      const d = new Date(n.createdAt);
+      const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      addDot(ds, 'note');
+    });
+    // 3) c.activity → mailing/phoning/visio/rdv (parse date FR sans année, on déduit)
+    const monthMap = {'janv':0,'févr':1,'fév':1,'mars':2,'avr':3,'mai':4,'juin':5,'juil':6,'août':7,'aout':7,'sept':8,'oct':9,'nov':10,'déc':11,'dec':11};
+    const today = new Date();
+    (c.activity||[]).forEach(a => {
+      if(!a || !a.date || !a.txt) return;
+      const m = String(a.date).match(/^(\d{1,2})\s+([a-zA-Zéèêûâîçé.]+)/);
+      if(!m) return;
+      const day = parseInt(m[1], 10);
+      const monthAbbr = m[2].toLowerCase().replace(/\./g, '');
+      const monthIdx = monthMap[monthAbbr];
+      if(monthIdx === undefined || isNaN(day)) return;
+      let yr = today.getFullYear();
+      const candidate = new Date(yr, monthIdx, day);
+      // Si la date ainsi formée est > 30 jours dans le futur, on suppose année précédente
+      if(candidate.getTime() - today.getTime() > 30*86400000) yr -= 1;
+      const ds = yr + '-' + String(monthIdx+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+      const t = String(a.txt).toLowerCase();
+      let type = null;
+      if(t.includes('mail')) type = 'mailing';
+      else if(t.includes('appel') || t.includes('phoning')) type = 'phoning';
+      else if(t.includes('visio')) type = 'visio';
+      else if(t.includes('rdv')) type = 'rdv';
+      if(type) addDot(ds, type);
+    });
+  }
+  return dotsByDate;
+}
+
+function appendCalDots(dayEl, dateStr, dotsByDate) {
+  const types = dotsByDate[dateStr];
+  if(!types || types.size === 0) return;
+  const order = ['rdv','mailing','phoning','visio','note'];
+  const list = order.filter(t => types.has(t));
+  const wrap = document.createElement('div');
+  wrap.className = 'rdv-cal-dots';
+  if(list.length <= 2) {
+    list.forEach(t => {
+      const dot = document.createElement('span');
+      dot.className = 'rdv-cal-dot dot-' + t;
+      wrap.appendChild(dot);
+    });
+  } else {
+    list.slice(0, 2).forEach(t => {
+      const dot = document.createElement('span');
+      dot.className = 'rdv-cal-dot dot-' + t;
+      wrap.appendChild(dot);
+    });
+    const more = document.createElement('span');
+    more.className = 'rdv-cal-dot dot-more';
+    more.textContent = '+';
+    wrap.appendChild(more);
+  }
+  dayEl.appendChild(wrap);
+}
+
 function renderRdvCalendar() {
   const year = rdvCalDate.getFullYear();
   const month = rdvCalDate.getMonth();
@@ -1090,6 +1180,8 @@ function renderRdvCalendar() {
     lbl.textContent = d;
     grid.appendChild(lbl);
   });
+  const dotsByDate = buildDotsByDate();
+  const fmt = (y, m, day) => y + '-' + String(m+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
   const firstDay = new Date(year, month, 1);
   let startDay = firstDay.getDay() - 1;
   if(startDay < 0) startDay = 6;
@@ -1098,6 +1190,8 @@ function renderRdvCalendar() {
     const d = document.createElement('div');
     d.className = 'rdv-cal-day other-month';
     d.textContent = prevMonthDays - i;
+    const prevDate = new Date(year, month - 1, prevMonthDays - i);
+    appendCalDots(d, fmt(prevDate.getFullYear(), prevDate.getMonth(), prevDate.getDate()), dotsByDate);
     grid.appendChild(d);
   }
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1109,6 +1203,7 @@ function renderRdvCalendar() {
     if(i === today.getDate() && month === today.getMonth() && year === today.getFullYear()) d.classList.add('today');
     if(rdvSelectedDate && rdvSelectedDate.getDate() === i && rdvSelectedDate.getMonth() === month && rdvSelectedDate.getFullYear() === year) d.classList.add('selected');
     d.onclick = function(){ selectRdvDay(year, month, i); };
+    appendCalDots(d, fmt(year, month, i), dotsByDate);
     grid.appendChild(d);
   }
   const totalCells = grid.children.length - 7;
@@ -1117,6 +1212,8 @@ function renderRdvCalendar() {
     const d = document.createElement('div');
     d.className = 'rdv-cal-day other-month';
     d.textContent = i;
+    const nextDate = new Date(year, month + 1, i);
+    appendCalDots(d, fmt(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate()), dotsByDate);
     grid.appendChild(d);
   }
   const btn = document.getElementById('rdv-save-btn');

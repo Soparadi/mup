@@ -1,14 +1,488 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>MUP — Statistiques</title>
-<link rel="stylesheet" href="/sidebar.css">
-<style>body{margin:0;font-family:-apple-system,sans-serif;display:flex;min-height:100vh;background:#F5F5F7}main{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#6E6E73}h1{font-size:32px;color:#1D1D1F;margin:0 0 8px}p{font-size:14px;margin:0}</style>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --bg:#FFFFFF; --surface:#F5F5F7; --surface2:#EBEBF0;
+    --card:#FFFFFF; --border:#E8E8ED; --border2:#C7C7CC;
+    --text:#1D1D1F; --muted:#6E6E73; --muted2:#AEAEB2;
+    --green:#1D8348; --orange:#B84C00; --red:#CC0000;
+    --blue:#0A66C2; --purple:#4338CA;
+    --cyan:#0BBCD4; --amber:#F59E0B; --violet:#7C3AED;
+    --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+    --mono:'Geist Mono','SF Mono','Menlo',monospace;
+  }
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;display:flex;min-height:100vh;}
+  ::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+  main{flex:1;overflow-y:auto;height:100vh;}
+
+  .page-header{background:var(--text);color:#fff;padding:28px 36px;display:flex;align-items:center;justify-content:space-between;}
+  .page-title{font-size:24px;font-weight:800;letter-spacing:-.4px;}
+  .period-toggle{display:inline-flex;gap:2px;background:rgba(255,255,255,.08);border-radius:9px;padding:3px;}
+  .period-toggle button{background:transparent;border:none;color:rgba(255,255,255,.6);font-family:var(--font);font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:6px 12px;border-radius:6px;cursor:pointer;transition:all .15s;}
+  .period-toggle button.active{background:rgba(255,255,255,.14);color:#fff;}
+
+  .container{padding:24px 36px 60px;display:flex;flex-direction:column;gap:18px;}
+
+  .grid-kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+  .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;}
+  .kpi-label{font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted2);display:flex;align-items:center;gap:6px;}
+  .kpi-value{font-size:26px;font-weight:800;line-height:1.1;letter-spacing:-.5px;}
+  .kpi-sub{font-size:11px;color:var(--muted);font-family:var(--mono);}
+
+  .grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;}
+  .card-title{font-size:10px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
+  .card-subtitle{font-size:10px;color:var(--muted2);font-weight:500;letter-spacing:.5px;text-transform:none;}
+
+  .funnel{display:flex;flex-direction:column;gap:6px;}
+  .funnel-row{display:grid;grid-template-columns:90px 1fr 50px 50px;gap:10px;align-items:center;font-size:12px;}
+  .funnel-name{font-weight:600;color:var(--text);text-transform:uppercase;font-size:10px;letter-spacing:1px;}
+  .funnel-bar-wrap{height:24px;background:var(--surface);border-radius:6px;overflow:hidden;position:relative;}
+  .funnel-bar{height:100%;border-radius:6px;transition:width .4s;display:flex;align-items:center;padding:0 8px;color:#fff;font-size:11px;font-weight:700;font-family:var(--mono);}
+  .funnel-count{font-family:var(--mono);font-size:13px;font-weight:700;text-align:right;}
+  .funnel-pct{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right;}
+  .funnel-loss{font-size:10px;color:var(--red);font-family:var(--mono);font-weight:600;padding:2px 0 6px 100px;}
+
+  .donut-wrap{display:flex;align-items:center;gap:24px;}
+  .donut-svg{width:160px;height:160px;flex-shrink:0;}
+  .donut-legend{display:flex;flex-direction:column;gap:6px;font-size:11px;flex:1;}
+  .donut-legend-item{display:flex;align-items:center;gap:8px;}
+  .donut-legend-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+  .donut-legend-name{color:var(--text);font-weight:500;flex:1;}
+  .donut-legend-val{font-family:var(--mono);font-weight:700;color:var(--text);}
+
+  .evolution-chart{height:200px;width:100%;position:relative;}
+
+  .insight{display:flex;gap:10px;padding:11px 12px;border-radius:9px;font-size:12px;line-height:1.5;}
+  .insight + .insight{margin-top:6px;}
+  .insight-icon{width:18px;height:18px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:10px;font-family:var(--mono);}
+  .insight.good{background:rgba(29,131,72,.07);}
+  .insight.good .insight-icon{background:var(--green);}
+  .insight.warn{background:rgba(245,158,11,.08);}
+  .insight.warn .insight-icon{background:var(--amber);}
+  .insight.bad{background:rgba(204,0,0,.07);}
+  .insight.bad .insight-icon{background:var(--red);}
+  .insight strong{font-weight:700;}
+
+  .roi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .roi-cell{padding:14px;border-radius:10px;background:var(--surface);text-align:center;}
+  .roi-label{font-size:10px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  .roi-value{font-size:22px;font-weight:800;letter-spacing:-.4px;font-family:var(--mono);}
+  .roi-sub{font-size:10px;color:var(--muted2);font-family:var(--mono);margin-top:2px;}
+
+  .placeholder-banner{padding:10px 12px;background:rgba(245,158,11,.08);border:1px dashed var(--amber);border-radius:9px;font-size:11px;color:#854F0B;display:flex;align-items:center;gap:8px;margin-top:10px;}
+</style>
 </head>
 <body>
+
 <aside id="sidebar" class="sidebar"></aside>
-<main><h1>Statistiques</h1><p>Bientôt disponible</p></main>
+
+<main>
+  <div class="page-header">
+    <div class="page-title">Statistiques</div>
+    <div class="period-toggle" id="period-toggle">
+      <button data-period="week">Semaine</button>
+      <button data-period="month" class="active">Mois</button>
+      <button data-period="quarter">Trimestre</button>
+      <button data-period="year">Année</button>
+      <button data-period="all">Tout</button>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <div class="grid-kpi">
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#E67E00" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          Leads
+        </div>
+        <div class="kpi-value" id="kpi-leads">—</div>
+        <div class="kpi-sub" id="kpi-leads-sub">total importés</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          Prospects actifs
+        </div>
+        <div class="kpi-value" id="kpi-prospects">—</div>
+        <div class="kpi-sub" id="kpi-prospects-sub">en pipeline</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Gagnés
+        </div>
+        <div class="kpi-value" id="kpi-won">—</div>
+        <div class="kpi-sub" id="kpi-won-sub">— € total</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Cycle moyen
+        </div>
+        <div class="kpi-value" id="kpi-cycle">—</div>
+        <div class="kpi-sub" id="kpi-cycle-sub">jours j → gagné</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2.5"><path d="M12 2v20M5 12h14"/></svg>
+          Taux closing
+        </div>
+        <div class="kpi-value" id="kpi-closing">—</div>
+        <div class="kpi-sub" id="kpi-closing-sub">gagné / clos</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">
+          <span>Funnel commercial</span>
+          <span class="card-subtitle" id="funnel-period-label">Sur la période</span>
+        </div>
+        <div class="funnel" id="funnel"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Répartition pipeline</span>
+          <span class="card-subtitle" id="donut-total">— cards</span>
+        </div>
+        <div class="donut-wrap">
+          <svg class="donut-svg" id="donut" viewBox="0 0 100 100"></svg>
+          <div class="donut-legend" id="donut-legend"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>Évolution dans le temps</span>
+        <span class="card-subtitle">Cards créées · RDV planifiés · Gagnés</span>
+      </div>
+      <div class="evolution-chart" id="evolution"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Process — ce qui fonctionne / ce qui coince</div>
+        <div id="insights"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>ROI par prospect gagné</span>
+          <span class="card-subtitle">Coût réel</span>
+        </div>
+        <div class="roi-grid">
+          <div class="roi-cell"><div class="roi-label">Revenus</div><div class="roi-value" id="roi-rev">—</div><div class="roi-sub">cards gagnées</div></div>
+          <div class="roi-cell"><div class="roi-label">Frais engagés</div><div class="roi-value" id="roi-cost">—</div><div class="roi-sub" id="roi-cost-sub">essence + repas + autres</div></div>
+          <div class="roi-cell"><div class="roi-label">Coût / gagné</div><div class="roi-value" id="roi-per-won">—</div><div class="roi-sub">€ par closing</div></div>
+        </div>
+        <div class="placeholder-banner" id="roi-placeholder" style="display:none;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Frais non saisis. La page <strong>&nbsp;Frais&nbsp;</strong> alimentera ce bloc dès que des frais seront déclarés.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
 <script src="/sidebar.js"></script>
+<script>
+(function(){
+  function loadJSON(key, fallback){
+    try{ return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }catch(e){ return fallback; }
+  }
+
+  var pipeline = loadJSON('mup_pipeline', []);
+  var agenda = loadJSON('mup_agenda', []);
+  var devis = loadJSON('mup_devis', []);
+  var prospects = loadJSON('mup_prospects', []);
+  var leads = loadJSON('mup_leads', []);
+  var frais = loadJSON('mup_frais', []);
+
+  var state = { period: 'month' };
+
+  function periodStart(p){
+    var now = new Date();
+    if(p==='week'){ var d=new Date(now); d.setDate(d.getDate()-7); return d; }
+    if(p==='month'){ var d=new Date(now); d.setMonth(d.getMonth()-1); return d; }
+    if(p==='quarter'){ var d=new Date(now); d.setMonth(d.getMonth()-3); return d; }
+    if(p==='year'){ var d=new Date(now); d.setFullYear(d.getFullYear()-1); return d; }
+    return new Date(0);
+  }
+  function inPeriod(ts, p){ if(!ts) return false; return new Date(ts) >= periodStart(p); }
+  function fmtN(n){ return new Intl.NumberFormat('fr-FR').format(Math.round(n)); }
+  function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Math.round(n||0)); }
+
+  var COLS = [
+    {id:'prospects',label:'Prospects',color:'#CC0000'},
+    {id:'linkedin', label:'LinkedIn',color:'#0A66C2'},
+    {id:'mailing',  label:'Mailing', color:'#B84C00'},
+    {id:'phoning',  label:'Phoning', color:'#4338CA'},
+    {id:'visio',    label:'Visio',   color:'#7C3AED'},
+    {id:'rdv',      label:'RDV',     color:'#0BBCD4'},
+    {id:'nego',     label:'Négo',    color:'#F97316'},
+    {id:'devis',    label:'Devis',   color:'#F59E0B'},
+    {id:'won',      label:'Gagné',   color:'#1D8348'},
+    {id:'lost',     label:'Disqual.',color:'#AEAEB2'}
+  ];
+  var COL_BY_ID = {}; COLS.forEach(function(c){ COL_BY_ID[c.id]=c; });
+
+  function metrics(){
+    var p = state.period;
+    var cards = pipeline.filter(function(c){
+      if(p==='all') return true;
+      if(c.activity && c.activity.length){
+        return c.activity.some(function(a){ return inPeriod(a.ts || a.date, p); });
+      }
+      return inPeriod(c.createdAt || c.ts, p);
+    });
+
+    var byCol = {};
+    COLS.forEach(function(c){ byCol[c.id] = 0; });
+    cards.forEach(function(c){ if(byCol[c.col] !== undefined) byCol[c.col]++; });
+
+    var won = cards.filter(function(c){ return c.col==='won'; });
+    var lost = cards.filter(function(c){ return c.col==='lost'; });
+    var revenue = won.reduce(function(s,c){ return s + (parseFloat(c.val)||0); }, 0);
+
+    var cycles = won.map(function(c){
+      var created = new Date(c.createdAt || c.ts || (c.activity && c.activity[0] && c.activity[0].ts) || 0);
+      var wonEntry = (c.activity||[]).slice().reverse().find(function(a){ return a.toCol==='won' || a.col==='won'; });
+      var wonAt = wonEntry ? new Date(wonEntry.ts || wonEntry.date) : new Date();
+      var days = (wonAt - created) / 86400000;
+      return days > 0 ? days : null;
+    }).filter(function(x){ return x !== null; });
+    var avgCycle = cycles.length ? cycles.reduce(function(a,b){return a+b;},0)/cycles.length : null;
+
+    var closingRate = (won.length + lost.length) ? (won.length / (won.length+lost.length)) * 100 : null;
+
+    var lossesByStage = {};
+    cards.forEach(function(c){
+      if(c.col === 'lost'){
+        if(c.lostFromCol){
+          lossesByStage[c.lostFromCol] = (lossesByStage[c.lostFromCol] || 0) + 1;
+        } else if(c.activity){
+          var hist = c.activity.filter(function(a){ return a.toCol || a.col; });
+          for(var i = hist.length - 1; i >= 0; i--){
+            var col = hist[i].toCol || hist[i].col;
+            if(col && col !== 'lost'){
+              lossesByStage[col] = (lossesByStage[col] || 0) + 1;
+              break;
+            }
+          }
+        }
+      }
+    });
+
+    return {
+      cards: cards, byCol: byCol, won: won.length, lost: lost.length,
+      revenue: revenue, avgCycle: avgCycle, closingRate: closingRate,
+      lossesByStage: lossesByStage,
+      totalLeads: leads.length,
+      totalProspects: prospects.length || cards.filter(function(c){ return c.col==='prospects'; }).length
+    };
+  }
+
+  function renderKPI(m){
+    document.getElementById('kpi-leads').textContent = fmtN(m.totalLeads);
+    document.getElementById('kpi-leads-sub').textContent = m.totalLeads + ' total';
+    document.getElementById('kpi-prospects').textContent = fmtN(m.cards.length - m.won - m.lost);
+    document.getElementById('kpi-prospects-sub').textContent = 'en pipeline actif';
+    document.getElementById('kpi-won').textContent = fmtN(m.won);
+    document.getElementById('kpi-won-sub').textContent = fmtEur(m.revenue) + ' total';
+    document.getElementById('kpi-cycle').textContent = m.avgCycle !== null ? Math.round(m.avgCycle) + ' j' : '—';
+    document.getElementById('kpi-cycle-sub').textContent = m.won ? 'sur ' + m.won + ' gagnés' : 'pas encore de gagné';
+    document.getElementById('kpi-closing').textContent = m.closingRate !== null ? Math.round(m.closingRate) + ' %' : '—';
+    document.getElementById('kpi-closing-sub').textContent = (m.won + m.lost) + ' clos';
+  }
+
+  function renderFunnel(m){
+    var stages = ['prospects','mailing','phoning','visio','rdv','nego','devis','won'];
+    var maxCount = Math.max.apply(null, stages.map(function(s){ return m.byCol[s] || 0; }));
+    if(maxCount === 0) maxCount = 1;
+
+    var html = '';
+    stages.forEach(function(stage, i){
+      var col = COL_BY_ID[stage];
+      var count = m.byCol[stage] || 0;
+      var pct = (count / maxCount) * 100;
+      var prevCount = i > 0 ? (m.byCol[stages[i-1]] || 0) : null;
+      var conv = prevCount ? Math.round((count / prevCount) * 100) : null;
+      var lossHere = m.lossesByStage[stage] || 0;
+
+      html += '<div class="funnel-row">';
+      html += '<div class="funnel-name">'+col.label+'</div>';
+      html += '<div class="funnel-bar-wrap"><div class="funnel-bar" style="width:'+pct+'%;background:'+col.color+';">'+(count > 0 ? count : '')+'</div></div>';
+      html += '<div class="funnel-count">'+count+'</div>';
+      html += '<div class="funnel-pct">'+(conv !== null ? conv+'%' : '—')+'</div>';
+      html += '</div>';
+      if(lossHere > 0){
+        html += '<div class="funnel-loss">↓ '+lossHere+' perdu(s) à cette étape</div>';
+      }
+    });
+
+    document.getElementById('funnel').innerHTML = html;
+    var labels = {week:'Semaine',month:'Mois',quarter:'Trimestre',year:'Année',all:'Tout'};
+    document.getElementById('funnel-period-label').textContent = labels[state.period];
+  }
+
+  function renderDonut(m){
+    var active = COLS.filter(function(c){ return c.id !== 'won' && c.id !== 'lost' && (m.byCol[c.id] > 0); });
+    var total = active.reduce(function(s,c){ return s + m.byCol[c.id]; }, 0);
+    document.getElementById('donut-total').textContent = total + ' cards actives';
+
+    if(total === 0){
+      document.getElementById('donut').innerHTML = '<circle cx="50" cy="50" r="40" fill="none" stroke="#EBEBF0" stroke-width="14"/>';
+      document.getElementById('donut-legend').innerHTML = '<div style="color:var(--muted2);font-size:11px;">Aucune card active sur la période</div>';
+      return;
+    }
+
+    var cx = 50, cy = 50, r = 40, circ = 2 * Math.PI * r;
+    var offset = 0;
+    var svgParts = ['<circle cx="50" cy="50" r="'+r+'" fill="none" stroke="#EBEBF0" stroke-width="14"/>'];
+    var legendParts = [];
+    active.forEach(function(c){
+      var count = m.byCol[c.id];
+      var pct = count / total;
+      var dash = circ * pct;
+      svgParts.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+c.color+'" stroke-width="14" stroke-dasharray="'+dash+' '+circ+'" stroke-dashoffset="'+(-offset)+'" transform="rotate(-90 50 50)"/>');
+      offset += dash;
+      legendParts.push('<div class="donut-legend-item"><div class="donut-legend-dot" style="background:'+c.color+'"></div><div class="donut-legend-name">'+c.label+'</div><div class="donut-legend-val">'+count+' · '+Math.round(pct*100)+'%</div></div>');
+    });
+    document.getElementById('donut').innerHTML = svgParts.join('');
+    document.getElementById('donut-legend').innerHTML = legendParts.join('');
+  }
+
+  function renderEvolution(m){
+    var p = state.period;
+    var buckets = (p==='week') ? 7 : (p==='month') ? 30 : (p==='quarter') ? 12 : (p==='year') ? 12 : 12;
+    var unitDays = (p==='week') ? 1 : (p==='month') ? 1 : (p==='quarter') ? 7 : (p==='year') ? 30 : 30;
+    var now = new Date();
+    var data = [];
+    for(var i = buckets - 1; i >= 0; i--){
+      var dEnd = new Date(now); dEnd.setDate(dEnd.getDate() - i * unitDays);
+      var dStart = new Date(dEnd); dStart.setDate(dStart.getDate() - unitDays);
+      var created = pipeline.filter(function(c){ var t = new Date(c.createdAt || c.ts || 0); return t >= dStart && t < dEnd; }).length;
+      var rdvs = agenda.filter(function(a){ var t = new Date(a.date || a.ts || 0); return t >= dStart && t < dEnd; }).length;
+      var won = pipeline.filter(function(c){
+        if(c.col !== 'won') return false;
+        var wonEntry = (c.activity||[]).slice().reverse().find(function(a){ return a.toCol==='won'; });
+        var t = wonEntry ? new Date(wonEntry.ts) : new Date(c.createdAt || 0);
+        return t >= dStart && t < dEnd;
+      }).length;
+      data.push({ created: created, rdvs: rdvs, won: won });
+    }
+
+    var allVals = [];
+    data.forEach(function(d){ allVals.push(d.created, d.rdvs, d.won); });
+    var maxY = Math.max(1, Math.max.apply(null, allVals));
+    var W = 100, H = 100;
+    var pts = function(arr, key){
+      return arr.map(function(d, i){
+        var x = (i / Math.max(1, arr.length - 1)) * W;
+        var y = H - (d[key] / maxY) * H;
+        return x.toFixed(1) + ',' + y.toFixed(1);
+      }).join(' ');
+    };
+
+    var svg = '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:160px;">';
+    svg += '<polyline fill="none" stroke="#4338CA" stroke-width="0.6" points="'+pts(data,'created')+'" vector-effect="non-scaling-stroke"/>';
+    svg += '<polyline fill="none" stroke="#0BBCD4" stroke-width="0.6" points="'+pts(data,'rdvs')+'" vector-effect="non-scaling-stroke"/>';
+    svg += '<polyline fill="none" stroke="#1D8348" stroke-width="0.6" points="'+pts(data,'won')+'" vector-effect="non-scaling-stroke"/>';
+    svg += '</svg>';
+
+    var legend = '<div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted);">'
+      + '<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;background:#4338CA;border-radius:2px;"></span>Cards créées</span>'
+      + '<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;background:#0BBCD4;border-radius:2px;"></span>RDV planifiés</span>'
+      + '<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;background:#1D8348;border-radius:2px;"></span>Gagnés</span>'
+      + '</div>';
+
+    document.getElementById('evolution').innerHTML = svg + legend;
+  }
+
+  function renderInsights(m){
+    var html = '';
+    var stages = ['prospects','mailing','phoning','visio','rdv','nego','devis'];
+    var counts = stages.map(function(s){ return { stage: s, count: m.byCol[s]||0, label: COL_BY_ID[s].label }; });
+    var biggestStage = counts.slice().sort(function(a,b){ return b.count - a.count; })[0];
+
+    if(biggestStage.count > 0){
+      html += '<div class="insight good"><div class="insight-icon">✓</div><div><strong>'+biggestStage.label+'</strong> concentre le plus de prospects actifs ('+biggestStage.count+'). Étape qui retient l\'attention sur la période.</div></div>';
+    }
+
+    var topLossStage = Object.keys(m.lossesByStage).sort(function(a,b){ return m.lossesByStage[b] - m.lossesByStage[a]; })[0];
+    if(topLossStage && m.lossesByStage[topLossStage] > 0){
+      var lbl = COL_BY_ID[topLossStage] ? COL_BY_ID[topLossStage].label : topLossStage;
+      html += '<div class="insight bad"><div class="insight-icon">!</div><div>Plus grosse perte : <strong>'+m.lossesByStage[topLossStage]+' prospect(s)</strong> perdu(s) au stade <strong>'+lbl+'</strong>. À investiguer en priorité.</div></div>';
+    }
+
+    if(m.avgCycle !== null && m.avgCycle > 30){
+      html += '<div class="insight warn"><div class="insight-icon">!</div><div>Cycle de closing long (<strong>'+Math.round(m.avgCycle)+' jours</strong>). Identifier les blocages aux étapes RDV et Devis.</div></div>';
+    }
+
+    if(m.closingRate !== null && m.closingRate < 30 && (m.won + m.lost) >= 5){
+      html += '<div class="insight warn"><div class="insight-icon">!</div><div>Taux de closing à <strong>'+Math.round(m.closingRate)+'%</strong> (sous 30%). Revue qualif Phoning et offre Devis recommandée.</div></div>';
+    }
+
+    if(m.won > 0 && m.closingRate >= 30){
+      html += '<div class="insight good"><div class="insight-icon">✓</div><div>Taux de closing sain à <strong>'+Math.round(m.closingRate)+'%</strong>. Process Phoning → RDV → Devis fonctionne.</div></div>';
+    }
+
+    if(!html){
+      html = '<div class="insight warn"><div class="insight-icon">i</div><div>Pas encore assez de données sur la période pour générer des insights. Continue à alimenter le pipeline.</div></div>';
+    }
+
+    document.getElementById('insights').innerHTML = html;
+  }
+
+  function renderROI(m){
+    var totalFrais = frais.reduce(function(s,f){ return s + (parseFloat(f.amount)||0); }, 0);
+    var costPerWon = m.won ? totalFrais / m.won : null;
+
+    document.getElementById('roi-rev').textContent = fmtEur(m.revenue);
+    document.getElementById('roi-cost').textContent = totalFrais > 0 ? fmtEur(totalFrais) : '—';
+    document.getElementById('roi-cost-sub').textContent = frais.length ? frais.length + ' frais saisis' : 'aucun frais saisi';
+    document.getElementById('roi-per-won').textContent = costPerWon !== null && totalFrais > 0 ? fmtEur(costPerWon) : '—';
+    document.getElementById('roi-placeholder').style.display = frais.length === 0 ? 'flex' : 'none';
+  }
+
+  function render(){
+    var m = metrics();
+    renderKPI(m); renderFunnel(m); renderDonut(m); renderEvolution(m); renderInsights(m); renderROI(m);
+  }
+
+  document.getElementById('period-toggle').addEventListener('click', function(e){
+    var btn = e.target.closest('button[data-period]');
+    if(!btn) return;
+    state.period = btn.dataset.period;
+    document.querySelectorAll('#period-toggle button').forEach(function(b){ b.classList.toggle('active', b.dataset.period === state.period); });
+    render();
+  });
+
+  window.addEventListener('storage', function(e){
+    if(['mup_pipeline','mup_agenda','mup_devis','mup_prospects','mup_leads','mup_frais'].indexOf(e.key) !== -1){
+      pipeline = loadJSON('mup_pipeline', []);
+      agenda = loadJSON('mup_agenda', []);
+      devis = loadJSON('mup_devis', []);
+      prospects = loadJSON('mup_prospects', []);
+      leads = loadJSON('mup_leads', []);
+      frais = loadJSON('mup_frais', []);
+      render();
+    }
+  });
+
+  render();
+})();
+</script>
 </body>
 </html>

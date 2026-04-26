@@ -77,6 +77,28 @@
   .roi-sub{font-size:10px;color:var(--muted2);font-family:var(--mono);margin-top:2px;}
 
   .placeholder-banner{padding:10px 12px;background:rgba(245,158,11,.08);border:1px dashed var(--amber);border-radius:9px;font-size:11px;color:#854F0B;display:flex;align-items:center;gap:8px;margin-top:10px;}
+
+  /* ── CHARTE FORTE (matching Dashboard) ── */
+  .card{padding:0;overflow:hidden;}
+  .card-header{background:var(--text);color:#fff;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;}
+  .card-header h3{font-size:17px;font-weight:800;letter-spacing:-.3px;color:#fff;margin:0;}
+  .card-header .card-subtitle{font-size:11px;color:rgba(255,255,255,.55);font-weight:500;letter-spacing:.4px;text-transform:none;}
+  .card-body{padding:22px;}
+  .card-section-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:7px;font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;margin-bottom:14px;}
+  .card-section-pill svg{flex-shrink:0;}
+  .card-divider{height:1px;background:var(--border);margin:22px 0;}
+  .insight{border-left:3px solid;padding-left:10px;border-radius:0 9px 9px 0;}
+  .insight.good{border-left-color:var(--green);}
+  .insight.warn{border-left-color:var(--amber);}
+  .insight.bad{border-left-color:var(--red);}
+  .kpi-card{padding:16px 18px;border-left:4px solid transparent;}
+  .kpi-label{font-size:10.5px;letter-spacing:1.6px;}
+  .kpi-value{font-size:30px;font-weight:900;}
+  .kpi-card.k-leads{border-left-color:#E67E00;} .kpi-card.k-leads .kpi-value{color:#E67E00;}
+  .kpi-card.k-prospects{border-left-color:#4338CA;} .kpi-card.k-prospects .kpi-value{color:#4338CA;}
+  .kpi-card.k-won{border-left-color:#1D8348;} .kpi-card.k-won .kpi-value{color:#1D8348;}
+  .kpi-card.k-cycle{border-left-color:#0A66C2;} .kpi-card.k-cycle .kpi-value{color:#0A66C2;}
+  .kpi-card.k-closing{border-left-color:var(--text);} .kpi-card.k-closing .kpi-value{color:var(--text);}
 </style>
 </head>
 <body>
@@ -98,7 +120,7 @@
   <div class="container">
 
     <div class="grid-kpi">
-      <div class="kpi-card">
+      <div class="kpi-card k-leads">
         <div class="kpi-label">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#E67E00" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
           Leads
@@ -106,7 +128,7 @@
         <div class="kpi-value" id="kpi-leads">—</div>
         <div class="kpi-sub" id="kpi-leads-sub">total importés</div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card k-prospects">
         <div class="kpi-label">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
           Prospects actifs
@@ -114,7 +136,7 @@
         <div class="kpi-value" id="kpi-prospects">—</div>
         <div class="kpi-sub" id="kpi-prospects-sub">en pipeline</div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card k-won">
         <div class="kpi-label">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
           Gagnés
@@ -122,7 +144,7 @@
         <div class="kpi-value" id="kpi-won">—</div>
         <div class="kpi-sub" id="kpi-won-sub">— € total</div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card k-cycle">
         <div class="kpi-label">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Cycle moyen
@@ -130,7 +152,7 @@
         <div class="kpi-value" id="kpi-cycle">—</div>
         <div class="kpi-sub" id="kpi-cycle-sub">jours j → gagné</div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card k-closing">
         <div class="kpi-label">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2.5"><path d="M12 2v20M5 12h14"/></svg>
           Taux closing
@@ -142,45 +164,54 @@
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-title">
-          <span>Funnel commercial</span>
+        <div class="card-header">
+          <h3>Funnel commercial</h3>
           <span class="card-subtitle" id="funnel-period-label">Sur la période</span>
         </div>
-        <div class="funnel" id="funnel"></div>
+        <div class="card-body">
+          <div class="funnel" id="funnel"></div>
+        </div>
       </div>
 
       <div class="card">
-        <div class="card-title">
-          <span>Répartition pipeline</span>
+        <div class="card-header">
+          <h3>Répartition pipeline</h3>
           <span class="card-subtitle" id="donut-total">— cards</span>
         </div>
-        <div class="donut-wrap">
-          <svg class="donut-svg" id="donut" viewBox="0 0 100 100"></svg>
-          <div class="donut-legend" id="donut-legend"></div>
+        <div class="card-body">
+          <div class="donut-wrap">
+            <svg class="donut-svg" id="donut" viewBox="0 0 100 100"></svg>
+            <div class="donut-legend" id="donut-legend"></div>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">
-        <span>Évolution dans le temps</span>
+      <div class="card-header">
+        <h3>Évolution dans le temps</h3>
         <span class="card-subtitle">Cards créées · RDV planifiés · Gagnés</span>
       </div>
-      <div class="evolution-chart" id="evolution"></div>
+      <div class="card-body">
+        <div class="evolution-chart" id="evolution"></div>
+      </div>
     </div>
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-title">Process — ce qui fonctionne / ce qui coince</div>
-        <div id="insights"></div>
+        <div class="card-header"><h3>Process — ce qui fonctionne / ce qui coince</h3></div>
+        <div class="card-body">
+          <div id="insights"></div>
+        </div>
       </div>
 
       <div class="card">
-        <div class="card-title">
-          <span>ROI par prospect gagné</span>
+        <div class="card-header">
+          <h3>ROI par prospect gagné</h3>
           <span class="card-subtitle">Coût réel</span>
         </div>
-        <div class="roi-grid">
+        <div class="card-body">
+          <div class="roi-grid">
           <div class="roi-cell"><div class="roi-label">Revenus</div><div class="roi-value" id="roi-rev">—</div><div class="roi-sub">cards gagnées</div></div>
           <div class="roi-cell"><div class="roi-label">Frais engagés</div><div class="roi-value" id="roi-cost">—</div><div class="roi-sub" id="roi-cost-sub">essence + repas + autres</div></div>
           <div class="roi-cell"><div class="roi-label">Coût / gagné</div><div class="roi-value" id="roi-per-won">—</div><div class="roi-sub">€ par closing</div></div>
@@ -188,6 +219,7 @@
         <div class="placeholder-banner" id="roi-placeholder" style="display:none;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           Frais non saisis. La page <strong>&nbsp;Frais&nbsp;</strong> alimentera ce bloc dès que des frais seront déclarés.
+        </div>
         </div>
       </div>
     </div>

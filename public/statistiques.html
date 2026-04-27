@@ -295,6 +295,57 @@
       <div class="leads-upgrade" id="leads-upgrade" style="display:none;"></div>
     </div>
 
+    <!-- FACTURATION 2026 — KPIs -->
+    <div class="card">
+      <div class="card-header-light"><h3>Facturation 2026</h3><span class="card-subtitle" id="fact-period">12 mois</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+          <div style="padding:14px 16px;background:var(--surface);border-radius:10px;border-left:3px solid #1D9E75;">
+            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">CA réalisé</div>
+            <div id="fact-realized" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:#1D9E75;margin-top:4px;font-family:var(--font);">0 €</div>
+          </div>
+          <div style="padding:14px 16px;background:var(--surface);border-radius:10px;border-left:3px solid #EF9F27;">
+            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">CA en attente</div>
+            <div id="fact-pending" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:#EF9F27;margin-top:4px;font-family:var(--font);">0 €</div>
+          </div>
+          <div style="padding:14px 16px;background:var(--surface);border-radius:10px;border-left:3px solid var(--text);">
+            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">Factures émises</div>
+            <div id="fact-count" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:var(--text);margin-top:4px;font-family:var(--font);">0</div>
+          </div>
+          <div style="padding:14px 16px;background:var(--surface);border-radius:10px;border-left:3px solid #4338CA;">
+            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">Ticket moyen</div>
+            <div id="fact-avg" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:#4338CA;margin-top:4px;font-family:var(--font);">0 €</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CA mensuel 2026 -->
+    <div class="card">
+      <div class="card-header-light"><h3>CA mensuel 2026</h3><span class="card-subtitle">Total TTC payé + en attente</span></div>
+      <div class="card-body">
+        <div id="fact-monthly-empty" style="display:none;color:var(--muted2);font-size:13px;text-align:center;padding:30px 0;font-style:italic;">Aucune donnée à afficher. Importe des factures pour voir les statistiques.</div>
+        <canvas id="fact-monthly-chart" style="max-height:280px;"></canvas>
+      </div>
+    </div>
+
+    <!-- Répartition entité + Top clients -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header-light"><h3>Répartition par entité</h3></div>
+        <div class="card-body">
+          <div id="fact-entity-empty" style="display:none;color:var(--muted2);font-size:13px;text-align:center;padding:30px 0;font-style:italic;">Aucune donnée.</div>
+          <canvas id="fact-entity-chart" style="max-height:240px;"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header-light"><h3>Top 5 clients</h3></div>
+        <div class="card-body">
+          <div id="fact-top-clients"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-header-light">
         <h3>Performance mensuelle</h3>
@@ -404,6 +455,7 @@
 
 <script src="/sidebar.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function(){
   function loadJSON(key, fallback){
@@ -1182,6 +1234,125 @@
   });
 
   render();
+})();
+</script>
+
+<script>
+// Facturation 2026 — KPIs + bar chart + entity donut + top 5 clients
+(function(){
+  var factures = [];
+  try { factures = JSON.parse(localStorage.getItem('mup_factures') || '[]'); } catch(e){}
+  function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0); }
+  function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  var ENTITY_LBL = { graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues', mup:'MUP', neox:'Neox' };
+  var ENTITY_COLOR = { graphic_factor:'#0A66C2', nouvellevagues:'#7C3AED', mup:'#1D1D1F', neox:'#0BBCD4' };
+
+  var f2026 = factures.filter(function(f){ return f.date_emission && new Date(f.date_emission).getFullYear() === 2026; });
+  var realized = f2026.filter(function(f){ return f.statut === 'payée' || f.statut === 'payee'; }).reduce(function(s,f){ return s + (parseFloat(f.total_ttc)||0); }, 0);
+  var pending = f2026.filter(function(f){ return f.statut === 'en_attente'; }).reduce(function(s,f){ return s + (parseFloat(f.total_ttc)||0); }, 0);
+  var totalAll = f2026.reduce(function(s,f){ return s + (parseFloat(f.total_ttc)||0); }, 0);
+  var avg = f2026.length ? totalAll / f2026.length : 0;
+
+  document.getElementById('fact-realized').textContent = fmtEur(realized);
+  document.getElementById('fact-pending').textContent = fmtEur(pending);
+  document.getElementById('fact-count').textContent = String(f2026.length);
+  document.getElementById('fact-avg').textContent = fmtEur(avg);
+
+  // CA mensuel
+  var months = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
+  var monthly = new Array(12).fill(0);
+  f2026.forEach(function(f){
+    var d = new Date(f.date_emission);
+    if(!isNaN(d.getTime())) monthly[d.getMonth()] += (parseFloat(f.total_ttc)||0);
+  });
+  if(typeof Chart !== 'undefined' && f2026.length > 0){
+    new Chart(document.getElementById('fact-monthly-chart').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: months,
+        datasets: [{ label: 'CA TTC', data: monthly, backgroundColor: '#1D9E75', borderRadius: 5, maxBarThickness: 60 }]
+      },
+      options: {
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function(ctx){ return fmtEur(ctx.raw); } } },
+          datalabels: false
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { family: 'Geist Mono', size: 10 } } },
+          y: { ticks: { callback: function(v){ return fmtEur(v).replace(',00',''); }, font: { family: 'Geist Mono', size: 10 } } }
+        },
+        responsive: true,
+        maintainAspectRatio: false
+      }
+    });
+  } else {
+    var el = document.getElementById('fact-monthly-chart'); if(el) el.style.display = 'none';
+    document.getElementById('fact-monthly-empty').style.display = 'block';
+  }
+
+  // Donut entité
+  var byEntity = {};
+  f2026.forEach(function(f){
+    var k = f.entity_origine || 'mup';
+    byEntity[k] = (byEntity[k] || 0) + (parseFloat(f.total_ttc)||0);
+  });
+  var entityKeys = Object.keys(byEntity).filter(function(k){ return byEntity[k] > 0; });
+  if(typeof Chart !== 'undefined' && entityKeys.length > 0){
+    new Chart(document.getElementById('fact-entity-chart').getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: entityKeys.map(function(k){ return ENTITY_LBL[k] || k; }),
+        datasets: [{
+          data: entityKeys.map(function(k){ return byEntity[k]; }),
+          backgroundColor: entityKeys.map(function(k){ return ENTITY_COLOR[k] || '#999'; }),
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { position: 'right', labels: { font: { family: 'Geist', size: 11 }, boxWidth: 12 } },
+          tooltip: { callbacks: { label: function(ctx){
+            var total = ctx.dataset.data.reduce(function(s,v){return s+v;},0);
+            var pct = total ? Math.round(ctx.raw/total*100) : 0;
+            return ctx.label + ' : ' + fmtEur(ctx.raw) + ' · ' + pct + '%';
+          } } }
+        },
+        responsive: true,
+        maintainAspectRatio: false
+      }
+    });
+  } else {
+    var el2 = document.getElementById('fact-entity-chart'); if(el2) el2.style.display = 'none';
+    document.getElementById('fact-entity-empty').style.display = 'block';
+  }
+
+  // Top 5 clients
+  var byClient = {};
+  factures.forEach(function(f){
+    var nom = (f.client && f.client.nom) || '—';
+    if(!byClient[nom]) byClient[nom] = { count:0, total:0, lastDate:'' };
+    byClient[nom].count++;
+    byClient[nom].total += (parseFloat(f.total_ttc)||0);
+    if(f.date_emission && f.date_emission > byClient[nom].lastDate) byClient[nom].lastDate = f.date_emission;
+  });
+  var top = Object.keys(byClient).map(function(k){ return Object.assign({ nom:k }, byClient[k]); }).sort(function(a,b){ return b.total - a.total; }).slice(0,5);
+  var topEl = document.getElementById('fact-top-clients');
+  if(top.length === 0){
+    topEl.innerHTML = '<div style="color:var(--muted2);font-size:12px;font-style:italic;padding:14px 0;text-align:center;">Aucun client.</div>';
+  } else {
+    var rows = top.map(function(c){
+      var dateLbl = c.lastDate ? new Date(c.lastDate).toLocaleDateString('fr-FR') : '—';
+      return '<div style="display:grid;grid-template-columns:1fr 60px 100px 90px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;">'
+        +'<span style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(c.nom)+'</span>'
+        +'<span style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;">'+c.count+' fact.</span>'
+        +'<span style="font-family:var(--mono);font-weight:800;color:#1D9E75;text-align:right;">'+fmtEur(c.total)+'</span>'
+        +'<span style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right;">'+dateLbl+'</span>'
+        +'</div>';
+    }).join('');
+    topEl.innerHTML = rows;
+  }
 })();
 </script>
 </body>

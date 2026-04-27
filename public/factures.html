@@ -594,12 +594,21 @@
     if(!result.total_ttc) result.confidence.total_ttc = 0;
 
     // ─── 5. TOTAL HT ───
-    var htMatch = txtFlat.match(/(?:total\s+ht|montant\s+ht|sous[\s\-]total\s+ht)\s*:?\s*([\d\s.,]+?)\s*€?/i);
-    if(htMatch && htMatch[1]){
-      var hn = parseFloat(String(htMatch[1]).replace(/\s/g, '').replace(',', '.'));
-      if(!isNaN(hn) && hn > 0){
-        result.total_ht = hn;
-        result.confidence.total_ht = 1.0;
+    var htPatterns = [
+      /Total\s+HT\s*:?\s*([\d]+(?:[.,\s]\d{2,3})*(?:[.,]\d{1,2})?)\s*€?/i,
+      /Montant\s+HT\s*:?\s*([\d]+(?:[.,\s]\d{2,3})*(?:[.,]\d{1,2})?)\s*€?/i,
+      /Sous[\s\-]total\s+HT\s*:?\s*([\d]+(?:[.,\s]\d{2,3})*(?:[.,]\d{1,2})?)\s*€?/i,
+      /Sous[\s\-]total\s*:?\s*([\d]+(?:[.,\s]\d{2,3})*(?:[.,]\d{1,2})?)\s*€?/i
+    ];
+    for(var hp = 0; hp < htPatterns.length; hp++){
+      var hm = txtFlat.match(htPatterns[hp]);
+      if(hm && hm[1]){
+        var hn = parseFloat(String(hm[1]).replace(/\s/g, '').replace(',', '.'));
+        if(!isNaN(hn) && hn > 0){
+          result.total_ht = hn;
+          result.confidence.total_ht = 1.0;
+          break;
+        }
       }
     }
     if(!result.total_ht) result.confidence.total_ht = 0;
@@ -610,7 +619,15 @@
       result.taux_tva = 0;
       result.mention_tva = 'TVA non applicable, art. 293 B du CGI';
       result.confidence.taux_tva = 1.0;
-      if(!result.total_ht && result.total_ttc) result.total_ht = result.total_ttc;
+      // TVA non applicable → HT == TTC : combler le manquant si l'autre est connu
+      if(result.total_ttc > 0 && (!result.total_ht || result.total_ht === 0)){
+        result.total_ht = result.total_ttc;
+        result.confidence.total_ht = 1.0;
+      }
+      if(result.total_ht > 0 && (!result.total_ttc || result.total_ttc === 0)){
+        result.total_ttc = result.total_ht;
+        result.confidence.total_ttc = 1.0;
+      }
     } else {
       var tvaMatch = txtFlat.match(/(?:taux\s+)?TVA\s*:?\s*(\d{1,2}[,.]?\d*)\s*%/i);
       if(tvaMatch){
@@ -673,14 +690,30 @@
       }
     }
 
-    // ─── 9. DÉSIGNATION ───
-    var desigMatch = txtFlat.match(/(?:d[ée]signation|description|prestation|libell[ée])\s*:?\s*([A-Za-zÀ-ÿ0-9\s\-,]{5,200})/i);
-    if(desigMatch){
-      result.designation = desigMatch[1].trim().substring(0, 200);
-      result.confidence.designation = 0.7;
-    } else {
-      result.confidence.designation = 0;
+    // ─── 9. DÉSIGNATION (4 fallbacks) ───
+    var desigPatterns = [
+      // 1. Mot-clé explicite
+      /(?:d[ée]signation|description|prestation|libell[ée]|objet)\s*:?\s*([A-Za-zÀ-ÿ0-9\s\-,]{3,200})/i,
+      // 2. Format Indy : ligne entre N°XXX et "Date"
+      /N[°o]\s*\d+[\-\d]+\s*\n\s*([A-Z][A-Za-zÀ-ÿ0-9\s\-,]{2,80})\s*\n\s*Date/i,
+      // 3. Première ligne du tableau (après l'en-tête Qté/Total HT)
+      /(?:Qt[ée]|Quantit[ée])\s+(?:Prix\s+unit[a-z\.]*\s+HT)?\s*(?:Total\s+HT)?\s*\n\s*([A-Za-zÀ-ÿ0-9\s\-,]{2,80})/i,
+      // 4. Ligne de prestation : nombre suivi de montants €
+      /\n\s*(\d+\s+[\d.,\s]+€?\s+[\d.,\s]+€?)\s*\n/
+    ];
+    var designation = '';
+    for(var dp = 0; dp < desigPatterns.length; dp++){
+      var dmd = (dp === 0 ? txtFlat : txt).match(desigPatterns[dp]);
+      if(dmd && dmd[1]){
+        designation = dmd[1].trim().replace(/\s{2,}/g, ' ').substring(0, 120);
+        break;
+      }
     }
+    if(!designation){
+      designation = 'Prestation de services';
+    }
+    result.designation = designation;
+    result.confidence.designation = (designation === 'Prestation de services') ? 0.5 : 0.9;
 
     // ─── ANTI-FAUX-POSITIF : SIRET client identique à l'émetteur ───
     var EMETTEUR_EI = '45338845600031';

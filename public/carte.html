@@ -840,14 +840,37 @@ function renderSchedule(){
       iconAnchor: [10, 10]
     });
     var marker = L.marker([contact.latitude, contact.longitude], { icon: icon }).addTo(map);
-    var nbFact = (contact.factures_ids || []).length;
-    var popup = '<div style="font-family:inherit;min-width:200px;">'
-      + '<div style="font-weight:700;font-size:14px;margin-bottom:4px;">'+escTxt(contact.nom||'—')+'</div>'
-      + '<div style="font-size:11px;color:#666;margin-bottom:8px;">'+escTxt(contact.adresse||contact.adresse_normalisee||'')+'</div>'
-      + '<div style="font-size:12px;margin-bottom:8px;">'+nbFact+' facture'+(nbFact>1?'s':'')+' · <strong>'+fmtMontant(contact.ca_total)+'</strong></div>'
-      + '<a href="/factures?client_siret='+encodeURIComponent(contact.siret||'')+'" style="font-size:12px;color:'+couleur+';text-decoration:none;font-weight:600;">Voir les factures →</a>'
+    var siretFmt = (contact.siret||'').replace(/(\d{3})(\d{3})(\d{3})(\d{5})/, '$1 $2 $3 $4');
+    var sirenFmt = (contact.siren||'').replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
+    var pinIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+    var entityLbl = ({graphic_factor:'Graphic Factor',nouvellevagues:'Nouvelles Vagues',mup:'MUP',neox:'Neox'})[contact.entity_origine] || '';
+    var popup = '<div style="font-family:Geist,-apple-system,sans-serif;width:280px;">'
+      // Header noir (style fiche MUP)
+      + '<div style="background:#1D1D1F;color:#fff;padding:12px 14px;">'
+        + (entityLbl ? '<div style="font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:6px;">'+escTxt(entityLbl)+'</div>' : '')
+        + '<div style="font-size:14px;font-weight:800;text-transform:uppercase;line-height:1.2;word-break:break-word;">'+escTxt(contact.nom||'—')+'</div>'
+      + '</div>'
+      // Body
+      + '<div style="padding:12px 14px;background:#fff;">'
+        // Section Contact (adresse)
+        + '<div style="font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#999;padding-bottom:6px;border-bottom:1px solid #E8E8ED;margin-bottom:8px;">Contact</div>'
+        + '<div style="display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:#1D1D1F;line-height:1.4;padding:3px 0;margin-bottom:10px;">'
+          + pinIco
+          + '<span style="word-break:break-word;">'+escTxt(contact.adresse||contact.adresse_normalisee||'—')+'</span>'
+        + '</div>'
+        // Section Identité légale
+        + '<div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#999;padding-bottom:6px;border-bottom:1px solid #E8E8ED;margin-bottom:8px;">'
+          + '<span>Identité légale</span><span style="color:#AEAEB2;">INSEE</span>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-size:11px;">'
+          + '<span style="color:#6E6E73;font-weight:500;">SIRET</span>'
+          + '<span style="color:#1D1D1F;font-weight:600;font-family:Geist Mono,monospace;">'+escTxt(siretFmt||'—')+'</span>'
+          + '<span style="color:#6E6E73;font-weight:500;">SIREN</span>'
+          + '<span style="color:#1D1D1F;font-weight:600;font-family:Geist Mono,monospace;">'+escTxt(sirenFmt||'—')+'</span>'
+        + '</div>'
+      + '</div>'
       + '</div>';
-    marker.bindPopup(popup);
+    marker.bindPopup(popup, { maxWidth: 300, closeButton: false });
     if(contact.siret) contactMarkers[contact.siret] = marker;
   });
 

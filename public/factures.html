@@ -379,8 +379,10 @@
   // ── PARSER PDF (regex validés sur 4 factures EI Benoit Fouquet) ──
   function detectEntity(clientNom){
     if(!clientNom) return 'mup';
-    var nom = clientNom.toLowerCase();
+    var nom = clientNom.toLowerCase().replace(/\s/g, '');
     if(nom.indexOf('neoxp') !== -1 || nom.indexOf('neox') !== -1) return 'neox';
+    if(nom.indexOf('graphic') !== -1 || nom.indexOf('factor') !== -1) return 'graphic_factor';
+    if(nom.indexOf('nouvelle') !== -1 || nom.indexOf('vague') !== -1) return 'nouvellevagues';
     return 'mup';
   }
 
@@ -440,7 +442,7 @@
     }
 
     // DATE PRESTATION / ÉMISSION (ligne du tableau)
-    var dateMatch = text.match(/\n\S+\s+(\d{2}\/\d{2}\/\d{4})\s+\d+\s+[\d.,]+\s+[\d.,]+/);
+    var dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4})\s+\d+\s+([\d.,]+)\s+\2/);
     if(dateMatch){
       var parts = dateMatch[1].split('/');
       var iso = parts[2] + '-' + parts[1] + '-' + parts[0];
@@ -451,7 +453,7 @@
     }
 
     // DÉSIGNATION
-    var moisMatch = text.match(/\n([A-ZÉÈÀ]+ \d{4})\n/);
+    var moisMatch = text.match(/[\d.,]+\s+[\d.,]+\s+([A-ZÉÈÀ]+\s+\d{4})\s+Date\s+de\s+règlement/);
     if(moisMatch && result.client_nom){
       result.designation = 'Prestation ' + result.client_nom + ' ' + moisMatch[1].trim();
       result.confidence.designation = 1.0;
@@ -1001,15 +1003,21 @@
       html += '</div>';
       html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Désignation'+confDot(c.designation_conf||0)+'</label>'
            + '<textarea data-pdf-i="'+i+'" data-pdf-f="designation" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;min-height:50px;font-family:var(--font);">'+esc(c.designation||'')+'</textarea></div>';
+      c.statut = c.statut || 'en_attente'; c.entity_origine = c.entity_origine || 'mup';
+      var sel = function(val, cur){ return val === cur ? ' selected' : ''; };
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">';
       html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Statut</label>'
            + '<select data-pdf-i="'+i+'" data-pdf-f="statut" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'
-           + '<option value="en_attente">En attente</option><option value="payée">Payée</option><option value="en_retard">En retard</option></select></div>';
+           + '<option value="en_attente"'+sel('en_attente',c.statut)+'>En attente</option>'
+           + '<option value="payée"'+sel('payée',c.statut)+'>Payée</option>'
+           + '<option value="en_retard"'+sel('en_retard',c.statut)+'>En retard</option></select></div>';
       html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Entité</label>'
            + '<select data-pdf-i="'+i+'" data-pdf-f="entity_origine" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'
-           + '<option value="mup">MUP</option><option value="graphic_factor">Graphic Factor</option><option value="nouvellevagues">Nouvelles Vagues</option><option value="neox">Neox</option></select></div>';
+           + '<option value="mup"'+sel('mup',c.entity_origine)+'>MUP</option>'
+           + '<option value="graphic_factor"'+sel('graphic_factor',c.entity_origine)+'>Graphic Factor</option>'
+           + '<option value="nouvellevagues"'+sel('nouvellevagues',c.entity_origine)+'>Nouvelles Vagues</option>'
+           + '<option value="neox"'+sel('neox',c.entity_origine)+'>Neox</option></select></div>';
       html += '</div>';
-      c.statut = c.statut || 'en_attente'; c.entity_origine = c.entity_origine || 'mup';
       html += '</div>';
     });
     box.innerHTML = html;

@@ -840,37 +840,23 @@ function renderSchedule(){
       iconAnchor: [10, 10]
     });
     var marker = L.marker([contact.latitude, contact.longitude], { icon: icon }).addTo(map);
-    var siretFmt = (contact.siret||'').replace(/(\d{3})(\d{3})(\d{3})(\d{5})/, '$1 $2 $3 $4');
-    var sirenFmt = (contact.siren||'').replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
-    var pinIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
-    var entityLbl = ({graphic_factor:'Graphic Factor',nouvellevagues:'Nouvelles Vagues',mup:'MUP',ei:'EI'})[contact.entity_origine] || '';
-    var popup = '<div style="font-family:Geist,-apple-system,sans-serif;width:280px;">'
-      // Header noir (style fiche MUP)
-      + '<div style="background:#1D1D1F;color:#fff;padding:12px 14px;">'
-        + (entityLbl ? '<div style="font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:6px;">'+escTxt(entityLbl)+'</div>' : '')
-        + '<div style="font-size:14px;font-weight:800;text-transform:uppercase;line-height:1.2;word-break:break-word;">'+escTxt(contact.nom||'—')+'</div>'
+    var nbFact = (contact.factures_ids || []).length;
+    var stages = ['#6E6E73','#CC0000','#0A66C2','#B84C00','#4338CA','#7C3AED','#0BBCD4','#F59E0B','#EA580C','#1D8348'];
+    var dotsHtml = '';
+    for(var si = 0; si < stages.length; si++){
+      dotsHtml += '<div style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:'+stages[si]+';"></div>';
+      if(si < stages.length - 1) dotsHtml += '<div style="flex:1;height:1.5px;background:#999;min-width:3px;"></div>';
+    }
+    var popup = '<div style="width:220px;padding:12px 14px;font-family:inherit;">'
+      + '<div style="font-weight:600;font-size:14px;line-height:1.3;color:#1a1a1a;margin-bottom:3px;">'+escTxt(contact.nom||'—')+'</div>'
+      + '<div style="font-size:11px;color:#888;line-height:1.4;margin-bottom:10px;">'+escTxt(contact.adresse||contact.adresse_normalisee||'')+'</div>'
+      + '<div style="display:flex;gap:8px;align-items:baseline;margin-bottom:10px;">'
+        + '<span style="font-weight:500;font-size:13px;color:#1D8348;">'+fmtMontant(contact.ca_total)+'</span>'
+        + '<span style="font-size:11px;color:#888;">'+nbFact+' facture'+(nbFact>1?'s':'')+'</span>'
       + '</div>'
-      // Body
-      + '<div style="padding:12px 14px;background:#fff;">'
-        // Section Contact (adresse)
-        + '<div style="font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#999;padding-bottom:6px;border-bottom:1px solid #E8E8ED;margin-bottom:8px;">Contact</div>'
-        + '<div style="display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:#1D1D1F;line-height:1.4;padding:3px 0;margin-bottom:10px;">'
-          + pinIco
-          + '<span style="word-break:break-word;">'+escTxt(contact.adresse||contact.adresse_normalisee||'—')+'</span>'
-        + '</div>'
-        // Section Identité légale
-        + '<div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#999;padding-bottom:6px;border-bottom:1px solid #E8E8ED;margin-bottom:8px;">'
-          + '<span>Identité légale</span><span style="color:#AEAEB2;">INSEE</span>'
-        + '</div>'
-        + '<div style="display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-size:11px;">'
-          + '<span style="color:#6E6E73;font-weight:500;">SIRET</span>'
-          + '<span style="color:#1D1D1F;font-weight:600;font-family:Geist Mono,monospace;">'+escTxt(siretFmt||'—')+'</span>'
-          + '<span style="color:#6E6E73;font-weight:500;">SIREN</span>'
-          + '<span style="color:#1D1D1F;font-weight:600;font-family:Geist Mono,monospace;">'+escTxt(sirenFmt||'—')+'</span>'
-        + '</div>'
-      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:3px;">'+dotsHtml+'</div>'
       + '</div>';
-    marker.bindPopup(popup, { maxWidth: 300, closeButton: false });
+    marker.bindPopup(popup, { maxWidth: 240, closeButton: false });
     if(contact.siret) contactMarkers[contact.siret] = marker;
   });
 

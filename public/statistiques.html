@@ -370,10 +370,10 @@
 
     <section style="margin-top:32px; padding:24px; background:#fff; border-radius:12px; border:0.5px solid rgba(0,0,0,0.08);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
-        <h2 style="font-size:18px; font-weight:500; margin:0;">Historique pluriannuel</h2>
+        <h2 style="font-size:18px; font-weight:500; margin:0;">Historique 3 ans</h2>
         <span style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em;" id="historique-periode">2023 - 2026</span>
       </div>
-      <div id="historique-kpis" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:24px;"></div>
+      <div id="historique-kpis" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; margin-bottom:24px;"></div>
       <div id="historique-chart-container" style="margin-bottom:24px;">
         <h3 style="font-size:14px; font-weight:500; margin:0 0 12px;">Évolution du CA par année</h3>
         <div style="position:relative; height:280px;">
@@ -1400,6 +1400,34 @@
   function formatMontant(n){ return Math.round(n).toLocaleString('fr-FR') + ' €'; }
   function formatMontantDec(n){ return n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
 
+  function parseDateFacture(date){
+    if(!date) return null;
+    var s = String(date);
+    var d;
+    if(s.indexOf('/') !== -1){
+      var p = s.split('/');
+      d = new Date(parseInt(p[2],10), parseInt(p[1],10) - 1, parseInt(p[0],10));
+    } else if(s.indexOf('-') !== -1){
+      d = new Date(s);
+    }
+    return (d && !isNaN(d.getTime())) ? d : null;
+  }
+
+  function calculerCaYTD(facturesAnnee, jourCourant){
+    if(!Array.isArray(facturesAnnee) || !jourCourant) return 0;
+    var jourAnneeRef = (jourCourant - new Date(jourCourant.getFullYear(), 0, 0)) / 86400000;
+    var total = 0;
+    facturesAnnee.forEach(function(f){
+      var d = parseDateFacture(f.date_emission || f.date_prestation);
+      if(!d) return;
+      var jourAnneeFacture = (d - new Date(d.getFullYear(), 0, 0)) / 86400000;
+      if(jourAnneeFacture <= jourAnneeRef){
+        total += (parseFloat(f.total_ttc) || 0);
+      }
+    });
+    return total;
+  }
+
   function renderHistoriqueKpis(parAnnee){
     var annees = Object.keys(parAnnee).map(Number).sort();
     var kpisEl = document.getElementById('historique-kpis');
@@ -1411,17 +1439,42 @@
     }
     var totalCumule = annees.reduce(function(s,a){ return s + parAnnee[a].ca; }, 0);
     var totalFactures = annees.reduce(function(s,a){ return s + parAnnee[a].nb; }, 0);
-    var anneeCourante = Math.max.apply(null, annees);
+
+    var today = new Date();
+    var anneeCourante = today.getFullYear();
     var anneePrecedente = anneeCourante - 1;
+
+    var caYtdCourant = 0;
+    var caYtdPrecedent = 0;
     var evolutionPct = null;
-    if(parAnnee[anneePrecedente] && parAnnee[anneePrecedente].ca > 0){
-      evolutionPct = ((parAnnee[anneeCourante].ca - parAnnee[anneePrecedente].ca) / parAnnee[anneePrecedente].ca * 100);
+    if(parAnnee[anneeCourante]){
+      caYtdCourant = calculerCaYTD(parAnnee[anneeCourante].factures, today);
     }
+    if(parAnnee[anneePrecedente]){
+      var memeDateAnneeMoinsUn = new Date(anneePrecedente, today.getMonth(), today.getDate());
+      caYtdPrecedent = calculerCaYTD(parAnnee[anneePrecedente].factures, memeDateAnneeMoinsUn);
+    }
+    if(caYtdPrecedent > 0 && caYtdCourant > 0){
+      evolutionPct = ((caYtdCourant - caYtdPrecedent) / caYtdPrecedent * 100);
+    }
+
     var meilleureAnnee = annees[0];
     annees.forEach(function(a){ if(parAnnee[a].ca > parAnnee[meilleureAnnee].ca) meilleureAnnee = a; });
     periodeEl.textContent = annees[0] + ' - ' + annees[annees.length-1];
+
+    var moisLabels = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+    var labelPeriode = '1er janv. → ' + today.getDate() + ' ' + moisLabels[today.getMonth()];
+
+    var joursEcoules = (today - new Date(anneeCourante, 0, 0)) / 86400000;
+    var joursAnnee = ((anneeCourante % 4 === 0 && anneeCourante % 100 !== 0) || anneeCourante % 400 === 0) ? 366 : 365;
+    var projection = null;
+    if(caYtdCourant > 0 && joursEcoules >= 30){
+      projection = (caYtdCourant / joursEcoules) * joursAnnee;
+    }
+
     var couleurEvol = evolutionPct === null ? '#888' : evolutionPct >= 0 ? '#1D8348' : '#A32D2D';
     var labelEvol = evolutionPct === null ? '—' : (evolutionPct >= 0 ? '+' : '') + evolutionPct.toFixed(1) + '%';
+
     kpisEl.innerHTML = [
       '<div style="background:#f8f8f8; border-radius:8px; padding:16px;">'+
         '<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">CA cumulé total</div>'+
@@ -1434,14 +1487,19 @@
         '<div style="font-size:11px; color:#888; margin-top:4px;">Ticket moyen '+formatMontant(totalCumule/totalFactures)+'</div>'+
       '</div>',
       '<div style="background:#f8f8f8; border-radius:8px; padding:16px;">'+
-        '<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Évolution '+anneeCourante+' vs '+anneePrecedente+'</div>'+
+        '<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Évolution YTD</div>'+
         '<div style="font-size:22px; font-weight:500; color:'+couleurEvol+';">'+labelEvol+'</div>'+
-        '<div style="font-size:11px; color:#888; margin-top:4px;">'+(evolutionPct === null ? 'Pas de référence' : 'vs année précédente')+'</div>'+
+        '<div style="font-size:11px; color:#888; margin-top:4px;">'+labelPeriode+' vs '+anneePrecedente+'</div>'+
       '</div>',
       '<div style="background:#f8f8f8; border-radius:8px; padding:16px;">'+
         '<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Meilleure année</div>'+
         '<div style="font-size:22px; font-weight:500;">'+meilleureAnnee+'</div>'+
         '<div style="font-size:11px; color:#888; margin-top:4px;">'+formatMontant(parAnnee[meilleureAnnee].ca)+'</div>'+
+      '</div>',
+      '<div style="background:#f8f8f8; border-radius:8px; padding:16px; border-left:3px solid #1D8348;">'+
+        '<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Projection '+anneeCourante+'</div>'+
+        '<div style="font-size:22px; font-weight:500; color:#1D8348;">'+(projection === null ? '—' : formatMontant(projection))+'</div>'+
+        '<div style="font-size:11px; color:#888; margin-top:4px;">'+(projection === null ? 'Données insuffisantes' : 'Au rythme actuel')+'</div>'+
       '</div>'
     ].join('');
   }
@@ -1497,6 +1555,8 @@
     var tableEl = document.getElementById('historique-table');
     var annees = Object.keys(parAnnee).map(Number).sort().reverse();
     if(annees.length === 0){ tableEl.innerHTML = ''; return; }
+    var today = new Date();
+    var anneeEnCours = today.getFullYear();
     var html = '<h3 style="font-size:14px; font-weight:500; margin:24px 0 12px;">Récapitulatif annuel</h3>';
     html += '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
     html += '<thead><tr style="border-bottom:1px solid rgba(0,0,0,0.1);">'
@@ -1511,7 +1571,19 @@
       var ticketMoyen = data.ca / data.nb;
       var anneePrecedente = annee - 1;
       var evolution = null;
-      if(parAnnee[anneePrecedente] && parAnnee[anneePrecedente].ca > 0){
+      var ytdNote = '';
+      if(annee === anneeEnCours){
+        // Année en cours : comparaison à période équivalente (YTD)
+        var caCourantYtd = calculerCaYTD(data.factures, today);
+        if(parAnnee[anneePrecedente]){
+          var memeDate = new Date(anneePrecedente, today.getMonth(), today.getDate());
+          var caPrecYtd = calculerCaYTD(parAnnee[anneePrecedente].factures, memeDate);
+          if(caPrecYtd > 0 && caCourantYtd > 0){
+            evolution = ((caCourantYtd - caPrecYtd) / caPrecYtd * 100);
+            ytdNote = ' <span style="font-size:10px;color:#888;font-weight:400;">YTD</span>';
+          }
+        }
+      } else if(parAnnee[anneePrecedente] && parAnnee[anneePrecedente].ca > 0){
         evolution = ((data.ca - parAnnee[anneePrecedente].ca) / parAnnee[anneePrecedente].ca * 100);
       }
       var couleur = evolution === null ? '#888' : evolution >= 0 ? '#1D8348' : '#A32D2D';
@@ -1521,10 +1593,11 @@
         + '<td style="padding:12px; text-align:right; font-weight:500; color:#1D8348;">'+formatMontantDec(data.ca)+'</td>'
         + '<td style="padding:12px; text-align:right;">'+data.nb+'</td>'
         + '<td style="padding:12px; text-align:right; color:#666;">'+formatMontantDec(ticketMoyen)+'</td>'
-        + '<td style="padding:12px; text-align:right; color:'+couleur+';">'+label+'</td>'
+        + '<td style="padding:12px; text-align:right; color:'+couleur+';">'+label+ytdNote+'</td>'
         + '</tr>';
     });
     html += '</tbody></table>';
+    html += '<div style="font-size:11px; color:#888; margin-top:8px; font-style:italic;">L\'évolution de l\'année en cours est calculée à période équivalente (Year-to-Date).</div>';
     tableEl.innerHTML = html;
   }
 

@@ -365,10 +365,231 @@
 <script src="/sidebar.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 (function(){
-  if(typeof pdfjsLib !== 'undefined'){ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; }
+  if(typeof pdfjsLib !== 'undefined'){ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js'; }
+
+  // ── ÉMETTEUR EI (utilisateur de MUP) ──
+  var EMETTEUR_EI_SIRET = '45338845600031';
+
+  // ── BIBLIOTHÈQUE DE PATTERNS REGEX ──
+  var PATTERNS = {
+    numero: [
+      /Facture\s*n°?\s*:?\s*([A-Z0-9\-\/]+)/i,
+      /N°\s*facture\s*:?\s*([A-Z0-9\-\/]+)/i,
+      /Invoice\s*#?\s*:?\s*([A-Z0-9\-\/]+)/i,
+      /Référence\s*:?\s*([A-Z0-9\-\/]+)/i,
+      /([0-9]{1,4}-[0-9]{6})\b/
+    ],
+    date_emission: [
+      /Date\s*d['']émission\s*:?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+      /Émis\s*le\s*:?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+      /Date\s*facture\s*:?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+      /Date\s*:?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i
+    ],
+    total_ttc: [
+      /TOTAL\s*TTC\s*:?\s*([\d\s,\.]+)\s*€?/i,
+      /Net\s*à\s*payer\s*:?\s*([\d\s,\.]+)\s*€?/i,
+      /Montant\s*total\s*:?\s*([\d\s,\.]+)\s*€?/i,
+      /TOTAL\s*en\s*€\s*:?\s*([\d\s,\.]+)/i,
+      /TOTAL\s*:?\s*([\d\s,\.]+)\s*€/i
+    ],
+    total_ht: [
+      /TOTAL\s*HT\s*:?\s*([\d\s,\.]+)\s*€?/i,
+      /Sous[\-\s]total\s*HT\s*:?\s*([\d\s,\.]+)\s*€?/i,
+      /Montant\s*HT\s*:?\s*([\d\s,\.]+)\s*€?/i
+    ],
+    tva_non_applicable: [
+      /TVA\s*non\s*applicable/i,
+      /art\.?\s*293\s*B/i,
+      /Franchise\s*en\s*base/i
+    ],
+    taux_tva: [
+      /TVA\s*(?:à\s*)?(\d{1,2})\s*%/i,
+      /(\d{1,2})\s*%\s*TVA/i
+    ],
+    siret: [
+      /SIRET\s*:?\s*([\d\s]{14,17})/i,
+      /N°?\s*SIRET\s*:?\s*([\d\s]{14,17})/i
+    ],
+    siren: [
+      /SIREN\s*:?\s*([\d\s]{9,11})/i,
+      /N°?\s*SIREN\s*:?\s*([\d\s]{9,11})/i
+    ],
+    tva_intra: [
+      /TVA\s*intra(?:communautaire)?\s*:?\s*(FR\d{11})/i,
+      /N°?\s*TVA\s*:?\s*(FR\d{11})/i
+    ],
+    designation: [
+      /Désignation[\s\S]{0,100}?\n([^\n]{10,200})/i,
+      /Description[\s\S]{0,100}?\n([^\n]{10,200})/i,
+      /Prestation[\s:]+([^\n]{5,200})/i
+    ]
+  };
+
+  // ── NORMALISATION ──
+  function normalizeDate(str){
+    if(!str) return null;
+    var m = String(str).match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+    if(!m) return null;
+    var dd = m[1], mm = m[2], yy = m[3];
+    if(yy.length === 2) yy = '20' + yy;
+    return yy + '-' + (mm.length===1?'0'+mm:mm) + '-' + (dd.length===1?'0'+dd:dd);
+  }
+  function normalizeAmount(str){
+    if(!str) return 0;
+    var s = String(str).replace(/[€EUR\s]/gi, '').trim();
+    // "2.834,53" ou "2 834,53" → "2834.53"
+    if(/,\d{1,2}$/.test(s)){ s = s.replace(/\./g, '').replace(',', '.'); }
+    else if(/\.\d{1,2}$/.test(s)){ s = s.replace(/\s/g,'').replace(/(?:[,])(?=\d{3})/g,''); }
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+  function normalizeSiret(str){
+    if(!str) return '';
+    return String(str).replace(/[\s\-]/g, '');
+  }
+
+  // ── APPLICATION DES PATTERNS ──
+  function applyPattern(text, regexList){
+    for(var i = 0; i < regexList.length; i++){
+      var m = text.match(regexList[i]);
+      if(m && m[1]){
+        return { value: m[1].trim(), confidence: i === 0 ? 1.0 : 0.6 };
+      }
+    }
+    return { value: '', confidence: 0 };
+  }
+  function applyFlagPattern(text, regexList){
+    for(var i = 0; i < regexList.length; i++){
+      if(regexList[i].test(text)) return { value: true, confidence: i === 0 ? 1.0 : 0.6 };
+    }
+    return { value: false, confidence: 0 };
+  }
+
+  // ── DÉTECTION CLIENT (zone destinataire vs émetteur) ──
+  function detectClientZone(items, pageWidth){
+    // items = [{ str, transform: [a,b,c,d,x,y] }]
+    // Zone destinataire = bloc qui ne contient pas EMETTEUR_EI_SIRET
+    var blocks = []; // groupes de lignes proches
+    var sorted = items.slice().sort(function(a,b){ return b.transform[5] - a.transform[5]; }); // top to bottom
+    var currentBlock = []; var lastY = null;
+    sorted.forEach(function(it){
+      var y = it.transform[5];
+      if(lastY === null || Math.abs(y - lastY) < 30){ currentBlock.push(it); }
+      else { if(currentBlock.length) blocks.push(currentBlock); currentBlock = [it]; }
+      lastY = y;
+    });
+    if(currentBlock.length) blocks.push(currentBlock);
+    // Garder le tiers haut
+    var topThird = blocks.slice(0, Math.max(2, Math.ceil(blocks.length / 3)));
+    var topText = topThird.map(function(b){ return b.map(function(it){ return it.str; }).join(' '); }).join('\n');
+    // Le bloc client = celui qui n'a pas EMETTEUR_EI_SIRET
+    var byEmetteur = topText.indexOf(EMETTEUR_EI_SIRET) !== -1;
+    return { topText: topText, hasEmetteur: byEmetteur };
+  }
+
+  // ── EXTRACTION TEXTE PDF ──
+  async function extractPDFTextFull(file){
+    if(typeof pdfjsLib === 'undefined') return { text:'', items:[], pageWidth:0 };
+    var buf = await file.arrayBuffer();
+    var doc = await pdfjsLib.getDocument({ data: buf }).promise;
+    var fullText = '';
+    var allItems = [];
+    var pageWidth = 0;
+    for(var i = 1; i <= doc.numPages; i++){
+      var page = await doc.getPage(i);
+      if(i === 1) pageWidth = page.view[2];
+      var content = await page.getTextContent();
+      content.items.forEach(function(it){
+        if(i === 1) allItems.push(it);
+        fullText += it.str + ' ';
+      });
+      fullText += '\n';
+    }
+    return { text: fullText, items: allItems, pageWidth: pageWidth, doc: doc };
+  }
+
+  // ── OCR FALLBACK ──
+  async function ocrFallback(doc, onProgress){
+    if(typeof Tesseract === 'undefined' || !doc) return '';
+    var fullText = '';
+    for(var i = 1; i <= doc.numPages; i++){
+      var page = await doc.getPage(i);
+      var viewport = page.getViewport({ scale: 2.0 });
+      var canvas = document.createElement('canvas');
+      canvas.width = viewport.width; canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+      var res = await Tesseract.recognize(canvas, 'fra', { logger: function(m){ if(onProgress) onProgress(m, i, doc.numPages); } });
+      fullText += res.data.text + '\n';
+    }
+    return fullText;
+  }
+
+  // ── PARSING COMPLET (cascade) ──
+  async function parsePDFComplete(file, onProgress){
+    var extracted = await extractPDFTextFull(file);
+    var text = extracted.text;
+    var ocrUsed = false;
+    if(!text || text.replace(/\s/g,'').length < 50){
+      if(onProgress) onProgress({ status:'ocr_start' });
+      text = await ocrFallback(extracted.doc, onProgress);
+      ocrUsed = true;
+    }
+    // Application patterns
+    var f = {
+      numero:           applyPattern(text, PATTERNS.numero),
+      date_emission:    applyPattern(text, PATTERNS.date_emission),
+      total_ttc:        applyPattern(text, PATTERNS.total_ttc),
+      total_ht:         applyPattern(text, PATTERNS.total_ht),
+      tva_non:          applyFlagPattern(text, PATTERNS.tva_non_applicable),
+      taux_tva:         applyPattern(text, PATTERNS.taux_tva),
+      siret:            applyPattern(text, PATTERNS.siret),
+      siren:            applyPattern(text, PATTERNS.siren),
+      tva_intra:        applyPattern(text, PATTERNS.tva_intra),
+      designation:      applyPattern(text, PATTERNS.designation)
+    };
+    // Détection client
+    var clientNom = '';
+    if(extracted.items.length){
+      var zone = detectClientZone(extracted.items, extracted.pageWidth);
+      // Heuristique simple : prendre 1ère ligne en majuscules dans le tiers haut
+      var lines = zone.topText.split(/\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+      var clientLine = lines.find(function(l){
+        return l.length > 3 && l.length < 80 && /[A-Z]{3,}/.test(l) && l.indexOf(EMETTEUR_EI_SIRET) === -1 && !/SIRET|TVA|FACTURE|DATE/i.test(l);
+      });
+      if(clientLine) clientNom = clientLine;
+    }
+    return {
+      numero: f.numero.value,
+      numero_conf: f.numero.confidence,
+      date_emission: normalizeDate(f.date_emission.value),
+      date_emission_conf: f.date_emission.confidence,
+      total_ttc: normalizeAmount(f.total_ttc.value),
+      total_ttc_conf: f.total_ttc.confidence,
+      total_ht: normalizeAmount(f.total_ht.value),
+      total_ht_conf: f.total_ht.confidence,
+      tva_applicable: !f.tva_non.value,
+      tva_applicable_conf: f.tva_non.confidence || (f.taux_tva.confidence ? 1 : 0),
+      taux_tva: f.taux_tva.value ? parseFloat(f.taux_tva.value) : 0,
+      taux_tva_conf: f.taux_tva.confidence,
+      mention_tva: f.tva_non.value ? 'TVA non applicable, art. 293 B du CGI' : '',
+      client_siret: normalizeSiret(f.siret.value),
+      client_siret_conf: f.siret.confidence,
+      client_siren: normalizeSiret(f.siren.value),
+      client_siren_conf: f.siren.confidence,
+      client_nom: clientNom,
+      client_nom_conf: clientNom ? 0.6 : 0,
+      designation: f.designation.value,
+      designation_conf: f.designation.confidence,
+      ocr_used: ocrUsed,
+      _rawText: text,
+      pdf_source: null,
+      filename: file.name
+    };
+  }
 
   function loadJSON(k, fb){ try{ return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); }catch(e){ return fb; } }
   function saveJSON(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
@@ -790,38 +1011,6 @@
   document.getElementById('pdf-drop').addEventListener('dragleave', function(){ this.classList.remove('dragover'); });
   document.getElementById('pdf-drop').addEventListener('drop', function(e){ e.preventDefault(); this.classList.remove('dragover'); handlePDFs(e.dataTransfer.files); });
   document.getElementById('pdf-file').addEventListener('change', function(e){ handlePDFs(e.target.files); });
-  async function extractPDFText(file){
-    if(typeof pdfjsLib === 'undefined') return '';
-    var buf = await file.arrayBuffer();
-    var doc = await pdfjsLib.getDocument({ data: buf }).promise;
-    var text = '';
-    for(var i = 1; i <= doc.numPages; i++){
-      var page = await doc.getPage(i);
-      var content = await page.getTextContent();
-      text += content.items.map(function(it){ return it.str; }).join(' ') + '\n';
-    }
-    return text;
-  }
-  function parseInvoicePDF(text, filename){
-    var numMatch = text.match(/(?:N[°ºo]?\s*[:.]?|Facture\s+n[°ºo]?\s*[:.]?)\s*([0-9]{1,4}[-\/][0-9A-Z]{3,10})/i);
-    var dateMatch = text.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/);
-    var totalMatch = text.match(/(?:total|montant)\s*(?:ttc|ht)?\s*[:.]?\s*([0-9][0-9\s,\.]*)\s*€?/i);
-    var clientMatch = text.match(/(?:client|destinataire|à[\s:])\s*[:.]?\s*([A-Z][A-Za-zÀ-ÿ\s&\-\.]{3,60})/);
-    var dateIso = null;
-    if(dateMatch){
-      var p = dateMatch[1].split(/[\/\-\.]/);
-      if(p[2] && p[2].length === 2) p[2] = '20' + p[2];
-      if(p.length === 3) dateIso = p[2] + '-' + pad(p[1],2) + '-' + pad(p[0],2);
-    }
-    var totalNum = totalMatch ? parseFloat(totalMatch[1].replace(/\s/g,'').replace(',','.')) : 0;
-    return {
-      filename: filename,
-      numero: numMatch ? numMatch[1] : '',
-      date_emission: dateIso || todayISO(),
-      total_ht: totalNum || 0,
-      client_nom: clientMatch ? clientMatch[1].trim() : ''
-    };
-  }
   async function handlePDFs(files){
     if(!files || files.length === 0) return;
     var candidates = [];
@@ -829,14 +1018,21 @@
     box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-top:14px">Analyse en cours…</div>';
     for(var i = 0; i < files.length; i++){
       var f = files[i];
+      box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-top:14px">Analyse '+(i+1)+'/'+files.length+' — '+esc(f.name)+'…</div>';
       try {
-        var text = await extractPDFText(f);
-        var parsed = parseInvoicePDF(text, f.name);
+        var parsed = await parsePDFComplete(f, function(m, page, total){
+          if(m && m.status === 'ocr_start'){
+            box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-top:14px">PDF scanné détecté, lancement de la reconnaissance OCR (peut prendre 30s)…</div>';
+          } else if(m && m.status === 'recognizing text' && page){
+            var pct = Math.round((m.progress||0)*100);
+            box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-top:14px">OCR page '+page+'/'+total+' — '+pct+'%</div>';
+          }
+        });
         var b64 = await fileToBase64(f);
         parsed.pdf_source = b64;
         candidates.push(parsed);
       } catch(err){
-        candidates.push({ filename: f.name, error: err.message, numero:'', date_emission:todayISO(), total_ht:0, client_nom:'' });
+        candidates.push({ filename: f.name, error: err.message, numero:'', date_emission:todayISO(), total_ttc:0, total_ht:0, client_nom:'', numero_conf:0, date_emission_conf:0, total_ttc_conf:0, total_ht_conf:0, client_nom_conf:0, designation_conf:0, designation:'', tva_applicable:false, taux_tva:0, mention_tva:'TVA non applicable, art. 293 B du CGI', client_siret:'', client_siren:'', client_siret_conf:0, client_siren_conf:0 });
       }
     }
     renderPDFPreview(candidates);
@@ -848,23 +1044,58 @@
       r.readAsDataURL(file);
     });
   }
+  function confDot(score){
+    var color = score >= 0.9 ? '#1D8348' : score >= 0.4 ? '#F59E0B' : '#CC0000';
+    return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+color+';margin-left:5px;vertical-align:middle;" title="Confiance '+Math.round(score*100)+'%"></span>';
+  }
+  function fieldRow(label, key, value, conf, type, idx){
+    var v = value == null ? '' : String(value);
+    type = type || 'text';
+    return '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">'+label+confDot(conf||0)+'</label>'
+      + '<input type="'+type+'" data-pdf-i="'+idx+'" data-pdf-f="'+key+'" value="'+esc(v)+'" '+(type==='number'?'step="0.01"':'')+' style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;" />'
+      + '</div>';
+  }
   function renderPDFPreview(candidates){
     var box = document.getElementById('pdf-preview-wrap');
     if(candidates.length === 0){ box.innerHTML = ''; return; }
-    var html = '<div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px;">'+candidates.length+' PDF analysé'+(candidates.length>1?'s':'')+'. Corriger si nécessaire :</div>';
+    var html = '<div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px;">'+candidates.length+' PDF analysé'+(candidates.length>1?'s':'')+'. Pastille verte = haute confiance, orange = à vérifier, rouge = à saisir.</div>';
     candidates.forEach(function(c, i){
-      html += '<div style="border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:8px;">';
-      html += '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-family:var(--mono);">'+esc(c.filename)+'</div>';
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
-      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">N°</label><input type="text" data-pdf-i="'+i+'" data-pdf-f="numero" value="'+esc(c.numero)+'" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;" /></div>';
-      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Date</label><input type="date" data-pdf-i="'+i+'" data-pdf-f="date_emission" value="'+esc(c.date_emission)+'" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;" /></div>';
-      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Client</label><input type="text" data-pdf-i="'+i+'" data-pdf-f="client_nom" value="'+esc(c.client_nom)+'" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;" /></div>';
-      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Total HT</label><input type="number" step="0.01" data-pdf-i="'+i+'" data-pdf-f="total_ht" value="'+(c.total_ht||0)+'" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;" /></div>';
-      html += '</div></div>';
+      html += '<div style="border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:10px;">';
+      html += '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-family:var(--mono);display:flex;justify-content:space-between;align-items:center;">'
+            + '<span>'+esc(c.filename)+(c.ocr_used?' · OCR':'')+'</span>'
+            + (c.error?'<span style="color:var(--red)">'+esc(c.error)+'</span>':'')
+            + '</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">';
+      html += fieldRow('Numéro', 'numero', c.numero, c.numero_conf, 'text', i);
+      html += fieldRow('Date émission', 'date_emission', c.date_emission, c.date_emission_conf, 'date', i);
+      html += fieldRow('Client (nom)', 'client_nom', c.client_nom, c.client_nom_conf, 'text', i);
+      html += fieldRow('Client SIRET', 'client_siret', c.client_siret, c.client_siret_conf, 'text', i);
+      html += fieldRow('Client SIREN', 'client_siren', c.client_siren, c.client_siren_conf, 'text', i);
+      html += fieldRow('Total HT', 'total_ht', c.total_ht, c.total_ht_conf, 'number', i);
+      html += fieldRow('Total TTC', 'total_ttc', c.total_ttc, c.total_ttc_conf, 'number', i);
+      html += fieldRow('Taux TVA (%)', 'taux_tva', c.taux_tva, c.taux_tva_conf, 'number', i);
+      html += '</div>';
+      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Désignation'+confDot(c.designation_conf||0)+'</label>'
+           + '<textarea data-pdf-i="'+i+'" data-pdf-f="designation" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;min-height:50px;font-family:var(--font);">'+esc(c.designation||'')+'</textarea></div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">';
+      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Statut</label>'
+           + '<select data-pdf-i="'+i+'" data-pdf-f="statut" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'
+           + '<option value="en_attente">En attente</option><option value="payée">Payée</option><option value="en_retard">En retard</option></select></div>';
+      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Entité</label>'
+           + '<select data-pdf-i="'+i+'" data-pdf-f="entity_origine" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'
+           + '<option value="mup">MUP</option><option value="graphic_factor">Graphic Factor</option><option value="nouvellevagues">Nouvelles Vagues</option><option value="neox">Neox</option></select></div>';
+      html += '</div>';
+      c.statut = c.statut || 'en_attente'; c.entity_origine = c.entity_origine || 'mup';
+      html += '</div>';
     });
     box.innerHTML = html;
     box.querySelectorAll('[data-pdf-i]').forEach(function(inp){
       inp.addEventListener('input', function(){
+        var i = parseInt(this.dataset.pdfI, 10);
+        var f = this.dataset.pdfF;
+        candidates[i][f] = this.value;
+      });
+      inp.addEventListener('change', function(){
         var i = parseInt(this.dataset.pdfI, 10);
         var f = this.dataset.pdfF;
         candidates[i][f] = this.value;
@@ -883,20 +1114,27 @@
       if(c.numero && existingNums[c.numero]) return;
       var num = c.numero ? { numero: c.numero, seq: parseInt(String(c.numero).split('-')[0],10)||0 } : generateNextNumero();
       var totalHt = parseFloat(c.total_ht)||0;
+      var totalTtc = parseFloat(c.total_ttc)||totalHt;
+      if(!totalHt && totalTtc) totalHt = totalTtc; // fallback : pas de HT extrait → TTC seul
+      var taux = parseFloat(c.taux_tva)||0;
+      var tvaApplicable = !!c.tva_applicable;
+      var montantTva = tvaApplicable ? (totalHt * taux / 100) : 0;
       var nowIso = new Date().toISOString();
+      var designation = c.designation && c.designation.trim() ? c.designation.trim() : ('Import PDF — '+ (c.filename||''));
       var f = {
         id: 'fac_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
         numero: num.numero, numero_seq: num.seq,
         date_emission: c.date_emission || todayISO(),
         date_prestation: c.date_emission || todayISO(),
         emetteur: { nom:'', adresse:'', siret:'', tva_intra:'' },
-        client: { nom: c.client_nom||'—', adresse:'', siret:'', siren:'', adresse_livraison:'' },
+        client: { nom: c.client_nom||'—', adresse:'', siret: c.client_siret||'', siren: c.client_siren||'', adresse_livraison:'' },
         nature_operation: 'prestation_services',
-        lignes: [{ designation: 'Import PDF — '+ (c.filename||''), date: c.date_emission||null, quantite: 1, prix_unitaire: totalHt, total: totalHt }],
-        total_ht: totalHt, tva_applicable:false, taux_tva:0, montant_tva:0, total_ttc: totalHt,
-        mention_tva:'TVA non applicable, art. 293 B du CGI', paiement_tva_debits:false,
-        date_reglement: null, statut: 'en_attente', date_paiement: null,
-        entity_origine: 'mup',
+        lignes: [{ designation: designation, date: c.date_emission||null, quantite: 1, prix_unitaire: totalHt, total: totalHt }],
+        total_ht: totalHt, tva_applicable: tvaApplicable, taux_tva: taux, montant_tva: montantTva, total_ttc: totalTtc,
+        mention_tva: c.mention_tva || (tvaApplicable ? '' : 'TVA non applicable, art. 293 B du CGI'),
+        paiement_tva_debits: false,
+        date_reglement: null, statut: c.statut || 'en_attente', date_paiement: null,
+        entity_origine: c.entity_origine || 'mup',
         devis_origine_id: null, plateforme_agreee_destinataire:null, format_export:'pdf_simple',
         pdf_source: c.pdf_source || null,
         created_at: nowIso, updated_at: nowIso

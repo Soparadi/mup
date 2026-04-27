@@ -396,6 +396,41 @@
 
   // Détection sémantique : reconnaît les conventions communes des factures FR
   // sans s'appuyer sur des positions précises ou des formulations exactes.
+  var MOIS_FR = {
+    'janvier':'01', 'janv':'01',
+    'février':'02', 'fevrier':'02', 'févr':'02', 'fevr':'02',
+    'mars':'03',
+    'avril':'04', 'avr':'04',
+    'mai':'05',
+    'juin':'06',
+    'juillet':'07', 'juil':'07',
+    'août':'08', 'aout':'08',
+    'septembre':'09', 'sept':'09',
+    'octobre':'10', 'oct':'10',
+    'novembre':'11', 'nov':'11',
+    'décembre':'12', 'decembre':'12', 'déc':'12', 'dec':'12'
+  };
+  function parseDateLitterale(str){
+    var m = String(str).match(/(\d{1,2})(?:er|ème)?\s+([a-zA-ZÀ-ÿ]+)\.?\s+(\d{4})/i);
+    if(!m) return null;
+    var jour = m[1].length < 2 ? '0' + m[1] : m[1];
+    var moisLib = m[2].toLowerCase().replace(/\.$/, '');
+    var mois = MOIS_FR[moisLib];
+    if(!mois) return null;
+    return jour + '/' + mois + '/' + m[3];
+  }
+  function extraireBlocDestinataire(text){
+    var labels = [
+      /DESTINATAIRE\s*\n?\s*([\s\S]{20,300}?)(?=\n\s*(?:FACTURE|Facture\s+n|N[°o]\s|Date\s+d|TOTAL|Qt[ée]|D[ée]signation|Conditions|TVA))/i,
+      /(?:Factur[ée]\s+[àa]|Adress[ée]\s+[àa])\s*:?\s*\n?\s*([\s\S]{20,300}?)(?=\n\s*(?:FACTURE|Facture\s+n|N[°o]\s|Date\s+d|TOTAL|Qt[ée]|D[ée]signation|Conditions|TVA))/i
+    ];
+    for(var i = 0; i < labels.length; i++){
+      var m = text.match(labels[i]);
+      if(m && m[1]) return m[1].trim();
+    }
+    return null;
+  }
+
   function extractFields(text){
     var result = {
       numero: null, numero_seq: null,
@@ -413,6 +448,30 @@
     var txt = String(text).replace(/\r\n/g, '\n');
     var txtFlat = txt.replace(/\s+/g, ' ');
 
+    // ─── 0. BLOC DESTINATAIRE (priorité absolue, formats Indy/auto-entrepreneur) ───
+    var blocDest = extraireBlocDestinataire(txt);
+    var blocDestFound = false;
+    if(blocDest){
+      blocDestFound = true;
+      var lignesDest = blocDest.split('\n').map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 1; });
+      if(lignesDest.length > 0){
+        result.client_nom = lignesDest[0].substring(0, 60);
+        result.confidence.client_nom = 0.95;
+      }
+      var addrInBloc = blocDest.match(/((?:\d+\s+)?[A-Za-zÀ-ÿ\-' ]{2,40}[\s,]*\d{5}\s*,?\s*[A-Za-zÀ-ÿ\-]+(?:[\s\-][A-Za-zÀ-ÿ\-]+){0,3})/);
+      if(addrInBloc){
+        result.client_adresse = cleanAdresse(addrInBloc[1]);
+        result.confidence.client_adresse = 0.95;
+      }
+      var siretInBloc = blocDest.match(/\b(\d{3}\s?\d{3}\s?\d{3}\s?\d{5})\b/);
+      if(siretInBloc){
+        result.client_siret = siretInBloc[1].replace(/\s/g, '');
+        result.client_siren = result.client_siret.substring(0, 9);
+        result.confidence.client_siret = 1.0;
+        result.confidence.client_siren = 1.0;
+      }
+    }
+
     // ─── 1. SIRET (14 chiffres, espacés ou non) ───
     var siretPattern = /\b(\d{3}\s?\d{3}\s?\d{3}\s?\d{5})\b/g;
     var siretMatches = [], sm;
@@ -422,18 +481,19 @@
     if(siretMatches.length >= 1){
       result._emetteur_siret = siretMatches[0];
     }
-    if(siretMatches.length >= 2){
+    if(!result.client_siret && siretMatches.length >= 2){
       result.client_siret = siretMatches[1];
       result.client_siren = result.client_siret.substring(0, 9);
       result.confidence.client_siret = 1.0;
       result.confidence.client_siren = 1.0;
-    } else {
-      result.confidence.client_siret = 0;
-      result.confidence.client_siren = 0;
     }
+    if(result.confidence.client_siret === undefined) result.confidence.client_siret = 0;
+    if(result.confidence.client_siren === undefined) result.confidence.client_siren = 0;
 
     // ─── 2. NUMÉRO DE FACTURE ───
     var numeroPatterns = [
+      { re: /N[°o]\s*(\d+[\-\/][\w\d\-\/]+)/i, conf: 1.0 },
+      { re: /N[°o]\s*([A-Z]{0,3}\d{2,}[\-\/]\d+)/i, conf: 1.0 },
       { re: /Facture\s+n[°o]\s*:?\s*([A-Z0-9\-\/]+)/i, conf: 1.0 },
       { re: /N[°o]\s+de\s+facture\s*:?\s*([A-Z0-9\-\/]+)/i, conf: 1.0 },
       { re: /N[°o]\s+facture\s*:?\s*([A-Z0-9\-\/]+)/i, conf: 1.0 },
@@ -455,31 +515,60 @@
     }
     if(!result.numero) result.confidence.numero = 0;
 
-    // ─── 3. DATES (JJ/MM/AAAA ou JJ-MM-AAAA) ───
+    // ─── 3. DATES ───
     function dateToIso(s){
       var p = String(s).split(/[\/\-]/);
       return p[2] + '-' + p[1] + '-' + p[0];
     }
-    var datePattern = /\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/g;
-    var dates = [], dm;
-    while((dm = datePattern.exec(txtFlat)) !== null){
-      var d = new Date(dm[3] + '-' + dm[2] + '-' + dm[1]);
-      if(!isNaN(d.getTime())){
-        dates.push({ raw: dm[1] + '/' + dm[2] + '/' + dm[3], iso: dm[3] + '-' + dm[2] + '-' + dm[1], ts: d.getTime() });
+    // 3a. Pattern littéral français AVEC mot-clé d'émission
+    var emissionLitt = txtFlat.match(/(?:date\s+d['']?[ée]mission|[ée]mis(?:e)?\s+le|en\s+date\s+du|date\s+de\s+facture)\s*:?\s*((?:\d{1,2})(?:er|ème)?\s+[a-zA-ZÀ-ÿ]+\.?\s+\d{4})/i);
+    if(emissionLitt){
+      var pl = parseDateLitterale(emissionLitt[1]);
+      if(pl){
+        result.date_emission = dateToIso(pl);
+        result.date_prestation = result.date_emission;
+        result.confidence.date_emission = 1.0;
+        result.confidence.date_prestation = 1.0;
       }
     }
-    var emissionMatch = txtFlat.match(/(?:date\s+d['']?[ée]mission|[ée]mis(?:e)?\s+le|en\s+date\s+du|date\s+de\s+facture)\s*:?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i);
-    if(emissionMatch){
-      result.date_emission = dateToIso(emissionMatch[1]);
-      result.date_prestation = result.date_emission;
-      result.confidence.date_emission = 1.0;
-      result.confidence.date_prestation = 1.0;
-    } else if(dates.length > 0){
-      result.date_emission = dates[0].iso;
-      result.date_prestation = dates[0].iso;
-      result.confidence.date_emission = 0.7;
-      result.confidence.date_prestation = 0.7;
-    } else {
+    // 3b. Pattern numérique JJ/MM/AAAA AVEC mot-clé d'émission
+    if(!result.date_emission){
+      var emissionNum = txtFlat.match(/(?:date\s+d['']?[ée]mission|[ée]mis(?:e)?\s+le|en\s+date\s+du|date\s+de\s+facture)\s*:?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i);
+      if(emissionNum){
+        result.date_emission = dateToIso(emissionNum[1]);
+        result.date_prestation = result.date_emission;
+        result.confidence.date_emission = 1.0;
+        result.confidence.date_prestation = 1.0;
+      }
+    }
+    // 3c. Première date littérale autonome
+    if(!result.date_emission){
+      var litAuto = txtFlat.match(/(\d{1,2}(?:er|ème)?\s+(?:janvier|janv|février|fevrier|févr|fevr|mars|avril|avr|mai|juin|juillet|juil|août|aout|septembre|sept|octobre|oct|novembre|nov|décembre|decembre|déc|dec)\.?\s+\d{4})/i);
+      if(litAuto){
+        var pl2 = parseDateLitterale(litAuto[1]);
+        if(pl2){
+          result.date_emission = dateToIso(pl2);
+          result.date_prestation = result.date_emission;
+          result.confidence.date_emission = 0.9;
+          result.confidence.date_prestation = 0.9;
+        }
+      }
+    }
+    // 3d. Première date numérique
+    if(!result.date_emission){
+      var datePattern = /\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/g;
+      var dm = datePattern.exec(txtFlat);
+      if(dm){
+        var d = new Date(dm[3] + '-' + dm[2] + '-' + dm[1]);
+        if(!isNaN(d.getTime())){
+          result.date_emission = dm[3] + '-' + dm[2] + '-' + dm[1];
+          result.date_prestation = result.date_emission;
+          result.confidence.date_emission = 0.7;
+          result.confidence.date_prestation = 0.7;
+        }
+      }
+    }
+    if(!result.date_emission){
       result.confidence.date_emission = 0;
       result.confidence.date_prestation = 0;
     }
@@ -532,8 +621,8 @@
       }
     }
 
-    // ─── 7. ADRESSES ───
-    var addrPattern = /(\d+\s*(?:bis|ter)?[,\s]*(?:rue|avenue|av\.?|boulevard|bd\.?|place|pl\.?|chemin|impasse|all[ée]e|cours|quai|route|rte\.?|voie|esplanade|square)[\s\.][A-Za-zÀ-ÿ\-' ]{2,50}?\s+(\d{5})\s+([A-Za-zÀ-ÿ\-]+(?:[\s\-][A-Za-zÀ-ÿ\-]+){0,3}))/gi;
+    // ─── 7. ADRESSES (fallback si bloc DESTINATAIRE absent) ───
+    var addrPattern = /(\d+\s*(?:bis|ter)?[,\s]*(?:rue|avenue|av\.?|boulevard|bd\.?|place|pl\.?|chemin|impasse|all[ée]e|cours|quai|route|rte\.?|voie|esplanade|square)[\s\.][A-Za-zÀ-ÿ\-' ]{2,50}?\s+(\d{5})\s+([A-ZÀ-Ÿ][A-Za-zÀ-ÿ\-]+(?:[\s\-][A-ZÀ-Ÿ][A-Za-zÀ-ÿ\-]+){0,2}))(?=\s|$|FRANCE|France)/gi;
     var adresses = [], am;
     while((am = addrPattern.exec(txtFlat)) !== null){ adresses.push(cleanAdresse(am[1])); }
     var emetteurAdresses = ['18 PL DU MARCHIX 22100 DINAN','18 PL. DU MARCHIX 22100 DINAN','18 PLACE DU MARCHIX 22100 DINAN'];
@@ -541,43 +630,47 @@
       var norm = String(a).toUpperCase().replace(/\s+/g, ' ').trim();
       return emetteurAdresses.some(function(e){ return norm === e; });
     }
-    if(adresses.length >= 2){
-      result.client_adresse = adresses[1];
-      result.confidence.client_adresse = 1.0;
-    } else if(adresses.length === 1){
-      if(!isEmetteurAdresse(adresses[0])){
-        result.client_adresse = adresses[0];
-        result.confidence.client_adresse = 0.7;
+    if(!result.client_adresse){
+      if(adresses.length >= 2){
+        result.client_adresse = adresses[1];
+        result.confidence.client_adresse = 1.0;
+      } else if(adresses.length === 1){
+        if(!isEmetteurAdresse(adresses[0])){
+          result.client_adresse = adresses[0];
+          result.confidence.client_adresse = 0.7;
+        } else {
+          result.confidence.client_adresse = 0;
+        }
       } else {
         result.confidence.client_adresse = 0;
       }
-    } else {
-      result.confidence.client_adresse = 0;
     }
 
-    // ─── 8. NOM DU CLIENT ───
-    var nomClient = '';
-    if(result.client_adresse){
-      var addrIdx = txtFlat.indexOf(result.client_adresse);
-      if(addrIdx > 0){
-        var before = txtFlat.substring(Math.max(0, addrIdx - 200), addrIdx);
-        var nomMatch = before.match(/([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ&'\-\.\s]{2,50})\s*$/);
-        if(nomMatch) nomClient = nomMatch[1].trim();
+    // ─── 8. NOM DU CLIENT (fallback si bloc DESTINATAIRE absent) ───
+    if(!result.client_nom){
+      var nomClient = '';
+      if(result.client_adresse){
+        var addrIdx = txtFlat.indexOf(result.client_adresse);
+        if(addrIdx > 0){
+          var before = txtFlat.substring(Math.max(0, addrIdx - 200), addrIdx);
+          var nomMatch = before.match(/([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ&'\-\.\s]{2,50})\s*$/);
+          if(nomMatch) nomClient = nomMatch[1].trim();
+        }
       }
-    }
-    if(!nomClient){
-      var clientMatch = txtFlat.match(/(?:Client|Destinataire|Factur[ée]\s+[àa]|Adress[ée]\s+[àa])\s*:?\s*([A-Za-zÀ-ÿ&'\-\.\s]{3,50})/i);
-      if(clientMatch) nomClient = clientMatch[1].trim();
-    }
-    if(!nomClient){
-      var entrMatch = txtFlat.match(/Entrepreneur\s+individuel\s+([A-Za-zÀ-ÿ\-']+)/i);
-      if(entrMatch) nomClient = entrMatch[1].trim();
-    }
-    if(nomClient){
-      result.client_nom = nomClient;
-      result.confidence.client_nom = 0.8;
-    } else {
-      result.confidence.client_nom = 0;
+      if(!nomClient){
+        var clientMatch = txtFlat.match(/(?:Client|Destinataire|Factur[ée]\s+[àa]|Adress[ée]\s+[àa])\s*:?\s*([A-Za-zÀ-ÿ&'\-\.\s]{3,50})/i);
+        if(clientMatch) nomClient = clientMatch[1].trim();
+      }
+      if(!nomClient){
+        var entrMatch = txtFlat.match(/Entrepreneur\s+individuel\s+([A-Za-zÀ-ÿ\-']+)/i);
+        if(entrMatch) nomClient = entrMatch[1].trim();
+      }
+      if(nomClient){
+        result.client_nom = nomClient;
+        result.confidence.client_nom = 0.8;
+      } else {
+        result.confidence.client_nom = 0;
+      }
     }
 
     // ─── 9. DÉSIGNATION ───
@@ -594,12 +687,21 @@
     if(result.client_siret && (result.client_siret === result._emetteur_siret || result.client_siret === EMETTEUR_EI)){
       result.client_siret = null;
       result.client_siren = null;
-      result.client_nom = null;
-      result.client_adresse = null;
+      // Ne purger nom/adresse que s'ils n'ont pas été détectés via le bloc DESTINATAIRE
+      if(!blocDestFound){
+        result.client_nom = null;
+        result.client_adresse = null;
+        result.confidence.client_nom = 0;
+        result.confidence.client_adresse = 0;
+      }
       result.confidence.client_siret = 0;
       result.confidence.client_siren = 0;
-      result.confidence.client_nom = 0;
-      result.confidence.client_adresse = 0;
+    }
+
+    // ─── CLIENT PARTICULIER (bloc DESTINATAIRE détecté mais aucun SIRET) ───
+    if(blocDestFound && !result.client_siret){
+      result.confidence.client_siret = -1;
+      result.confidence.client_siren = -1;
     }
 
     return result;
@@ -611,6 +713,11 @@
       .replace(/\s*SIRET.*$/i, '')
       .replace(/\s*SIREN.*$/i, '')
       .replace(/\s*TVA.*$/i, '')
+      .replace(/\s*FRANCE\s+DESTINATAIRE.*$/i, '')
+      .replace(/\s*DESTINATAIRE.*$/i, '')
+      .replace(/\s*T[ée]l\.?\s*:.*$/i, '')
+      .replace(/\s*Mail\s*:.*$/i, '')
+      .replace(/\s*Email\s*:.*$/i, '')
       .replace(/[\r\n\t]+/g, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
@@ -1371,7 +1478,10 @@
     });
   }
   function confDot(score){
-    var s = Number(score) || 0;
+    var s = (typeof score === 'number') ? score : (parseFloat(score) || 0);
+    if(s === -1){
+      return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#AEAEB2;margin-left:5px;vertical-align:middle;" title="Client particulier (pas de SIRET)"></span>';
+    }
     var color = s >= 0.9 ? '#1D9E75' : s >= 0.5 ? '#EF9F27' : '#A32D2D';
     return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+color+';margin-left:5px;vertical-align:middle;" title="Confiance '+Math.round(s*100)+'%"></span>';
   }

@@ -359,16 +359,19 @@
       </button>
     </div>
     <div class="modal-body">
-      <div class="info-banner">Détection automatique du numéro, date et montant via regex. Tu pourras corriger avant validation.</div>
+      <div class="info-banner">Détection sémantique automatique. Vérifiez les champs orange/rouge avant validation.</div>
       <div class="drop-zone" id="pdf-drop">
         <input type="file" id="pdf-file" accept="application/pdf" multiple style="display:none;" />
         <div>Glisser un ou plusieurs PDF ici, ou <strong>cliquer pour parcourir</strong></div>
       </div>
       <div id="pdf-preview-wrap"></div>
     </div>
-    <div class="modal-footer">
-      <button class="secondary" data-close="modal-import-pdf">Annuler</button>
-      <button class="primary" id="pdf-confirm" disabled style="opacity:.4;cursor:not-allowed;">Confirmer l'import</button>
+    <div class="modal-footer" style="flex-direction:column;align-items:stretch;gap:8px;">
+      <div id="pdf-confirm-msg" style="font-size:11px;color:var(--red);min-height:14px;text-align:right;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="secondary" data-close="modal-import-pdf">Annuler</button>
+        <button class="primary" id="pdf-confirm" disabled style="opacity:.4;cursor:not-allowed;">Confirmer l'import</button>
+      </div>
     </div>
   </div>
 </div>
@@ -391,96 +394,212 @@
     return 'mup';
   }
 
+  // Détection sémantique : reconnaît les conventions communes des factures FR
+  // sans s'appuyer sur des positions précises ou des formulations exactes.
   function extractFields(text){
     var result = {
       numero: null, numero_seq: null,
       date_emission: null, date_prestation: null,
-      client_nom: null, client_siret: null, client_siren: null,
-      total_ht: null, total_ttc: null,
+      client_nom: null, client_siret: null, client_siren: null, client_adresse: null,
+      total_ht: null, total_ttc: null, taux_tva: null,
       tva_applicable: true, mention_tva: null,
       designation: null,
+      _emetteur_siret: null,
       confidence: {}
     };
+    if(!text) return result;
 
-    // NUMÉRO
-    var numMatch = text.match(/Facture\s+n°\s*:\s*([\d\-]+)/i);
-    if(numMatch){
-      result.numero = numMatch[1].trim();
-      result.numero_seq = parseInt(result.numero.split('-')[0], 10);
-      result.confidence.numero = 1.0;
+    var rawText = text;
+    var txt = String(text).replace(/\r\n/g, '\n');
+    var txtFlat = txt.replace(/\s+/g, ' ');
+
+    // ─── 1. SIRET (14 chiffres, espacés ou non) ───
+    var siretPattern = /\b(\d{3}\s?\d{3}\s?\d{3}\s?\d{5})\b/g;
+    var siretMatches = [], sm;
+    while((sm = siretPattern.exec(txtFlat)) !== null){
+      siretMatches.push(sm[1].replace(/\s/g, ''));
     }
-
-    // CLIENT NOM
-    var clientMatch = text.match(/Entrepreneur\s+individuel\s+(\S+)/i);
-    if(clientMatch){
-      result.client_nom = clientMatch[1].trim();
-      result.confidence.client_nom = 1.0;
+    if(siretMatches.length >= 1){
+      result._emetteur_siret = siretMatches[0];
     }
-
-    // CLIENT SIRET (2ème SIRET du document = client, le 1er = émetteur)
-    var siretRe = /SIRET\s*:?\s*([\d\s]{14,20})/gi;
-    var siretMatches = [];
-    var sm;
-    while((sm = siretRe.exec(text)) !== null){ siretMatches.push(sm[1]); }
     if(siretMatches.length >= 2){
-      result.client_siret = siretMatches[1].replace(/\s/g, '');
+      result.client_siret = siretMatches[1];
       result.client_siren = result.client_siret.substring(0, 9);
       result.confidence.client_siret = 1.0;
       result.confidence.client_siren = 1.0;
+    } else {
+      result.confidence.client_siret = 0;
+      result.confidence.client_siren = 0;
     }
 
-    // TOTAL
-    var totalMatch = text.match(/TOTAL\s+en\s+€\s+([\d.,]+)/i);
-    if(totalMatch){
-      var amount = parseFloat(totalMatch[1].replace(',', '.'));
-      result.total_ttc = amount;
-      result.total_ht = amount;
-      result.confidence.total_ttc = 1.0;
-      result.confidence.total_ht = 1.0;
+    // ─── 2. NUMÉRO DE FACTURE ───
+    var numeroPatterns = [
+      { re: /Facture\s+n[°o]\s*:?\s*([A-Z0-9\-\/]+)/i, conf: 1.0 },
+      { re: /N[°o]\s+de\s+facture\s*:?\s*([A-Z0-9\-\/]+)/i, conf: 1.0 },
+      { re: /N[°o]\s+facture\s*:?\s*([A-Z0-9\-\/]+)/i, conf: 1.0 },
+      { re: /R[ée]f[ée]rence\s*:?\s*([A-Z0-9\-\/]+)/i, conf: 0.7 },
+      { re: /R[ée]f\.\s*:?\s*([A-Z0-9\-\/]+)/i, conf: 0.7 },
+      { re: /Invoice\s+(?:n[°o]|number)\s*:?\s*([A-Z0-9\-\/]+)/i, conf: 1.0 },
+      { re: /\b(FAC[A-Z0-9\-\/]*)\b/, conf: 0.7 },
+      { re: /\b(FA[\-_][A-Z0-9\-\/]+)\b/, conf: 0.7 },
+      { re: /\b([A-Z]?\d{4,}[\-\/]\d+)\b/, conf: 0.5 }
+    ];
+    for(var ni = 0; ni < numeroPatterns.length; ni++){
+      var nm = txtFlat.match(numeroPatterns[ni].re);
+      if(nm && nm[1] && nm[1].length >= 3 && nm[1].length <= 30){
+        result.numero = nm[1].trim();
+        result.numero_seq = parseInt(String(result.numero).split(/[-\/]/)[0], 10) || null;
+        result.confidence.numero = numeroPatterns[ni].conf;
+        break;
+      }
     }
+    if(!result.numero) result.confidence.numero = 0;
 
-    // TVA NON APPLICABLE
-    if(/TVA\s+non\s+applicable/i.test(text)){
-      result.tva_applicable = false;
-      result.mention_tva = 'TVA non applicable, art. 293 B du CGI';
-      result.confidence.tva = 1.0;
+    // ─── 3. DATES (JJ/MM/AAAA ou JJ-MM-AAAA) ───
+    function dateToIso(s){
+      var p = String(s).split(/[\/\-]/);
+      return p[2] + '-' + p[1] + '-' + p[0];
     }
-
-    // DATE PRESTATION / ÉMISSION (ligne du tableau)
-    var dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4})\s+\d+\s+([\d.,]+)\s+\2/);
-    if(dateMatch){
-      var parts = dateMatch[1].split('/');
-      var iso = parts[2] + '-' + parts[1] + '-' + parts[0];
-      result.date_emission = iso;
-      result.date_prestation = iso;
+    var datePattern = /\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/g;
+    var dates = [], dm;
+    while((dm = datePattern.exec(txtFlat)) !== null){
+      var d = new Date(dm[3] + '-' + dm[2] + '-' + dm[1]);
+      if(!isNaN(d.getTime())){
+        dates.push({ raw: dm[1] + '/' + dm[2] + '/' + dm[3], iso: dm[3] + '-' + dm[2] + '-' + dm[1], ts: d.getTime() });
+      }
+    }
+    var emissionMatch = txtFlat.match(/(?:date\s+d['']?[ée]mission|[ée]mis(?:e)?\s+le|en\s+date\s+du|date\s+de\s+facture)\s*:?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i);
+    if(emissionMatch){
+      result.date_emission = dateToIso(emissionMatch[1]);
+      result.date_prestation = result.date_emission;
       result.confidence.date_emission = 1.0;
       result.confidence.date_prestation = 1.0;
+    } else if(dates.length > 0){
+      result.date_emission = dates[0].iso;
+      result.date_prestation = dates[0].iso;
+      result.confidence.date_emission = 0.7;
+      result.confidence.date_prestation = 0.7;
+    } else {
+      result.confidence.date_emission = 0;
+      result.confidence.date_prestation = 0;
     }
 
-    // DÉSIGNATION
-    var moisMatch = text.match(/[\d.,]+\s+[\d.,]+\s+([A-ZÉÈÀ]+\s+\d{4})\s+Date\s+de\s+règlement/);
-    if(moisMatch && result.client_nom){
-      result.designation = 'Prestation ' + result.client_nom + ' ' + moisMatch[1].trim();
-      result.confidence.designation = 1.0;
-    }
-
-    // ADRESSE CLIENT (2ème adresse trouvée = client, 1ère = émetteur EI)
-    var EMETTEUR_SIRET = '45338845600031';
-    var addrPattern = /(\d+\s+(?:rue|avenue|av|boulevard|bd|place|pl|chemin|impasse|allée|cours|quai|route|voie)\.?\s+[A-Za-zÀ-ÿ\-' ]{2,40}?\s+(\d{5})\s+([A-Za-zÀ-ÿ\-]+(?:[\s\-][A-Za-zÀ-ÿ\-]+){0,3}))/gi;
-    var addresses = [];
-    var am;
-    while((am = addrPattern.exec(text)) !== null){ addresses.push(am[1].trim()); }
-    if(addresses.length >= 2){
-      result.client_adresse = cleanAdresse(addresses[1]);
-      result.confidence.client_adresse = 1.0;
-    } else if(addresses.length === 1){
-      var emetteurIdx = text.indexOf(EMETTEUR_SIRET);
-      var addrIdx = text.indexOf(addresses[0]);
-      var isEmetteur = emetteurIdx > -1 && addrIdx > -1 && addrIdx < emetteurIdx;
-      if(!isEmetteur){
-        result.client_adresse = cleanAdresse(addresses[0]);
-        result.confidence.client_adresse = 1.0;
+    // ─── 4. TOTAL TTC ───
+    var ttcPatterns = [
+      /(?:total\s+ttc|net\s+[àa]\s+payer|montant\s+total\s+ttc|[àa]\s+payer)\s*:?\s*([\d\s.,]+?)\s*€/i,
+      /total\s+en\s+€\s*:?\s*([\d\s.,]+)/i,
+      /total\s*:?\s*([\d\s.,]+?)\s*€/i,
+      /\bTOTAL\s+([\d\s.,]+?)\s*€/
+    ];
+    for(var tp = 0; tp < ttcPatterns.length; tp++){
+      var tm = txtFlat.match(ttcPatterns[tp]);
+      if(tm && tm[1]){
+        var num = parseFloat(String(tm[1]).replace(/\s/g, '').replace(',', '.'));
+        if(!isNaN(num) && num > 0){
+          result.total_ttc = num;
+          result.confidence.total_ttc = 1.0;
+          break;
+        }
       }
+    }
+    if(!result.total_ttc) result.confidence.total_ttc = 0;
+
+    // ─── 5. TOTAL HT ───
+    var htMatch = txtFlat.match(/(?:total\s+ht|montant\s+ht|sous[\s\-]total\s+ht)\s*:?\s*([\d\s.,]+?)\s*€?/i);
+    if(htMatch && htMatch[1]){
+      var hn = parseFloat(String(htMatch[1]).replace(/\s/g, '').replace(',', '.'));
+      if(!isNaN(hn) && hn > 0){
+        result.total_ht = hn;
+        result.confidence.total_ht = 1.0;
+      }
+    }
+    if(!result.total_ht) result.confidence.total_ht = 0;
+
+    // ─── 6. TVA ───
+    if(/TVA\s+non\s+applicable|art\.?\s*293\s*B|exonn?[ée]r[ée]\s+de\s+TVA/i.test(txtFlat)){
+      result.tva_applicable = false;
+      result.taux_tva = 0;
+      result.mention_tva = 'TVA non applicable, art. 293 B du CGI';
+      result.confidence.taux_tva = 1.0;
+      if(!result.total_ht && result.total_ttc) result.total_ht = result.total_ttc;
+    } else {
+      var tvaMatch = txtFlat.match(/(?:taux\s+)?TVA\s*:?\s*(\d{1,2}[,.]?\d*)\s*%/i);
+      if(tvaMatch){
+        result.taux_tva = parseFloat(String(tvaMatch[1]).replace(',', '.'));
+        result.confidence.taux_tva = 1.0;
+      } else {
+        result.confidence.taux_tva = 0;
+      }
+    }
+
+    // ─── 7. ADRESSES ───
+    var addrPattern = /(\d+\s*(?:bis|ter)?[,\s]*(?:rue|avenue|av\.?|boulevard|bd\.?|place|pl\.?|chemin|impasse|all[ée]e|cours|quai|route|rte\.?|voie|esplanade|square)[\s\.][A-Za-zÀ-ÿ\-' ]{2,50}?\s+(\d{5})\s+([A-Za-zÀ-ÿ\-]+(?:[\s\-][A-Za-zÀ-ÿ\-]+){0,3}))/gi;
+    var adresses = [], am;
+    while((am = addrPattern.exec(txtFlat)) !== null){ adresses.push(cleanAdresse(am[1])); }
+    var emetteurAdresses = ['18 PL DU MARCHIX 22100 DINAN','18 PL. DU MARCHIX 22100 DINAN','18 PLACE DU MARCHIX 22100 DINAN'];
+    function isEmetteurAdresse(a){
+      var norm = String(a).toUpperCase().replace(/\s+/g, ' ').trim();
+      return emetteurAdresses.some(function(e){ return norm === e; });
+    }
+    if(adresses.length >= 2){
+      result.client_adresse = adresses[1];
+      result.confidence.client_adresse = 1.0;
+    } else if(adresses.length === 1){
+      if(!isEmetteurAdresse(adresses[0])){
+        result.client_adresse = adresses[0];
+        result.confidence.client_adresse = 0.7;
+      } else {
+        result.confidence.client_adresse = 0;
+      }
+    } else {
+      result.confidence.client_adresse = 0;
+    }
+
+    // ─── 8. NOM DU CLIENT ───
+    var nomClient = '';
+    if(result.client_adresse){
+      var addrIdx = txtFlat.indexOf(result.client_adresse);
+      if(addrIdx > 0){
+        var before = txtFlat.substring(Math.max(0, addrIdx - 200), addrIdx);
+        var nomMatch = before.match(/([A-ZÀ-Ÿ][A-ZÀ-Ÿa-zà-ÿ&'\-\.\s]{2,50})\s*$/);
+        if(nomMatch) nomClient = nomMatch[1].trim();
+      }
+    }
+    if(!nomClient){
+      var clientMatch = txtFlat.match(/(?:Client|Destinataire|Factur[ée]\s+[àa]|Adress[ée]\s+[àa])\s*:?\s*([A-Za-zÀ-ÿ&'\-\.\s]{3,50})/i);
+      if(clientMatch) nomClient = clientMatch[1].trim();
+    }
+    if(!nomClient){
+      var entrMatch = txtFlat.match(/Entrepreneur\s+individuel\s+([A-Za-zÀ-ÿ\-']+)/i);
+      if(entrMatch) nomClient = entrMatch[1].trim();
+    }
+    if(nomClient){
+      result.client_nom = nomClient;
+      result.confidence.client_nom = 0.8;
+    } else {
+      result.confidence.client_nom = 0;
+    }
+
+    // ─── 9. DÉSIGNATION ───
+    var desigMatch = txtFlat.match(/(?:d[ée]signation|description|prestation|libell[ée])\s*:?\s*([A-Za-zÀ-ÿ0-9\s\-,]{5,200})/i);
+    if(desigMatch){
+      result.designation = desigMatch[1].trim().substring(0, 200);
+      result.confidence.designation = 0.7;
+    } else {
+      result.confidence.designation = 0;
+    }
+
+    // ─── ANTI-FAUX-POSITIF : SIRET client identique à l'émetteur ───
+    var EMETTEUR_EI = '45338845600031';
+    if(result.client_siret && (result.client_siret === result._emetteur_siret || result.client_siret === EMETTEUR_EI)){
+      result.client_siret = null;
+      result.client_siren = null;
+      result.client_nom = null;
+      result.client_adresse = null;
+      result.confidence.client_siret = 0;
+      result.confidence.client_siren = 0;
+      result.confidence.client_nom = 0;
+      result.confidence.client_adresse = 0;
     }
 
     return result;
@@ -1252,8 +1371,40 @@
     });
   }
   function confDot(score){
-    var color = score >= 1.0 ? '#1D9E75' : score > 0 ? '#EF9F27' : '#A32D2D';
-    return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+color+';margin-left:5px;vertical-align:middle;" title="Confiance '+Math.round(score*100)+'%"></span>';
+    var s = Number(score) || 0;
+    var color = s >= 0.9 ? '#1D9E75' : s >= 0.5 ? '#EF9F27' : '#A32D2D';
+    return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+color+';margin-left:5px;vertical-align:middle;" title="Confiance '+Math.round(s*100)+'%"></span>';
+  }
+  function validateCandidate(c){
+    var miss = [];
+    if(!c.numero || String(c.numero).trim() === '') miss.push('Numéro');
+    if(!c.date_emission) miss.push('Date');
+    if(!c.client_nom || String(c.client_nom).trim() === '') miss.push('Nom client');
+    if(!c.total_ttc || parseFloat(c.total_ttc) <= 0) miss.push('Total TTC');
+    return miss;
+  }
+  function revalidateConfirmBtn(){
+    var btn = document.getElementById('pdf-confirm');
+    var msgEl = document.getElementById('pdf-confirm-msg');
+    if(!btn) return;
+    var cands = btn._candidates || [];
+    if(cands.length === 0){
+      btn.disabled = true; btn.style.opacity = .4; btn.style.cursor = 'not-allowed';
+      if(msgEl) msgEl.textContent = '';
+      return;
+    }
+    var allMissing = [];
+    cands.forEach(function(c, i){
+      var miss = validateCandidate(c);
+      if(miss.length) allMissing.push('PDF #' + (i+1) + ' : ' + miss.join(', '));
+    });
+    if(allMissing.length){
+      btn.disabled = true; btn.style.opacity = .4; btn.style.cursor = 'not-allowed';
+      if(msgEl) msgEl.textContent = 'Complétez les champs marqués en rouge avant de valider. ' + allMissing.join(' · ');
+    } else {
+      btn.disabled = false; btn.style.opacity = 1; btn.style.cursor = 'pointer';
+      if(msgEl) msgEl.textContent = '';
+    }
   }
   function fieldRow(label, key, value, conf, type, idx){
     var v = value == null ? '' : String(value);
@@ -1309,16 +1460,18 @@
         var i = parseInt(this.dataset.pdfI, 10);
         var f = this.dataset.pdfF;
         candidates[i][f] = this.value;
+        revalidateConfirmBtn();
       });
       inp.addEventListener('change', function(){
         var i = parseInt(this.dataset.pdfI, 10);
         var f = this.dataset.pdfF;
         candidates[i][f] = this.value;
+        revalidateConfirmBtn();
       });
     });
     var btn = document.getElementById('pdf-confirm');
-    btn.disabled = false; btn.style.opacity = 1; btn.style.cursor = 'pointer';
     btn._candidates = candidates;
+    revalidateConfirmBtn();
   }
   document.getElementById('pdf-confirm').addEventListener('click', async function(){
     var cands = this._candidates || [];

@@ -715,6 +715,17 @@ function renderProgress(card) {
   if(card.col === 'lost') {
     return '<div class="kcard-progress"><span style="font-size:9px;color:var(--muted2)">Disqualifié</span></div>';
   }
+  // Cas spécial : fiche issue d'une facture → entrée directe en "Gagné"
+  if(card.source === 'facture_import' && card.col === 'won'){
+    let html = '<div class="kcard-progress">';
+    for(let i = 0; i < 9; i++){
+      html += '<div class="prog-dot todo" style="background:#E5E5E7;--c:#E5E5E7" title="Étape sautée"></div>';
+      html += '<div class="prog-line"></div>';
+    }
+    html += '<div class="prog-dot current" style="background:#1D8348;--c:#1D8348" title="Gagné"></div>';
+    html += '</div>';
+    return html;
+  }
   // Afficher seulement les 9 premières étapes (pas won/lost)
   const mainStages = STAGES.slice(0, 9);
   let html = '<div class="kcard-progress">';
@@ -767,6 +778,55 @@ function load() {
   }
 }
 function save() { localStorage.setItem('mup_pipeline', JSON.stringify(cards)); }
+
+function migratePipelineFromContacts(){
+  var contacts = [];
+  try { contacts = JSON.parse(localStorage.getItem('mup_contacts') || '[]'); } catch(e){}
+  if(!Array.isArray(contacts) || contacts.length === 0) return;
+  var changed = false;
+  contacts.forEach(function(c){
+    if(!c || !c.siret || c.source !== 'facture_import') return;
+    var idx = cards.findIndex(function(p){ return p.siret === c.siret; });
+    if(idx === -1){
+      cards.push(migrateCard({
+        id: 'pipeline_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+        company: c.nom,
+        contact: c.nom,
+        siret: c.siret,
+        siren: c.siren || '',
+        address: c.adresse || '',
+        latitude: c.latitude || null,
+        longitude: c.longitude || null,
+        col: 'won',
+        value: c.ca_total || 0,
+        val: c.ca_total || 0,
+        entity_origine: c.entity_origine || 'ei',
+        source: 'facture_import',
+        contact_id: c.id,
+        created_at: c.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+      changed = true;
+    } else {
+      var f = cards[idx];
+      if(f.col !== 'won' || (f.value || f.val || 0) !== (c.ca_total || 0) || f.source !== 'facture_import'){
+        f.col = 'won';
+        f.value = c.ca_total || 0;
+        f.val = c.ca_total || 0;
+        f.source = 'facture_import';
+        f.contact_id = c.id;
+        f.entity_origine = f.entity_origine || c.entity_origine || 'ei';
+        f.updated_at = new Date().toISOString();
+        cards[idx] = f;
+        changed = true;
+      }
+    }
+  });
+  if(changed){
+    save();
+    console.log('migratePipelineFromContacts : fiches won synchronisées');
+  }
+}
 
 function migrateCard(c){
   // Rename old fields
@@ -1530,6 +1590,7 @@ if(localStorage.getItem('mup_pipeline_v') !== MOCK_VERSION) {
   localStorage.setItem('mup_pipeline_v', MOCK_VERSION);
 }
 load();
+migratePipelineFromContacts();
 importFromProspects();
 renderKanban();
 

@@ -637,7 +637,95 @@
     contact.updated_at = new Date().toISOString();
     contacts[contactIdx] = contact;
     saveJSON('mup_contacts', contacts);
+    syncPipelineFromContact(contact);
     return { contact: contact, geocoded: geocoded };
+  }
+
+  function syncPipelineFromContact(contact){
+    if(!contact || !contact.siret) return;
+    var pipeline = loadJSON('mup_pipeline', []);
+    if(!Array.isArray(pipeline)) pipeline = [];
+    var ficheIdx = pipeline.findIndex(function(p){ return p.siret === contact.siret; });
+    if(ficheIdx === -1){
+      pipeline.push({
+        id: 'pipeline_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+        company: contact.nom,
+        contact: contact.nom,
+        siret: contact.siret,
+        siren: contact.siren || '',
+        address: contact.adresse || '',
+        latitude: contact.latitude || null,
+        longitude: contact.longitude || null,
+        col: 'won',
+        value: contact.ca_total || 0,
+        entity_origine: contact.entity_origine || 'ei',
+        source: 'facture_import',
+        contact_id: contact.id,
+        created_at: contact.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    } else {
+      var f = pipeline[ficheIdx];
+      f.value = contact.ca_total || 0;
+      f.col = 'won';
+      f.address = contact.adresse || f.address;
+      f.latitude = contact.latitude || f.latitude;
+      f.longitude = contact.longitude || f.longitude;
+      f.entity_origine = contact.entity_origine || f.entity_origine || 'ei';
+      f.source = 'facture_import';
+      f.contact_id = contact.id;
+      f.updated_at = new Date().toISOString();
+      pipeline[ficheIdx] = f;
+    }
+    saveJSON('mup_pipeline', pipeline);
+  }
+
+  function migratePipelineFromContacts(){
+    var contacts = loadJSON('mup_contacts', []);
+    if(!Array.isArray(contacts) || contacts.length === 0) return;
+    var pipeline = loadJSON('mup_pipeline', []);
+    if(!Array.isArray(pipeline)) pipeline = [];
+    var changed = false;
+    contacts.forEach(function(c){
+      if(!c || !c.siret) return;
+      if(c.source !== 'facture_import') return;
+      var idx = pipeline.findIndex(function(p){ return p.siret === c.siret; });
+      if(idx === -1){
+        pipeline.push({
+          id: 'pipeline_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+          company: c.nom,
+          contact: c.nom,
+          siret: c.siret,
+          siren: c.siren || '',
+          address: c.adresse || '',
+          latitude: c.latitude || null,
+          longitude: c.longitude || null,
+          col: 'won',
+          value: c.ca_total || 0,
+          entity_origine: c.entity_origine || 'ei',
+          source: 'facture_import',
+          contact_id: c.id,
+          created_at: c.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+        changed = true;
+      } else {
+        var f = pipeline[idx];
+        if(f.col !== 'won' || (f.value || 0) !== (c.ca_total || 0) || f.source !== 'facture_import'){
+          f.col = 'won';
+          f.value = c.ca_total || 0;
+          f.source = 'facture_import';
+          f.contact_id = c.id;
+          f.updated_at = new Date().toISOString();
+          pipeline[idx] = f;
+          changed = true;
+        }
+      }
+    });
+    if(changed){
+      saveJSON('mup_pipeline', pipeline);
+      console.log('migratePipelineFromContacts : fiches won synchronisées');
+    }
   }
 
   async function migrateContactsExistants(){
@@ -1326,6 +1414,8 @@
   refreshYearFilter();
   // Migration auto contacts existants (clean adresse + recalc factures_ids/ca_total)
   migrateContactsExistants().catch(function(e){ console.error('migrateContactsExistants', e); });
+  // Migration auto pipeline (fiches won pour chaque contact issu d'une facture)
+  try { migratePipelineFromContacts(); } catch(e){ console.error('migratePipelineFromContacts', e); }
   // Filtre URL ?client_siret=
   var clientSiretParam = (window.location.search.match(/[?&]client_siret=([^&]+)/) || [])[1];
   if(clientSiretParam){ applyClientFilter(decodeURIComponent(clientSiretParam)); }

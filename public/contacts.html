@@ -693,7 +693,7 @@ let prospects = [];
 let filteredProspects = [];
 let selectedId = null;
 let currentStatusFilter = 'all';
-let sortField = 'name';
+let sortField = 'nom';
 let sortDir = 1;
 let csvParsed = [];
 let activeModalTab = 'csv';
@@ -701,32 +701,35 @@ let activeModalTab = 'csv';
 // ── SAMPLE DATA ──
 const SAMPLE = [];
 
+const ENTITY_LABEL = { ei:'EI', mup:'MUP', graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues' };
+const ENTITY_COLOR = { ei:'#A32D2D', mup:'#EF9F27', graphic_factor:'#1D9E75', nouvellevagues:'#5B6FED' };
+
 function save(){
-  // Read full pipeline, update matching cards, save back
-  var full = [];
-  try { var r = localStorage.getItem('mup_pipeline'); if(r) full = JSON.parse(r); } catch(e) {}
-  // Update existing cards from prospects array
-  prospects.forEach(function(p) {
-    var idx = full.findIndex(function(c) { return String(c.id) === String(p.id); });
-    if(idx !== -1) full[idx] = p;
-    else full.push(p);
+  // mup_contacts est la source de vérité pour cette page
+  var contacts = prospects.map(function(p){
+    var c = Object.assign({}, p);
+    delete c.col; delete c.value; delete c.val;
+    c.updated_at = new Date().toISOString();
+    return c;
   });
-  localStorage.setItem('mup_pipeline', JSON.stringify(full));
+  localStorage.setItem('mup_contacts', JSON.stringify(contacts));
 }
 
 function migrateProspect(p){
-  if(p.name && !p.contact) p.contact = p.name;
-  if(p.company && !p.contact) p.contact = p.company;
-  if(!p.company && p.contact) p.company = p.contact;
-  if(p.tel && !p.phone) p.phone = p.tel;
-  if(p.location && !p.address) p.address = p.location;
-  if(p.director && !p.contact) p.contact = p.director;
-  // Backward compat aliases
-  p.name = p.contact || p.name || '';
-  p.tel = p.phone || '';
-  p.location = p.address || p.location || '';
-  p.director = p.contact || p.director || '';
-  // Init new fields
+  // Unification des champs : nom (canonique), adresse (canonique)
+  if(!p.nom) p.nom = p.company || p.name || p.contact || '—';
+  if(!p.adresse) p.adresse = p.address || p.location || '';
+  if(!p.source) p.source = p.col === 'won' || p.col === 'lost' ? 'pipeline' : (p.source || 'manual');
+  if(!p.entity_origine) p.entity_origine = 'mup';
+  if(!Array.isArray(p.factures_ids)) p.factures_ids = [];
+  if(typeof p.ca_total !== 'number') p.ca_total = 0;
+  // Aliases pour compat ancienne UI (modal/import)
+  p.name = p.nom;
+  p.company = p.company || p.nom;
+  p.contact = p.contact || p.nom;
+  p.address = p.adresse;
+  p.location = p.adresse;
+  p.tel = p.phone || p.tel || '';
   if(!p.emailStatus) p.emailStatus = 'new';
   if(!p.lastContact) p.lastContact = '';
   if(!p.tags) p.tags = [];
@@ -736,94 +739,108 @@ function migrateProspect(p){
 // ── INIT ──
 function init(){
   localStorage.removeItem('mup_prospects');
-  const stored = localStorage.getItem('mup_pipeline');
-  if(stored){ try{ prospects = JSON.parse(stored); prospects = prospects.map(migrateProspect); prospects = prospects.filter(function(p){ return p.col !== 'won' && p.col !== 'lost'; }); }catch(e){ prospects = [...SAMPLE]; prospects = prospects.map(migrateProspect); prospects = prospects.filter(function(p){ return p.col !== 'won' && p.col !== 'lost'; }); } }
-  else { prospects = [...SAMPLE]; prospects = prospects.map(migrateProspect); prospects = prospects.filter(function(p){ return p.col !== 'won' && p.col !== 'lost'; }); }
+  prospects = [];
+  try {
+    var raw = localStorage.getItem('mup_contacts');
+    if(raw){
+      var parsed = JSON.parse(raw);
+      if(Array.isArray(parsed)) prospects = parsed.map(migrateProspect);
+    }
+  } catch(e){ prospects = []; }
   renderAll();
   updateKPIs();
   updateBadges();
 }
 
+function fmtMontantContacts(n){
+  return (Number(n)||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + '\u00A0€';
+}
+function siretFormat(s){
+  return s ? String(s).replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4') : '';
+}
+function entityBadgeHtml(entity){
+  var lab = ENTITY_LABEL[entity] || (entity ? entity.toUpperCase() : 'MUP');
+  var col = ENTITY_COLOR[entity] || '#1D1D1F';
+  return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:'+col+';color:#fff;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">'+esc(lab)+'</span>';
+}
+function sourceBadgeHtml(source){
+  if(source === 'facture_import') return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:#EDF7F2;color:#1D8348;font-size:10px;font-weight:700;letter-spacing:.5px">Import facture</span>';
+  if(source === 'csv_import') return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:#EEF3FD;color:#0A66C2;font-size:10px;font-weight:700;letter-spacing:.5px">Import CSV</span>';
+  if(source === 'pipeline') return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:#FFF4EC;color:#B84C00;font-size:10px;font-weight:700;letter-spacing:.5px">Pipeline</span>';
+  return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:#F5F5F7;color:#6E6E73;font-size:10px;font-weight:700;letter-spacing:.5px">Manuel</span>';
+}
+
 function renderAll(){
   let list = [...prospects];
-  const q = document.getElementById('search-input').value.toLowerCase();
+  const qInput = document.getElementById('search-input');
+  const q = qInput ? qInput.value.toLowerCase() : '';
   if(q) list = list.filter(p=>
-    p.name.toLowerCase().includes(q)||
-    p.company.toLowerCase().includes(q)||
-    (p.email||'').toLowerCase().includes(q)||
-    (p.location||'').toLowerCase().includes(q)
+    (p.nom||'').toLowerCase().includes(q) ||
+    (p.adresse||'').toLowerCase().includes(q)
   );
-  // status filter removed
   list.sort((a,b)=>{
-    const va=(a[sortField]||'').toString().toLowerCase();
-    const vb=(b[sortField]||'').toString().toLowerCase();
+    const va=(a.nom||'').toString().toLowerCase();
+    const vb=(b.nom||'').toString().toLowerCase();
     return va<vb?-sortDir:va>vb?sortDir:0;
   });
   filteredProspects=list;
-  document.getElementById('count-label').textContent=list.length+' contact(s)';
+  const countEl = document.getElementById('count-label');
+  if(countEl) countEl.textContent = list.length + ' contact' + (list.length>1?'s':'');
   const grid=document.getElementById('prospects-grid');
   const empty=document.getElementById('empty-state');
   if(!list.length){
-    grid.style.display='none';
-    empty.style.display='flex';
+    if(grid) grid.style.display='none';
+    if(empty) empty.style.display='flex';
     return;
   }
-  grid.style.display='grid';
-  empty.style.display='none';
+  if(grid) grid.style.display='grid';
+  if(empty) empty.style.display='none';
   const svgBuilding='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/></svg>';
+  const svgPin='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
   const svgPhone='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#CC0000" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>';
   const svgMail='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
-  const svgPin='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
-  const svgLinkedin='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>';
-  const svgFacebook='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>';
-  const svgInstagram='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
-  const svgWhatsapp='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
+  const svgEuro='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round"><path d="M14.7 6.3A8 8 0 1 0 4 12c0 4.4 3.6 8 8 8a8 8 0 0 0 6.7-3.7"/><path d="M5 11h10"/><path d="M5 14h8"/></svg>';
+  const svgMap='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>';
+  const svgInvoice='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
   const EMPTY='<span class="cc-empty">—</span>';
-  function socialTile(url, kind, svg, label){
-    const u=esc(url||'');
-    if(u){
-      return `<a class="cc-social-tile active ${kind}" href="${u}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="${label}">${svg}</a>`;
-    }
-    return `<span class="cc-social-tile" title="${label} non renseigné">${svg}</span>`;
-  }
   grid.innerHTML=list.map(p=>{
-    const siretFmt=p.siret?String(p.siret).replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4'):'';
-    const company=p.company||p.name||'—';
-    const director=p.company&&p.name?p.name:'';
-    const waUrl=p.whatsapp?(p.whatsapp.startsWith('http')?p.whatsapp:'https://wa.me/'+p.whatsapp.replace(/\s/g,'')):'';
-    return `<div class="p-card" onclick="openDetail(${p.id})">
+    const nbFact = (p.factures_ids||[]).length;
+    const ca = p.ca_total||0;
+    const siretF = siretFormat(p.siret);
+    const hasSiret = !!p.siret;
+    const showActivity = (p.source === 'facture_import') || nbFact > 0 || ca > 0;
+    return `<div class="p-card" onclick="openDetail('${esc(String(p.id))}')">
       <div class="cc-header">
-        <div class="cc-naf">${svgBuilding}<span>${esc(p.sector||'Activité')}</span></div>
-        <div class="cc-name">${esc(company)}</div>
-        <div class="cc-director">${director?esc(director):EMPTY}</div>
+        <div class="cc-naf" style="display:flex;align-items:center;gap:6px;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:6px">${svgBuilding}<span>${esc(p.sector||'Contact')}</span></div>
+          ${entityBadgeHtml(p.entity_origine)}
+        </div>
+        <div class="cc-name">${esc(p.nom||'—')}</div>
+        <div class="cc-director" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${sourceBadgeHtml(p.source)}
+          ${siretF?'<span style="font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.7)">'+esc(siretF)+'</span>':''}
+        </div>
       </div>
       <div class="cc-body">
         <div class="cc-section">
+          <div class="cc-section-label"><span>Localisation</span></div>
+          <div class="cc-row">${svgPin}${p.adresse?'<span>'+esc(p.adresse)+'</span>':EMPTY}</div>
+        </div>
+        ${showActivity ? `<div class="cc-section">
+          <div class="cc-section-label"><span>Activité</span><span>${nbFact} facture${nbFact>1?'s':''}</span></div>
+          <div class="cc-row">${svgEuro}<span style="font-weight:700;color:#1D8348">${fmtMontantContacts(ca)}</span><span style="color:var(--muted);margin-left:6px">de CA</span></div>
+        </div>` : ''}
+        ${(p.phone||p.email) ? `<div class="cc-section">
           <div class="cc-section-label"><span>Contact</span></div>
-          <div class="cc-row">${svgPhone}${p.phone?`<a href="tel:${esc(p.phone.replace(/\s/g,''))}" onclick="event.stopPropagation()">${esc(p.phone)}</a>`:EMPTY}</div>
-          <div class="cc-row">${svgMail}${p.email?`<a href="mailto:${esc(p.email)}" onclick="event.stopPropagation()">${esc(p.email)}</a>`:EMPTY}</div>
-          <div class="cc-row">${svgPin}${p.location?`<span>${esc([p.location,p.zip].filter(Boolean).join(' '))}</span>`:EMPTY}</div>
-        </div>
-        <div class="cc-section">
-          <div class="cc-section-label"><span>Réseaux sociaux</span></div>
-          <div class="cc-socials">
-            ${socialTile(p.linkedin,'linkedin',svgLinkedin,'LinkedIn')}
-            ${socialTile(p.facebook,'facebook',svgFacebook,'Facebook')}
-            ${socialTile(p.instagram,'instagram',svgInstagram,'Instagram')}
-            ${socialTile(waUrl,'whatsapp',svgWhatsapp,'WhatsApp')}
-          </div>
-        </div>
-        <div class="cc-section">
-          <div class="cc-section-label"><span>Identité légale</span><span>INSEE</span></div>
-          <dl class="cc-id">
-            <dt>SIRET</dt><dd>${siretFmt?esc(siretFmt):EMPTY}</dd>
-            <dt>Forme</dt><dd>${p.forme?esc(p.forme):EMPTY}</dd>
-            <dt>Code NAF</dt><dd>${p.naf?esc(p.naf):EMPTY}</dd>
-            <dt>Effectif</dt><dd>${p.effectif?esc(p.effectif):EMPTY}</dd>
-          </dl>
-        </div>
+          ${p.phone?'<div class="cc-row">'+svgPhone+'<a href="tel:'+esc(p.phone.replace(/\\s/g,''))+'" onclick="event.stopPropagation()">'+esc(p.phone)+'</a></div>':''}
+          ${p.email?'<div class="cc-row">'+svgMail+'<a href="mailto:'+esc(p.email)+'" onclick="event.stopPropagation()">'+esc(p.email)+'</a></div>':''}
+        </div>` : ''}
       </div>
-      <button class="cc-edit-btn" onclick="event.stopPropagation();openDetail(${p.id})">Modifier</button>
+      <div style="display:flex;gap:6px;padding:0 10px 10px">
+        ${hasSiret?`<a class="cc-edit-btn" style="flex:1;text-decoration:none;background:#F5F5F7;color:#1D1D1F;border:1px solid var(--border);margin:0" href="carte.html?contact_siret=${encodeURIComponent(p.siret)}" onclick="event.stopPropagation()">${svgMap}<span style="margin-left:4px">Carte</span></a>`:''}
+        ${hasSiret?`<a class="cc-edit-btn" style="flex:1;text-decoration:none;background:#F5F5F7;color:#1D1D1F;border:1px solid var(--border);margin:0" href="factures.html?client_siret=${encodeURIComponent(p.siret)}" onclick="event.stopPropagation()">${svgInvoice}<span style="margin-left:4px">Factures</span></a>`:''}
+        <button class="cc-edit-btn" style="flex:1;margin:0" onclick="event.stopPropagation();openDetail('${esc(String(p.id))}')">Modifier</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -846,15 +863,15 @@ function sourceIco(s){ return ''; }
 
 // ── KPIS ──
 function updateKPIs(){
+  const set=(id,v)=>{ var el=document.getElementById(id); if(el) el.textContent = v; };
   const total=prospects.length;
-  const hot=prospects.filter(p=>p.status==='hot').length;
-  const warm=prospects.filter(p=>p.status==='warm').length;
-  const emails=prospects.filter(p=>p.email).length;
-  document.getElementById('kpi-total').textContent=total;
-  document.getElementById('kpi-hot').textContent=hot;
-  document.getElementById('kpi-warm').textContent=warm;
-  document.getElementById('kpi-emails').textContent=emails;
-  document.getElementById('kpi-value').textContent= total ? (total*450)+'€/mois' : '—';
+  const facImport=prospects.filter(p=>p.source==='facture_import').length;
+  const ca=prospects.reduce((s,p)=>s+(Number(p.ca_total)||0),0);
+  set('kpi-total', total);
+  set('kpi-hot', facImport);
+  set('kpi-warm', prospects.filter(p=>p.source==='manual').length);
+  set('kpi-emails', prospects.filter(p=>p.email).length);
+  set('kpi-value', ca ? (Math.round(ca).toLocaleString('fr-FR')+'\u00A0€') : '—');
 }
 function updateBadges(){
   // badges are in filter toolbar, updated via count-label
@@ -899,17 +916,16 @@ function openDetail(id){
   selectedId=String(id);
   const p=prospects.find(x=>String(x.id)===String(id));
   if(!p)return;
-  document.getElementById('dp-name').textContent=p.company||p.name||'';
-  document.getElementById('dp-co').textContent='';
-  document.getElementById('dp-director-sub').textContent=p.contact||p.director||p.name||'';
-  // Editable fields
-  document.getElementById('dp-company').value=p.company||'';
+  document.getElementById('dp-name').textContent=p.nom||'';
+  document.getElementById('dp-co').textContent=p.siret?siretFormat(p.siret):'';
+  document.getElementById('dp-director-sub').textContent=p.contact_nom||p.contact||'';
+  document.getElementById('dp-company').value=p.nom||'';
   document.getElementById('dp-sector').value=p.sector||'';
   document.getElementById('dp-website').value=p.website||'';
-  document.getElementById('dp-contact').value=p.contact||p.director||p.name||'';
-  document.getElementById('dp-phone').value=p.phone||p.tel||'';
+  document.getElementById('dp-contact').value=p.contact_nom||p.contact||'';
+  document.getElementById('dp-phone').value=p.phone||'';
   document.getElementById('dp-email').value=p.email||'';
-  document.getElementById('dp-address').value=p.address||p.location||'';
+  document.getElementById('dp-address').value=p.adresse||'';
   document.getElementById('dp-zip').value=p.zip||'';
   document.getElementById('dp-linkedin').value=p.linkedin||'';
   document.getElementById('dp-facebook').value=p.facebook||'';
@@ -926,16 +942,15 @@ function saveAllFields(){
   if(!selectedId)return;
   const p=prospects.find(x=>String(x.id)===String(selectedId));
   if(!p)return;
-  p.company=document.getElementById('dp-company').value.trim();
+  p.nom=document.getElementById('dp-company').value.trim()||p.nom;
   p.sector=document.getElementById('dp-sector').value.trim();
   p.website=document.getElementById('dp-website').value.trim();
-  p.contact=document.getElementById('dp-contact').value.trim();
-  p.name=p.contact; p.director=p.contact;
+  p.contact_nom=document.getElementById('dp-contact').value.trim();
+  p.contact=p.contact_nom;
   p.phone=document.getElementById('dp-phone').value.trim();
-  p.tel=p.phone;
   p.email=document.getElementById('dp-email').value.trim();
-  p.address=document.getElementById('dp-address').value.trim();
-  p.location=p.address;
+  p.adresse=document.getElementById('dp-address').value.trim();
+  p.address=p.adresse; p.location=p.adresse;
   p.zip=document.getElementById('dp-zip').value.trim();
   p.linkedin=document.getElementById('dp-linkedin').value.trim();
   p.facebook=document.getElementById('dp-facebook').value.trim();
@@ -944,12 +959,13 @@ function saveAllFields(){
   p.emailStatus=document.getElementById('dp-emailStatus').value;
   p.lastContact=document.getElementById('dp-lastContact').value;
   p.notes=document.getElementById('dp-notes').value;
+  // Maintien des aliases pour compat
+  p.name=p.nom; p.company=p.nom;
   save();
-  // Update header
-  document.getElementById('dp-name').textContent=p.company||p.contact||'';
-  document.getElementById('dp-director-sub').textContent=p.contact||'';
+  document.getElementById('dp-name').textContent=p.nom||'';
+  document.getElementById('dp-director-sub').textContent=p.contact_nom||'';
   renderAll();
-  toast('Prospect enregistré');
+  toast('Contact enregistré');
 }
 function closeDetail(){
   selectedId=null;
@@ -1093,13 +1109,38 @@ function showCsvPreview(){
   document.getElementById('csv-count').textContent=csvParsed.length;
 }
 
+function newContactId(){ return 'contact_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
+
 // ── CONFIRM IMPORT ──
 function confirmImport(){
   if(activeModalTab==='csv'){
     if(!csvParsed.length){toast('Aucune donnée à importer');return;}
-    prospects=[...prospects,...csvParsed];
+    var added = csvParsed.map(function(r){
+      return migrateProspect({
+        id: newContactId(),
+        nom: r.company || r.name || '—',
+        contact_nom: r.name || r.director || '',
+        email: r.email || '',
+        phone: r.phone || '',
+        adresse: r.location || r.address || '',
+        zip: r.zip || '',
+        sector: r.sector || '',
+        website: r.website || '',
+        siren: r.siren || '',
+        notes: r.notes || '',
+        linkedin: r.linkedin || '',
+        facebook: r.facebook || '',
+        instagram: r.instagram || '',
+        source: 'csv_import',
+        entity_origine: 'mup',
+        factures_ids: [],
+        ca_total: 0,
+        created_at: new Date().toISOString()
+      });
+    });
+    prospects = [...prospects, ...added];
     save();
-    toast(`${csvParsed.length} contact(s) importé(s)`);
+    toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}`);
     csvParsed=[];
     document.getElementById('csv-preview').classList.remove('visible');
     document.getElementById('csv-info').style.display='none';
@@ -1108,45 +1149,58 @@ function confirmImport(){
     const name=document.getElementById('f-name').value.trim();
     const company=document.getElementById('f-company').value.trim();
     if(!name&&!company){toast('Nom ou société requis');return;}
-    const p={
-      id:Date.now(),
-      name:name||company,
-      company:company||name,
-      email:document.getElementById('f-email').value.trim(),
-      phone:document.getElementById('f-phone').value.trim(),
-      location:document.getElementById('f-loc').value.trim(),
-      sector:document.getElementById('f-sector').value,
-      status:'new',
-      website:document.getElementById('f-website').value.trim(),
-      source:document.getElementById('f-source').value,
-      notes:document.getElementById('f-notes').value.trim(),
-      linkedin:document.getElementById('f-linkedin').value.trim(),
-      facebook:document.getElementById('f-facebook').value.trim(),
-      instagram:document.getElementById('f-instagram').value.trim(),
-      director:name||company,
-    };
+    const p = migrateProspect({
+      id: newContactId(),
+      nom: company || name,
+      contact_nom: name,
+      email: document.getElementById('f-email').value.trim(),
+      phone: document.getElementById('f-phone').value.trim(),
+      adresse: document.getElementById('f-loc').value.trim(),
+      sector: document.getElementById('f-sector').value,
+      website: document.getElementById('f-website').value.trim(),
+      notes: document.getElementById('f-notes').value.trim(),
+      linkedin: document.getElementById('f-linkedin').value.trim(),
+      facebook: document.getElementById('f-facebook').value.trim(),
+      instagram: document.getElementById('f-instagram').value.trim(),
+      source: 'manual',
+      entity_origine: 'mup',
+      factures_ids: [],
+      ca_total: 0,
+      created_at: new Date().toISOString()
+    });
     prospects.push(p);
     save();
-    // reset form
     ['f-name','f-company','f-email','f-phone','f-loc','f-website','f-notes','f-linkedin','f-facebook','f-instagram'].forEach(id=>document.getElementById(id).value='');
-    toast('Prospect ajouté');
+    toast('Contact ajouté');
   } else if(activeModalTab==='paste'){
     const raw=document.getElementById('paste-input').value.trim();
     if(!raw){toast('Aucune donnée');return;}
     const lines=raw.split('\n').filter(l=>l.trim());
-    const added=lines.map((line,idx)=>{
+    const added=lines.map((line)=>{
       const parts=line.split(/[,;·\t]+/).map(s=>s.trim()).filter(Boolean);
       const email=parts.find(s=>/\S+@\S+\.\S+/.test(s));
       const phone=parts.find(s=>/^[\d\s\+\(\)\-\.]{8,}$/.test(s.replace(/\s/g,'')));
       const name=parts[0]||'';
-      const company=parts[1]||'';
+      const company=parts[1]||name;
       const loc=parts.find(s=>!/\S+@/.test(s)&&!/^\d/.test(s.replace(/\s/g,''))&&s!==name&&s!==company);
-      return {id:Date.now()+idx,name,company,email:email||'',phone:phone||'',location:loc||'',status:'new',source:'Collé',director:name};
+      return migrateProspect({
+        id: newContactId(),
+        nom: company || name,
+        contact_nom: name,
+        email: email || '',
+        phone: phone || '',
+        adresse: loc || '',
+        source: 'paste',
+        entity_origine: 'mup',
+        factures_ids: [],
+        ca_total: 0,
+        created_at: new Date().toISOString()
+      });
     });
     prospects=[...prospects,...added];
     save();
     document.getElementById('paste-input').value='';
-    toast(`${added.length} contact(s) importé(s)`);
+    toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}`);
   }
   closeModal();
   renderAll();updateKPIs();updateBadges();

@@ -11,7 +11,7 @@
     mention_tva: 'TVA non applicable, art. 293 B du CGI',
     paiement_tva_debits (false),
     date_reglement, statut, date_paiement,
-    entity_origine: 'graphic_factor' | 'nouvellevagues' | 'mup' | 'neox',
+    entity_origine: 'graphic_factor' | 'nouvellevagues' | 'mup' | 'ei',
     devis_origine_id,
     plateforme_agreee_destinataire (null), format_export ('pdf_simple'),
     pdf_source (base64, optionnel),
@@ -196,10 +196,10 @@
       <span class="filter-label">Entité</span>
       <select class="filter-select" id="filter-entity">
         <option value="all">Toutes</option>
+        <option value="ei">EI</option>
         <option value="graphic_factor">Graphic Factor</option>
         <option value="nouvellevagues">Nouvelles Vagues</option>
         <option value="mup">MUP</option>
-        <option value="neox">Neox</option>
       </select>
     </div>
     <div style="display:flex;align-items:center;gap:6px;">
@@ -283,10 +283,10 @@
           <div class="field">
             <label>Entité émettrice</label>
             <select id="new-entity">
+              <option value="ei">EI</option>
               <option value="graphic_factor">Graphic Factor</option>
               <option value="nouvellevagues">Nouvelles Vagues</option>
               <option value="mup">MUP</option>
-              <option value="neox">Neox</option>
             </select>
           </div>
         </div>
@@ -385,7 +385,7 @@
   function detectEntity(clientNom){
     if(!clientNom) return 'mup';
     var nom = clientNom.toLowerCase().replace(/\s/g, '');
-    if(nom.indexOf('neoxp') !== -1 || nom.indexOf('neox') !== -1) return 'neox';
+    if(nom.indexOf('neoxp') !== -1) return 'ei';
     if(nom.indexOf('graphic') !== -1 || nom.indexOf('factor') !== -1) return 'graphic_factor';
     if(nom.indexOf('nouvelle') !== -1 || nom.indexOf('vague') !== -1) return 'nouvellevagues';
     return 'mup';
@@ -550,7 +550,7 @@
   function todayISO(){ return new Date().toISOString().slice(0,10); }
   function ddmmyy(date){ var d = new Date(date); return pad(d.getDate(),2) + pad(d.getMonth()+1,2) + String(d.getFullYear()).slice(-2); }
 
-  var ENTITY_LABELS = { graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues', mup:'MUP', neox:'Neox' };
+  var ENTITY_LABELS = { ei:'EI', graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues', mup:'MUP' };
   var STATUTS = { 'payée':'Payée', 'en_attente':'En attente', 'en_retard':'En retard' };
 
   var IMPORT_DRIVERS = {
@@ -1161,10 +1161,10 @@
            + '<option value="en_retard"'+sel('en_retard',c.statut)+'>En retard</option></select></div>';
       html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Entité</label>'
            + '<select data-pdf-i="'+i+'" data-pdf-f="entity_origine" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'
+           + '<option value="ei"'+sel('ei',c.entity_origine)+'>EI</option>'
            + '<option value="mup"'+sel('mup',c.entity_origine)+'>MUP</option>'
            + '<option value="graphic_factor"'+sel('graphic_factor',c.entity_origine)+'>Graphic Factor</option>'
-           + '<option value="nouvellevagues"'+sel('nouvellevagues',c.entity_origine)+'>Nouvelles Vagues</option>'
-           + '<option value="neox"'+sel('neox',c.entity_origine)+'>Neox</option></select></div>';
+           + '<option value="nouvellevagues"'+sel('nouvellevagues',c.entity_origine)+'>Nouvelles Vagues</option></select></div>';
       html += '</div>';
       html += '</div>';
     });

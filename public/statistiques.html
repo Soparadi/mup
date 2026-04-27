@@ -1244,8 +1244,8 @@
   try { factures = JSON.parse(localStorage.getItem('mup_factures') || '[]'); } catch(e){}
   function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0); }
   function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  var ENTITY_LBL = { graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues', mup:'MUP', neox:'Neox' };
-  var ENTITY_COLOR = { graphic_factor:'#0A66C2', nouvellevagues:'#7C3AED', mup:'#1D1D1F', neox:'#0BBCD4' };
+  var ENTITY_LBL = { ei:'EI', graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues', mup:'MUP' };
+  var ENTITY_COLOR = { ei:'#A32D2D', graphic_factor:'#0A66C2', nouvellevagues:'#7C3AED', mup:'#1D1D1F' };
 
   var f2026 = factures.filter(function(f){ return f.date_emission && new Date(f.date_emission).getFullYear() === 2026; });
   var realized = f2026.filter(function(f){ return f.statut === 'payée' || f.statut === 'payee'; }).reduce(function(s,f){ return s + (parseFloat(f.total_ttc)||0); }, 0);

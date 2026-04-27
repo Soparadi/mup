@@ -1,4 +1,20 @@
 (function() {
+  // Migration silencieuse : entity_origine 'neox' → 'ei'
+  try {
+    ['mup_factures','mup_contacts','mup_pipeline','mup_devis','mup_agenda'].forEach(function(key){
+      var raw = localStorage.getItem(key);
+      if(!raw) return;
+      var data;
+      try { data = JSON.parse(raw); } catch(e){ return; }
+      if(!Array.isArray(data)) return;
+      var updated = false;
+      data.forEach(function(item){
+        if(item && item.entity_origine === 'neox'){ item.entity_origine = 'ei'; updated = true; }
+      });
+      if(updated) localStorage.setItem(key, JSON.stringify(data));
+    });
+  } catch(e){}
+
   // Inject unified sidebar styles with high specificity
   var ss = document.createElement('style');
   ss.textContent = ''

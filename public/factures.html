@@ -615,6 +615,7 @@
 
     // ─── 6. TVA ───
     if(/TVA\s+non\s+applicable|art\.?\s*293\s*B|exonn?[ée]r[ée]\s+de\s+TVA/i.test(txtFlat)){
+      result.tva_non_applicable = true;
       result.tva_applicable = false;
       result.taux_tva = 0;
       result.mention_tva = 'TVA non applicable, art. 293 B du CGI';
@@ -792,8 +793,8 @@
       total_ht_conf: fields.confidence.total_ht || 0,
       tva_applicable: fields.tva_applicable,
       mention_tva: fields.mention_tva || '',
-      taux_tva: 0,
-      taux_tva_conf: fields.confidence.tva || 0,
+      taux_tva: fields.taux_tva || 0,
+      taux_tva_conf: fields.confidence.taux_tva || 0,
       client_nom: fields.client_nom || '',
       client_nom_conf: fields.confidence.client_nom || 0,
       client_siret: fields.client_siret || '',

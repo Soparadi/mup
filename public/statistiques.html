@@ -373,10 +373,10 @@
         <h2 style="font-size:18px; font-weight:500; margin:0;">Historique 3 ans</h2>
         <span style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em;" id="historique-periode">2023 - 2026</span>
       </div>
-      <div id="historique-kpis" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; margin-bottom:24px;"></div>
+      <div id="historique-kpis" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:24px;"></div>
       <div id="historique-chart-container" style="margin-bottom:24px;">
         <h3 style="font-size:14px; font-weight:500; margin:0 0 12px;">Évolution du CA par année</h3>
-        <div style="position:relative; height:280px;">
+        <div style="position:relative; height:220px;">
           <canvas id="historique-chart"></canvas>
         </div>
       </div>
@@ -1476,29 +1476,19 @@
     var labelEvol = evolutionPct === null ? '—' : (evolutionPct >= 0 ? '+' : '') + evolutionPct.toFixed(1) + '%';
 
     kpisEl.innerHTML = [
-      '<div style="background:#f8f8f8; border-radius:8px; padding:16px;">'+
+      '<div style="background:#f8f8f8; border-radius:8px; padding:14px;">'+
         '<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">CA cumulé total</div>'+
-        '<div style="font-size:22px; font-weight:500; color:#1D8348;">'+formatMontant(totalCumule)+'</div>'+
+        '<div style="font-size:20px; font-weight:500; color:#1D8348;">'+formatMontant(totalCumule)+'</div>'+
         '<div style="font-size:11px; color:#888; margin-top:4px;">'+annees.length+' année'+(annees.length>1?'s':'')+'</div>'+
       '</div>',
-      '<div style="background:#f8f8f8; border-radius:8px; padding:16px;">'+
-        '<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Factures totales</div>'+
-        '<div style="font-size:22px; font-weight:500;">'+totalFactures+'</div>'+
-        '<div style="font-size:11px; color:#888; margin-top:4px;">Ticket moyen '+formatMontant(totalCumule/totalFactures)+'</div>'+
-      '</div>',
-      '<div style="background:#f8f8f8; border-radius:8px; padding:16px;">'+
+      '<div style="background:#f8f8f8; border-radius:8px; padding:14px;">'+
         '<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Évolution YTD</div>'+
-        '<div style="font-size:22px; font-weight:500; color:'+couleurEvol+';">'+labelEvol+'</div>'+
+        '<div style="font-size:20px; font-weight:500; color:'+couleurEvol+';">'+labelEvol+'</div>'+
         '<div style="font-size:11px; color:#888; margin-top:4px;">'+labelPeriode+' vs '+anneePrecedente+'</div>'+
       '</div>',
-      '<div style="background:#f8f8f8; border-radius:8px; padding:16px;">'+
-        '<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Meilleure année</div>'+
-        '<div style="font-size:22px; font-weight:500;">'+meilleureAnnee+'</div>'+
-        '<div style="font-size:11px; color:#888; margin-top:4px;">'+formatMontant(parAnnee[meilleureAnnee].ca)+'</div>'+
-      '</div>',
-      '<div style="background:#f8f8f8; border-radius:8px; padding:16px; border-left:3px solid #1D8348;">'+
+      '<div style="background:#f8f8f8; border-radius:8px; padding:14px; border-left:3px solid #1D8348;">'+
         '<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Projection '+anneeCourante+'</div>'+
-        '<div style="font-size:22px; font-weight:500; color:#1D8348;">'+(projection === null ? '—' : formatMontant(projection))+'</div>'+
+        '<div style="font-size:20px; font-weight:500; color:#1D8348;">'+(projection === null ? '—' : formatMontant(projection))+'</div>'+
         '<div style="font-size:11px; color:#888; margin-top:4px;">'+(projection === null ? 'Données insuffisantes' : 'Au rythme actuel')+'</div>'+
       '</div>'
     ].join('');
@@ -1537,7 +1527,7 @@
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 16, boxWidth: 14 } },
+          legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 16, boxWidth: 14 }, onClick: null },
           tooltip: {
             callbacks: {
               label: function(c){ return c.dataset.label + ' : ' + Math.round(c.parsed.y).toLocaleString('fr-FR') + ' €'; }

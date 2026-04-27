@@ -813,6 +813,56 @@ function renderSchedule(){
   }
   summaryEl.innerHTML=sumHtml;
 }
+
+// ── CONTACTS GÉOCODÉS depuis mup_contacts ──
+(function(){
+  var contacts = [];
+  try { contacts = JSON.parse(localStorage.getItem('mup_contacts') || '[]'); } catch(e){}
+  if(!Array.isArray(contacts) || contacts.length === 0) return;
+
+  var COULEURS_ENTITE = {
+    'graphic_factor': '#1D9E75',
+    'nouvellevagues': '#5B6FED',
+    'mup': '#EF9F27',
+    'neox': '#A32D2D'
+  };
+  function fmtMontant(n){ return (n||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
+  function escTxt(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  var contactMarkers = {};
+  contacts.forEach(function(contact){
+    if(!contact.latitude || !contact.longitude) return;
+    var couleur = COULEURS_ENTITE[contact.entity_origine] || '#666';
+    var icon = L.divIcon({
+      className: 'contact-marker',
+      html: '<div style="width:20px;height:20px;border-radius:50%;background:'+couleur+';border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+    var marker = L.marker([contact.latitude, contact.longitude], { icon: icon }).addTo(map);
+    var nbFact = (contact.factures_ids || []).length;
+    var popup = '<div style="font-family:inherit;min-width:200px;">'
+      + '<div style="font-weight:700;font-size:14px;margin-bottom:4px;">'+escTxt(contact.nom||'—')+'</div>'
+      + '<div style="font-size:11px;color:#666;margin-bottom:8px;">'+escTxt(contact.adresse||contact.adresse_normalisee||'')+'</div>'
+      + '<div style="font-size:12px;margin-bottom:8px;">'+nbFact+' facture'+(nbFact>1?'s':'')+' · <strong>'+fmtMontant(contact.ca_total)+'</strong></div>'
+      + '<a href="/factures?client_siret='+encodeURIComponent(contact.siret||'')+'" style="font-size:12px;color:'+couleur+';text-decoration:none;font-weight:600;">Voir les factures →</a>'
+      + '</div>';
+    marker.bindPopup(popup);
+    if(contact.siret) contactMarkers[contact.siret] = marker;
+  });
+
+  // Centrage si ?contact_siret=
+  var m = window.location.search.match(/[?&]contact_siret=([^&]+)/);
+  if(m){
+    var siret = decodeURIComponent(m[1]);
+    var target = contacts.find(function(c){ return c.siret === siret; });
+    if(target && target.latitude && target.longitude){
+      map.setView([target.latitude, target.longitude], 14);
+      var mk = contactMarkers[siret];
+      if(mk) setTimeout(function(){ mk.openPopup(); }, 300);
+    }
+  }
+})();
 </script>
 <script src="/sidebar.js"></script>
 </body>

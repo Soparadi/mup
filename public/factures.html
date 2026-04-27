@@ -180,6 +180,10 @@
     <span id="test-banner-label">Factures de test détectées.</span>
     <button id="test-banner-purge" style="padding:6px 14px;border:none;background:#854F0B;color:#fff;border-radius:7px;font-family:var(--font);font-weight:700;font-size:11px;cursor:pointer;letter-spacing:.4px;">Vider la base</button>
   </div>
+  <div id="filter-client-banner" style="display:none;background:rgba(67,56,202,0.10);border-bottom:1px solid #4338CA;padding:10px 28px;font-size:12.5px;color:#4338CA;align-items:center;justify-content:space-between;gap:12px;">
+    <span id="filter-client-label">Filtre actif</span>
+    <button id="filter-client-clear" style="padding:6px 14px;border:none;background:#4338CA;color:#fff;border-radius:7px;font-family:var(--font);font-weight:700;font-size:11px;cursor:pointer;letter-spacing:.4px;">Retirer le filtre</button>
+  </div>
 
   <div class="filters">
     <div class="status-tabs" id="status-tabs">
@@ -205,6 +209,7 @@
       </select>
     </div>
     <span style="margin-left:auto;font-size:11px;color:var(--muted);font-family:var(--mono);" id="count-label">0 facture</span>
+    <button id="btn-sync-contacts" style="padding:6px 11px;border:1px solid var(--border);background:#fff;color:var(--text);border-radius:7px;font-family:var(--font);font-weight:700;font-size:10.5px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;">Synchroniser les contacts</button>
     <button id="btn-purge" style="display:none;padding:6px 11px;border:1px solid #A32D2D;background:#fff;color:#A32D2D;border-radius:7px;font-family:var(--font);font-weight:700;font-size:10.5px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;">Vider la base de test</button>
   </div>
 
@@ -459,6 +464,25 @@
       result.confidence.designation = 1.0;
     }
 
+    // ADRESSE CLIENT (2ème adresse trouvée = client, 1ère = émetteur EI)
+    var EMETTEUR_SIRET = '45338845600031';
+    var addrPattern = /(\d+\s+(?:rue|avenue|av|boulevard|bd|place|pl|chemin|impasse|allée|cours|quai|route|voie)\.?\s+[^\d]{2,40}?\s+\d{5}\s+[A-Za-zÀ-ÿ\-]+(?:\s+[A-Za-zÀ-ÿ\-]+)?)/gi;
+    var addresses = [];
+    var am;
+    while((am = addrPattern.exec(text)) !== null){ addresses.push(am[1].trim()); }
+    if(addresses.length >= 2){
+      result.client_adresse = addresses[1];
+      result.confidence.client_adresse = 1.0;
+    } else if(addresses.length === 1){
+      var emetteurIdx = text.indexOf(EMETTEUR_SIRET);
+      var addrIdx = text.indexOf(addresses[0]);
+      var isEmetteur = emetteurIdx > -1 && addrIdx > -1 && addrIdx < emetteurIdx;
+      if(!isEmetteur){
+        result.client_adresse = addresses[0];
+        result.confidence.client_adresse = 1.0;
+      }
+    }
+
     return result;
   }
 
@@ -506,6 +530,8 @@
       client_siret_conf: fields.confidence.client_siret || 0,
       client_siren: fields.client_siren || '',
       client_siren_conf: fields.confidence.client_siren || 0,
+      client_adresse: fields.client_adresse || '',
+      client_adresse_conf: fields.confidence.client_adresse || 0,
       designation: fields.designation || '',
       designation_conf: fields.confidence.designation || 0,
       entity_origine: entity,
@@ -537,7 +563,64 @@
 
   var factures = loadJSON('mup_factures', []);
   var pipeline = loadJSON('mup_pipeline', []);
-  var state = { status:'all', entity:'all', year:'all', currentId:null };
+  var state = { status:'all', entity:'all', year:'all', currentId:null, clientSiretFilter:null };
+
+  // ── GÉOCODAGE BAN ──
+  async function geocodeAdresse(adresse){
+    if(!adresse) return null;
+    try {
+      var url = 'https://api-adresse.data.gouv.fr/search/?q=' + encodeURIComponent(adresse) + '&limit=1';
+      var res = await fetch(url);
+      var data = await res.json();
+      if(data.features && data.features[0]){
+        var coords = data.features[0].geometry.coordinates;
+        return { latitude: coords[1], longitude: coords[0], score: data.features[0].properties.score, label: data.features[0].properties.label };
+      }
+    } catch(e){ console.error('Géocodage échec', e); }
+    return null;
+  }
+
+  // ── SYNC CONTACT depuis facture ──
+  async function syncContactFromFacture(facture){
+    if(!facture.client || !facture.client.siret) return null;
+    var contacts = loadJSON('mup_contacts', []);
+    if(!Array.isArray(contacts)) contacts = [];
+    var contact = contacts.find(function(c){ return c.siret === facture.client.siret; });
+    var geocoded = false;
+    if(!contact){
+      contact = {
+        id: 'contact_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+        nom: facture.client.nom || '—',
+        siret: facture.client.siret,
+        siren: facture.client.siren || '',
+        adresse: facture.client.adresse || '',
+        latitude: null, longitude: null,
+        entity_origine: facture.entity_origine || 'mup',
+        source: 'facture_import',
+        factures_ids: [facture.id],
+        ca_total: facture.total_ttc || 0,
+        created_at: new Date().toISOString()
+      };
+      if(contact.adresse){
+        var geo = await geocodeAdresse(contact.adresse);
+        if(geo){ contact.latitude = geo.latitude; contact.longitude = geo.longitude; contact.adresse_normalisee = geo.label; geocoded = true; }
+      }
+      contacts.push(contact);
+    } else {
+      if(!contact.factures_ids) contact.factures_ids = [];
+      if(contact.factures_ids.indexOf(facture.id) === -1){
+        contact.factures_ids.push(facture.id);
+        contact.ca_total = (contact.ca_total || 0) + (facture.total_ttc || 0);
+      }
+      if(!contact.adresse && facture.client.adresse) contact.adresse = facture.client.adresse;
+      if(!contact.latitude && contact.adresse){
+        var geo2 = await geocodeAdresse(contact.adresse);
+        if(geo2){ contact.latitude = geo2.latitude; contact.longitude = geo2.longitude; contact.adresse_normalisee = geo2.label; geocoded = true; }
+      }
+    }
+    saveJSON('mup_contacts', contacts);
+    return { contact: contact, geocoded: geocoded };
+  }
 
   function generateNextNumero(){
     var maxSeq = factures.reduce(function(m,f){ return Math.max(m, f.numero_seq || 0); }, 0);
@@ -594,9 +677,32 @@
       if(state.status !== 'all' && f.statut !== state.status) return false;
       if(state.entity !== 'all' && f.entity_origine !== state.entity) return false;
       if(state.year !== 'all' && f.date_emission && new Date(f.date_emission).getFullYear() !== parseInt(state.year,10)) return false;
+      if(state.clientSiretFilter && (!f.client || f.client.siret !== state.clientSiretFilter)) return false;
       return true;
     });
   }
+  function applyClientFilter(siret){
+    state.clientSiretFilter = siret || null;
+    var banner = document.getElementById('filter-client-banner');
+    var label = document.getElementById('filter-client-label');
+    if(siret){
+      var contacts = loadJSON('mup_contacts', []);
+      var c = contacts.find(function(x){ return x.siret === siret; });
+      var nom = c ? c.nom : siret;
+      var n = factures.filter(function(f){ return f.client && f.client.siret === siret; }).length;
+      label.textContent = 'Filtre actif : ' + nom + ' (' + n + ' facture' + (n>1?'s':'') + ')';
+      banner.style.display = 'flex';
+    } else {
+      banner.style.display = 'none';
+    }
+    renderList();
+  }
+  document.getElementById('filter-client-clear').addEventListener('click', function(){
+    var url = new URL(window.location.href);
+    url.searchParams.delete('client_siret');
+    window.history.replaceState({}, '', url);
+    applyClientFilter(null);
+  });
   function renderList(){
     var list = applyFilters().sort(function(a,b){ return (b.date_emission||'').localeCompare(a.date_emission||''); });
     document.getElementById('count-label').textContent = list.length + ' facture' + (list.length>1?'s':'');
@@ -704,6 +810,16 @@
       html += '<button id="e-download" style="width:100%;padding:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;cursor:pointer;font-family:var(--font);font-weight:600;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;margin-bottom:10px;">'
         +'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
         +'Télécharger le PDF original</button>';
+    }
+    // Lien vers la carte si contact géocodé
+    if(f.client && f.client.siret){
+      var contacts = loadJSON('mup_contacts', []);
+      var contact = contacts.find(function(c){ return c.siret === f.client.siret; });
+      if(contact && contact.latitude && contact.longitude){
+        html += '<a href="/carte?contact_siret='+encodeURIComponent(f.client.siret)+'" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;text-decoration:none;font-family:var(--font);font-weight:600;font-size:12px;margin-bottom:10px;">'
+          +'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
+          +'Voir le client sur la carte</a>';
+      }
     }
     html += '<div class="edit-actions">';
     html += '<button class="secondary" id="e-cancel">Fermer</button>';
@@ -1031,6 +1147,8 @@
       html += fieldRow('Total TTC', 'total_ttc', c.total_ttc, c.total_ttc_conf, 'number', i);
       html += fieldRow('Taux TVA (%)', 'taux_tva', c.taux_tva, c.taux_tva_conf, 'number', i);
       html += '</div>';
+      html += '<div style="margin-bottom:8px;"><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Adresse client'+confDot(c.client_adresse_conf||0)+'</label>'
+           + '<textarea data-pdf-i="'+i+'" data-pdf-f="client_adresse" rows="2" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--font);resize:vertical;">'+esc(c.client_adresse||'')+'</textarea></div>';
       html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Désignation'+confDot(c.designation_conf||0)+'</label>'
            + '<textarea data-pdf-i="'+i+'" data-pdf-f="designation" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;min-height:50px;font-family:var(--font);">'+esc(c.designation||'')+'</textarea></div>';
       c.statut = c.statut || 'en_attente'; c.entity_origine = c.entity_origine || 'mup';
@@ -1089,7 +1207,7 @@
         date_emission: c.date_emission || todayISO(),
         date_prestation: c.date_emission || todayISO(),
         emetteur: { nom:'', adresse:'', siret:'', tva_intra:'' },
-        client: { nom: c.client_nom||'—', adresse:'', siret: c.client_siret||'', siren: c.client_siren||'', adresse_livraison:'' },
+        client: { nom: c.client_nom||'—', adresse: c.client_adresse||'', siret: c.client_siret||'', siren: c.client_siren||'', adresse_livraison:'' },
         nature_operation: 'prestation_services',
         lignes: [{ designation: designation, date: c.date_emission||null, quantite: 1, prix_unitaire: totalHt, total: totalHt }],
         total_ht: totalHt, tva_applicable: tvaApplicable, taux_tva: taux, montant_tva: montantTva, total_ttc: totalTtc,
@@ -1107,6 +1225,17 @@
     saveJSON('mup_factures', factures);
     document.getElementById('modal-import-pdf').classList.remove('show');
     refreshYearFilter(); renderList();
+
+    // Sync contacts géocodés en arrière-plan
+    var newFactures = factures.slice(-added);
+    var contactsCreated = 0, geocoded = 0;
+    Promise.all(newFactures.map(function(fc){
+      return syncContactFromFacture(fc).then(function(r){
+        if(r){ if(r.contact) contactsCreated++; if(r.geocoded) geocoded++; }
+      });
+    })).then(function(){
+      console.log('Sync contacts :', contactsCreated, 'créés/MAJ,', geocoded, 'géocodés');
+    });
     alert(added + ' facture' + (added>1?'s':'') + ' importée' + (added>1?'s':'') + ' depuis PDF.');
   });
 
@@ -1118,6 +1247,23 @@
     var f = factures.find(function(x){ return x.numero === num; });
     if(f) select(f.id);
   }
+
+  // ── SYNC CONTACTS RÉTROACTIF ──
+  document.getElementById('btn-sync-contacts').addEventListener('click', async function(){
+    if(factures.length === 0){ alert('Aucune facture à synchroniser.'); return; }
+    var btn = this;
+    var originalLabel = btn.textContent;
+    var created = 0, geocodedN = 0;
+    for(var i = 0; i < factures.length; i++){
+      btn.textContent = 'Sync ' + (i+1) + '/' + factures.length;
+      try {
+        var r = await syncContactFromFacture(factures[i]);
+        if(r){ if(r.contact) created++; if(r.geocoded) geocodedN++; }
+      } catch(e){ console.error('Sync échec', e); }
+    }
+    btn.textContent = originalLabel;
+    alert(created + ' contact' + (created>1?'s':'') + ' créé/MAJ, ' + geocodedN + ' géocodé' + (geocodedN>1?'s':'') + ' avec succès.');
+  });
 
   // ── PURGE BASE DE TEST ──
   function purgeTestFactures(){
@@ -1131,6 +1277,9 @@
   // ── INIT ──
   buildImportDropdown();
   refreshYearFilter();
+  // Filtre URL ?client_siret=
+  var clientSiretParam = (window.location.search.match(/[?&]client_siret=([^&]+)/) || [])[1];
+  if(clientSiretParam){ applyClientFilter(decodeURIComponent(clientSiretParam)); }
   renderList();
   maybeHighlight();
 

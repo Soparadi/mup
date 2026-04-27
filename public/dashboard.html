@@ -546,7 +546,7 @@
         <div><div class="card-title">Facturation 2026</div></div>
         <span class="card-action">Tout voir <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);padding:18px 22px;gap:14px;border-bottom:1px solid var(--border);">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);padding:18px 22px;gap:14px;">
         <div>
           <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">CA réalisé</div>
           <div id="fact-kpi-realized" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:#1D9E75;margin-top:4px;font-family:var(--font);">0 €</div>
@@ -563,10 +563,6 @@
           <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">Ticket moyen</div>
           <div id="fact-kpi-avg" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:var(--text);margin-top:4px;font-family:var(--font);">0 €</div>
         </div>
-      </div>
-      <div style="padding:14px 22px;">
-        <div style="font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">Dernières factures</div>
-        <div id="fact-recent-list"></div>
       </div>
     </div>
 
@@ -1137,15 +1133,11 @@ function closeSidebar(){
 })();
 </script>
 <script>
-// Facturation 2026 — KPIs + dernières factures depuis mup_factures
+// Facturation 2026 — KPIs depuis mup_factures
 (function(){
   var factures = [];
   try { factures = JSON.parse(localStorage.getItem('mup_factures') || '[]'); } catch(e){}
   function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0); }
-  function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  var STATUT_BG = { 'payée':'rgba(29,158,117,.12)', 'payee':'rgba(29,158,117,.12)', 'en_attente':'rgba(245,158,11,.14)', 'en_retard':'rgba(204,0,0,.12)' };
-  var STATUT_FG = { 'payée':'#1D9E75', 'payee':'#1D9E75', 'en_attente':'#854F0B', 'en_retard':'#A32D2D' };
-  var STATUT_LBL = { 'payée':'Payée', 'payee':'Payée', 'en_attente':'En attente', 'en_retard':'En retard' };
 
   var f2026 = factures.filter(function(f){ return f.date_emission && new Date(f.date_emission).getFullYear() === 2026; });
   var realized = f2026.filter(function(f){ return f.statut === 'payée' || f.statut === 'payee'; }).reduce(function(s,f){ return s + (parseFloat(f.total_ttc)||0); }, 0);
@@ -1157,27 +1149,6 @@ function closeSidebar(){
   document.getElementById('fact-kpi-pending').textContent = fmtEur(pending);
   document.getElementById('fact-kpi-count').textContent = String(f2026.length);
   document.getElementById('fact-kpi-avg').textContent = fmtEur(avg);
-
-  var recent = factures.slice().sort(function(a,b){ return (b.date_emission||'').localeCompare(a.date_emission||''); }).slice(0,5);
-  var listEl = document.getElementById('fact-recent-list');
-  if(recent.length === 0){
-    listEl.innerHTML = '<div style="color:var(--muted2);font-size:12px;font-style:italic;padding:8px 0;">Aucune facture pour le moment.</div>';
-  } else {
-    listEl.innerHTML = recent.map(function(f){
-      var statutKey = f.statut || 'en_attente';
-      var bg = STATUT_BG[statutKey] || 'var(--surface2)';
-      var fg = STATUT_FG[statutKey] || 'var(--muted)';
-      var lbl = STATUT_LBL[statutKey] || statutKey;
-      var dateLbl = f.date_emission ? new Date(f.date_emission).toLocaleDateString('fr-FR') : '—';
-      return '<div style="display:grid;grid-template-columns:90px 1fr 90px 100px 90px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;cursor:pointer;" onclick="window.location.href=\'/factures?highlight='+encodeURIComponent(f.numero||'')+'\'">'
-        +'<span style="font-family:var(--mono);font-size:11px;font-weight:700;">'+esc(f.numero||'—')+'</span>'
-        +'<span style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc((f.client && f.client.nom)||'—')+'</span>'
-        +'<span style="font-family:var(--mono);font-size:11px;color:var(--muted);">'+dateLbl+'</span>'
-        +'<span style="font-family:var(--mono);font-weight:800;text-align:right;">'+fmtEur(f.total_ttc||0)+'</span>'
-        +'<span style="background:'+bg+';color:'+fg+';font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;padding:3px 7px;border-radius:4px;text-align:center;justify-self:end;">'+esc(lbl)+'</span>'
-        +'</div>';
-    }).join('');
-  }
 })();
 </script>
 <script>

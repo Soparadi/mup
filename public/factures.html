@@ -466,24 +466,35 @@
 
     // ADRESSE CLIENT (2ème adresse trouvée = client, 1ère = émetteur EI)
     var EMETTEUR_SIRET = '45338845600031';
-    var addrPattern = /(\d+\s+(?:rue|avenue|av|boulevard|bd|place|pl|chemin|impasse|allée|cours|quai|route|voie)\.?\s+[^\d]{2,40}?\s+\d{5}\s+[A-Za-zÀ-ÿ\-]+(?:\s+[A-Za-zÀ-ÿ\-]+)?)/gi;
+    var addrPattern = /(\d+\s+(?:rue|avenue|av|boulevard|bd|place|pl|chemin|impasse|allée|cours|quai|route|voie)\.?\s+[A-Za-zÀ-ÿ\-' ]{2,40}?\s+(\d{5})\s+([A-Za-zÀ-ÿ\-]+(?:[\s\-][A-Za-zÀ-ÿ\-]+){0,3}))/gi;
     var addresses = [];
     var am;
     while((am = addrPattern.exec(text)) !== null){ addresses.push(am[1].trim()); }
     if(addresses.length >= 2){
-      result.client_adresse = addresses[1];
+      result.client_adresse = cleanAdresse(addresses[1]);
       result.confidence.client_adresse = 1.0;
     } else if(addresses.length === 1){
       var emetteurIdx = text.indexOf(EMETTEUR_SIRET);
       var addrIdx = text.indexOf(addresses[0]);
       var isEmetteur = emetteurIdx > -1 && addrIdx > -1 && addrIdx < emetteurIdx;
       if(!isEmetteur){
-        result.client_adresse = addresses[0];
+        result.client_adresse = cleanAdresse(addresses[0]);
         result.confidence.client_adresse = 1.0;
       }
     }
 
     return result;
+  }
+
+  function cleanAdresse(adresse){
+    if(!adresse) return adresse;
+    return String(adresse)
+      .replace(/\s*SIRET.*$/i, '')
+      .replace(/\s*SIREN.*$/i, '')
+      .replace(/\s*TVA.*$/i, '')
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   }
 
   async function parsePDF(file){
@@ -585,20 +596,24 @@
     if(!facture.client || !facture.client.siret) return null;
     var contacts = loadJSON('mup_contacts', []);
     if(!Array.isArray(contacts)) contacts = [];
-    var contact = contacts.find(function(c){ return c.siret === facture.client.siret; });
+    var allFactures = loadJSON('mup_factures', []);
+    if(!Array.isArray(allFactures)) allFactures = [];
+    var siret = facture.client.siret;
+    var contactIdx = contacts.findIndex(function(c){ return c.siret === siret; });
     var geocoded = false;
-    if(!contact){
+    var contact;
+    if(contactIdx === -1){
       contact = {
         id: 'contact_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
         nom: facture.client.nom || '—',
-        siret: facture.client.siret,
+        siret: siret,
         siren: facture.client.siren || '',
-        adresse: facture.client.adresse || '',
+        adresse: cleanAdresse(facture.client.adresse || ''),
         latitude: null, longitude: null,
         entity_origine: facture.entity_origine || 'mup',
         source: 'facture_import',
-        factures_ids: [facture.id],
-        ca_total: facture.total_ttc || 0,
+        factures_ids: [],
+        ca_total: 0,
         created_at: new Date().toISOString()
       };
       if(contact.adresse){
@@ -606,20 +621,52 @@
         if(geo){ contact.latitude = geo.latitude; contact.longitude = geo.longitude; contact.adresse_normalisee = geo.label; geocoded = true; }
       }
       contacts.push(contact);
+      contactIdx = contacts.length - 1;
     } else {
-      if(!contact.factures_ids) contact.factures_ids = [];
-      if(contact.factures_ids.indexOf(facture.id) === -1){
-        contact.factures_ids.push(facture.id);
-        contact.ca_total = (contact.ca_total || 0) + (facture.total_ttc || 0);
-      }
-      if(!contact.adresse && facture.client.adresse) contact.adresse = facture.client.adresse;
+      contact = contacts[contactIdx];
+      if(!contact.adresse && facture.client.adresse) contact.adresse = cleanAdresse(facture.client.adresse);
+      else if(contact.adresse) contact.adresse = cleanAdresse(contact.adresse);
       if(!contact.latitude && contact.adresse){
         var geo2 = await geocodeAdresse(contact.adresse);
         if(geo2){ contact.latitude = geo2.latitude; contact.longitude = geo2.longitude; contact.adresse_normalisee = geo2.label; geocoded = true; }
       }
     }
+    var clientFactures = allFactures.filter(function(f){ return f.client && f.client.siret === siret; });
+    contact.factures_ids = clientFactures.map(function(f){ return f.id; });
+    contact.ca_total = clientFactures.reduce(function(sum, f){ return sum + (f.total_ttc || 0); }, 0);
+    contact.updated_at = new Date().toISOString();
+    contacts[contactIdx] = contact;
     saveJSON('mup_contacts', contacts);
     return { contact: contact, geocoded: geocoded };
+  }
+
+  async function migrateContactsExistants(){
+    var contacts = loadJSON('mup_contacts', []);
+    if(!Array.isArray(contacts) || contacts.length === 0) return;
+    var allFactures = loadJSON('mup_factures', []);
+    if(!Array.isArray(allFactures)) allFactures = [];
+    var changed = false;
+    for(var i = 0; i < contacts.length; i++){
+      var c = contacts[i];
+      if(!c || !c.siret) continue;
+      var cleaned = cleanAdresse(c.adresse || '');
+      if(cleaned !== c.adresse){ c.adresse = cleaned; changed = true; }
+      var clientFactures = allFactures.filter(function(f){ return f.client && f.client.siret === c.siret; });
+      var newIds = clientFactures.map(function(f){ return f.id; });
+      var newCa = clientFactures.reduce(function(sum, f){ return sum + (f.total_ttc || 0); }, 0);
+      var oldIds = Array.isArray(c.factures_ids) ? c.factures_ids : [];
+      if(newIds.length !== oldIds.length || newIds.some(function(id, idx){ return id !== oldIds[idx]; }) || (c.ca_total || 0) !== newCa){
+        c.factures_ids = newIds;
+        c.ca_total = newCa;
+        c.updated_at = new Date().toISOString();
+        changed = true;
+      }
+      contacts[i] = c;
+    }
+    if(changed){
+      saveJSON('mup_contacts', contacts);
+      console.log('migrateContactsExistants : contacts réparés');
+    }
   }
 
   function generateNextNumero(){
@@ -1185,7 +1232,7 @@
     btn.disabled = false; btn.style.opacity = 1; btn.style.cursor = 'pointer';
     btn._candidates = candidates;
   }
-  document.getElementById('pdf-confirm').addEventListener('click', function(){
+  document.getElementById('pdf-confirm').addEventListener('click', async function(){
     var cands = this._candidates || [];
     var existingNums = {};
     factures.forEach(function(f){ existingNums[f.numero] = true; });
@@ -1226,16 +1273,16 @@
     document.getElementById('modal-import-pdf').classList.remove('show');
     refreshYearFilter(); renderList();
 
-    // Sync contacts géocodés en arrière-plan
+    // Sync contacts géocodés (séquentiel pour éviter race conditions)
     var newFactures = factures.slice(-added);
     var contactsCreated = 0, geocoded = 0;
-    Promise.all(newFactures.map(function(fc){
-      return syncContactFromFacture(fc).then(function(r){
+    for(var i = 0; i < newFactures.length; i++){
+      try {
+        var r = await syncContactFromFacture(newFactures[i]);
         if(r){ if(r.contact) contactsCreated++; if(r.geocoded) geocoded++; }
-      });
-    })).then(function(){
-      console.log('Sync contacts :', contactsCreated, 'créés/MAJ,', geocoded, 'géocodés');
-    });
+      } catch(e){ console.error('Sync échec', e); }
+    }
+    console.log('Sync contacts :', contactsCreated, 'créés/MAJ,', geocoded, 'géocodés');
     alert(added + ' facture' + (added>1?'s':'') + ' importée' + (added>1?'s':'') + ' depuis PDF.');
   });
 
@@ -1277,6 +1324,8 @@
   // ── INIT ──
   buildImportDropdown();
   refreshYearFilter();
+  // Migration auto contacts existants (clean adresse + recalc factures_ids/ca_total)
+  migrateContactsExistants().catch(function(e){ console.error('migrateContactsExistants', e); });
   // Filtre URL ?client_siret=
   var clientSiretParam = (window.location.search.match(/[?&]client_siret=([^&]+)/) || [])[1];
   if(clientSiretParam){ applyClientFilter(decodeURIComponent(clientSiretParam)); }

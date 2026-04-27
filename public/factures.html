@@ -176,8 +176,8 @@
     </div>
   </div>
 
-  <div id="test-banner" style="display:none;background:rgba(245,158,11,0.14);border-bottom:1px solid #F59E0B;padding:10px 28px;font-size:12.5px;color:#854F0B;display:none;align-items:center;justify-content:space-between;gap:12px;">
-    <span>Factures de test détectées.</span>
+  <div id="test-banner" style="display:none;background:rgba(245,158,11,0.14);border-bottom:1px solid #F59E0B;padding:10px 28px;font-size:12.5px;color:#854F0B;align-items:center;justify-content:space-between;gap:12px;">
+    <span id="test-banner-label">Factures de test détectées.</span>
     <button id="test-banner-purge" style="padding:6px 14px;border:none;background:#854F0B;color:#fff;border-radius:7px;font-family:var(--font);font-weight:700;font-size:11px;cursor:pointer;letter-spacing:.4px;">Vider la base</button>
   </div>
 
@@ -604,10 +604,22 @@
     var phantom = factures.filter(function(f){
       return !f.total_ttc || f.total_ttc === 0 || (f.numero && TEST_NUMS.test(f.numero));
     }).length;
+    var noPdf = factures.filter(function(f){ return !f.pdf_source; }).length;
     var purgeBtn = document.getElementById('btn-purge');
     if(purgeBtn) purgeBtn.style.display = phantom > 0 ? 'inline-flex' : 'none';
     var banner = document.getElementById('test-banner');
-    if(banner) banner.style.display = phantom > 0 ? 'flex' : 'none';
+    var bannerLabel = document.getElementById('test-banner-label');
+    if(banner){
+      if(phantom > 0){
+        if(bannerLabel) bannerLabel.textContent = 'Factures de test détectées.';
+        banner.style.display = 'flex';
+      } else if(noPdf > 0 && factures.length > 0){
+        if(bannerLabel) bannerLabel.textContent = noPdf + ' facture' + (noPdf>1?'s':'') + ' sans PDF original. Ré-importer pour stocker les PDF.';
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
+      }
+    }
     var box = document.getElementById('invoice-list');
     if(list.length === 0){
       box.innerHTML = '<div class="empty-state"><strong>Aucune facture</strong>Crée ta première facture ou importe un fichier.</div>';
@@ -639,6 +651,10 @@
     var f = factures.find(function(x){ return x.id === state.currentId; });
     var box = document.getElementById('invoice-preview');
     if(!f){ box.innerHTML = '<div class="empty-state"><strong>Aucune facture sélectionnée</strong>Cliquer sur une facture dans la liste.</div>'; return; }
+    if(f.pdf_source){
+      box.innerHTML = '<iframe src="'+f.pdf_source+'" style="width:100%;height:100%;min-height:80vh;border:none;border-radius:8px;background:#fff;"></iframe>';
+      return;
+    }
     var emetteur = f.emetteur || {};
     var client = f.client || {};
     var lignes = f.lignes || [];
@@ -684,6 +700,11 @@
     html += '<div class="field"><label>Date paiement</label><input type="date" id="e-date-paiement" value="'+esc(f.date_paiement||'')+'" /></div>';
     html += '</div>';
     html += '</div>';
+    if(f.pdf_source){
+      html += '<button id="e-download" style="width:100%;padding:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;cursor:pointer;font-family:var(--font);font-weight:600;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;margin-bottom:10px;">'
+        +'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+        +'Télécharger le PDF original</button>';
+    }
     html += '<div class="edit-actions">';
     html += '<button class="secondary" id="e-cancel">Fermer</button>';
     html += '<button class="primary" id="e-save">Enregistrer</button>';
@@ -691,6 +712,15 @@
       + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>';
     html += '</div>';
     box.innerHTML = html;
+
+    if(f.pdf_source){
+      document.getElementById('e-download').onclick = function(){
+        var a = document.createElement('a');
+        a.href = f.pdf_source;
+        a.download = (f.filename || ('facture-' + (f.numero||f.id)) + '.pdf');
+        document.body.appendChild(a); a.click(); a.remove();
+      };
+    }
 
     document.getElementById('e-cancel').onclick = function(){ state.currentId = null; renderList(); renderPreview(); renderEdit(); };
     document.getElementById('e-save').onclick = function(){
@@ -1069,6 +1099,7 @@
         entity_origine: c.entity_origine || 'mup',
         devis_origine_id: null, plateforme_agreee_destinataire:null, format_export:'pdf_simple',
         pdf_source: c.pdf_source || null,
+        filename: c.filename || null,
         created_at: nowIso, updated_at: nowIso
       };
       factures.push(f); existingNums[f.numero] = true; added++;

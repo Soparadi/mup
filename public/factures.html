@@ -200,6 +200,7 @@
       </select>
     </div>
     <span style="margin-left:auto;font-size:11px;color:var(--muted);font-family:var(--mono);" id="count-label">0 facture</span>
+    <button id="btn-purge" style="display:none;padding:6px 11px;border:1px solid #A32D2D;background:#fff;color:#A32D2D;border-radius:7px;font-family:var(--font);font-weight:700;font-size:10.5px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;">Vider la base de test</button>
   </div>
 
   <div class="layout-3panes">
@@ -366,228 +367,145 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 (function(){
   if(typeof pdfjsLib !== 'undefined'){ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js'; }
 
-  // ── ÉMETTEUR EI (utilisateur de MUP) ──
-  var EMETTEUR_EI_SIRET = '45338845600031';
-
-  // ── BIBLIOTHÈQUE DE PATTERNS REGEX ──
-  var PATTERNS = {
-    numero: [
-      /Facture\s*n°?\s*:?\s*([A-Z0-9\-\/]+)/i,
-      /N°\s*facture\s*:?\s*([A-Z0-9\-\/]+)/i,
-      /Invoice\s*#?\s*:?\s*([A-Z0-9\-\/]+)/i,
-      /Référence\s*:?\s*([A-Z0-9\-\/]+)/i,
-      /([0-9]{1,4}-[0-9]{6})\b/
-    ],
-    date_emission: [
-      /Date\s*d['']émission\s*:?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
-      /Émis\s*le\s*:?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
-      /Date\s*facture\s*:?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
-      /Date\s*:?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i
-    ],
-    total_ttc: [
-      /TOTAL\s*TTC\s*:?\s*([\d\s,\.]+)\s*€?/i,
-      /Net\s*à\s*payer\s*:?\s*([\d\s,\.]+)\s*€?/i,
-      /Montant\s*total\s*:?\s*([\d\s,\.]+)\s*€?/i,
-      /TOTAL\s*en\s*€\s*:?\s*([\d\s,\.]+)/i,
-      /TOTAL\s*:?\s*([\d\s,\.]+)\s*€/i
-    ],
-    total_ht: [
-      /TOTAL\s*HT\s*:?\s*([\d\s,\.]+)\s*€?/i,
-      /Sous[\-\s]total\s*HT\s*:?\s*([\d\s,\.]+)\s*€?/i,
-      /Montant\s*HT\s*:?\s*([\d\s,\.]+)\s*€?/i
-    ],
-    tva_non_applicable: [
-      /TVA\s*non\s*applicable/i,
-      /art\.?\s*293\s*B/i,
-      /Franchise\s*en\s*base/i
-    ],
-    taux_tva: [
-      /TVA\s*(?:à\s*)?(\d{1,2})\s*%/i,
-      /(\d{1,2})\s*%\s*TVA/i
-    ],
-    siret: [
-      /SIRET\s*:?\s*([\d\s]{14,17})/i,
-      /N°?\s*SIRET\s*:?\s*([\d\s]{14,17})/i
-    ],
-    siren: [
-      /SIREN\s*:?\s*([\d\s]{9,11})/i,
-      /N°?\s*SIREN\s*:?\s*([\d\s]{9,11})/i
-    ],
-    tva_intra: [
-      /TVA\s*intra(?:communautaire)?\s*:?\s*(FR\d{11})/i,
-      /N°?\s*TVA\s*:?\s*(FR\d{11})/i
-    ],
-    designation: [
-      /Désignation[\s\S]{0,100}?\n([^\n]{10,200})/i,
-      /Description[\s\S]{0,100}?\n([^\n]{10,200})/i,
-      /Prestation[\s:]+([^\n]{5,200})/i
-    ]
-  };
-
-  // ── NORMALISATION ──
-  function normalizeDate(str){
-    if(!str) return null;
-    var m = String(str).match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
-    if(!m) return null;
-    var dd = m[1], mm = m[2], yy = m[3];
-    if(yy.length === 2) yy = '20' + yy;
-    return yy + '-' + (mm.length===1?'0'+mm:mm) + '-' + (dd.length===1?'0'+dd:dd);
-  }
-  function normalizeAmount(str){
-    if(!str) return 0;
-    var s = String(str).replace(/[€EUR\s]/gi, '').trim();
-    // "2.834,53" ou "2 834,53" → "2834.53"
-    if(/,\d{1,2}$/.test(s)){ s = s.replace(/\./g, '').replace(',', '.'); }
-    else if(/\.\d{1,2}$/.test(s)){ s = s.replace(/\s/g,'').replace(/(?:[,])(?=\d{3})/g,''); }
-    var n = parseFloat(s);
-    return isNaN(n) ? 0 : n;
-  }
-  function normalizeSiret(str){
-    if(!str) return '';
-    return String(str).replace(/[\s\-]/g, '');
+  // ── PARSER PDF (regex validés sur 4 factures EI Benoit Fouquet) ──
+  function detectEntity(clientNom){
+    if(!clientNom) return 'mup';
+    var nom = clientNom.toLowerCase();
+    if(nom.indexOf('neoxp') !== -1 || nom.indexOf('neox') !== -1) return 'neox';
+    return 'mup';
   }
 
-  // ── APPLICATION DES PATTERNS ──
-  function applyPattern(text, regexList){
-    for(var i = 0; i < regexList.length; i++){
-      var m = text.match(regexList[i]);
-      if(m && m[1]){
-        return { value: m[1].trim(), confidence: i === 0 ? 1.0 : 0.6 };
-      }
+  function extractFields(text){
+    var result = {
+      numero: null, numero_seq: null,
+      date_emission: null, date_prestation: null,
+      client_nom: null, client_siret: null, client_siren: null,
+      total_ht: null, total_ttc: null,
+      tva_applicable: true, mention_tva: null,
+      designation: null,
+      confidence: {}
+    };
+
+    // NUMÉRO
+    var numMatch = text.match(/Facture\s+n°\s*:\s*([\d\-]+)/i);
+    if(numMatch){
+      result.numero = numMatch[1].trim();
+      result.numero_seq = parseInt(result.numero.split('-')[0], 10);
+      result.confidence.numero = 1.0;
     }
-    return { value: '', confidence: 0 };
-  }
-  function applyFlagPattern(text, regexList){
-    for(var i = 0; i < regexList.length; i++){
-      if(regexList[i].test(text)) return { value: true, confidence: i === 0 ? 1.0 : 0.6 };
+
+    // CLIENT NOM
+    var clientMatch = text.match(/Entrepreneur\s+individuel\s+(\S+)/i);
+    if(clientMatch){
+      result.client_nom = clientMatch[1].trim();
+      result.confidence.client_nom = 1.0;
     }
-    return { value: false, confidence: 0 };
+
+    // CLIENT SIRET (2ème SIRET du document = client, le 1er = émetteur)
+    var siretRe = /SIRET\s*:?\s*([\d\s]{14,20})/gi;
+    var siretMatches = [];
+    var sm;
+    while((sm = siretRe.exec(text)) !== null){ siretMatches.push(sm[1]); }
+    if(siretMatches.length >= 2){
+      result.client_siret = siretMatches[1].replace(/\s/g, '');
+      result.client_siren = result.client_siret.substring(0, 9);
+      result.confidence.client_siret = 1.0;
+      result.confidence.client_siren = 1.0;
+    }
+
+    // TOTAL
+    var totalMatch = text.match(/TOTAL\s+en\s+€\s+([\d.,]+)/i);
+    if(totalMatch){
+      var amount = parseFloat(totalMatch[1].replace(',', '.'));
+      result.total_ttc = amount;
+      result.total_ht = amount;
+      result.confidence.total_ttc = 1.0;
+      result.confidence.total_ht = 1.0;
+    }
+
+    // TVA NON APPLICABLE
+    if(/TVA\s+non\s+applicable/i.test(text)){
+      result.tva_applicable = false;
+      result.mention_tva = 'TVA non applicable, art. 293 B du CGI';
+      result.confidence.tva = 1.0;
+    }
+
+    // DATE PRESTATION / ÉMISSION (ligne du tableau)
+    var dateMatch = text.match(/\n\S+\s+(\d{2}\/\d{2}\/\d{4})\s+\d+\s+[\d.,]+\s+[\d.,]+/);
+    if(dateMatch){
+      var parts = dateMatch[1].split('/');
+      var iso = parts[2] + '-' + parts[1] + '-' + parts[0];
+      result.date_emission = iso;
+      result.date_prestation = iso;
+      result.confidence.date_emission = 1.0;
+      result.confidence.date_prestation = 1.0;
+    }
+
+    // DÉSIGNATION
+    var moisMatch = text.match(/\n([A-ZÉÈÀ]+ \d{4})\n/);
+    if(moisMatch && result.client_nom){
+      result.designation = 'Prestation ' + result.client_nom + ' ' + moisMatch[1].trim();
+      result.confidence.designation = 1.0;
+    }
+
+    return result;
   }
 
-  // ── DÉTECTION CLIENT (zone destinataire vs émetteur) ──
-  function detectClientZone(items, pageWidth){
-    // items = [{ str, transform: [a,b,c,d,x,y] }]
-    // Zone destinataire = bloc qui ne contient pas EMETTEUR_EI_SIRET
-    var blocks = []; // groupes de lignes proches
-    var sorted = items.slice().sort(function(a,b){ return b.transform[5] - a.transform[5]; }); // top to bottom
-    var currentBlock = []; var lastY = null;
-    sorted.forEach(function(it){
-      var y = it.transform[5];
-      if(lastY === null || Math.abs(y - lastY) < 30){ currentBlock.push(it); }
-      else { if(currentBlock.length) blocks.push(currentBlock); currentBlock = [it]; }
-      lastY = y;
-    });
-    if(currentBlock.length) blocks.push(currentBlock);
-    // Garder le tiers haut
-    var topThird = blocks.slice(0, Math.max(2, Math.ceil(blocks.length / 3)));
-    var topText = topThird.map(function(b){ return b.map(function(it){ return it.str; }).join(' '); }).join('\n');
-    // Le bloc client = celui qui n'a pas EMETTEUR_EI_SIRET
-    var byEmetteur = topText.indexOf(EMETTEUR_EI_SIRET) !== -1;
-    return { topText: topText, hasEmetteur: byEmetteur };
-  }
-
-  // ── EXTRACTION TEXTE PDF ──
-  async function extractPDFTextFull(file){
-    if(typeof pdfjsLib === 'undefined') return { text:'', items:[], pageWidth:0 };
+  async function parsePDF(file){
+    if(typeof pdfjsLib === 'undefined') throw new Error('PDF.js non chargé');
     var buf = await file.arrayBuffer();
-    var doc = await pdfjsLib.getDocument({ data: buf }).promise;
+    var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     var fullText = '';
-    var allItems = [];
-    var pageWidth = 0;
-    for(var i = 1; i <= doc.numPages; i++){
-      var page = await doc.getPage(i);
-      if(i === 1) pageWidth = page.view[2];
+    for(var i = 1; i <= pdf.numPages; i++){
+      var page = await pdf.getPage(i);
       var content = await page.getTextContent();
-      content.items.forEach(function(it){
-        if(i === 1) allItems.push(it);
-        fullText += it.str + ' ';
-      });
+      var items = content.items;
+      var lastY = null;
+      for(var j = 0; j < items.length; j++){
+        var item = items[j];
+        if(lastY !== null && Math.abs(item.transform[5] - lastY) > 2){
+          fullText += '\n';
+        }
+        fullText += item.str + ' ';
+        lastY = item.transform[5];
+      }
       fullText += '\n';
     }
-    return { text: fullText, items: allItems, pageWidth: pageWidth, doc: doc };
-  }
-
-  // ── OCR FALLBACK ──
-  async function ocrFallback(doc, onProgress){
-    if(typeof Tesseract === 'undefined' || !doc) return '';
-    var fullText = '';
-    for(var i = 1; i <= doc.numPages; i++){
-      var page = await doc.getPage(i);
-      var viewport = page.getViewport({ scale: 2.0 });
-      var canvas = document.createElement('canvas');
-      canvas.width = viewport.width; canvas.height = viewport.height;
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
-      var res = await Tesseract.recognize(canvas, 'fra', { logger: function(m){ if(onProgress) onProgress(m, i, doc.numPages); } });
-      fullText += res.data.text + '\n';
+    if(!fullText || fullText.replace(/\s/g,'').length < 50){
+      throw new Error('PDF non lisible, saisie manuelle requise');
     }
-    return fullText;
-  }
-
-  // ── PARSING COMPLET (cascade) ──
-  async function parsePDFComplete(file, onProgress){
-    var extracted = await extractPDFTextFull(file);
-    var text = extracted.text;
-    var ocrUsed = false;
-    if(!text || text.replace(/\s/g,'').length < 50){
-      if(onProgress) onProgress({ status:'ocr_start' });
-      text = await ocrFallback(extracted.doc, onProgress);
-      ocrUsed = true;
-    }
-    // Application patterns
-    var f = {
-      numero:           applyPattern(text, PATTERNS.numero),
-      date_emission:    applyPattern(text, PATTERNS.date_emission),
-      total_ttc:        applyPattern(text, PATTERNS.total_ttc),
-      total_ht:         applyPattern(text, PATTERNS.total_ht),
-      tva_non:          applyFlagPattern(text, PATTERNS.tva_non_applicable),
-      taux_tva:         applyPattern(text, PATTERNS.taux_tva),
-      siret:            applyPattern(text, PATTERNS.siret),
-      siren:            applyPattern(text, PATTERNS.siren),
-      tva_intra:        applyPattern(text, PATTERNS.tva_intra),
-      designation:      applyPattern(text, PATTERNS.designation)
-    };
-    // Détection client
-    var clientNom = '';
-    if(extracted.items.length){
-      var zone = detectClientZone(extracted.items, extracted.pageWidth);
-      // Heuristique simple : prendre 1ère ligne en majuscules dans le tiers haut
-      var lines = zone.topText.split(/\n/).map(function(l){ return l.trim(); }).filter(Boolean);
-      var clientLine = lines.find(function(l){
-        return l.length > 3 && l.length < 80 && /[A-Z]{3,}/.test(l) && l.indexOf(EMETTEUR_EI_SIRET) === -1 && !/SIRET|TVA|FACTURE|DATE/i.test(l);
-      });
-      if(clientLine) clientNom = clientLine;
-    }
+    var fields = extractFields(fullText);
+    var entity = detectEntity(fields.client_nom);
     return {
-      numero: f.numero.value,
-      numero_conf: f.numero.confidence,
-      date_emission: normalizeDate(f.date_emission.value),
-      date_emission_conf: f.date_emission.confidence,
-      total_ttc: normalizeAmount(f.total_ttc.value),
-      total_ttc_conf: f.total_ttc.confidence,
-      total_ht: normalizeAmount(f.total_ht.value),
-      total_ht_conf: f.total_ht.confidence,
-      tva_applicable: !f.tva_non.value,
-      tva_applicable_conf: f.tva_non.confidence || (f.taux_tva.confidence ? 1 : 0),
-      taux_tva: f.taux_tva.value ? parseFloat(f.taux_tva.value) : 0,
-      taux_tva_conf: f.taux_tva.confidence,
-      mention_tva: f.tva_non.value ? 'TVA non applicable, art. 293 B du CGI' : '',
-      client_siret: normalizeSiret(f.siret.value),
-      client_siret_conf: f.siret.confidence,
-      client_siren: normalizeSiret(f.siren.value),
-      client_siren_conf: f.siren.confidence,
-      client_nom: clientNom,
-      client_nom_conf: clientNom ? 0.6 : 0,
-      designation: f.designation.value,
-      designation_conf: f.designation.confidence,
-      ocr_used: ocrUsed,
-      _rawText: text,
+      numero: fields.numero || '',
+      numero_conf: fields.confidence.numero || 0,
+      date_emission: fields.date_emission || todayISO(),
+      date_emission_conf: fields.confidence.date_emission || 0,
+      total_ttc: fields.total_ttc || 0,
+      total_ttc_conf: fields.confidence.total_ttc || 0,
+      total_ht: fields.total_ht || 0,
+      total_ht_conf: fields.confidence.total_ht || 0,
+      tva_applicable: fields.tva_applicable,
+      mention_tva: fields.mention_tva || '',
+      taux_tva: 0,
+      taux_tva_conf: fields.confidence.tva || 0,
+      client_nom: fields.client_nom || '',
+      client_nom_conf: fields.confidence.client_nom || 0,
+      client_siret: fields.client_siret || '',
+      client_siret_conf: fields.confidence.client_siret || 0,
+      client_siren: fields.client_siren || '',
+      client_siren_conf: fields.confidence.client_siren || 0,
+      designation: fields.designation || '',
+      designation_conf: fields.confidence.designation || 0,
+      entity_origine: entity,
+      statut: 'en_attente',
       pdf_source: null,
-      filename: file.name
+      filename: file.name,
+      _rawText: fullText
     };
   }
 
@@ -675,6 +593,9 @@
   function renderList(){
     var list = applyFilters().sort(function(a,b){ return (b.date_emission||'').localeCompare(a.date_emission||''); });
     document.getElementById('count-label').textContent = list.length + ' facture' + (list.length>1?'s':'');
+    var phantom = factures.filter(function(f){ return !f.total_ttc || f.total_ttc === 0; }).length;
+    var purgeBtn = document.getElementById('btn-purge');
+    if(purgeBtn) purgeBtn.style.display = phantom > 0 ? 'inline-flex' : 'none';
     var box = document.getElementById('invoice-list');
     if(list.length === 0){
       box.innerHTML = '<div class="empty-state"><strong>Aucune facture</strong>Crée ta première facture ou importe un fichier.</div>';
@@ -1020,19 +941,12 @@
       var f = files[i];
       box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-top:14px">Analyse '+(i+1)+'/'+files.length+' — '+esc(f.name)+'…</div>';
       try {
-        var parsed = await parsePDFComplete(f, function(m, page, total){
-          if(m && m.status === 'ocr_start'){
-            box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-top:14px">PDF scanné détecté, lancement de la reconnaissance OCR (peut prendre 30s)…</div>';
-          } else if(m && m.status === 'recognizing text' && page){
-            var pct = Math.round((m.progress||0)*100);
-            box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-top:14px">OCR page '+page+'/'+total+' — '+pct+'%</div>';
-          }
-        });
+        var parsed = await parsePDF(f);
         var b64 = await fileToBase64(f);
         parsed.pdf_source = b64;
         candidates.push(parsed);
       } catch(err){
-        candidates.push({ filename: f.name, error: err.message, numero:'', date_emission:todayISO(), total_ttc:0, total_ht:0, client_nom:'', numero_conf:0, date_emission_conf:0, total_ttc_conf:0, total_ht_conf:0, client_nom_conf:0, designation_conf:0, designation:'', tva_applicable:false, taux_tva:0, mention_tva:'TVA non applicable, art. 293 B du CGI', client_siret:'', client_siren:'', client_siret_conf:0, client_siren_conf:0 });
+        candidates.push({ filename: f.name, error: err.message, numero:'', date_emission:todayISO(), total_ttc:0, total_ht:0, client_nom:'', numero_conf:0, date_emission_conf:0, total_ttc_conf:0, total_ht_conf:0, client_nom_conf:0, designation_conf:0, designation:'', tva_applicable:false, taux_tva:0, mention_tva:'TVA non applicable, art. 293 B du CGI', client_siret:'', client_siren:'', client_siret_conf:0, client_siren_conf:0, entity_origine:'mup', statut:'en_attente' });
       }
     }
     renderPDFPreview(candidates);
@@ -1045,7 +959,7 @@
     });
   }
   function confDot(score){
-    var color = score >= 0.9 ? '#1D8348' : score >= 0.4 ? '#F59E0B' : '#CC0000';
+    var color = score >= 1.0 ? '#1D9E75' : score > 0 ? '#EF9F27' : '#A32D2D';
     return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+color+';margin-left:5px;vertical-align:middle;" title="Confiance '+Math.round(score*100)+'%"></span>';
   }
   function fieldRow(label, key, value, conf, type, idx){
@@ -1062,7 +976,7 @@
     candidates.forEach(function(c, i){
       html += '<div style="border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:10px;">';
       html += '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-family:var(--mono);display:flex;justify-content:space-between;align-items:center;">'
-            + '<span>'+esc(c.filename)+(c.ocr_used?' · OCR':'')+'</span>'
+            + '<span>'+esc(c.filename)+'</span>'
             + (c.error?'<span style="color:var(--red)">'+esc(c.error)+'</span>':'')
             + '</div>';
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">';
@@ -1155,6 +1069,17 @@
     var f = factures.find(function(x){ return x.numero === num; });
     if(f) select(f.id);
   }
+
+  // ── PURGE BASE DE TEST ──
+  document.getElementById('btn-purge').addEventListener('click', function(){
+    var phantom = factures.filter(function(f){ return !f.total_ttc || f.total_ttc === 0; }).length;
+    if(!phantom) return;
+    if(!confirm('Supprimer '+phantom+' facture(s) avec total = 0 ?')) return;
+    factures = factures.filter(function(f){ return f.total_ttc && f.total_ttc > 0; });
+    saveJSON('mup_factures', factures);
+    state.currentId = null;
+    refreshYearFilter(); renderList(); renderPreview(); renderEdit();
+  });
 
   // ── INIT ──
   buildImportDropdown();

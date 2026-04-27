@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<!--
+  SCHÉMA mup_factures (cible facturation électronique 2027) :
+  {
+    id, numero (NN-JJMMAA), numero_seq, date_emission (ISO), date_prestation,
+    emetteur: { nom, adresse, siret, tva_intra },
+    client: { nom, adresse, siret, siren, adresse_livraison },
+    nature_operation: 'prestation_services' | 'livraison_biens' | 'mixte',
+    lignes: [{ designation, date, quantite, prix_unitaire, total }],
+    total_ht, tva_applicable (false), taux_tva (0), montant_tva (0), total_ttc,
+    mention_tva: 'TVA non applicable, art. 293 B du CGI',
+    paiement_tva_debits (false),
+    date_reglement, statut, date_paiement,
+    entity_origine: 'graphic_factor' | 'nouvellevagues' | 'mup' | 'neox',
+    devis_origine_id,
+    plateforme_agreee_destinataire (null), format_export ('pdf_simple'),
+    pdf_source (base64, optionnel),
+    created_at, updated_at
+  }
+-->
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MUP — Factures</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --bg:#FFFFFF; --surface:#F5F5F7; --surface2:#EBEBF0;
+    --card:#FFFFFF; --border:#E8E8ED; --border2:#C7C7CC;
+    --text:#1D1D1F; --muted:#6E6E73; --muted2:#AEAEB2;
+    --green:#1D8348; --orange:#B84C00; --red:#CC0000;
+    --blue:#0A66C2; --purple:#4338CA; --amber:#F59E0B;
+    --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+    --mono:'Geist Mono','SF Mono','Menlo',monospace;
+  }
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;display:flex;min-height:100vh;}
+  ::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+  main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+  .page-header{background:var(--text);color:#fff;padding:20px 28px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:16px;flex-wrap:wrap;}
+  .page-title{font-size:22px;font-weight:800;letter-spacing:-.4px;}
+  .page-subtitle{font-size:11px;color:rgba(255,255,255,.5);font-weight:500;letter-spacing:.4px;margin-top:2px;}
+  .header-actions{display:flex;align-items:center;gap:8px;position:relative;}
+  .btn-h{padding:9px 14px;border:none;border-radius:9px;font-family:var(--font);font-weight:700;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
+  .btn-h.primary{background:#fff;color:var(--text);}
+  .btn-h.primary:hover{background:var(--surface);}
+  .btn-h.alt{background:rgba(255,255,255,.12);color:#fff;}
+  .btn-h.alt:hover{background:rgba(255,255,255,.2);}
+
+  .filters{padding:14px 28px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex-shrink:0;}
+  .status-tabs{display:flex;gap:2px;background:var(--surface2);border-radius:8px;padding:2px;}
+  .stab{padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);border:none;background:none;font-family:var(--font);transition:all .12s;white-space:nowrap;}
+  .stab.on{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .filter-select{padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-family:var(--font);font-size:11.5px;background:#fff;color:var(--text);cursor:pointer;}
+  .filter-label{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);}
+
+  .layout-3panes{flex:1;display:grid;grid-template-columns:340px 1fr 360px;overflow:hidden;}
+  .pane{overflow-y:auto;border-right:1px solid var(--border);}
+  .pane:last-child{border-right:none;}
+  .pane.list-pane{background:var(--surface);}
+  .pane.preview-pane{background:#fff;padding:24px;}
+  .pane.edit-pane{background:#fff;padding:18px 20px;}
+
+  .invoice-row{padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;}
+  .invoice-row:hover{background:var(--surface2);}
+  .invoice-row.active{background:var(--card);border-left:3px solid var(--text);}
+  .invoice-row-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
+  .invoice-num{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text);}
+  .invoice-amount{font-family:var(--mono);font-weight:800;font-size:13px;color:var(--text);}
+  .invoice-client{font-size:12.5px;font-weight:600;color:var(--text);}
+  .invoice-meta{display:flex;gap:8px;align-items:center;margin-top:4px;font-size:10.5px;color:var(--muted);font-family:var(--mono);}
+  .badge{font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;padding:2px 6px;border-radius:4px;}
+  .badge.payée{background:rgba(29,131,72,.12);color:var(--green);}
+  .badge.en_attente{background:rgba(245,158,11,.14);color:#854F0B;}
+  .badge.en_retard{background:rgba(204,0,0,.12);color:var(--red);}
+  .empty-state{padding:60px 30px;text-align:center;color:var(--muted2);font-size:13px;}
+  .empty-state strong{display:block;color:var(--text);font-weight:700;font-size:14px;margin-bottom:6px;}
+
+  .preview-doc{max-width:680px;margin:0 auto;background:#fff;border:1px solid var(--border);border-radius:10px;padding:36px 40px;}
+  .preview-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;}
+  .preview-emetteur{font-size:11px;color:var(--muted);line-height:1.5;}
+  .preview-emetteur strong{color:var(--text);font-size:14px;display:block;margin-bottom:3px;}
+  .preview-num{text-align:right;}
+  .preview-num h2{font-size:22px;font-weight:800;letter-spacing:-.5px;}
+  .preview-num .num-val{font-family:var(--mono);font-size:13px;color:var(--muted);margin-top:3px;}
+  .preview-section-title{font-size:9.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  .preview-client{margin-bottom:24px;font-size:12.5px;line-height:1.5;}
+  .preview-client strong{color:var(--text);font-weight:700;}
+  .preview-table{width:100%;border-collapse:collapse;margin-bottom:18px;}
+  .preview-table th{font-size:9.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1.5px solid var(--text);}
+  .preview-table td{padding:10px;border-bottom:1px solid var(--border);font-size:12px;}
+  .preview-table th.right,.preview-table td.right{text-align:right;font-family:var(--mono);}
+  .preview-totals{margin-left:auto;width:50%;}
+  .preview-totals-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;}
+  .preview-totals-row.total{font-weight:800;font-size:16px;border-top:1.5px solid var(--text);padding-top:10px;margin-top:6px;}
+  .preview-mention{margin-top:18px;padding:10px 12px;background:var(--surface);border-radius:8px;font-size:11px;color:var(--muted);font-style:italic;}
+  .preview-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;font-size:11.5px;}
+  .preview-meta-cell strong{display:block;font-size:9.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-bottom:3px;}
+
+  .edit-section{margin-bottom:18px;}
+  .edit-section-title{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .field{margin-bottom:11px;}
+  .field label{display:block;font-size:10px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+  .field input,.field select,.field textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:var(--font);font-size:12.5px;background:#fff;color:var(--text);}
+  .field input::placeholder{color:var(--muted2);}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--text);}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .checkbox-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);margin-bottom:10px;cursor:pointer;}
+  .checkbox-row input{width:16px;height:16px;cursor:pointer;}
+
+  .lignes-table{width:100%;font-size:11.5px;margin-bottom:8px;}
+  .lignes-table th{padding:5px 4px;text-align:left;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+  .lignes-table td{padding:3px 2px;}
+  .lignes-table input{padding:5px 7px;font-size:11.5px;}
+  .ligne-del{background:none;border:none;color:var(--muted2);cursor:pointer;padding:4px;}
+  .ligne-del:hover{color:var(--red);}
+  .btn-add-line{margin-top:6px;padding:7px;border:1px dashed var(--border2);background:#fff;color:var(--muted);border-radius:7px;cursor:pointer;font-family:var(--font);font-size:11px;font-weight:600;width:100%;}
+  .btn-add-line:hover{border-color:var(--text);color:var(--text);}
+
+  .edit-actions{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+  .edit-actions button{flex:1;padding:10px;border:none;border-radius:8px;cursor:pointer;font-family:var(--font);font-weight:700;font-size:12px;}
+  .edit-actions .primary{background:var(--text);color:#fff;}
+  .edit-actions .secondary{background:var(--surface);color:var(--text);}
+  .edit-actions .danger{background:rgba(204,0,0,.10);color:var(--red);flex:0 0 auto;padding:10px 14px;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-start;justify-content:center;z-index:900;padding:40px 20px;overflow-y:auto;}
+  .modal-overlay.show{display:flex;}
+  .modal-card{background:#fff;border-radius:14px;width:640px;max-width:96vw;display:flex;flex-direction:column;}
+  .modal-header{padding:22px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+  .modal-title{font-size:18px;font-weight:800;letter-spacing:-.3px;}
+  .modal-close{background:none;border:none;cursor:pointer;color:var(--muted);width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;}
+  .modal-close:hover{background:var(--surface);color:var(--text);}
+  .modal-body{padding:22px 24px;}
+  .modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+  .modal-footer button{padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-family:var(--font);font-weight:700;font-size:12.5px;}
+  .modal-footer .primary{background:var(--text);color:#fff;}
+  .modal-footer .secondary{background:var(--surface);color:var(--text);}
+
+  .dropdown{position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1px solid var(--border);border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.08);min-width:180px;display:none;z-index:50;overflow:hidden;}
+  .dropdown.show{display:block;}
+  .dropdown-item{padding:11px 14px;font-size:12.5px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px;border:none;background:none;width:100%;text-align:left;font-family:var(--font);}
+  .dropdown-item:hover{background:var(--surface);}
+  .dropdown-item:not(:last-child){border-bottom:1px solid var(--border);}
+
+  .drop-zone{border:2px dashed var(--border2);border-radius:10px;padding:30px 18px;text-align:center;color:var(--muted);font-size:12.5px;cursor:pointer;transition:all .15s;}
+  .drop-zone:hover,.drop-zone.dragover{border-color:var(--text);background:var(--surface);color:var(--text);}
+  .csv-preview-table{width:100%;border-collapse:collapse;margin-top:14px;font-size:11px;}
+  .csv-preview-table th{background:var(--surface);padding:6px 8px;font-weight:700;text-align:left;border-bottom:1px solid var(--border);}
+  .csv-preview-table td{padding:5px 8px;border-bottom:1px solid var(--border);}
+  .csv-preview-table tr.dup{background:rgba(204,0,0,.06);}
+  .info-banner{padding:9px 12px;background:rgba(245,158,11,.08);border:1px dashed var(--amber);border-radius:8px;font-size:11.5px;color:#854F0B;margin-bottom:12px;}
+</style>
+</head>
+<body>
+
+<aside id="sidebar" class="sidebar"></aside>
+
+<main>
+  <div class="page-header">
+    <div>
+      <div class="page-title">Factures</div>
+      <div class="page-subtitle">Conforme facturation électronique 2027</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-h alt" id="btn-import">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Importer
+      </button>
+      <div class="dropdown" id="import-dropdown"></div>
+      <button class="btn-h primary" id="btn-new">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nouvelle facture
+      </button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="status-tabs" id="status-tabs">
+      <button class="stab on" data-status="all">Toutes</button>
+      <button class="stab" data-status="payée">Payée</button>
+      <button class="stab" data-status="en_attente">En attente</button>
+      <button class="stab" data-status="en_retard">En retard</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span class="filter-label">Entité</span>
+      <select class="filter-select" id="filter-entity">
+        <option value="all">Toutes</option>
+        <option value="graphic_factor">Graphic Factor</option>
+        <option value="nouvellevagues">Nouvelles Vagues</option>
+        <option value="mup">MUP</option>
+        <option value="neox">Neox</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span class="filter-label">Année</span>
+      <select class="filter-select" id="filter-year">
+        <option value="all">Toutes</option>
+      </select>
+    </div>
+    <span style="margin-left:auto;font-size:11px;color:var(--muted);font-family:var(--mono);" id="count-label">0 facture</span>
+  </div>
+
+  <div class="layout-3panes">
+    <div class="pane list-pane">
+      <div id="invoice-list"></div>
+    </div>
+    <div class="pane preview-pane">
+      <div id="invoice-preview"><div class="empty-state"><strong>Aucune facture sélectionnée</strong>Cliquer sur une facture dans la liste pour voir l'aperçu.</div></div>
+    </div>
+    <div class="pane edit-pane">
+      <div id="invoice-edit"><div class="empty-state"><strong>Édition</strong>Sélectionner une facture pour la modifier.</div></div>
+    </div>
+  </div>
+</main>
+
+<!-- Modale Nouvelle facture -->
+<div class="modal-overlay" id="modal-new">
+  <div class="modal-card" style="width:680px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header">
+      <div class="modal-title">Nouvelle facture</div>
+      <button class="modal-close" data-close="modal-new">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="info-banner">Le numéro sera généré automatiquement (NN-JJMMAA).</div>
+
+      <div class="edit-section">
+        <div class="edit-section-title">Client</div>
+        <div class="field">
+          <label>Nom du client</label>
+          <input type="text" id="new-client-nom" list="clients-datalist" placeholder="Nom de l'entreprise" />
+          <datalist id="clients-datalist"></datalist>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>SIREN</label>
+            <input type="text" id="new-client-siren" placeholder="000 000 000" maxlength="11" />
+          </div>
+          <div class="field">
+            <label>SIRET</label>
+            <input type="text" id="new-client-siret" placeholder="000 000 000 00000" maxlength="17" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Adresse</label>
+          <input type="text" id="new-client-adresse" placeholder="Rue, code postal, ville" />
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="new-livraison-diff" />
+          <label for="new-livraison-diff" style="margin:0;text-transform:none;letter-spacing:0;font-weight:500;font-size:12px;color:var(--text);cursor:pointer;">Adresse de livraison différente</label>
+        </div>
+        <div class="field" id="new-livraison-wrap" style="display:none;">
+          <label>Adresse de livraison</label>
+          <input type="text" id="new-client-livraison" placeholder="Rue, code postal, ville" />
+        </div>
+      </div>
+
+      <div class="edit-section">
+        <div class="edit-section-title">Opération</div>
+        <div class="field-row">
+          <div class="field">
+            <label>Nature</label>
+            <select id="new-nature">
+              <option value="prestation_services">Prestation de services</option>
+              <option value="livraison_biens">Livraison de biens</option>
+              <option value="mixte">Mixte</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Entité émettrice</label>
+            <select id="new-entity">
+              <option value="graphic_factor">Graphic Factor</option>
+              <option value="nouvellevagues">Nouvelles Vagues</option>
+              <option value="mup">MUP</option>
+              <option value="neox">Neox</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Date prestation</label>
+            <input type="date" id="new-date-prestation" />
+          </div>
+          <div class="field">
+            <label>Date règlement (échéance)</label>
+            <input type="date" id="new-date-reglement" />
+          </div>
+        </div>
+      </div>
+
+      <div class="edit-section">
+        <div class="edit-section-title">Lignes</div>
+        <table class="lignes-table" id="new-lignes-table">
+          <thead><tr><th style="width:40%;">Désignation</th><th style="width:15%;">Date</th><th style="width:10%;">Qté</th><th style="width:15%;">PU HT</th><th style="width:15%;">Total HT</th><th></th></tr></thead>
+          <tbody id="new-lignes-body"></tbody>
+        </table>
+        <button type="button" class="btn-add-line" id="new-add-line">+ Ajouter une ligne</button>
+        <div style="margin-top:10px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:800;">Total HT : <span id="new-total-ht">0,00 €</span></div>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted);font-style:italic;">TVA non applicable, art. 293 B du CGI</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="secondary" data-close="modal-new">Annuler</button>
+      <button class="primary" id="new-save">Créer la facture</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modale Import CSV -->
+<div class="modal-overlay" id="modal-import-csv">
+  <div class="modal-card" style="width:700px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header">
+      <div class="modal-title">Importer un CSV / Excel</div>
+      <button class="modal-close" data-close="modal-import-csv">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+        <button class="btn-h alt" style="background:var(--surface);color:var(--text);" id="btn-csv-template">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Télécharger le modèle
+        </button>
+      </div>
+      <div class="drop-zone" id="csv-drop">
+        <input type="file" id="csv-file" accept=".csv,.xlsx,.xls" style="display:none;" />
+        <div>Glisser un fichier CSV ou Excel ici, ou <strong>cliquer pour parcourir</strong></div>
+      </div>
+      <div id="csv-preview-wrap"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="secondary" data-close="modal-import-csv">Annuler</button>
+      <button class="primary" id="csv-confirm" disabled style="opacity:.4;cursor:not-allowed;">Confirmer l'import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modale Import PDF -->
+<div class="modal-overlay" id="modal-import-pdf">
+  <div class="modal-card" style="width:700px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header">
+      <div class="modal-title">Importer des factures PDF</div>
+      <button class="modal-close" data-close="modal-import-pdf">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="info-banner">Détection automatique du numéro, date et montant via regex. Tu pourras corriger avant validation.</div>
+      <div class="drop-zone" id="pdf-drop">
+        <input type="file" id="pdf-file" accept="application/pdf" multiple style="display:none;" />
+        <div>Glisser un ou plusieurs PDF ici, ou <strong>cliquer pour parcourir</strong></div>
+      </div>
+      <div id="pdf-preview-wrap"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="secondary" data-close="modal-import-pdf">Annuler</button>
+      <button class="primary" id="pdf-confirm" disabled style="opacity:.4;cursor:not-allowed;">Confirmer l'import</button>
+    </div>
+  </div>
+</div>
+
+<script src="/sidebar.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>
+(function(){
+  if(typeof pdfjsLib !== 'undefined'){ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; }
+
+  function loadJSON(k, fb){ try{ return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); }catch(e){ return fb; } }
+  function saveJSON(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+  function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0); }
+  function pad(n,w){ n = String(n); while(n.length < w) n = '0' + n; return n; }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function ddmmyy(date){ var d = new Date(date); return pad(d.getDate(),2) + pad(d.getMonth()+1,2) + String(d.getFullYear()).slice(-2); }
+
+  var ENTITY_LABELS = { graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues', mup:'MUP', neox:'Neox' };
+  var STATUTS = { 'payée':'Payée', 'en_attente':'En attente', 'en_retard':'En retard' };
+
+  var IMPORT_DRIVERS = {
+    csv:     { label:'CSV / Excel',   active:true,  handler:openCSVImport },
+    pdf:     { label:'PDF',           active:true,  handler:openPDFImport },
+    facturx: { label:'Factur-X',      active:false, handler:null },
+    email:   { label:'Email auto',    active:false, handler:null },
+    api:     { label:'API connecteur',active:false, handler:null }
+  };
+
+  var factures = loadJSON('mup_factures', []);
+  var pipeline = loadJSON('mup_pipeline', []);
+  var state = { status:'all', entity:'all', year:'all', currentId:null };
+
+  function generateNextNumero(){
+    var maxSeq = factures.reduce(function(m,f){ return Math.max(m, f.numero_seq || 0); }, 0);
+    var nextSeq = maxSeq + 1;
+    return { seq: nextSeq, numero: pad(nextSeq, 2) + '-' + ddmmyy(new Date()) };
+  }
+
+  // ── DROPDOWN IMPORT ──
+  function buildImportDropdown(){
+    var dd = document.getElementById('import-dropdown');
+    var html = '';
+    Object.keys(IMPORT_DRIVERS).forEach(function(k){
+      var d = IMPORT_DRIVERS[k];
+      if(!d.active) return;
+      html += '<button class="dropdown-item" data-driver="'+k+'">'+d.label+'</button>';
+    });
+    dd.innerHTML = html;
+    dd.querySelectorAll('[data-driver]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var driver = IMPORT_DRIVERS[this.dataset.driver];
+        if(driver && driver.handler) driver.handler();
+        dd.classList.remove('show');
+      });
+    });
+  }
+  document.getElementById('btn-import').addEventListener('click', function(e){
+    e.stopPropagation();
+    document.getElementById('import-dropdown').classList.toggle('show');
+  });
+  document.addEventListener('click', function(){ document.getElementById('import-dropdown').classList.remove('show'); });
+
+  // ── FILTRES ──
+  function refreshYearFilter(){
+    var sel = document.getElementById('filter-year');
+    var current = sel.value;
+    var years = {};
+    factures.forEach(function(f){ if(f.date_emission) years[new Date(f.date_emission).getFullYear()] = true; });
+    var list = Object.keys(years).sort().reverse();
+    sel.innerHTML = '<option value="all">Toutes</option>' + list.map(function(y){ return '<option value="'+y+'">'+y+'</option>'; }).join('');
+    if(list.indexOf(current) !== -1) sel.value = current;
+  }
+  document.getElementById('status-tabs').addEventListener('click', function(e){
+    var btn = e.target.closest('.stab'); if(!btn) return;
+    state.status = btn.dataset.status;
+    document.querySelectorAll('#status-tabs .stab').forEach(function(b){ b.classList.toggle('on', b === btn); });
+    renderList();
+  });
+  document.getElementById('filter-entity').addEventListener('change', function(e){ state.entity = e.target.value; renderList(); });
+  document.getElementById('filter-year').addEventListener('change', function(e){ state.year = e.target.value; renderList(); });
+
+  // ── LIST ──
+  function applyFilters(){
+    return factures.filter(function(f){
+      if(state.status !== 'all' && f.statut !== state.status) return false;
+      if(state.entity !== 'all' && f.entity_origine !== state.entity) return false;
+      if(state.year !== 'all' && f.date_emission && new Date(f.date_emission).getFullYear() !== parseInt(state.year,10)) return false;
+      return true;
+    });
+  }
+  function renderList(){
+    var list = applyFilters().sort(function(a,b){ return (b.date_emission||'').localeCompare(a.date_emission||''); });
+    document.getElementById('count-label').textContent = list.length + ' facture' + (list.length>1?'s':'');
+    var box = document.getElementById('invoice-list');
+    if(list.length === 0){
+      box.innerHTML = '<div class="empty-state"><strong>Aucune facture</strong>Crée ta première facture ou importe un fichier.</div>';
+      return;
+    }
+    box.innerHTML = list.map(function(f){
+      var clientNom = (f.client && f.client.nom) || '—';
+      var statutKey = f.statut || 'en_attente';
+      var statutLbl = STATUTS[statutKey] || statutKey;
+      return '<div class="invoice-row'+(state.currentId===f.id?' active':'')+'" data-id="'+f.id+'">'
+        +'<div class="invoice-row-top"><span class="invoice-num">'+esc(f.numero||'—')+'</span><span class="invoice-amount">'+fmtEur(f.total_ttc||0)+'</span></div>'
+        +'<div class="invoice-client">'+esc(clientNom)+'</div>'
+        +'<div class="invoice-meta"><span>'+(f.date_emission?new Date(f.date_emission).toLocaleDateString('fr-FR'):'—')+'</span><span class="badge '+statutKey+'">'+esc(statutLbl)+'</span><span>'+esc(ENTITY_LABELS[f.entity_origine]||'')+'</span></div>'
+        +'</div>';
+    }).join('');
+    box.querySelectorAll('.invoice-row').forEach(function(row){
+      row.addEventListener('click', function(){ select(this.dataset.id); });
+    });
+  }
+  function select(id){
+    state.currentId = id;
+    renderList();
+    renderPreview();
+    renderEdit();
+  }
+
+  // ── PREVIEW ──
+  function renderPreview(){
+    var f = factures.find(function(x){ return x.id === state.currentId; });
+    var box = document.getElementById('invoice-preview');
+    if(!f){ box.innerHTML = '<div class="empty-state"><strong>Aucune facture sélectionnée</strong>Cliquer sur une facture dans la liste.</div>'; return; }
+    var emetteur = f.emetteur || {};
+    var client = f.client || {};
+    var lignes = f.lignes || [];
+    var totalHt = (f.total_ht != null) ? f.total_ht : lignes.reduce(function(s,l){ return s + (parseFloat(l.total)||0); }, 0);
+    var html = '<div class="preview-doc">';
+    html += '<div class="preview-header">';
+    html += '<div class="preview-emetteur"><strong>'+esc(emetteur.nom || ENTITY_LABELS[f.entity_origine] || '—')+'</strong>'+(emetteur.adresse?esc(emetteur.adresse):'')+(emetteur.siret?'<br>SIRET '+esc(emetteur.siret):'')+(emetteur.tva_intra?'<br>TVA '+esc(emetteur.tva_intra):'')+'</div>';
+    html += '<div class="preview-num"><h2>FACTURE</h2><div class="num-val">N° '+esc(f.numero||'—')+'</div><div class="num-val" style="margin-top:2px">'+(f.date_emission?new Date(f.date_emission).toLocaleDateString('fr-FR'):'—')+'</div></div>';
+    html += '</div>';
+    html += '<div class="preview-section-title">Client</div>';
+    html += '<div class="preview-client"><strong>'+esc(client.nom||'—')+'</strong>'+(client.adresse?'<br>'+esc(client.adresse):'')+(client.siret?'<br>SIRET '+esc(client.siret):'')+(client.siren?'<br>SIREN '+esc(client.siren):'')+'</div>';
+    if(client.adresse_livraison){ html += '<div class="preview-section-title">Adresse de livraison</div><div class="preview-client">'+esc(client.adresse_livraison)+'</div>'; }
+    html += '<div class="preview-meta-grid">';
+    html += '<div class="preview-meta-cell"><strong>Nature</strong>'+(f.nature_operation==='prestation_services'?'Prestation de services':f.nature_operation==='livraison_biens'?'Livraison de biens':'Mixte')+'</div>';
+    if(f.date_prestation) html += '<div class="preview-meta-cell"><strong>Date de prestation</strong>'+new Date(f.date_prestation).toLocaleDateString('fr-FR')+'</div>';
+    if(f.date_reglement) html += '<div class="preview-meta-cell"><strong>Date de règlement</strong>'+new Date(f.date_reglement).toLocaleDateString('fr-FR')+'</div>';
+    html += '</div>';
+    html += '<table class="preview-table"><thead><tr><th>Désignation</th><th class="right">Qté</th><th class="right">PU HT</th><th class="right">Total HT</th></tr></thead><tbody>';
+    lignes.forEach(function(l){
+      html += '<tr><td>'+esc(l.designation||'')+(l.date?'<br><small style="color:var(--muted);font-size:10.5px">'+new Date(l.date).toLocaleDateString('fr-FR')+'</small>':'')+'</td><td class="right">'+(l.quantite||0)+'</td><td class="right">'+fmtEur(l.prix_unitaire||0)+'</td><td class="right">'+fmtEur(l.total||0)+'</td></tr>';
+    });
+    html += '</tbody></table>';
+    html += '<div class="preview-totals">';
+    html += '<div class="preview-totals-row"><span>Total HT</span><span style="font-family:var(--mono)">'+fmtEur(totalHt)+'</span></div>';
+    html += '<div class="preview-totals-row"><span>TVA</span><span style="font-family:var(--mono)">'+fmtEur(f.montant_tva||0)+'</span></div>';
+    html += '<div class="preview-totals-row total"><span>Total TTC</span><span style="font-family:var(--mono)">'+fmtEur(f.total_ttc||totalHt)+'</span></div>';
+    html += '</div>';
+    html += '<div class="preview-mention">'+esc(f.mention_tva||'TVA non applicable, art. 293 B du CGI')+'</div>';
+    if(f.paiement_tva_debits) html += '<div class="preview-mention">TVA acquittée d\'après les débits.</div>';
+    html += '</div>';
+    box.innerHTML = html;
+  }
+
+  // ── EDIT ──
+  function renderEdit(){
+    var f = factures.find(function(x){ return x.id === state.currentId; });
+    var box = document.getElementById('invoice-edit');
+    if(!f){ box.innerHTML = '<div class="empty-state"><strong>Édition</strong>Sélectionner une facture.</div>'; return; }
+    var html = '<div class="edit-section"><div class="edit-section-title">Métadonnées</div>';
+    html += '<div class="field"><label>Numéro</label><input type="text" value="'+esc(f.numero||'')+'" disabled style="background:var(--surface);color:var(--muted)" /></div>';
+    html += '<div class="field-row">';
+    html += '<div class="field"><label>Statut</label><select id="e-statut">'+Object.keys(STATUTS).map(function(k){ return '<option value="'+k+'"'+(f.statut===k?' selected':'')+'>'+STATUTS[k]+'</option>'; }).join('')+'</select></div>';
+    html += '<div class="field"><label>Date paiement</label><input type="date" id="e-date-paiement" value="'+esc(f.date_paiement||'')+'" /></div>';
+    html += '</div>';
+    html += '</div>';
+    html += '<div class="edit-actions">';
+    html += '<button class="secondary" id="e-cancel">Fermer</button>';
+    html += '<button class="primary" id="e-save">Enregistrer</button>';
+    html += '<button class="danger" id="e-delete" title="Supprimer">'
+      + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>';
+    html += '</div>';
+    box.innerHTML = html;
+
+    document.getElementById('e-cancel').onclick = function(){ state.currentId = null; renderList(); renderPreview(); renderEdit(); };
+    document.getElementById('e-save').onclick = function(){
+      f.statut = document.getElementById('e-statut').value;
+      f.date_paiement = document.getElementById('e-date-paiement').value || null;
+      f.updated_at = new Date().toISOString();
+      saveJSON('mup_factures', factures);
+      renderList(); renderPreview();
+    };
+    document.getElementById('e-delete').onclick = function(){
+      if(!confirm('Supprimer cette facture ?')) return;
+      factures = factures.filter(function(x){ return x.id !== f.id; });
+      saveJSON('mup_factures', factures);
+      state.currentId = null;
+      refreshYearFilter(); renderList(); renderPreview(); renderEdit();
+    };
+  }
+
+  // ── MODALE NOUVELLE FACTURE ──
+  document.querySelectorAll('[data-close]').forEach(function(b){
+    b.addEventListener('click', function(){ document.getElementById(this.dataset.close).classList.remove('show'); });
+  });
+  document.querySelectorAll('.modal-overlay').forEach(function(o){
+    o.addEventListener('click', function(e){ if(e.target === this) this.classList.remove('show'); });
+  });
+  document.getElementById('new-livraison-diff').addEventListener('change', function(){
+    document.getElementById('new-livraison-wrap').style.display = this.checked ? 'block' : 'none';
+  });
+
+  function openNewModal(prefill){
+    // Reset
+    ['new-client-nom','new-client-siren','new-client-siret','new-client-adresse','new-client-livraison'].forEach(function(id){ document.getElementById(id).value = ''; });
+    document.getElementById('new-livraison-diff').checked = false;
+    document.getElementById('new-livraison-wrap').style.display = 'none';
+    document.getElementById('new-nature').value = 'prestation_services';
+    document.getElementById('new-entity').value = 'mup';
+    document.getElementById('new-date-prestation').value = todayISO();
+    var d = new Date(); d.setDate(d.getDate() + 30);
+    document.getElementById('new-date-reglement').value = d.toISOString().slice(0,10);
+    document.getElementById('new-lignes-body').innerHTML = '';
+    addLineRow();
+    refreshNewTotal();
+    // Datalist clients (gagnés depuis pipeline)
+    var dl = document.getElementById('clients-datalist');
+    var won = pipeline.filter(function(c){ return c.col === 'won'; });
+    dl.innerHTML = won.map(function(c){ return '<option value="'+esc(c.co || c.name || '')+'">'; }).join('');
+    if(prefill){
+      if(prefill.client_nom) document.getElementById('new-client-nom').value = prefill.client_nom;
+      if(prefill.client_siren) document.getElementById('new-client-siren').value = prefill.client_siren;
+      if(prefill.client_siret) document.getElementById('new-client-siret').value = prefill.client_siret;
+      if(prefill.client_adresse) document.getElementById('new-client-adresse').value = prefill.client_adresse;
+      if(prefill.entity_origine) document.getElementById('new-entity').value = prefill.entity_origine;
+      if(Array.isArray(prefill.lignes) && prefill.lignes.length){
+        document.getElementById('new-lignes-body').innerHTML = '';
+        prefill.lignes.forEach(addLineRow);
+        refreshNewTotal();
+      }
+    }
+    document.getElementById('modal-new').classList.add('show');
+    document.getElementById('modal-new')._prefill = prefill || null;
+  }
+  function closeNewModal(){ document.getElementById('modal-new').classList.remove('show'); }
+
+  document.getElementById('btn-new').addEventListener('click', function(){ openNewModal(); });
+
+  function addLineRow(prefill){
+    var body = document.getElementById('new-lignes-body');
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td><input type="text" class="ln-desc" placeholder="Description" value="'+esc((prefill&&prefill.designation)||'')+'" /></td>'
+      +'<td><input type="date" class="ln-date" value="'+esc((prefill&&prefill.date)||'')+'" /></td>'
+      +'<td><input type="number" class="ln-qte" min="0" step="1" value="'+((prefill&&prefill.quantite!=null)?prefill.quantite:1)+'" /></td>'
+      +'<td><input type="number" class="ln-pu" min="0" step="0.01" value="'+((prefill&&prefill.prix_unitaire!=null)?prefill.prix_unitaire:'')+'" /></td>'
+      +'<td><input type="text" class="ln-total" disabled style="background:var(--surface);color:var(--muted)" /></td>'
+      +'<td><button type="button" class="ligne-del" title="Supprimer">×</button></td>';
+    body.appendChild(tr);
+    tr.querySelectorAll('.ln-qte, .ln-pu').forEach(function(inp){ inp.addEventListener('input', refreshNewTotal); });
+    tr.querySelector('.ligne-del').addEventListener('click', function(){ tr.remove(); refreshNewTotal(); });
+    refreshNewTotal();
+  }
+  function refreshNewTotal(){
+    var rows = document.querySelectorAll('#new-lignes-body tr');
+    var total = 0;
+    rows.forEach(function(tr){
+      var q = parseFloat(tr.querySelector('.ln-qte').value) || 0;
+      var p = parseFloat(tr.querySelector('.ln-pu').value) || 0;
+      var t = q * p;
+      tr.querySelector('.ln-total').value = fmtEur(t);
+      total += t;
+    });
+    document.getElementById('new-total-ht').textContent = fmtEur(total);
+  }
+  document.getElementById('new-add-line').addEventListener('click', function(){ addLineRow(); });
+
+  document.getElementById('new-save').addEventListener('click', function(){
+    var clientNom = document.getElementById('new-client-nom').value.trim();
+    if(!clientNom){ alert('Nom du client requis'); return; }
+    var rows = document.querySelectorAll('#new-lignes-body tr');
+    var lignes = [];
+    rows.forEach(function(tr){
+      var desc = tr.querySelector('.ln-desc').value.trim();
+      if(!desc) return;
+      var q = parseFloat(tr.querySelector('.ln-qte').value) || 0;
+      var p = parseFloat(tr.querySelector('.ln-pu').value) || 0;
+      lignes.push({ designation: desc, date: tr.querySelector('.ln-date').value || null, quantite: q, prix_unitaire: p, total: q * p });
+    });
+    if(lignes.length === 0){ alert('Au moins une ligne avec désignation requise'); return; }
+    var totalHt = lignes.reduce(function(s,l){ return s + l.total; }, 0);
+    var num = generateNextNumero();
+    var nowIso = new Date().toISOString();
+    var prefill = document.getElementById('modal-new')._prefill || {};
+    var f = {
+      id: 'fac_' + Date.now(),
+      numero: num.numero,
+      numero_seq: num.seq,
+      date_emission: todayISO(),
+      date_prestation: document.getElementById('new-date-prestation').value || null,
+      emetteur: { nom: ENTITY_LABELS[document.getElementById('new-entity').value] || '', adresse:'', siret:'', tva_intra:'' },
+      client: {
+        nom: clientNom,
+        adresse: document.getElementById('new-client-adresse').value.trim(),
+        siret: document.getElementById('new-client-siret').value.trim(),
+        siren: document.getElementById('new-client-siren').value.trim(),
+        adresse_livraison: document.getElementById('new-livraison-diff').checked ? document.getElementById('new-client-livraison').value.trim() : ''
+      },
+      nature_operation: document.getElementById('new-nature').value,
+      lignes: lignes,
+      total_ht: totalHt,
+      tva_applicable: false,
+      taux_tva: 0,
+      montant_tva: 0,
+      total_ttc: totalHt,
+      mention_tva: 'TVA non applicable, art. 293 B du CGI',
+      paiement_tva_debits: false,
+      date_reglement: document.getElementById('new-date-reglement').value || null,
+      statut: 'en_attente',
+      date_paiement: null,
+      entity_origine: document.getElementById('new-entity').value,
+      devis_origine_id: prefill.devis_origine_id || null,
+      plateforme_agreee_destinataire: null,
+      format_export: 'pdf_simple',
+      pdf_source: null,
+      created_at: nowIso,
+      updated_at: nowIso
+    };
+    factures.push(f);
+    saveJSON('mup_factures', factures);
+    closeNewModal();
+    refreshYearFilter();
+    select(f.id);
+    if(prefill.devis_origine_id && prefill.onCreated){ prefill.onCreated(f); }
+  });
+
+  // ── IMPORT CSV ──
+  function openCSVImport(){
+    document.getElementById('csv-preview-wrap').innerHTML = '';
+    document.getElementById('csv-confirm').disabled = true;
+    document.getElementById('csv-confirm').style.opacity = .4;
+    document.getElementById('csv-confirm').style.cursor = 'not-allowed';
+    document.getElementById('csv-confirm')._rows = null;
+    document.getElementById('modal-import-csv').classList.add('show');
+  }
+  document.getElementById('btn-csv-template').addEventListener('click', function(){
+    var headers = ['numero','date_emission','client_nom','client_siret','client_siren','client_adresse','nature_operation','designation','quantite','prix_unitaire','total_ht','statut','entity_origine'];
+    var csv = headers.join(',') + '\n';
+    var blob = new Blob([new Uint8Array([0xEF,0xBB,0xBF]), csv], { type:'text/csv;charset=utf-8' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'modele-factures-mup.csv'; a.click();
+  });
+  document.getElementById('csv-drop').addEventListener('click', function(){ document.getElementById('csv-file').click(); });
+  document.getElementById('csv-drop').addEventListener('dragover', function(e){ e.preventDefault(); this.classList.add('dragover'); });
+  document.getElementById('csv-drop').addEventListener('dragleave', function(){ this.classList.remove('dragover'); });
+  document.getElementById('csv-drop').addEventListener('drop', function(e){ e.preventDefault(); this.classList.remove('dragover'); if(e.dataTransfer.files.length) handleCSVFile(e.dataTransfer.files[0]); });
+  document.getElementById('csv-file').addEventListener('change', function(e){ if(e.target.files.length) handleCSVFile(e.target.files[0]); });
+  function handleCSVFile(file){
+    var ext = (file.name.split('.').pop() || '').toLowerCase();
+    if(ext === 'xlsx' || ext === 'xls'){
+      var reader = new FileReader();
+      reader.onload = function(e){
+        try {
+          var wb = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+          var ws = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
+          showCSVPreview(rows);
+        } catch(err){ alert('Erreur lecture Excel: '+err.message); }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      Papa.parse(file, { header:true, skipEmptyLines:true, complete:function(res){ showCSVPreview(res.data); }, error:function(err){ alert('Erreur CSV: '+err.message); } });
+    }
+  }
+  function showCSVPreview(rows){
+    if(!rows || rows.length === 0){ document.getElementById('csv-preview-wrap').innerHTML = '<div class="info-banner" style="background:rgba(204,0,0,.06);border-color:var(--red);color:var(--red);">Aucune ligne détectée.</div>'; return; }
+    var existingNums = {};
+    factures.forEach(function(f){ existingNums[f.numero] = true; });
+    var html = '<div style="margin-top:14px;font-size:12px;color:var(--muted);">'+rows.length+' ligne'+(rows.length>1?'s':'')+' détectée'+(rows.length>1?'s':'')+'.</div>';
+    html += '<table class="csv-preview-table"><thead><tr><th>Numéro</th><th>Date</th><th>Client</th><th>Total HT</th><th>Statut</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var dup = r.numero && existingNums[r.numero];
+      html += '<tr'+(dup?' class="dup" title="Numéro déjà existant, sera ignoré"':'')+'><td>'+esc(r.numero||'')+'</td><td>'+esc(r.date_emission||'')+'</td><td>'+esc(r.client_nom||'')+'</td><td>'+esc(r.total_ht||r.prix_unitaire||'')+'</td><td>'+esc(r.statut||'en_attente')+'</td></tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('csv-preview-wrap').innerHTML = html;
+    var btn = document.getElementById('csv-confirm');
+    btn.disabled = false; btn.style.opacity = 1; btn.style.cursor = 'pointer';
+    btn._rows = rows;
+  }
+  document.getElementById('csv-confirm').addEventListener('click', function(){
+    var rows = this._rows || [];
+    var existingNums = {};
+    factures.forEach(function(f){ existingNums[f.numero] = true; });
+    var added = 0;
+    rows.forEach(function(r){
+      if(r.numero && existingNums[r.numero]) return;
+      var num = r.numero ? { numero: r.numero, seq: parseInt(String(r.numero).split('-')[0],10)||0 } : generateNextNumero();
+      var qty = parseFloat(r.quantite)||1, pu = parseFloat(r.prix_unitaire)||0, totalHt = parseFloat(r.total_ht)||(qty*pu);
+      var nowIso = new Date().toISOString();
+      var f = {
+        id: 'fac_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+        numero: num.numero, numero_seq: num.seq,
+        date_emission: r.date_emission || todayISO(),
+        date_prestation: r.date_emission || todayISO(),
+        emetteur: { nom: ENTITY_LABELS[r.entity_origine] || '', adresse:'', siret:'', tva_intra:'' },
+        client: { nom: r.client_nom||'—', adresse: r.client_adresse||'', siret: r.client_siret||'', siren: r.client_siren||'', adresse_livraison:'' },
+        nature_operation: r.nature_operation || 'prestation_services',
+        lignes: [{ designation: r.designation||'Import CSV', date: r.date_emission||null, quantite: qty, prix_unitaire: pu, total: totalHt }],
+        total_ht: totalHt, tva_applicable:false, taux_tva:0, montant_tva:0, total_ttc: totalHt,
+        mention_tva:'TVA non applicable, art. 293 B du CGI', paiement_tva_debits:false,
+        date_reglement: null, statut: r.statut || 'en_attente', date_paiement: null,
+        entity_origine: r.entity_origine || 'mup',
+        devis_origine_id: null, plateforme_agreee_destinataire:null, format_export:'pdf_simple', pdf_source:null,
+        created_at: nowIso, updated_at: nowIso
+      };
+      factures.push(f); existingNums[f.numero] = true; added++;
+    });
+    saveJSON('mup_factures', factures);
+    document.getElementById('modal-import-csv').classList.remove('show');
+    refreshYearFilter(); renderList();
+    alert(added + ' facture' + (added>1?'s':'') + ' importée' + (added>1?'s':'') + '.');
+  });
+
+  // ── IMPORT PDF ──
+  function openPDFImport(){
+    document.getElementById('pdf-preview-wrap').innerHTML = '';
+    document.getElementById('pdf-confirm').disabled = true;
+    document.getElementById('pdf-confirm').style.opacity = .4;
+    document.getElementById('pdf-confirm').style.cursor = 'not-allowed';
+    document.getElementById('pdf-confirm')._candidates = [];
+    document.getElementById('modal-import-pdf').classList.add('show');
+  }
+  document.getElementById('pdf-drop').addEventListener('click', function(){ document.getElementById('pdf-file').click(); });
+  document.getElementById('pdf-drop').addEventListener('dragover', function(e){ e.preventDefault(); this.classList.add('dragover'); });
+  document.getElementById('pdf-drop').addEventListener('dragleave', function(){ this.classList.remove('dragover'); });
+  document.getElementById('pdf-drop').addEventListener('drop', function(e){ e.preventDefault(); this.classList.remove('dragover'); handlePDFs(e.dataTransfer.files); });
+  document.getElementById('pdf-file').addEventListener('change', function(e){ handlePDFs(e.target.files); });
+  async function extractPDFText(file){
+    if(typeof pdfjsLib === 'undefined') return '';
+    var buf = await file.arrayBuffer();
+    var doc = await pdfjsLib.getDocument({ data: buf }).promise;
+    var text = '';
+    for(var i = 1; i <= doc.numPages; i++){
+      var page = await doc.getPage(i);
+      var content = await page.getTextContent();
+      text += content.items.map(function(it){ return it.str; }).join(' ') + '\n';
+    }
+    return text;
+  }
+  function parseInvoicePDF(text, filename){
+    var numMatch = text.match(/(?:N[°ºo]?\s*[:.]?|Facture\s+n[°ºo]?\s*[:.]?)\s*([0-9]{1,4}[-\/][0-9A-Z]{3,10})/i);
+    var dateMatch = text.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/);
+    var totalMatch = text.match(/(?:total|montant)\s*(?:ttc|ht)?\s*[:.]?\s*([0-9][0-9\s,\.]*)\s*€?/i);
+    var clientMatch = text.match(/(?:client|destinataire|à[\s:])\s*[:.]?\s*([A-Z][A-Za-zÀ-ÿ\s&\-\.]{3,60})/);
+    var dateIso = null;
+    if(dateMatch){
+      var p = dateMatch[1].split(/[\/\-\.]/);
+      if(p[2] && p[2].length === 2) p[2] = '20' + p[2];
+      if(p.length === 3) dateIso = p[2] + '-' + pad(p[1],2) + '-' + pad(p[0],2);
+    }
+    var totalNum = totalMatch ? parseFloat(totalMatch[1].replace(/\s/g,'').replace(',','.')) : 0;
+    return {
+      filename: filename,
+      numero: numMatch ? numMatch[1] : '',
+      date_emission: dateIso || todayISO(),
+      total_ht: totalNum || 0,
+      client_nom: clientMatch ? clientMatch[1].trim() : ''
+    };
+  }
+  async function handlePDFs(files){
+    if(!files || files.length === 0) return;
+    var candidates = [];
+    var box = document.getElementById('pdf-preview-wrap');
+    box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-top:14px">Analyse en cours…</div>';
+    for(var i = 0; i < files.length; i++){
+      var f = files[i];
+      try {
+        var text = await extractPDFText(f);
+        var parsed = parseInvoicePDF(text, f.name);
+        var b64 = await fileToBase64(f);
+        parsed.pdf_source = b64;
+        candidates.push(parsed);
+      } catch(err){
+        candidates.push({ filename: f.name, error: err.message, numero:'', date_emission:todayISO(), total_ht:0, client_nom:'' });
+      }
+    }
+    renderPDFPreview(candidates);
+  }
+  function fileToBase64(file){
+    return new Promise(function(resolve){
+      var r = new FileReader();
+      r.onload = function(e){ resolve(e.target.result); };
+      r.readAsDataURL(file);
+    });
+  }
+  function renderPDFPreview(candidates){
+    var box = document.getElementById('pdf-preview-wrap');
+    if(candidates.length === 0){ box.innerHTML = ''; return; }
+    var html = '<div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px;">'+candidates.length+' PDF analysé'+(candidates.length>1?'s':'')+'. Corriger si nécessaire :</div>';
+    candidates.forEach(function(c, i){
+      html += '<div style="border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:8px;">';
+      html += '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-family:var(--mono);">'+esc(c.filename)+'</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">N°</label><input type="text" data-pdf-i="'+i+'" data-pdf-f="numero" value="'+esc(c.numero)+'" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;" /></div>';
+      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Date</label><input type="date" data-pdf-i="'+i+'" data-pdf-f="date_emission" value="'+esc(c.date_emission)+'" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;" /></div>';
+      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Client</label><input type="text" data-pdf-i="'+i+'" data-pdf-f="client_nom" value="'+esc(c.client_nom)+'" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;" /></div>';
+      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Total HT</label><input type="number" step="0.01" data-pdf-i="'+i+'" data-pdf-f="total_ht" value="'+(c.total_ht||0)+'" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;" /></div>';
+      html += '</div></div>';
+    });
+    box.innerHTML = html;
+    box.querySelectorAll('[data-pdf-i]').forEach(function(inp){
+      inp.addEventListener('input', function(){
+        var i = parseInt(this.dataset.pdfI, 10);
+        var f = this.dataset.pdfF;
+        candidates[i][f] = this.value;
+      });
+    });
+    var btn = document.getElementById('pdf-confirm');
+    btn.disabled = false; btn.style.opacity = 1; btn.style.cursor = 'pointer';
+    btn._candidates = candidates;
+  }
+  document.getElementById('pdf-confirm').addEventListener('click', function(){
+    var cands = this._candidates || [];
+    var existingNums = {};
+    factures.forEach(function(f){ existingNums[f.numero] = true; });
+    var added = 0;
+    cands.forEach(function(c){
+      if(c.numero && existingNums[c.numero]) return;
+      var num = c.numero ? { numero: c.numero, seq: parseInt(String(c.numero).split('-')[0],10)||0 } : generateNextNumero();
+      var totalHt = parseFloat(c.total_ht)||0;
+      var nowIso = new Date().toISOString();
+      var f = {
+        id: 'fac_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+        numero: num.numero, numero_seq: num.seq,
+        date_emission: c.date_emission || todayISO(),
+        date_prestation: c.date_emission || todayISO(),
+        emetteur: { nom:'', adresse:'', siret:'', tva_intra:'' },
+        client: { nom: c.client_nom||'—', adresse:'', siret:'', siren:'', adresse_livraison:'' },
+        nature_operation: 'prestation_services',
+        lignes: [{ designation: 'Import PDF — '+ (c.filename||''), date: c.date_emission||null, quantite: 1, prix_unitaire: totalHt, total: totalHt }],
+        total_ht: totalHt, tva_applicable:false, taux_tva:0, montant_tva:0, total_ttc: totalHt,
+        mention_tva:'TVA non applicable, art. 293 B du CGI', paiement_tva_debits:false,
+        date_reglement: null, statut: 'en_attente', date_paiement: null,
+        entity_origine: 'mup',
+        devis_origine_id: null, plateforme_agreee_destinataire:null, format_export:'pdf_simple',
+        pdf_source: c.pdf_source || null,
+        created_at: nowIso, updated_at: nowIso
+      };
+      factures.push(f); existingNums[f.numero] = true; added++;
+    });
+    saveJSON('mup_factures', factures);
+    document.getElementById('modal-import-pdf').classList.remove('show');
+    refreshYearFilter(); renderList();
+    alert(added + ' facture' + (added>1?'s':'') + ' importée' + (added>1?'s':'') + ' depuis PDF.');
+  });
+
+  // ── HIGHLIGHT (depuis ?highlight=NUMERO) ──
+  function maybeHighlight(){
+    var m = window.location.search.match(/[?&]highlight=([^&]+)/);
+    if(!m) return;
+    var num = decodeURIComponent(m[1]);
+    var f = factures.find(function(x){ return x.numero === num; });
+    if(f) select(f.id);
+  }
+
+  // ── INIT ──
+  buildImportDropdown();
+  refreshYearFilter();
+  renderList();
+  maybeHighlight();
+
+  window.addEventListener('storage', function(e){
+    if(['mup_factures','mup_pipeline'].indexOf(e.key) !== -1){
+      factures = loadJSON('mup_factures', []);
+      pipeline = loadJSON('mup_pipeline', []);
+      refreshYearFilter(); renderList(); renderPreview(); renderEdit();
+    }
+  });
+})();
+</script>
+</body>
+</html>

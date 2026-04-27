@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MUP — Devis & Factures</title>
+<title>MUP — Devis</title>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -165,7 +165,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   <div class="list-col">
     <div class="list-hdr">
       <div class="list-hdr-top">
-        <div class="list-title">Devis & Factures</div>
+        <div class="list-title">Devis</div>
         <button class="btn-new" onclick="newDoc()">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
           Nouveau
@@ -176,7 +176,8 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
         <button class="stab" onclick="filterStatus('draft',this)">Brouillon</button>
         <button class="stab" onclick="filterStatus('sent',this)">Envoyé</button>
         <button class="stab" onclick="filterStatus('accepted',this)">Accepté</button>
-        <button class="stab" onclick="filterStatus('invoice',this)">Facture</button>
+        <button class="stab" onclick="filterStatus('refused',this)">Refusé</button>
+        <button class="stab" onclick="filterStatus('transformed',this)">Transformé</button>
       </div>
     </div>
     <div class="list-scroll" id="doc-list"></div>
@@ -312,7 +313,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     <div class="edit-actions">
       <button class="btn-action primary" onclick="saveDoc()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Enregistrer</button>
       <button class="btn-action success" onclick="markAccepted()">✓ Marquer comme accepté</button>
-      <button class="btn-action secondary" onclick="convertToInvoice()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Convertir en facture</button>
+      <button class="btn-action secondary" disabled title="Page Factures à venir" style="opacity:.5;cursor:not-allowed;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Convertir en facture</button>
       <button class="btn-action danger" onclick="deleteDoc()">Supprimer</button>
     </div>
   </div>
@@ -323,13 +324,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 const MONTHS_FR = ['jan.','fév.','mar.','avr.','mai','jun.','jul.','aoû.','sep.','oct.','nov.','déc.'];
 
 // ── DONNÉES ──
-const MOCK_DOCS = [
-  { id:'d1', type:'devis', num:'2026-001', name:'Laurent Morin',    co:'Hôtel Le Grand',   email:'l.morin@legrand.fr',    addr:'15 Place Vendôme, 75001 Paris', date:'2026-04-01', validity:30, status:'sent',     tva:20, notes:'Paiement à 30 jours.', lines:[{desc:'Écrans LED intérieurs 55" × 4',qty:4,pu:8000},{desc:'Installation et câblage',qty:1,pu:2000},{desc:'Formation personnel',qty:1,pu:500}] },
-  { id:'d2', type:'devis', num:'2026-002', name:'A. Fournier',      co:'Château Margaux',  email:'a.fournier@margaux.fr', addr:'33460 Margaux', date:'2026-04-03', validity:60, status:'draft',    tva:20, notes:'', lines:[{desc:'Écrans outdoor étanches × 2',qty:2,pu:5500},{desc:'Logiciel de diffusion annuel',qty:1,pu:1200}] },
-  { id:'d3', type:'devis', num:'2026-003', name:'P. Dumont',        co:'Le Meurice',       email:'p.dumont@meurice.fr',   addr:'228 Rue de Rivoli, 75001 Paris', date:'2026-03-15', validity:30, status:'accepted', tva:20, notes:'Acompte 30% versé.', lines:[{desc:'Écrans 65" lobby × 6',qty:6,pu:7500},{desc:'Contenu dynamique - création',qty:1,pu:3500},{desc:'Maintenance annuelle',qty:1,pu:2400}] },
-  { id:'d4', type:'facture',num:'F-2026-001',name:'P. Dumont',      co:'Le Meurice',       email:'p.dumont@meurice.fr',   addr:'228 Rue de Rivoli, 75001 Paris', date:'2026-03-20', validity:30, status:'invoice',  tva:20, notes:'Paiement 30j. Merci.', lines:[{desc:'Écrans 65" lobby × 6',qty:6,pu:7500},{desc:'Contenu dynamique - création',qty:1,pu:3500},{desc:'Maintenance annuelle',qty:1,pu:2400}] },
-  { id:'d5', type:'devis', num:'2026-004', name:'E. Faure',         co:'Commerce — Lille', email:'e.faure@lille.fr',      addr:'1 Place du Général de Gaulle, 59000 Lille', date:'2026-03-28', validity:30, status:'refused',  tva:20, notes:'', lines:[{desc:'Vitrine interactive tactile',qty:1,pu:12000}] },
-];
+const MOCK_DOCS = [];
 
 let docs = [];
 let currentId = null;

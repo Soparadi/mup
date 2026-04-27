@@ -58,5 +58,27 @@
     html += '</a>';
   }
 
+  html += '<div style="margin-top:auto;padding:14px 6px 6px;border-top:1px solid var(--border,#E8E8ED);">'
+    + '<button id="sb-reset-mup" style="width:100%;padding:7px 10px;border:1px solid var(--border,#E8E8ED);background:#fff;color:var(--muted,#6E6E73);border-radius:7px;font-family:inherit;font-size:10.5px;font-weight:600;cursor:pointer;letter-spacing:.4px;text-transform:uppercase;transition:all .12s;">Réinitialiser MUP</button>'
+    + '</div>';
+
   el.innerHTML = html;
+
+  var resetBtn = document.getElementById('sb-reset-mup');
+  if(resetBtn){
+    resetBtn.addEventListener('click', function(){
+      var msg1 = 'Cette action va supprimer tous les prospects, RDV, leads, contacts et devis. Les factures réelles seront conservées. Confirmer ?';
+      if(!confirm(msg1)) return;
+      var msg2 = 'Confirmation finale : RÉINITIALISER MUP ? (mup_factures sera conservé)';
+      if(!confirm(msg2)) return;
+      var keep = { 'mup_factures': localStorage.getItem('mup_factures') };
+      var allKeys = [];
+      for(var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if(k && k.indexOf('mup_') === 0 && k !== 'mup_factures') allKeys.push(k);
+      }
+      allKeys.forEach(function(k){ localStorage.removeItem(k); });
+      window.location.href = '/dashboard';
+    });
+  }
 })();

@@ -120,9 +120,40 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
 .btn-new-rdv{background:var(--text);color:#fff;padding:9px 14px;border-radius:9px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;flex-shrink:0}
 .btn-new-rdv:hover{background:#000}
 
+/* —— BOUTON TESTER CAMÉRA —— */
+.launch-btn.test-cam{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.launch-btn.test-cam:hover{background:var(--surface2)}
+.launch-btn.test-cam svg{color:var(--muted)}
+.launch-btn.test-cam.active-test{background:var(--red);color:#fff;border-color:var(--red)}
+.launch-btn.test-cam.active-test svg{color:#fff}
+.launch-btn.test-cam.active-test:hover{background:#8a2424}
+
+/* —— MODALE TEST CAMÉRA —— */
+.test-cam-modal{max-width:920px;padding:0;display:flex;flex-direction:column;max-height:92vh}
+.test-cam-modal-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.test-cam-modal-header h2{font-size:17px;font-weight:800;letter-spacing:-.4px;margin:0}
+.test-cam-modal-header .sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+.test-cam-modal-body{display:grid;grid-template-columns:1.35fr 1fr;gap:0;flex:1;min-height:0;overflow:hidden}
+.test-cam-left{padding:18px 18px 14px;display:flex;flex-direction:column;gap:10px;background:var(--surface);overflow-y:auto}
+.test-cam-right{padding:18px 22px 14px;display:flex;flex-direction:column;gap:0;border-left:1px solid var(--border);overflow-y:auto}
+.test-cam-preview-wrap{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9;width:100%}
+.test-cam-preview-wrap video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.test-cam-preview-wrap.bg-applied::before{content:'';position:absolute;inset:0;background-size:cover;background-position:center;opacity:.30;pointer-events:none;z-index:1}
+.test-cam-preview-wrap.bg-1::before{background-image:linear-gradient(135deg,#7C3AED 0%,#1D1D1F 100%)}
+.test-cam-preview-wrap.bg-2::before{background-image:linear-gradient(135deg,#0BBCD4 0%,#1D8348 100%)}
+.test-cam-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:rgba(255,255,255,.7);gap:8px;text-align:center;padding:20px;font-size:12px;z-index:2}
+.test-cam-placeholder svg{width:36px;height:36px;color:rgba(255,255,255,.4)}
+.audio-meter-wrap{position:relative;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;margin-top:4px}
+.audio-meter-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,var(--green) 0%,#FFD60A 60%,var(--red) 95%);transition:width .05s linear}
+.audio-meter-label{font-size:10px;color:var(--muted2);margin-top:4px;text-align:center;font-style:italic}
+.test-cam-modal-footer{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;background:var(--card)}
+@media(max-width:760px){
+  .test-cam-modal-body{grid-template-columns:1fr}
+  .test-cam-right{border-left:none;border-top:1px solid var(--border)}
+}
+
 /* —— WORKSPACE —— */
 .workspace{flex:1;display:grid;grid-template-columns:280px 1fr 320px;min-height:0;overflow:hidden;transition:grid-template-columns .25s}
-.workspace.tools-open{grid-template-columns:280px 1fr 240px 320px}
 
 /* —— COL GAUCHE —— */
 .col-left{background:var(--card);border-right:1px solid var(--border);overflow-y:auto;padding:14px 0}
@@ -249,9 +280,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
 .notes-zone label .kbd-hint{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted2);font-weight:500;letter-spacing:.3px}
 .notes-zone textarea{width:100%;min-height:54px;max-height:130px;border:none;background:transparent;resize:vertical;font-size:12.5px;line-height:1.5;outline:none}
 
-/* —— COL OUTILS —— */
-.col-tools{background:var(--card);border-left:1px solid var(--border);border-right:1px solid var(--border);overflow-y:auto;padding:14px 14px 80px;display:none}
-.workspace.tools-open .col-tools{display:block}
+/* —— RÉGLAGES (sliders + fond) — utilisés dans la modale Test caméra —— */
 .tool-section{background:var(--surface);border-radius:12px;padding:14px;margin-bottom:12px}
 .tool-section h3{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:7px}
 .tool-section h3 svg{color:var(--visio)}
@@ -498,18 +527,16 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
 
 @media(max-width:1300px){
   .workspace{grid-template-columns:240px 1fr 280px}
-  .workspace.tools-open{grid-template-columns:240px 1fr 220px 280px}
   .my-link-field input{width:130px}
 }
 @media(max-width:1100px){
   .workspace{grid-template-columns:220px 1fr}
-  .workspace.tools-open{grid-template-columns:220px 1fr 220px}
   .col-right{display:none}
   .my-links{display:none}
 }
 @media(max-width:900px){
   .workspace{grid-template-columns:1fr}
-  .col-left,.col-tools,.col-right{display:none}
+  .col-left,.col-right{display:none}
   .launch-bar{padding:10px 16px;gap:8px}
   .launch-providers{flex-wrap:wrap}
 }
@@ -525,6 +552,10 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
     <span class="pulse"></span>
     <span class="countdown" id="urgentCountdown">5:00</span>
     <span>RDV avec <span class="name" id="urgentName">—</span> <span class="societe" id="urgentSociete"></span></span>
+    <span id="urgentCamHint" style="display:none;font-size:11px;font-weight:500;background:rgba(0,0,0,.18);padding:3px 9px;border-radius:5px;margin-left:6px;">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:3px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Caméra à autoriser au démarrage
+    </span>
     <span class="spacer"></span>
     <button id="urgentOpenBtn">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -547,10 +578,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
     </div>
     <div class="actions">
       <button class="btn-help" id="openHelpBtn" title="Raccourcis clavier">?</button>
-      <button class="btn-tools-toggle" id="toolsToggle" title="Étalonnage et fonds vidéo">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        Étalonnage
-      </button>
     </div>
   </div>
 
@@ -561,6 +588,10 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
       <button class="launch-btn primary" id="launchJitsi" title="Démarrer une visio Jitsi instantanée">
         <span class="dot"></span>
         Jitsi
+      </button>
+      <button class="launch-btn test-cam" id="testCameraBtn" title="Préparation avant RDV : caméra, lumière, fond">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <span class="test-cam-label">Tester caméra</span>
       </button>
       <button class="launch-btn zoom" id="launchZoom" title="Ouvrir mon Zoom personnel">
         <span class="dot"></span>
@@ -671,51 +702,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
           </label>
           <textarea id="rdvNotes" placeholder="Prises de notes en direct, points clés, prochaine étape…"></textarea>
         </div>
-      </div>
-    </div>
-
-    <!-- COL OUTILS (étalonnage / fonds) -->
-    <div class="col-tools">
-      <div class="tool-section">
-        <h3>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          Étalonnage
-        </h3>
-        <div class="cal-row">
-          <label><span><span class="swatch lum"></span>Lumière</span><span class="val" id="valLum">100%</span></label>
-          <input type="range" id="lum" min="50" max="150" value="100">
-        </div>
-        <div class="cal-row r">
-          <label><span><span class="swatch r"></span>Rouge</span><span class="val" id="valR">0</span></label>
-          <input type="range" id="r" min="-50" max="50" value="0">
-        </div>
-        <div class="cal-row g">
-          <label><span><span class="swatch g"></span>Vert</span><span class="val" id="valG">0</span></label>
-          <input type="range" id="g" min="-50" max="50" value="0">
-        </div>
-        <div class="cal-row b">
-          <label><span><span class="swatch b"></span>Bleu</span><span class="val" id="valB">0</span></label>
-          <input type="range" id="b" min="-50" max="50" value="0">
-        </div>
-        <div class="tool-actions">
-          <button id="calReset">Réinitialiser</button>
-          <button id="calSave" class="primary">Enregistrer</button>
-        </div>
-      </div>
-
-      <div class="tool-section">
-        <h3>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          Fond d'écran
-        </h3>
-        <div class="bg-grid">
-          <div class="bg-thumb none selected" data-bg="none">Aucun</div>
-          <div class="bg-thumb bg-1" data-bg="bg-1"></div>
-          <div class="bg-thumb bg-2" data-bg="bg-2"></div>
-          <div class="bg-thumb custom-empty" id="customBgSlot"><span>+ Uploader<br>mon fond</span></div>
-        </div>
-        <input type="file" id="bgUpload" class="upload-input" accept="image/*">
-        <div class="upload-help">Effet décoratif autour de la vidéo. Pour un vrai fond virtuel, configurez-le dans Zoom/Teams/Meet.</div>
       </div>
     </div>
 
@@ -889,6 +875,92 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
   </div>
 </div>
 
+<!-- MODALE TEST CAMÉRA / PRÉPARATION -->
+<div class="overlay" id="testCameraModal">
+  <div class="modal test-cam-modal">
+    <div class="test-cam-modal-header">
+      <div>
+        <h2>Mode préparation</h2>
+        <div class="sub">Vérifiez votre caméra, ajustez la lumière, choisissez votre fond.</div>
+      </div>
+      <div class="modal-close" data-close="testCameraModal" style="cursor:pointer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </div>
+    </div>
+
+    <div class="test-cam-modal-body">
+      <!-- GAUCHE : preview + audio meter -->
+      <div class="test-cam-left">
+        <div class="test-cam-preview-wrap" id="testCamPreview">
+          <video id="testCamVideo" autoplay muted playsinline></video>
+          <div class="test-cam-placeholder" id="testCamPlaceholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            <div>Démarrage de la caméra…</div>
+          </div>
+        </div>
+        <div>
+          <div class="audio-meter-wrap"><div class="audio-meter-fill" id="audioMeterFill"></div></div>
+          <div class="audio-meter-label">Aucun enregistrement — test local uniquement</div>
+        </div>
+      </div>
+
+      <!-- DROITE : étalonnage + fonds -->
+      <div class="test-cam-right">
+        <div class="tool-section">
+          <h3>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            Étalonnage
+          </h3>
+          <div class="cal-row">
+            <label><span><span class="swatch lum"></span>Lumière</span><span class="val" id="valLum">100%</span></label>
+            <input type="range" id="lum" min="50" max="150" value="100">
+          </div>
+          <div class="cal-row r">
+            <label><span><span class="swatch r"></span>Rouge</span><span class="val" id="valR">0</span></label>
+            <input type="range" id="r" min="-50" max="50" value="0">
+          </div>
+          <div class="cal-row g">
+            <label><span><span class="swatch g"></span>Vert</span><span class="val" id="valG">0</span></label>
+            <input type="range" id="g" min="-50" max="50" value="0">
+          </div>
+          <div class="cal-row b">
+            <label><span><span class="swatch b"></span>Bleu</span><span class="val" id="valB">0</span></label>
+            <input type="range" id="b" min="-50" max="50" value="0">
+          </div>
+          <div class="tool-actions">
+            <button id="calReset">Réinitialiser</button>
+          </div>
+        </div>
+
+        <div class="tool-section">
+          <h3>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Fond d'écran
+          </h3>
+          <div class="bg-grid">
+            <div class="bg-thumb none selected" data-bg="none">Aucun</div>
+            <div class="bg-thumb bg-1" data-bg="bg-1"></div>
+            <div class="bg-thumb bg-2" data-bg="bg-2"></div>
+            <div class="bg-thumb custom-empty" id="customBgSlot"><span>+ Uploader<br>mon fond</span></div>
+          </div>
+          <input type="file" id="bgUpload" class="upload-input" accept="image/*">
+          <div class="upload-help">Effet décoratif autour de la vidéo. Pour un vrai fond virtuel, configurez-le dans Zoom/Teams/Meet.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="test-cam-modal-footer">
+      <button class="btn-secondary" id="testCamClose">Fermer le test</button>
+      <button class="btn-primary" id="testCamLaunchJitsi" style="background:var(--visio)">
+        <span style="display:inline-flex;align-items:center;gap:6px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Lancer Jitsi maintenant
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="/sidebar.js"></script>
@@ -902,7 +974,6 @@ const LS = {
   VISIO_LOGS:'mup_visio_logs', VISIO_SETTINGS:'mup_settings_visio',
   VISIO_CALIBRATION:'mup_visio_calibration', VISIO_DRAFT:'mup_visio_draft',
   VISIO_BG_CUSTOM:'mup_visio_bg_custom', VISIO_BG_ACTIVE:'mup_visio_bg_active',
-  TOOLS_OPEN:'mup_visio_tools_open',
   DOCS_META:'mup_visio_docs_meta',          // [{id, name, tag, mime, size, pinned, addedAt}]
   DOCS_OPEN_LOG:'mup_visio_docs_open_log',  // [{docId, prospectId, societe, openedAt}]
   URGENT_DISMISSED:'mup_visio_urgent_dismissed' // [rdvId, ...]
@@ -1099,18 +1170,6 @@ $('launchTeams').addEventListener('click', ()=>launchExternal('teams'));
 $('launchMeet').addEventListener('click', ()=>launchExternal('meet'));
 
 /* ————————————————————————————————————————————————
-   TOOLS DRAWER
-   ———————————————————————————————————————————————— */
-function setToolsOpen(open){
-  ls.set(LS.TOOLS_OPEN, open);
-  $('workspace').classList.toggle('tools-open', open);
-  $('toolsToggle').classList.toggle('active', open);
-}
-$('toolsToggle').addEventListener('click', ()=>{
-  setToolsOpen(!$('workspace').classList.contains('tools-open'));
-});
-
-/* ————————————————————————————————————————————————
    COLLECTE RDV
    ———————————————————————————————————————————————— */
 function collectVisioRdvs(){
@@ -1298,6 +1357,16 @@ function updateUrgentBanner(rdvs, now){
   } else {
     banner.classList.remove('show');
   }
+  updateUrgentBannerHint();
+}
+
+function updateUrgentBannerHint(){
+  const hint = $('urgentCamHint');
+  const banner = $('urgentBanner');
+  if(!hint || !banner) return;
+  // Only show hint when banner is visible AND test camera is closed (so user knows perms are still pending)
+  const bannerVisible = banner.classList.contains('show');
+  hint.style.display = (bannerVisible && !testCamOpen) ? 'inline-flex' : 'none';
 }
 
 /* ————————————————————————————————————————————————
@@ -1528,45 +1597,59 @@ function ensureSvgFilter(){
   return svgFilterEl;
 }
 
+function getFrameTargets(){
+  return [$('videoFrame'), $('testCamPreview')].filter(Boolean);
+}
+
 function applyCalibrationFilter(c){
-  const frame = $('videoFrame');
-  if(!frame) return;
   ensureSvgFilter().innerHTML = buildColorMatrixSVG(c.r, c.g, c.b);
-  frame.style.filter = `brightness(${c.lum}%) url(#mupColorMatrix)`;
+  const filter = `brightness(${c.lum}%) url(#mupColorMatrix)`;
+  getFrameTargets().forEach(f => { f.style.filter = filter; });
 }
 
 function loadCalibrationToUI(){
   const c = getCalibration();
-  $('lum').value = c.lum; $('r').value = c.r; $('g').value = c.g; $('b').value = c.b;
+  if($('lum')) $('lum').value = c.lum;
+  if($('r')) $('r').value = c.r;
+  if($('g')) $('g').value = c.g;
+  if($('b')) $('b').value = c.b;
   updateCalLabels();
   applyCalibrationFilter(c);
 }
 
 function updateCalLabels(){
-  $('valLum').textContent = $('lum').value + '%';
-  const r = +$('r').value, g = +$('g').value, b = +$('b').value;
-  $('valR').textContent = (r>=0?'+':'') + r;
-  $('valG').textContent = (g>=0?'+':'') + g;
-  $('valB').textContent = (b>=0?'+':'') + b;
+  if($('valLum') && $('lum')) $('valLum').textContent = $('lum').value + '%';
+  if($('lum') && $('r') && $('g') && $('b')){
+    const r = +$('r').value, g = +$('g').value, b = +$('b').value;
+    if($('valR')) $('valR').textContent = (r>=0?'+':'') + r;
+    if($('valG')) $('valG').textContent = (g>=0?'+':'') + g;
+    if($('valB')) $('valB').textContent = (b>=0?'+':'') + b;
+  }
+}
+
+let calSaveTimer = null;
+function persistCalibrationDebounced(c){
+  clearTimeout(calSaveTimer);
+  calSaveTimer = setTimeout(()=>{ ls.set(LS.VISIO_CALIBRATION, c); }, 500);
 }
 
 ['lum','r','g','b'].forEach(k=>{
-  $(k).addEventListener('input', ()=>{
+  const el = $(k); if(!el) return;
+  el.addEventListener('input', ()=>{
     updateCalLabels();
-    applyCalibrationFilter({ lum:+$('lum').value, r:+$('r').value, g:+$('g').value, b:+$('b').value });
+    const c = { lum:+$('lum').value, r:+$('r').value, g:+$('g').value, b:+$('b').value };
+    applyCalibrationFilter(c);
+    persistCalibrationDebounced(c);
   });
 });
 
-$('calReset').addEventListener('click', ()=>{
+if($('calReset')) $('calReset').addEventListener('click', ()=>{
   $('lum').value = 100; $('r').value = 0; $('g').value = 0; $('b').value = 0;
   updateCalLabels();
-  applyCalibrationFilter({ lum:100, r:0, g:0, b:0 });
+  const c = { lum:100, r:0, g:0, b:0 };
+  applyCalibrationFilter(c);
+  ls.set(LS.VISIO_CALIBRATION, c);
   showToast('Étalonnage réinitialisé');
-});
-
-$('calSave').addEventListener('click', ()=>{
-  ls.set(LS.VISIO_CALIBRATION, { lum:+$('lum').value, r:+$('r').value, g:+$('g').value, b:+$('b').value });
-  showToast('Étalonnage enregistré');
 });
 
 /* ————————————————————————————————————————————————
@@ -1575,24 +1658,26 @@ $('calSave').addEventListener('click', ()=>{
 function applyBackground(){
   const active = ls.get(LS.VISIO_BG_ACTIVE, 'none');
   const customData = ls.get(LS.VISIO_BG_CUSTOM, null);
-  const frame = $('videoFrame');
-  if(!frame) return;
+  const frames = getFrameTargets();
+  if(frames.length === 0) return;
 
-  frame.classList.remove('bg-applied','bg-1','bg-2','bg-custom-active');
+  frames.forEach(frame => {
+    frame.classList.remove('bg-applied','bg-1','bg-2','bg-custom-active');
+  });
   let styleTag = document.getElementById('mupCustomBgStyle');
   if(styleTag) styleTag.remove();
 
   if(active === 'none') return;
-  frame.classList.add('bg-applied');
+  frames.forEach(frame => frame.classList.add('bg-applied'));
 
   if(active === 'bg-1' || active === 'bg-2'){
-    frame.classList.add(active);
+    frames.forEach(frame => frame.classList.add(active));
   } else if(active === 'custom' && customData){
     const s = document.createElement('style');
     s.id = 'mupCustomBgStyle';
-    s.textContent = `.video-frame-wrap.bg-custom-active::before{background-image:url("${customData}") !important;background-size:cover !important;background-position:center !important;opacity:.30 !important}`;
+    s.textContent = `.video-frame-wrap.bg-custom-active::before, .test-cam-preview-wrap.bg-custom-active::before{background-image:url("${customData}") !important;background-size:cover !important;background-position:center !important;opacity:.30 !important}`;
     document.head.appendChild(s);
-    frame.classList.add('bg-custom-active');
+    frames.forEach(frame => frame.classList.add('bg-custom-active'));
   }
 }
 
@@ -1632,7 +1717,7 @@ function renderCustomBgThumb(){
     slot.classList.add('custom-bg');
     slot.dataset.bg = 'custom';
     slot.style.backgroundImage = `url("${data}")`;
-    slot.innerHTML = `<button onclick="event.stopPropagation();removeCustomBg()" style="position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0;z-index:3">É</button>`;
+    slot.innerHTML = `<button onclick="event.stopPropagation();removeCustomBg()" style="position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0;z-index:3" title="Supprimer">&times;</button>`;
     slot.onclick = (e) => { if(e.target.tagName === 'BUTTON') return; selectBackground('custom'); };
   }
 }
@@ -2041,7 +2126,7 @@ function renderInviteEmails(){
   $('inviteEmailsList').innerHTML = inviteEmails.map((e,i)=>`
     <span style="background:var(--surface);padding:4px 10px;border-radius:6px;font-size:11px;display:inline-flex;align-items:center;gap:6px">
       ${escapeHtml(e)}
-      <button onclick="removeEmail(${i})" style="color:var(--muted);font-size:14px;line-height:1">É</button>
+      <button onclick="removeEmail(${i})" style="color:var(--muted);font-size:14px;line-height:1">&times;</button>
     </span>
   `).join('');
 }
@@ -2188,6 +2273,119 @@ $('saveRdvBtn').addEventListener('click', ()=>{
 });
 
 /* ————————————————————————————————————————————————
+   MODE TEST CAMÉRA (préparation avant RDV)
+   ———————————————————————————————————————————————— */
+let testCamStream = null;
+let testCamAudioCtx = null;
+let testCamAnalyser = null;
+let testCamMeterRaf = null;
+let testCamOpen = false;
+
+function setTestCameraBtnState(active){
+  testCamOpen = active;
+  const btn = $('testCameraBtn');
+  if(!btn) return;
+  btn.classList.toggle('active-test', active);
+  const lbl = btn.querySelector('.test-cam-label');
+  if(lbl) lbl.textContent = active ? 'Fermer le test' : 'Tester caméra';
+}
+
+async function openTestCamera(){
+  $('testCameraModal').classList.add('show');
+  const placeholder = $('testCamPlaceholder');
+  if(placeholder){ placeholder.style.display = 'flex'; placeholder.querySelector('div').textContent = 'Démarrage de la caméra…'; }
+  // Apply current calibration + bg to preview
+  applyCalibrationFilter(getCalibration());
+  applyBackground();
+  try {
+    testCamStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+    const v = $('testCamVideo');
+    v.srcObject = testCamStream;
+    if(placeholder) placeholder.style.display = 'none';
+    // Audio meter
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(Ctx){
+      testCamAudioCtx = new Ctx();
+      const src = testCamAudioCtx.createMediaStreamSource(testCamStream);
+      testCamAnalyser = testCamAudioCtx.createAnalyser();
+      testCamAnalyser.fftSize = 256;
+      testCamAnalyser.smoothingTimeConstant = 0.6;
+      src.connect(testCamAnalyser);
+      const data = new Uint8Array(testCamAnalyser.frequencyBinCount);
+      const fill = $('audioMeterFill');
+      function tick(){
+        if(!testCamAnalyser) return;
+        testCamAnalyser.getByteFrequencyData(data);
+        let sum = 0;
+        for(let i=0;i<data.length;i++) sum += data[i];
+        const avg = sum / data.length;
+        const pct = Math.min(100, (avg / 90) * 100);
+        if(fill) fill.style.width = pct + '%';
+        testCamMeterRaf = requestAnimationFrame(tick);
+      }
+      tick();
+    }
+    setTestCameraBtnState(true);
+    updateUrgentBannerHint();
+  } catch(e){
+    setTestCameraBtnState(false);
+    let msg = 'Erreur d\'accès caméra';
+    if(e.name === 'NotAllowedError') msg = 'Permission refusée — autorisez caméra et micro dans le navigateur';
+    else if(e.name === 'NotFoundError') msg = 'Aucune caméra ou micro détecté';
+    else if(e.name === 'NotReadableError') msg = 'Caméra utilisée par une autre application';
+    else if(e.message) msg = `Erreur : ${e.message}`;
+    showToast(msg);
+    console.error('[testCamera]', e);
+    if(placeholder){
+      placeholder.style.display = 'flex';
+      placeholder.querySelector('div').textContent = msg;
+    }
+  }
+}
+
+function closeTestCamera(){
+  if(testCamMeterRaf){ cancelAnimationFrame(testCamMeterRaf); testCamMeterRaf = null; }
+  if(testCamStream){
+    testCamStream.getTracks().forEach(t => { try{ t.stop(); }catch{} });
+    testCamStream = null;
+  }
+  if(testCamAudioCtx){ try{ testCamAudioCtx.close(); }catch{} testCamAudioCtx = null; }
+  testCamAnalyser = null;
+  const v = $('testCamVideo');
+  if(v) v.srcObject = null;
+  const fill = $('audioMeterFill');
+  if(fill) fill.style.width = '0%';
+  $('testCameraModal').classList.remove('show');
+  setTestCameraBtnState(false);
+  updateUrgentBannerHint();
+}
+
+$('testCameraBtn').addEventListener('click', ()=>{
+  if(testCamOpen) closeTestCamera();
+  else openTestCamera();
+});
+$('testCamClose').addEventListener('click', closeTestCamera);
+$('testCamLaunchJitsi').addEventListener('click', ()=>{
+  closeTestCamera();
+  setTimeout(()=>$('launchJitsi').click(), 80);
+});
+
+// Override default close behaviour for the test camera modal so the stream is released
+document.querySelectorAll('[data-close="testCameraModal"]').forEach(btn=>{
+  btn.addEventListener('click', e=>{ e.stopImmediatePropagation(); closeTestCamera(); }, true);
+});
+const testOverlay = $('testCameraModal');
+testOverlay.addEventListener('click', e=>{
+  if(e.target === testOverlay){ e.stopImmediatePropagation(); closeTestCamera(); }
+}, true);
+
+// Cleanup on tab close
+window.addEventListener('beforeunload', ()=>{
+  if(testCamStream) testCamStream.getTracks().forEach(t => { try{ t.stop(); }catch{} });
+  if(testCamAudioCtx){ try{ testCamAudioCtx.close(); }catch{} }
+});
+
+/* ————————————————————————————————————————————————
    RACCOURCIS CLAVIER
    ———————————————————————————————————————————————— */
 document.addEventListener('keydown', e=>{
@@ -2198,7 +2396,10 @@ document.addEventListener('keydown', e=>{
   // Échap toujours actif
   if(e.key === 'Escape'){
     const openOverlay = document.querySelector('.overlay.show');
-    if(openOverlay){ openOverlay.classList.remove('show'); return; }
+    if(openOverlay){
+      if(openOverlay.id === 'testCameraModal'){ closeTestCamera(); return; }
+      openOverlay.classList.remove('show'); return;
+    }
     if(activeRdv && !inField){ endCurrentRdv(); return; }
   }
 
@@ -2276,7 +2477,6 @@ document.querySelectorAll('.bg-thumb[data-bg]').forEach(t=>t.classList.remove('s
 const activeThumb = document.querySelector(`.bg-thumb[data-bg="${activeBg}"]`);
 if(activeThumb) activeThumb.classList.add('selected');
 applyBackground();
-setToolsOpen(ls.get(LS.TOOLS_OPEN, false));
 renderDocsList();
 renderRdvList();
 updateQuota();

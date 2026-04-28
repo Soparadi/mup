@@ -12,38 +12,50 @@
 
   function ensureOverlay(){
     if(overlay) return overlay;
+    // Backdrop léger (clic ferme la fiche)
     overlay = document.createElement('div');
     overlay.id = 'mup-fiche-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);'
-      + 'display:none;align-items:stretch;justify-content:center;padding:0;'
-      + 'opacity:0;transition:opacity .18s ease;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.30);'
+      + 'display:none;opacity:0;transition:opacity .18s ease;';
     overlay.addEventListener('click', function(e){
       if(e.target === overlay) MUPFiche.close();
     });
-    iframe = document.createElement('iframe');
-    iframe.style.cssText = 'width:100%;max-width:780px;height:100%;border:none;'
-      + 'background:#FFFFFF;box-shadow:0 16px 48px rgba(0,0,0,.18);';
-    iframe.setAttribute('title', 'Fiche client');
-    overlay.appendChild(iframe);
     document.body.appendChild(overlay);
+
+    // Panneau latéral droit (identique à .detail-panel de Pipeline)
+    iframe = document.createElement('iframe');
+    iframe.id = 'mup-fiche-iframe';
+    iframe.style.cssText = 'position:fixed;right:0;top:0;bottom:0;width:380px;'
+      + 'background:#FFFFFF;border-left:1px solid #E8E8ED;border:none;z-index:9001;'
+      + 'transform:translateX(100%);transition:transform .25s ease;display:block;'
+      + 'box-shadow:-8px 0 24px rgba(0,0,0,.10);';
+    iframe.setAttribute('title', 'Fiche client');
+    document.body.appendChild(iframe);
     return overlay;
   }
 
   function showOverlay(){
-    var o = ensureOverlay();
-    o.style.display = 'flex';
-    requestAnimationFrame(function(){ o.style.opacity = '1'; });
-    document.body.style.overflow = 'hidden';
+    ensureOverlay();
+    overlay.style.display = 'block';
+    iframe.style.display = 'block';
+    requestAnimationFrame(function(){
+      overlay.style.opacity = '1';
+      iframe.style.transform = 'translateX(0)';
+    });
+    // Pas de body overflow:hidden — on veut pouvoir voir la visio derrière
   }
 
   function hideOverlay(){
-    if(!overlay) return;
+    if(!overlay || !iframe) return;
     overlay.style.opacity = '0';
+    iframe.style.transform = 'translateX(100%)';
     setTimeout(function(){
       if(overlay) overlay.style.display = 'none';
-      if(iframe) iframe.src = 'about:blank';
-      document.body.style.overflow = '';
-    }, 180);
+      if(iframe){
+        iframe.style.display = 'none';
+        iframe.src = 'about:blank';
+      }
+    }, 250);
   }
 
   // ESC ferme l'iframe overlay

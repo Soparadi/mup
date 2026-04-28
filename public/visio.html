@@ -1335,7 +1335,10 @@ function renderRdvList(){
     el.addEventListener('click', ()=>{
       const id = el.dataset.rdvId;
       const rdv = rdvs.find(r=>r.id===id);
-      if(rdv) selectRdv(rdv);
+      if(!rdv) return;
+      selectRdv(rdv);
+      // Ouvre la fiche complète à droite, en parallèle de la visio
+      if(rdv.prospectId && window.MUPFiche) MUPFiche.open(rdv.prospectId);
     });
   });
 

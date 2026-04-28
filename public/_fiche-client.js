@@ -81,7 +81,7 @@
       if(!id) return;
       ensureOverlay();
       lastTrigger = (opts && opts.trigger) || null;
-      iframe.src = '/pipeline?fiche=' + encodeURIComponent(id);
+      iframe.src = '/pipeline?fiche=' + encodeURIComponent(id) + '&embed=panel';
       showOverlay();
     },
     close: function(){

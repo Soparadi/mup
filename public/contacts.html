@@ -809,7 +809,7 @@ function renderAll(){
     const siretF = siretFormat(p.siret);
     const hasSiret = !!p.siret;
     const showActivity = (p.source === 'facture_import') || nbFact > 0 || ca > 0;
-    return `<div class="p-card" onclick="openDetail('${esc(String(p.id))}')">
+    return `<div class="p-card" onclick="MUPFiche.open('${esc(String(p.id))}')">
       <div class="cc-header">
         <div class="cc-naf" style="display:flex;align-items:center;gap:6px;justify-content:space-between">
           <div style="display:flex;align-items:center;gap:6px">${svgBuilding}<span>${esc(p.sector||'Contact')}</span></div>
@@ -839,7 +839,7 @@ function renderAll(){
       <div style="display:flex;gap:6px;padding:0 10px 10px">
         ${hasSiret?`<a class="cc-edit-btn" style="flex:1;text-decoration:none;background:#F5F5F7;color:#1D1D1F;border:1px solid var(--border);margin:0" href="carte.html?contact_siret=${encodeURIComponent(p.siret)}" onclick="event.stopPropagation()">${svgMap}<span style="margin-left:4px">Carte</span></a>`:''}
         ${hasSiret?`<a class="cc-edit-btn" style="flex:1;text-decoration:none;background:#F5F5F7;color:#1D1D1F;border:1px solid var(--border);margin:0" href="factures.html?client_siret=${encodeURIComponent(p.siret)}" onclick="event.stopPropagation()">${svgInvoice}<span style="margin-left:4px">Factures</span></a>`:''}
-        <button class="cc-edit-btn" style="flex:1;margin:0" onclick="event.stopPropagation();openDetail('${esc(String(p.id))}')">Modifier</button>
+        <button class="cc-edit-btn" style="flex:1;margin:0" onclick="event.stopPropagation();MUPFiche.open('${esc(String(p.id))}')">Modifier</button>
       </div>
     </div>`;
   }).join('');
@@ -1274,5 +1274,6 @@ init();
 })();
 </script>
 <script src="/sidebar.js"></script>
+<script src="/_fiche-client.js"></script>
 </body>
 </html>

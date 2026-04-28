@@ -1235,6 +1235,10 @@ function closeDetail() {
   document.getElementById('detail-panel').classList.remove('open');
   if(detailMap) { detailMap.remove(); detailMap = null; detailMarker = null; }
   currentId = null;
+  // Mode iframe (?fiche=) : prévenir la page parente
+  if(window.MUP_FICHE_EMBED && window.parent !== window){
+    try { window.parent.postMessage({ type:'mup-fiche-close' }, '*'); } catch(e){}
+  }
 }
 
 function saveNotes() {
@@ -2016,10 +2020,73 @@ renderKanban();
     }
   };
 
+  // ── MODE IFRAME (?fiche=ID) : ouvre directement la fiche en plein écran ──
+  function bootstrapFicheEmbed(){
+    var p = new URLSearchParams(window.location.search);
+    var ficheId = p.get('fiche');
+    if(!ficheId) return;
+    window.MUP_FICHE_EMBED = true;
+    // Style minimal pour cacher l'UI de la page autour de la fiche
+    var s = document.createElement('style');
+    s.textContent = '.sidebar,.topbar,.kanban-wrap,.kanban-toolbar{display:none!important}'
+      + 'body{background:transparent;overflow:hidden}'
+      + 'main,.main,.kanban-shell{display:block!important}'
+      + '.detail-overlay{background:rgba(0,0,0,0)!important}'
+      + '.detail-panel{box-shadow:none!important;width:100%!important;max-width:780px;left:0!important;right:0!important;margin:0 auto;border-left:none!important}';
+    document.head.appendChild(s);
+    // Fallback : si l'ID existe dans mup_contacts mais pas mup_pipeline, le créer
+    function ensureCardExists(id){
+      if(!Array.isArray(window.cards)) return;
+      var found = window.cards.find(function(x){ return String(x.id) === String(id); });
+      if(found) return;
+      var contacts = [];
+      try { contacts = JSON.parse(localStorage.getItem('mup_contacts') || '[]'); } catch(e){}
+      var ct = contacts.find(function(x){ return String(x.id) === String(id); });
+      if(!ct) return;
+      var newCard = {
+        id: String(ct.id),
+        name: ct.contact || ct.nom || ct.name || '',
+        co: ct.company || ct.societe || ct.nom || '',
+        email: ct.email || '',
+        tel: ct.tel || ct.telephone || ct.phone || '',
+        address: ct.adresse || ct.address || '',
+        linkedin: ct.linkedin || '',
+        facebook: ct.facebook || '',
+        instagram: ct.instagram || '',
+        col: ct.col || 'leads',
+        val: 0,
+        days: 0,
+        src: ct.source || 'contacts',
+        activity: ct.activity || [],
+        noteEntries: ct.noteEntries || [],
+        rdvs: ct.rdvs || []
+      };
+      window.cards.push(newCard);
+      try { localStorage.setItem('mup_pipeline', JSON.stringify(window.cards)); } catch(e){}
+    }
+    function tryOpen(retry){
+      if(typeof window.openDetail === 'function'){
+        ensureCardExists(ficheId);
+        window.openDetail(ficheId);
+        // Si la fiche n'a pas trouvé de carte, signaler pour fermer le wrap côté parent
+        setTimeout(function(){
+          var panel = document.getElementById('detail-panel');
+          if(!panel || !panel.classList.contains('open')){
+            try { window.parent.postMessage({ type:'mup-fiche-not-found', id: ficheId }, '*'); } catch(e){}
+          }
+        }, 60);
+      } else if(retry < 30){
+        setTimeout(function(){ tryOpen(retry+1); }, 50);
+      }
+    }
+    tryOpen(0);
+  }
+
   // ── INIT après chargement DOM ──
   function init(){
     injectFocusWrap();
     injectNextActionBlock();
+    bootstrapFicheEmbed();
 
     // Raccourci clavier : F pour toggle focus
     document.addEventListener('keydown', e => {

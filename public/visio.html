@@ -2294,13 +2294,20 @@ async function openTestCamera(){
   $('testCameraModal').classList.add('show');
   const placeholder = $('testCamPlaceholder');
   if(placeholder){ placeholder.style.display = 'flex'; placeholder.querySelector('div').textContent = 'Démarrage de la caméra…'; }
-  // Apply current calibration + bg to preview
-  applyCalibrationFilter(getCalibration());
-  applyBackground();
   try {
     testCamStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
     const v = $('testCamVideo');
     v.srcObject = testCamStream;
+    // Safari : déclencher play() explicitement après chargement des métadonnées
+    v.onloadedmetadata = function() {
+      v.play().catch(function(err) {
+        console.warn('[testCamera] play() bloqué :', err);
+      });
+    };
+    // Calibration et fond appliqués APRÈS que le stream soit attaché
+    // (sinon Safari rend une image noire)
+    applyCalibrationFilter(getCalibration());
+    applyBackground();
     if(placeholder) placeholder.style.display = 'none';
     // Audio meter
     const Ctx = window.AudioContext || window.webkitAudioContext;

@@ -2,13 +2,2293 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MUP — Visio</title>
 <link rel="stylesheet" href="/sidebar.css">
-<style>body{margin:0;font-family:-apple-system,sans-serif;display:flex;min-height:100vh;background:#F5F5F7}main{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#6E6E73}h1{font-size:32px;color:#1D1D1F;margin:0 0 8px}p{font-size:14px;margin:0}</style>
+<style>
+:root{
+  --text:#1D1D1F;
+  --muted:#6E6E73;
+  --muted2:#AEAEB2;
+  --surface:#F5F5F7;
+  --surface2:#EBEBF0;
+  --card:#FFFFFF;
+  --border:#E8E8ED;
+  --border2:#D2D2D7;
+  --visio:#7C3AED;
+  --visio-light:rgba(124,58,237,.12);
+  --visio-soft:rgba(124,58,237,.06);
+  --green:#1D8348;
+  --green-light:rgba(29,131,72,.12);
+  --orange:#E67E00;
+  --orange-light:rgba(230,126,0,.15);
+  --blue:#0A66C2;
+  --red:#A32D2D;
+  --jitsi:#7C3AED;
+  --zoom:#2D8CFF;
+  --teams:#464BC8;
+  --meet:#00805A;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Geist",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--surface);color:var(--text);display:flex;min-height:100vh;font-size:13px;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;color:inherit}
+main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow:hidden}
+
+/* —— BANDEAU URGENT T-5 (en haut, au-dessus du header) —— */
+.urgent-banner{
+  background:linear-gradient(90deg, var(--orange) 0%, #d56d00 100%);
+  color:#fff;
+  padding:10px 24px;
+  display:none;
+  align-items:center;
+  gap:14px;
+  font-size:13px;
+  font-weight:600;
+  flex-shrink:0;
+  animation:slideDown .35s;
+}
+.urgent-banner.show{display:flex}
+@keyframes slideDown{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}
+.urgent-banner .pulse{
+  width:9px;height:9px;border-radius:50%;background:#fff;
+  animation:pulse 1.2s infinite;flex-shrink:0;
+}
+.urgent-banner .countdown{
+  font-family:var(--mono);font-weight:800;font-size:14px;
+  background:rgba(0,0,0,.2);padding:3px 9px;border-radius:6px;
+}
+.urgent-banner .name{font-weight:800}
+.urgent-banner .societe{font-weight:400;opacity:.85;font-size:12px}
+.urgent-banner .spacer{flex:1}
+.urgent-banner button{
+  background:#fff;color:var(--orange);
+  padding:7px 14px;border-radius:7px;
+  font-size:12px;font-weight:700;
+  display:flex;align-items:center;gap:6px;
+}
+.urgent-banner button:hover{background:#fff5e6}
+.urgent-banner .dismiss{
+  background:rgba(0,0,0,.15);color:#fff;
+  width:28px;height:28px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+}
+.urgent-banner .dismiss:hover{background:rgba(0,0,0,.3)}
+
+/* —— HEADER —— */
+.header{background:var(--text);color:#fff;padding:12px 24px;display:flex;align-items:center;gap:18px;flex-shrink:0}
+.header h1{font-size:18px;font-weight:800;letter-spacing:-.4px}
+.header .meta{display:flex;align-items:center;gap:14px;font-size:11.5px;color:rgba(255,255,255,.65)}
+.header .meta .dot{width:6px;height:6px;border-radius:50%;background:var(--visio);box-shadow:0 0 8px var(--visio)}
+.header .meta strong{color:#fff;font-weight:600}
+.header .actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn-tools-toggle{background:rgba(255,255,255,.1);color:#fff;padding:7px 12px;border-radius:7px;font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+.btn-tools-toggle:hover{background:rgba(255,255,255,.18)}
+.btn-tools-toggle.active{background:var(--visio)}
+.btn-help{background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:var(--mono)}
+.btn-help:hover{background:rgba(255,255,255,.18);color:#fff}
+
+/* —— BARRE LANCEMENT —— */
+.launch-bar{background:var(--card);border-bottom:1px solid var(--border);padding:13px 24px;display:flex;align-items:center;gap:14px;flex-shrink:0;flex-wrap:wrap}
+.launch-label{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted2);margin-right:4px}
+.launch-providers{display:flex;gap:8px;align-items:center}
+.launch-btn{padding:9px 16px;border-radius:9px;background:var(--surface);display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--text);transition:all .12s;border:1px solid transparent;position:relative}
+.launch-btn:hover{background:var(--surface2);transform:translateY(-1px)}
+.launch-btn .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.launch-btn.jitsi .dot{background:var(--jitsi);box-shadow:0 0 0 3px rgba(124,58,237,.15)}
+.launch-btn.zoom .dot{background:var(--zoom);box-shadow:0 0 0 3px rgba(45,140,255,.15)}
+.launch-btn.teams .dot{background:var(--teams);box-shadow:0 0 0 3px rgba(70,75,200,.15)}
+.launch-btn.meet .dot{background:var(--meet);box-shadow:0 0 0 3px rgba(0,128,90,.15)}
+.launch-btn.primary{background:var(--text);color:#fff}
+.launch-btn.primary:hover{background:#000;transform:translateY(-1px)}
+.launch-btn.primary .dot{background:var(--visio);box-shadow:0 0 0 3px rgba(124,58,237,.3)}
+.launch-btn .check{position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:var(--green);color:#fff;display:none;align-items:center;justify-content:center;font-size:9px;font-weight:bold}
+.launch-btn.has-link .check{display:flex}
+.launch-divider{width:1px;height:28px;background:var(--border);margin:0 6px}
+.my-links{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.my-link-field{display:flex;align-items:center;background:var(--surface);border-radius:8px;padding:6px 10px 6px 12px;gap:6px;border:1px solid transparent;transition:border-color .15s}
+.my-link-field:focus-within{border-color:var(--visio)}
+.my-link-field .label-mini{font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:4px}
+.my-link-field .label-mini .ld{width:6px;height:6px;border-radius:50%}
+.my-link-field input{border:none;background:transparent;outline:none;font-size:11.5px;width:160px;font-family:var(--mono);color:var(--text)}
+.my-link-field input::placeholder{color:var(--muted2);font-family:var(--font)}
+.my-link-field .save-mini{width:20px;height:20px;border-radius:5px;background:var(--visio);color:#fff;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
+.my-link-field.dirty .save-mini{opacity:1}
+.launch-spacer{flex:1}
+.btn-new-rdv{background:var(--text);color:#fff;padding:9px 14px;border-radius:9px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.btn-new-rdv:hover{background:#000}
+
+/* —— WORKSPACE —— */
+.workspace{flex:1;display:grid;grid-template-columns:280px 1fr 320px;min-height:0;overflow:hidden;transition:grid-template-columns .25s}
+.workspace.tools-open{grid-template-columns:280px 1fr 240px 320px}
+
+/* —— COL GAUCHE —— */
+.col-left{background:var(--card);border-right:1px solid var(--border);overflow-y:auto;padding:14px 0}
+.col-left .search-box{padding:0 14px 10px}
+.col-left .search-input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;background:var(--surface) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="%236E6E73" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') 10px center no-repeat;outline:none}
+.col-left .search-input:focus{border-color:var(--visio)}
+.section-label{padding:14px 16px 6px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)}
+.section-label .count{font-family:var(--mono);background:var(--surface);color:var(--muted);padding:1px 6px;border-radius:5px;margin-left:6px;font-size:9px}
+.rdv-card{margin:0 8px 4px;padding:10px 11px;border-radius:10px;cursor:pointer;transition:background .12s;border:1px solid transparent;position:relative}
+.rdv-card:hover{background:var(--surface)}
+.rdv-card.active{background:var(--visio-soft);border-color:var(--visio-light)}
+.rdv-card.imminent{background:var(--orange-light);border-color:rgba(230,126,0,.4)}
+.rdv-card .top{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.rdv-card .time{font-family:var(--mono);font-weight:700;font-size:11.5px;color:var(--text)}
+.rdv-card.imminent .time{color:var(--orange)}
+.rdv-card .duration{font-family:var(--mono);font-size:10px;color:var(--muted2)}
+.rdv-card .badge-provider{margin-left:auto;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px}
+.badge-provider.jitsi{background:var(--visio-light);color:var(--visio)}
+.badge-provider.zoom{background:rgba(45,140,255,.12);color:var(--zoom)}
+.badge-provider.teams{background:rgba(70,75,200,.12);color:var(--teams)}
+.badge-provider.meet{background:rgba(0,128,90,.12);color:var(--meet)}
+.badge-provider.custom{background:var(--surface2);color:var(--muted)}
+.rdv-card .name{font-weight:600;font-size:12px;color:var(--text);margin-bottom:1px}
+.rdv-card .societe{font-size:10.5px;color:var(--muted)}
+.rdv-card .live-dot{position:absolute;top:11px;right:11px;width:6px;height:6px;border-radius:50%;background:#FF3B30;animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.empty-list{padding:30px 16px;text-align:center;color:var(--muted2);font-size:11.5px;line-height:1.5}
+
+/* —— COL CENTRE —— */
+.col-center{display:flex;flex-direction:column;background:var(--surface);overflow-y:auto;position:relative;padding:14px}
+
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center;gap:14px}
+.empty-state .icon-circle{width:72px;height:72px;border-radius:50%;background:var(--visio-light);display:flex;align-items:center;justify-content:center;color:var(--visio)}
+.empty-state h2{font-size:20px;font-weight:800;letter-spacing:-.4px}
+.empty-state p{color:var(--muted);font-size:12.5px;max-width:400px;line-height:1.5}
+.empty-state .hint{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11.5px;color:var(--muted);margin-top:8px}
+.empty-state .hint strong{color:var(--text)}
+
+/* —— BRIEFING + VISIO + DOCS LAYOUT —— */
+.center-stack{display:flex;flex-direction:column;gap:12px;min-height:0;flex:1}
+
+/* BRIEFING PROSPECT — visible avant et pendant la visio */
+.briefing{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px 16px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  flex-shrink:0;
+}
+.briefing.imminent{border-color:rgba(230,126,0,.5);background:linear-gradient(90deg, rgba(230,126,0,.04), var(--card) 30%)}
+.briefing-avatar{
+  width:48px;height:48px;border-radius:14px;
+  background:var(--visio-light);color:var(--visio);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:800;flex-shrink:0;
+}
+.briefing-main{flex:1;min-width:0}
+.briefing-name{font-size:16px;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:8px}
+.briefing-soc{font-size:12.5px;color:var(--muted);margin-top:1px}
+.briefing-info{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap}
+.briefing-info a, .briefing-info span{
+  font-size:11.5px;color:var(--text);
+  display:flex;align-items:center;gap:5px;
+  text-decoration:none;
+  padding:3px 8px;border-radius:6px;
+  background:var(--surface);
+  transition:background .12s;
+}
+.briefing-info a:hover{background:var(--surface2)}
+.briefing-info svg{color:var(--muted)}
+.stage-pill-inline{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:3px 8px;background:var(--surface);border-radius:6px}
+.stage-pill-inline .dot{width:6px;height:6px;border-radius:50%}
+.briefing-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+.briefing-mini{
+  padding:6px 12px;
+  border-radius:8px;
+  background:var(--surface);
+  font-size:11px;font-weight:600;
+  display:flex;align-items:center;gap:5px;
+  white-space:nowrap;
+}
+.briefing-mini:hover{background:var(--surface2)}
+.briefing-mini.cta{background:var(--text);color:#fff}
+.briefing-mini.cta:hover{background:#000}
+
+/* ZONE VISIO */
+.video-frame-wrap{
+  flex:1;background:#000;border-radius:14px;overflow:hidden;
+  position:relative;min-height:280px;
+  display:flex;align-items:center;justify-content:center;
+}
+.video-frame-wrap iframe{width:100%;height:100%;border:none;display:block}
+.video-frame-wrap.bg-applied::before{content:'';position:absolute;inset:0;background-size:cover;background-position:center;opacity:.30;pointer-events:none;z-index:1}
+.video-frame-wrap.bg-1::before{background-image:linear-gradient(135deg,#7C3AED 0%,#1D1D1F 100%)}
+.video-frame-wrap.bg-2::before{background-image:linear-gradient(135deg,#0BBCD4 0%,#1D8348 100%)}
+
+.popup-launcher{text-align:center;color:#fff;padding:32px;position:relative;z-index:2}
+.popup-launcher .provider-logo{width:60px;height:60px;border-radius:14px;background:rgba(255,255,255,.08);display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px;font-weight:800;font-size:22px}
+.popup-launcher h3{font-size:20px;font-weight:800;margin-bottom:5px}
+.popup-launcher p{color:rgba(255,255,255,.6);font-size:12.5px;margin-bottom:18px;max-width:360px;margin-left:auto;margin-right:auto;line-height:1.5}
+.btn-launch{background:#fff;color:#000;padding:12px 26px;border-radius:10px;font-size:13.5px;font-weight:700;display:inline-flex;align-items:center;gap:8px}
+.btn-launch:hover{background:#f0f0f0}
+.popup-state{margin-top:18px;padding:9px 14px;background:rgba(124,58,237,.18);border:1px solid rgba(124,58,237,.4);color:#fff;border-radius:8px;font-size:11.5px;display:none;align-items:center;gap:8px;justify-content:center}
+.popup-state.show{display:inline-flex}
+.popup-state .live-dot{width:6px;height:6px;border-radius:50%;background:#FF3B30;animation:pulse 1.4s infinite}
+
+/* TOOLBAR */
+.visio-toolbar{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:11px 14px;display:flex;gap:10px;align-items:center;flex-shrink:0}
+.timer{font-family:var(--mono);font-size:16px;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:7px;padding-right:12px;border-right:1px solid var(--border)}
+.timer .live-dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:pulse 1.4s infinite}
+.tool-btn{width:34px;height:34px;border-radius:9px;background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--text);transition:all .12s}
+.tool-btn:hover{background:var(--surface2)}
+.toolbar-end{margin-left:auto;display:flex;gap:8px}
+.btn-end{background:var(--red);color:#fff;padding:8px 14px;border-radius:9px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px}
+.btn-end:hover{background:#8a2424}
+
+/* NOTES */
+.notes-zone{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;flex-shrink:0}
+.notes-zone label{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.notes-zone label .save-indicator{font-size:9px;color:var(--green);font-weight:600;letter-spacing:0;text-transform:none}
+.notes-zone label .kbd-hint{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted2);font-weight:500;letter-spacing:.3px}
+.notes-zone textarea{width:100%;min-height:54px;max-height:130px;border:none;background:transparent;resize:vertical;font-size:12.5px;line-height:1.5;outline:none}
+
+/* —— COL OUTILS —— */
+.col-tools{background:var(--card);border-left:1px solid var(--border);border-right:1px solid var(--border);overflow-y:auto;padding:14px 14px 80px;display:none}
+.workspace.tools-open .col-tools{display:block}
+.tool-section{background:var(--surface);border-radius:12px;padding:14px;margin-bottom:12px}
+.tool-section h3{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.tool-section h3 svg{color:var(--visio)}
+.cal-row{margin-bottom:11px}
+.cal-row:last-child{margin-bottom:0}
+.cal-row label{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600;color:var(--text);margin-bottom:5px}
+.cal-row label .val{font-family:var(--mono);font-size:10.5px;background:var(--card);padding:2px 7px;border-radius:5px;color:var(--muted);font-weight:600}
+.cal-row .swatch{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.swatch.lum{background:linear-gradient(90deg,#000,#fff);border:1px solid var(--border2)}
+.swatch.r{background:#FF3B30}
+.swatch.g{background:#34C759}
+.swatch.b{background:#007AFF}
+.cal-row input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:5px;background:var(--surface2);border-radius:3px;outline:none}
+.cal-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:15px;height:15px;background:var(--visio);border-radius:50%;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.cal-row input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--visio);border-radius:50%;border:none;cursor:pointer}
+.cal-row.r input[type=range]{background:linear-gradient(90deg,rgba(255,59,48,.15),rgba(255,59,48,.5))}
+.cal-row.g input[type=range]{background:linear-gradient(90deg,rgba(52,199,89,.15),rgba(52,199,89,.5))}
+.cal-row.b input[type=range]{background:linear-gradient(90deg,rgba(0,122,255,.15),rgba(0,122,255,.5))}
+.tool-actions{display:flex;gap:6px;margin-top:12px;border-top:1px solid var(--border);padding-top:10px}
+.tool-actions button{flex:1;padding:7px 10px;border-radius:7px;background:var(--card);font-size:11px;font-weight:600}
+.tool-actions button:hover{background:var(--border)}
+.tool-actions button.primary{background:var(--visio);color:#fff}
+.tool-actions button.primary:hover{background:#6028d3}
+.bg-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.bg-thumb{aspect-ratio:16/10;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:border-color .15s;position:relative;overflow:hidden;background:var(--card)}
+.bg-thumb:hover{border-color:var(--border2)}
+.bg-thumb.selected{border-color:var(--visio)}
+.bg-thumb.selected::after{content:'';position:absolute;top:5px;right:5px;width:14px;height:14px;border-radius:50%;background:var(--visio) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>') center/10px no-repeat;z-index:2}
+.bg-thumb.none{background:var(--card);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);font-weight:600}
+.bg-thumb.bg-1{background:linear-gradient(135deg,#7C3AED 0%,#1D1D1F 100%)}
+.bg-thumb.bg-2{background:linear-gradient(135deg,#0BBCD4 0%,#1D8348 100%)}
+.bg-thumb.custom-bg{background-size:cover;background-position:center}
+.bg-thumb.custom-empty{border:2px dashed var(--border2);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;font-weight:600;text-align:center;line-height:1.3;padding:6px}
+.upload-input{display:none}
+.upload-help{font-size:10px;color:var(--muted);line-height:1.4;margin-top:6px}
+
+/* —— COL DROITE : DOCS BIBLIOTHÉQUE —— */
+.col-right{background:var(--card);overflow-y:auto;display:flex;flex-direction:column;border-left:1px solid var(--border)}
+.docs-header{
+  padding:14px 16px 12px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;
+}
+.docs-header h3{font-size:13px;font-weight:800;letter-spacing:-.2px;flex:1}
+.docs-header .doc-count{font-family:var(--mono);font-size:10px;font-weight:700;background:var(--surface);color:var(--muted);padding:2px 7px;border-radius:5px}
+.btn-add-doc{
+  width:28px;height:28px;border-radius:7px;
+  background:var(--visio);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+}
+.btn-add-doc:hover{background:#6028d3}
+
+.docs-filter{
+  display:flex;gap:5px;
+  padding:10px 16px;
+  border-bottom:1px solid var(--border);
+  flex-wrap:wrap;
+}
+.filter-pill{
+  font-size:10px;font-weight:600;
+  padding:4px 9px;border-radius:5px;
+  background:var(--surface);color:var(--muted);
+  cursor:pointer;
+  text-transform:lowercase;
+}
+.filter-pill:hover{background:var(--surface2)}
+.filter-pill.active{background:var(--text);color:#fff}
+
+.pinned-section, .other-section{padding:8px 8px}
+.pinned-label{
+  font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--muted2);
+  padding:6px 10px 4px;
+  display:flex;align-items:center;gap:6px;
+}
+.pinned-label .pin-icon{color:var(--visio)}
+
+.doc-card{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 10px;
+  margin:0 0 4px;
+  border-radius:10px;
+  cursor:pointer;
+  border:1px solid transparent;
+  transition:all .12s;
+  position:relative;
+}
+.doc-card:hover{background:var(--surface)}
+.doc-card.pinned{background:var(--visio-soft);border-color:var(--visio-light)}
+.doc-card.placeholder{background:transparent;border:1px dashed var(--border2);color:var(--muted2);cursor:default;opacity:.7}
+.doc-card.placeholder:hover{background:transparent}
+
+.doc-icon{
+  width:36px;height:36px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;font-size:9px;font-weight:800;letter-spacing:.5px;
+}
+.doc-icon.pdf{background:rgba(255,59,48,.12);color:#FF3B30}
+.doc-icon.video{background:rgba(124,58,237,.12);color:var(--visio)}
+.doc-icon.image{background:rgba(52,199,89,.12);color:#34C759}
+.doc-icon.doc{background:rgba(0,122,255,.12);color:#007AFF}
+.doc-icon.other{background:var(--surface2);color:var(--muted)}
+.doc-icon.placeholder-icon{background:var(--surface);color:var(--muted2)}
+
+.doc-info{flex:1;min-width:0}
+.doc-name{font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-card.placeholder .doc-name{color:var(--muted2);font-style:italic;font-weight:500}
+.doc-meta{
+  font-size:10px;color:var(--muted);
+  display:flex;align-items:center;gap:6px;
+  margin-top:2px;
+}
+.doc-tag{
+  font-size:9px;font-weight:600;
+  padding:1px 6px;border-radius:4px;
+  background:var(--surface2);color:var(--muted);
+  text-transform:lowercase;
+}
+.doc-seen-badge{
+  font-size:9px;font-weight:600;
+  color:var(--green);
+  display:inline-flex;align-items:center;gap:3px;
+}
+
+.doc-shortcut{
+  font-family:var(--mono);font-size:10px;font-weight:700;
+  background:var(--card);color:var(--muted);
+  padding:2px 6px;border-radius:5px;
+  border:1px solid var(--border);
+  flex-shrink:0;
+}
+
+.doc-actions{
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  display:none;align-items:center;gap:3px;
+  background:var(--card);
+  padding:3px;border-radius:6px;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+.doc-card:hover .doc-actions{display:flex}
+.doc-action{
+  width:24px;height:24px;border-radius:5px;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);
+}
+.doc-action:hover{background:var(--surface);color:var(--text)}
+.doc-action.danger:hover{background:#FFE5E5;color:var(--red)}
+
+.docs-empty{padding:30px 16px;text-align:center;color:var(--muted2);font-size:11.5px;line-height:1.5}
+.docs-empty .btn-first-upload{
+  display:inline-flex;align-items:center;gap:6px;
+  margin-top:10px;
+  padding:8px 14px;
+  background:var(--visio);color:#fff;
+  border-radius:8px;font-size:11.5px;font-weight:700;
+}
+
+.docs-quota{
+  padding:8px 16px;
+  font-size:9.5px;color:var(--muted2);
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;
+}
+.docs-quota .bar{
+  flex:1;height:3px;background:var(--surface2);border-radius:2px;overflow:hidden;
+}
+.docs-quota .bar-fill{height:100%;background:var(--visio);transition:width .25s}
+.docs-quota.warn .bar-fill{background:var(--orange)}
+.docs-quota.critical .bar-fill{background:var(--red)}
+
+/* —— MODALES —— */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.overlay.show{display:flex}
+.modal{background:#fff;border-radius:16px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;padding:24px}
+.modal h2{font-size:17px;font-weight:800;letter-spacing:-.4px;margin-bottom:5px}
+.modal .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.modal .field{margin-bottom:13px}
+.modal label{display:block;font-size:9.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.modal input,.modal select,.modal textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:9px;font-size:12.5px;outline:none;background:#fff}
+.modal input:focus,.modal select:focus,.modal textarea:focus{border-color:var(--visio)}
+.modal .row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.btn-secondary{padding:9px 14px;background:var(--surface);border-radius:9px;font-size:12px;font-weight:600}
+.btn-primary{padding:9px 16px;background:var(--text);color:#fff;border-radius:9px;font-size:12px;font-weight:700}
+.btn-primary:disabled{background:var(--surface2);color:var(--muted2);cursor:not-allowed;pointer-events:none}
+.btn-primary:hover{background:#000}
+.provider-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.provider-opt{padding:11px 8px;border:2px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;transition:all .12s}
+.provider-opt:hover{border-color:var(--border2)}
+.provider-opt.selected{border-color:var(--visio);background:var(--visio-soft)}
+.provider-opt .p-name{font-size:11px;font-weight:700;margin-top:4px}
+.provider-opt .p-mini{font-size:9px;color:var(--muted);margin-top:2px}
+.invite-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.invite-row input{flex:1}
+.invite-row button{flex-shrink:0;width:34px;height:34px;border-radius:8px;background:var(--surface)}
+.copy-link-box{background:var(--surface);border-radius:9px;padding:9px 11px;display:flex;align-items:center;gap:10px;margin-top:5px}
+.copy-link-box code{flex:1;font-family:var(--mono);font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.copy-link-box button{padding:5px 10px;background:var(--text);color:#fff;border-radius:6px;font-size:10px;font-weight:600}
+
+/* Modale Upload doc */
+.upload-zone{
+  border:2px dashed var(--border2);
+  border-radius:12px;
+  padding:30px 20px;
+  text-align:center;
+  cursor:pointer;
+  transition:all .15s;
+}
+.upload-zone:hover, .upload-zone.dragover{border-color:var(--visio);background:var(--visio-soft)}
+.upload-zone svg{color:var(--muted2);margin-bottom:8px}
+.upload-zone .up-title{font-size:13px;font-weight:600}
+.upload-zone .up-sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+.tag-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tag-opt{
+  padding:8px 6px;
+  border:1.5px solid var(--border);
+  border-radius:8px;
+  text-align:center;
+  font-size:11px;font-weight:600;
+  cursor:pointer;
+  transition:all .12s;
+}
+.tag-opt:hover{border-color:var(--border2)}
+.tag-opt.selected{border-color:var(--visio);background:var(--visio-soft);color:var(--visio)}
+
+/* Modale Aide raccourcis */
+.kbd-list{display:flex;flex-direction:column;gap:8px}
+.kbd-row{display:flex;align-items:center;gap:12px;padding:8px 10px;background:var(--surface);border-radius:8px}
+.kbd-row .keys{display:flex;gap:4px;flex-shrink:0}
+.kbd-row kbd{
+  font-family:var(--mono);font-size:11px;font-weight:700;
+  padding:3px 8px;border-radius:5px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-bottom:2px solid var(--border2);
+  min-width:24px;text-align:center;
+  color:var(--text);
+}
+.kbd-row .desc{font-size:12px;color:var(--text);flex:1}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,.2);z-index:2000;transition:transform .25s;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+@media(max-width:1300px){
+  .workspace{grid-template-columns:240px 1fr 280px}
+  .workspace.tools-open{grid-template-columns:240px 1fr 220px 280px}
+  .my-link-field input{width:130px}
+}
+@media(max-width:1100px){
+  .workspace{grid-template-columns:220px 1fr}
+  .workspace.tools-open{grid-template-columns:220px 1fr 220px}
+  .col-right{display:none}
+  .my-links{display:none}
+}
+@media(max-width:900px){
+  .workspace{grid-template-columns:1fr}
+  .col-left,.col-tools,.col-right{display:none}
+  .launch-bar{padding:10px 16px;gap:8px}
+  .launch-providers{flex-wrap:wrap}
+}
+</style>
 </head>
 <body>
+
 <aside id="sidebar" class="sidebar"></aside>
-<main><h1>Visio</h1><p>Bientôt disponible</p></main>
+
+<main>
+  <!-- BANDEAU URGENT T-5 -->
+  <div class="urgent-banner" id="urgentBanner">
+    <span class="pulse"></span>
+    <span class="countdown" id="urgentCountdown">5:00</span>
+    <span>RDV avec <span class="name" id="urgentName">—</span> <span class="societe" id="urgentSociete"></span></span>
+    <span class="spacer"></span>
+    <button id="urgentOpenBtn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+      Ouvrir la fiche
+    </button>
+    <button class="dismiss" id="urgentDismiss" title="Masquer">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>Visio</h1>
+    <div class="meta">
+      <span><strong id="rdvDayCount">0</strong> RDV aujourd'hui</span>
+      <span id="nextRdvLabel" style="display:none">·
+        <span class="dot"></span>
+        Prochain dans <strong id="nextRdvTime">—</strong>
+      </span>
+    </div>
+    <div class="actions">
+      <button class="btn-help" id="openHelpBtn" title="Raccourcis clavier">?</button>
+      <button class="btn-tools-toggle" id="toolsToggle" title="Étalonnage et fonds vidéo">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Étalonnage
+      </button>
+    </div>
+  </div>
+
+  <!-- BARRE LANCEMENT -->
+  <div class="launch-bar">
+    <span class="launch-label">Lancer maintenant</span>
+    <div class="launch-providers">
+      <button class="launch-btn primary" id="launchJitsi" title="Démarrer une visio Jitsi instantanée">
+        <span class="dot"></span>
+        Jitsi
+      </button>
+      <button class="launch-btn zoom" id="launchZoom" title="Ouvrir mon Zoom personnel">
+        <span class="dot"></span>
+        Zoom
+        <span class="check">—</span>
+      </button>
+      <button class="launch-btn teams" id="launchTeams" title="Ouvrir mon Teams personnel">
+        <span class="dot"></span>
+        Teams
+        <span class="check">—</span>
+      </button>
+      <button class="launch-btn meet" id="launchMeet" title="Ouvrir mon Google Meet personnel">
+        <span class="dot"></span>
+        Meet
+        <span class="check">—</span>
+      </button>
+    </div>
+
+    <div class="launch-divider"></div>
+
+    <div class="my-links">
+      <div class="my-link-field" data-provider="zoom">
+        <span class="label-mini"><span class="ld" style="background:var(--zoom)"></span>Zoom</span>
+        <input type="url" data-link="zoom" placeholder="https://zoom.us/j/...">
+        <button class="save-mini"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+      </div>
+      <div class="my-link-field" data-provider="teams">
+        <span class="label-mini"><span class="ld" style="background:var(--teams)"></span>Teams</span>
+        <input type="url" data-link="teams" placeholder="https://teams.microsoft.com/...">
+        <button class="save-mini"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+      </div>
+      <div class="my-link-field" data-provider="meet">
+        <span class="label-mini"><span class="ld" style="background:var(--meet)"></span>Meet</span>
+        <input type="url" data-link="meet" placeholder="https://meet.google.com/...">
+        <button class="save-mini"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+      </div>
+    </div>
+
+    <div class="launch-spacer"></div>
+
+    <button class="btn-new-rdv" id="openNewRdvBtn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Programmer RDV
+    </button>
+  </div>
+
+  <!-- WORKSPACE -->
+  <div class="workspace" id="workspace">
+
+    <!-- COL GAUCHE : LISTE RDV -->
+    <div class="col-left">
+      <div class="search-box">
+        <input class="search-input" id="searchInput" placeholder="Rechercher un RDV…" />
+      </div>
+      <div id="rdvList"></div>
+    </div>
+
+    <!-- COL CENTRE : BRIEFING + VISIO -->
+    <div class="col-center">
+      <div class="empty-state" id="emptyState">
+        <div class="icon-circle">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        </div>
+        <h2>Prêt à lancer une visio</h2>
+        <p>Cliquez sur un provider en haut pour démarrer instantanément, ou sélectionnez un RDV programmé dans la liste.</p>
+        <div id="nextRdvCard"></div>
+        <div id="emptyDocsHint" class="hint" style="display:none">
+          <strong id="emptyDocsCount">—</strong> · Touches <kbd style="font-family:var(--mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">1</kbd> <kbd style="font-family:var(--mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">2</kbd> <kbd style="font-family:var(--mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">3</kbd> pour ouvrir vos documents épinglés directement.
+        </div>
+        <div class="hint">
+          <strong>Astuce</strong> · Saisissez vos liens Zoom/Teams/Meet une seule fois en haut. Touche <kbd style="font-family:var(--mono);background:var(--surface);padding:1px 5px;border-radius:3px;font-size:10px">?</kbd> pour les raccourcis.
+        </div>
+      </div>
+
+      <div class="center-stack" id="visioActive" style="display:none">
+        <!-- BRIEFING PROSPECT -->
+        <div class="briefing" id="briefingPanel"></div>
+
+        <!-- ZONE VISIO -->
+        <div class="video-frame-wrap" id="videoFrame"></div>
+
+        <!-- TOOLBAR -->
+        <div class="visio-toolbar">
+          <div class="timer">
+            <span class="live-dot"></span>
+            <span id="timerDisplay">00:00</span>
+          </div>
+          <button class="tool-btn" id="copyLinkBtn" title="Copier le lien (C)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </button>
+          <button class="tool-btn" id="inviteBtn" title="Inviter (I)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          </button>
+          <div class="toolbar-end">
+            <button class="btn-end" id="endRdvBtn" title="Terminer (Échap)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="23" y1="1" x2="1" y2="23"/><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/></svg>
+              Terminer
+            </button>
+          </div>
+        </div>
+
+        <!-- NOTES -->
+        <div class="notes-zone">
+          <label>
+            Notes du RDV
+            <span class="save-indicator" id="saveIndicator" style="display:none">Enregistré</span>
+            <span class="kbd-hint">Touche N pour focus</span>
+          </label>
+          <textarea id="rdvNotes" placeholder="Prises de notes en direct, points clés, prochaine étape…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- COL OUTILS (étalonnage / fonds) -->
+    <div class="col-tools">
+      <div class="tool-section">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          Étalonnage
+        </h3>
+        <div class="cal-row">
+          <label><span><span class="swatch lum"></span>Lumière</span><span class="val" id="valLum">100%</span></label>
+          <input type="range" id="lum" min="50" max="150" value="100">
+        </div>
+        <div class="cal-row r">
+          <label><span><span class="swatch r"></span>Rouge</span><span class="val" id="valR">0</span></label>
+          <input type="range" id="r" min="-50" max="50" value="0">
+        </div>
+        <div class="cal-row g">
+          <label><span><span class="swatch g"></span>Vert</span><span class="val" id="valG">0</span></label>
+          <input type="range" id="g" min="-50" max="50" value="0">
+        </div>
+        <div class="cal-row b">
+          <label><span><span class="swatch b"></span>Bleu</span><span class="val" id="valB">0</span></label>
+          <input type="range" id="b" min="-50" max="50" value="0">
+        </div>
+        <div class="tool-actions">
+          <button id="calReset">Réinitialiser</button>
+          <button id="calSave" class="primary">Enregistrer</button>
+        </div>
+      </div>
+
+      <div class="tool-section">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          Fond d'écran
+        </h3>
+        <div class="bg-grid">
+          <div class="bg-thumb none selected" data-bg="none">Aucun</div>
+          <div class="bg-thumb bg-1" data-bg="bg-1"></div>
+          <div class="bg-thumb bg-2" data-bg="bg-2"></div>
+          <div class="bg-thumb custom-empty" id="customBgSlot"><span>+ Uploader<br>mon fond</span></div>
+        </div>
+        <input type="file" id="bgUpload" class="upload-input" accept="image/*">
+        <div class="upload-help">Effet décoratif autour de la vidéo. Pour un vrai fond virtuel, configurez-le dans Zoom/Teams/Meet.</div>
+      </div>
+    </div>
+
+    <!-- COL DROITE : DOCS BIBLIOTHÉQUE -->
+    <div class="col-right">
+      <div class="docs-header">
+        <h3>Mes documents</h3>
+        <span class="doc-count" id="docCount">0</span>
+        <button class="btn-add-doc" id="addDocBtn" title="Ajouter un document">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+
+      <div class="docs-filter" id="docsFilter">
+        <span class="filter-pill active" data-filter="all">tous</span>
+        <span class="filter-pill" data-filter="presentation">présentation</span>
+        <span class="filter-pill" data-filter="tarifs">tarifs</span>
+        <span class="filter-pill" data-filter="demo">démo</span>
+        <span class="filter-pill" data-filter="cas-client">cas client</span>
+        <span class="filter-pill" data-filter="legal">légal</span>
+        <span class="filter-pill" data-filter="autre">autre</span>
+      </div>
+
+      <div id="docsList" style="flex:1;overflow-y:auto"></div>
+
+      <div class="docs-quota" id="docsQuota">
+        <span id="docsQuotaText">—</span>
+        <div class="bar"><div class="bar-fill" id="docsQuotaBar" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- MODALE NOUVEAU RDV -->
+<div class="overlay" id="newRdvModal">
+  <div class="modal">
+    <h2>Programmer un RDV visio</h2>
+    <div class="sub">Planifiez un appel avec un prospect et envoyez l'invitation.</div>
+    <div class="field">
+      <label>Provider</label>
+      <div class="provider-grid">
+        <div class="provider-opt selected" data-provider="jitsi"><div style="font-size:18px;color:var(--jitsi)">—</div><div class="p-name">Jitsi</div><div class="p-mini">Lien généré</div></div>
+        <div class="provider-opt" data-provider="zoom"><div style="font-size:18px;color:var(--zoom)">—</div><div class="p-name">Zoom</div><div class="p-mini">Mon lien</div></div>
+        <div class="provider-opt" data-provider="teams"><div style="font-size:18px;color:var(--teams)">—</div><div class="p-name">Teams</div><div class="p-mini">Mon lien</div></div>
+        <div class="provider-opt" data-provider="meet"><div style="font-size:18px;color:var(--meet)">—</div><div class="p-name">Meet</div><div class="p-mini">Mon lien</div></div>
+        <div class="provider-opt" data-provider="custom"><div style="font-size:18px;color:var(--muted)">—</div><div class="p-name">Autre</div><div class="p-mini">Lien custom</div></div>
+      </div>
+    </div>
+    <div class="field" id="customLinkField" style="display:none">
+      <label>Lien de la visio</label>
+      <input type="url" id="customLinkInput" placeholder="https://...">
+    </div>
+    <div class="field">
+      <label>Prospect</label>
+      <select id="prospectSelect"><option value="">— Sélectionner —</option></select>
+    </div>
+    <div class="row-2">
+      <div class="field"><label>Date</label><input type="date" id="rdvDate"></div>
+      <div class="field"><label>Heure</label><input type="time" id="rdvTime"></div>
+    </div>
+    <div class="row-2">
+      <div class="field">
+        <label>Durée</label>
+        <select id="rdvDuration">
+          <option value="15">15 min</option>
+          <option value="30" selected>30 min</option>
+          <option value="45">45 min</option>
+          <option value="60">1 h</option>
+          <option value="90">1 h 30</option>
+        </select>
+      </div>
+      <div class="field"><label>Sujet</label><input type="text" id="rdvSubject" placeholder="ex : Présentation offre"></div>
+    </div>
+    <div class="field"><label>Email du prospect</label><input type="email" id="prospectEmail" placeholder="contact@societe.fr"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" data-close="newRdvModal">Annuler</button>
+      <button class="btn-primary" id="saveRdvBtn">Créer & inviter</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE INVITATION -->
+<div class="overlay" id="inviteModal">
+  <div class="modal">
+    <h2>Inviter au RDV</h2>
+    <div class="sub" id="inviteRdvLabel">—</div>
+    <div class="field">
+      <label>Lien à partager</label>
+      <div class="copy-link-box">
+        <code id="inviteLinkCode">—</code>
+        <button id="copyInviteLink">Copier</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Envoyer par email</label>
+      <div class="invite-row">
+        <input type="email" id="inviteEmailInput" placeholder="email@destinataire.fr">
+        <button id="addEmailBtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      </div>
+      <div id="inviteEmailsList" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+    </div>
+    <div class="field">
+      <label>Message</label>
+      <textarea id="inviteMessage" rows="3"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" data-close="inviteModal">Fermer</button>
+      <button class="btn-primary" id="sendInviteBtn">Envoyer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE UPLOAD DOC -->
+<div class="overlay" id="uploadDocModal">
+  <div class="modal">
+    <h2>Ajouter un document</h2>
+    <div class="sub">Glissez votre fichier ou cliquez pour parcourir. Stocké localement.</div>
+
+    <div class="upload-zone" id="uploadZone">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div class="up-title" id="uploadFileName">Cliquez ou déposez un fichier</div>
+      <div class="up-sub" id="uploadFileSize">PDF, MP4, images, doc, etc. · Max 50 Mo par fichier</div>
+    </div>
+    <input type="file" id="docFileInput" style="display:none">
+
+    <div class="field" style="margin-top:14px">
+      <label>Nom (modifiable)</label>
+      <input type="text" id="docDisplayName" placeholder="Ex : Présentation MUP 2026">
+    </div>
+
+    <div class="field">
+      <label>Catégorie</label>
+      <div class="tag-grid">
+        <div class="tag-opt selected" data-tag="presentation">Présentation</div>
+        <div class="tag-opt" data-tag="tarifs">Tarifs</div>
+        <div class="tag-opt" data-tag="demo">Démo</div>
+        <div class="tag-opt" data-tag="cas-client">Cas client</div>
+        <div class="tag-opt" data-tag="legal">Légal</div>
+        <div class="tag-opt" data-tag="autre">Autre</div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" data-close="uploadDocModal">Annuler</button>
+      <button class="btn-primary" id="saveDocBtn" disabled>Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE AIDE RACCOURCIS -->
+<div class="overlay" id="helpModal">
+  <div class="modal" style="max-width:420px">
+    <h2>Raccourcis clavier</h2>
+    <div class="sub">Pour aller plus vite pendant un RDV.</div>
+    <div class="kbd-list">
+      <div class="kbd-row"><div class="keys"><kbd>1</kbd></div><div class="desc">Ouvrir le 1<sup>er</sup> document épinglé <span style="color:var(--muted2);font-size:10px">(même sans RDV en cours)</span></div></div>
+      <div class="kbd-row"><div class="keys"><kbd>2</kbd></div><div class="desc">Ouvrir le 2<sup>e</sup> document épinglé</div></div>
+      <div class="kbd-row"><div class="keys"><kbd>3</kbd></div><div class="desc">Ouvrir le 3<sup>e</sup> document épinglé</div></div>
+      <div class="kbd-row"><div class="keys"><kbd>N</kbd></div><div class="desc">Focus sur les notes <span style="color:var(--muted2);font-size:10px">(pendant un RDV)</span></div></div>
+      <div class="kbd-row"><div class="keys"><kbd>C</kbd></div><div class="desc">Copier le lien de la visio <span style="color:var(--muted2);font-size:10px">(pendant un RDV)</span></div></div>
+      <div class="kbd-row"><div class="keys"><kbd>I</kbd></div><div class="desc">Ouvrir l'invitation par email <span style="color:var(--muted2);font-size:10px">(pendant un RDV)</span></div></div>
+      <div class="kbd-row"><div class="keys"><kbd>?</kbd></div><div class="desc">Afficher cette aide</div></div>
+      <div class="kbd-row"><div class="keys"><kbd>Échap</kbd></div><div class="desc">Fermer une modale ou terminer le RDV</div></div>
+    </div>
+    <div style="margin-top:14px;padding:10px 12px;background:var(--surface);border-radius:9px;font-size:11px;color:var(--muted);line-height:1.5">
+      <strong style="color:var(--text)">Note</strong> · Si la fenêtre Jitsi a le focus, cliquez d'abord en dehors avant d'utiliser les raccourcis.
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" data-close="helpModal">Compris</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
 <script src="/sidebar.js"></script>
+<script>
+/* ————————————————————————————————————————————————
+   MUP VISIO v4 — briefing, docs persistants, raccourcis, T-5
+   ———————————————————————————————————————————————— */
+
+const LS = {
+  PIPELINE:'mup_pipeline', AGENDA:'mup_agenda', CONTACTS:'mup_contacts', DEVIS:'mup_devis',
+  VISIO_LOGS:'mup_visio_logs', VISIO_SETTINGS:'mup_settings_visio',
+  VISIO_CALIBRATION:'mup_visio_calibration', VISIO_DRAFT:'mup_visio_draft',
+  VISIO_BG_CUSTOM:'mup_visio_bg_custom', VISIO_BG_ACTIVE:'mup_visio_bg_active',
+  TOOLS_OPEN:'mup_visio_tools_open',
+  DOCS_META:'mup_visio_docs_meta',          // [{id, name, tag, mime, size, pinned, addedAt}]
+  DOCS_OPEN_LOG:'mup_visio_docs_open_log',  // [{docId, prospectId, societe, openedAt}]
+  URGENT_DISMISSED:'mup_visio_urgent_dismissed' // [rdvId, ...]
+};
+
+const PROVIDERS = {
+  jitsi: { embed:true,  label:'Jitsi', color:'#7C3AED', urlGen:(id)=>`https://meet.jit.si/mup-${id}` },
+  zoom:  { embed:false, label:'Zoom',  color:'#2D8CFF', pattern:/zoom\.us/ },
+  teams: { embed:false, label:'Teams', color:'#464BC8', pattern:/teams\.microsoft|teams\.live/ },
+  meet:  { embed:false, label:'Meet',  color:'#00805A', pattern:/meet\.google/ },
+  custom:{ embed:false, label:'Lien',  color:'#6E6E73' }
+};
+
+const PLACEHOLDERS = [
+  { tag:'presentation', name:'PDF de présentation', mime:'application/pdf' },
+  { tag:'tarifs',       name:'Grille tarifaire',     mime:'application/pdf' },
+  { tag:'demo',         name:'Vidéo de démonstration', mime:'video/mp4' }
+];
+
+const $ = id => document.getElementById(id);
+const ls = {
+  get(k, fb){ try{ return JSON.parse(localStorage.getItem(k)) ?? fb }catch{ return fb } },
+  set(k, v){ localStorage.setItem(k, JSON.stringify(v)) }
+};
+const fmt2 = n => String(n).padStart(2,'0');
+const uid = () => Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
+const escapeHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtSize = b => b < 1024 ? b+'B' : b < 1048576 ? (b/1024).toFixed(0)+'Ko' : (b/1048576).toFixed(1)+'Mo';
+
+function detectProvider(link){
+  if(!link) return 'jitsi';
+  if(link.includes('jit.si')) return 'jitsi';
+  for(const [n,c] of Object.entries(PROVIDERS)){
+    if(c.pattern && c.pattern.test(link)) return n;
+  }
+  return 'custom';
+}
+
+function showToast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+let activeRdv = null;
+let timerInterval = null;
+let timerStart = null;
+let saveTimeout = null;
+let inviteEmails = [];
+let activeFilter = 'all';
+let pendingDoc = null;  // { file, tag }
+let activeBlobUrls = []; // URLs blob ouverts pour cleanup à fermeture
+
+// Cleanup à la fermeture de la page (libère les blob URLs)
+window.addEventListener('beforeunload', ()=>{
+  activeBlobUrls.forEach(url=>{ try{ URL.revokeObjectURL(url); }catch{} });
+});
+
+/* ————————————————————————————————————————————————
+   INDEXEDDB pour blobs documents
+   ———————————————————————————————————————————————— */
+const DB_NAME = 'mup_visio_db';
+const DB_STORE = 'docs';
+
+function openDB(){
+  return new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(DB_STORE)){
+        db.createObjectStore(DB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbPut(id, blob){
+  const db = await openDB();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).put(blob, id);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+
+async function dbGet(id){
+  const db = await openDB();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const req = tx.objectStore(DB_STORE).get(id);
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+
+async function dbDelete(id){
+  const db = await openDB();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).delete(id);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+
+async function getStorageEstimate(){
+  if(navigator.storage && navigator.storage.estimate){
+    return await navigator.storage.estimate();
+  }
+  return null;
+}
+
+/* ————————————————————————————————————————————————
+   LIENS PERSOS — INLINE AUTOSAVE
+   ———————————————————————————————————————————————— */
+function loadMyLinks(){
+  const settings = ls.get(LS.VISIO_SETTINGS, {});
+  const links = settings.links || {};
+  document.querySelectorAll('input[data-link]').forEach(input=>{
+    const provider = input.dataset.link;
+    if(links[provider]){
+      input.value = links[provider];
+      $(`launch${provider.charAt(0).toUpperCase() + provider.slice(1)}`).classList.add('has-link');
+    }
+  });
+}
+
+function saveMyLink(provider, value){
+  const settings = ls.get(LS.VISIO_SETTINGS, {});
+  if(!settings.links) settings.links = {};
+  settings.links[provider] = value.trim();
+  ls.set(LS.VISIO_SETTINGS, settings);
+  const launchBtn = $(`launch${provider.charAt(0).toUpperCase() + provider.slice(1)}`);
+  if(value.trim()) launchBtn.classList.add('has-link');
+  else launchBtn.classList.remove('has-link');
+}
+
+document.querySelectorAll('input[data-link]').forEach(input=>{
+  let timer;
+  input.addEventListener('input', ()=>{
+    input.closest('.my-link-field').classList.add('dirty');
+    clearTimeout(timer);
+    timer = setTimeout(()=>{
+      saveMyLink(input.dataset.link, input.value);
+      input.closest('.my-link-field').classList.remove('dirty');
+      showToast(`Lien ${input.dataset.link} enregistré`);
+    }, 700);
+  });
+});
+
+/* ————————————————————————————————————————————————
+   LANCEMENT PROVIDERS
+   ———————————————————————————————————————————————— */
+$('launchJitsi').addEventListener('click', ()=>{
+  const id = 'quick_' + uid();
+  selectRdv({
+    id, prospectId:null, prospectName:'Visio Jitsi rapide', societe:'', email:'',
+    date: new Date().toISOString(), duree: 30,
+    provider:'jitsi', link: PROVIDERS.jitsi.urlGen(id),
+    status:'in_progress', sujet:'Visio rapide'
+  });
+});
+
+function launchExternal(provider){
+  const settings = ls.get(LS.VISIO_SETTINGS, {});
+  const link = settings.links?.[provider];
+
+  if(!link){
+    const input = document.querySelector(`input[data-link="${provider}"]`);
+    if(input){
+      input.focus();
+      input.closest('.my-link-field').style.borderColor = 'var(--red)';
+      setTimeout(()=>{ input.closest('.my-link-field').style.borderColor = ''; }, 1500);
+    }
+    showToast(`Renseignez votre lien ${PROVIDERS[provider].label} ci-dessus`);
+    return;
+  }
+
+  const id = 'quick_' + uid();
+  selectRdv({
+    id, prospectId:null, prospectName:`${PROVIDERS[provider].label} rapide`, societe:'', email:'',
+    date: new Date().toISOString(), duree: 30,
+    provider, link, status:'in_progress', sujet:'Visio rapide'
+  });
+  setTimeout(()=>window.open(link, 'mup_visio_popup', 'width=1200,height=780,resizable=yes'), 200);
+}
+
+$('launchZoom').addEventListener('click', ()=>launchExternal('zoom'));
+$('launchTeams').addEventListener('click', ()=>launchExternal('teams'));
+$('launchMeet').addEventListener('click', ()=>launchExternal('meet'));
+
+/* ————————————————————————————————————————————————
+   TOOLS DRAWER
+   ———————————————————————————————————————————————— */
+function setToolsOpen(open){
+  ls.set(LS.TOOLS_OPEN, open);
+  $('workspace').classList.toggle('tools-open', open);
+  $('toolsToggle').classList.toggle('active', open);
+}
+$('toolsToggle').addEventListener('click', ()=>{
+  setToolsOpen(!$('workspace').classList.contains('tools-open'));
+});
+
+/* ————————————————————————————————————————————————
+   COLLECTE RDV
+   ———————————————————————————————————————————————— */
+function collectVisioRdvs(){
+  const pipeline = ls.get(LS.PIPELINE, []) || [];
+  const agenda = ls.get(LS.AGENDA, []) || [];
+  const rdvs = [];
+
+  pipeline.forEach(p=>{
+    const stage = (p.stage || p.colonne || '').toLowerCase();
+    const type = (p.type || '').toLowerCase();
+    if(stage === 'visio' || type === 'visio'){
+      rdvs.push({
+        id: p.id || 'p_'+uid(),
+        prospectId: p.id,
+        prospectName: p.nom || p.name || p.co || 'Sans nom',
+        societe: p.societe || '',
+        email: p.email || '',
+        tel: p.tel || p.telephone || '',
+        adresse: p.adresse || '',
+        date: p.rdv_date || p.date || new Date().toISOString(),
+        duree: p.duree || 30,
+        provider: p.visio_provider || detectProvider(p.visio_link || ''),
+        link: p.visio_link || '',
+        status: p.visio_status || 'planned',
+        sujet: p.sujet || ''
+      });
+    }
+  });
+
+  agenda.forEach(e=>{
+    if((e.type||'').toLowerCase() !== 'visio') return;
+    rdvs.push({
+      id: e.id || 'a_'+uid(),
+      prospectId: e.prospectId || null,
+      prospectName: e.title || e.prospectName || 'Sans nom',
+      societe: e.societe || '',
+      email: e.email || '',
+      tel: e.tel || '',
+      adresse: e.adresse || '',
+      date: e.start || e.date || new Date().toISOString(),
+      duree: e.duree || 30,
+      provider: e.provider || detectProvider(e.link || ''),
+      link: e.link || '',
+      status: e.status || 'planned',
+      sujet: e.sujet || ''
+    });
+  });
+
+  rdvs.sort((a,b)=> new Date(a.date) - new Date(b.date));
+  return rdvs;
+}
+
+function renderRdvList(){
+  const rdvs = collectVisioRdvs();
+  const search = ($('searchInput').value || '').toLowerCase().trim();
+  const list = $('rdvList');
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
+  const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+  const sections = { today:[], tomorrow:[], thisWeek:[], later:[] };
+
+  rdvs.filter(r => !search || (r.prospectName + ' ' + r.societe + ' ' + r.sujet).toLowerCase().includes(search))
+    .forEach(r=>{
+      const d = new Date(r.date);
+      if(d >= today && d < tomorrow) sections.today.push(r);
+      else if(d >= tomorrow && d < new Date(tomorrow.getTime()+86400000)) sections.tomorrow.push(r);
+      else if(d >= today && d < endOfWeek) sections.thisWeek.push(r);
+      else sections.later.push(r);
+    });
+
+  $('rdvDayCount').textContent = sections.today.length;
+
+  const nextRdv = rdvs.find(r => new Date(r.date) > now);
+  if(nextRdv){
+    const diff = new Date(nextRdv.date) - now;
+    const h = Math.floor(diff/3600000);
+    const m = Math.floor((diff%3600000)/60000);
+    let label = h > 24 ? Math.floor(h/24)+'j '+(h%24)+'h' : h > 0 ? h+'h'+fmt2(m) : m+' min';
+    $('nextRdvTime').textContent = label;
+    $('nextRdvLabel').style.display = 'inline';
+
+    if(!activeRdv){
+      $('nextRdvCard').innerHTML = `
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-top:6px;display:flex;align-items:center;gap:16px;min-width:340px">
+          <div>
+            <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);margin-bottom:3px">Prochain RDV dans</div>
+            <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--visio)">${escapeHtml(label)}</div>
+          </div>
+          <div style="border-left:1px solid var(--border);padding-left:16px">
+            <div style="font-weight:700;font-size:13px">${escapeHtml(nextRdv.prospectName)}</div>
+            <div style="font-size:11px;color:var(--muted)">${escapeHtml(nextRdv.societe)}</div>
+            <div style="margin-top:5px"><span class="badge-provider ${nextRdv.provider}">${PROVIDERS[nextRdv.provider]?.label || nextRdv.provider}</span></div>
+          </div>
+        </div>`;
+    }
+  } else {
+    $('nextRdvLabel').style.display = 'none';
+    $('nextRdvCard').innerHTML = '';
+  }
+
+  // Détection imminents (T-5min)
+  const imminentIds = new Set();
+  rdvs.forEach(r=>{
+    const diff = new Date(r.date) - now;
+    if(diff > 0 && diff <= 5*60*1000) imminentIds.add(r.id);
+  });
+
+  let html = '';
+  const renderSection = (title, items) => {
+    if(!items.length) return '';
+    let s = `<div class="section-label">${title}<span class="count">${items.length}</span></div>`;
+    items.forEach(r=>{
+      const d = new Date(r.date);
+      const time = `${fmt2(d.getHours())}:${fmt2(d.getMinutes())}`;
+      const live = r.status === 'in_progress';
+      const isActive = activeRdv && activeRdv.id === r.id;
+      const isImm = imminentIds.has(r.id);
+      s += `
+        <div class="rdv-card ${isActive?'active':''} ${isImm?'imminent':''}" data-rdv-id="${r.id}">
+          ${live?'<div class="live-dot"></div>':''}
+          <div class="top">
+            <span class="time">${time}</span>
+            <span class="duration">· ${r.duree}min</span>
+            <span class="badge-provider ${r.provider}">${PROVIDERS[r.provider]?.label || r.provider}</span>
+          </div>
+          <div class="name">${escapeHtml(r.prospectName)}</div>
+          <div class="societe">${escapeHtml(r.societe || r.sujet || '')}</div>
+        </div>`;
+    });
+    return s;
+  };
+
+  html += renderSection("Aujourd'hui", sections.today);
+  html += renderSection("Demain", sections.tomorrow);
+  html += renderSection("Cette semaine", sections.thisWeek);
+  html += renderSection("Plus tard", sections.later);
+
+  if(!html){
+    html = `<div class="empty-list">Aucun RDV programmé.<br>Cliquez sur <strong>Programmer RDV</strong>.</div>`;
+  }
+
+  list.innerHTML = html;
+  list.querySelectorAll('.rdv-card').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.dataset.rdvId;
+      const rdv = rdvs.find(r=>r.id===id);
+      if(rdv) selectRdv(rdv);
+    });
+  });
+
+  // Mise à jour bandeau urgent
+  updateUrgentBanner(rdvs, now);
+}
+
+/* ————————————————————————————————————————————————
+   BANDEAU T-5
+   ———————————————————————————————————————————————— */
+function updateUrgentBanner(rdvs, now){
+  const dismissed = ls.get(LS.URGENT_DISMISSED, []) || [];
+  const imminent = rdvs.find(r=>{
+    const diff = new Date(r.date) - now;
+    return diff > 0 && diff <= 5*60*1000 && !dismissed.includes(r.id);
+  });
+
+  const banner = $('urgentBanner');
+  if(imminent && (!activeRdv || activeRdv.id !== imminent.id)){
+    const diff = new Date(imminent.date) - now;
+    const m = Math.floor(diff/60000);
+    const s = Math.floor((diff%60000)/1000);
+    $('urgentCountdown').textContent = `${m}:${fmt2(s)}`;
+    $('urgentName').textContent = imminent.prospectName;
+    $('urgentSociete').textContent = imminent.societe ? '· ' + imminent.societe : '';
+    $('urgentOpenBtn').onclick = ()=>{
+      banner.classList.remove('show');
+      selectRdv(imminent);
+    };
+    $('urgentDismiss').onclick = ()=>{
+      const d = ls.get(LS.URGENT_DISMISSED, []) || [];
+      if(!d.includes(imminent.id)) d.push(imminent.id);
+      ls.set(LS.URGENT_DISMISSED, d);
+      banner.classList.remove('show');
+    };
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+}
+
+/* ————————————————————————————————————————————————
+   SÉLECTION RDV + RENDU
+   ———————————————————————————————————————————————— */
+function selectRdv(rdv){
+  activeRdv = rdv;
+  $('emptyState').style.display = 'none';
+  $('visioActive').style.display = 'flex';
+  renderRdvList();
+  renderBriefing(rdv);
+  renderVideoFrame(rdv);
+  renderDocsList(); // refresh badges "déjà vu" pour ce prospect
+  startTimer();
+  loadDraftNotes(rdv.id);
+}
+
+function renderBriefing(rdv){
+  const contacts = ls.get(LS.CONTACTS, []) || [];
+  const pipeline = ls.get(LS.PIPELINE, []) || [];
+
+  const contact = contacts.find(c =>
+    (rdv.prospectId && c.id === rdv.prospectId) ||
+    (rdv.societe && c.societe && c.societe.toLowerCase() === rdv.societe.toLowerCase())
+  );
+  const pEntry = pipeline.find(p => p.id === rdv.prospectId);
+  const stage = pEntry?.stage || 'visio';
+  const stageColors = { prospects:'#A32D2D', linkedin:'#0A66C2', mailing:'#B84C00', phoning:'#4338CA', visio:'#7C3AED', rdv:'#0BBCD4', devis:'#1D8348', negociation:'#E67E00', gagne:'#1D8348', disqualifie:'#AEAEB2' };
+  const stageColor = stageColors[stage.toLowerCase()] || '#7C3AED';
+
+  const initials = (rdv.prospectName || '?').split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase();
+  const email = rdv.email || contact?.email;
+  const tel = rdv.tel || contact?.tel || contact?.telephone;
+  const adresse = rdv.adresse || contact?.adresse;
+
+  // Imminent ?
+  const diff = new Date(rdv.date) - new Date();
+  const isImminent = diff > 0 && diff <= 10*60*1000;
+
+  const panel = $('briefingPanel');
+  panel.classList.toggle('imminent', isImminent);
+
+  let infoHtml = '';
+  if(email){
+    infoHtml += `<a href="mailto:${escapeHtml(email)}">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      ${escapeHtml(email)}
+    </a>`;
+  }
+  if(tel){
+    infoHtml += `<a href="tel:${escapeHtml(tel)}">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      ${escapeHtml(tel)}
+    </a>`;
+  }
+  if(adresse){
+    infoHtml += `<span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${escapeHtml(adresse)}</span>`;
+  }
+  infoHtml += `<span class="stage-pill-inline"><span class="dot" style="background:${stageColor}"></span>${escapeHtml(stage)}</span>`;
+  if(rdv.sujet && rdv.sujet !== 'Visio rapide'){
+    infoHtml += `<span style="background:var(--visio-soft);color:var(--visio)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${escapeHtml(rdv.sujet)}</span>`;
+  }
+
+  // Badges actions
+  let actionsHtml = '';
+  if(rdv.prospectId){
+    actionsHtml = `
+      <button class="briefing-mini cta" onclick="createDevisFromRdv()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Devis
+      </button>
+      <button class="briefing-mini" onclick="window.location.href='/pipeline'">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Fiche
+      </button>
+    `;
+  }
+
+  panel.innerHTML = `
+    <div class="briefing-avatar">${escapeHtml(initials)}</div>
+    <div class="briefing-main">
+      <div class="briefing-name">${escapeHtml(rdv.prospectName)}</div>
+      <div class="briefing-soc">${escapeHtml(rdv.societe || '—')}</div>
+      <div class="briefing-info">${infoHtml}</div>
+    </div>
+    <div class="briefing-actions">${actionsHtml}</div>
+  `;
+}
+
+function renderVideoFrame(rdv){
+  const frame = $('videoFrame');
+  const provider = PROVIDERS[rdv.provider];
+
+  if(rdv.provider === 'jitsi' && !rdv.link){
+    rdv.link = PROVIDERS.jitsi.urlGen(rdv.id);
+  }
+
+  if(provider && provider.embed && rdv.link){
+    frame.innerHTML = `<iframe src="${rdv.link}" allow="camera; microphone; display-capture; autoplay; clipboard-write" allowfullscreen></iframe>`;
+  } else {
+    frame.innerHTML = `
+      <div class="popup-launcher">
+        <div class="provider-logo" style="color:${provider?.color || '#fff'}">${(provider?.label || 'Lien').charAt(0)}</div>
+        <h3>${provider?.label || 'Visio externe'}</h3>
+        <p>${rdv.link ? 'La fenêtre s\'ouvre à part — MUP reste ouvert avec la fiche prospect et vos documents.' : 'Aucun lien fourni pour ce RDV.'}</p>
+        ${rdv.link ? `<button class="btn-launch" onclick="launchPopup('${rdv.link.replace(/'/g,"\\'")}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Ouvrir ${provider?.label || 'la visio'}
+        </button>` : ''}
+        <div class="popup-state" id="popupState"><span class="live-dot"></span>Visio ouverte dans la fenêtre externe</div>
+      </div>`;
+  }
+  applyCalibrationFilter(getCalibration());
+  applyBackground();
+}
+
+window.launchPopup = function(link){
+  const w = window.open(link, 'mup_visio_popup', 'width=1200,height=780,resizable=yes');
+  if(w){
+    const ps = $('popupState');
+    if(ps) ps.classList.add('show');
+    showToast('Visio ouverte');
+  } else {
+    showToast('Veuillez autoriser les popups');
+  }
+};
+
+window.createDevisFromRdv = function(){
+  if(!activeRdv) return;
+  localStorage.setItem('mup_devis_prefill', JSON.stringify({
+    societe: activeRdv.societe, nom: activeRdv.prospectName,
+    email: activeRdv.email, source: 'visio', rdvId: activeRdv.id
+  }));
+  window.location.href = '/devis';
+};
+
+/* ————————————————————————————————————————————————
+   TIMER + NOTES
+   ———————————————————————————————————————————————— */
+function startTimer(){
+  clearInterval(timerInterval);
+  timerStart = Date.now();
+  timerInterval = setInterval(()=>{
+    const elapsed = Math.floor((Date.now() - timerStart) / 1000);
+    const m = Math.floor(elapsed / 60);
+    const s = elapsed % 60;
+    $('timerDisplay').textContent = `${fmt2(m)}:${fmt2(s)}`;
+  }, 1000);
+}
+
+function loadDraftNotes(rdvId){
+  const drafts = ls.get(LS.VISIO_DRAFT, {}) || {};
+  $('rdvNotes').value = drafts[rdvId] || '';
+}
+
+$('rdvNotes').addEventListener('input', e=>{
+  if(!activeRdv) return;
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(()=>{
+    const drafts = ls.get(LS.VISIO_DRAFT, {}) || {};
+    drafts[activeRdv.id] = e.target.value;
+    ls.set(LS.VISIO_DRAFT, drafts);
+    const ind = $('saveIndicator');
+    ind.style.display = 'inline';
+    setTimeout(()=>ind.style.display = 'none', 1500);
+  }, 600);
+});
+
+$('endRdvBtn').addEventListener('click', endCurrentRdv);
+
+function endCurrentRdv(){
+  if(!activeRdv) return;
+  if(!confirm('Terminer ce RDV ? La durée et les notes seront enregistrées.')) return;
+
+  const duree = Math.floor((Date.now() - timerStart) / 60000);
+  const notes = $('rdvNotes').value;
+
+  const logs = ls.get(LS.VISIO_LOGS, []) || [];
+  logs.unshift({
+    id: 'log_' + uid(), rdvId: activeRdv.id,
+    prospectId: activeRdv.prospectId, prospectName: activeRdv.prospectName,
+    societe: activeRdv.societe, date: new Date().toISOString(),
+    duree, notes, provider: activeRdv.provider
+  });
+  ls.set(LS.VISIO_LOGS, logs);
+
+  const pipeline = ls.get(LS.PIPELINE, []) || [];
+  const pIdx = pipeline.findIndex(p => p.id === activeRdv.prospectId);
+  if(pIdx !== -1 && (pipeline[pIdx].stage || '').toLowerCase() === 'visio'){
+    pipeline[pIdx].stage = 'rdv';
+    ls.set(LS.PIPELINE, pipeline);
+  }
+
+  const drafts = ls.get(LS.VISIO_DRAFT, {}) || {};
+  delete drafts[activeRdv.id];
+  ls.set(LS.VISIO_DRAFT, drafts);
+
+  showToast(`RDV enregistré · ${duree} min`);
+  clearInterval(timerInterval);
+  activeRdv = null;
+  $('emptyState').style.display = 'flex';
+  $('visioActive').style.display = 'none';
+  renderDocsList();
+  renderRdvList();
+}
+
+/* ————————————————————————————————————————————————
+   ÉTALONNAGE
+   ———————————————————————————————————————————————— */
+function getCalibration(){
+  return ls.get(LS.VISIO_CALIBRATION, { lum:100, r:0, g:0, b:0 });
+}
+
+function buildColorMatrixSVG(r, g, b){
+  const rr = 1 + r/100, gg = 1 + g/100, bb = 1 + b/100;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute"><filter id="mupColorMatrix" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${rr} 0 0 0 0 0 ${gg} 0 0 0 0 0 ${bb} 0 0 0 0 0 1 0"/></filter></svg>`;
+}
+
+let svgFilterEl = null;
+function ensureSvgFilter(){
+  if(!svgFilterEl){
+    const wrap = document.createElement('div');
+    wrap.id = 'mupSvgFilterWrap';
+    wrap.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none';
+    document.body.appendChild(wrap);
+    svgFilterEl = wrap;
+  }
+  return svgFilterEl;
+}
+
+function applyCalibrationFilter(c){
+  const frame = $('videoFrame');
+  if(!frame) return;
+  ensureSvgFilter().innerHTML = buildColorMatrixSVG(c.r, c.g, c.b);
+  frame.style.filter = `brightness(${c.lum}%) url(#mupColorMatrix)`;
+}
+
+function loadCalibrationToUI(){
+  const c = getCalibration();
+  $('lum').value = c.lum; $('r').value = c.r; $('g').value = c.g; $('b').value = c.b;
+  updateCalLabels();
+  applyCalibrationFilter(c);
+}
+
+function updateCalLabels(){
+  $('valLum').textContent = $('lum').value + '%';
+  const r = +$('r').value, g = +$('g').value, b = +$('b').value;
+  $('valR').textContent = (r>=0?'+':'') + r;
+  $('valG').textContent = (g>=0?'+':'') + g;
+  $('valB').textContent = (b>=0?'+':'') + b;
+}
+
+['lum','r','g','b'].forEach(k=>{
+  $(k).addEventListener('input', ()=>{
+    updateCalLabels();
+    applyCalibrationFilter({ lum:+$('lum').value, r:+$('r').value, g:+$('g').value, b:+$('b').value });
+  });
+});
+
+$('calReset').addEventListener('click', ()=>{
+  $('lum').value = 100; $('r').value = 0; $('g').value = 0; $('b').value = 0;
+  updateCalLabels();
+  applyCalibrationFilter({ lum:100, r:0, g:0, b:0 });
+  showToast('Étalonnage réinitialisé');
+});
+
+$('calSave').addEventListener('click', ()=>{
+  ls.set(LS.VISIO_CALIBRATION, { lum:+$('lum').value, r:+$('r').value, g:+$('g').value, b:+$('b').value });
+  showToast('Étalonnage enregistré');
+});
+
+/* ————————————————————————————————————————————————
+   FONDS
+   ———————————————————————————————————————————————— */
+function applyBackground(){
+  const active = ls.get(LS.VISIO_BG_ACTIVE, 'none');
+  const customData = ls.get(LS.VISIO_BG_CUSTOM, null);
+  const frame = $('videoFrame');
+  if(!frame) return;
+
+  frame.classList.remove('bg-applied','bg-1','bg-2','bg-custom-active');
+  let styleTag = document.getElementById('mupCustomBgStyle');
+  if(styleTag) styleTag.remove();
+
+  if(active === 'none') return;
+  frame.classList.add('bg-applied');
+
+  if(active === 'bg-1' || active === 'bg-2'){
+    frame.classList.add(active);
+  } else if(active === 'custom' && customData){
+    const s = document.createElement('style');
+    s.id = 'mupCustomBgStyle';
+    s.textContent = `.video-frame-wrap.bg-custom-active::before{background-image:url("${customData}") !important;background-size:cover !important;background-position:center !important;opacity:.30 !important}`;
+    document.head.appendChild(s);
+    frame.classList.add('bg-custom-active');
+  }
+}
+
+function selectBackground(bg){
+  ls.set(LS.VISIO_BG_ACTIVE, bg);
+  document.querySelectorAll('.bg-thumb[data-bg]').forEach(t=>t.classList.remove('selected'));
+  const thumb = document.querySelector(`.bg-thumb[data-bg="${bg}"]`);
+  if(thumb) thumb.classList.add('selected');
+  applyBackground();
+}
+
+document.querySelectorAll('.bg-thumb[data-bg]').forEach(thumb=>{
+  thumb.addEventListener('click', ()=>selectBackground(thumb.dataset.bg));
+});
+
+$('customBgSlot').addEventListener('click', ()=>$('bgUpload').click());
+
+$('bgUpload').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  if(file.size > 2*1024*1024){ showToast('Image trop lourde (max 2 Mo)'); return; }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    ls.set(LS.VISIO_BG_CUSTOM, ev.target.result);
+    renderCustomBgThumb();
+    selectBackground('custom');
+    showToast('Fond personnalisé appliqué');
+  };
+  reader.readAsDataURL(file);
+});
+
+function renderCustomBgThumb(){
+  const slot = $('customBgSlot');
+  const data = ls.get(LS.VISIO_BG_CUSTOM, null);
+  if(data){
+    slot.classList.remove('custom-empty');
+    slot.classList.add('custom-bg');
+    slot.dataset.bg = 'custom';
+    slot.style.backgroundImage = `url("${data}")`;
+    slot.innerHTML = `<button onclick="event.stopPropagation();removeCustomBg()" style="position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0;z-index:3">É</button>`;
+    slot.onclick = (e) => { if(e.target.tagName === 'BUTTON') return; selectBackground('custom'); };
+  }
+}
+
+window.removeCustomBg = function(){
+  if(!confirm('Supprimer le fond personnalisé ?')) return;
+  localStorage.removeItem(LS.VISIO_BG_CUSTOM);
+  const active = ls.get(LS.VISIO_BG_ACTIVE, 'none');
+  const slot = $('customBgSlot');
+  slot.classList.remove('custom-bg','selected');
+  slot.classList.add('custom-empty');
+  delete slot.dataset.bg;
+  slot.style.backgroundImage = '';
+  slot.innerHTML = '<span>+ Uploader<br>mon fond</span>';
+  slot.onclick = () => $('bgUpload').click();
+  if(active === 'custom') selectBackground('none');
+  showToast('Fond supprimé');
+};
+
+/* ————————————————————————————————————————————————
+   DOCUMENTS — UPLOAD, RENDU, OUVERTURE
+   ———————————————————————————————————————————————— */
+$('addDocBtn').addEventListener('click', openUploadModal);
+
+function openUploadModal(){
+  pendingDoc = null;
+  $('uploadFileName').textContent = 'Cliquez ou déposez un fichier';
+  $('uploadFileSize').textContent = 'PDF, MP4, images, doc, etc. · Max 50 Mo par fichier';
+  $('docDisplayName').value = '';
+  document.querySelectorAll('.tag-opt').forEach(t=>t.classList.remove('selected'));
+  document.querySelector('.tag-opt[data-tag="presentation"]').classList.add('selected');
+  $('saveDocBtn').disabled = true;
+  $('uploadDocModal').classList.add('show');
+}
+
+$('uploadZone').addEventListener('click', ()=>$('docFileInput').click());
+$('uploadZone').addEventListener('dragover', e=>{ e.preventDefault(); $('uploadZone').classList.add('dragover'); });
+$('uploadZone').addEventListener('dragleave', ()=>$('uploadZone').classList.remove('dragover'));
+$('uploadZone').addEventListener('drop', e=>{
+  e.preventDefault();
+  $('uploadZone').classList.remove('dragover');
+  if(e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]);
+});
+$('docFileInput').addEventListener('change', e=>{
+  if(e.target.files[0]) handleFileSelect(e.target.files[0]);
+});
+
+function handleFileSelect(file){
+  if(file.size > 50*1024*1024){
+    showToast('Fichier trop lourd (max 50 Mo)');
+    return;
+  }
+  pendingDoc = { file };
+  $('uploadFileName').textContent = file.name;
+  $('uploadFileSize').textContent = `${fmtSize(file.size)} · ${file.type || 'type inconnu'}`;
+  $('docDisplayName').value = file.name.replace(/\.[^.]+$/, '');
+  $('saveDocBtn').disabled = false;
+}
+
+document.querySelectorAll('.tag-opt').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tag-opt').forEach(x=>x.classList.remove('selected'));
+    t.classList.add('selected');
+  });
+});
+
+$('saveDocBtn').addEventListener('click', async ()=>{
+  if(!pendingDoc) return;
+  const name = $('docDisplayName').value.trim() || pendingDoc.file.name;
+  const tag = document.querySelector('.tag-opt.selected')?.dataset.tag || 'autre';
+  const id = 'doc_' + uid();
+
+  // Désactiver le bouton pendant l'upload (bloquer doubles clics)
+  const btn = $('saveDocBtn');
+  btn.disabled = true;
+  btn.textContent = 'Ajout en cours…';
+
+  try{
+    // 1. Tenter d'abord l'écriture du blob (le risque #1 est le quota)
+    await dbPut(id, pendingDoc.file);
+
+    // 2. Vérifier que le blob est bien lisible (sinon corruption silencieuse)
+    const verify = await dbGet(id);
+    if(!verify){
+      throw new Error('Vérification échouée après écriture');
+    }
+
+    // 3. Seulement si OK, écrire les métadonnées
+    const meta = ls.get(LS.DOCS_META, []) || [];
+    const pinnedCount = meta.filter(m=>m.pinned).length;
+    meta.push({
+      id, name, tag,
+      mime: pendingDoc.file.type,
+      size: pendingDoc.file.size,
+      pinned: pinnedCount < 3,
+      addedAt: new Date().toISOString()
+    });
+    ls.set(LS.DOCS_META, meta);
+
+    showToast('Document ajouté');
+    $('uploadDocModal').classList.remove('show');
+    pendingDoc = null;
+    renderDocsList();
+    updateQuota();
+  } catch(e){
+    // Rollback : si la meta a été écrite, on supprime le blob orphelin
+    try{ await dbDelete(id); }catch{}
+
+    // Diagnostic clair selon le type d'erreur
+    let msg = 'Erreur de stockage';
+    if(e.name === 'QuotaExceededError' || (e.message||'').toLowerCase().includes('quota')){
+      msg = 'Stockage plein. Supprimez des documents ou videz le cache.';
+    } else if(e.message){
+      msg = `Erreur : ${e.message}`;
+    }
+    showToast(msg);
+    console.error('[MUP doc upload]', e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ajouter';
+  }
+});
+
+function updateEmptyDocsHint(meta){
+  const pinnedCount = (meta || []).filter(m=>m.pinned).slice(0,3).length;
+  const hint = $('emptyDocsHint');
+  if(!hint) return;
+  if(pinnedCount > 0){
+    $('emptyDocsCount').textContent = pinnedCount === 1
+      ? '1 document épinglé prêt'
+      : `${pinnedCount} documents épinglés prêts`;
+    hint.style.display = 'block';
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
+function getMimeCategory(mime){
+  if(!mime) return 'other';
+  if(mime.includes('pdf')) return 'pdf';
+  if(mime.startsWith('video/')) return 'video';
+  if(mime.startsWith('image/')) return 'image';
+  if(mime.includes('word') || mime.includes('text')) return 'doc';
+  return 'other';
+}
+
+function getMimeLabel(mime){
+  const cat = getMimeCategory(mime);
+  return { pdf:'PDF', video:'MP4', image:'IMG', doc:'DOC', other:'FILE' }[cat];
+}
+
+function renderDocsList(){
+  const meta = ls.get(LS.DOCS_META, []) || [];
+  const filtered = activeFilter === 'all' ? meta : meta.filter(m=>m.tag === activeFilter);
+  const pinned = filtered.filter(m=>m.pinned).slice(0,3);
+  const others = filtered.filter(m=>!pinned.includes(m));
+  const list = $('docsList');
+  const logs = ls.get(LS.DOCS_OPEN_LOG, []) || [];
+
+  $('docCount').textContent = meta.length;
+
+  // Mise à jour de l'indicateur d'empty state (raccourcis 1/2/3 prêts)
+  updateEmptyDocsHint(meta);
+
+  let html = '';
+
+  // Section épinglée — toujours 3 emplacements (pinned + placeholders)
+  if(activeFilter === 'all'){
+    html += `<div class="pinned-label">
+      <svg class="pin-icon" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M16 4v4h4l-2 4 2 4h-4v4l-4-2-4 2v-4H4l2-4-2-4h4V4l4 2 4-2z"/></svg>
+      Épinglés (touches 1-2-3)
+    </div>`;
+    html += `<div class="pinned-section">`;
+
+    for(let i = 0; i < 3; i++){
+      if(pinned[i]){
+        html += renderDocCard(pinned[i], i+1, logs);
+      } else {
+        const ph = PLACEHOLDERS[i];
+        html += `
+          <div class="doc-card placeholder">
+            <div class="doc-icon placeholder-icon">${getMimeLabel(ph.mime)}</div>
+            <div class="doc-info">
+              <div class="doc-name">${escapeHtml(ph.name)}</div>
+              <div class="doc-meta">à ajouter · épinglé auto</div>
+            </div>
+            <span class="doc-shortcut">${i+1}</span>
+          </div>`;
+      }
+    }
+    html += `</div>`;
+
+    if(others.length){
+      html += `<div class="pinned-label">Autres (${others.length})</div>`;
+      html += `<div class="other-section">`;
+      others.forEach(d => html += renderDocCard(d, null, logs));
+      html += `</div>`;
+    }
+  } else {
+    // Filtre actif — tout afficher dans une seule section
+    if(filtered.length){
+      html += `<div class="other-section" style="padding-top:10px">`;
+      filtered.forEach((d, i) => {
+        const idx = pinned.indexOf(d);
+        html += renderDocCard(d, idx >= 0 ? idx+1 : null, logs);
+      });
+      html += `</div>`;
+    }
+  }
+
+  if(meta.length === 0){
+    html = `
+      <div class="docs-empty">
+        Aucun document.<br>
+        Ajoutez vos PDF, vidéos et présentations<br>
+        une fois pour les avoir toujours sous la main.
+        <br>
+        <button class="btn-first-upload" onclick="document.getElementById('addDocBtn').click()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Ajouter un document
+        </button>
+      </div>`;
+  } else if(filtered.length === 0 && activeFilter !== 'all'){
+    html = `<div class="docs-empty" style="padding-top:30px">Aucun document dans cette catégorie.</div>`;
+  }
+
+  list.innerHTML = html;
+
+  // Click handlers
+  list.querySelectorAll('.doc-card:not(.placeholder)').forEach(el=>{
+    el.addEventListener('click', e=>{
+      if(e.target.closest('.doc-actions')) return;
+      openDoc(el.dataset.docId);
+    });
+  });
+  list.querySelectorAll('.doc-action-pin').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      togglePin(btn.dataset.docId);
+    });
+  });
+  list.querySelectorAll('.doc-action-delete').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      deleteDoc(btn.dataset.docId);
+    });
+  });
+}
+
+function renderDocCard(d, shortcutNum, logs){
+  const cat = getMimeCategory(d.mime);
+  const label = getMimeLabel(d.mime);
+
+  // Badge "déjà vu" pour le prospect actuel
+  let seenBadge = '';
+  if(activeRdv && activeRdv.prospectId){
+    const seenLog = logs.find(l => l.docId === d.id && l.prospectId === activeRdv.prospectId);
+    if(seenLog){
+      const date = new Date(seenLog.openedAt);
+      const dateStr = `${fmt2(date.getDate())}/${fmt2(date.getMonth()+1)}`;
+      seenBadge = `<span class="doc-seen-badge">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        vu ${dateStr}
+      </span>`;
+    }
+  }
+
+  return `
+    <div class="doc-card ${d.pinned?'pinned':''}" data-doc-id="${d.id}">
+      <div class="doc-icon ${cat}">${label}</div>
+      <div class="doc-info">
+        <div class="doc-name">${escapeHtml(d.name)}</div>
+        <div class="doc-meta">
+          <span class="doc-tag">${d.tag}</span>
+          <span>${fmtSize(d.size)}</span>
+          ${seenBadge}
+        </div>
+      </div>
+      ${shortcutNum ? `<span class="doc-shortcut">${shortcutNum}</span>` : ''}
+      <div class="doc-actions">
+        <button class="doc-action doc-action-pin" data-doc-id="${d.id}" title="${d.pinned?'Désépingler':'Épingler'}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="${d.pinned?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M16 4v4h4l-2 4 2 4h-4v4l-4-2-4 2v-4H4l2-4-2-4h4V4l4 2 4-2z"/></svg>
+        </button>
+        <button class="doc-action doc-action-delete danger" data-doc-id="${d.id}" title="Supprimer">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+    </div>`;
+}
+
+async function openDoc(docId){
+  const meta = ls.get(LS.DOCS_META, []) || [];
+  const doc = meta.find(m => m.id === docId);
+  if(!doc) return;
+
+  try{
+    const blob = await dbGet(docId);
+    if(!blob){
+      showToast('Document introuvable');
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+    if(!w){
+      showToast('Veuillez autoriser les popups');
+      return;
+    }
+    showToast(`${doc.name} ouvert`);
+
+    // Log "doc ouvert pour ce prospect"
+    if(activeRdv && activeRdv.prospectId){
+      const logs = ls.get(LS.DOCS_OPEN_LOG, []) || [];
+      logs.push({
+        docId, prospectId: activeRdv.prospectId,
+        societe: activeRdv.societe, openedAt: new Date().toISOString()
+      });
+      ls.set(LS.DOCS_OPEN_LOG, logs);
+      // Refresh badges
+      setTimeout(renderDocsList, 50);
+    }
+
+    // Garder l'URL valide 30 min (mp4 longs OK) + cleanup à fermeture
+    activeBlobUrls.push(url);
+    setTimeout(()=>URL.revokeObjectURL(url), 30*60*1000);
+  } catch(e){
+    showToast('Erreur d\'ouverture');
+    console.error(e);
+  }
+}
+
+function togglePin(docId){
+  const meta = ls.get(LS.DOCS_META, []) || [];
+  const doc = meta.find(m => m.id === docId);
+  if(!doc) return;
+  if(!doc.pinned && meta.filter(m=>m.pinned).length >= 3){
+    showToast('Maximum 3 documents épinglés');
+    return;
+  }
+  doc.pinned = !doc.pinned;
+  ls.set(LS.DOCS_META, meta);
+  showToast(doc.pinned ? 'Épinglé' : 'Désépinglé');
+  renderDocsList();
+}
+
+async function deleteDoc(docId){
+  const meta = ls.get(LS.DOCS_META, []) || [];
+  const doc = meta.find(m => m.id === docId);
+  if(!doc) return;
+  if(!confirm(`Supprimer "${doc.name}" ?`)) return;
+  await dbDelete(docId);
+  ls.set(LS.DOCS_META, meta.filter(m => m.id !== docId));
+  showToast('Document supprimé');
+  renderDocsList();
+  updateQuota();
+}
+
+document.querySelectorAll('.filter-pill').forEach(p=>{
+  p.addEventListener('click', ()=>{
+    document.querySelectorAll('.filter-pill').forEach(x=>x.classList.remove('active'));
+    p.classList.add('active');
+    activeFilter = p.dataset.filter;
+    renderDocsList();
+  });
+});
+
+async function updateQuota(){
+  const meta = ls.get(LS.DOCS_META, []) || [];
+  const usedBytes = meta.reduce((sum, m) => sum + (m.size || 0), 0);
+  const estimate = await getStorageEstimate();
+  const quota = estimate?.quota || 500*1024*1024; // fallback 500Mo
+  const pct = Math.round((usedBytes / quota) * 100);
+
+  $('docsQuotaText').textContent = `${fmtSize(usedBytes)} utilisés`;
+  $('docsQuotaBar').style.width = Math.min(pct, 100) + '%';
+  const q = $('docsQuota');
+  q.classList.remove('warn', 'critical');
+  if(pct > 80) q.classList.add('critical');
+  else if(pct > 60) q.classList.add('warn');
+}
+
+/* ————————————————————————————————————————————————
+   COPIER + INVITER
+   ———————————————————————————————————————————————— */
+$('copyLinkBtn').addEventListener('click', ()=>{
+  if(!activeRdv?.link){ showToast('Aucun lien à copier'); return; }
+  navigator.clipboard.writeText(activeRdv.link).then(()=>showToast('Lien copié'));
+});
+
+$('inviteBtn').addEventListener('click', ()=>{
+  if(!activeRdv) return;
+  $('inviteRdvLabel').textContent = `${activeRdv.prospectName} — ${new Date(activeRdv.date).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'})}`;
+  $('inviteLinkCode').textContent = activeRdv.link || '—';
+  inviteEmails = activeRdv.email ? [activeRdv.email] : [];
+  renderInviteEmails();
+  $('inviteMessage').value = generateInviteMessage(activeRdv);
+  $('inviteModal').classList.add('show');
+});
+
+function generateInviteMessage(rdv){
+  const settings = ls.get(LS.VISIO_SETTINGS, {});
+  const dateStr = new Date(rdv.date).toLocaleString('fr-FR', { weekday:'long', day:'numeric', month:'long', hour:'2-digit', minute:'2-digit' });
+  return `Bonjour,\n\nJe vous propose un RDV en visioconférence le ${dateStr} (durée ~${rdv.duree} min).\n\nLien : ${rdv.link || '(à venir)'}\n${rdv.sujet ? '\nSujet : ' + rdv.sujet : ''}\n\n${settings.signature || 'àtrès bientôt'}`;
+}
+
+function renderInviteEmails(){
+  $('inviteEmailsList').innerHTML = inviteEmails.map((e,i)=>`
+    <span style="background:var(--surface);padding:4px 10px;border-radius:6px;font-size:11px;display:inline-flex;align-items:center;gap:6px">
+      ${escapeHtml(e)}
+      <button onclick="removeEmail(${i})" style="color:var(--muted);font-size:14px;line-height:1">É</button>
+    </span>
+  `).join('');
+}
+
+window.removeEmail = function(i){ inviteEmails.splice(i,1); renderInviteEmails(); };
+
+$('addEmailBtn').addEventListener('click', ()=>{
+  const v = $('inviteEmailInput').value.trim();
+  if(v && /\S+@\S+\.\S+/.test(v) && !inviteEmails.includes(v)){
+    inviteEmails.push(v);
+    $('inviteEmailInput').value = '';
+    renderInviteEmails();
+  }
+});
+$('inviteEmailInput').addEventListener('keydown', e=>{
+  if(e.key === 'Enter'){ e.preventDefault(); $('addEmailBtn').click(); }
+});
+
+$('copyInviteLink').addEventListener('click', ()=>{
+  navigator.clipboard.writeText($('inviteLinkCode').textContent).then(()=>showToast('Lien copié'));
+});
+
+$('sendInviteBtn').addEventListener('click', ()=>{
+  if(!inviteEmails.length){ showToast('Ajoutez au moins un destinataire'); return; }
+  const subject = encodeURIComponent(`Invitation visio — ${activeRdv?.prospectName || 'RDV'}`);
+  const body = encodeURIComponent($('inviteMessage').value);
+  window.location.href = `mailto:${inviteEmails.join(',')}?subject=${subject}&body=${body}`;
+  showToast('Ouverture client mail…');
+  setTimeout(()=>$('inviteModal').classList.remove('show'), 800);
+});
+
+/* ————————————————————————————————————————————————
+   MODALE NOUVEAU RDV
+   ———————————————————————————————————————————————— */
+$('openNewRdvBtn').addEventListener('click', ()=>{
+  const pipeline = ls.get(LS.PIPELINE, []) || [];
+  const contacts = ls.get(LS.CONTACTS, []) || [];
+  const sel = $('prospectSelect');
+  sel.innerHTML = '<option value="">— Sélectionner —</option>';
+  const merged = new Map();
+  pipeline.forEach(p=>{
+    const key = p.id || (p.nom + p.societe);
+    merged.set(key, { id:p.id, name:p.nom||p.name||p.co, societe:p.societe, email:p.email });
+  });
+  contacts.forEach(c=>{
+    const key = c.id || (c.nom + c.societe);
+    if(!merged.has(key)){
+      merged.set(key, { id:c.id, name:c.nom||c.name, societe:c.societe, email:c.email });
+    }
+  });
+  [...merged.values()].forEach(p=>{
+    sel.innerHTML += `<option value="${p.id}">${escapeHtml(p.name||'')}${p.societe ? ' — '+escapeHtml(p.societe) : ''}</option>`;
+  });
+
+  const now = new Date();
+  $('rdvDate').value = now.toISOString().slice(0,10);
+  $('rdvTime').value = `${fmt2(now.getHours()+1)}:00`;
+  $('newRdvModal').classList.add('show');
+});
+
+document.querySelectorAll('.provider-opt').forEach(opt=>{
+  opt.addEventListener('click', ()=>{
+    document.querySelectorAll('.provider-opt').forEach(o=>o.classList.remove('selected'));
+    opt.classList.add('selected');
+    const p = opt.dataset.provider;
+    $('customLinkField').style.display = (p === 'custom') ? 'block' : 'none';
+  });
+});
+
+$('prospectSelect').addEventListener('change', e=>{
+  const id = e.target.value;
+  const pipeline = ls.get(LS.PIPELINE, []) || [];
+  const contacts = ls.get(LS.CONTACTS, []) || [];
+  const found = pipeline.find(p=>p.id===id) || contacts.find(c=>c.id===id);
+  if(found?.email) $('prospectEmail').value = found.email;
+});
+
+$('saveRdvBtn').addEventListener('click', ()=>{
+  const provider = document.querySelector('.provider-opt.selected')?.dataset.provider || 'jitsi';
+  const date = $('rdvDate').value;
+  const time = $('rdvTime').value;
+  if(!date || !time){ showToast('Date et heure requises'); return; }
+  const prospectId = $('prospectSelect').value;
+  const customLink = $('customLinkInput').value.trim();
+  const settings = ls.get(LS.VISIO_SETTINGS, {});
+  const myLinks = settings.links || {};
+
+  const newId = 'rdv_' + uid();
+  let link = '';
+  if(provider === 'jitsi') link = PROVIDERS.jitsi.urlGen(newId);
+  else if(['zoom','teams','meet'].includes(provider)){
+    link = myLinks[provider] || '';
+    if(!link){ showToast(`Renseignez d'abord votre lien ${PROVIDERS[provider].label} en haut`); return; }
+  } else link = customLink;
+
+  const dateISO = new Date(date + 'T' + time).toISOString();
+  const txt = $('prospectSelect').selectedOptions[0]?.text || '';
+  const prospectName = txt.split(' — ')[0] || 'Prospect';
+  const societe = txt.split(' — ')[1] || '';
+
+  if(prospectId){
+    const pipeline = ls.get(LS.PIPELINE, []) || [];
+    const idx = pipeline.findIndex(p=>p.id===prospectId);
+    if(idx !== -1){
+      pipeline[idx].stage = 'visio';
+      pipeline[idx].visio_link = link;
+      pipeline[idx].visio_provider = provider;
+      pipeline[idx].rdv_date = dateISO;
+      pipeline[idx].duree = +$('rdvDuration').value;
+      pipeline[idx].sujet = $('rdvSubject').value;
+      ls.set(LS.PIPELINE, pipeline);
+    }
+  }
+
+  const agenda = ls.get(LS.AGENDA, []) || [];
+  agenda.push({
+    id: newId, type: 'visio',
+    title: prospectName, societe, prospectId,
+    email: $('prospectEmail').value,
+    start: dateISO, duree: +$('rdvDuration').value,
+    provider, link, sujet: $('rdvSubject').value,
+    status: 'planned', createdAt: new Date().toISOString()
+  });
+  ls.set(LS.AGENDA, agenda);
+
+  showToast('RDV créé');
+  $('newRdvModal').classList.remove('show');
+  renderRdvList();
+
+  if($('prospectEmail').value){
+    setTimeout(()=>{
+      if(confirm("Envoyer l'invitation par email maintenant ?")){
+        const subject = encodeURIComponent(`Invitation visio — ${prospectName}`);
+        const dateStr = new Date(dateISO).toLocaleString('fr-FR',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
+        const body = encodeURIComponent(`Bonjour,\n\nJe vous propose un RDV en visioconférence le ${dateStr}.\n\nLien : ${link}\n\n${settings.signature || 'àtrès bientôt'}`);
+        window.location.href = `mailto:${$('prospectEmail').value}?subject=${subject}&body=${body}`;
+      }
+    }, 400);
+  }
+
+  $('customLinkInput').value = '';
+  $('rdvSubject').value = '';
+  $('prospectEmail').value = '';
+});
+
+/* ————————————————————————————————————————————————
+   RACCOURCIS CLAVIER
+   ———————————————————————————————————————————————— */
+document.addEventListener('keydown', e=>{
+  // Ignorer si focus dans un input/textarea
+  const tag = e.target.tagName;
+  const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+  // Échap toujours actif
+  if(e.key === 'Escape'){
+    const openOverlay = document.querySelector('.overlay.show');
+    if(openOverlay){ openOverlay.classList.remove('show'); return; }
+    if(activeRdv && !inField){ endCurrentRdv(); return; }
+  }
+
+  if(inField) return;
+
+  // Aide
+  if(e.key === '?'){ e.preventDefault(); $('helpModal').classList.add('show'); return; }
+
+  // 1, 2, 3 : ouvrir doc épinglé (marche AVEC ou SANS RDV actif)
+  if(['1','2','3'].includes(e.key)){
+    const meta = ls.get(LS.DOCS_META, []) || [];
+    const pinned = meta.filter(m=>m.pinned).slice(0,3);
+    const doc = pinned[parseInt(e.key)-1];
+    if(doc){ e.preventDefault(); openDoc(doc.id); }
+    return;
+  }
+
+  if(!activeRdv) return;
+
+  // N : focus notes
+  if(e.key === 'n' || e.key === 'N'){
+    e.preventDefault();
+    $('rdvNotes').focus();
+    return;
+  }
+
+  // C : copier lien
+  if(e.key === 'c' || e.key === 'C'){
+    e.preventDefault();
+    $('copyLinkBtn').click();
+    return;
+  }
+
+  // I : inviter
+  if(e.key === 'i' || e.key === 'I'){
+    e.preventDefault();
+    $('inviteBtn').click();
+    return;
+  }
+});
+
+$('openHelpBtn').addEventListener('click', ()=>$('helpModal').classList.add('show'));
+
+/* ————————————————————————————————————————————————
+   COMMUN
+   ———————————————————————————————————————————————— */
+document.querySelectorAll('[data-close]').forEach(btn=>{
+  btn.addEventListener('click', ()=> $(btn.dataset.close).classList.remove('show'));
+});
+document.querySelectorAll('.overlay').forEach(ov=>{
+  ov.addEventListener('click', e=>{
+    if(e.target === ov) ov.classList.remove('show');
+  });
+});
+
+$('searchInput').addEventListener('input', renderRdvList);
+
+window.addEventListener('storage', e=>{
+  if([LS.PIPELINE, LS.AGENDA, LS.CONTACTS, LS.DEVIS].includes(e.key)){
+    renderRdvList();
+    if(activeRdv) renderBriefing(activeRdv);
+  }
+});
+
+setInterval(renderRdvList, 30000); // 30s pour le bandeau T-5
+
+/* ————————————————————————————————————————————————
+   INIT
+   ———————————————————————————————————————————————— */
+loadMyLinks();
+loadCalibrationToUI();
+renderCustomBgThumb();
+const activeBg = ls.get(LS.VISIO_BG_ACTIVE, 'none');
+document.querySelectorAll('.bg-thumb[data-bg]').forEach(t=>t.classList.remove('selected'));
+const activeThumb = document.querySelector(`.bg-thumb[data-bg="${activeBg}"]`);
+if(activeThumb) activeThumb.classList.add('selected');
+applyBackground();
+setToolsOpen(ls.get(LS.TOOLS_OPEN, false));
+renderDocsList();
+renderRdvList();
+updateQuota();
+
+// Nettoyer dismissed expirés (RDV passés)
+const dismissed = ls.get(LS.URGENT_DISMISSED, []) || [];
+const allRdvs = collectVisioRdvs();
+const validIds = new Set(allRdvs.filter(r => new Date(r.date) > new Date()).map(r=>r.id));
+const cleanDismissed = dismissed.filter(id => validIds.has(id));
+if(cleanDismissed.length !== dismissed.length){
+  ls.set(LS.URGENT_DISMISSED, cleanDismissed);
+}
+</script>
 </body>
 </html>

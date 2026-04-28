@@ -1173,25 +1173,48 @@ function collectVisioRdvs(){
   const rdvs = [];
 
   pipeline.forEach(p=>{
-    const stage = (p.stage || p.colonne || '').toLowerCase();
+    const stage = (p.col || p.stage || p.colonne || '').toLowerCase();
     const type = (p.type || '').toLowerCase();
-    if(stage === 'visio' || type === 'visio'){
-      rdvs.push({
-        id: p.id || 'p_'+uid(),
-        prospectId: p.id,
-        prospectName: p.nom || p.name || p.co || 'Sans nom',
-        societe: p.societe || '',
-        email: p.email || '',
-        tel: p.tel || p.telephone || '',
-        adresse: p.adresse || '',
-        date: p.rdv_date || p.date || new Date().toISOString(),
-        duree: p.duree || 30,
-        provider: p.visio_provider || detectProvider(p.visio_link || ''),
-        link: p.visio_link || '',
-        status: p.visio_status || 'planned',
-        sujet: p.sujet || ''
-      });
+    if(stage !== 'visio' && type !== 'visio') return;
+
+    // Reconstituer la date du RDV depuis les champs disponibles
+    // Ordre de priorité :
+    //  1. p.rdvs[] (array, format Pipeline récent) → on prend le dernier
+    //  2. p.rdvDate + p.rdvTime (champs séparés legacy)
+    //  3. p.rdv_date / p.date (très ancien)
+    let rdvDateIso = null;
+
+    if(Array.isArray(p.rdvs) && p.rdvs.length){
+      const lastRdv = p.rdvs[p.rdvs.length - 1];
+      if(lastRdv && lastRdv.date) rdvDateIso = lastRdv.date;
     }
+    if(!rdvDateIso && p.rdvDate){
+      const dateStr = p.rdvDate;
+      const timeStr = p.rdvTime || '14:00';
+      try {
+        rdvDateIso = new Date(dateStr + 'T' + timeStr + ':00').toISOString();
+      } catch(e){}
+    }
+    if(!rdvDateIso) rdvDateIso = p.rdv_date || p.date;
+
+    // Pas de date valide → ne pas afficher (évite NaN:NaN)
+    if(!rdvDateIso) return;
+
+    rdvs.push({
+      id: p.id || 'p_'+uid(),
+      prospectId: p.id,
+      prospectName: p.co || p.nom || p.name || 'Sans nom',
+      societe: p.societe || p.co || '',
+      email: p.email || '',
+      tel: p.tel || p.telephone || '',
+      adresse: p.address || p.adresse || '',
+      date: rdvDateIso,
+      duree: p.duree || 30,
+      provider: p.visio_provider || detectProvider(p.visio_link || '') || 'jitsi',
+      link: p.visio_link || '',
+      status: p.visio_status || 'planned',
+      sujet: p.sujet || ''
+    });
   });
 
   agenda.forEach(e=>{

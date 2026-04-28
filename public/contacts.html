@@ -740,13 +740,64 @@ function migrateProspect(p){
 function init(){
   localStorage.removeItem('mup_prospects');
   prospects = [];
+
+  // 1) Source historique : mup_contacts
+  var fromContacts = [];
   try {
     var raw = localStorage.getItem('mup_contacts');
     if(raw){
       var parsed = JSON.parse(raw);
-      if(Array.isArray(parsed)) prospects = parsed.map(migrateProspect);
+      if(Array.isArray(parsed)) fromContacts = parsed.map(migrateProspect);
     }
-  } catch(e){ prospects = []; }
+  } catch(e){}
+
+  // 2) Source pipeline : tout client ajouté depuis Leads ou directement
+  //    dans Pipeline doit apparaître dans Contacts
+  var fromPipeline = [];
+  try {
+    var rawP = localStorage.getItem('mup_pipeline');
+    if(rawP){
+      var parsedP = JSON.parse(rawP);
+      if(Array.isArray(parsedP)){
+        fromPipeline = parsedP.map(function(p){
+          // Adaptation des champs Pipeline → Contacts (alias)
+          return migrateProspect({
+            id: p.id,
+            nom: p.co || p.nom || p.name || '',
+            company: p.co || p.nom || '',
+            contact: p.name || '',
+            email: p.email || '',
+            tel: p.tel || p.telephone || '',
+            adresse: p.address || p.adresse || '',
+            linkedin: p.linkedin || '',
+            facebook: p.facebook || '',
+            instagram: p.instagram || '',
+            siren: p.siren || '',
+            siret: p.siret || '',
+            source: 'pipeline',
+            entity_origine: p.entity_origine || 'mup',
+            col: p.col || 'leads',
+            activity: p.activity || [],
+            noteEntries: p.noteEntries || [],
+            rdvs: p.rdvs || []
+          });
+        });
+      }
+    }
+  } catch(e){}
+
+  // 3) Fusion sans doublon : clé = id (priorité Pipeline si même id)
+  var seen = {};
+  prospects = [];
+  fromPipeline.forEach(function(p){
+    var k = String(p.id);
+    if(!seen[k]){ seen[k] = true; prospects.push(p); }
+  });
+  fromContacts.forEach(function(p){
+    var k = String(p.id);
+    if(!seen[k]){ seen[k] = true; prospects.push(p); }
+  });
+
   renderAll();
   updateKPIs();
   updateBadges();

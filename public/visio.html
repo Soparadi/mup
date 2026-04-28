@@ -128,28 +128,29 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
 .launch-btn.test-cam.active-test svg{color:#fff}
 .launch-btn.test-cam.active-test:hover{background:#8a2424}
 
-/* —— MODALE TEST CAMÉRA —— */
-.test-cam-modal{max-width:1300px;padding:0;display:flex;flex-direction:column;max-height:92vh}
-.test-cam-modal-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.test-cam-modal-header h2{font-size:17px;font-weight:800;letter-spacing:-.4px;margin:0}
-.test-cam-modal-header .sub{font-size:11.5px;color:var(--muted);margin-top:2px}
-.test-cam-modal-body{display:grid;grid-template-columns:7fr 3fr;gap:0;flex:1;min-height:0;overflow:hidden}
-.test-cam-left{padding:18px 18px 14px;display:flex;flex-direction:column;gap:10px;background:var(--surface);overflow-y:auto}
-.test-cam-right{padding:18px 22px 14px;display:flex;flex-direction:column;gap:0;border-left:1px solid var(--border);overflow-y:auto}
-.test-cam-preview-wrap{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9;width:100%}
-.test-cam-preview-wrap video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
-.test-cam-preview-wrap.bg-applied::before{content:'';position:absolute;inset:0;background-size:cover;background-position:center;opacity:.30;pointer-events:none;z-index:1}
-.test-cam-preview-wrap.bg-1::before{background-image:linear-gradient(135deg,#7C3AED 0%,#1D1D1F 100%)}
-.test-cam-preview-wrap.bg-2::before{background-image:linear-gradient(135deg,#0BBCD4 0%,#1D8348 100%)}
+/* —— MODE PRÉPARATION (test caméra inline) —— */
 .test-cam-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:rgba(255,255,255,.7);gap:8px;text-align:center;padding:20px;font-size:12px;z-index:2}
 .test-cam-placeholder svg{width:36px;height:36px;color:rgba(255,255,255,.4)}
 .audio-meter-wrap{position:relative;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;margin-top:4px}
 .audio-meter-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,var(--green) 0%,#FFD60A 60%,var(--red) 95%);transition:width .05s linear}
 .audio-meter-label{font-size:10px;color:var(--muted2);margin-top:4px;text-align:center;font-style:italic}
-.test-cam-modal-footer{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;background:var(--card)}
+.testcam-inline-header{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  padding:6px 0 14px;border-bottom:1px solid var(--border);margin-bottom:14px;
+}
+.testcam-inline-title{font-size:17px;font-weight:800;letter-spacing:-.4px}
+.testcam-inline-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+.testcam-controls{
+  display:grid;grid-template-columns:1fr 1fr;gap:18px;
+  padding:18px;background:var(--card);border:1px solid var(--border);
+  border-radius:12px;margin-top:14px;
+}
+.testcam-inline-footer{
+  display:flex;justify-content:flex-end;gap:8px;
+  padding-top:14px;border-top:1px solid var(--border);margin-top:14px;
+}
 @media(max-width:900px){
-  .test-cam-modal-body{grid-template-columns:1fr}
-  .test-cam-right{border-left:none;border-top:1px solid var(--border)}
+  .testcam-controls{grid-template-columns:1fr}
 }
 
 /* —— WORKSPACE —— */
@@ -703,6 +704,85 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
           <textarea id="rdvNotes" placeholder="Prises de notes en direct, points clés, prochaine étape…"></textarea>
         </div>
       </div>
+
+      <!-- MODE PRÉPARATION (test caméra inline) -->
+      <div class="center-stack" id="testCamActive" style="display:none">
+        <div class="testcam-inline-header">
+          <div>
+            <div class="testcam-inline-title">Mode préparation</div>
+            <div class="testcam-inline-sub">Vérifiez votre caméra, ajustez la lumière, choisissez votre fond.</div>
+          </div>
+          <button class="tool-btn" id="testCamCloseInline" title="Fermer le test">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="video-frame-wrap" id="testCamPreview">
+          <video id="testCamVideo" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;display:block;background:#000"></video>
+          <div class="test-cam-placeholder" id="testCamPlaceholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            <div>Démarrage de la caméra…</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="audio-meter-wrap"><div class="audio-meter-fill" id="audioMeterFill"></div></div>
+          <div class="audio-meter-label">Aucun enregistrement — test local uniquement</div>
+        </div>
+
+        <div class="testcam-controls">
+          <div class="tool-section">
+            <h3>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              Étalonnage
+            </h3>
+            <div class="cal-row">
+              <label><span><span class="swatch lum"></span>Lumière</span><span class="val" id="valLum">100%</span></label>
+              <input type="range" id="lum" min="50" max="150" value="100">
+            </div>
+            <div class="cal-row r">
+              <label><span><span class="swatch r"></span>Rouge</span><span class="val" id="valR">0</span></label>
+              <input type="range" id="r" min="-50" max="50" value="0">
+            </div>
+            <div class="cal-row g">
+              <label><span><span class="swatch g"></span>Vert</span><span class="val" id="valG">0</span></label>
+              <input type="range" id="g" min="-50" max="50" value="0">
+            </div>
+            <div class="cal-row b">
+              <label><span><span class="swatch b"></span>Bleu</span><span class="val" id="valB">0</span></label>
+              <input type="range" id="b" min="-50" max="50" value="0">
+            </div>
+            <div class="tool-actions">
+              <button id="calReset">Réinitialiser</button>
+            </div>
+          </div>
+
+          <div class="tool-section">
+            <h3>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              Fond d'écran
+            </h3>
+            <div class="bg-grid">
+              <div class="bg-thumb none selected" data-bg="none">Aucun</div>
+              <div class="bg-thumb bg-1" data-bg="bg-1"></div>
+              <div class="bg-thumb bg-2" data-bg="bg-2"></div>
+              <div class="bg-thumb custom-empty" id="customBgSlot"><span>+ Uploader<br>mon fond</span></div>
+            </div>
+            <input type="file" id="bgUpload" class="upload-input" accept="image/*">
+            <div class="upload-help">Effet décoratif autour de la vidéo. Pour un vrai fond virtuel, configurez-le dans Zoom/Teams/Meet.</div>
+          </div>
+        </div>
+
+        <div class="testcam-inline-footer">
+          <button class="btn-secondary" id="testCamCloseFooter">Fermer le test</button>
+          <button class="btn-primary" id="testCamLaunchJitsi" style="background:var(--visio)">
+            <span style="display:inline-flex;align-items:center;gap:6px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Lancer Jitsi maintenant
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- COL DROITE : DOCS BIBLIOTHÉQUE -->
@@ -871,92 +951,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow
     </div>
     <div class="modal-actions">
       <button class="btn-primary" data-close="helpModal">Compris</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODALE TEST CAMÉRA / PRÉPARATION -->
-<div class="overlay" id="testCameraModal">
-  <div class="modal test-cam-modal">
-    <div class="test-cam-modal-header">
-      <div>
-        <h2>Mode préparation</h2>
-        <div class="sub">Vérifiez votre caméra, ajustez la lumière, choisissez votre fond.</div>
-      </div>
-      <div class="modal-close" data-close="testCameraModal" style="cursor:pointer">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </div>
-    </div>
-
-    <div class="test-cam-modal-body">
-      <!-- GAUCHE : preview + audio meter -->
-      <div class="test-cam-left">
-        <div class="test-cam-preview-wrap" id="testCamPreview">
-          <video id="testCamVideo" autoplay muted playsinline></video>
-          <div class="test-cam-placeholder" id="testCamPlaceholder">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-            <div>Démarrage de la caméra…</div>
-          </div>
-        </div>
-        <div>
-          <div class="audio-meter-wrap"><div class="audio-meter-fill" id="audioMeterFill"></div></div>
-          <div class="audio-meter-label">Aucun enregistrement — test local uniquement</div>
-        </div>
-      </div>
-
-      <!-- DROITE : étalonnage + fonds -->
-      <div class="test-cam-right">
-        <div class="tool-section">
-          <h3>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-            Étalonnage
-          </h3>
-          <div class="cal-row">
-            <label><span><span class="swatch lum"></span>Lumière</span><span class="val" id="valLum">100%</span></label>
-            <input type="range" id="lum" min="50" max="150" value="100">
-          </div>
-          <div class="cal-row r">
-            <label><span><span class="swatch r"></span>Rouge</span><span class="val" id="valR">0</span></label>
-            <input type="range" id="r" min="-50" max="50" value="0">
-          </div>
-          <div class="cal-row g">
-            <label><span><span class="swatch g"></span>Vert</span><span class="val" id="valG">0</span></label>
-            <input type="range" id="g" min="-50" max="50" value="0">
-          </div>
-          <div class="cal-row b">
-            <label><span><span class="swatch b"></span>Bleu</span><span class="val" id="valB">0</span></label>
-            <input type="range" id="b" min="-50" max="50" value="0">
-          </div>
-          <div class="tool-actions">
-            <button id="calReset">Réinitialiser</button>
-          </div>
-        </div>
-
-        <div class="tool-section">
-          <h3>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            Fond d'écran
-          </h3>
-          <div class="bg-grid">
-            <div class="bg-thumb none selected" data-bg="none">Aucun</div>
-            <div class="bg-thumb bg-1" data-bg="bg-1"></div>
-            <div class="bg-thumb bg-2" data-bg="bg-2"></div>
-            <div class="bg-thumb custom-empty" id="customBgSlot"><span>+ Uploader<br>mon fond</span></div>
-          </div>
-          <input type="file" id="bgUpload" class="upload-input" accept="image/*">
-          <div class="upload-help">Effet décoratif autour de la vidéo. Pour un vrai fond virtuel, configurez-le dans Zoom/Teams/Meet.</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="test-cam-modal-footer">
-      <button class="btn-secondary" id="testCamClose">Fermer le test</button>
-      <button class="btn-primary" id="testCamLaunchJitsi" style="background:var(--visio)">
-        <span style="display:inline-flex;align-items:center;gap:6px">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Lancer Jitsi maintenant
-        </span>
-      </button>
     </div>
   </div>
 </div>
@@ -1373,8 +1367,11 @@ function updateUrgentBannerHint(){
    SÉLECTION RDV + RENDU
    ———————————————————————————————————————————————— */
 function selectRdv(rdv){
+  // Si un test caméra est en cours, le fermer proprement avant de basculer
+  if(testCamOpen) closeTestCamera();
   activeRdv = rdv;
   $('emptyState').style.display = 'none';
+  $('testCamActive').style.display = 'none';
   $('visioActive').style.display = 'flex';
   renderRdvList();
   renderBriefing(rdv);
@@ -2291,24 +2288,29 @@ function setTestCameraBtnState(active){
 }
 
 async function openTestCamera(){
-  $('testCameraModal').classList.add('show');
+  // Cacher emptyState et visioActive, montrer testCamActive
+  $('emptyState').style.display = 'none';
+  $('visioActive').style.display = 'none';
+  $('testCamActive').style.display = 'flex';
+
   const placeholder = $('testCamPlaceholder');
   if(placeholder){ placeholder.style.display = 'flex'; placeholder.querySelector('div').textContent = 'Démarrage de la caméra…'; }
+
   try {
     testCamStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
     const v = $('testCamVideo');
     v.srcObject = testCamStream;
-    // Safari : déclencher play() explicitement après chargement des métadonnées
+    // Safari : déclencher play() explicitement
     v.onloadedmetadata = function() {
       v.play().catch(function(err) {
         console.warn('[testCamera] play() bloqué :', err);
       });
     };
-    // Calibration et fond appliqués APRÈS que le stream soit attaché
-    // (sinon Safari rend une image noire)
+    // Calibration et fond appliqués APRÈS attachement du stream
     applyCalibrationFilter(getCalibration());
     applyBackground();
     if(placeholder) placeholder.style.display = 'none';
+
     // Audio meter
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if(Ctx){
@@ -2362,7 +2364,15 @@ function closeTestCamera(){
   if(v) v.srcObject = null;
   const fill = $('audioMeterFill');
   if(fill) fill.style.width = '0%';
-  $('testCameraModal').classList.remove('show');
+
+  // Cacher testCamActive, revenir à emptyState (sauf si un RDV est actif)
+  $('testCamActive').style.display = 'none';
+  if(activeRdv){
+    $('visioActive').style.display = 'flex';
+  } else {
+    $('emptyState').style.display = 'flex';
+  }
+
   setTestCameraBtnState(false);
   updateUrgentBannerHint();
 }
@@ -2371,20 +2381,14 @@ $('testCameraBtn').addEventListener('click', ()=>{
   if(testCamOpen) closeTestCamera();
   else openTestCamera();
 });
-$('testCamClose').addEventListener('click', closeTestCamera);
+const _testCamCloseInline = $('testCamCloseInline');
+if(_testCamCloseInline) _testCamCloseInline.addEventListener('click', closeTestCamera);
+const _testCamCloseFooter = $('testCamCloseFooter');
+if(_testCamCloseFooter) _testCamCloseFooter.addEventListener('click', closeTestCamera);
 $('testCamLaunchJitsi').addEventListener('click', ()=>{
   closeTestCamera();
   setTimeout(()=>$('launchJitsi').click(), 80);
 });
-
-// Override default close behaviour for the test camera modal so the stream is released
-document.querySelectorAll('[data-close="testCameraModal"]').forEach(btn=>{
-  btn.addEventListener('click', e=>{ e.stopImmediatePropagation(); closeTestCamera(); }, true);
-});
-const testOverlay = $('testCameraModal');
-testOverlay.addEventListener('click', e=>{
-  if(e.target === testOverlay){ e.stopImmediatePropagation(); closeTestCamera(); }
-}, true);
 
 // Cleanup on tab close
 window.addEventListener('beforeunload', ()=>{
@@ -2403,10 +2407,8 @@ document.addEventListener('keydown', e=>{
   // Échap toujours actif
   if(e.key === 'Escape'){
     const openOverlay = document.querySelector('.overlay.show');
-    if(openOverlay){
-      if(openOverlay.id === 'testCameraModal'){ closeTestCamera(); return; }
-      openOverlay.classList.remove('show'); return;
-    }
+    if(openOverlay){ openOverlay.classList.remove('show'); return; }
+    if(testCamOpen && !inField){ closeTestCamera(); return; }
     if(activeRdv && !inField){ endCurrentRdv(); return; }
   }
 

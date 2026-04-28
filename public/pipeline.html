@@ -2026,27 +2026,24 @@ renderKanban();
     var ficheId = p.get('fiche');
     if(!ficheId) return;
     window.MUP_FICHE_EMBED = true;
-    var embedMode = p.get('embed') || 'overlay'; // 'overlay' (legacy) | 'panel' (nouveau)
+    var embedMode = p.get('embed') || 'overlay';
     var s = document.createElement('style');
 
-    var commonCss = 'aside#sidebar,aside#sidebar.sidebar,.sidebar,.topbar,.kanban-wrap,.kanban-toolbar,#sidebar{display:none!important;width:0!important;visibility:hidden!important}'
-      + 'body{background:transparent!important;overflow:hidden;margin:0!important;padding:0!important}'
-      + 'main,.main,.kanban-shell,.app,.layout{display:block!important;padding:0!important;margin:0!important;width:100%!important}'
-      + '.detail-overlay{display:none!important}';
-
     if(embedMode === 'panel'){
-      // Mode panneau latéral (l'iframe parent fait déjà 380px à droite)
-      // → la fiche occupe TOUTE la largeur de l'iframe, sans box-shadow ni transform
-      s.textContent = commonCss
-        + '.detail-panel{position:static!important;width:100%!important;max-width:none!important;'
-        + 'height:100vh!important;transform:none!important;box-shadow:none!important;'
-        + 'border-left:none!important;left:auto!important;right:auto!important;margin:0!important}';
+      s.textContent = ''
+        + 'aside#sidebar,aside#sidebar.sidebar,#sidebar,.sidebar,.topbar,.kanban-wrap,.kanban-toolbar{display:none!important;width:0!important;visibility:hidden!important}'
+        + 'html,body{background:transparent!important;overflow:hidden!important;margin:0!important;padding:0!important;width:100%!important;height:100%!important}'
+        + 'main,.main,.kanban-shell,.app,.layout{display:block!important;padding:0!important;margin:0!important;width:100%!important;height:100%!important}'
+        + '.detail-overlay{display:none!important}'
+        + '.detail-panel{position:static!important;width:100%!important;max-width:none!important;height:100vh!important;transform:none!important;box-shadow:none!important;border-left:none!important;left:auto!important;right:auto!important;margin:0!important;display:flex!important;flex-direction:column!important}'
+        + '.detail-panel .detail-body{flex:1;overflow-y:auto}';
     } else {
-      // Mode overlay legacy (centré 780px)
-      s.textContent = commonCss
+      s.textContent = ''
+        + 'aside#sidebar,aside#sidebar.sidebar,#sidebar,.sidebar,.topbar,.kanban-wrap,.kanban-toolbar{display:none!important}'
+        + 'body{background:transparent;overflow:hidden;margin:0;padding:0}'
+        + 'main,.main,.kanban-shell{display:block!important}'
         + '.detail-overlay{background:rgba(0,0,0,0)!important;display:block!important}'
-        + '.detail-panel{box-shadow:none!important;width:100%!important;max-width:780px;'
-        + 'left:0!important;right:0!important;margin:0 auto;border-left:none!important}';
+        + '.detail-panel{box-shadow:none!important;width:100%!important;max-width:780px;left:0!important;right:0!important;margin:0 auto;border-left:none!important}';
     }
     document.head.appendChild(s);
     // Fallback : si l'ID existe dans mup_contacts mais pas mup_pipeline, le créer
@@ -2090,6 +2087,8 @@ renderKanban();
             if(panel && !panel.classList.contains('open')){
               panel.classList.add('open');
             }
+            var ovl = document.getElementById('detail-overlay');
+            if(ovl) ovl.classList.remove('open');
           }, 50);
         }
         // Si la fiche n'a pas trouvé de carte, signaler pour fermer le wrap côté parent

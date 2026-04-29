@@ -2437,15 +2437,17 @@ function applyFrenchTypography(text){
 
 // ── STRUCTURATION AUTO EN COMPTE-RENDU COMMERCIAL ──
 function structureCommercialNote(rawText){
-  if(!rawText || rawText.trim().length < 30) return rawText;
+  if(!rawText || !rawText.trim()) return rawText;
+  const cleaned = rawText.trim();
 
-  const sentences = rawText
+  // Découper en phrases. Si pas de ponctuation, prendre tout le texte comme une seule phrase.
+  let sentences = cleaned
     .replace(/\s+/g, ' ')
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
-    .filter(s => s.length > 4);
+    .filter(s => s.length > 0);
 
-  if(sentences.length < 2) return rawText;
+  if(sentences.length === 0) sentences = [cleaned];
 
   const sections = {
     contexte: [],
@@ -2462,8 +2464,8 @@ function structureCommercialNote(rawText){
     besoins: /\b(cherche|veut|besoin|souhait|voudrait|aimerait|recherche|interesse par|envisage|projet de|attend|demande)/i,
     budget: /\b(\d+\s*(€|euros|k€|keuros|mille)|budget|enveloppe|cout|prix|tarif|montant|investissement)/i,
     decisions: /\b(decid|valid|on part sur|on retient|on prend|accord|sign|confirm|on y va|on lance|ok pour)/i,
-    actions: /\b(a faire|il faut|faut|envoyer|relancer|rappeler|preparer|recontact|prevoir|programmer|planifier|envoie|relance)/i,
-    contexte: /\b(rencontre|visite|rdv|reunion|appel|echang|discut|presentation|demo|premier contact|recommande par|vient de|reseau)/i
+    actions: /\b(a faire|il faut|faut|envoyer|relancer|rappeler|preparer|recontact|prevoir|programmer|planifier|envoie|relance|rdv|rendez|visite|visio|appel|mail|devis)/i,
+    contexte: /\b(rencontre|reunion|echang|discut|presentation|demo|premier contact|recommande par|vient de|reseau|aujourd|hier|matin|après[- ]midi|client)/i
   };
 
   function normalize(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }

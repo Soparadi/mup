@@ -315,6 +315,9 @@ function eventsForDate(dateStr) {
   return events.filter(e => e.date === dateStr).sort((a,b) => a.start.localeCompare(b.start));
 }
 
+// Labels lisibles par type, partagés par les vues mois + jour
+const TYPE_LABELS = { rdv:'RDV', visio:'Visio', mail:'Mail', devis:'Devis', appel:'Appel', perso:'' };
+
 // ── CALENDRIER ──
 function renderCal() {
   const title = document.getElementById('cal-month-title');
@@ -357,7 +360,9 @@ function renderCal() {
     let evtHtml = '';
     const visible = dayEvts.slice(0, 2);
     visible.forEach(e => {
-      evtHtml += `<div class="cal-evt type-${e.type}" title="${e.title}">${e.start} ${e.title}</div>`;
+      const lbl = TYPE_LABELS[e.type] || '';
+      const prefix = lbl ? lbl + ' · ' : '';
+      evtHtml += `<div class="cal-evt type-${e.type}" title="${lbl} — ${e.start} — ${e.title}">${prefix}${e.start} ${e.title}</div>`;
     });
     if(dayEvts.length > 2) evtHtml += `<div class="cal-more">+${dayEvts.length-2}</div>`;
 
@@ -415,10 +420,12 @@ function renderDay() {
         perso:  '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
       };
       const typeEmoji = typeIcons[e.type] || typeIcons.rdv;
+      const typeLabel = TYPE_LABELS[e.type] || '';
+      const labelHtml = typeLabel ? '<span style="font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;opacity:.7;margin-right:6px">'+typeLabel+'</span>' : '';
       evtsHtml += `
         <div class="evt-block type-${e.type}" onclick="editEvent('${e.id}')">
-          <div class="evt-time-tag">${e.start}–${e.end}</div>
-          <div class="evt-title">${typeEmoji} ${e.title}</div>
+          <div class="evt-time-tag">${e.start}–${e.end||''}</div>
+          <div class="evt-title">${typeEmoji} ${labelHtml}${e.title}</div>
           ${e.contact?`<div class="evt-contact"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${e.contact}</div>`:''}
           ${e.notes?`<div style="font-size:10.5px;color:var(--muted);margin-top:3px;font-style:italic">${e.notes}</div>`:''}
         </div>`;

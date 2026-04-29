@@ -287,8 +287,11 @@ function loadEvents() {
       cards.forEach(function(c){ fichesIds[String(c.id)] = true; });
 
       events = events.filter(function(ev){
-        if(ev && ev.key && String(ev.key).indexOf('pipe_') === 0) return false;
-        if(ev && !ev.key && fichesIds[String(ev.id)]) return false;
+        if(!ev) return false;
+        // Purge events issus du pipeline (toutes formes possibles)
+        if(ev.key && String(ev.key).indexOf('pipe_') === 0) return false;
+        if(ev.ficheId && fichesIds[String(ev.ficheId)]) return false;
+        if(!ev.key && fichesIds[String(ev.id)]) return false;
         return true;
       });
 

@@ -1356,30 +1356,8 @@ function buildDotsByDate() {
       const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
       addDot(ds, 'note');
     });
-    // 3) c.activity → mailing/phoning/visio/rdv (parse date FR sans année, on déduit)
-    const monthMap = {'janv':0,'févr':1,'fév':1,'mars':2,'avr':3,'mai':4,'juin':5,'juil':6,'août':7,'aout':7,'sept':8,'oct':9,'nov':10,'déc':11,'dec':11};
-    const today = new Date();
-    (c.activity||[]).forEach(a => {
-      if(!a || !a.date || !a.txt) return;
-      const m = String(a.date).match(/^(\d{1,2})\s+([a-zA-Zéèêûâîçé.]+)/);
-      if(!m) return;
-      const day = parseInt(m[1], 10);
-      const monthAbbr = m[2].toLowerCase().replace(/\./g, '');
-      const monthIdx = monthMap[monthAbbr];
-      if(monthIdx === undefined || isNaN(day)) return;
-      let yr = today.getFullYear();
-      const candidate = new Date(yr, monthIdx, day);
-      // Si la date ainsi formée est > 30 jours dans le futur, on suppose année précédente
-      if(candidate.getTime() - today.getTime() > 30*86400000) yr -= 1;
-      const ds = yr + '-' + String(monthIdx+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
-      const t = String(a.txt).toLowerCase();
-      let type = null;
-      if(t.includes('mail')) type = 'mailing';
-      else if(t.includes('appel') || t.includes('phoning')) type = 'phoning';
-      else if(t.includes('visio')) type = 'visio';
-      else if(t.includes('rdv')) type = 'rdv';
-      if(type) addDot(ds, type);
-    });
+    // c.activity n'est plus parsé pour les dots de type :
+    // c.rdvs[] est désormais la source de vérité (évite les doublons mailing/phoning/visio/rdv).
   }
   return dotsByDate;
 }
@@ -1547,32 +1525,8 @@ function saveRdv() {
   c.rdvTime = time;
   save();
 
-  // Sync mup_agenda — format compatible avec /agenda (date YYYY-MM-DD, start HH:MM)
-  let agenda = [];
-  try { const r = localStorage.getItem('mup_agenda'); if(r) agenda = JSON.parse(r); } catch(e) {}
-  // Clé composite : permet plusieurs events distincts (RDV + Visio + Mail + Devis) sur la même fiche.
-  // On dédupe seulement l'event équivalent (même fiche + même type + même date).
-  const evtKey = String(c.id) + '_' + actionType + '_' + dateStr;
-  agenda = agenda.filter(ev => {
-    if(ev.key) return ev.key !== evtKey;
-    // Fallback : ancien format où id == c.id et pas de key → on garde sauf si même type/date
-    if(String(ev.id) === String(c.id) && ev.type === agendaType && ev.date === dateStr) return false;
-    return true;
-  });
-  agenda.push({
-    id: 'evt_' + Date.now(),
-    key: evtKey,
-    ficheId: String(c.id),
-    title: c.co || c.name || '',
-    contact: c.name || '',
-    date: dateStr,
-    start: time,
-    end: '',
-    type: agendaType,
-    col: c.col,
-    notes: ''
-  });
-  localStorage.setItem('mup_agenda', JSON.stringify(agenda));
+  // mup_agenda est reconstruit par /agenda lui-même depuis c.rdvs[] (source de vérité).
+  // Pas d'écriture directe ici → évite les doublons.
 
   // Note synthétique horodatée dans timeline
   if(!Array.isArray(c.noteEntries)) c.noteEntries = [];

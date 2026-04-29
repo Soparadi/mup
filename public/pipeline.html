@@ -2694,7 +2694,28 @@ function createActionFromDetection(type, dateStr, time){
 
   save();
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
+
+  // Préserver le texte de la note en cours de saisie avant le re-render
+  const noteInput = document.getElementById('d-notes-input');
+  const preserved = noteInput ? {
+    value: noteInput.value,
+    rawVersion: noteInput.dataset.rawVersion || '',
+    crVersion: noteInput.dataset.crVersion || '',
+    viewMode: noteInput.dataset.viewMode || 'raw'
+  } : null;
+
   if(typeof openDetail === 'function') openDetail(currentId);
+
+  // Restaurer après re-render
+  if(preserved){
+    const newInput = document.getElementById('d-notes-input');
+    if(newInput){
+      newInput.value = preserved.value;
+      newInput.dataset.rawVersion = preserved.rawVersion;
+      newInput.dataset.crVersion = preserved.crVersion;
+      newInput.dataset.viewMode = preserved.viewMode;
+    }
+  }
 }
 
 </script>

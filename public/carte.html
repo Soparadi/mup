@@ -134,13 +134,13 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     </button>
     <button class="map-btn" id="btn-tour" onclick="toggleTourPanel()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-      RDV <span id="tour-badge" style="display:none;font-size:9px;font-weight:800;background:#fff;color:var(--text);border-radius:4px;padding:1px 5px;margin-left:2px">0</span>
+      Actions <span id="tour-badge" style="display:none;font-size:9px;font-weight:800;background:#fff;color:var(--text);border-radius:4px;padding:1px 5px;margin-left:2px">0</span>
     </button>
   </div>
 
   <div class="tour-panel" id="tour-panel">
     <div class="tour-hdr">
-      <span class="tour-title">RDV</span>
+      <span class="tour-title">Actions</span>
       <span class="tour-count" id="tour-count">0 fiches</span>
     </div>
     <div id="tour-controls" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
@@ -174,6 +174,25 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 function isUpcoming(dateStr){if(!dateStr)return false;var today=new Date();today.setHours(0,0,0,0);return new Date(dateStr+'T00:00:00')>=today;}
+
+// Retourne la prochaine action à venir parmi c.rdvs[]
+function nextActionOf(c){
+  if(!c || !Array.isArray(c.rdvs) || !c.rdvs.length) return null;
+  const now = Date.now();
+  const upcoming = c.rdvs
+    .filter(r => r && r.date && new Date(r.date).getTime() >= now - 24*3600*1000)
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+  return upcoming[0] || null;
+}
+
+// Retourne {label, color} pour un type d'action
+function actionStyle(type){
+  const t = (type||'').toLowerCase();
+  if(t === 'visio') return {label:'Visio', color:'#7C3AED'};
+  if(t === 'mail')  return {label:'Mail',  color:'#B84C00'};
+  if(t === 'devis') return {label:'Devis', color:'#0A66C2'};
+  return {label:'RDV', color:'#1D8348'};
+}
 var OSRM='https://router.project-osrm.org';
 
 var STAGES=[
@@ -300,7 +319,9 @@ Object.keys(addrMap).forEach(function(addr){
           var jitter=addrMap[addr].length>1?(idx-addrMap[addr].length/2)*0.0004:0;
           var clat=lat+jitter,clng=lng+jitter;
           var col=stageColor(c.col);
-          var isRdv=!!c.rdvDate&&isUpcoming(c.rdvDate);
+          var nextAct=nextActionOf(c);
+          var isRdv=!!nextAct;
+          var actStyle=isRdv?actionStyle(nextAct.type):null;
           var icon=createMupMarker(clat, clng, col);
           var val=c.val>=1000?Math.round(c.val/1000)+'k\u20AC':(c.val?c.val+'\u20AC':'\u2014');
           var popup='<div class="pop">'
@@ -310,7 +331,7 @@ Object.keys(addrMap).forEach(function(addr){
             +'<div class="pop-foot"><span class="pop-val">'+val+'</span><span class="pop-days">J+'+(c.days||0)+'</span></div>'
             +'<div class="pop-stage" style="background:'+col+'22;color:'+col+'">'+stageName(c.col)+'</div>'
             +progressHtml(c.col)
-            +(c.rdvDate?'<div style="font-size:11px;color:var(--text);margin-top:8px;padding:6px 8px;background:var(--surface);border-radius:6px;font-weight:600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0BBCD4" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+formatRdvDate(c.rdvDate,c.rdvTime)+'</div>':'')
+            +(nextAct?'<div style="font-size:11px;color:var(--text);margin-top:8px;padding:6px 8px;background:var(--surface);border-radius:6px;font-weight:600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="'+actStyle.color+'" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+actStyle.label+' — '+formatRdvDate(nextAct.date.slice(0,10),nextAct.hour||'14:00')+'</div>':'')
             +(c.tel?'<div style="margin-top:8px;font-size:11px"><a href="tel:'+esc(c.tel.replace(/\s/g,''))+'" style="color:var(--blue);text-decoration:none;display:flex;align-items:center;gap:5px" onclick="event.stopPropagation()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'+esc(c.tel)+'</a></div>':'')
             +'<div class="pop-actions">'
             +'<button class="pop-btn" onclick="scrollToStop(\''+c.id+'\')">Voir dans le panneau</button>'
@@ -339,15 +360,11 @@ Object.keys(addrMap).forEach(function(addr){
 // Auto-detect RDV cards and show their proximity + panel
 function autoShowRdv(){
   var rdvCards=[];
-  // Debug: log all cards with rdvDate
   Object.keys(markers).forEach(function(id){
     var m=markers[id];
-    if(m.card.rdvDate){
-      console.log('[RDV debug]', m.card.co||m.card.name, 'rdvDate:', JSON.stringify(m.card.rdvDate), 'type:', typeof m.card.rdvDate, 'isUpcoming:', isUpcoming(m.card.rdvDate));
-    }
-    if(m.card.rdvDate&&isUpcoming(m.card.rdvDate)) rdvCards.push(m);
+    var na=nextActionOf(m.card);
+    if(na){ m.nextAction=na; rdvCards.push(m); }
   });
-  console.log('[RDV] Found', rdvCards.length, 'upcoming RDV cards');
   if(!rdvCards.length) return;
 
   rdvPanelIds=[];
@@ -360,7 +377,7 @@ function autoShowRdv(){
     // Find all non-RDV cards in radius
     Object.keys(markers).forEach(function(mid){
       var m=markers[mid];
-      if(m.card.rdvDate&&isUpcoming(m.card.rdvDate)) return;
+      if(nextActionOf(m.card)) return;
       var dist=map.distance(L.latLng(rdv.latlng),L.latLng(m.latlng));
       if(dist<=30000&&rdvPanelIds.indexOf(mid)===-1){
         rdvPanelIds.push(mid);
@@ -455,7 +472,8 @@ function renderPanel(){
     if(!info) return null;
     var dist=null;
     if(userLatLng) dist=map.distance(L.latLng(userLatLng),L.latLng(info.latlng));
-    return{id:id,card:info.card,dist:dist,latlng:info.latlng,isRdv:!!info.card.rdvDate&&isUpcoming(info.card.rdvDate)};
+    var na=nextActionOf(info.card);
+    return{id:id,card:info.card,dist:dist,latlng:info.latlng,isRdv:!!na,nextAction:na};
   }).filter(Boolean);
 
   if(userLatLng) items.sort(function(a,b){return(a.dist||0)-(b.dist||0);});
@@ -463,8 +481,10 @@ function renderPanel(){
   body.innerHTML=items.map(function(it,i){
     var distStr=it.dist!==null?(it.dist>=1000?Math.round(it.dist/1000)+' km':Math.round(it.dist)+' m'):'';
     var col=stageColor(it.card.col);
-    var label=it.isRdv?'RDV':'Prospect';
-    return '<div class="tour-item" style="cursor:pointer;'+(it.isRdv?'border-color:#0BBCD4;background:rgba(11,188,212,.04)':'')+'" onclick="flyTo(\''+it.id+'\')">'
+    var actSt=it.isRdv?actionStyle(it.nextAction.type):null;
+    var label=it.isRdv?actSt.label:'Prospect';
+    var labelColor=it.isRdv?actSt.color:'#6E6E73';
+    return '<div class="tour-item" style="cursor:pointer;'+(it.isRdv?'border-color:'+labelColor+';background:'+labelColor+'14':'')+'" onclick="flyTo(\''+it.id+'\')">'
       +'<div class="tour-num" style="background:'+col+'">'+(i+1)+'</div>'
       +'<div class="tour-info">'
       +'<div class="tour-info-name">'+esc(it.card.co||it.card.name)+'</div>'
@@ -554,7 +574,7 @@ function calcTour(){
       var allCards=[];
       try{var r2=localStorage.getItem('mup_pipeline');if(r2)allCards=JSON.parse(r2);}catch(e){}
       for(var i=0;i<allCards.length;i++){
-        if(allCards[i].rdvDate&&isUpcoming(allCards[i].rdvDate)&&allCards[i].col!=='lost'){
+        if(nextActionOf(allCards[i])&&allCards[i].col!=='lost'){
           var mid=String(allCards[i].id);
           if(markers[mid]){
             anchorCard={card:allCards[i],latlng:markers[mid].latlng,id:mid};
@@ -770,7 +790,7 @@ function renderSchedule(){
     +'<div class="sched-dot" style="background:#0BBCD4"></div>'
     +'<div class="sched-info"><div class="sched-name">'+esc(anchorCard.card.co||anchorCard.card.name)+'</div>'
     +'<div class="sched-meta">'+anchorDistLabel+' · '+anchorTimeLabel+'</div>'
-    +'<div class="sched-meta" style="color:#0BBCD4;font-weight:600">RDV — '+formatRdvDate(anchorCard.card.rdvDate,anchorCard.card.rdvTime)+'</div>'
+    +(function(){var na=nextActionOf(anchorCard.card);var st=na?actionStyle(na.type):actionStyle('rdv');var d=na?na.date.slice(0,10):anchorCard.card.rdvDate;var h=na?(na.hour||'14:00'):anchorCard.card.rdvTime;return '<div class="sched-meta" style="color:'+st.color+';font-weight:600">'+st.label+' — '+formatRdvDate(d,h)+'</div>';})()
     +'</div>'
     +'<div class="sched-badge" style="background:rgba(11,188,212,.12);color:#0BBCD4">RDV</div>'
     +'</div>';

@@ -1413,6 +1413,11 @@ function saveNote() {
   save();
   input.value = '';
   openDetail(currentId);
+  // Détection d'intention d'action (popup non-bloquante)
+  const detected = detectActionInNote(text);
+  if(detected){
+    setTimeout(() => openActionConfirmPopup(detected), 100);
+  }
 }
 
 // ── CALENDRIER RDV INLINE ──
@@ -2336,6 +2341,9 @@ function toggleDictation(){
     const corrected = applyFrenchTypography(dictationBaseText + dictationFinalBuffer);
     input.value = corrected;
     stopDictationUI();
+    // Détection d'intention d'action
+    const detected = detectActionInNote(corrected);
+    if(detected) openActionConfirmPopup(detected);
   };
 
   dictationRecognition.start();
@@ -2417,7 +2425,189 @@ function applyFrenchTypography(text){
   return t;
 }
 
+// ── DÉTECTION D'ACTION DANS UNE NOTE ──
+function detectActionInNote(text){
+  if(!text || text.length < 8) return null;
+  const lower = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+
+  // Type d'action
+  let type = null;
+  if(/\b(rdv|rendez[- ]vous|visite|rencontre|reunion)\b/.test(lower)) type = 'rdv';
+  else if(/\b(visio|visioconference|teams|zoom|meet|appel video)\b/.test(lower)) type = 'visio';
+  else if(/\b(envoyer (un )?(mail|email|courriel)|relance(r)? par mail|mailing|email)\b/.test(lower)) type = 'mail';
+  else if(/\b(devis|proposition commerciale|chiffrage)\b/.test(lower)) type = 'devis';
+  if(!type) return null;
+
+  // Date
+  const date = parseFrenchDate(lower);
+  if(!date) return null;
+
+  // Heure
+  const time = parseFrenchTime(lower) || '14:00';
+
+  return { type, date, time, sourceText: text };
+}
+
+function parseFrenchDate(lower){
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const y = today.getFullYear();
+
+  // « aujourd'hui »
+  if(/\baujourd[' ]?hui\b/.test(lower)) return new Date(today);
+  // « demain »
+  if(/\bdemain\b/.test(lower)){ const d=new Date(today); d.setDate(d.getDate()+1); return d; }
+  // « après-demain »
+  if(/\bapres[- ]?demain\b/.test(lower)){ const d=new Date(today); d.setDate(d.getDate()+2); return d; }
+
+  // « lundi prochain » / « mardi prochain » ...
+  const jours = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  const joursMatch = lower.match(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(\s+prochain)?\b/);
+  if(joursMatch){
+    const targetDay = jours.indexOf(joursMatch[1]);
+    const d = new Date(today);
+    let diff = (targetDay - d.getDay() + 7) % 7;
+    if(diff === 0 || joursMatch[2]) diff = diff || 7;
+    d.setDate(d.getDate() + diff);
+    return d;
+  }
+
+  // « le 6 mai » / « 6 mai » / « le 12 » (mois courant)
+  const moisMap = {janvier:0,fevrier:1,mars:2,avril:3,mai:4,juin:5,juillet:6,aout:7,septembre:8,octobre:9,novembre:10,decembre:11};
+  const dateMatch = lower.match(/\b(?:le\s+)?(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\b/);
+  if(dateMatch){
+    const day = parseInt(dateMatch[1], 10);
+    const month = moisMap[dateMatch[2]];
+    if(day && month !== undefined){
+      let yr = y;
+      const candidate = new Date(yr, month, day);
+      if(candidate < today) yr++; // l'année prochaine si la date est passée
+      return new Date(yr, month, day);
+    }
+  }
+
+  // « le 12/05 » ou « 12/05/2026 »
+  const slashMatch = lower.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if(slashMatch){
+    const day = parseInt(slashMatch[1],10);
+    const month = parseInt(slashMatch[2],10) - 1;
+    let yr = slashMatch[3] ? parseInt(slashMatch[3],10) : y;
+    if(yr < 100) yr += 2000;
+    if(day && month >= 0){
+      const d = new Date(yr, month, day);
+      if(d >= today || slashMatch[3]) return d;
+      return new Date(yr+1, month, day);
+    }
+  }
+
+  return null;
+}
+
+function parseFrenchTime(lower){
+  // « 14h30 » / « 14h » / « 14:30 » / « 14 heures 30 » / « 9 heures »
+  let m = lower.match(/\b(\d{1,2})\s*h\s*(\d{1,2})?\b/);
+  if(m) return String(m[1]).padStart(2,'0') + ':' + String(m[2]||'00').padStart(2,'0');
+  m = lower.match(/\b(\d{1,2}):(\d{2})\b/);
+  if(m) return String(m[1]).padStart(2,'0') + ':' + m[2];
+  m = lower.match(/\b(\d{1,2})\s*heures?\s*(\d{1,2})?\b/);
+  if(m) return String(m[1]).padStart(2,'0') + ':' + String(m[2]||'00').padStart(2,'0');
+  return null;
+}
+
+function openActionConfirmPopup(detected){
+  if(!detected || !currentId) return;
+  const ov = document.getElementById('action-confirm-overlay');
+  const sel = document.getElementById('action-confirm-type');
+  const dt = document.getElementById('action-confirm-date');
+  const tm = document.getElementById('action-confirm-time');
+  if(!ov || !sel || !dt || !tm) return;
+
+  sel.value = detected.type;
+  const d = detected.date;
+  dt.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  tm.value = detected.time;
+
+  ov.style.display = 'flex';
+
+  const close = () => { ov.style.display = 'none'; };
+  document.getElementById('action-confirm-cancel').onclick = close;
+  ov.onclick = (e) => { if(e.target === ov) close(); };
+  document.getElementById('action-confirm-ok').onclick = function(){
+    createActionFromDetection(sel.value, dt.value, tm.value);
+    close();
+  };
+}
+
+function createActionFromDetection(type, dateStr, time){
+  const c = cards.find(x => String(x.id) === String(currentId));
+  if(!c) return;
+  const [yyyy, mm, dd] = dateStr.split('-').map(Number);
+  const [hh, mn] = time.split(':').map(Number);
+  const iso = new Date(yyyy, mm-1, dd, hh, mn, 0, 0);
+
+  const rdv = {
+    id: 'rdv_' + Date.now(),
+    contactId: String(c.id),
+    contactName: c.co || c.name || '',
+    address: c.address || '',
+    lat: c.lat || null,
+    lng: c.lng || null,
+    date: iso.toISOString(),
+    hour: time,
+    type: type.toUpperCase(),
+    colonne: c.col || '',
+    createdAt: new Date().toISOString(),
+    source: 'note_voice'
+  };
+  if(!Array.isArray(c.rdvs)) c.rdvs = [];
+  c.rdvs.push(rdv);
+
+  // Trace timeline
+  if(!Array.isArray(c.noteEntries)) c.noteEntries = [];
+  const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+  const verbe = {rdv:'RDV planifié', visio:'Visio planifiée', mail:'Mail programmé', devis:'Devis planifié'}[type] || 'Action planifiée';
+  c.noteEntries.push({
+    id: 'tl_' + Date.now(),
+    text: verbe + ' (auto) le ' + iso.getDate() + ' ' + monthsShort[iso.getMonth()] + ' à ' + time,
+    createdAt: new Date().toISOString(),
+    rdvId: rdv.id
+  });
+
+  save();
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
+  if(typeof openDetail === 'function') openDetail(currentId);
+}
+
 </script>
+<div id="action-confirm-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:420px;max-width:92vw;font-family:Geist,-apple-system,sans-serif">
+    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6E6E73;margin-bottom:6px">Action détectée</div>
+    <div style="font-size:16px;font-weight:800;letter-spacing:-.3px;margin-bottom:16px">Créer cette action dans l'agenda ?</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
+      <label style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6E6E73">Type
+        <select id="action-confirm-type" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid #E8E8ED;border-radius:8px;font-size:13px;font-family:inherit">
+          <option value="rdv">RDV</option>
+          <option value="visio">Visio</option>
+          <option value="mail">Mail</option>
+          <option value="devis">Devis</option>
+        </select>
+      </label>
+      <div style="display:flex;gap:8px">
+        <label style="flex:1;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6E6E73">Date
+          <input id="action-confirm-date" type="date" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid #E8E8ED;border-radius:8px;font-size:13px;font-family:inherit">
+        </label>
+        <label style="flex:1;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6E6E73">Heure
+          <input id="action-confirm-time" type="time" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid #E8E8ED;border-radius:8px;font-size:13px;font-family:inherit">
+        </label>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="action-confirm-cancel" type="button" style="padding:9px 16px;border:1px solid #E8E8ED;background:#fff;color:#1D1D1F;border-radius:8px;font-family:inherit;font-weight:600;font-size:12.5px;cursor:pointer">Annuler</button>
+      <button id="action-confirm-ok" type="button" style="padding:9px 16px;border:none;background:#1D1D1F;color:#fff;border-radius:8px;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer">Créer</button>
+    </div>
+  </div>
+</div>
+
 <script src="/sidebar.js"></script>
 </body>
 </html>

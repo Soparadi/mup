@@ -159,6 +159,15 @@
   .cal-ev-sub{font-size:10.5px;color:var(--muted);}
   .cal-ev-time{font-size:10px;color:var(--muted);font-family:var(--mono);}
 
+  /* ── KPI CHIPS (style Pipeline) ── */
+  .kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0}
+  .kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-right:1px solid var(--border);transition:background .12s;flex-shrink:0}
+  .kpi-chip:last-child{border-right:none}
+  .kpi-chip:hover{background:var(--surface2)}
+  .kpi-num{font-size:22px;font-weight:900;line-height:1;letter-spacing:-.5px}
+  .kpi-lbl{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+  .kpi-pipeline-total{display:flex;align-items:center;gap:8px;padding:10px 18px;background:rgba(29,131,72,.08);border:1px solid rgba(29,131,72,.25);border-radius:12px;flex-shrink:0}
+
   /* ── CRM CARD ── */
   .crm-card{grid-column:1/3;grid-row:2;}
   .crm-board{display:flex;overflow-x:auto;height:360px;gap:0;}
@@ -474,58 +483,49 @@
         <h1 style="font-size:22px;font-weight:900;letter-spacing:-.6px;color:var(--text);">Dashboard</h1>
       </div>
 
-      <!-- LIGNE 2 : Encart hiérarchisé -->
-      <div style="display:flex;align-items:stretch;gap:8px;">
-
-        <!-- GROUPE 1 : Actions commerciales (ordre Pipeline) -->
-        <div style="display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0;">
-          <div style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-right:1px solid var(--border);">
+      <!-- LIGNE 2 : Topbar KPI (style Pipeline) -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div class="kpi-group">
+          <div class="kpi-chip">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            <div><div id="kpi-mailing" style="font-size:22px;font-weight:900;color:#B84C00;line-height:1;">0</div><div style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Mailing</div></div>
+            <div><div class="kpi-num" id="kpi-mailing" style="color:#B84C00">0</div><div class="kpi-lbl">Mailing</div></div>
           </div>
-          <div style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-right:1px solid var(--border);">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.64a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.5 16l.42.92z"/></svg>
-            <div><div id="kpi-phoning" style="font-size:22px;font-weight:900;color:var(--red);line-height:1;">0</div><div style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Phoning</div></div>
+          <div class="kpi-chip">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>
+            <div><div class="kpi-num" id="kpi-phoning" style="color:#4338CA">0</div><div class="kpi-lbl">Phoning</div></div>
           </div>
-          <div style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-right:1px solid var(--border);">
+          <div class="kpi-chip">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-            <div><div id="kpi-visio" style="font-size:22px;font-weight:900;color:#7C3AED;line-height:1;">0</div><div style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Visio</div></div>
+            <div><div class="kpi-num" id="kpi-visio" style="color:#7C3AED">0</div><div class="kpi-lbl">Visio</div></div>
           </div>
-          <div style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-right:1px solid var(--border);">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0BBCD4" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-            <div><div id="kpi-rdv" style="font-size:22px;font-weight:900;color:#1D8348;line-height:1;">0</div><div style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">RDV</div></div>
+          <div class="kpi-chip">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            <div><div class="kpi-num" id="kpi-rdv" style="color:#1D8348">0</div><div class="kpi-lbl">RDV</div></div>
           </div>
-          <div style="display:flex;align-items:center;gap:6px;padding:8px 14px;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            <div><div id="kpi-devis" style="font-size:22px;font-weight:900;color:#0A66C2;line-height:1;">0</div><div style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Devis</div></div>
+          <div class="kpi-chip">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0A66C2" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <div><div class="kpi-num" id="kpi-devis" style="color:#0A66C2">0</div><div class="kpi-lbl">Devis</div></div>
           </div>
         </div>
-
-        <!-- GROUPE 2 : Pipeline -->
-        <div style="display:flex;align-items:center;gap:6px;padding:8px 16px;background:rgba(29,131,72,.08);border:1px solid rgba(29,131,72,.2);border-radius:12px;flex-shrink:0;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
-          <div><div id="kpi-pipeline" style="font-size:22px;font-weight:900;color:var(--green);line-height:1;">0€</div><div style="font-size:9px;font-weight:600;color:var(--green);opacity:.7;text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Pipeline</div></div>
+        <div class="kpi-pipeline-total">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <div><div class="kpi-num" id="kpi-pipeline" style="color:#1D8348">0€</div><div class="kpi-lbl" style="color:#1D8348;opacity:.7">Pipeline</div></div>
         </div>
-
-        <!-- GROUPE 3 : Contexte (météo + AFP) -->
-        <div style="display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex:1;min-width:0;">
-          <div id="weather-widget" style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-right:1px solid var(--border);flex-shrink:0;">
-            <span id="weather-icon" style="display:flex;align-items:center;color:var(--muted);flex-shrink:0;line-height:0;"></span>
-            <div style="display:flex;flex-direction:column;justify-content:center;">
-              <span id="weather-temp" style="font-size:20px;font-weight:900;color:var(--text);line-height:1;letter-spacing:-.5px;">—°</span>
-              <span id="weather-city" style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">…</span>
-            </div>
+        <div id="weather-widget" style="display:flex;align-items:center;gap:10px;padding:10px 18px;background:var(--surface);border:1px solid var(--border);border-radius:12px;flex-shrink:0;">
+          <span id="weather-icon" style="display:flex;align-items:center;color:var(--muted);flex-shrink:0;line-height:0;"></span>
+          <div style="display:flex;flex-direction:column;justify-content:center;">
+            <span id="weather-temp" style="font-size:20px;font-weight:900;color:var(--text);line-height:1;letter-spacing:-.5px;">—°</span>
+            <span id="weather-city" style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">…</span>
           </div>
-          <div id="news-ticker" style="display:flex;align-items:center;gap:8px;padding:8px 12px;flex:1;overflow:hidden;min-width:0;">
-            <span style="font-size:8px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;background:#CC0000;color:#fff;padding:2px 6px;border-radius:4px;flex-shrink:0;">AFP</span>
-            <div style="overflow:hidden;flex:1;">
-              <div id="news-track" style="display:inline-block;white-space:nowrap;">
-                <span style="font-size:11px;color:var(--muted);">Chargement…</span>
-              </div>
+        </div>
+        <div id="news-ticker" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;flex:1;overflow:hidden;min-width:0;">
+          <span style="font-size:8px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;background:#CC0000;color:#fff;padding:2px 6px;border-radius:4px;flex-shrink:0;">AFP</span>
+          <div style="overflow:hidden;flex:1;">
+            <div id="news-track" style="display:inline-block;white-space:nowrap;">
+              <span style="font-size:11px;color:var(--muted);">Chargement…</span>
             </div>
           </div>
         </div>
-
       </div>
     </div>
 

@@ -537,7 +537,6 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
         <div class="frow">
           <div class="flabel">Étape</div>
           <select class="finput" id="m-col">
-            <option value="leads">Leads</option>
             <option value="prospects">Prospects</option>
             <option value="linkedin">LinkedIn</option>
             <option value="mailing">Mailing</option>
@@ -726,7 +725,6 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
     <div class="detail-section">
       <div class="detail-section-title">Déplacer vers</div>
       <select class="col-select" id="d-move" onchange="moveCard(this.value)">
-        <option value="leads">Leads</option>
         <option value="prospects">Prospects</option>
         <option value="linkedin">LinkedIn</option>
         <option value="mailing">Mailing</option>
@@ -752,7 +750,6 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
 <script>
 
 const STAGES = [
-  { id:'leads',     label:'L',  color:'#6E6E73', name:'Leads' },
   { id:'prospects', label:'P',  color:'#CC0000', name:'Prospects' },
   { id:'linkedin',  label:'Li', color:'#0A66C2', name:'LinkedIn' },
   { id:'mailing',   label:'M',  color:'#B84C00', name:'Mailing' },
@@ -1121,7 +1118,7 @@ function openModal(colId) {
   document.getElementById('m-email').value = '';
   document.getElementById('m-tel').value = '';
   document.getElementById('m-notes').value = '';
-  document.getElementById('m-col').value = colId || 'leads';
+  document.getElementById('m-col').value = colId || 'prospects';
   document.getElementById('modal-title').textContent = 'Nouvelle fiche';
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(() => document.getElementById('m-name').focus(), 100);
@@ -1137,7 +1134,7 @@ function editCard(id) {
   document.getElementById('m-tel').value = c.tel||'';
   document.getElementById('m-addr').value = c.address||'';
   document.getElementById('m-notes').value = c.notes||'';
-  document.getElementById('m-col').value = c.col||'leads';
+  document.getElementById('m-col').value = c.col||'prospects';
   document.getElementById('modal-title').textContent = 'Modifier la fiche';
   document.getElementById('modal-overlay').classList.add('open');
 }
@@ -1227,7 +1224,7 @@ function openDetail(id) {
   var igLink=document.getElementById('d-instagram-link'); igLink.href=c.instagram||'#'; igLink.style.display=c.instagram?'':'none';
 
   // Move select
-  document.getElementById('d-move').value = c.col||'leads';
+  document.getElementById('d-move').value = c.col||'prospects';
 
   // Timeline (all activity + auto-generated entry date)
   const allActs = (c.activity||[]).slice(-12).reverse();

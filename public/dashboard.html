@@ -1066,11 +1066,36 @@ function closeSidebar(){
     {id:'lost',name:'Disqualifié',color:'#AEAEB2'},
   ];
 
-  // KPIs
-  var kpiMap={mailing:'kpi-mailing',phoning:'kpi-phoning',visio:'kpi-visio',devis:'kpi-devis',rdv:'kpi-rdv'};
-  Object.keys(kpiMap).forEach(function(col){
-    var el=document.getElementById(kpiMap[col]);
-    if(el) el.textContent=cards.filter(function(c){return c.col===col;}).length;
+  // KPIs : actions à venir (à partir d'aujourd'hui), par type, agrégées sur toutes les fiches
+  var kpiMap = {
+    mailing: 'kpi-mailing',
+    phoning: 'kpi-phoning',
+    visio:   'kpi-visio',
+    rdv:     'kpi-rdv',
+    devis:   'kpi-devis'
+  };
+  var todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+
+  var kpiCounts = { mailing: 0, phoning: 0, visio: 0, rdv: 0, devis: 0 };
+
+  cards.forEach(function(c){
+    if(!Array.isArray(c.rdvs)) return;
+    c.rdvs.forEach(function(rdv){
+      if(!rdv || !rdv.date) return;
+      var d = new Date(rdv.date);
+      if(isNaN(d.getTime())) return;
+      if(d.getTime() < todayMidnight.getTime()) return; // exclure passé
+      var t = String(rdv.type || 'rdv').toLowerCase();
+      // Mapping : type 'mail' (action) → KPI 'mailing' (label)
+      if(t === 'mail') t = 'mailing';
+      if(kpiCounts[t] !== undefined) kpiCounts[t]++;
+    });
+  });
+
+  Object.keys(kpiMap).forEach(function(k){
+    var el = document.getElementById(kpiMap[k]);
+    if(el) el.textContent = kpiCounts[k] || 0;
   });
 
   // Pipeline total

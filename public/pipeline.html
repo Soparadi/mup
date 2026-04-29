@@ -2574,10 +2574,11 @@ function detectActionInNote(text){
 
   // Type d'action
   let type = null;
-  if(/\b(rdv|rendez[- ]vous|visite|rencontre|reunion)\b/.test(lower)) type = 'rdv';
-  else if(/\b(visio|visioconference|teams|zoom|meet|appel video)\b/.test(lower)) type = 'visio';
-  else if(/\b(envoyer (un )?(mail|email|courriel)|relance(r)? par mail|mailing|email)\b/.test(lower)) type = 'mail';
-  else if(/\b(devis|proposition commerciale|chiffrage)\b/.test(lower)) type = 'devis';
+  // Visio en priorité (avant 'appel' qui matcherait aussi)
+  if(/\b(visio|visioconference|teams|zoom|meet|appel video|en visio)\b/.test(lower)) type = 'visio';
+  else if(/\b(devis|proposition commerciale|chiffrage|propose un devis)\b/.test(lower)) type = 'devis';
+  else if(/\b(envoyer (un )?(mail|email|courriel)|relance(r)? par mail|mailing\b|email\b|envoyer un mail)\b/.test(lower)) type = 'mail';
+  else if(/\b(rdv|rendez[- ]vous|visite|rencontre|reunion|appeler|rappeler|telephoner|recontacter|contacter|joindre|me rappelle|le rappeler|me contacter)\b/.test(lower)) type = 'rdv';
   if(!type) return null;
 
   // Date

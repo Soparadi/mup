@@ -156,7 +156,8 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .tl-item.type-mail::before{background:#B84C00}
 .tl-item.type-appel::before{background:#4338CA}
 .tl-item.type-visio::before{background:#7C3AED}
-.tl-item.type-rdv::before{background:#0BBCD4}
+.tl-item.type-rdv::before{background:#1D8348}
+.tl-item.type-devis::before{background:#0A66C2}
 .tl-item.type-move::before{background:#1D8348}
 .tl-item.type-note::before{background:#1D1D1F}
 .notes-input-wrap{display:flex;flex-direction:column;gap:8px}
@@ -192,6 +193,9 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .rdv-time-label{font-size:9px;font-weight:700;color:#AEAEB2;letter-spacing:1px;text-transform:uppercase}
 .rdv-time-input{border:1px solid #E8E8ED;border-radius:8px;padding:8px 12px;font-family:inherit;font-size:13px}
 .rdv-time-input:focus{outline:none;border-color:#1D1D1F}
+.rdv-type-wrap{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.rdv-type-select{flex:1;border:1px solid #E8E8ED;border-radius:8px;padding:8px 12px;font-family:inherit;font-size:13px;background:#fff;cursor:pointer}
+.rdv-type-select:focus{outline:none;border-color:#1D1D1F}
 .rdv-save-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;background:#1D1D1F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity 0.12s}
 .rdv-save-btn:hover{opacity:0.85}
 .rdv-save-btn:disabled{opacity:0.4;cursor:not-allowed}
@@ -586,6 +590,15 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
       <div class="detail-section-title" id="rdv-section-label">Rendez-vous</div>
       <div id="d-rdv-content">
         <div class="rdv-section">
+          <div class="rdv-type-wrap">
+            <label class="rdv-time-label" for="rdv-type-select">Type</label>
+            <select id="rdv-type-select" class="rdv-type-select" onchange="onRdvTypeChange()">
+              <option value="rdv">RDV</option>
+              <option value="visio">Visio</option>
+              <option value="mail">Mail</option>
+              <option value="devis">Devis</option>
+            </select>
+          </div>
           <div class="rdv-calendar-wrap">
             <div class="rdv-cal-header">
               <button class="rdv-cal-nav" onclick="rdvCalPrev()" type="button">
@@ -604,7 +617,7 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
           </div>
           <button class="rdv-save-btn" id="rdv-save-btn" onclick="saveRdv()" type="button" disabled>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Enregistrer le RDV
+            <span id="rdv-save-btn-label">Enregistrer le RDV</span>
           </button>
         </div>
       </div>
@@ -1112,6 +1125,7 @@ function openDetail(id) {
   const allActs = (c.activity||[]).slice(-12).reverse();
   function getTimelineType(txt) {
     const t = txt.toLowerCase();
+    if(t.includes('devis')) return 'type-devis';
     if(t.includes('mail')) return 'type-mail';
     if(t.includes('appel') || t.includes('phoning')) return 'type-appel';
     if(t.includes('visio')) return 'type-visio';
@@ -1221,12 +1235,13 @@ function openDetail(id) {
   // Adaptation Visio si la carte est dans la colonne "visio"
   const isVisioCard = (c.col === 'visio');
 
-  // Bouton "Enregistrer le RDV" → "Enregistrer la Visio"
-  var saveBtn = document.getElementById('rdv-save-btn');
-  if(saveBtn) {
-    saveBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> '
-      + (isVisioCard ? 'Enregistrer la Visio' : 'Enregistrer le RDV');
+  // Pré-sélection du type d'action (modifiable par l'utilisateur)
+  var typeSel = document.getElementById('rdv-type-select');
+  if(typeSel) {
+    typeSel.value = isVisioCard ? 'visio' : 'rdv';
   }
+  // Refresh du libellé du bouton selon la pré-sélection
+  if(typeof onRdvTypeChange === 'function') onRdvTypeChange();
 
   // Label section "Rendez-vous" → "Visio"
   var rdvLabel = document.getElementById('rdv-section-label');
@@ -1442,17 +1457,43 @@ function selectRdvDay(year, month, day) {
 function rdvCalPrev() { rdvCalDate.setMonth(rdvCalDate.getMonth() - 1); renderRdvCalendar(); }
 function rdvCalNext() { rdvCalDate.setMonth(rdvCalDate.getMonth() + 1); renderRdvCalendar(); }
 
+function onRdvTypeChange() {
+  var sel = document.getElementById('rdv-type-select');
+  var lbl = document.getElementById('rdv-save-btn-label');
+  if(!sel || !lbl) return;
+  var labels = {
+    rdv: 'Enregistrer le RDV',
+    visio: 'Enregistrer la visio',
+    mail: 'Enregistrer le mail',
+    devis: 'Enregistrer le devis'
+  };
+  lbl.textContent = labels[sel.value] || labels.rdv;
+}
+
 function saveRdv() {
   if(!rdvSelectedDate) { alert('Sélectionnez une date dans le calendrier'); return; }
   if(!currentId) return;
   const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
-  const isVisio = (c.col === 'visio');
-  const recordType = isVisio ? 'VISIO' : 'RDV';
-  const agendaType = isVisio ? 'visio' : 'rdv';
-  const advanceTarget = isVisio ? 'visio' : 'rdv';
-  const labelVerbe = isVisio ? 'Visio planifiée' : 'RDV planifié';
-  const labelEnregistre = isVisio ? 'Visio enregistrée' : 'RDV enregistré';
+  const typeSel = document.getElementById('rdv-type-select');
+  const actionType = (typeSel && typeSel.value) || (c.col === 'visio' ? 'visio' : 'rdv');
+  const recordType = actionType.toUpperCase();           // 'RDV' | 'VISIO' | 'MAIL' | 'DEVIS'
+  const agendaType = actionType;                          // 'rdv'  | 'visio' | 'mail' | 'devis'
+  const advanceTarget = (actionType === 'rdv' || actionType === 'visio') ? actionType : null;
+  const labelVerbeMap = {
+    rdv: 'RDV planifié',
+    visio: 'Visio planifiée',
+    mail: 'Mail programmé',
+    devis: 'Devis planifié'
+  };
+  const labelEnregistreMap = {
+    rdv: 'RDV enregistré',
+    visio: 'Visio enregistrée',
+    mail: 'Mail enregistré',
+    devis: 'Devis enregistré'
+  };
+  const labelVerbe = labelVerbeMap[actionType] || labelVerbeMap.rdv;
+  const labelEnregistre = labelEnregistreMap[actionType] || labelEnregistreMap.rdv;
   const timeInput = document.getElementById('rdv-time-input');
   const time = timeInput ? timeInput.value : '14:00';
   if(!time) { alert('Sélectionnez une heure'); return; }
@@ -1518,8 +1559,8 @@ function saveRdv() {
   });
   save();
 
-  // Auto-advance colonne pipeline (règle no-regress + terminaux figés)
-  if(advanceCardColumn(c, advanceTarget)) {
+  // Auto-advance colonne pipeline (uniquement RDV et Visio — Mail et Devis laissent la fiche en place)
+  if(advanceTarget && advanceCardColumn(c, advanceTarget)) {
     save();
     renderKanban();
   }

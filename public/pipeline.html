@@ -691,6 +691,9 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
             <span id="notes-mic-label">Dicter</span>
           </button>
+          <button class="notes-mic-btn" onclick="restoreRawDictation()" type="button" title="Restaurer la dictée brute" style="font-size:11px">
+            Brut
+          </button>
           <button class="notes-save-btn" onclick="saveNote()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             Enregistrer
@@ -2337,12 +2340,17 @@ function toggleDictation(){
   };
 
   dictationRecognition.onend = function(){
-    // Appliquer la correction typo FR sur le buffer final + base
-    const corrected = applyFrenchTypography(dictationBaseText + dictationFinalBuffer);
+    // 1. Correction typo FR sur le buffer brut
+    const rawCombined = dictationBaseText + dictationFinalBuffer;
+    let corrected = applyFrenchTypography(rawCombined);
+    // Stocke le brut typographié pour le bouton « Brut »
+    input.dataset.rawDictation = corrected;
+    // 2. Structuration commerciale automatique (compte-rendu)
+    corrected = structureCommercialNote(corrected);
     input.value = corrected;
     stopDictationUI();
-    // Détection d'intention d'action
-    const detected = detectActionInNote(corrected);
+    // 3. Détection d'action sur le texte brut (avant structuration) — pour popup agenda
+    const detected = detectActionInNote(rawCombined);
     if(detected) openActionConfirmPopup(detected);
   };
 
@@ -2423,6 +2431,83 @@ function applyFrenchTypography(text){
   t = t.replace(/\s+$/, '');
 
   return t;
+}
+
+// ── STRUCTURATION AUTO EN COMPTE-RENDU COMMERCIAL ──
+function structureCommercialNote(rawText){
+  if(!rawText || rawText.trim().length < 30) return rawText;
+
+  const sentences = rawText
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 4);
+
+  if(sentences.length < 2) return rawText;
+
+  const sections = {
+    contexte: [],
+    besoins: [],
+    freins: [],
+    budget: [],
+    decisions: [],
+    actions: [],
+    autres: []
+  };
+
+  const patterns = {
+    freins: /\b(trop cher|pas le budget|hesit|pas sur|inquiet|reticent|probleme|frein|bloqu|crainte|peur de|pas convaincu|deja sous contrat|engage avec|fidele a|n[' ]a pas besoin|reflechi)/i,
+    besoins: /\b(cherche|veut|besoin|souhait|voudrait|aimerait|recherche|interesse par|envisage|projet de|attend|demande)/i,
+    budget: /\b(\d+\s*(€|euros|k€|keuros|mille)|budget|enveloppe|cout|prix|tarif|montant|investissement)/i,
+    decisions: /\b(decid|valid|on part sur|on retient|on prend|accord|sign|confirm|on y va|on lance|ok pour)/i,
+    actions: /\b(a faire|il faut|faut|envoyer|relancer|rappeler|preparer|recontact|prevoir|programmer|planifier|envoie|relance)/i,
+    contexte: /\b(rencontre|visite|rdv|reunion|appel|echang|discut|presentation|demo|premier contact|recommande par|vient de|reseau)/i
+  };
+
+  function normalize(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+
+  sentences.forEach(s => {
+    const n = normalize(s);
+    let placed = false;
+    if(patterns.freins.test(n)){ sections.freins.push(s); placed = true; }
+    else if(patterns.decisions.test(n)){ sections.decisions.push(s); placed = true; }
+    else if(patterns.actions.test(n)){ sections.actions.push(s); placed = true; }
+    else if(patterns.besoins.test(n)){ sections.besoins.push(s); placed = true; }
+    else if(patterns.budget.test(n)){ sections.budget.push(s); placed = true; }
+    else if(patterns.contexte.test(n)){ sections.contexte.push(s); placed = true; }
+    if(!placed) sections.autres.push(s);
+  });
+
+  const lines = [];
+  function addSection(title, items){
+    if(!items.length) return;
+    lines.push(title);
+    items.forEach(s => lines.push('• ' + s));
+    lines.push('');
+  }
+
+  const now = new Date();
+  const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+  const dateStr = now.getDate() + ' ' + monthsShort[now.getMonth()] + ' ' + now.getFullYear();
+  lines.push('COMPTE-RENDU — ' + dateStr);
+  lines.push('');
+
+  addSection('CONTEXTE', sections.contexte);
+  addSection('BESOINS EXPRIMÉS', sections.besoins);
+  addSection('FREINS / OBJECTIONS', sections.freins);
+  addSection('BUDGET', sections.budget);
+  addSection('DÉCISIONS', sections.decisions);
+  addSection('PROCHAINES ÉTAPES', sections.actions);
+  addSection('AUTRES POINTS', sections.autres);
+
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function restoreRawDictation(){
+  const input = document.getElementById('d-notes-input');
+  if(input && input.dataset.rawDictation){
+    input.value = input.dataset.rawDictation;
+  }
 }
 
 // ── DÉTECTION D'ACTION DANS UNE NOTE ──

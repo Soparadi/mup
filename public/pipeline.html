@@ -35,9 +35,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .shell{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 
 /* ── TOPBAR ── */
-.topbar{padding:14px 20px;border-bottom:1px solid var(--border);background:var(--card);flex-shrink:0;display:flex;align-items:center;gap:16px}
+.topbar{padding:18px 28px;border-bottom:1px solid var(--border);background:var(--card);flex-shrink:0;display:flex;align-items:center;gap:20px}
+#pipeline-search-input:focus{border-color:var(--text);background:var(--card)}
 .topbar-title{font-size:17px;font-weight:800;letter-spacing:-.3px}
-.pipeline-total{font-size:12px;font-weight:700;font-family:var(--mono);color:var(--green);background:rgba(29,131,72,.1);border-radius:6px;padding:3px 10px}
+.pipeline-total{font-size:12px;font-weight:700;font-family:var(--mono);color:var(--green);background:rgba(29,131,72,.1);border-radius:6px;padding:5px 12px}
 .topbar-actions{margin-left:auto;display:flex;gap:8px}
 .btn-add-card{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:9px;border:none;background:var(--text);color:#fff;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
 .btn-add-card:hover{background:#000}
@@ -439,6 +440,10 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
   <div class="topbar">
     <div class="topbar-title">Pipeline</div>
     <div class="pipeline-total" id="pipeline-total">127k€ en cours</div>
+    <div class="pipeline-search" style="position:relative;flex:1;max-width:360px;margin-left:8px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted2);pointer-events:none"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="pipeline-search-input" type="text" placeholder="Rechercher un client, une catégorie, un secteur…" oninput="filterCards(this.value)" style="width:100%;padding:7px 12px 7px 32px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--surface);outline:none;transition:border-color .12s">
+    </div>
     <div style="display:flex;gap:6px;align-items:center;margin-left:8px">
       <span style="font-size:11px;color:var(--muted)">Trier par</span>
       <select style="border:1.5px solid var(--border);border-radius:8px;padding:4px 8px;font-size:11.5px;font-family:var(--font);color:var(--text);background:var(--card);cursor:pointer;outline:none" onchange="sortCards(this.value)">
@@ -916,11 +921,36 @@ function totalInProgress() {
   return t > 0 ? fmtVal(t) : '0\u00A0€';
 }
 
+let pipelineSearchQuery = '';
+
+function normalize(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+
+function cardMatchesQuery(c, q){
+  if(!q) return true;
+  const haystack = [
+    c.co, c.name, c.email, c.tel, c.address,
+    c.naf, c.naf_label, c.sector, c.activity_label,
+    c.notes, c.siren, c.siret
+  ].map(normalize).join(' ');
+  return haystack.indexOf(q) !== -1;
+}
+
+function filterCards(query){
+  pipelineSearchQuery = normalize(String(query||'').trim());
+  renderKanban();
+}
+
 function renderKanban() {
   const kb = document.getElementById('kanban');
+  // Total "en cours" reste calculé sur l'ensemble (non filtré)
   document.getElementById('pipeline-total').textContent = totalInProgress() + ' en cours';
+  const sourceCards = pipelineSearchQuery
+    ? cards.filter(c => cardMatchesQuery(c, pipelineSearchQuery))
+    : cards;
   kb.innerHTML = COLS.map(col => {
-    const colCards = cards.filter(c => c.col === col.id);
+    const colCards = sourceCards.filter(c => c.col === col.id);
     const total = colCards.reduce((s,c)=>s+(c.val||0),0);
     const totalStr = total >= 1000 ? Math.round(total/1000)+'k€' : (total ? total+'€' : '—');
     return `<div class="col${col.cls?' '+col.cls:''}" id="col-${col.id}" 

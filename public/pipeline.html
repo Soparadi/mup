@@ -1408,7 +1408,6 @@ function saveNote() {
   const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
 
-  // 1. Toujours sauvegarder la note dans la timeline
   if(!Array.isArray(c.noteEntries)) c.noteEntries = [];
   c.noteEntries.push({
     id: 'tl_' + Date.now(),
@@ -1416,16 +1415,15 @@ function saveNote() {
     createdAt: new Date().toISOString()
   });
   save();
-  if(input) input.value = '';
 
-  // 2. Re-render fiche pour montrer la nouvelle entrée
-  if(typeof openDetail === 'function') openDetail(currentId);
-
-  // 3. Détecter une action dans le texte de la note
-  const detected = detectActionInNote(text);
-  if(detected){
-    setTimeout(() => openActionConfirmPopup(detected), 150);
+  if(input){
+    input.value = '';
+    input.dataset.rawVersion = '';
+    input.dataset.crVersion = '';
+    input.dataset.viewMode = 'raw';
   }
+
+  if(typeof openDetail === 'function') openDetail(currentId);
 }
 
 // ── CALENDRIER RDV INLINE ──
@@ -2345,9 +2343,17 @@ function toggleDictation(){
   };
 
   dictationRecognition.onend = function(){
-    const corrected = applyFrenchTypography(dictationBaseText + dictationFinalBuffer);
+    const fullText = dictationBaseText + dictationFinalBuffer;
+    const corrected = applyFrenchTypography(fullText);
     input.value = corrected;
+    // Réinitialiser le toggle compte-rendu
+    input.dataset.rawVersion = corrected;
+    input.dataset.crVersion = '';
+    input.dataset.viewMode = 'raw';
     stopDictationUI();
+    // Popup d'action si détection
+    const detected = detectActionInNote(corrected);
+    if(detected) openActionConfirmPopup(detected);
   };
 
   dictationRecognition.start();
@@ -2502,11 +2508,41 @@ function structureCommercialNote(rawText){
 function applyCompteRendu(){
   const input = document.getElementById('d-notes-input');
   if(!input || !input.value.trim()) return;
-  // Si déjà structuré (commence par 'COMPTE-RENDU'), ne pas double-structurer
-  if(/^COMPTE-RENDU/m.test(input.value)) return;
-  input.value = structureCommercialNote(input.value);
+
+  const mode = input.dataset.viewMode || 'raw';
+
+  if(mode === 'raw'){
+    // Passer en compte-rendu : générer si pas déjà fait, sinon réutiliser
+    if(!input.dataset.rawVersion) input.dataset.rawVersion = input.value;
+    if(!input.dataset.crVersion){
+      input.dataset.crVersion = structureCommercialNote(input.dataset.rawVersion);
+    }
+    input.value = input.dataset.crVersion;
+    input.dataset.viewMode = 'cr';
+  } else {
+    // Retour au brut
+    input.value = input.dataset.rawVersion || input.value;
+    input.dataset.viewMode = 'raw';
+  }
   input.focus();
 }
+
+// Synchronise la version brute quand l'utilisateur tape manuellement (mode raw)
+(function(){
+  function bind(){
+    const input = document.getElementById('d-notes-input');
+    if(!input || input.dataset.boundCrSync === '1') return;
+    input.dataset.boundCrSync = '1';
+    input.addEventListener('input', function(){
+      if((input.dataset.viewMode || 'raw') === 'raw'){
+        input.dataset.rawVersion = input.value;
+        input.dataset.crVersion = ''; // invalide le compte-rendu (sera regenéré au prochain clic)
+      }
+    });
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+})();
 
 // ── DÉTECTION D'ACTION DANS UNE NOTE ──
 function detectActionInNote(text){

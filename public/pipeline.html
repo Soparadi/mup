@@ -182,10 +182,12 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .rdv-cal-day{position:relative;padding:6px 0 14px}
 .rdv-cal-dots{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);display:flex;gap:2px;align-items:center}
 .rdv-cal-dot{width:5px;height:5px;border-radius:50%;display:inline-block}
-.rdv-cal-dot.dot-rdv{background:#0BBCD4}
-.rdv-cal-dot.dot-mailing{background:#B84C00}
-.rdv-cal-dot.dot-phoning{background:#4338CA}
-.rdv-cal-dot.dot-visio{background:#7C3AED}
+.rdv-cal-dot.dot-rdv{background:#1D8348}      /* vert */
+.rdv-cal-dot.dot-visio{background:#7C3AED}    /* violet */
+.rdv-cal-dot.dot-mail{background:#B84C00}     /* orange */
+.rdv-cal-dot.dot-devis{background:#0A66C2}    /* bleu */
+.rdv-cal-dot.dot-mailing{background:#B84C00}  /* legacy */
+.rdv-cal-dot.dot-phoning{background:#4338CA}  /* legacy */
 .rdv-cal-dot.dot-note{background:#8E8E93}
 .rdv-cal-dot.dot-more{font-size:8px;color:#8E8E93;line-height:1;width:auto;height:auto;background:none;font-weight:700}
 .rdv-cal-day.selected .rdv-cal-dot{outline:1px solid #fff}
@@ -1322,17 +1324,31 @@ function buildDotsByDate() {
     if(!dotsByDate[dateStr]) dotsByDate[dateStr] = new Set();
     dotsByDate[dateStr].add(type);
   };
-  // 1) RDV depuis mup_agenda filtré sur currentId
+  // 1) Actions depuis c.rdvs[] (source primaire)
+  const c = cards.find(x => String(x.id) === String(currentId));
+  if(c && Array.isArray(c.rdvs)){
+    c.rdvs.forEach(function(rdv){
+      if(!rdv || !rdv.date) return;
+      var d = new Date(rdv.date);
+      if(isNaN(d.getTime())) return;
+      var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      var t = String(rdv.type || 'rdv').toLowerCase();
+      addDot(ds, t);
+    });
+  }
+
+  // 2) Fallback : mup_agenda (events natifs ou anciens) sur cette fiche
   try {
     const agenda = JSON.parse(localStorage.getItem('mup_agenda') || '[]');
     agenda.forEach(ev => {
-      if(String(ev.id) === String(currentId) && ev.type === 'rdv' && ev.date) {
-        addDot(ev.date, 'rdv');
+      var matchFiche = String(ev.ficheId || ev.id) === String(currentId);
+      if(matchFiche && ev.date && ev.type){
+        addDot(ev.date, String(ev.type).toLowerCase());
       }
     });
   } catch(e) {}
-  // 2) c.noteEntries → notes (gris)
-  const c = cards.find(x => String(x.id) === String(currentId));
+
+  // 3) c.noteEntries → notes (gris)
   if(c) {
     (c.noteEntries||[]).forEach(n => {
       if(!n.createdAt) return;
@@ -1371,7 +1387,7 @@ function buildDotsByDate() {
 function appendCalDots(dayEl, dateStr, dotsByDate) {
   const types = dotsByDate[dateStr];
   if(!types || types.size === 0) return;
-  const order = ['rdv','mailing','phoning','visio','note'];
+  const order = ['rdv','visio','mail','devis','mailing','phoning','note'];
   const list = order.filter(t => types.has(t));
   const wrap = document.createElement('div');
   wrap.className = 'rdv-cal-dots';

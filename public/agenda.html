@@ -269,37 +269,60 @@ let events = [];
 function loadEvents() {
   const stored = localStorage.getItem('mup_agenda');
   if(stored) { try { events = JSON.parse(stored); } catch(e) { events = []; } }
-  // Also import RDV from pipeline
+
+  // Source de vérité : c.rdvs[] dans mup_pipeline.
+  // On purge les events Agenda issus du pipeline (key préfixée 'pipe_' OU
+  // ancien format sans key dont l'id correspond à une fiche), puis reconstruction.
   try {
     var pipe = localStorage.getItem('mup_pipeline');
     if(pipe) {
-      var cards = JSON.parse(pipe).map(function(c){if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;c.co=c.company||'';c.name=c.contact||'';return c;});
-      cards.forEach(function(c) {
-        if(!c.rdvDate) return;
-        // Check if already exists
-        var exists = events.find(function(ev) { return String(ev.id) === String(c.id); });
-        if(!exists) {
+      var cards = JSON.parse(pipe).map(function(c){
+        if(c.co && !c.company) c.company = c.co;
+        if(c.name && !c.contact) c.contact = c.name;
+        c.co = c.company || '';
+        c.name = c.contact || '';
+        return c;
+      });
+      var fichesIds = {};
+      cards.forEach(function(c){ fichesIds[String(c.id)] = true; });
+
+      events = events.filter(function(ev){
+        if(ev && ev.key && String(ev.key).indexOf('pipe_') === 0) return false;
+        if(ev && !ev.key && fichesIds[String(ev.id)]) return false;
+        return true;
+      });
+
+      cards.forEach(function(c){
+        if(!Array.isArray(c.rdvs) || !c.rdvs.length) return;
+        c.rdvs.forEach(function(rdv){
+          if(!rdv || !rdv.date) return;
+          var d = new Date(rdv.date);
+          if(isNaN(d.getTime())) return;
+          var dateStr = d.getFullYear() + '-' +
+                        String(d.getMonth()+1).padStart(2,'0') + '-' +
+                        String(d.getDate()).padStart(2,'0');
+          var hour = rdv.hour || (String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'));
+          var type = String(rdv.type || 'rdv').toLowerCase();
+          var evtKey = 'pipe_' + String(c.id) + '_' + (rdv.id || (type + '_' + dateStr));
+          if(events.some(function(ev){ return ev.key === evtKey; })) return;
           events.push({
-            id: String(c.id),
+            id: String(rdv.id || (c.id + '_' + type + '_' + dateStr)),
+            key: evtKey,
+            ficheId: String(c.id),
             title: c.co || c.name || '',
             contact: c.name || '',
-            date: c.rdvDate,
-            start: c.rdvTime || '',
+            date: dateStr,
+            start: hour,
             end: '',
-            type: 'rdv',
+            type: type,
             col: c.col || '',
             notes: ''
           });
-        } else {
-          // Update existing
-          exists.date = c.rdvDate;
-          exists.start = c.rdvTime || exists.start;
-          exists.title = c.co || c.name || exists.title;
-          exists.contact = c.name || exists.contact;
-        }
+        });
       });
     }
   } catch(e) {}
+
   if(!events.length) events = MOCK_EVENTS;
 }
 
@@ -621,6 +644,15 @@ loadEvents();
 fetchWeather();
 renderCal();
 renderDay();
+
+// Rafraîchissement temps réel quand mup_pipeline ou mup_agenda changent
+window.addEventListener('storage', function(e){
+  if(!e.key || e.key === 'mup_pipeline' || e.key === 'mup_agenda'){
+    loadEvents();
+    if(typeof renderCal === 'function') renderCal();
+    if(typeof renderDay === 'function') renderDay();
+  }
+});
 
 
 </script>

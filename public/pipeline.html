@@ -178,6 +178,11 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .notes-save-btn{align-self:flex-end;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1D1D1F;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:opacity 0.12s}
 .notes-save-btn:hover{opacity:0.85}
 .notes-save-btn:disabled{opacity:0.4;cursor:not-allowed}
+.notes-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.notes-mic-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;font-family:inherit}
+.notes-mic-btn:hover{border-color:var(--text);background:var(--surface)}
+.notes-mic-btn.recording{background:#A32D2D;color:#fff;border-color:#A32D2D;animation:micPulse 1.2s ease-in-out infinite}
+@keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(163,45,45,.4)}50%{box-shadow:0 0 0 8px rgba(163,45,45,0)}}
 .rdv-section{display:flex;flex-direction:column;gap:12px}
 .rdv-calendar-wrap{background:#F5F5F7;border-radius:8px;padding:12px}
 .rdv-cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -680,11 +685,17 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
     <div class="detail-section">
       <div class="detail-section-title">Notes</div>
       <div class="notes-input-wrap">
-        <textarea id="d-notes-input" placeholder="Ajouter des notes…" rows="4" onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();saveNote();}"></textarea>
-        <button class="notes-save-btn" onclick="saveNote()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Enregistrer
-        </button>
+        <textarea id="d-notes-input" placeholder="Ajouter des notes… (cliquez sur le micro pour dicter)" rows="4" onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();saveNote();}"></textarea>
+        <div class="notes-actions">
+          <button class="notes-mic-btn" id="notes-mic-btn" onclick="toggleDictation()" type="button" title="Dictée vocale">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <span id="notes-mic-label">Dicter</span>
+          </button>
+          <button class="notes-save-btn" onclick="saveNote()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Enregistrer
+          </button>
+        </div>
       </div>
     </div>
 
@@ -2267,6 +2278,144 @@ renderKanban();
     init();
   }
 })();
+
+// ── DICTÉE VOCALE + CORRECTION TYPO FR ──
+let dictationRecognition = null;
+let dictationActive = false;
+let dictationBaseText = '';
+let dictationFinalBuffer = '';
+
+function toggleDictation(){
+  const btn = document.getElementById('notes-mic-btn');
+  const lbl = document.getElementById('notes-mic-label');
+  const input = document.getElementById('d-notes-input');
+  if(!btn || !input) return;
+
+  if(dictationActive){
+    if(dictationRecognition) dictationRecognition.stop();
+    return;
+  }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){
+    alert('La dictée vocale n\'est pas supportée par ce navigateur. Utilisez Chrome, Edge ou Safari.');
+    return;
+  }
+
+  dictationRecognition = new SR();
+  dictationRecognition.lang = 'fr-FR';
+  dictationRecognition.continuous = true;
+  dictationRecognition.interimResults = true;
+
+  dictationBaseText = input.value;
+  if(dictationBaseText && !/[\s\n]$/.test(dictationBaseText)) dictationBaseText += ' ';
+  dictationFinalBuffer = '';
+
+  dictationRecognition.onresult = function(event){
+    let interim = '';
+    for(let i = event.resultIndex; i < event.results.length; i++){
+      const transcript = event.results[i][0].transcript;
+      if(event.results[i].isFinal){
+        dictationFinalBuffer += transcript;
+      } else {
+        interim += transcript;
+      }
+    }
+    input.value = dictationBaseText + dictationFinalBuffer + interim;
+  };
+
+  dictationRecognition.onerror = function(e){
+    if(e.error === 'not-allowed'){
+      alert('Accès au microphone refusé. Autorisez-le dans les paramètres du navigateur.');
+    }
+    stopDictationUI();
+  };
+
+  dictationRecognition.onend = function(){
+    // Appliquer la correction typo FR sur le buffer final + base
+    const corrected = applyFrenchTypography(dictationBaseText + dictationFinalBuffer);
+    input.value = corrected;
+    stopDictationUI();
+  };
+
+  dictationRecognition.start();
+  dictationActive = true;
+  btn.classList.add('recording');
+  if(lbl) lbl.textContent = 'Stop';
+  btn.title = 'Arrêter la dictée';
+}
+
+function stopDictationUI(){
+  dictationActive = false;
+  const btn = document.getElementById('notes-mic-btn');
+  const lbl = document.getElementById('notes-mic-label');
+  if(btn){
+    btn.classList.remove('recording');
+    btn.title = 'Dictée vocale';
+  }
+  if(lbl) lbl.textContent = 'Dicter';
+}
+
+// Correction typographique française
+function applyFrenchTypography(text){
+  if(!text) return text;
+  let t = text;
+
+  // Espaces multiples
+  t = t.replace(/[ \t]+/g, ' ');
+  // Espaces avant retour ligne
+  t = t.replace(/ +\n/g, '\n').replace(/\n +/g, '\n');
+
+  // Espace insécable avant : ; ! ? » (règle FR)
+  t = t.replace(/\s*([:;!?»])/g, '\u00a0$1');
+  // Espace insécable après «
+  t = t.replace(/«\s*/g, '«\u00a0');
+
+  // Pas d'espace avant , .
+  t = t.replace(/\s+([,.])/g, '$1');
+  // Espace après , si suivi d'une lettre
+  t = t.replace(/,(?=\S)/g, ', ');
+  // Espace après . si suivi d'une lettre (pas pour les nombres : 3.14)
+  t = t.replace(/\.(?=[A-Za-z\u00C0-\u017F])/g, '. ');
+
+  // Capitalisation : première lettre + après . ! ?
+  t = t.replace(/(^|[.!?]\s+)([a-zà-ÿ])/g, function(_, p1, p2){
+    return p1 + p2.toUpperCase();
+  });
+  if(t.length) t = t.charAt(0).toUpperCase() + t.slice(1);
+
+  // Apostrophe typographique
+  t = t.replace(/(\w)'(\w)/g, '$1\u2019$2');
+
+  // Remplacer mots dictés littéralement par leur ponctuation (cas fréquents)
+  const dictPunct = [
+    [/\s*\bvirgule\b\s*/gi, ', '],
+    [/\s*\bpoint\b(?!\s*virgule|\s*d['’]exclamation|\s*d['’]interrogation)\s*/gi, '. '],
+    [/\s*\bpoint d['’]?exclamation\b\s*/gi, '\u00a0! '],
+    [/\s*\bpoint d['’]?interrogation\b\s*/gi, '\u00a0? '],
+    [/\s*\bpoint virgule\b\s*/gi, '\u00a0; '],
+    [/\s*\bdeux points\b\s*/gi, '\u00a0: '],
+    [/\s*\b(à la ligne|nouvelle ligne|saut de ligne)\b\s*/gi, '\n'],
+    [/\s*\bouvrez les guillemets\b\s*/gi, ' «\u00a0'],
+    [/\s*\bfermez les guillemets\b\s*/gi, '\u00a0» '],
+    [/\s*\bouvrez la parenthèse\b\s*/gi, ' ('],
+    [/\s*\bfermez la parenthèse\b\s*/gi, ') ']
+  ];
+  dictPunct.forEach(function(rule){ t = t.replace(rule[0], rule[1]); });
+
+  // Re-passe espaces multiples après remplacements
+  t = t.replace(/[ \t]+/g, ' ').replace(/ +\n/g, '\n');
+
+  // Re-capitaliser après les nouveaux . ! ?
+  t = t.replace(/([.!?]\s+)([a-zà-ÿ])/g, function(_, p1, p2){
+    return p1 + p2.toUpperCase();
+  });
+
+  // Trim final
+  t = t.replace(/\s+$/, '');
+
+  return t;
+}
 
 </script>
 <script src="/sidebar.js"></script>

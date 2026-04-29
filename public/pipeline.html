@@ -1028,9 +1028,27 @@ function saveCard() {
     const c = cards.find(x=>x.id===editingId);
     if(c) { c.name=name; c.co=document.getElementById('m-co').value.trim(); c.address=document.getElementById('m-addr').value.trim(); c.val=parseInt(document.getElementById('m-val').value)||0; c.email=document.getElementById('m-email').value.trim(); c.tel=document.getElementById('m-tel').value.trim(); c.notes=document.getElementById('m-notes').value.trim(); c.col=document.getElementById('m-col').value; }
   } else {
-    cards.push({ id:'c'+Date.now(), name, co:document.getElementById('m-co').value.trim(), address:document.getElementById('m-addr').value.trim(), val:parseInt(document.getElementById('m-val').value)||0, email:document.getElementById('m-email').value.trim(), tel:document.getElementById('m-tel').value.trim(), notes:document.getElementById('m-notes').value.trim(), col:document.getElementById('m-col').value, days:0, src:'Manuel', activity:[] });
+    cards.push({
+      id: String('c'+Date.now()),
+      name,
+      co: document.getElementById('m-co').value.trim(),
+      address: document.getElementById('m-addr').value.trim(),
+      val: parseInt(document.getElementById('m-val').value)||0,
+      email: document.getElementById('m-email').value.trim(),
+      tel: document.getElementById('m-tel').value.trim(),
+      notes: document.getElementById('m-notes').value.trim(),
+      col: document.getElementById('m-col').value,
+      days: 0,
+      src: 'Manuel',
+      entity_origine: 'mup',
+      activity: [],
+      noteEntries: [],
+      rdvs: []
+    });
   }
   save(); closeModal(); renderKanban();
+  // Notifie les autres onglets (Contacts notamment) d'un changement
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
 }
 function deleteCard(id) {
   cards = cards.filter(c=>String(c.id)!==String(id));

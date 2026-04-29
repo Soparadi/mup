@@ -1304,6 +1304,13 @@ function navTo(p){window.location.href='/'+p}
 
 init();
 
+// Rafraîchissement temps réel quand mup_pipeline ou mup_contacts changent
+window.addEventListener('storage', function(e){
+  if(e.key === 'mup_pipeline' || e.key === 'mup_contacts' || e.key === null){
+    init();
+  }
+});
+
 // ── DENSITY TOGGLE ──
 (function() {
   var grid = document.getElementById('prospects-grid');

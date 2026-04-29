@@ -218,7 +218,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .rdv-save-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;background:#1D1D1F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity 0.12s}
 .rdv-save-btn:hover{opacity:0.85}
 .rdv-save-btn:disabled{opacity:0.4;cursor:not-allowed}
-.tl-txt{font-size:12px;color:var(--text);font-weight:500}
+.tl-txt{font-size:12px;color:var(--text);font-weight:500;white-space:pre-line}
 .tl-date{font-size:10px;color:var(--muted2);font-family:var(--mono)}
 
 
@@ -1242,7 +1242,12 @@ function openDetail(id) {
   const entryDate = c.created || new Date(typeof c.id==='string'?(parseInt(c.id.replace('c',''))||Date.now()):c.id).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
   const entryItem = `<div class="tl-item type-move"><div class="tl-date">${esc(entryDate)}</div><div class="tl-txt">Ajouté au pipeline</div></div>`;
   const tlItems = allActs.map(a => `<div class="tl-item ${getTimelineType(a.txt)}"><div class="tl-date">${esc(a.date)}</div><div class="tl-txt">${esc(a.txt)}</div></div>`).join('');
-  const noteItems = (c.noteEntries||[]).slice().reverse().map(n => `<div class="tl-item type-note"><div class="tl-date">${esc(formatNoteDate(n.createdAt))}</div><div class="tl-txt">${esc(n.text)}</div></div>`).join('');
+  const noteItems = (c.noteEntries||[]).slice().reverse().map(n => {
+    const safe = esc(n.text);
+    const titleRegex = /^(Compte-rendu — [^\n]+|Contexte|Besoins exprimés|Freins \/ objections|Budget|Décisions|Prochaines étapes|Autres points)$/gm;
+    const formatted = safe.replace(titleRegex, '<strong>$1</strong>');
+    return `<div class="tl-item type-note"><div class="tl-date">${esc(formatNoteDate(n.createdAt))}</div><div class="tl-txt">${formatted}</div></div>`;
+  }).join('');
   document.getElementById('d-timeline').innerHTML = noteItems + (tlItems || '') + entryItem;
 
   // Notes (legacy textarea — éléments removed; reset new note input)
@@ -1411,6 +1416,17 @@ function saveNote() {
     text: text,
     createdAt: new Date().toISOString()
   });
+
+  // Capture automatique d'un numéro de téléphone français
+  const telMatch = text.match(/\b(0[1-9])(?:[\s.\-]?(\d{2})){4}\b/);
+  if(telMatch){
+    const normalized = telMatch[0].replace(/[^\d+]/g, '').replace(/^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/, '$1 $2 $3 $4 $5');
+    if(!c.tel || c.tel.trim() === ''){
+      c.tel = normalized;
+      c.phone = normalized;
+    }
+  }
+
   save();
 
   if(input){
@@ -2503,6 +2519,7 @@ function structureCommercialNote(rawText){
   const lines = [];
   function addSection(title, items){
     if(!items.length) return;
+    // Casse normale (le rendu timeline mettra le titre en gras)
     lines.push(title);
     items.forEach(s => lines.push('• ' + polish(s)));
     lines.push('');
@@ -2511,16 +2528,16 @@ function structureCommercialNote(rawText){
   const now = new Date();
   const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
   const dateStr = now.getDate() + ' ' + monthsShort[now.getMonth()] + ' ' + now.getFullYear();
-  lines.push('COMPTE-RENDU — ' + dateStr);
+  lines.push('Compte-rendu — ' + dateStr);
   lines.push('');
 
-  addSection('CONTEXTE', sections.contexte);
-  addSection('BESOINS EXPRIMÉS', sections.besoins);
-  addSection('FREINS / OBJECTIONS', sections.freins);
-  addSection('BUDGET', sections.budget);
-  addSection('DÉCISIONS', sections.decisions);
-  addSection('PROCHAINES ÉTAPES', sections.actions);
-  addSection('AUTRES POINTS', sections.autres);
+  addSection('Contexte', sections.contexte);
+  addSection('Besoins exprimés', sections.besoins);
+  addSection('Freins / objections', sections.freins);
+  addSection('Budget', sections.budget);
+  addSection('Décisions', sections.decisions);
+  addSection('Prochaines étapes', sections.actions);
+  addSection('Autres points', sections.autres);
 
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }

@@ -691,8 +691,9 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
             <span id="notes-mic-label">Dicter</span>
           </button>
-          <button class="notes-mic-btn" onclick="restoreRawDictation()" type="button" title="Restaurer la dictée brute" style="font-size:11px">
-            Brut
+          <button class="notes-mic-btn" onclick="applyCompteRendu()" type="button" title="Mettre en forme en compte-rendu">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="18" y2="18"/></svg>
+            Compte-rendu
           </button>
           <button class="notes-save-btn" onclick="saveNote()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1400,26 +1401,30 @@ function formatNoteDate(isoDate) {
 }
 
 function saveNote() {
-  if(!currentId) return;
   const input = document.getElementById('d-notes-input');
-  if(!input) return;
-  const text = input.value.trim();
-  if(!text) return;
+  const text = input ? input.value.trim() : '';
+  if(!text || !currentId) return;
+
   const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
+
+  // 1. Toujours sauvegarder la note dans la timeline
   if(!Array.isArray(c.noteEntries)) c.noteEntries = [];
   c.noteEntries.push({
-    id: 'note_' + Date.now(),
+    id: 'tl_' + Date.now(),
     text: text,
     createdAt: new Date().toISOString()
   });
   save();
-  input.value = '';
-  openDetail(currentId);
-  // Détection d'intention d'action (popup non-bloquante)
+  if(input) input.value = '';
+
+  // 2. Re-render fiche pour montrer la nouvelle entrée
+  if(typeof openDetail === 'function') openDetail(currentId);
+
+  // 3. Détecter une action dans le texte de la note
   const detected = detectActionInNote(text);
   if(detected){
-    setTimeout(() => openActionConfirmPopup(detected), 100);
+    setTimeout(() => openActionConfirmPopup(detected), 150);
   }
 }
 
@@ -2340,18 +2345,9 @@ function toggleDictation(){
   };
 
   dictationRecognition.onend = function(){
-    // 1. Correction typo FR sur le buffer brut
-    const rawCombined = dictationBaseText + dictationFinalBuffer;
-    let corrected = applyFrenchTypography(rawCombined);
-    // Stocke le brut typographié pour le bouton « Brut »
-    input.dataset.rawDictation = corrected;
-    // 2. Structuration commerciale automatique (compte-rendu)
-    corrected = structureCommercialNote(corrected);
+    const corrected = applyFrenchTypography(dictationBaseText + dictationFinalBuffer);
     input.value = corrected;
     stopDictationUI();
-    // 3. Détection d'action sur le texte brut (avant structuration) — pour popup agenda
-    const detected = detectActionInNote(rawCombined);
-    if(detected) openActionConfirmPopup(detected);
   };
 
   dictationRecognition.start();
@@ -2503,11 +2499,13 @@ function structureCommercialNote(rawText){
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-function restoreRawDictation(){
+function applyCompteRendu(){
   const input = document.getElementById('d-notes-input');
-  if(input && input.dataset.rawDictation){
-    input.value = input.dataset.rawDictation;
-  }
+  if(!input || !input.value.trim()) return;
+  // Si déjà structuré (commence par 'COMPTE-RENDU'), ne pas double-structurer
+  if(/^COMPTE-RENDU/m.test(input.value)) return;
+  input.value = structureCommercialNote(input.value);
+  input.focus();
 }
 
 // ── DÉTECTION D'ACTION DANS UNE NOTE ──

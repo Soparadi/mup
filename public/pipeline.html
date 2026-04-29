@@ -1239,9 +1239,9 @@ function openDetail(id) {
   }
   // Add pipeline entry as first event
   const entryDate = c.created || new Date(typeof c.id==='string'?(parseInt(c.id.replace('c',''))||Date.now()):c.id).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
-  const entryItem = `<div class="tl-item type-move"><div class="tl-txt">Ajouté au pipeline</div><div class="tl-date">${esc(entryDate)}</div></div>`;
-  const tlItems = allActs.map(a => `<div class="tl-item ${getTimelineType(a.txt)}"><div class="tl-txt">${esc(a.txt)}</div><div class="tl-date">${esc(a.date)}</div></div>`).join('');
-  const noteItems = (c.noteEntries||[]).slice().reverse().map(n => `<div class="tl-item type-note"><div class="tl-txt">${esc(n.text)}</div><div class="tl-date">${esc(formatNoteDate(n.createdAt))}</div></div>`).join('');
+  const entryItem = `<div class="tl-item type-move"><div class="tl-date">${esc(entryDate)}</div><div class="tl-txt">Ajouté au pipeline</div></div>`;
+  const tlItems = allActs.map(a => `<div class="tl-item ${getTimelineType(a.txt)}"><div class="tl-date">${esc(a.date)}</div><div class="tl-txt">${esc(a.txt)}</div></div>`).join('');
+  const noteItems = (c.noteEntries||[]).slice().reverse().map(n => `<div class="tl-item type-note"><div class="tl-date">${esc(formatNoteDate(n.createdAt))}</div><div class="tl-txt">${esc(n.text)}</div></div>`).join('');
   document.getElementById('d-timeline').innerHTML = noteItems + (tlItems || '') + entryItem;
 
   // Notes (legacy textarea — éléments removed; reset new note input)

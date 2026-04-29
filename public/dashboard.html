@@ -493,11 +493,11 @@
           </div>
           <div style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-right:1px solid var(--border);">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0BBCD4" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-            <div><div id="kpi-rdv" style="font-size:22px;font-weight:900;color:#0BBCD4;line-height:1;">0</div><div style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">RDV</div></div>
+            <div><div id="kpi-rdv" style="font-size:22px;font-weight:900;color:#1D8348;line-height:1;">0</div><div style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">RDV</div></div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;padding:8px 14px;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            <div><div id="kpi-devis" style="font-size:22px;font-weight:900;color:#F59E0B;line-height:1;">0</div><div style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Devis</div></div>
+            <div><div id="kpi-devis" style="font-size:22px;font-weight:900;color:#0A66C2;line-height:1;">0</div><div style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Devis</div></div>
           </div>
         </div>
 
@@ -863,15 +863,18 @@ const CAL_EVENTS = {};
   try {
     var raw = localStorage.getItem('mup_agenda');
     if(!raw) return;
-    var events = JSON.parse(raw);
-    // Deduplicate by id — keep last
+    var events = JSON.parse(raw).filter(function(e){
+      // Skip events reconstruits depuis le pipeline (on les relit directement de c.rdvs[])
+      if(e && e.key && String(e.key).indexOf('pipe_') === 0) return false;
+      return true;
+    });
     var deduped = {};
     events.forEach(function(e){ if(e.id) deduped[e.id]=e; else deduped['_'+Math.random()]=e; });
     Object.keys(deduped).forEach(function(k){
       var e=deduped[k];
       if(!e.date) return;
       if(!CAL_EVENTS[e.date]) CAL_EVENTS[e.date] = [];
-      CAL_EVENTS[e.date].push({ id: e.id||'', title: e.title || '', sub: e.contact || '', time: e.start || '' });
+      CAL_EVENTS[e.date].push({ id: e.id||'', title: e.title || '', sub: e.contact || '', time: e.start || '', type: String(e.type||'rdv').toLowerCase() });
     });
   } catch(e){}
 })();
@@ -879,14 +882,36 @@ const CAL_EVENTS = {};
   try {
     var raw = localStorage.getItem('mup_pipeline');
     if(!raw) return;
-    var cards = JSON.parse(raw).map(function(c){if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;c.co=c.company||'';c.name=c.contact||'';return c;});
+    var cards = JSON.parse(raw).map(function(c){
+      if(c.co && !c.company) c.company = c.co;
+      if(c.name && !c.contact) c.contact = c.name;
+      c.co = c.company || '';
+      c.name = c.contact || '';
+      return c;
+    });
     cards.forEach(function(c){
-      if(!c.rdvDate||!isUpcoming(c.rdvDate)) return;
-      if(!CAL_EVENTS[c.rdvDate]) CAL_EVENTS[c.rdvDate] = [];
-      var exists = CAL_EVENTS[c.rdvDate].find(function(ev){ return String(ev.id) === String(c.id); });
-      if(!exists) {
-        CAL_EVENTS[c.rdvDate].push({ id: String(c.id), title: (c.co||c.name||'RDV'), sub: c.name||'', time: c.rdvTime||'' });
-      }
+      if(!Array.isArray(c.rdvs) || !c.rdvs.length) return;
+      c.rdvs.forEach(function(rdv){
+        if(!rdv || !rdv.date) return;
+        var d = new Date(rdv.date);
+        if(isNaN(d.getTime())) return;
+        var ds = d.getFullYear() + '-' +
+                 String(d.getMonth()+1).padStart(2,'0') + '-' +
+                 String(d.getDate()).padStart(2,'0');
+        if(!isUpcoming(ds)) return;
+        if(!CAL_EVENTS[ds]) CAL_EVENTS[ds] = [];
+        var key = String(rdv.id || (c.id + '_' + (rdv.type||'rdv').toLowerCase() + '_' + ds));
+        var exists = CAL_EVENTS[ds].find(function(ev){ return String(ev.id) === key; });
+        if(!exists) {
+          CAL_EVENTS[ds].push({
+            id: key,
+            title: (c.co || c.name || 'Action'),
+            sub: c.name || '',
+            time: rdv.hour || '',
+            type: String(rdv.type || 'rdv').toLowerCase()
+          });
+        }
+      });
     });
   } catch(e){}
 })();
@@ -1060,28 +1085,25 @@ function closeSidebar(){
     {id:'mailing',label:'Mailing',color:'#B84C00'},
     {id:'phoning',label:'Phoning',color:'#CC0000'},
     {id:'visio',label:'Visio',color:'#7C3AED'},
-    {id:'rdv',label:'RDV',color:'#0BBCD4'},
-    {id:'devis',label:'Devis',color:'#F59E0B'},
+    {id:'rdv',label:'RDV',color:'#1D8348'},
+    {id:'devis',label:'Devis',color:'#0A66C2'},
   ];
 
-  // Load today's RDV from agenda
-  var todayAgenda = [];
-  try {
-    var agRaw = localStorage.getItem('mup_agenda');
-    if(agRaw) {
-      var agAll = JSON.parse(agRaw);
-      var todayStr = new Date().toISOString().slice(0,10);
-      var filtered = agAll.filter(function(ev) { return ev.date === todayStr; });
-      // Deduplicate by id — keep last occurrence (most recent)
-      var seen = {};
-      for(var i=filtered.length-1;i>=0;i--){
-        var key=filtered[i].id||('no-id-'+i);
-        if(seen[key]){filtered.splice(i,1);}
-        else{seen[key]=true;}
-      }
-      todayAgenda = filtered;
-    }
-  } catch(e) {}
+  // Compter les actions du jour depuis c.rdvs[] par type
+  var todayStr = new Date().toISOString().slice(0,10);
+  var todayActions = {};
+  cards.forEach(function(c){
+    (c.rdvs||[]).forEach(function(rdv){
+      if(!rdv || !rdv.date) return;
+      var d = new Date(rdv.date);
+      if(isNaN(d.getTime())) return;
+      var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      if(ds !== todayStr) return;
+      var t = String(rdv.type || 'rdv').toLowerCase();
+      if(!todayActions[t]) todayActions[t] = [];
+      todayActions[t].push({ card: c, rdv: rdv });
+    });
+  });
 
   var todayGrid=document.getElementById('today-grid');
   if(todayGrid){
@@ -1089,12 +1111,25 @@ function closeSidebar(){
       var border=i<todayCols.length-1?'border-right:1px solid var(--border);':'';
       var items='';
       var count=0;
-      if(tc.id==='rdv'){
-        count=todayAgenda.length;
-        items=todayAgenda.length?todayAgenda.slice(0,3).map(function(ev){
-          return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(ev.title||'RDV')+'</div><div class="today-meta">'+esc(ev.contact||'')+(ev.start?' · '+ev.start:'')+'</div></div></div>';
-        }).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
+      // Mapping label colonne → clé du type d'action dans c.rdvs[]
+      var typeKey = (tc.id === 'mailing') ? 'mail'
+                  : (tc.id === 'rdv')     ? 'rdv'
+                  : (tc.id === 'visio')   ? 'visio'
+                  : (tc.id === 'devis')   ? 'devis'
+                  : null;
+      if(typeKey){
+        var list = todayActions[typeKey] || [];
+        count = list.length;
+        items = list.length
+          ? list.slice(0,3).map(function(item){
+              var card = item.card, rdv = item.rdv;
+              var name = card.co || card.name || 'Action';
+              var meta = (card.name || '') + (rdv.hour ? ' · ' + rdv.hour : '');
+              return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(name)+'</div><div class="today-meta">'+esc(meta)+'</div></div></div>';
+            }).join('')
+          : '<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
       } else {
+        // Phoning : pas de type équivalent dans c.rdvs[] → fallback sur la colonne kanban
         var colCards=cards.filter(function(c){return c.col===tc.id;}).slice(0,3);
         count=cards.filter(function(c){return c.col===tc.id;}).length;
         items=colCards.length?colCards.map(function(c){return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(c.co||c.name)+'</div><div class="today-meta">'+esc(c.name||'')+'</div></div></div>';}).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';

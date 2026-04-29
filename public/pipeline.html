@@ -2438,14 +2438,26 @@ function applyFrenchTypography(text){
 // ── STRUCTURATION AUTO EN COMPTE-RENDU COMMERCIAL ──
 function structureCommercialNote(rawText){
   if(!rawText || !rawText.trim()) return rawText;
-  const cleaned = rawText.trim();
+  let cleaned = rawText.trim();
 
-  // Découper en phrases. Si pas de ponctuation, prendre tout le texte comme une seule phrase.
-  let sentences = cleaned
-    .replace(/\s+/g, ' ')
-    .split(/(?<=[.!?])\s+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
+  // 1. Découpage par ponctuation forte
+  let sentences = cleaned.split(/(?<=[.!?])\s+/);
+
+  // 2. Si peu de phrases, découper sur les frontières sémantiques (commerce FR)
+  if(sentences.length < 3){
+    const boundaries = /(?:^|\s)(?=(?:il|elle|ils|elles|on|nous|le client|la cliente|mais|cependant|toutefois|néanmoins|donc|ensuite|puis|après|enfin|en plus|par ailleurs|d['’]ailleurs|aussi|et il|et elle|car|parce que|afin)\b)/gi;
+    sentences = cleaned.split(boundaries).filter(s => s && s.trim().length > 3);
+  }
+
+  // 3. Repli : couper les phrases très longues (>180 caractères) sur les virgules
+  const expanded = [];
+  sentences.forEach(s => {
+    s = s.trim();
+    if(s.length <= 180){ expanded.push(s); return; }
+    const parts = s.split(/(?<=,)\s+/);
+    parts.forEach(p => expanded.push(p.trim()));
+  });
+  sentences = expanded.filter(s => s.length > 0);
 
   if(sentences.length === 0) sentences = [cleaned];
 
@@ -2460,12 +2472,12 @@ function structureCommercialNote(rawText){
   };
 
   const patterns = {
-    freins: /\b(trop cher|pas le budget|hesit|pas sur|inquiet|reticent|probleme|frein|bloqu|crainte|peur de|pas convaincu|deja sous contrat|engage avec|fidele a|n[' ]a pas besoin|reflechi)/i,
-    besoins: /\b(cherche|veut|besoin|souhait|voudrait|aimerait|recherche|interesse par|envisage|projet de|attend|demande)/i,
-    budget: /\b(\d+\s*(€|euros|k€|keuros|mille)|budget|enveloppe|cout|prix|tarif|montant|investissement)/i,
-    decisions: /\b(decid|valid|on part sur|on retient|on prend|accord|sign|confirm|on y va|on lance|ok pour)/i,
-    actions: /\b(a faire|il faut|faut|envoyer|relancer|rappeler|preparer|recontact|prevoir|programmer|planifier|envoie|relance|rdv|rendez|visite|visio|appel|mail|devis)/i,
-    contexte: /\b(rencontre|reunion|echang|discut|presentation|demo|premier contact|recommande par|vient de|reseau|aujourd|hier|matin|après[- ]midi|client)/i
+    freins: /\b(trop cher|pas le budget|hesit|pas sur|inquiet|reticent|probleme|frein|bloqu|crainte|peur de|pas convaincu|deja sous contrat|engage avec|fidele a|n[' ’]a pas besoin|reflechi|attendre|attente)/i,
+    besoins: /\b(cherche|veut|besoin|souhait|voudrait|aimerait|recherche|interesse par|envisage|projet de|pense que|necessaire|communiquer)/i,
+    budget: /\b(\d+\s*(€|euros?|k€|keuros|mille)|forfait|budget|enveloppe|cout|prix|tarif|montant|investissement)/i,
+    decisions: /\b(decid|valid|on part sur|on retient|on prend|accord|sign|confirm|on y va|on lance|ok pour|prendra sa decision|prendre le forfait|passe)/i,
+    actions: /\b(a faire|il faut|faut|envoyer|relancer|rappeler|preparer|recontact|prevoir|programmer|planifier|envoie|relance|j['’ ]envoie|expert[- ]comptable|rdv|rendez|visite|visio|appel|mail|devis)/i,
+    contexte: /\b(rencontre|reunion|echang|discut|presentation|demo|premier contact|recommande par|vient de|reseau|aujourd|hier|matin|après[- ]midi|client|jean)/i
   };
 
   function normalize(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
@@ -2476,17 +2488,26 @@ function structureCommercialNote(rawText){
     if(patterns.freins.test(n)){ sections.freins.push(s); placed = true; }
     else if(patterns.decisions.test(n)){ sections.decisions.push(s); placed = true; }
     else if(patterns.actions.test(n)){ sections.actions.push(s); placed = true; }
-    else if(patterns.besoins.test(n)){ sections.besoins.push(s); placed = true; }
     else if(patterns.budget.test(n)){ sections.budget.push(s); placed = true; }
+    else if(patterns.besoins.test(n)){ sections.besoins.push(s); placed = true; }
     else if(patterns.contexte.test(n)){ sections.contexte.push(s); placed = true; }
     if(!placed) sections.autres.push(s);
   });
+
+  // Capitaliser et ajouter un point final si manquant
+  function polish(s){
+    let t = s.trim();
+    if(!t) return t;
+    t = t.charAt(0).toUpperCase() + t.slice(1);
+    if(!/[.!?]$/.test(t)) t += '.';
+    return t;
+  }
 
   const lines = [];
   function addSection(title, items){
     if(!items.length) return;
     lines.push(title);
-    items.forEach(s => lines.push('• ' + s));
+    items.forEach(s => lines.push('• ' + polish(s)));
     lines.push('');
   }
 

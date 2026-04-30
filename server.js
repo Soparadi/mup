@@ -1,9 +1,33 @@
+if(process.env.NODE_ENV !== 'production'){
+  await import('dotenv/config')
+}
 import express from 'express'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { getDb } from './lib/surreal.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
+
+app.get('/api/health', async (req, res) => {
+  const status = {
+    server: 'ok',
+    timestamp: new Date().toISOString(),
+    surreal: 'unknown'
+  }
+  try {
+    const db = await getDb()
+    await db.query('INFO FOR DB;')
+    status.surreal = 'ok'
+    status.surreal_namespace = process.env.SURREAL_NAMESPACE
+    status.surreal_database = process.env.SURREAL_DATABASE
+  } catch(err){
+    status.surreal = 'error'
+    status.surreal_error = err.message
+    return res.status(503).json(status)
+  }
+  res.json(status)
+})
 
 app.use(express.static(join(__dirname, 'public')))
 

@@ -835,59 +835,21 @@ let cards = [];
 let currentId = null;
 let dragId = null;
 
-async function load() {
-  try {
-    const res = await fetch('/api/pipeline');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    cards = (data || []).map(card => {
-      card.id = card.id.replace(/^pipeline:/, '');
-      return migrateCard(card);
-    });
-  } catch (err) {
-    console.error('[load] Erreur API:', err);
-    // Fallback localStorage
-    const s = localStorage.getItem('mup_pipeline');
-    if(s) {
-      try {
-        const parsed = JSON.parse(s);
-        const hasOld = parsed.some(c => c.name && c.name.length <= 12 && c.name.includes('.'));
-        cards = (hasOld ? MOCK : parsed).map(migrateCard);
-        if(hasOld) localStorage.removeItem('mup_pipeline');
-      } catch(e) { cards = MOCK.map(migrateCard); }
-    } else {
-      cards = MOCK.map(migrateCard);
-    }
+function load() {
+  const s = localStorage.getItem('mup_pipeline');
+  if(s) {
+    try {
+      const parsed = JSON.parse(s);
+      // Reset si données mockées avec anciens noms courts (A. Fournier etc.)
+      const hasOld = parsed.some(c => c.name && c.name.length <= 12 && c.name.includes('.'));
+      cards = (hasOld ? MOCK : parsed).map(migrateCard);
+      if(hasOld) localStorage.removeItem('mup_pipeline');
+    } catch(e) { cards = MOCK.map(migrateCard); }
+  } else {
+    cards = MOCK.map(migrateCard);
   }
 }
-async function save() {
-  for (const card of cards) {
-    if (card.id) {
-      try {
-        const res = await fetch(`/api/pipeline/${card.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(card)
-        });
-        if (!res.ok && res.status !== 404) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        if (res.status === 404) {
-          const resPost = await fetch('/api/pipeline', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(card)
-          });
-          if (!resPost.ok) throw new Error(`POST failed: HTTP ${resPost.status}`);
-        }
-      } catch (err) {
-        console.error('[save] Erreur pour carte', card.id, err);
-      }
-    }
-  }
-  localStorage.setItem('mup_pipeline', JSON.stringify(cards));
-  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch (_) {}
-}
+function save() { localStorage.setItem('mup_pipeline', JSON.stringify(cards)); }
 
 function migratePipelineFromContacts(){
   var contacts = [];
@@ -1206,13 +1168,7 @@ function saveCard() {
   // Notifie les autres onglets (Contacts notamment) d'un changement
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
 }
-async function deleteCard(id) {
-  try {
-    const res = await fetch(`/api/pipeline/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch (err) {
-    console.error('[deleteCard] Erreur suppression:', err);
-  }
+function deleteCard(id) {
   cards = cards.filter(c=>String(c.id)!==String(id));
   save(); renderKanban(); closeDetail();
 }
@@ -1829,17 +1785,15 @@ function importFromProspects() {
 }
 
 // Vider le cache si les données mockées ont changé
-(async () => {
-  const MOCK_VERSION = '3';
-  if(localStorage.getItem('mup_pipeline_v') !== MOCK_VERSION) {
-    localStorage.removeItem('mup_pipeline');
-    localStorage.setItem('mup_pipeline_v', MOCK_VERSION);
-  }
-  await load();
-  migratePipelineFromContacts();
-  importFromProspects();
-  renderKanban();
-})();
+const MOCK_VERSION = '3';
+if(localStorage.getItem('mup_pipeline_v') !== MOCK_VERSION) {
+  localStorage.removeItem('mup_pipeline');
+  localStorage.setItem('mup_pipeline_v', MOCK_VERSION);
+}
+load();
+migratePipelineFromContacts();
+importFromProspects();
+renderKanban();
 
 // ═══════════════════════════════════════════════════════
 // PIPELINE_FOCUS_MODE_EXTENSION — JS

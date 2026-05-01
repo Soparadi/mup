@@ -8,6 +8,7 @@ import { getDb } from './lib/surreal.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
+app.use(express.json())
 
 app.get('/api/health', async (req, res) => {
   const status = {
@@ -30,6 +31,66 @@ app.get('/api/health', async (req, res) => {
 })
 
 app.use(express.static(join(__dirname, 'public')))
+
+app.get('/api/pipeline', async (req, res) => {
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM pipeline')
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[pipeline]', err)
+    res.status(500).json({ error: 'Impossible de lire les cartes pipeline' })
+  }
+})
+
+app.post('/api/pipeline', async (req, res) => {
+  try {
+    const body = req.body
+    const db = await getDb()
+    let result
+    if (body?.id && typeof body.id === 'string' && body.id.startsWith('c')) {
+      result = await db.query('CREATE type::record("pipeline", $id) CONTENT $body', { id: body.id, body })
+    } else {
+      result = await db.query('CREATE pipeline CONTENT $body', { body })
+    }
+    res.json(result[0]?.[0] || result[0] || null)
+  } catch (err) {
+    console.error('[pipeline]', err)
+    res.status(500).json({ error: 'Impossible de créer la carte pipeline' })
+  }
+})
+
+app.put('/api/pipeline/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const body = req.body
+    const db = await getDb()
+    
+    // 1. Vérifier l'existence
+    const existing = await db.query('SELECT * FROM type::record("pipeline", $id)', { id })
+    if (!existing[0] || existing[0].length === 0) {
+      return res.status(404).json({ error: 'Carte introuvable' })
+    }
+    
+    // 2. UPDATE
+    const result = await db.query('UPDATE type::record("pipeline", $id) CONTENT $body', { id, body })
+    res.json(result[0]?.[0] || result[0] || {})
+  } catch (err) {
+    console.error('[pipeline]', err)
+    res.status(500).json({ error: 'Impossible de mettre à jour la carte pipeline' })
+  }
+})
+
+app.delete('/api/pipeline/:id', async (req, res) => {
+  try {
+    const db = await getDb()
+    await db.query('DELETE type::record("pipeline", $id)', { id: req.params.id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[pipeline]', err)
+    res.status(500).json({ error: 'Impossible de supprimer la carte pipeline' })
+  }
+})
 
 // ── INSEE OAuth2 token cache ──
 let inseeToken = null

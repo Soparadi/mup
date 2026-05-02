@@ -668,6 +668,29 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 // ── MAP — pipeline addresses from localStorage ──
+var _pipelineCache = null;
+var _pipelineCacheTime = 0;
+async function _loadPipeline(){
+  if(_pipelineCache && (Date.now() - _pipelineCacheTime < 30000)){
+    return _pipelineCache;
+  }
+  var cards = [];
+  try {
+    var resp = await fetch('/api/pipeline');
+    if(resp.ok){
+      var data = await resp.json();
+      if(Array.isArray(data)) cards = data;
+    } else {
+      throw new Error('Pipeline API unavailable');
+    }
+  } catch(e) {
+    console.warn('[Dashboard] _loadPipeline API failed, fallback localStorage', e);
+    try { var r = localStorage.getItem('mup_pipeline'); if(r) cards = JSON.parse(r); } catch(e2){}
+  }
+  _pipelineCache = cards || [];
+  _pipelineCacheTime = Date.now();
+  return _pipelineCache;
+}
 function createMupMarker(lat, lng, color){
   return L.divIcon({
     className: 'mup-marker',
@@ -688,7 +711,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 L.control.attribution({ prefix: '© OpenStreetMap' }).addTo(map);
 setTimeout(function(){ map.invalidateSize(); }, 100);
 
-(function(){
+(async function(){
   var STAGES=[
     {id:'prospects',color:'#CC0000'},{id:'linkedin',color:'#0A66C2'},
     {id:'mailing',color:'#B84C00'},{id:'phoning',color:'#4338CA'},
@@ -721,7 +744,7 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
     c.co=c.company||'';c.name=c.contact||'';c.tel=c.phone||'';return c;
   }
   var cards=[];
-  try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r).map(migrateCard);}catch(e){}
+  try{cards=(await _loadPipeline()).map(migrateCard);}catch(e){}
   var withAddr=cards.filter(function(c){return c.address;});
   if(!withAddr.length) return;
 
@@ -903,10 +926,9 @@ const CAL_EVENTS = {};
   } catch(e){}
 })();
 (function(){
-  try {
-    var raw = localStorage.getItem('mup_pipeline');
-    if(!raw) return;
-    var cards = JSON.parse(raw).map(function(c){
+  _loadPipeline().then(function(cards){
+    if(!cards || !cards.length) return;
+    cards = cards.map(function(c){
       if(c.co && !c.company) c.company = c.co;
       if(c.name && !c.contact) c.contact = c.name;
       c.co = c.company || '';
@@ -937,7 +959,8 @@ const CAL_EVENTS = {};
         }
       });
     });
-  } catch(e){}
+    if(typeof renderCalendar === 'function') renderCalendar();
+  });
 })();
 
 let calYear = TODAY.getFullYear();
@@ -1064,7 +1087,7 @@ function closeSidebar(){
 
 <script>
 // ── DASHBOARD DATA FROM LOCALSTORAGE ──
-(function(){
+(async function(){
   function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
   // Load pipeline
@@ -1075,7 +1098,7 @@ function closeSidebar(){
     c.co=c.company||'';c.name=c.contact||'';c.tel=c.phone||'';return c;
   }
   var cards=[];
-  try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r).map(migrateCard);}catch(e){}
+  try{cards=(await _loadPipeline()).map(migrateCard);}catch(e){}
 
   var COLS=[
     {id:'prospects',name:'Prospects',color:'#CC0000'},
@@ -1190,12 +1213,12 @@ function closeSidebar(){
   // (prospects list removed)
 
   // Pipeline funnel + conversion (remplace l'ancien board kanban)
-  renderDashFunnel(cards);
+  await renderDashFunnel(cards);
 })();
 
-function renderDashFunnel(cards){
+async function renderDashFunnel(cards){
   if(!Array.isArray(cards)){
-    try { cards = JSON.parse(localStorage.getItem('mup_pipeline')||'[]'); } catch(e){ cards = []; }
+    cards = await _loadPipeline();
   }
   var FCOLS = [
     {id:'prospects', name:'Prospects',   color:'#CC0000'},

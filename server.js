@@ -48,8 +48,14 @@ app.post('/api/pipeline', async (req, res) => {
     const body = req.body
     const db = await getDb()
     let result
-    if (body?.id && typeof body.id === 'string' && body.id.startsWith('c')) {
-      result = await db.query('CREATE type::record("pipeline", $id) CONTENT $body', { id: body.id, body })
+    let cleanId = null
+    if (body?.id && typeof body.id === 'string') {
+      cleanId = body.id.replace(/^pipeline:/, '').replace(/^⟨+/, '').replace(/\\?⟩+$/, '').replace(/\\/g, '')
+      if (/^\d/.test(cleanId)) cleanId = 'c' + cleanId
+    }
+    if (cleanId) {
+      const cleanBody = { ...body, id: cleanId }
+      result = await db.query('CREATE type::record("pipeline", $id) CONTENT $body', { id: cleanId, body: cleanBody })
     } else {
       result = await db.query('CREATE pipeline CONTENT $body', { body })
     }
@@ -108,8 +114,14 @@ app.post('/api/contacts', async (req, res) => {
     const body = req.body
     const db = await getDb()
     let result
-    if (body?.id && typeof body.id === 'string' && body.id.startsWith('c')) {
-      result = await db.query('CREATE type::record("contacts", $id) CONTENT $body', { id: body.id, body })
+    let cleanId = null
+    if (body?.id && typeof body.id === 'string') {
+      cleanId = body.id.replace(/^contacts:/, '').replace(/^⟨+/, '').replace(/\\?⟩+$/, '').replace(/\\/g, '')
+      if (/^\d/.test(cleanId)) cleanId = 'c' + cleanId
+    }
+    if (cleanId) {
+      const cleanBody = { ...body, id: cleanId }
+      result = await db.query('CREATE type::record("contacts", $id) CONTENT $body', { id: cleanId, body: cleanBody })
     } else {
       result = await db.query('CREATE contacts CONTENT $body', { body })
     }

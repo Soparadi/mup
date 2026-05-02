@@ -1134,7 +1134,8 @@ app.get('/api/devis/:id', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM type::record("devis", $id)', { id: req.params.id })
+    const id = cleanRecordId('devis', req.params.id) || req.params.id
+    const result = await db.query('SELECT * FROM type::record("devis", $id)', { id })
     const rec = result[0]?.[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
     res.json(rec)
@@ -1179,7 +1180,7 @@ app.put('/api/devis/:id', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const { id } = req.params
+    const id = cleanRecordId('devis', req.params.id) || req.params.id
     const existing = await db.query('SELECT * FROM type::record("devis", $id)', { id })
     const rec = existing[0]?.[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
@@ -1204,7 +1205,7 @@ app.delete('/api/devis/:id', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const { id } = req.params
+    const id = cleanRecordId('devis', req.params.id) || req.params.id
     const existing = await db.query('SELECT * FROM type::record("devis", $id)', { id })
     const rec = existing[0]?.[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
@@ -1235,7 +1236,8 @@ app.get('/api/factures/:id', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM type::record("facture", $id)', { id: req.params.id })
+    const id = cleanRecordId('facture', req.params.id) || req.params.id
+    const result = await db.query('SELECT * FROM type::record("facture", $id)', { id })
     const rec = result[0]?.[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Facture introuvable' })
     res.json(rec)
@@ -1279,7 +1281,7 @@ app.put('/api/factures/:id', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const { id } = req.params
+    const id = cleanRecordId('facture', req.params.id) || req.params.id
     const existing = await db.query('SELECT * FROM type::record("facture", $id)', { id })
     const rec = existing[0]?.[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Facture introuvable' })
@@ -1304,7 +1306,7 @@ app.delete('/api/factures/:id', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const { id } = req.params
+    const id = cleanRecordId('facture', req.params.id) || req.params.id
     const existing = await db.query('SELECT * FROM type::record("facture", $id)', { id })
     const rec = existing[0]?.[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Facture introuvable' })

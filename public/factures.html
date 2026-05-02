@@ -1279,8 +1279,9 @@
     };
     document.getElementById('e-delete').onclick = async function(){
       if(!confirm('Supprimer cette facture ?')) return;
+      var rid = String(f.id).replace(/^facture:/, '').replace(/^⟨+|⟩+$/g, '');
+      await fetch('/api/factures/' + encodeURIComponent(rid), { method:'DELETE' });
       factures = factures.filter(function(x){ return x.id !== f.id; });
-      await saveJSON('mup_factures', factures);
       state.currentId = null;
       refreshYearFilter(); renderList(); renderPreview(); renderEdit();
     };

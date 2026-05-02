@@ -10,6 +10,7 @@ import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { getDb } from './lib/surreal.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
+import { getUserId } from './lib/auth.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -726,6 +727,314 @@ app.post('/api/mail/sync', async (req, res) => {
   }
 })
 
+// ── VISIO ─────────────────────────────────────────────────────────────
+// V1: scoping par userId via getUserId() (env MUP_DEFAULT_USER_ID en mono-user).
+// IndexedDB des blobs documents reste local (V2 = stockage cloud).
+
+const visioBgJson = express.json({ limit: '20mb' })
+
+app.get('/api/visio/settings', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const result = await db.query('SELECT * FROM type::record("visio_settings", $id)', { id: userId })
+    res.json(result[0]?.[0] || { userId })
+  } catch (err) {
+    console.error('[visio/settings:get]', err.message)
+    res.status(500).json({ error: 'Lecture configuration visio impossible' })
+  }
+})
+
+async function visioSettingsUpsertHandler(req, res) {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const body = req.body || {}
+    const payload = { ...body, userId, updated_at: new Date().toISOString() }
+    const { record, status } = await upsertRecord(db, 'visio_settings', userId, payload)
+    res.status(status).json(record)
+  } catch (err) {
+    console.error('[visio/settings:upsert]', err.message)
+    res.status(500).json({ error: 'Enregistrement configuration visio impossible' })
+  }
+}
+app.put('/api/visio/settings', visioSettingsUpsertHandler)
+// POST alias pour sendBeacon (beforeunload flush) — sendBeacon ne supporte que POST
+app.post('/api/visio/settings', visioSettingsUpsertHandler)
+
+app.get('/api/visio/logs', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const prospectId = req.query.prospectId ? String(req.query.prospectId) : null
+    let result
+    if (prospectId) {
+      result = await db.query(
+        'SELECT * FROM visio_log WHERE userId = $userId AND prospectId = $prospectId ORDER BY started_at DESC',
+        { userId, prospectId }
+      )
+    } else {
+      result = await db.query('SELECT * FROM visio_log WHERE userId = $userId ORDER BY started_at DESC', { userId })
+    }
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[visio/logs:list]', err.message)
+    res.status(500).json({ error: 'Lecture logs visio impossible' })
+  }
+})
+
+app.post('/api/visio/logs', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const body = req.body || {}
+    const payload = {
+      userId,
+      prospectId: body.prospectId || null,
+      rdvId: body.rdvId || null,
+      provider: body.provider || 'custom',
+      link: body.link || '',
+      started_at: body.started_at || new Date().toISOString(),
+      ended_at: body.ended_at || null,
+      duration_seconds: body.duration_seconds || 0,
+      notes: body.notes || ''
+    }
+    const recordId = body.id ? String(body.id).replace(/^visio_log:/, '') : `log_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const cleanId = /^\d/.test(recordId) ? 'c' + recordId : recordId
+    const { record, status } = await upsertRecord(db, 'visio_log', cleanId, payload)
+    res.status(status).json(record)
+  } catch (err) {
+    console.error('[visio/logs:post]', err.message)
+    res.status(500).json({ error: 'Enregistrement log visio impossible' })
+  }
+})
+
+app.delete('/api/visio/logs/:id', async (req, res) => {
+  try {
+    const db = await getDb()
+    await db.query('DELETE type::record("visio_log", $id)', { id: req.params.id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[visio/logs:delete]', err.message)
+    res.status(500).json({ error: 'Suppression log visio impossible' })
+  }
+})
+
+function draftId(userId, prospectId) {
+  return `${String(userId).replace(/[^a-zA-Z0-9_]/g, '_')}_${String(prospectId).replace(/[^a-zA-Z0-9_]/g, '_')}`
+}
+
+app.get('/api/visio/drafts/:prospectId', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const id = draftId(userId, req.params.prospectId)
+    const result = await db.query('SELECT * FROM type::record("visio_draft", $id)', { id })
+    const rec = result[0]?.[0]
+    if (!rec) return res.status(404).json({ error: 'Draft introuvable' })
+    res.json(rec)
+  } catch (err) {
+    console.error('[visio/drafts:get]', err.message)
+    res.status(500).json({ error: 'Lecture draft impossible' })
+  }
+})
+
+app.put('/api/visio/drafts/:prospectId', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const prospectId = String(req.params.prospectId)
+    const id = draftId(userId, prospectId)
+    const payload = {
+      userId,
+      prospectId,
+      content: (req.body && req.body.content) || '',
+      updated_at: new Date().toISOString()
+    }
+    const { record, status } = await upsertRecord(db, 'visio_draft', id, payload)
+    res.status(status).json(record)
+  } catch (err) {
+    console.error('[visio/drafts:put]', err.message)
+    res.status(500).json({ error: 'Enregistrement draft impossible' })
+  }
+})
+
+app.delete('/api/visio/drafts/:prospectId', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const id = draftId(userId, req.params.prospectId)
+    await db.query('DELETE type::record("visio_draft", $id)', { id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[visio/drafts:delete]', err.message)
+    res.status(500).json({ error: 'Suppression draft impossible' })
+  }
+})
+
+app.get('/api/visio/bg-custom', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const result = await db.query('SELECT * FROM type::record("visio_bg_custom", $id)', { id: userId })
+    const rec = result[0]?.[0]
+    if (!rec) return res.status(404).json({ error: 'Fond personnalisé absent' })
+    res.json(rec)
+  } catch (err) {
+    console.error('[visio/bg:get]', err.message)
+    res.status(500).json({ error: 'Lecture fond personnalisé impossible' })
+  }
+})
+
+app.put('/api/visio/bg-custom', visioBgJson, async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const body = req.body || {}
+    const payload = {
+      userId,
+      data_base64: body.data_base64 || '',
+      mime: body.mime || 'image/jpeg',
+      size: Number(body.size) || (body.data_base64 ? body.data_base64.length : 0),
+      updated_at: new Date().toISOString()
+    }
+    const { record, status } = await upsertRecord(db, 'visio_bg_custom', userId, payload)
+    res.status(status).json(record)
+  } catch (err) {
+    console.error('[visio/bg:put]', err.message)
+    res.status(500).json({ error: 'Enregistrement fond personnalisé impossible' })
+  }
+})
+
+app.delete('/api/visio/bg-custom', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    await db.query('DELETE type::record("visio_bg_custom", $id)', { id: userId })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[visio/bg:delete]', err.message)
+    res.status(500).json({ error: 'Suppression fond personnalisé impossible' })
+  }
+})
+
+app.get('/api/visio/docs', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const result = await db.query('SELECT * FROM visio_doc WHERE userId = $userId ORDER BY addedAt DESC', { userId })
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[visio/docs:list]', err.message)
+    res.status(500).json({ error: 'Lecture documents impossible' })
+  }
+})
+
+app.post('/api/visio/docs', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const body = req.body || {}
+    const payload = {
+      userId,
+      name: body.name || '',
+      tag: body.tag || 'custom',
+      mime: body.mime || '',
+      size: Number(body.size) || 0,
+      pinned: Boolean(body.pinned),
+      indexedDb_local_id: body.indexedDb_local_id || body.id || null,
+      addedAt: body.addedAt || new Date().toISOString()
+    }
+    const recordId = body.id ? String(body.id).replace(/^visio_doc:/, '') : `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const cleanId = /^\d/.test(recordId) ? 'c' + recordId : recordId
+    const { record, status } = await upsertRecord(db, 'visio_doc', cleanId, payload)
+    res.status(status).json(record)
+  } catch (err) {
+    console.error('[visio/docs:post]', err.message)
+    res.status(500).json({ error: 'Enregistrement document impossible' })
+  }
+})
+
+app.put('/api/visio/docs/:id', async (req, res) => {
+  try {
+    const db = await getDb()
+    const id = req.params.id
+    const existing = await db.query('SELECT * FROM type::record("visio_doc", $id)', { id })
+    if (!existing[0] || existing[0].length === 0) return res.status(404).json({ error: 'Document introuvable' })
+    const cleanBody = { ...(req.body || {}) }
+    delete cleanBody.id
+    const result = await db.query('UPDATE type::record("visio_doc", $id) CONTENT $body', { id, body: cleanBody })
+    res.json(result[0]?.[0] || result[0] || {})
+  } catch (err) {
+    console.error('[visio/docs:put]', err.message)
+    res.status(500).json({ error: 'Mise à jour document impossible' })
+  }
+})
+
+app.delete('/api/visio/docs/:id', async (req, res) => {
+  try {
+    const db = await getDb()
+    await db.query('DELETE type::record("visio_doc", $id)', { id: req.params.id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[visio/docs:delete]', err.message)
+    res.status(500).json({ error: 'Suppression document impossible' })
+  }
+})
+
+app.post('/api/visio/docs/:id/open', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const docId = req.params.id
+    const body = req.body || {}
+    const payload = {
+      userId,
+      docId,
+      prospectId: body.prospectId || null,
+      societe: body.societe || '',
+      openedAt: body.openedAt || new Date().toISOString()
+    }
+    const recordId = `open_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const { record, status } = await upsertRecord(db, 'visio_doc_open', recordId, payload)
+    res.status(status).json(record)
+  } catch (err) {
+    console.error('[visio/docs:open]', err.message)
+    res.status(500).json({ error: 'Enregistrement ouverture impossible' })
+  }
+})
+
+app.get('/api/visio/doc-opens', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const result = await db.query(
+      'SELECT * FROM visio_doc_open WHERE userId = $userId ORDER BY openedAt DESC',
+      { userId }
+    )
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[visio/doc-opens:list]', err.message)
+    res.status(500).json({ error: 'Lecture historique global ouvertures impossible' })
+  }
+})
+
+app.get('/api/visio/docs/:id/opens', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(getUserId(req))
+    const docId = req.params.id
+    const result = await db.query(
+      'SELECT * FROM visio_doc_open WHERE userId = $userId AND docId = $docId ORDER BY openedAt DESC',
+      { userId, docId }
+    )
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[visio/docs:opens]', err.message)
+    res.status(500).json({ error: 'Lecture historique ouvertures impossible' })
+  }
+})
+
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'public', 'dashboard.html'))
 })
@@ -737,15 +1046,21 @@ app.get('/:page', (req, res) => {
   })
 })
 
-// Initialise mail tables on boot (idempotent: IF NOT EXISTS keeps redeploys quiet)
+// Initialise tables on boot (idempotent: IF NOT EXISTS keeps redeploys quiet)
 ;(async () => {
   try {
     const db = await getDb()
     await db.query('DEFINE TABLE IF NOT EXISTS mail_settings SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS mail SCHEMALESS')
-    console.log('[mail] tables ready (mail_settings, mail)')
+    await db.query('DEFINE TABLE IF NOT EXISTS visio_settings SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS visio_log SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS visio_draft SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS visio_bg_custom SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS visio_doc SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS visio_doc_open SCHEMALESS')
+    console.log('[boot] tables ready (mail x2, visio x6)')
   } catch (e) {
-    console.error('[mail] table init failed:', e.message)
+    console.error('[boot] table init failed:', e.message)
   }
 })()
 

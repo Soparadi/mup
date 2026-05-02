@@ -993,6 +993,124 @@ const ls = {
   get(k, fb){ try{ return JSON.parse(localStorage.getItem(k)) ?? fb }catch{ return fb } },
   set(k, v){ localStorage.setItem(k, JSON.stringify(v)) }
 };
+
+/* ————————————————————————————————————————————————
+   API SurrealDB (V1 mono-utilisateur, userId via env serveur)
+   Cache mémoire pour préserver les lecteurs synchrones existants.
+   Les écritures mettent à jour le cache + débouncent un PUT.
+   ———————————————————————————————————————————————— */
+const _state = {
+  settings: { links:{}, calibration:{ lum:100, r:0, g:0, b:0 }, bg_active:'none', urgent_dismissed:[] },
+  bgCustom: null,         // base64 data URL string
+  docs: [],
+  docOpens: []
+};
+
+let _settingsPutTimer = null;
+function _schedulePutSettings(){
+  clearTimeout(_settingsPutTimer);
+  _settingsPutTimer = setTimeout(()=>{
+    _settingsPutTimer = null;
+    fetch('/api/visio/settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_state.settings) })
+      .catch(e => console.warn('[visio] PUT settings failed', e));
+  }, 400);
+}
+
+// Flush avant fermeture/navigation : si un PUT settings est en attente, on
+// l'envoie immédiatement via sendBeacon (POST avec Content-Type JSON).
+window.addEventListener('beforeunload', () => {
+  if (_settingsPutTimer) {
+    clearTimeout(_settingsPutTimer);
+    _settingsPutTimer = null;
+    try {
+      const blob = new Blob([JSON.stringify(_state.settings)], { type: 'application/json' });
+      navigator.sendBeacon('/api/visio/settings', blob);
+    } catch (e) {}
+  }
+});
+
+const api = {
+  // Pipeline / Agenda / Contacts (lecture seule, APIs déjà migrées)
+  async getPipeline(){
+    try { const r = await fetch('/api/pipeline'); return r.ok ? await r.json() : []; } catch(e){ return []; }
+  },
+  async getAgenda(){
+    try { const r = await fetch('/api/agenda'); return r.ok ? await r.json() : []; } catch(e){ return []; }
+  },
+  async getContacts(){
+    try { const r = await fetch('/api/contacts'); return r.ok ? await r.json() : []; } catch(e){ return []; }
+  },
+  async putPipelineCard(card){
+    if(!card || !card.id) return null;
+    const rawId = String(card.id).replace(/^pipeline:/, '');
+    try {
+      const r = await fetch('/api/pipeline/' + encodeURIComponent(rawId), { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(card) });
+      if(r.ok) return await r.json();
+      if(r.status === 404){
+        const r2 = await fetch('/api/pipeline', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(card) });
+        if(r2.ok) return await r2.json();
+      }
+    } catch(e){ console.warn('[visio] putPipelineCard failed', e); }
+    return null;
+  },
+  // Drafts (per-prospect)
+  async getDraft(prospectId){
+    if(!prospectId) return null;
+    try { const r = await fetch('/api/visio/drafts/' + encodeURIComponent(prospectId)); return r.ok ? await r.json() : null; } catch(e){ return null; }
+  },
+  async setDraft(prospectId, content){
+    if(!prospectId) return null;
+    try { const r = await fetch('/api/visio/drafts/' + encodeURIComponent(prospectId), { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ content }) }); return r.ok ? await r.json() : null; } catch(e){ return null; }
+  },
+  async deleteDraft(prospectId){
+    if(!prospectId) return null;
+    try { return await fetch('/api/visio/drafts/' + encodeURIComponent(prospectId), { method:'DELETE' }); } catch(e){ return null; }
+  },
+  // Logs
+  async addLog(log){
+    try { const r = await fetch('/api/visio/logs', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(log) }); return r.ok ? await r.json() : null; } catch(e){ return null; }
+  },
+  // Bg custom
+  async setBgCustom(data_base64, mime, size){
+    try { const r = await fetch('/api/visio/bg-custom', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data_base64, mime, size }) }); return r.ok ? await r.json() : null; } catch(e){ return null; }
+  },
+  async deleteBgCustom(){
+    try { return await fetch('/api/visio/bg-custom', { method:'DELETE' }); } catch(e){ return null; }
+  },
+  // Docs metadata
+  async addDoc(meta){
+    try { const r = await fetch('/api/visio/docs', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(meta) }); return r.ok ? await r.json() : null; } catch(e){ return null; }
+  },
+  async updateDoc(id, patch){
+    try { const r = await fetch('/api/visio/docs/' + encodeURIComponent(id), { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(patch) }); return r.ok ? await r.json() : null; } catch(e){ return null; }
+  },
+  async deleteDoc(id){
+    try { return await fetch('/api/visio/docs/' + encodeURIComponent(id), { method:'DELETE' }); } catch(e){ return null; }
+  },
+  async logDocOpen(docId, prospectId, societe){
+    try { const r = await fetch('/api/visio/docs/' + encodeURIComponent(docId) + '/open', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prospectId, societe }) }); return r.ok ? await r.json() : null; } catch(e){ return null; }
+  }
+};
+
+// Préchargement initial — appelé à DOMContentLoaded avant tout render
+async function bootstrapVisio(){
+  const [settings, bg, docs, opens] = await Promise.all([
+    fetch('/api/visio/settings').then(r => r.ok ? r.json() : null).catch(()=>null),
+    fetch('/api/visio/bg-custom').then(r => r.ok ? r.json() : null).catch(()=>null),
+    fetch('/api/visio/docs').then(r => r.ok ? r.json() : []).catch(()=>[]),
+    fetch('/api/visio/doc-opens').then(r => r.ok ? r.json() : []).catch(()=>[])
+  ]);
+  if(settings){
+    _state.settings.links = settings.links || {};
+    _state.settings.calibration = settings.calibration || { lum:100, r:0, g:0, b:0 };
+    _state.settings.bg_active = settings.bg_active || 'none';
+    _state.settings.urgent_dismissed = settings.urgent_dismissed || [];
+    if(settings.signature) _state.settings.signature = settings.signature;
+  }
+  _state.bgCustom = bg && bg.data_base64 ? bg.data_base64 : null;
+  _state.docs = Array.isArray(docs) ? docs : [];
+  _state.docOpens = Array.isArray(opens) ? opens : [];
+}
 const fmt2 = n => String(n).padStart(2,'0');
 const uid = () => Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
 const escapeHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1030,6 +1148,8 @@ window.addEventListener('beforeunload', ()=>{
 
 /* ————————————————————————————————————————————————
    INDEXEDDB pour blobs documents
+   V1 : blobs PDF/vidéo conservés localement (perf + quota navigateur).
+   V2 : migration vers stockage cloud (S3/R2) avec URLs signées.
    ———————————————————————————————————————————————— */
 const DB_NAME = 'mup_visio_db';
 const DB_STORE = 'docs';
@@ -1089,8 +1209,7 @@ async function getStorageEstimate(){
    LIENS PERSOS — INLINE AUTOSAVE
    ———————————————————————————————————————————————— */
 function loadMyLinks(){
-  const settings = ls.get(LS.VISIO_SETTINGS, {});
-  const links = settings.links || {};
+  const links = _state.settings.links || {};
   document.querySelectorAll('input[data-link]').forEach(input=>{
     const provider = input.dataset.link;
     if(links[provider]){
@@ -1101,10 +1220,9 @@ function loadMyLinks(){
 }
 
 function saveMyLink(provider, value){
-  const settings = ls.get(LS.VISIO_SETTINGS, {});
-  if(!settings.links) settings.links = {};
-  settings.links[provider] = value.trim();
-  ls.set(LS.VISIO_SETTINGS, settings);
+  if(!_state.settings.links) _state.settings.links = {};
+  _state.settings.links[provider] = value.trim();
+  _schedulePutSettings();
   const launchBtn = $(`launch${provider.charAt(0).toUpperCase() + provider.slice(1)}`);
   if(value.trim()) launchBtn.classList.add('has-link');
   else launchBtn.classList.remove('has-link');
@@ -1137,8 +1255,7 @@ $('launchJitsi').addEventListener('click', ()=>{
 });
 
 function launchExternal(provider){
-  const settings = ls.get(LS.VISIO_SETTINGS, {});
-  const link = settings.links?.[provider];
+  const link = _state.settings.links?.[provider];
 
   if(!link){
     const input = document.querySelector(`input[data-link="${provider}"]`);
@@ -1167,9 +1284,8 @@ $('launchMeet').addEventListener('click', ()=>launchExternal('meet'));
 /* ————————————————————————————————————————————————
    COLLECTE RDV
    ———————————————————————————————————————————————— */
-function collectVisioRdvs(){
-  const pipeline = ls.get(LS.PIPELINE, []) || [];
-  const agenda = ls.get(LS.AGENDA, []) || [];
+async function collectVisioRdvs(){
+  const [pipeline, agenda] = await Promise.all([api.getPipeline(), api.getAgenda()]);
   const rdvs = [];
 
   pipeline.forEach(p=>{
@@ -1240,8 +1356,8 @@ function collectVisioRdvs(){
   return rdvs;
 }
 
-function renderRdvList(){
-  const rdvs = collectVisioRdvs();
+async function renderRdvList(){
+  const rdvs = await collectVisioRdvs();
   const search = ($('searchInput').value || '').toLowerCase().trim();
   const list = $('rdvList');
   const now = new Date();
@@ -1350,7 +1466,7 @@ function renderRdvList(){
    BANDEAU T-5
    ———————————————————————————————————————————————— */
 function updateUrgentBanner(rdvs, now){
-  const dismissed = ls.get(LS.URGENT_DISMISSED, []) || [];
+  const dismissed = _state.settings.urgent_dismissed || [];
   const imminent = rdvs.find(r=>{
     const diff = new Date(r.date) - now;
     return diff > 0 && diff <= 5*60*1000 && !dismissed.includes(r.id);
@@ -1369,9 +1485,11 @@ function updateUrgentBanner(rdvs, now){
       selectRdv(imminent);
     };
     $('urgentDismiss').onclick = ()=>{
-      const d = ls.get(LS.URGENT_DISMISSED, []) || [];
-      if(!d.includes(imminent.id)) d.push(imminent.id);
-      ls.set(LS.URGENT_DISMISSED, d);
+      if(!_state.settings.urgent_dismissed) _state.settings.urgent_dismissed = [];
+      if(!_state.settings.urgent_dismissed.includes(imminent.id)){
+        _state.settings.urgent_dismissed.push(imminent.id);
+        _schedulePutSettings();
+      }
       banner.classList.remove('show');
     };
     banner.classList.add('show');
@@ -1407,9 +1525,8 @@ function selectRdv(rdv){
   loadDraftNotes(rdv.id);
 }
 
-function renderBriefing(rdv){
-  const contacts = ls.get(LS.CONTACTS, []) || [];
-  const pipeline = ls.get(LS.PIPELINE, []) || [];
+async function renderBriefing(rdv){
+  const [contacts, pipeline] = await Promise.all([api.getContacts(), api.getPipeline()]);
 
   const contact = contacts.find(c =>
     (rdv.prospectId && c.id === rdv.prospectId) ||
@@ -1519,6 +1636,7 @@ window.launchPopup = function(link){
 
 window.createDevisFromRdv = function(){
   if(!activeRdv) return;
+  // TODO: migrer en SurrealDB lors de la migration page Devis (handover éphémère cross-page)
   localStorage.setItem('mup_devis_prefill', JSON.stringify({
     societe: activeRdv.societe, nom: activeRdv.prospectName,
     email: activeRdv.email, source: 'visio', rdvId: activeRdv.id
@@ -1540,18 +1658,16 @@ function startTimer(){
   }, 1000);
 }
 
-function loadDraftNotes(rdvId){
-  const drafts = ls.get(LS.VISIO_DRAFT, {}) || {};
-  $('rdvNotes').value = drafts[rdvId] || '';
+async function loadDraftNotes(rdvId){
+  const draft = await api.getDraft(rdvId);
+  $('rdvNotes').value = (draft && draft.content) || '';
 }
 
 $('rdvNotes').addEventListener('input', e=>{
   if(!activeRdv) return;
   clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(()=>{
-    const drafts = ls.get(LS.VISIO_DRAFT, {}) || {};
-    drafts[activeRdv.id] = e.target.value;
-    ls.set(LS.VISIO_DRAFT, drafts);
+  saveTimeout = setTimeout(async ()=>{
+    await api.setDraft(activeRdv.id, e.target.value);
     const ind = $('saveIndicator');
     ind.style.display = 'inline';
     setTimeout(()=>ind.style.display = 'none', 1500);
@@ -1564,32 +1680,35 @@ $('endRdvBtn').addEventListener('click', function(){
   endCurrentRdv();
 });
 
-function endCurrentRdv(){
+async function endCurrentRdv(){
   if(!activeRdv) return;
   if(!confirm('Terminer ce RDV ? La durée et les notes seront enregistrées.')) return;
 
   const duree = Math.floor((Date.now() - timerStart) / 60000);
   const notes = $('rdvNotes').value;
+  const rdv = activeRdv;
 
-  const logs = ls.get(LS.VISIO_LOGS, []) || [];
-  logs.unshift({
-    id: 'log_' + uid(), rdvId: activeRdv.id,
-    prospectId: activeRdv.prospectId, prospectName: activeRdv.prospectName,
-    societe: activeRdv.societe, date: new Date().toISOString(),
-    duree, notes, provider: activeRdv.provider
+  await api.addLog({
+    rdvId: rdv.id,
+    prospectId: rdv.prospectId,
+    provider: rdv.provider,
+    link: rdv.link || '',
+    started_at: new Date(timerStart).toISOString(),
+    ended_at: new Date().toISOString(),
+    duration_seconds: duree * 60,
+    notes
   });
-  ls.set(LS.VISIO_LOGS, logs);
 
-  const pipeline = ls.get(LS.PIPELINE, []) || [];
-  const pIdx = pipeline.findIndex(p => p.id === activeRdv.prospectId);
-  if(pIdx !== -1 && (pipeline[pIdx].stage || '').toLowerCase() === 'visio'){
-    pipeline[pIdx].stage = 'rdv';
-    ls.set(LS.PIPELINE, pipeline);
+  if(rdv.prospectId){
+    const pipeline = await api.getPipeline();
+    const card = pipeline.find(p => p.id === rdv.prospectId);
+    if(card && (card.stage || '').toLowerCase() === 'visio'){
+      card.stage = 'rdv';
+      await api.putPipelineCard(card);
+    }
   }
 
-  const drafts = ls.get(LS.VISIO_DRAFT, {}) || {};
-  delete drafts[activeRdv.id];
-  ls.set(LS.VISIO_DRAFT, drafts);
+  await api.deleteDraft(rdv.id);
 
   showToast(`RDV enregistré · ${duree} min`);
   clearInterval(timerInterval);
@@ -1604,7 +1723,7 @@ function endCurrentRdv(){
    ÉTALONNAGE
    ———————————————————————————————————————————————— */
 function getCalibration(){
-  return ls.get(LS.VISIO_CALIBRATION, { lum:100, r:0, g:0, b:0 });
+  return _state.settings.calibration || { lum:100, r:0, g:0, b:0 };
 }
 
 function buildColorMatrixSVG(r, g, b){
@@ -1665,7 +1784,10 @@ function updateCalLabels(){
 let calSaveTimer = null;
 function persistCalibrationDebounced(c){
   clearTimeout(calSaveTimer);
-  calSaveTimer = setTimeout(()=>{ ls.set(LS.VISIO_CALIBRATION, c); }, 500);
+  calSaveTimer = setTimeout(()=>{
+    _state.settings.calibration = c;
+    _schedulePutSettings();
+  }, 500);
 }
 
 function bindCalibrationControls(){
@@ -1684,7 +1806,8 @@ function bindCalibrationControls(){
     updateCalLabels();
     const c = { lum:100, r:0, g:0, b:0 };
     applyCalibrationFilter(c);
-    ls.set(LS.VISIO_CALIBRATION, c);
+    _state.settings.calibration = c;
+    _schedulePutSettings();
     showToast('Étalonnage réinitialisé');
   };
 }
@@ -1693,8 +1816,8 @@ function bindCalibrationControls(){
    FONDS
    ———————————————————————————————————————————————— */
 function applyBackground(){
-  const active = ls.get(LS.VISIO_BG_ACTIVE, 'none');
-  const customData = ls.get(LS.VISIO_BG_CUSTOM, null);
+  const active = _state.settings.bg_active || 'none';
+  const customData = _state.bgCustom;
   const frames = getFrameTargets();
   if(frames.length === 0) return;
 
@@ -1719,7 +1842,8 @@ function applyBackground(){
 }
 
 function selectBackground(bg){
-  ls.set(LS.VISIO_BG_ACTIVE, bg);
+  _state.settings.bg_active = bg;
+  _schedulePutSettings();
   document.querySelectorAll('.bg-thumb[data-bg]').forEach(t=>t.classList.remove('selected'));
   const thumb = document.querySelector(`.bg-thumb[data-bg="${bg}"]`);
   if(thumb) thumb.classList.add('selected');
@@ -1742,8 +1866,10 @@ function bindBackgroundControls(){
     if(!file) return;
     if(file.size > 2*1024*1024){ showToast('Image trop lourde (max 2 Mo)'); return; }
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      ls.set(LS.VISIO_BG_CUSTOM, ev.target.result);
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target.result;
+      _state.bgCustom = dataUrl;
+      await api.setBgCustom(dataUrl, file.type, file.size);
       renderCustomBgThumb();
       selectBackground('custom');
       showToast('Fond personnalisé appliqué');
@@ -1751,7 +1877,7 @@ function bindBackgroundControls(){
     reader.readAsDataURL(file);
   };
   // Highlight selection + render custom thumb
-  const activeBg = ls.get(LS.VISIO_BG_ACTIVE, 'none');
+  const activeBg = _state.settings.bg_active || 'none';
   document.querySelectorAll('.testcam-overlay-panel .bg-thumb[data-bg]').forEach(t=>t.classList.remove('selected'));
   const sel = document.querySelector(`.testcam-overlay-panel .bg-thumb[data-bg="${activeBg}"]`);
   if(sel) sel.classList.add('selected');
@@ -1761,7 +1887,7 @@ function bindBackgroundControls(){
 function renderCustomBgThumb(){
   const slot = $('customBgSlot');
   if(!slot) return;
-  const data = ls.get(LS.VISIO_BG_CUSTOM, null);
+  const data = _state.bgCustom;
   if(data){
     slot.classList.remove('custom-empty');
     slot.classList.add('custom-bg');
@@ -1772,10 +1898,11 @@ function renderCustomBgThumb(){
   }
 }
 
-window.removeCustomBg = function(){
+window.removeCustomBg = async function(){
   if(!confirm('Supprimer le fond personnalisé ?')) return;
-  localStorage.removeItem(LS.VISIO_BG_CUSTOM);
-  const active = ls.get(LS.VISIO_BG_ACTIVE, 'none');
+  _state.bgCustom = null;
+  await api.deleteBgCustom();
+  const active = _state.settings.bg_active || 'none';
   const slot = $('customBgSlot');
   if(slot){
     slot.classList.remove('custom-bg','selected');
@@ -1857,17 +1984,19 @@ $('saveDocBtn').addEventListener('click', async ()=>{
       throw new Error('Vérification échouée après écriture');
     }
 
-    // 3. Seulement si OK, écrire les métadonnées
-    const meta = ls.get(LS.DOCS_META, []) || [];
-    const pinnedCount = meta.filter(m=>m.pinned).length;
-    meta.push({
-      id, name, tag,
+    // 3. Seulement si OK, écrire les métadonnées via API
+    const pinnedCount = _state.docs.filter(m=>m.pinned).length;
+    const docMeta = {
+      id,
+      indexedDb_local_id: id,
+      name, tag,
       mime: pendingDoc.file.type,
       size: pendingDoc.file.size,
       pinned: pinnedCount < 3,
       addedAt: new Date().toISOString()
-    });
-    ls.set(LS.DOCS_META, meta);
+    };
+    const created = await api.addDoc(docMeta);
+    _state.docs.push(created || docMeta);
 
     showToast('Document ajouté');
     $('uploadDocModal').classList.remove('show');
@@ -1922,12 +2051,12 @@ function getMimeLabel(mime){
 }
 
 function renderDocsList(){
-  const meta = ls.get(LS.DOCS_META, []) || [];
+  const meta = _state.docs || [];
   const filtered = activeFilter === 'all' ? meta : meta.filter(m=>m.tag === activeFilter);
   const pinned = filtered.filter(m=>m.pinned).slice(0,3);
   const others = filtered.filter(m=>!pinned.includes(m));
   const list = $('docsList');
-  const logs = ls.get(LS.DOCS_OPEN_LOG, []) || [];
+  const logs = _state.docOpens || [];
 
   $('docCount').textContent = meta.length;
 
@@ -2061,12 +2190,12 @@ function renderDocCard(d, shortcutNum, logs){
 }
 
 async function openDoc(docId){
-  const meta = ls.get(LS.DOCS_META, []) || [];
-  const doc = meta.find(m => m.id === docId);
+  const doc = (_state.docs || []).find(m => m.id === docId);
   if(!doc) return;
+  const blobKey = doc.indexedDb_local_id || doc.id;
 
   try{
-    const blob = await dbGet(docId);
+    const blob = await dbGet(blobKey);
     if(!blob){
       showToast('Document introuvable');
       return;
@@ -2081,13 +2210,12 @@ async function openDoc(docId){
 
     // Log "doc ouvert pour ce prospect"
     if(activeRdv && activeRdv.prospectId){
-      const logs = ls.get(LS.DOCS_OPEN_LOG, []) || [];
-      logs.push({
+      const openedAt = new Date().toISOString();
+      _state.docOpens.push({
         docId, prospectId: activeRdv.prospectId,
-        societe: activeRdv.societe, openedAt: new Date().toISOString()
+        societe: activeRdv.societe, openedAt
       });
-      ls.set(LS.DOCS_OPEN_LOG, logs);
-      // Refresh badges
+      api.logDocOpen(docId, activeRdv.prospectId, activeRdv.societe);
       setTimeout(renderDocsList, 50);
     }
 
@@ -2100,27 +2228,27 @@ async function openDoc(docId){
   }
 }
 
-function togglePin(docId){
-  const meta = ls.get(LS.DOCS_META, []) || [];
-  const doc = meta.find(m => m.id === docId);
+async function togglePin(docId){
+  const doc = (_state.docs || []).find(m => m.id === docId);
   if(!doc) return;
-  if(!doc.pinned && meta.filter(m=>m.pinned).length >= 3){
+  if(!doc.pinned && _state.docs.filter(m=>m.pinned).length >= 3){
     showToast('Maximum 3 documents épinglés');
     return;
   }
   doc.pinned = !doc.pinned;
-  ls.set(LS.DOCS_META, meta);
+  await api.updateDoc(docId, { ...doc });
   showToast(doc.pinned ? 'Épinglé' : 'Désépinglé');
   renderDocsList();
 }
 
 async function deleteDoc(docId){
-  const meta = ls.get(LS.DOCS_META, []) || [];
-  const doc = meta.find(m => m.id === docId);
+  const doc = (_state.docs || []).find(m => m.id === docId);
   if(!doc) return;
   if(!confirm(`Supprimer "${doc.name}" ?`)) return;
-  await dbDelete(docId);
-  ls.set(LS.DOCS_META, meta.filter(m => m.id !== docId));
+  const blobKey = doc.indexedDb_local_id || doc.id;
+  await dbDelete(blobKey);
+  await api.deleteDoc(docId);
+  _state.docs = _state.docs.filter(m => m.id !== docId);
   showToast('Document supprimé');
   renderDocsList();
   updateQuota();
@@ -2136,7 +2264,7 @@ document.querySelectorAll('.filter-pill').forEach(p=>{
 });
 
 async function updateQuota(){
-  const meta = ls.get(LS.DOCS_META, []) || [];
+  const meta = _state.docs || [];
   const usedBytes = meta.reduce((sum, m) => sum + (m.size || 0), 0);
   const estimate = await getStorageEstimate();
   const quota = estimate?.quota || 500*1024*1024; // fallback 500Mo
@@ -2169,7 +2297,7 @@ $('inviteBtn').addEventListener('click', ()=>{
 });
 
 function generateInviteMessage(rdv){
-  const settings = ls.get(LS.VISIO_SETTINGS, {});
+  const settings = _state.settings;
   const dateStr = new Date(rdv.date).toLocaleString('fr-FR', { weekday:'long', day:'numeric', month:'long', hour:'2-digit', minute:'2-digit' });
   return `Bonjour,\n\nJe vous propose un RDV en visioconférence le ${dateStr} (durée ~${rdv.duree} min).\n\nLien : ${rdv.link || '(à venir)'}\n${rdv.sujet ? '\nSujet : ' + rdv.sujet : ''}\n\n${settings.signature || 'àtrès bientôt'}`;
 }
@@ -2213,9 +2341,8 @@ $('sendInviteBtn').addEventListener('click', ()=>{
 /* ————————————————————————————————————————————————
    MODALE NOUVEAU RDV
    ———————————————————————————————————————————————— */
-$('openNewRdvBtn').addEventListener('click', ()=>{
-  const pipeline = ls.get(LS.PIPELINE, []) || [];
-  const contacts = ls.get(LS.CONTACTS, []) || [];
+$('openNewRdvBtn').addEventListener('click', async ()=>{
+  const [pipeline, contacts] = await Promise.all([api.getPipeline(), api.getContacts()]);
   const sel = $('prospectSelect');
   sel.innerHTML = '<option value="">— Sélectionner —</option>';
   const merged = new Map();
@@ -2248,23 +2375,21 @@ document.querySelectorAll('.provider-opt').forEach(opt=>{
   });
 });
 
-$('prospectSelect').addEventListener('change', e=>{
+$('prospectSelect').addEventListener('change', async e=>{
   const id = e.target.value;
-  const pipeline = ls.get(LS.PIPELINE, []) || [];
-  const contacts = ls.get(LS.CONTACTS, []) || [];
+  const [pipeline, contacts] = await Promise.all([api.getPipeline(), api.getContacts()]);
   const found = pipeline.find(p=>p.id===id) || contacts.find(c=>c.id===id);
   if(found?.email) $('prospectEmail').value = found.email;
 });
 
-$('saveRdvBtn').addEventListener('click', ()=>{
+$('saveRdvBtn').addEventListener('click', async ()=>{
   const provider = document.querySelector('.provider-opt.selected')?.dataset.provider || 'jitsi';
   const date = $('rdvDate').value;
   const time = $('rdvTime').value;
   if(!date || !time){ showToast('Date et heure requises'); return; }
   const prospectId = $('prospectSelect').value;
   const customLink = $('customLinkInput').value.trim();
-  const settings = ls.get(LS.VISIO_SETTINGS, {});
-  const myLinks = settings.links || {};
+  const myLinks = _state.settings.links || {};
 
   const newId = 'rdv_' + uid();
   let link = '';
@@ -2280,29 +2405,31 @@ $('saveRdvBtn').addEventListener('click', ()=>{
   const societe = txt.split(' — ')[1] || '';
 
   if(prospectId){
-    const pipeline = ls.get(LS.PIPELINE, []) || [];
-    const idx = pipeline.findIndex(p=>p.id===prospectId);
-    if(idx !== -1){
-      pipeline[idx].stage = 'visio';
-      pipeline[idx].visio_link = link;
-      pipeline[idx].visio_provider = provider;
-      pipeline[idx].rdv_date = dateISO;
-      pipeline[idx].duree = +$('rdvDuration').value;
-      pipeline[idx].sujet = $('rdvSubject').value;
-      ls.set(LS.PIPELINE, pipeline);
+    const pipeline = await api.getPipeline();
+    const card = pipeline.find(p => p.id === prospectId);
+    if(card){
+      card.stage = 'visio';
+      card.visio_link = link;
+      card.visio_provider = provider;
+      card.rdv_date = dateISO;
+      card.duree = +$('rdvDuration').value;
+      card.sujet = $('rdvSubject').value;
+      await api.putPipelineCard(card);
     }
   }
 
-  const agenda = ls.get(LS.AGENDA, []) || [];
-  agenda.push({
+  // Agenda event via API existante
+  const agendaPayload = {
     id: newId, type: 'visio',
     title: prospectName, societe, prospectId,
     email: $('prospectEmail').value,
     start: dateISO, duree: +$('rdvDuration').value,
     provider, link, sujet: $('rdvSubject').value,
     status: 'planned', createdAt: new Date().toISOString()
-  });
-  ls.set(LS.AGENDA, agenda);
+  };
+  try {
+    await fetch('/api/agenda', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(agendaPayload) });
+  } catch(e){ console.warn('[visio] POST agenda failed', e); }
 
   showToast('RDV créé');
   $('newRdvModal').classList.remove('show');
@@ -2313,7 +2440,7 @@ $('saveRdvBtn').addEventListener('click', ()=>{
       if(confirm("Envoyer l'invitation par email maintenant ?")){
         const subject = encodeURIComponent(`Invitation visio — ${prospectName}`);
         const dateStr = new Date(dateISO).toLocaleString('fr-FR',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
-        const body = encodeURIComponent(`Bonjour,\n\nJe vous propose un RDV en visioconférence le ${dateStr}.\n\nLien : ${link}\n\n${settings.signature || 'àtrès bientôt'}`);
+        const body = encodeURIComponent(`Bonjour,\n\nJe vous propose un RDV en visioconférence le ${dateStr}.\n\nLien : ${link}\n\n${_state.settings.signature || 'àtrès bientôt'}`);
         window.location.href = `mailto:${$('prospectEmail').value}?subject=${subject}&body=${body}`;
       }
     }, 400);
@@ -2537,8 +2664,7 @@ document.addEventListener('keydown', e=>{
 
   // 1, 2, 3 : ouvrir doc épinglé (marche AVEC ou SANS RDV actif)
   if(['1','2','3'].includes(e.key)){
-    const meta = ls.get(LS.DOCS_META, []) || [];
-    const pinned = meta.filter(m=>m.pinned).slice(0,3);
+    const pinned = (_state.docs || []).filter(m=>m.pinned).slice(0,3);
     const doc = pinned[parseInt(e.key)-1];
     if(doc){ e.preventDefault(); openDoc(doc.id); }
     return;
@@ -2596,23 +2722,27 @@ setInterval(renderRdvList, 30000); // 30s pour le bandeau T-5
 /* ————————————————————————————————————————————————
    INIT
    ———————————————————————————————————————————————— */
-loadMyLinks();
-// Note : sliders/fonds/customBgSlot/bgUpload sont injectés dynamiquement par
-// openTestCamera() — leurs handlers sont attachés via bindCalibration/Background
-// au moment de l'ouverture du mode test. Pas de binding init-time ici.
-applyBackground();
-renderDocsList();
-renderRdvList();
-updateQuota();
+(async () => {
+  await bootstrapVisio();
+  loadMyLinks();
+  // Note : sliders/fonds/customBgSlot/bgUpload sont injectés dynamiquement par
+  // openTestCamera() — leurs handlers sont attachés via bindCalibration/Background
+  // au moment de l'ouverture du mode test. Pas de binding init-time ici.
+  applyBackground();
+  renderDocsList();
+  await renderRdvList();
+  updateQuota();
 
-// Nettoyer dismissed expirés (RDV passés)
-const dismissed = ls.get(LS.URGENT_DISMISSED, []) || [];
-const allRdvs = collectVisioRdvs();
-const validIds = new Set(allRdvs.filter(r => new Date(r.date) > new Date()).map(r=>r.id));
-const cleanDismissed = dismissed.filter(id => validIds.has(id));
-if(cleanDismissed.length !== dismissed.length){
-  ls.set(LS.URGENT_DISMISSED, cleanDismissed);
-}
+  // Nettoyer dismissed expirés (RDV passés)
+  const dismissed = _state.settings.urgent_dismissed || [];
+  const allRdvs = await collectVisioRdvs();
+  const validIds = new Set(allRdvs.filter(r => new Date(r.date) > new Date()).map(r=>r.id));
+  const cleanDismissed = dismissed.filter(id => validIds.has(id));
+  if(cleanDismissed.length !== dismissed.length){
+    _state.settings.urgent_dismissed = cleanDismissed;
+    _schedulePutSettings();
+  }
+})();
 </script>
 </body>
 </html>

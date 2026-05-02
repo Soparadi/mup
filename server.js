@@ -10,6 +10,27 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
 app.use(express.json())
 
+// Idempotent upsert: CREATE if absent, UPDATE if AlreadyExists.
+// Caller passes a hardcoded table name (never user input) and a clean id.
+async function upsertRecord(db, table, cleanId, body) {
+  const cleanBody = { ...body }
+  delete cleanBody.id
+  const createSql = `CREATE type::record("${table}", $id) CONTENT $body`
+  const updateSql = `UPDATE type::record("${table}", $id) CONTENT $body`
+  try {
+    const result = await db.query(createSql, { id: cleanId, body: cleanBody })
+    return { record: result[0]?.[0] || result[0] || null, status: 201, action: 'created' }
+  } catch (e) {
+    const isAlreadyExists =
+      e?.name === 'AlreadyExistsError' ||
+      e?.kind === 'AlreadyExists' ||
+      String(e?.message || '').includes('already exists')
+    if (!isAlreadyExists) throw e
+    const result = await db.query(updateSql, { id: cleanId, body: cleanBody })
+    return { record: result[0]?.[0] || result[0] || null, status: 200, action: 'updated' }
+  }
+}
+
 app.get('/api/health', async (req, res) => {
   const status = {
     server: 'ok',
@@ -47,19 +68,18 @@ app.post('/api/pipeline', async (req, res) => {
   try {
     const body = req.body
     const db = await getDb()
-    let result
     let cleanId = null
     if (body?.id && typeof body.id === 'string') {
       cleanId = body.id.replace(/^pipeline:/, '').replace(/^⟨+/, '').replace(/\\?⟩+$/, '').replace(/\\/g, '')
       if (/^\d/.test(cleanId)) cleanId = 'c' + cleanId
     }
     if (cleanId) {
-      const cleanBody = { ...body, id: cleanId }
-      result = await db.query('CREATE type::record("pipeline", $id) CONTENT $body', { id: cleanId, body: cleanBody })
-    } else {
-      result = await db.query('CREATE pipeline CONTENT $body', { body })
+      const { record, status, action } = await upsertRecord(db, 'pipeline', cleanId, body)
+      if (action === 'updated') console.log(`[pipeline] upsert pipeline:${cleanId}`)
+      return res.status(status).json(record)
     }
-    res.json(result[0]?.[0] || result[0] || null)
+    const result = await db.query('CREATE pipeline CONTENT $body', { body })
+    res.status(201).json(result[0]?.[0] || result[0] || null)
   } catch (err) {
     console.error('[pipeline]', err)
     res.status(500).json({ error: 'Impossible de créer la carte pipeline' })
@@ -115,19 +135,18 @@ app.post('/api/contacts', async (req, res) => {
   try {
     const body = req.body
     const db = await getDb()
-    let result
     let cleanId = null
     if (body?.id && typeof body.id === 'string') {
       cleanId = body.id.replace(/^contacts:/, '').replace(/^⟨+/, '').replace(/\\?⟩+$/, '').replace(/\\/g, '')
       if (/^\d/.test(cleanId)) cleanId = 'c' + cleanId
     }
     if (cleanId) {
-      const cleanBody = { ...body, id: cleanId }
-      result = await db.query('CREATE type::record("contacts", $id) CONTENT $body', { id: cleanId, body: cleanBody })
-    } else {
-      result = await db.query('CREATE contacts CONTENT $body', { body })
+      const { record, status, action } = await upsertRecord(db, 'contacts', cleanId, body)
+      if (action === 'updated') console.log(`[contacts] upsert contacts:${cleanId}`)
+      return res.status(status).json(record)
     }
-    res.json(result[0]?.[0] || result[0] || null)
+    const result = await db.query('CREATE contacts CONTENT $body', { body })
+    res.status(201).json(result[0]?.[0] || result[0] || null)
   } catch (err) {
     console.error('[contacts]', err)
     res.status(500).json({ error: 'Impossible de créer le contact' })
@@ -182,19 +201,18 @@ app.post('/api/agenda', async (req, res) => {
   try {
     const body = req.body
     const db = await getDb()
-    let result
     let cleanId = null
     if (body?.id && typeof body.id === 'string') {
       cleanId = body.id.replace(/^agenda:/, '').replace(/^⟨+/, '').replace(/\\?⟩+$/, '').replace(/\\/g, '')
       if (/^\d/.test(cleanId)) cleanId = 'c' + cleanId
     }
     if (cleanId) {
-      const cleanBody = { ...body, id: cleanId }
-      result = await db.query('CREATE type::record("agenda", $id) CONTENT $body', { id: cleanId, body: cleanBody })
-    } else {
-      result = await db.query('CREATE agenda CONTENT $body', { body })
+      const { record, status, action } = await upsertRecord(db, 'agenda', cleanId, body)
+      if (action === 'updated') console.log(`[agenda] upsert agenda:${cleanId}`)
+      return res.status(status).json(record)
     }
-    res.json(result[0]?.[0] || result[0] || null)
+    const result = await db.query('CREATE agenda CONTENT $body', { body })
+    res.status(201).json(result[0]?.[0] || result[0] || null)
   } catch (err) {
     console.error('[agenda]', err)
     res.status(500).json({ error: 'Impossible de créer l\'évènement agenda' })

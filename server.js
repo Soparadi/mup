@@ -10,7 +10,7 @@ import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { getDb } from './lib/surreal.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
-import { getUserId } from './lib/auth.js'
+import { getUserId, requireUserId } from './lib/auth.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -91,9 +91,11 @@ app.get('/api/health', async (req, res) => {
 app.use(express.static(join(__dirname, 'public')))
 
 app.get('/api/pipeline', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM pipeline')
+    const result = await db.query('SELECT * FROM pipeline WHERE userId = $userId', { userId })
     res.json(result[0] || [])
   } catch (err) {
     console.error('[pipeline]', err)
@@ -102,8 +104,10 @@ app.get('/api/pipeline', async (req, res) => {
 })
 
 app.post('/api/pipeline', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
-    const body = req.body
+    const body = { ...(req.body || {}), userId } // userId forcé, body.userId écrasé
     const db = await getDb()
     let cleanId = null
     if (body?.id && typeof body.id === 'string') {
@@ -124,20 +128,23 @@ app.post('/api/pipeline', async (req, res) => {
 })
 
 app.put('/api/pipeline/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
     const { id } = req.params
-    const body = req.body
     const db = await getDb()
-    
-    // 1. Vérifier l'existence
+
+    // Ownership check : 404 si record absent OU appartient à un autre user
     const existing = await db.query('SELECT * FROM type::record("pipeline", $id)', { id })
-    if (!existing[0] || existing[0].length === 0) {
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) {
       return res.status(404).json({ error: 'Carte introuvable' })
     }
-    
-    // 2. UPDATE — strip body.id to avoid conflict with type::record target
-    const cleanBody = { ...body }
+
+    // UPDATE — strip body.id et préserve userId initial
+    const cleanBody = { ...(req.body || {}) }
     delete cleanBody.id
+    cleanBody.userId = userId
     const result = await db.query('UPDATE type::record("pipeline", $id) CONTENT $body', { id, body: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
@@ -147,9 +154,17 @@ app.put('/api/pipeline/:id', async (req, res) => {
 })
 
 app.delete('/api/pipeline/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
     const db = await getDb()
-    await db.query('DELETE type::record("pipeline", $id)', { id: req.params.id })
+    const { id } = req.params
+    const existing = await db.query('SELECT * FROM type::record("pipeline", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) {
+      return res.status(404).json({ error: 'Carte introuvable' })
+    }
+    await db.query('DELETE type::record("pipeline", $id)', { id })
     res.json({ ok: true })
   } catch (err) {
     console.error('[pipeline]', err)
@@ -158,9 +173,11 @@ app.delete('/api/pipeline/:id', async (req, res) => {
 })
 
 app.get('/api/contacts', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM contacts')
+    const result = await db.query('SELECT * FROM contacts WHERE userId = $userId', { userId })
     res.json(result[0] || [])
   } catch (err) {
     console.error('[contacts]', err)
@@ -169,8 +186,10 @@ app.get('/api/contacts', async (req, res) => {
 })
 
 app.post('/api/contacts', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
-    const body = req.body
+    const body = { ...(req.body || {}), userId }
     const db = await getDb()
     let cleanId = null
     if (body?.id && typeof body.id === 'string') {
@@ -191,20 +210,22 @@ app.post('/api/contacts', async (req, res) => {
 })
 
 app.put('/api/contacts/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
     const { id } = req.params
-    const body = req.body
     const db = await getDb()
-    
-    // 1. Vérifier l'existence
+
+    // Ownership check
     const existing = await db.query('SELECT * FROM type::record("contacts", $id)', { id })
-    if (!existing[0] || existing[0].length === 0) {
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) {
       return res.status(404).json({ error: 'Contact introuvable' })
     }
-    
-    // 2. UPDATE — strip body.id to avoid conflict with type::record target
-    const cleanBody = { ...body }
+
+    const cleanBody = { ...(req.body || {}) }
     delete cleanBody.id
+    cleanBody.userId = userId
     const result = await db.query('UPDATE type::record("contacts", $id) CONTENT $body', { id, body: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
@@ -214,9 +235,17 @@ app.put('/api/contacts/:id', async (req, res) => {
 })
 
 app.delete('/api/contacts/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
     const db = await getDb()
-    await db.query('DELETE type::record("contacts", $id)', { id: req.params.id })
+    const { id } = req.params
+    const existing = await db.query('SELECT * FROM type::record("contacts", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) {
+      return res.status(404).json({ error: 'Contact introuvable' })
+    }
+    await db.query('DELETE type::record("contacts", $id)', { id })
     res.json({ ok: true })
   } catch (err) {
     console.error('[contacts]', err)
@@ -225,9 +254,11 @@ app.delete('/api/contacts/:id', async (req, res) => {
 })
 
 app.get('/api/agenda', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM agenda')
+    const result = await db.query('SELECT * FROM agenda WHERE userId = $userId', { userId })
     res.json(result[0] || [])
   } catch (err) {
     console.error('[agenda]', err)
@@ -235,8 +266,10 @@ app.get('/api/agenda', async (req, res) => {
   }
 })
 app.post('/api/agenda', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
-    const body = req.body
+    const body = { ...(req.body || {}), userId }
     const db = await getDb()
     let cleanId = null
     if (body?.id && typeof body.id === 'string') {
@@ -256,16 +289,19 @@ app.post('/api/agenda', async (req, res) => {
   }
 })
 app.put('/api/agenda/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
     const { id } = req.params
-    const body = req.body
     const db = await getDb()
     const existing = await db.query('SELECT * FROM type::record("agenda", $id)', { id })
-    if (!existing[0] || existing[0].length === 0) {
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) {
       return res.status(404).json({ error: 'Évènement introuvable' })
     }
-    const cleanBody = { ...body }
+    const cleanBody = { ...(req.body || {}) }
     delete cleanBody.id
+    cleanBody.userId = userId
     const result = await db.query('UPDATE type::record("agenda", $id) CONTENT $body', { id, body: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
@@ -274,9 +310,17 @@ app.put('/api/agenda/:id', async (req, res) => {
   }
 })
 app.delete('/api/agenda/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
   try {
     const db = await getDb()
-    await db.query('DELETE type::record("agenda", $id)', { id: req.params.id })
+    const { id } = req.params
+    const existing = await db.query('SELECT * FROM type::record("agenda", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) {
+      return res.status(404).json({ error: 'Évènement introuvable' })
+    }
+    await db.query('DELETE type::record("agenda", $id)', { id })
     res.json({ ok: true })
   } catch (err) {
     console.error('[agenda]', err)

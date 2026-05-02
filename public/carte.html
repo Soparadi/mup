@@ -259,9 +259,6 @@ function migrateCard(c){
   if(c.location&&!c.address)c.address=c.location;if(c.director&&!c.contact)c.contact=c.director;
   c.co=c.company||'';c.name=c.contact||'';c.tel=c.phone||'';return c;
 }
-var cards=[];
-try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r).map(migrateCard);}catch(e){}
-
 var markers={}; // id -> {marker, card, latlng}
 var rdvPanelIds=[]; // ids shown in RDV panel
 var userLatLng=null;
@@ -282,19 +279,26 @@ map.on('click',function(){
   resetOverlays();
 });
 
-// Geocode & place all cards
-var withAddr=cards.filter(function(c){return c.address;});
-var addrMap={};
-withAddr.forEach(function(c){
-  if(!addrMap[c.address])addrMap[c.address]=[];
-  addrMap[c.address].push(c);
-});
+// Geocode & place all cards (lecture pipeline via API SurrealDB)
+(async function(){
+  var cards = [];
+  try {
+    var resp = await fetch('/api/pipeline');
+    if(resp.ok) cards = (await resp.json()).map(migrateCard);
+  } catch(e) {}
 
-var bounds=[];
-var pending=Object.keys(addrMap).length;
-if(!pending) pending=-1;
+  var withAddr=cards.filter(function(c){return c.address;});
+  var addrMap={};
+  withAddr.forEach(function(c){
+    if(!addrMap[c.address])addrMap[c.address]=[];
+    addrMap[c.address].push(c);
+  });
 
-Object.keys(addrMap).forEach(function(addr){
+  var bounds=[];
+  var pending=Object.keys(addrMap).length;
+  if(!pending) pending=-1;
+
+  Object.keys(addrMap).forEach(function(addr){
   // Try BAN first, fallback to Nominatim
   fetch('/api/geocode?q='+encodeURIComponent(addr))
     .then(function(r){return r.json();})
@@ -355,7 +359,8 @@ Object.keys(addrMap).forEach(function(addr){
         autoShowRdv();
       }
     });
-});
+  });
+})();
 
 // Auto-detect RDV cards and show their proximity + panel
 function autoShowRdv(){
@@ -554,7 +559,7 @@ function calcTour(){
   console.log('[Tour] Geocoding start address:', addr);
   fetch('/api/geocode?q='+encodeURIComponent(addr)+'&type=municipality')
     .then(function(r){return r.json();})
-    .then(function(data){
+    .then(async function(data){
       if(!data.features||!data.features.length){toast('Adresse introuvable');console.error('[Tour] No geocode results for:', addr);return;}
       var coords=data.features[0].geometry.coordinates;
       startLatLng=[coords[1],coords[0]]; // lat,lng
@@ -572,7 +577,10 @@ function calcTour(){
       // 2. Find RDV anchor
       anchorCard=null;
       var allCards=[];
-      try{var r2=localStorage.getItem('mup_pipeline');if(r2)allCards=JSON.parse(r2);}catch(e){}
+      try {
+        var pipelineResp = await fetch('/api/pipeline');
+        if(pipelineResp.ok) allCards = await pipelineResp.json();
+      } catch(e) {}
       for(var i=0;i<allCards.length;i++){
         if(nextActionOf(allCards[i])&&allCards[i].col!=='lost'){
           var mid=String(allCards[i].id);
@@ -834,10 +842,13 @@ function renderSchedule(){
   summaryEl.innerHTML=sumHtml;
 }
 
-// ── CONTACTS GÉOCODÉS depuis mup_contacts ──
-(function(){
+// ── CONTACTS GÉOCODÉS depuis /api/contacts ──
+(async function(){
   var contacts = [];
-  try { contacts = JSON.parse(localStorage.getItem('mup_contacts') || '[]'); } catch(e){}
+  try {
+    var resp = await fetch('/api/contacts');
+    if(resp.ok) contacts = await resp.json();
+  } catch(e) {}
   if(!Array.isArray(contacts) || contacts.length === 0) return;
 
   var COULEURS_ENTITE = {

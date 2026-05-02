@@ -4,11 +4,47 @@ if(process.env.NODE_ENV !== 'production'){
 import express from 'express'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { createHash } from 'crypto'
+import nodemailer from 'nodemailer'
+import { ImapFlow } from 'imapflow'
+import { simpleParser } from 'mailparser'
 import { getDb } from './lib/surreal.js'
+import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
-app.use(express.json())
+app.use(express.json({ limit: '10mb' }))
+
+const DEFAULT_USER_ID = process.env.MUP_DEFAULT_USER_ID || 'default'
+
+// Derive IMAP host/port from SMTP config when IMAP fields are absent (V1 onboarding).
+function deriveImapFromSmtp(host) {
+  if (!host || typeof host !== 'string') return null
+  return host.replace(/^smtp\./i, 'imap.')
+}
+
+// Strip secrets from a record before returning to client.
+function stripSettingsSecrets(rec) {
+  if (!rec) return rec
+  const { smtp_pass_encrypted, imap_pass_encrypted, ...safe } = rec
+  return {
+    ...safe,
+    configured: Boolean(smtp_pass_encrypted),
+    has_imap: Boolean(imap_pass_encrypted)
+  }
+}
+
+function requireCrypto(res) {
+  if (!isCryptoReady()) {
+    res.status(503).json({ error: 'Mail non configuré sur le serveur — SECRET_KEY absente' })
+    return false
+  }
+  return true
+}
+
+function hashMessageId(messageId) {
+  return createHash('sha256').update(String(messageId)).digest('hex').slice(0, 24)
+}
 
 // Idempotent upsert: CREATE if absent, UPDATE if AlreadyExists.
 // Caller passes a hardcoded table name (never user input) and a clean id.
@@ -357,6 +393,339 @@ app.get('/api/geocode', async (req, res) => {
   }
 })
 
+// ── MAIL ──────────────────────────────────────────────────────────────
+// V1: mono-utilisateur via MUP_DEFAULT_USER_ID. Multi-tenant à brancher
+// quand l'auth arrive. Aucun quota MUP — limite déléguée au SMTP utilisateur.
+
+app.get('/api/mail/settings/:userId', async (req, res) => {
+  if (!requireCrypto(res)) return
+  try {
+    const db = await getDb()
+    const userId = String(req.params.userId || DEFAULT_USER_ID)
+    const result = await db.query('SELECT * FROM type::record("mail_settings", $id)', { id: userId })
+    const rec = result[0]?.[0]
+    if (!rec) return res.status(404).json({ error: 'Configuration mail introuvable' })
+    res.json(stripSettingsSecrets(rec))
+  } catch (err) {
+    console.error('[mail/settings:get]', err.message)
+    res.status(500).json({ error: 'Lecture configuration mail impossible' })
+  }
+})
+
+app.post('/api/mail/settings', async (req, res) => {
+  if (!requireCrypto(res)) return
+  try {
+    const body = req.body || {}
+    const userId = String(body.userId || DEFAULT_USER_ID)
+    const db = await getDb()
+    const payload = {
+      userId,
+      smtp_host: body.smtp_host || '',
+      smtp_port: Number(body.smtp_port) || 587,
+      smtp_secure: body.smtp_secure ?? (Number(body.smtp_port) === 465),
+      smtp_user: body.smtp_user || body.from_email || '',
+      imap_host: body.imap_host || deriveImapFromSmtp(body.smtp_host) || '',
+      imap_port: Number(body.imap_port) || 993,
+      imap_secure: body.imap_secure ?? true,
+      imap_user: body.imap_user || body.smtp_user || body.from_email || '',
+      from_name: body.from_name || '',
+      from_email: body.from_email || '',
+      signature_html: body.signature_html || '',
+      signature_text: body.signature_text || '',
+      onboarded_at: new Date().toISOString()
+    }
+    if (body.smtp_pass) payload.smtp_pass_encrypted = encrypt(String(body.smtp_pass))
+    if (body.imap_pass) {
+      payload.imap_pass_encrypted = encrypt(String(body.imap_pass))
+    } else if (body.smtp_pass) {
+      payload.imap_pass_encrypted = encrypt(String(body.smtp_pass))
+    }
+    const { record, status } = await upsertRecord(db, 'mail_settings', userId, payload)
+    res.status(status).json(stripSettingsSecrets(record))
+  } catch (err) {
+    console.error('[mail/settings:post]', err.message)
+    res.status(500).json({ error: 'Enregistrement configuration mail impossible' })
+  }
+})
+
+app.delete('/api/mail/settings/:userId', async (req, res) => {
+  if (!requireCrypto(res)) return
+  try {
+    const db = await getDb()
+    const userId = String(req.params.userId || DEFAULT_USER_ID)
+    await db.query('DELETE type::record("mail_settings", $id)', { id: userId })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[mail/settings:delete]', err.message)
+    res.status(500).json({ error: 'Suppression configuration mail impossible' })
+  }
+})
+
+app.post('/api/mail/test-smtp', async (req, res) => {
+  if (!requireCrypto(res)) return
+  const body = req.body || {}
+  if (!body.smtp_host || !body.smtp_user || !body.smtp_pass) {
+    return res.status(400).json({ error: 'Paramètres SMTP incomplets' })
+  }
+  try {
+    const transporter = nodemailer.createTransport({
+      host: body.smtp_host,
+      port: Number(body.smtp_port) || 587,
+      secure: body.smtp_secure ?? (Number(body.smtp_port) === 465),
+      auth: { user: body.smtp_user, pass: body.smtp_pass }
+    })
+    await transporter.verify()
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(502).json({ ok: false, error: err.message })
+  }
+})
+
+app.post('/api/mail/test-imap', async (req, res) => {
+  if (!requireCrypto(res)) return
+  const body = req.body || {}
+  const host = body.imap_host || deriveImapFromSmtp(body.smtp_host)
+  const user = body.imap_user || body.smtp_user
+  const pass = body.imap_pass || body.smtp_pass
+  if (!host || !user || !pass) {
+    return res.status(400).json({ error: 'Paramètres IMAP incomplets' })
+  }
+  const client = new ImapFlow({
+    host,
+    port: Number(body.imap_port) || 993,
+    secure: body.imap_secure ?? true,
+    auth: { user, pass },
+    logger: false
+  })
+  try {
+    await client.connect()
+    await client.logout()
+    res.json({ ok: true })
+  } catch (err) {
+    try { await client.logout() } catch (e) {}
+    res.status(502).json({ ok: false, error: err.message })
+  }
+})
+
+app.get('/api/mail', async (req, res) => {
+  try {
+    const db = await getDb()
+    const userId = String(req.query.userId || DEFAULT_USER_ID)
+    const prospectId = req.query.prospectId ? String(req.query.prospectId) : null
+    let result
+    if (prospectId) {
+      result = await db.query(
+        'SELECT * FROM mail WHERE userId = $userId AND prospectId = $prospectId ORDER BY date DESC',
+        { userId, prospectId }
+      )
+    } else {
+      result = await db.query('SELECT * FROM mail WHERE userId = $userId ORDER BY date DESC', { userId })
+    }
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[mail:list]', err.message)
+    res.status(500).json({ error: 'Lecture mails impossible' })
+  }
+})
+
+app.get('/api/mail/:id', async (req, res) => {
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM type::record("mail", $id)', { id: req.params.id })
+    const rec = result[0]?.[0]
+    if (!rec) return res.status(404).json({ error: 'Mail introuvable' })
+    res.json(rec)
+  } catch (err) {
+    console.error('[mail:get]', err.message)
+    res.status(500).json({ error: 'Lecture mail impossible' })
+  }
+})
+
+app.delete('/api/mail/:id', async (req, res) => {
+  try {
+    const db = await getDb()
+    await db.query('DELETE type::record("mail", $id)', { id: req.params.id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[mail:delete]', err.message)
+    res.status(500).json({ error: 'Suppression mail impossible' })
+  }
+})
+
+app.post('/api/mail/send', async (req, res) => {
+  if (!requireCrypto(res)) return
+  try {
+    const body = req.body || {}
+    const userId = String(body.userId || DEFAULT_USER_ID)
+    if (!body.to || !body.subject) {
+      return res.status(400).json({ error: 'Destinataire et objet requis' })
+    }
+    const db = await getDb()
+    const settingsResult = await db.query('SELECT * FROM type::record("mail_settings", $id)', { id: userId })
+    const settings = settingsResult[0]?.[0]
+    if (!settings || !settings.smtp_pass_encrypted) {
+      return res.status(503).json({ error: 'Configuration SMTP absente — terminez l\'onboarding' })
+    }
+
+    const smtpPass = decrypt(settings.smtp_pass_encrypted)
+    const transporter = nodemailer.createTransport({
+      host: settings.smtp_host,
+      port: settings.smtp_port,
+      secure: settings.smtp_secure,
+      auth: { user: settings.smtp_user, pass: smtpPass }
+    })
+
+    const bodyHtml = body.body_html || (body.body_text || '').replace(/\n/g, '<br>')
+    const finalHtml = settings.signature_html
+      ? `${bodyHtml}<br><br>${settings.signature_html}`
+      : bodyHtml
+    const finalText = settings.signature_text
+      ? `${body.body_text || ''}\n\n${settings.signature_text}`
+      : (body.body_text || '')
+
+    const mailOptions = {
+      from: settings.from_name ? `"${settings.from_name}" <${settings.from_email}>` : settings.from_email,
+      to: body.to,
+      cc: body.cc || undefined,
+      subject: body.subject,
+      text: finalText,
+      html: finalHtml
+    }
+
+    let sendInfo
+    try {
+      sendInfo = await transporter.sendMail(mailOptions)
+    } catch (smtpErr) {
+      const failedRecord = {
+        userId,
+        direction: 'sent',
+        prospectId: body.prospectId || null,
+        from: settings.from_email,
+        to: body.to,
+        cc: body.cc || '',
+        subject: body.subject,
+        body_html: finalHtml,
+        body_text: finalText,
+        date: new Date().toISOString(),
+        messageId: '',
+        status: 'failed',
+        error: smtpErr.message,
+        attachments: []
+      }
+      const rid = `failed_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      await upsertRecord(db, 'mail', rid, failedRecord)
+      return res.status(502).json({ error: smtpErr.message })
+    }
+
+    const messageId = sendInfo.messageId || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const recordId = hashMessageId(messageId)
+    const sentRecord = {
+      userId,
+      direction: 'sent',
+      prospectId: body.prospectId || null,
+      from: settings.from_email,
+      to: body.to,
+      cc: body.cc || '',
+      subject: body.subject,
+      body_html: finalHtml,
+      body_text: finalText,
+      date: new Date().toISOString(),
+      messageId,
+      status: 'sent',
+      attachments: []
+    }
+    const { record, status } = await upsertRecord(db, 'mail', recordId, sentRecord)
+    res.status(status).json(record)
+  } catch (err) {
+    console.error('[mail/send]', err.message)
+    res.status(500).json({ error: 'Envoi mail impossible' })
+  }
+})
+
+app.post('/api/mail/sync', async (req, res) => {
+  if (!requireCrypto(res)) return
+  const body = req.body || {}
+  const userId = String(body.userId || DEFAULT_USER_ID)
+  const onlyProspectId = body.prospectId ? String(body.prospectId) : null
+  try {
+    const db = await getDb()
+    const settingsResult = await db.query('SELECT * FROM type::record("mail_settings", $id)', { id: userId })
+    const settings = settingsResult[0]?.[0]
+    if (!settings || !settings.imap_pass_encrypted) {
+      return res.status(503).json({ error: 'Configuration IMAP absente' })
+    }
+
+    const pipelineResult = await db.query('SELECT id, email, co, name FROM pipeline')
+    let cards = pipelineResult[0] || []
+    if (onlyProspectId) cards = cards.filter(c => String(c.id) === onlyProspectId)
+    const targets = cards.filter(c => c.email && /@/.test(c.email))
+    if (!targets.length) return res.json({ synced: 0, errors: [] })
+
+    const imapPass = decrypt(settings.imap_pass_encrypted)
+    const client = new ImapFlow({
+      host: settings.imap_host,
+      port: settings.imap_port,
+      secure: settings.imap_secure,
+      auth: { user: settings.imap_user, pass: imapPass },
+      logger: false
+    })
+
+    let synced = 0
+    const errors = []
+    try {
+      await client.connect()
+      const lock = await client.getMailboxLock('INBOX')
+      try {
+        for (const card of targets) {
+          try {
+            const uids = await client.search({ from: card.email })
+            if (!uids || !uids.length) continue
+            for await (const msg of client.fetch(uids, { source: true })) {
+              const parsed = await simpleParser(msg.source)
+              const messageId = parsed.messageId || `${card.email}_${parsed.date?.toISOString() || Date.now()}`
+              const recordId = hashMessageId(messageId)
+              const existing = await db.query('SELECT id FROM type::record("mail", $id)', { id: recordId })
+              if (existing[0]?.[0]) continue
+              await upsertRecord(db, 'mail', recordId, {
+                userId,
+                direction: 'received',
+                prospectId: String(card.id),
+                from: parsed.from?.text || card.email,
+                to: parsed.to?.text || settings.from_email,
+                cc: parsed.cc?.text || '',
+                subject: parsed.subject || '',
+                body_html: parsed.html || '',
+                body_text: parsed.text || '',
+                date: parsed.date ? parsed.date.toISOString() : new Date().toISOString(),
+                messageId,
+                status: 'received',
+                attachments: (parsed.attachments || []).map(a => ({
+                  filename: a.filename,
+                  contentType: a.contentType,
+                  size: a.size
+                }))
+              })
+              synced++
+            }
+          } catch (cardErr) {
+            errors.push({ prospectId: String(card.id), error: cardErr.message })
+          }
+        }
+      } finally {
+        lock.release()
+      }
+      await client.logout()
+    } catch (imapErr) {
+      try { await client.logout() } catch (e) {}
+      return res.status(502).json({ error: imapErr.message })
+    }
+    res.json({ synced, errors })
+  } catch (err) {
+    console.error('[mail/sync]', err.message)
+    res.status(500).json({ error: 'Synchronisation IMAP impossible' })
+  }
+})
+
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'public', 'dashboard.html'))
 })
@@ -367,5 +736,17 @@ app.get('/:page', (req, res) => {
     if(err) res.sendFile(join(__dirname, 'public', 'dashboard.html'))
   })
 })
+
+// Initialise mail tables on boot (idempotent: DEFINE TABLE is a no-op if exists)
+;(async () => {
+  try {
+    const db = await getDb()
+    await db.query('DEFINE TABLE mail_settings SCHEMALESS')
+    await db.query('DEFINE TABLE mail SCHEMALESS')
+    console.log('[mail] tables ready (mail_settings, mail)')
+  } catch (e) {
+    console.error('[mail] table init failed:', e.message)
+  }
+})()
 
 app.listen(process.env.PORT || 3000, () => console.log('✓ mup running'))

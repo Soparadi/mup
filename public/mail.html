@@ -366,6 +366,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input type="text" placeholder="Rechercher...">
           </div>
+          <button id="btn-sync" type="button" onclick="syncMails()" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font:600 11.5px var(--font);cursor:pointer;">
+            <svg id="btn-sync-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span id="btn-sync-label">Synchroniser</span>
+          </button>
         </div>
         <div class="email-list" id="list-inbox">
           <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;text-align:center;color:var(--muted2);">
@@ -602,11 +606,64 @@ function showCompose(){
 function closeCompose(){
   var cp=document.getElementById('compose-panel');cp.style.display='none';cp.classList.remove('open');
 }
-function sendEmail(){
-  var to=document.getElementById('compose-to').value;
+var MUP_USER_ID='default';
+async function sendEmail(){
+  var to=document.getElementById('compose-to').value.trim();
+  var subject=document.getElementById('compose-subject').value.trim();
+  var body_text=document.getElementById('compose-body').value;
   if(!to){showToast('Indiquez un destinataire');return;}
-  showToast('Envoye -- connexion SMTP requise pour l\'envoi reel');
-  closeCompose();
+  if(!subject){showToast('Indiquez un objet');return;}
+  showToast('Transmission en cours...');
+  try {
+    var resp=await fetch('/api/mail/send',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({userId:MUP_USER_ID,to:to,subject:subject,body_text:body_text})
+    });
+    var data=await resp.json().catch(function(){return {};});
+    if(resp.status===201){
+      showToast('Mail transmis');
+      closeCompose();
+    } else if(resp.status===503){
+      showToast('Mail non configuré sur le serveur — contactez le support');
+    } else if(resp.status===502){
+      showToast('Erreur SMTP — '+(data.error||'serveur tiers indisponible'));
+    } else if(resp.status===400){
+      showToast(data.error||'Paramètres invalides');
+    } else {
+      showToast('Erreur — '+(data.error||resp.status));
+    }
+  } catch(e){
+    showToast('Erreur réseau — '+e.message);
+  }
+}
+async function syncMails(){
+  var btn=document.getElementById('btn-sync');
+  var label=document.getElementById('btn-sync-label');
+  if(btn) btn.disabled=true;
+  if(label) label.textContent='Synchronisation...';
+  try {
+    var resp=await fetch('/api/mail/sync',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({userId:MUP_USER_ID})
+    });
+    var data=await resp.json().catch(function(){return {};});
+    if(resp.ok){
+      showToast(data.synced+' mail'+(data.synced>1?'s':'')+' synchronisé'+(data.synced>1?'s':''));
+    } else if(resp.status===503){
+      showToast('Mail non configuré');
+    } else if(resp.status===502){
+      showToast('Erreur IMAP — '+(data.error||'serveur tiers indisponible'));
+    } else {
+      showToast('Erreur — '+(data.error||resp.status));
+    }
+  } catch(e){
+    showToast('Erreur réseau — '+e.message);
+  } finally {
+    if(btn) btn.disabled=false;
+    if(label) label.textContent='Synchroniser';
+  }
 }
 function toggleConnect(){
   var bar=document.getElementById('connectBar');
@@ -624,20 +681,53 @@ function updateSigPreview(){
   preview.innerHTML='<div class="ob-sig-name">'+(name||'Votre nom')+' -- {company_sender}</div><div class="ob-sig-sep"></div>'+(email?'<div>'+email+'</div>':'')+(phone?'<div>'+phone+'</div>':'');
 }
 function dismissOnboarding(){document.getElementById('onboarding-overlay').classList.remove('visible');}
-function completeOnboarding(){
-  var smtp=document.getElementById('ob-smtp').value;
-  var email=document.getElementById('ob-email').value;
-  if(!smtp||!email){showToast('Renseignez le serveur SMTP et l\'email');return;}
-  localStorage.setItem('mup_mail_onboarding','1');
+async function completeOnboarding(){
+  var smtp_host=document.getElementById('ob-smtp').value.trim();
+  var smtp_port=parseInt(document.getElementById('ob-port').value,10)||587;
+  var email=document.getElementById('ob-email').value.trim();
+  var password=document.getElementById('ob-password').value;
+  var name=document.getElementById('ob-name').value.trim();
+  var phone=document.getElementById('ob-phone').value.trim();
+  if(!smtp_host||!email||!password){showToast('Renseignez serveur SMTP, email et mot de passe');return;}
+  showToast('Vérification SMTP...');
+  var smtpTest=await fetch('/api/mail/test-smtp',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({smtp_host:smtp_host,smtp_port:smtp_port,smtp_secure:smtp_port===465,smtp_user:email,smtp_pass:password})
+  });
+  var smtpData=await smtpTest.json().catch(function(){return {};});
+  if(!smtpTest.ok){showToast('SMTP refusé — '+(smtpData.error||smtpTest.status));return;}
+  showToast('Vérification IMAP...');
+  var imapTest=await fetch('/api/mail/test-imap',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({smtp_host:smtp_host,smtp_user:email,smtp_pass:password})
+  });
+  var imapData=await imapTest.json().catch(function(){return {};});
+  if(!imapTest.ok){showToast('IMAP refusé — '+(imapData.error||imapTest.status));return;}
+  var sigHtml='<div style="font-weight:700">'+(name||email)+'</div>'+(email?'<div>'+email+'</div>':'')+(phone?'<div>'+phone+'</div>':'');
+  var sigText=(name||email)+(email?'\n'+email:'')+(phone?'\n'+phone:'');
+  var save=await fetch('/api/mail/settings',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      userId:MUP_USER_ID,
+      smtp_host:smtp_host,smtp_port:smtp_port,smtp_secure:smtp_port===465,
+      smtp_user:email,smtp_pass:password,
+      from_name:name,from_email:email,
+      signature_html:sigHtml,signature_text:sigText
+    })
+  });
+  if(!save.ok){var sd=await save.json().catch(function(){return {};});showToast('Enregistrement échoué — '+(sd.error||save.status));return;}
   document.getElementById('onboarding-overlay').classList.remove('visible');
   var bar=document.getElementById('connectBar');if(bar)bar.style.display='none';
-  showToast('Boite mail configuree');
+  showToast('Boîte mail configurée');
 }
 
 // Load mailing from pipeline
-function loadMailingList(){
+async function loadMailingList(){
   var cards=[];
-  try{var r=localStorage.getItem('mup_pipeline');if(r)cards=JSON.parse(r);}catch(e){}
+  try { var resp=await fetch('/api/pipeline'); if(resp.ok){ var data=await resp.json(); if(Array.isArray(data)) cards=data; } } catch(e){}
   var mailing=cards.filter(function(c){return c.col==='mailing';});
   var kpi=document.getElementById('kpi-mailing');
   if(kpi)kpi.textContent=mailing.length;
@@ -660,12 +750,18 @@ function openComposeTo(name,email){
   showCompose();
 }
 
-document.addEventListener('DOMContentLoaded',function(){
+document.addEventListener('DOMContentLoaded',async function(){
   loadMailingList();
-  if(localStorage.getItem('mup_mail_onboarding')==='1'){
-    document.getElementById('onboarding-overlay').classList.remove('visible');
-    var bar=document.getElementById('connectBar');if(bar)bar.style.display='none';
-  }
+  try {
+    var resp=await fetch('/api/mail/settings/'+encodeURIComponent(MUP_USER_ID));
+    if(resp.ok){
+      var data=await resp.json();
+      if(data && data.onboarded_at){
+        document.getElementById('onboarding-overlay').classList.remove('visible');
+        var bar=document.getElementById('connectBar');if(bar)bar.style.display='none';
+      }
+    }
+  } catch(e){}
 });
 </script>
 <script src="/sidebar.js"></script>

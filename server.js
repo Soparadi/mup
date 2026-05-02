@@ -92,6 +92,66 @@ app.delete('/api/pipeline/:id', async (req, res) => {
   }
 })
 
+app.get('/api/contacts', async (req, res) => {
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM contacts')
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[contacts]', err)
+    res.status(500).json({ error: 'Impossible de lire les contacts' })
+  }
+})
+
+app.post('/api/contacts', async (req, res) => {
+  try {
+    const body = req.body
+    const db = await getDb()
+    let result
+    if (body?.id && typeof body.id === 'string' && body.id.startsWith('c')) {
+      result = await db.query('CREATE type::record("contacts", $id) CONTENT $body', { id: body.id, body })
+    } else {
+      result = await db.query('CREATE contacts CONTENT $body', { body })
+    }
+    res.json(result[0]?.[0] || result[0] || null)
+  } catch (err) {
+    console.error('[contacts]', err)
+    res.status(500).json({ error: 'Impossible de créer le contact' })
+  }
+})
+
+app.put('/api/contacts/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const body = req.body
+    const db = await getDb()
+    
+    // 1. Vérifier l'existence
+    const existing = await db.query('SELECT * FROM type::record("contacts", $id)', { id })
+    if (!existing[0] || existing[0].length === 0) {
+      return res.status(404).json({ error: 'Contact introuvable' })
+    }
+    
+    // 2. UPDATE
+    const result = await db.query('UPDATE type::record("contacts", $id) CONTENT $body', { id, body })
+    res.json(result[0]?.[0] || result[0] || {})
+  } catch (err) {
+    console.error('[contacts]', err)
+    res.status(500).json({ error: 'Impossible de mettre à jour le contact' })
+  }
+})
+
+app.delete('/api/contacts/:id', async (req, res) => {
+  try {
+    const db = await getDb()
+    await db.query('DELETE type::record("contacts", $id)', { id: req.params.id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[contacts]', err)
+    res.status(500).json({ error: 'Impossible de supprimer le contact' })
+  }
+})
+
 // ── INSEE OAuth2 token cache ──
 let inseeToken = null
 let inseeTokenExpires = 0

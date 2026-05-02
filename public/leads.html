@@ -1652,12 +1652,33 @@ var REGION_CODES = {
 };
 
 // ── DEDUPLICATION against existing prospects/pipeline ────────
-function _getExistingSirets() {
+var _siretsCache = null;
+var _siretsCacheTime = 0;
+
+async function _getExistingSirets() {
+  if (_siretsCache && (Date.now() - _siretsCacheTime < 30000)) {
+    return _siretsCache;
+  }
   var sirets = {};
   try {
-    var k = localStorage.getItem('mup_pipeline');
-    if(k) JSON.parse(k).forEach(function(x){ if(x.siren) sirets[x.siren]=true; if(x.siret) sirets[x.siret]=true; });
-  } catch(e){}
+    var resp = await fetch('/api/pipeline');
+    if(resp.ok){
+      var data = await resp.json();
+      if(Array.isArray(data)){
+        data.forEach(function(x){ if(x.siren) sirets[x.siren]=true; if(x.siret) sirets[x.siret]=true; });
+      }
+    } else {
+      throw new Error('Pipeline API unavailable');
+    }
+  } catch(e) {
+    console.warn('[Leads] _getExistingSirets API failed, fallback localStorage', e);
+    try {
+      var k = localStorage.getItem('mup_pipeline');
+      if(k) JSON.parse(k).forEach(function(x){ if(x.siren) sirets[x.siren]=true; if(x.siret) sirets[x.siret]=true; });
+    } catch(e2){}
+  }
+  _siretsCache = sirets;
+  _siretsCacheTime = Date.now();
   return sirets;
 }
 
@@ -1818,7 +1839,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   if(naf && naf.length >= 4 && naf.indexOf('.') === -1) {
     nafDotted = naf.substring(0,2) + '.' + naf.substring(2);
   }
-  var existing = _getExistingSirets();
+  var existing = await _getExistingSirets();
   var depts = REGION_DEPTS[regionCode] || [];
 
   // ── TRY INSEE SIRENE V3 FIRST ──
@@ -2478,16 +2499,26 @@ function cp(v, label) {
   navigator.clipboard.writeText(v).then(function(){ showToast(label+' copié ✓'); });
 }
 
-function addToPipeline(leadId) {
+async function addToPipeline(leadId) {
   var lead = S.buffer.find(function(l){ return l.id === leadId; });
   if(!lead) return;
   var cards = [];
-  try { var r = localStorage.getItem('mup_pipeline'); if(r) cards = JSON.parse(r); } catch(e){}
+  try {
+    var resp = await fetch('/api/pipeline');
+    if(resp.ok){
+      cards = await resp.json();
+    } else {
+      throw new Error('Pipeline API unavailable');
+    }
+  } catch(e) {
+    console.warn('[Leads] addToPipeline pipeline fetch failed, fallback localStorage', e);
+    try { var r = localStorage.getItem('mup_pipeline'); if(r) cards = JSON.parse(r); } catch(e2){}
+  }
   if(cards.find(function(c){ return (lead.siren && String(c.siren) === String(lead.siren)) || (lead.siret && String(c.siret) === String(lead.siret)); })) {
     showToast('Déjà dans le pipeline');
     return;
   }
-  cards.push({
+  var newCard = {
     id: String(Date.now()),
     name: lead.director || lead.name,
     co: lead.name,
@@ -2508,14 +2539,42 @@ function addToPipeline(leadId) {
     val: 0,
     days: 0,
     activity: []
-  });
-  localStorage.setItem('mup_pipeline', JSON.stringify(cards));
-  showToast(lead.name + ' ajouté au pipeline');
-  // Grey out the button
-  var card = document.getElementById('card-' + leadId);
-  if(card) {
-    var btn = card.querySelector('.ba.pr');
-    if(btn) { btn.textContent = 'Ajouté'; btn.disabled = true; btn.style.opacity = '.5'; }
+  };
+  try {
+    var apiResp = await fetch('/api/pipeline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCard)
+    });
+    if(!apiResp.ok) throw new Error('HTTP ' + apiResp.status);
+    var apiResult = await apiResp.json();
+    // Dual-write localStorage
+    try {
+      var localCards = [];
+      var r = localStorage.getItem('mup_pipeline');
+      if(r) localCards = JSON.parse(r);
+      localCards.push(Object.assign({}, newCard, apiResult || {}));
+      localStorage.setItem('mup_pipeline', JSON.stringify(localCards));
+    } catch(e2) {
+      console.warn('[Leads] addToPipeline localStorage update failed', e2);
+    }
+    _siretsCache = null;
+    _siretsCacheTime = 0;
+    showToast(lead.name + ' ajouté au pipeline');
+    var card = document.getElementById('card-' + leadId);
+    if(card) {
+      var btn = card.querySelector('.ba.pr');
+      if(btn) { btn.textContent = 'Ajouté'; btn.disabled = true; btn.style.opacity = '.5'; }
+    }
+    try {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' }));
+    } catch(e3) {
+      console.warn('[Leads] storage event dispatch failed', e3);
+    }
+  } catch(e) {
+    console.error('[Leads] addToPipeline API failed', e);
+    showToast('Erreur ajout pipeline');
+    return;
   }
 }
 
@@ -2822,14 +2881,32 @@ else buildIndex();
     document.getElementById('plafond-modal-overlay').onclick = function(e){ if(e.target.id === 'plafond-modal-overlay') this.remove(); };
   }
   var originalAddToPipeline = window.addToPipeline;
-  window.addToPipeline = function(leadId){
+  window.addToPipeline = async function(leadId){
     // Mode test : on incrémente toujours, jamais de blocage. Hard cap reviendra avec le backend.
     var pipelineBefore = [];
-    try { pipelineBefore = JSON.parse(localStorage.getItem('mup_pipeline') || '[]'); } catch(e){}
+    try {
+      var resp = await fetch('/api/pipeline');
+      if(resp.ok){
+        pipelineBefore = await resp.json();
+      } else {
+        throw new Error('Pipeline API unavailable');
+      }
+    } catch(e) {
+      try { pipelineBefore = JSON.parse(localStorage.getItem('mup_pipeline') || '[]'); } catch(e2){ pipelineBefore = []; }
+    }
     var beforeLen = pipelineBefore.length;
-    if(originalAddToPipeline) originalAddToPipeline(leadId);
+    if(originalAddToPipeline) await originalAddToPipeline(leadId);
     var pipelineAfter = [];
-    try { pipelineAfter = JSON.parse(localStorage.getItem('mup_pipeline') || '[]'); } catch(e){}
+    try {
+      var resp2 = await fetch('/api/pipeline');
+      if(resp2.ok){
+        pipelineAfter = await resp2.json();
+      } else {
+        throw new Error('Pipeline API unavailable');
+      }
+    } catch(e) {
+      try { pipelineAfter = JSON.parse(localStorage.getItem('mup_pipeline') || '[]'); } catch(e2){ pipelineAfter = []; }
+    }
     if(pipelineAfter.length > beforeLen){
       var p = loadPlan();
       p.leadsConsumed = (p.leadsConsumed || 0) + 1;

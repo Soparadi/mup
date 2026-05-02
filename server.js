@@ -78,8 +78,10 @@ app.put('/api/pipeline/:id', async (req, res) => {
       return res.status(404).json({ error: 'Carte introuvable' })
     }
     
-    // 2. UPDATE
-    const result = await db.query('UPDATE type::record("pipeline", $id) CONTENT $body', { id, body })
+    // 2. UPDATE — strip body.id to avoid conflict with type::record target
+    const cleanBody = { ...body }
+    delete cleanBody.id
+    const result = await db.query('UPDATE type::record("pipeline", $id) CONTENT $body', { id, body: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
     console.error('[pipeline]', err)
@@ -144,8 +146,10 @@ app.put('/api/contacts/:id', async (req, res) => {
       return res.status(404).json({ error: 'Contact introuvable' })
     }
     
-    // 2. UPDATE
-    const result = await db.query('UPDATE type::record("contacts", $id) CONTENT $body', { id, body })
+    // 2. UPDATE — strip body.id to avoid conflict with type::record target
+    const cleanBody = { ...body }
+    delete cleanBody.id
+    const result = await db.query('UPDATE type::record("contacts", $id) CONTENT $body', { id, body: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
     console.error('[contacts]', err)
@@ -161,6 +165,67 @@ app.delete('/api/contacts/:id', async (req, res) => {
   } catch (err) {
     console.error('[contacts]', err)
     res.status(500).json({ error: 'Impossible de supprimer le contact' })
+  }
+})
+
+app.get('/api/agenda', async (req, res) => {
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM agenda')
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[agenda]', err)
+    res.status(500).json({ error: 'Impossible de lire les évènements agenda' })
+  }
+})
+app.post('/api/agenda', async (req, res) => {
+  try {
+    const body = req.body
+    const db = await getDb()
+    let result
+    let cleanId = null
+    if (body?.id && typeof body.id === 'string') {
+      cleanId = body.id.replace(/^agenda:/, '').replace(/^⟨+/, '').replace(/\\?⟩+$/, '').replace(/\\/g, '')
+      if (/^\d/.test(cleanId)) cleanId = 'c' + cleanId
+    }
+    if (cleanId) {
+      const cleanBody = { ...body, id: cleanId }
+      result = await db.query('CREATE type::record("agenda", $id) CONTENT $body', { id: cleanId, body: cleanBody })
+    } else {
+      result = await db.query('CREATE agenda CONTENT $body', { body })
+    }
+    res.json(result[0]?.[0] || result[0] || null)
+  } catch (err) {
+    console.error('[agenda]', err)
+    res.status(500).json({ error: 'Impossible de créer l\'évènement agenda' })
+  }
+})
+app.put('/api/agenda/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const body = req.body
+    const db = await getDb()
+    const existing = await db.query('SELECT * FROM type::record("agenda", $id)', { id })
+    if (!existing[0] || existing[0].length === 0) {
+      return res.status(404).json({ error: 'Évènement introuvable' })
+    }
+    const cleanBody = { ...body }
+    delete cleanBody.id
+    const result = await db.query('UPDATE type::record("agenda", $id) CONTENT $body', { id, body: cleanBody })
+    res.json(result[0]?.[0] || result[0] || {})
+  } catch (err) {
+    console.error('[agenda]', err)
+    res.status(500).json({ error: 'Impossible de mettre à jour l\'évènement agenda' })
+  }
+})
+app.delete('/api/agenda/:id', async (req, res) => {
+  try {
+    const db = await getDb()
+    await db.query('DELETE type::record("agenda", $id)', { id: req.params.id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[agenda]', err)
+    res.status(500).json({ error: 'Impossible de supprimer l\'évènement agenda' })
   }
 })
 

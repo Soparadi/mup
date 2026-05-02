@@ -252,6 +252,102 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 </div>
 
 <script>
+var _pipelineCache = null;
+var _pipelineCacheTime = 0;
+var _agendaCache = null;
+var _agendaCacheTime = 0;
+
+async function _loadPipeline(){
+  if(_pipelineCache && (Date.now() - _pipelineCacheTime < 30000)){
+    return _pipelineCache;
+  }
+  var cards = [];
+  try {
+    var resp = await fetch('/api/pipeline');
+    if(resp.ok){
+      var data = await resp.json();
+      if(Array.isArray(data)) cards = data;
+    } else {
+      throw new Error('Pipeline API unavailable');
+    }
+  } catch(e) {
+    console.warn('[Agenda] _loadPipeline API failed, fallback localStorage', e);
+    try { var r = localStorage.getItem('mup_pipeline'); if(r) cards = JSON.parse(r); } catch(e2){}
+  }
+  _pipelineCache = cards || [];
+  _pipelineCacheTime = Date.now();
+  return _pipelineCache;
+}
+
+async function _loadAgenda(){
+  if(_agendaCache && (Date.now() - _agendaCacheTime < 30000)){
+    return _agendaCache;
+  }
+  var events = [];
+  try {
+    var resp = await fetch('/api/agenda');
+    if(resp.ok){
+      var data = await resp.json();
+      if(Array.isArray(data)) events = data;
+    } else {
+      throw new Error('Agenda API unavailable');
+    }
+  } catch(e) {
+    console.warn('[Agenda] _loadAgenda API failed, fallback localStorage', e);
+    try { var r = localStorage.getItem('mup_agenda'); if(r) events = JSON.parse(r); } catch(e2){}
+  }
+  _agendaCache = events || [];
+  _agendaCacheTime = Date.now();
+  return _agendaCache;
+}
+
+async function _saveAgendaEvent(ev){
+  var hasId = ev && ev.id && typeof ev.id === 'string';
+  var url = hasId ? '/api/agenda/' + encodeURIComponent(ev.id.replace(/^agenda:/, '')) : '/api/agenda';
+  var method = hasId ? 'PUT' : 'POST';
+  try {
+    var resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ev) });
+    if(!resp.ok){
+      if(resp.status === 404 && method === 'PUT'){
+        var resp2 = await fetch('/api/agenda', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ev) });
+        if(!resp2.ok) throw new Error('POST fallback failed: ' + resp2.status);
+        _agendaCache = null; _agendaCacheTime = 0;
+        return await resp2.json();
+      }
+      throw new Error('HTTP ' + resp.status);
+    }
+    _agendaCache = null; _agendaCacheTime = 0;
+    return await resp.json();
+  } catch(e){
+    console.warn('[Agenda] _saveAgendaEvent API failed', e);
+    return null;
+  }
+}
+
+async function _savePipelineCard(card){
+  var rawId = String(card.id || '').replace(/^pipeline:/, '');
+  var hasId = rawId && rawId.length > 0;
+  var url = hasId ? '/api/pipeline/' + encodeURIComponent(rawId) : '/api/pipeline';
+  var method = hasId ? 'PUT' : 'POST';
+  try {
+    var resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(card) });
+    if(!resp.ok){
+      if(resp.status === 404 && method === 'PUT'){
+        var resp2 = await fetch('/api/pipeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(card) });
+        if(!resp2.ok) throw new Error('POST fallback failed: ' + resp2.status);
+        _pipelineCache = null; _pipelineCacheTime = 0;
+        return await resp2.json();
+      }
+      throw new Error('HTTP ' + resp.status);
+    }
+    _pipelineCache = null; _pipelineCacheTime = 0;
+    return await resp.json();
+  } catch(e){
+    console.warn('[Agenda] _savePipelineCard API failed', e);
+    return null;
+  }
+}
+
 function isUpcoming(dateStr){if(!dateStr)return false;var today=new Date();today.setHours(0,0,0,0);return new Date(dateStr+'T00:00:00')>=today;}
 const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const DAYS_FR   = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
@@ -266,23 +362,22 @@ const MOCK_EVENTS = [];
 
 let events = [];
 
-function loadEvents() {
-  const stored = localStorage.getItem('mup_agenda');
-  if(stored) { try { events = JSON.parse(stored); } catch(e) { events = []; } }
+async function loadEvents() {
+  try { events = await _loadAgenda(); } catch(e) { events = []; }
+  if(!Array.isArray(events)) events = [];
 
   // Source de vérité : c.rdvs[] dans mup_pipeline.
   // On purge les events Agenda issus du pipeline (key préfixée 'pipe_' OU
   // ancien format sans key dont l'id correspond à une fiche), puis reconstruction.
   try {
-    var pipe = localStorage.getItem('mup_pipeline');
-    if(pipe) {
-      var cards = JSON.parse(pipe).map(function(c){
-        if(c.co && !c.company) c.company = c.co;
-        if(c.name && !c.contact) c.contact = c.name;
-        c.co = c.company || '';
-        c.name = c.contact || '';
-        return c;
-      });
+    var cards = (await _loadPipeline()).map(function(c){
+      if(c.co && !c.company) c.company = c.co;
+      if(c.name && !c.contact) c.contact = c.name;
+      c.co = c.company || '';
+      c.name = c.contact || '';
+      return c;
+    });
+    if(cards.length) {
       var fichesIds = {};
       cards.forEach(function(c){ fichesIds[String(c.id)] = true; });
 
@@ -329,8 +424,12 @@ function loadEvents() {
   if(!events.length) events = MOCK_EVENTS;
 }
 
-function saveEvents() {
+async function saveEvents() {
+  // Dual-write: API + localStorage (transitoire)
   localStorage.setItem('mup_agenda', JSON.stringify(events));
+  for(const ev of events){
+    if(ev && ev.id) await _saveAgendaEvent(ev);
+  }
 }
 
 function dateKey(d) {
@@ -493,7 +592,7 @@ function renderDay() {
 let editingId = null;
 let modalType = 'rdv';
 
-function openModal(hour) {
+async function openModal(hour) {
   editingId = null;
   document.getElementById('m-title').value = '';
   document.getElementById('m-contact').value = '';
@@ -513,22 +612,20 @@ function openModal(hour) {
   if(sel) {
     var html = '<option value="">-- Choisir une fiche pipeline --</option>';
     try {
-      var pipe = localStorage.getItem('mup_pipeline');
-      if(pipe) {
-        JSON.parse(pipe).forEach(function(c) {
-          html += '<option value="'+c.id+'">'+((c.co||c.name)||'Sans nom')+'</option>';
-        });
-      }
+      var cards = await _loadPipeline();
+      cards.forEach(function(c) {
+        html += '<option value="'+c.id+'">'+((c.co||c.name)||'Sans nom')+'</option>';
+      });
     } catch(e) {}
     sel.innerHTML = html;
   }
 }
 
-function fillFromPipeline() {
+async function fillFromPipeline() {
   var sel = document.getElementById('m-pipeline-card');
   if(!sel || !sel.value) return;
   try {
-    var pipe = JSON.parse(localStorage.getItem('mup_pipeline') || '[]');
+    var pipe = await _loadPipeline();
     var c = pipe.find(function(x) { return String(x.id) === String(sel.value); });
     if(c) {
       document.getElementById('m-title').value = c.co || c.name || '';
@@ -558,7 +655,7 @@ function selType(el) {
   modalType = el.dataset.type;
 }
 
-function saveEvent() {
+async function saveEvent() {
   const title = document.getElementById('m-title').value.trim();
   if(!title) { document.getElementById('m-title').focus(); return; }
   if(editingId) {
@@ -567,7 +664,7 @@ function saveEvent() {
   } else {
     events.push({ id:'e'+Date.now(), date:dateKey(selectedDay), start:document.getElementById('m-start').value, end:document.getElementById('m-end').value, title, contact:document.getElementById('m-contact').value.trim(), type:modalType, notes:document.getElementById('m-notes').value.trim() });
   }
-  saveEvents();
+  await saveEvents();
   closeModal();
   renderCal();
   renderDay();
@@ -575,14 +672,18 @@ function saveEvent() {
   var pipeId = document.getElementById('m-pipeline-card')?.value;
   var evtId = editingId || null;
   try {
-    var pipe = JSON.parse(localStorage.getItem('mup_pipeline') || '[]');
+    var pipe = await _loadPipeline();
     var card = null;
     if(pipeId) card = pipe.find(function(x){ return String(x.id) === String(pipeId); });
     if(!card && evtId) card = pipe.find(function(x){ return String(x.id) === String(evtId); });
     if(card) {
       card.rdvDate = editingId ? (events.find(function(x){return x.id===editingId;})?.date || dateKey(selectedDay)) : dateKey(selectedDay);
       card.rdvTime = document.getElementById('m-start').value || '';
+      // Dual-write: API + localStorage (transitoire)
       localStorage.setItem('mup_pipeline', JSON.stringify(pipe));
+      if(card && card.id){
+        await _savePipelineCard(card);
+      }
     }
   } catch(e) {}
 }
@@ -643,17 +744,19 @@ function weatherCode(c) {
   return { ico:SVG_WEATHER, desc:'—' };
 }
 
-loadEvents();
+loadEvents().then(function(){
+  renderCal();
+  renderDay();
+});
 fetchWeather();
-renderCal();
-renderDay();
 
 // Rafraîchissement temps réel quand mup_pipeline ou mup_agenda changent
 window.addEventListener('storage', function(e){
   if(!e.key || e.key === 'mup_pipeline' || e.key === 'mup_agenda'){
-    loadEvents();
-    if(typeof renderCal === 'function') renderCal();
-    if(typeof renderDay === 'function') renderDay();
+    loadEvents().then(function(){
+      if(typeof renderCal === 'function') renderCal();
+      if(typeof renderDay === 'function') renderDay();
+    });
   }
 });
 

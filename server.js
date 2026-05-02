@@ -11,6 +11,7 @@ import { simpleParser } from 'mailparser'
 import { getDb } from './lib/surreal.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
+import { cleanRecordId } from './lib/db.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -109,11 +110,7 @@ app.post('/api/pipeline', async (req, res) => {
   try {
     const body = { ...(req.body || {}), userId } // userId forcé, body.userId écrasé
     const db = await getDb()
-    let cleanId = null
-    if (body?.id && typeof body.id === 'string') {
-      cleanId = body.id.replace(/^pipeline:/, '').replace(/^⟨+/, '').replace(/\\?⟩+$/, '').replace(/\\/g, '')
-      if (/^\d/.test(cleanId)) cleanId = 'c' + cleanId
-    }
+    const cleanId = cleanRecordId('pipeline', body?.id)
     if (cleanId) {
       const { record, status, action } = await upsertRecord(db, 'pipeline', cleanId, body)
       if (action === 'updated') console.log(`[pipeline] upsert pipeline:${cleanId}`)
@@ -191,11 +188,7 @@ app.post('/api/contacts', async (req, res) => {
   try {
     const body = { ...(req.body || {}), userId }
     const db = await getDb()
-    let cleanId = null
-    if (body?.id && typeof body.id === 'string') {
-      cleanId = body.id.replace(/^contacts:/, '').replace(/^⟨+/, '').replace(/\\?⟩+$/, '').replace(/\\/g, '')
-      if (/^\d/.test(cleanId)) cleanId = 'c' + cleanId
-    }
+    const cleanId = cleanRecordId('contacts', body?.id)
     if (cleanId) {
       const { record, status, action } = await upsertRecord(db, 'contacts', cleanId, body)
       if (action === 'updated') console.log(`[contacts] upsert contacts:${cleanId}`)
@@ -271,11 +264,7 @@ app.post('/api/agenda', async (req, res) => {
   try {
     const body = { ...(req.body || {}), userId }
     const db = await getDb()
-    let cleanId = null
-    if (body?.id && typeof body.id === 'string') {
-      cleanId = body.id.replace(/^agenda:/, '').replace(/^⟨+/, '').replace(/\\?⟩+$/, '').replace(/\\/g, '')
-      if (/^\d/.test(cleanId)) cleanId = 'c' + cleanId
-    }
+    const cleanId = cleanRecordId('agenda', body?.id)
     if (cleanId) {
       const { record, status, action } = await upsertRecord(db, 'agenda', cleanId, body)
       if (action === 'updated') console.log(`[agenda] upsert agenda:${cleanId}`)
@@ -843,8 +832,7 @@ app.post('/api/visio/logs', async (req, res) => {
       duration_seconds: body.duration_seconds || 0,
       notes: body.notes || ''
     }
-    const recordId = body.id ? String(body.id).replace(/^visio_log:/, '') : `log_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    const cleanId = /^\d/.test(recordId) ? 'c' + recordId : recordId
+    const cleanId = cleanRecordId('visio_log', body.id) || `log_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const { record, status } = await upsertRecord(db, 'visio_log', cleanId, payload)
     res.status(status).json(record)
   } catch (err) {
@@ -989,8 +977,7 @@ app.post('/api/visio/docs', async (req, res) => {
       indexedDb_local_id: body.indexedDb_local_id || body.id || null,
       addedAt: body.addedAt || new Date().toISOString()
     }
-    const recordId = body.id ? String(body.id).replace(/^visio_doc:/, '') : `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    const cleanId = /^\d/.test(recordId) ? 'c' + recordId : recordId
+    const cleanId = cleanRecordId('visio_doc', body.id) || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const { record, status } = await upsertRecord(db, 'visio_doc', cleanId, payload)
     res.status(status).json(record)
   } catch (err) {
@@ -1079,6 +1066,301 @@ app.get('/api/visio/docs/:id/opens', async (req, res) => {
   }
 })
 
+// ── DEVIS / FACTURES ──────────────────────────────────────────────────
+// V1: numérotation séquentielle protégée par mutex in-process per-(userId,type).
+// Test race condition (5 POST simultanés) sur UPDATE+fallback CREATE a échoué :
+// UPDATE sur record absent retourne [] et la branche CREATE n'est pas atomique
+// → bascule sur sérialisation node.js. Marche tant qu'un seul replica Railway
+// gère les requêtes. À revoir si scale-out > 1 replica (passer à un lock
+// distribué ou à une séquence SurrealDB native si proposée).
+
+const _counterMutex = new Map() // key: `${userId}_${type}` → pending promise
+
+async function nextSequenceNumber(db, userId, type) {
+  const key = `${userId}_${type}`
+  const prev = _counterMutex.get(key) || Promise.resolve()
+  let release
+  const wait = new Promise(r => { release = r })
+  _counterMutex.set(key, wait)
+  try {
+    await prev
+    return await _generateSequenceUnsafe(db, userId, type)
+  } finally {
+    release()
+    if (_counterMutex.get(key) === wait) _counterMutex.delete(key)
+  }
+}
+
+async function _generateSequenceUnsafe(db, userId, type) {
+  const year = new Date().getFullYear()
+  const counterId = `${String(userId).replace(/[^a-zA-Z0-9_]/g, '_')}_${type}_${year}`
+  // À l'intérieur du mutex : SELECT actuel → calcule nextSeq → UPDATE/CREATE.
+  // Pas de race possible : un seul caller à la fois pour ce (userId,type).
+  const sel = await db.query('SELECT seq FROM type::record("counter", $id)', { id: counterId })
+  const current = sel[0]?.[0]
+  const nextSeq = current ? Number(current.seq || 0) + 1 : 1
+  if (current) {
+    await db.query(
+      'UPDATE type::record("counter", $id) SET seq = $seq, updated_at = time::now()',
+      { id: counterId, seq: nextSeq }
+    )
+  } else {
+    await db.query(
+      'CREATE type::record("counter", $id) CONTENT { userId: $userId, type: $type, year: $year, seq: $seq, updated_at: time::now() }',
+      { id: counterId, userId, type, year, seq: nextSeq }
+    )
+  }
+  const prefix = type === 'facture' ? 'FAC' : 'DEV'
+  const padded = String(nextSeq).padStart(4, '0')
+  return { numero: `${prefix}-${year}-${padded}`, seq: nextSeq, year }
+}
+
+// ── DEVIS ──
+app.get('/api/devis', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM devis WHERE userId = $userId ORDER BY date_emission DESC, created_at DESC', { userId })
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[devis:list]', err.message)
+    res.status(500).json({ error: 'Lecture devis impossible' })
+  }
+})
+
+app.get('/api/devis/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM type::record("devis", $id)', { id: req.params.id })
+    const rec = result[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
+    res.json(rec)
+  } catch (err) {
+    console.error('[devis:get]', err.message)
+    res.status(500).json({ error: 'Lecture devis impossible' })
+  }
+})
+
+app.post('/api/devis', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const body = { ...(req.body || {}), userId }
+    // Numéro auto si absent et pas de fourniture explicite
+    if (!body.numero && !body.num) {
+      const { numero, seq, year } = await nextSequenceNumber(db, userId, 'devis')
+      body.numero = numero
+      body.numero_seq = seq
+      body.numero_year = year
+    }
+    const now = new Date().toISOString()
+    if (!body.created_at) body.created_at = now
+    body.updated_at = now
+
+    const cleanId = cleanRecordId('devis', body.id)
+    if (cleanId) {
+      const { record, status } = await upsertRecord(db, 'devis', cleanId, body)
+      return res.status(status).json(record)
+    }
+    const result = await db.query('CREATE devis CONTENT $body', { body })
+    res.status(201).json(result[0]?.[0] || result[0] || null)
+  } catch (err) {
+    console.error('[devis:post]', err.message)
+    res.status(500).json({ error: 'Enregistrement devis impossible' })
+  }
+})
+
+app.put('/api/devis/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const { id } = req.params
+    const existing = await db.query('SELECT * FROM type::record("devis", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
+    const cleanBody = { ...(req.body || {}) }
+    delete cleanBody.id
+    cleanBody.userId = userId
+    cleanBody.updated_at = new Date().toISOString()
+    // Préserve numero/numero_seq/numero_year initial (non-rewritable)
+    if (rec.numero) cleanBody.numero = rec.numero
+    if (rec.numero_seq) cleanBody.numero_seq = rec.numero_seq
+    if (rec.numero_year) cleanBody.numero_year = rec.numero_year
+    const result = await db.query('UPDATE type::record("devis", $id) CONTENT $body', { id, body: cleanBody })
+    res.json(result[0]?.[0] || result[0] || {})
+  } catch (err) {
+    console.error('[devis:put]', err.message)
+    res.status(500).json({ error: 'Mise à jour devis impossible' })
+  }
+})
+
+app.delete('/api/devis/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const { id } = req.params
+    const existing = await db.query('SELECT * FROM type::record("devis", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
+    await db.query('DELETE type::record("devis", $id)', { id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[devis:delete]', err.message)
+    res.status(500).json({ error: 'Suppression devis impossible' })
+  }
+})
+
+// ── FACTURES ──
+app.get('/api/factures', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM facture WHERE userId = $userId ORDER BY date_emission DESC, created_at DESC', { userId })
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[factures:list]', err.message)
+    res.status(500).json({ error: 'Lecture factures impossible' })
+  }
+})
+
+app.get('/api/factures/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM type::record("facture", $id)', { id: req.params.id })
+    const rec = result[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Facture introuvable' })
+    res.json(rec)
+  } catch (err) {
+    console.error('[factures:get]', err.message)
+    res.status(500).json({ error: 'Lecture facture impossible' })
+  }
+})
+
+app.post('/api/factures', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const body = { ...(req.body || {}), userId }
+    if (!body.numero && !body.numero_seq) {
+      const { numero, seq, year } = await nextSequenceNumber(db, userId, 'facture')
+      body.numero = numero
+      body.numero_seq = seq
+      body.numero_year = year
+    }
+    const now = new Date().toISOString()
+    if (!body.created_at) body.created_at = now
+    body.updated_at = now
+
+    const cleanId = cleanRecordId('facture', body.id)
+    if (cleanId) {
+      const { record, status } = await upsertRecord(db, 'facture', cleanId, body)
+      return res.status(status).json(record)
+    }
+    const result = await db.query('CREATE facture CONTENT $body', { body })
+    res.status(201).json(result[0]?.[0] || result[0] || null)
+  } catch (err) {
+    console.error('[factures:post]', err.message)
+    res.status(500).json({ error: 'Enregistrement facture impossible' })
+  }
+})
+
+app.put('/api/factures/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const { id } = req.params
+    const existing = await db.query('SELECT * FROM type::record("facture", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Facture introuvable' })
+    const cleanBody = { ...(req.body || {}) }
+    delete cleanBody.id
+    cleanBody.userId = userId
+    cleanBody.updated_at = new Date().toISOString()
+    // Numéro séquentiel verrouillé après création (exigence facturation 2027)
+    if (rec.numero) cleanBody.numero = rec.numero
+    if (rec.numero_seq) cleanBody.numero_seq = rec.numero_seq
+    if (rec.numero_year) cleanBody.numero_year = rec.numero_year
+    const result = await db.query('UPDATE type::record("facture", $id) CONTENT $body', { id, body: cleanBody })
+    res.json(result[0]?.[0] || result[0] || {})
+  } catch (err) {
+    console.error('[factures:put]', err.message)
+    res.status(500).json({ error: 'Mise à jour facture impossible' })
+  }
+})
+
+app.delete('/api/factures/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const { id } = req.params
+    const existing = await db.query('SELECT * FROM type::record("facture", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Facture introuvable' })
+    await db.query('DELETE type::record("facture", $id)', { id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[factures:delete]', err.message)
+    res.status(500).json({ error: 'Suppression facture impossible' })
+  }
+})
+
+// Conversion devis accepté → facture
+app.post('/api/factures/from-devis/:devisId', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const { devisId } = req.params
+    const dResult = await db.query('SELECT * FROM type::record("devis", $id)', { id: devisId })
+    const devis = dResult[0]?.[0]
+    if (!devis || devis.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
+    if (devis.statut && devis.statut !== 'accepte' && devis.status !== 'accepted') {
+      return res.status(412).json({ error: 'Le devis doit être accepté avant conversion' })
+    }
+
+    // Génère le numéro de facture séquentiel
+    const { numero, seq, year } = await nextSequenceNumber(db, userId, 'facture')
+    const now = new Date().toISOString()
+    const facturePayload = {
+      ...devis,
+      userId,
+      id: undefined,
+      numero, numero_seq: seq, numero_year: year,
+      devis_id: devis.id,
+      devis_origine_id: devis.id,
+      statut: 'en_attente',
+      date_emission: now.slice(0, 10),
+      created_at: now,
+      updated_at: now
+    }
+    delete facturePayload.id
+    const result = await db.query('CREATE facture CONTENT $body', { body: facturePayload })
+    const created = result[0]?.[0] || result[0] || null
+
+    // Marque le devis transformé
+    const devisIdRaw = String(devis.id).replace(/^devis:/, '')
+    await db.query('UPDATE type::record("devis", $id) SET statut = "accepte", facture_id = $fid, updated_at = $now',
+      { id: devisIdRaw, fid: created?.numero || numero, now })
+
+    res.status(201).json(created)
+  } catch (err) {
+    console.error('[factures:from-devis]', err.message)
+    res.status(500).json({ error: 'Conversion devis → facture impossible' })
+  }
+})
+
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'public', 'dashboard.html'))
 })
@@ -1102,7 +1384,10 @@ app.get('/:page', (req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS visio_bg_custom SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS visio_doc SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS visio_doc_open SCHEMALESS')
-    console.log('[boot] tables ready (mail x2, visio x6)')
+    await db.query('DEFINE TABLE IF NOT EXISTS devis SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS facture SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS counter SCHEMALESS')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

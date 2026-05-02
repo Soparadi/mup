@@ -331,14 +331,30 @@ let currentId = null;
 let filterStat = 'all';
 let lineCount = 0;
 
-function loadDocs() {
-  let raw = localStorage.getItem('mup_devis');
-  if(raw === null){ raw = localStorage.getItem('mup_docs'); }
-  docs = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(MOCK_DOCS));
+// API SurrealDB (V1 mono-utilisateur, scoping serveur via env MUP_DEFAULT_USER_ID)
+async function loadDocs() {
+  try {
+    const r = await fetch('/api/devis');
+    if(r.ok){
+      const data = await r.json();
+      docs = Array.isArray(data) && data.length ? data : JSON.parse(JSON.stringify(MOCK_DOCS));
+      return;
+    }
+  } catch(e){}
+  docs = JSON.parse(JSON.stringify(MOCK_DOCS));
 }
-function saveDocs() {
-  localStorage.setItem('mup_devis', JSON.stringify(docs));
-  localStorage.removeItem('mup_docs');
+async function saveDocs() {
+  // Persistance API : chaque doc devient un POST upsert (idempotent grâce à upsertRecord serveur)
+  for(const d of docs){
+    try {
+      await fetch('/api/devis', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(d) });
+    } catch(e){ console.warn('[devis] saveDocs failed for', d.id, e); }
+  }
+}
+async function deleteDocApi(id){
+  if(!id) return;
+  try { await fetch('/api/devis/' + encodeURIComponent(id), { method:'DELETE' }); }
+  catch(e){ console.warn('[devis] DELETE failed', id, e); }
 }
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -590,66 +606,35 @@ function markAccepted() {
   if(d) { d.status = 'accepted'; document.getElementById('e-status').value = 'accepted'; saveDocs(); renderList(); renderPreview(d); showToast('✓ Marqué comme accepté'); }
 }
 
-function convertToInvoice() {
+async function convertToInvoice() {
   if(!currentId) return;
   const d = docs.find(x => x.id === currentId);
   if(!d) return;
   if(d.status !== 'accepted'){ alert('Le devis doit être accepté avant conversion.'); return; }
 
-  // Génère le numéro facture (NN-JJMMAA) sur la base des factures existantes
-  let factures = [];
-  try { factures = JSON.parse(localStorage.getItem('mup_factures') || '[]'); } catch(e){}
-  const maxSeq = factures.reduce(function(m,f){ return Math.max(m, f.numero_seq || 0); }, 0);
-  const nextSeq = maxSeq + 1;
-  const dt = new Date();
-  const pad = function(n,w){ n = String(n); while(n.length<w) n='0'+n; return n; };
-  const ddmmyy = pad(dt.getDate(),2) + pad(dt.getMonth()+1,2) + String(dt.getFullYear()).slice(-2);
-  const numero = pad(nextSeq,2) + '-' + ddmmyy;
-
-  // Map devis → facture (schéma 2027)
-  const lignes = (d.lines||[]).map(function(l){
-    const q = parseFloat(l.qty)||0, p = parseFloat(l.pu)||0;
-    return { designation: l.desc||'', date: null, quantite: q, prix_unitaire: p, total: q*p };
-  });
-  const totalHt = lignes.reduce(function(s,l){ return s + l.total; }, 0);
-  const nowIso = new Date().toISOString();
-  const facture = {
-    id: 'fac_' + Date.now(),
-    numero: numero, numero_seq: nextSeq,
-    date_emission: nowIso.slice(0,10),
-    date_prestation: d.date || nowIso.slice(0,10),
-    emetteur: { nom:'', adresse:'', siret:'', tva_intra:'' },
-    client: { nom: d.co || d.name || '', adresse: d.addr || '', siret:'', siren:'', adresse_livraison:'' },
-    nature_operation: 'prestation_services',
-    lignes: lignes,
-    total_ht: totalHt,
-    tva_applicable: false, taux_tva: 0, montant_tva: 0, total_ttc: totalHt,
-    mention_tva: 'TVA non applicable, art. 293 B du CGI',
-    paiement_tva_debits: false,
-    date_reglement: null, statut: 'en_attente', date_paiement: null,
-    entity_origine: 'mup',
-    devis_origine_id: d.id,
-    plateforme_agreee_destinataire: null, format_export: 'pdf_simple', pdf_source: null,
-    created_at: nowIso, updated_at: nowIso
-  };
-  factures.push(facture);
-  localStorage.setItem('mup_factures', JSON.stringify(factures));
-
-  // Marque le devis transformé
-  d.status = 'transformed';
-  d.facture_id = numero;
-  d.updatedAt = nowIso;
-  saveDocs();
-
-  // Redirige vers /factures avec highlight
-  window.location.href = '/factures?highlight=' + encodeURIComponent(numero);
+  // Conversion via route serveur dédiée — numéro de facture séquentiel généré côté API
+  try {
+    const r = await fetch('/api/factures/from-devis/' + encodeURIComponent(d.id), { method:'POST' });
+    if(!r.ok){
+      const err = await r.json().catch(() => ({}));
+      alert(err.error || 'Conversion impossible');
+      return;
+    }
+    const facture = await r.json();
+    // Re-sync devis depuis l'API (statut + facture_id mis à jour côté serveur)
+    await loadDocs();
+    window.location.href = '/factures?highlight=' + encodeURIComponent(facture.numero || '');
+  } catch(e){
+    console.error('[devis] convertToInvoice failed', e);
+    alert('Erreur réseau lors de la conversion');
+  }
 }
 
-function deleteDoc() {
+async function deleteDoc() {
   if(!currentId) return;
   if(!confirm('Supprimer ce document ?')) return;
+  await deleteDocApi(currentId);
   docs = docs.filter(x => x.id !== currentId);
-  saveDocs();
   currentId = null;
   renderList();
   document.getElementById('preview-area').innerHTML = '<div class="preview-empty"><div style="opacity:.2"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div><div style="font-size:13px">Sélectionnez ou créez un devis</div></div>';
@@ -668,13 +653,14 @@ function showToast(msg) {
 }
 
 // Init
-loadDocs();
-renderList();
-// Sélectionner le premier par défaut
-if(docs.length) selectDoc(docs[0].id);
-
-// Date par défaut
-document.getElementById('e-date').value = new Date().toISOString().split('T')[0];
+(async () => {
+  await loadDocs();
+  renderList();
+  // Sélectionner le premier par défaut
+  if(docs.length) selectDoc(docs[0].id);
+  // Date par défaut
+  document.getElementById('e-date').value = new Date().toISOString().split('T')[0];
+})();
 </script>
 <script src="/sidebar.js"></script>
 </body>

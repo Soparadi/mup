@@ -381,7 +381,7 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js"></script>
 <script>
-(function(){
+(async function(){
   if(typeof pdfjsLib !== 'undefined'){ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js'; }
 
   // ── PARSER PDF (regex validés sur 4 factures EI Benoit Fouquet) ──
@@ -813,8 +813,43 @@
     };
   }
 
-  function loadJSON(k, fb){ try{ return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); }catch(e){ return fb; } }
-  function saveJSON(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+  // Proxies API SurrealDB (V1 mono-utilisateur, scoping serveur).
+  // loadJSON/saveJSON deviennent async — TOUS les call sites passent en await.
+  async function loadJSON(k, fb){
+    const route = k === 'mup_factures' ? '/api/factures'
+                : k === 'mup_pipeline' ? '/api/pipeline'
+                : k === 'mup_contacts' ? '/api/contacts'
+                : null;
+    if(!route) return fb;
+    try {
+      const r = await fetch(route);
+      if(r.ok) return await r.json();
+    } catch(e){ console.warn('[factures] loadJSON failed', k, e); }
+    return fb;
+  }
+  async function saveJSON(k, v){
+    const route = k === 'mup_factures' ? '/api/factures'
+                : k === 'mup_pipeline' ? '/api/pipeline'
+                : k === 'mup_contacts' ? '/api/contacts'
+                : null;
+    if(!route || !Array.isArray(v)) return;
+    // Stratégie V1 : POST chaque entry, idempotent grâce à upsertRecord serveur.
+    for(const item of v){
+      try {
+        await fetch(route, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(item) });
+      } catch(e){ console.warn('[factures] saveJSON failed', k, e); }
+    }
+  }
+  async function deleteAllFactures(){
+    try {
+      const list = await loadJSON('mup_factures', []);
+      for(const f of list){
+        if(!f || !f.id) continue;
+        const rid = String(f.id).replace(/^facture:/, '');
+        await fetch('/api/factures/' + encodeURIComponent(rid), { method:'DELETE' });
+      }
+    } catch(e){ console.warn('[factures] purge failed', e); }
+  }
   function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0); }
   function pad(n,w){ n = String(n); while(n.length < w) n = '0' + n; return n; }
@@ -832,8 +867,9 @@
     api:     { label:'API connecteur',active:false, handler:null }
   };
 
-  var factures = loadJSON('mup_factures', []);
-  var pipeline = loadJSON('mup_pipeline', []);
+  // Initialisés vides ; remplis par bootstrap() au DOMContentLoaded équivalent (init block bas du script)
+  var factures = [];
+  var pipeline = [];
   var state = { status:'all', entity:'all', year:'all', currentId:null, clientSiretFilter:null };
 
   // ── GÉOCODAGE BAN ──
@@ -854,9 +890,9 @@
   // ── SYNC CONTACT depuis facture ──
   async function syncContactFromFacture(facture){
     if(!facture.client || !facture.client.siret) return null;
-    var contacts = loadJSON('mup_contacts', []);
+    var contacts = await loadJSON('mup_contacts', []);
     if(!Array.isArray(contacts)) contacts = [];
-    var allFactures = loadJSON('mup_factures', []);
+    var allFactures = await loadJSON('mup_factures', []);
     if(!Array.isArray(allFactures)) allFactures = [];
     var siret = facture.client.siret;
     var contactIdx = contacts.findIndex(function(c){ return c.siret === siret; });
@@ -896,14 +932,14 @@
     contact.ca_total = clientFactures.reduce(function(sum, f){ return sum + (f.total_ttc || 0); }, 0);
     contact.updated_at = new Date().toISOString();
     contacts[contactIdx] = contact;
-    saveJSON('mup_contacts', contacts);
+    await saveJSON('mup_contacts', contacts);
     syncPipelineFromContact(contact);
     return { contact: contact, geocoded: geocoded };
   }
 
-  function syncPipelineFromContact(contact){
+  async function syncPipelineFromContact(contact){
     if(!contact || !contact.siret) return;
-    var pipeline = loadJSON('mup_pipeline', []);
+    var pipeline = await loadJSON('mup_pipeline', []);
     if(!Array.isArray(pipeline)) pipeline = [];
     var ficheIdx = pipeline.findIndex(function(p){ return p.siret === contact.siret; });
     if(ficheIdx === -1){
@@ -937,13 +973,13 @@
       f.updated_at = new Date().toISOString();
       pipeline[ficheIdx] = f;
     }
-    saveJSON('mup_pipeline', pipeline);
+    await saveJSON('mup_pipeline', pipeline);
   }
 
-  function migratePipelineFromContacts(){
-    var contacts = loadJSON('mup_contacts', []);
+  async function migratePipelineFromContacts(){
+    var contacts = await loadJSON('mup_contacts', []);
     if(!Array.isArray(contacts) || contacts.length === 0) return;
-    var pipeline = loadJSON('mup_pipeline', []);
+    var pipeline = await loadJSON('mup_pipeline', []);
     if(!Array.isArray(pipeline)) pipeline = [];
     var changed = false;
     contacts.forEach(function(c){
@@ -983,15 +1019,15 @@
       }
     });
     if(changed){
-      saveJSON('mup_pipeline', pipeline);
+      await saveJSON('mup_pipeline', pipeline);
       console.log('migratePipelineFromContacts : fiches won synchronisées');
     }
   }
 
   async function migrateContactsExistants(){
-    var contacts = loadJSON('mup_contacts', []);
+    var contacts = await loadJSON('mup_contacts', []);
     if(!Array.isArray(contacts) || contacts.length === 0) return;
-    var allFactures = loadJSON('mup_factures', []);
+    var allFactures = await loadJSON('mup_factures', []);
     if(!Array.isArray(allFactures)) allFactures = [];
     var changed = false;
     for(var i = 0; i < contacts.length; i++){
@@ -1012,7 +1048,7 @@
       contacts[i] = c;
     }
     if(changed){
-      saveJSON('mup_contacts', contacts);
+      await saveJSON('mup_contacts', contacts);
       console.log('migrateContactsExistants : contacts réparés');
     }
   }
@@ -1076,12 +1112,12 @@
       return true;
     });
   }
-  function applyClientFilter(siret){
+  async function applyClientFilter(siret){
     state.clientSiretFilter = siret || null;
     var banner = document.getElementById('filter-client-banner');
     var label = document.getElementById('filter-client-label');
     if(siret){
-      var contacts = loadJSON('mup_contacts', []);
+      var contacts = await loadJSON('mup_contacts', []);
       var c = contacts.find(function(x){ return x.siret === siret; });
       var nom = c ? c.nom : siret;
       var n = factures.filter(function(f){ return f.client && f.client.siret === siret; }).length;
@@ -1190,7 +1226,7 @@
   }
 
   // ── EDIT ──
-  function renderEdit(){
+  async function renderEdit(){
     var f = factures.find(function(x){ return x.id === state.currentId; });
     var box = document.getElementById('invoice-edit');
     if(!f){ box.innerHTML = '<div class="empty-state"><strong>Édition</strong>Sélectionner une facture.</div>'; return; }
@@ -1208,7 +1244,7 @@
     }
     // Lien vers la carte si contact géocodé
     if(f.client && f.client.siret){
-      var contacts = loadJSON('mup_contacts', []);
+      var contacts = await loadJSON('mup_contacts', []);
       var contact = contacts.find(function(c){ return c.siret === f.client.siret; });
       if(contact && contact.latitude && contact.longitude){
         html += '<a href="/carte?contact_siret='+encodeURIComponent(f.client.siret)+'" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;text-decoration:none;font-family:var(--font);font-weight:600;font-size:12px;margin-bottom:10px;">'
@@ -1234,17 +1270,17 @@
     }
 
     document.getElementById('e-cancel').onclick = function(){ state.currentId = null; renderList(); renderPreview(); renderEdit(); };
-    document.getElementById('e-save').onclick = function(){
+    document.getElementById('e-save').onclick = async function(){
       f.statut = document.getElementById('e-statut').value;
       f.date_paiement = document.getElementById('e-date-paiement').value || null;
       f.updated_at = new Date().toISOString();
-      saveJSON('mup_factures', factures);
+      await saveJSON('mup_factures', factures);
       renderList(); renderPreview();
     };
-    document.getElementById('e-delete').onclick = function(){
+    document.getElementById('e-delete').onclick = async function(){
       if(!confirm('Supprimer cette facture ?')) return;
       factures = factures.filter(function(x){ return x.id !== f.id; });
-      saveJSON('mup_factures', factures);
+      await saveJSON('mup_factures', factures);
       state.currentId = null;
       refreshYearFilter(); renderList(); renderPreview(); renderEdit();
     };
@@ -1325,7 +1361,7 @@
   }
   document.getElementById('new-add-line').addEventListener('click', function(){ addLineRow(); });
 
-  document.getElementById('new-save').addEventListener('click', function(){
+  document.getElementById('new-save').addEventListener('click', async function(){
     var clientNom = document.getElementById('new-client-nom').value.trim();
     if(!clientNom){ alert('Nom du client requis'); return; }
     var rows = document.querySelectorAll('#new-lignes-body tr');
@@ -1377,7 +1413,7 @@
       updated_at: nowIso
     };
     factures.push(f);
-    saveJSON('mup_factures', factures);
+    await saveJSON('mup_factures', factures);
     closeNewModal();
     refreshYearFilter();
     select(f.id);
@@ -1437,7 +1473,7 @@
     btn.disabled = false; btn.style.opacity = 1; btn.style.cursor = 'pointer';
     btn._rows = rows;
   }
-  document.getElementById('csv-confirm').addEventListener('click', function(){
+  document.getElementById('csv-confirm').addEventListener('click', async function(){
     var rows = this._rows || [];
     var existingNums = {};
     factures.forEach(function(f){ existingNums[f.numero] = true; });
@@ -1465,7 +1501,7 @@
       };
       factures.push(f); existingNums[f.numero] = true; added++;
     });
-    saveJSON('mup_factures', factures);
+    await saveJSON('mup_factures', factures);
     document.getElementById('modal-import-csv').classList.remove('show');
     refreshYearFilter(); renderList();
     alert(added + ' facture' + (added>1?'s':'') + ' importée' + (added>1?'s':'') + '.');
@@ -1654,7 +1690,7 @@
       };
       factures.push(f); existingNums[f.numero] = true; added++;
     });
-    saveJSON('mup_factures', factures);
+    await saveJSON('mup_factures', factures);
     document.getElementById('modal-import-pdf').classList.remove('show');
     refreshYearFilter(); renderList();
 
@@ -1698,31 +1734,36 @@
   });
 
   // ── PURGE BASE DE TEST ──
-  function purgeTestFactures(){
+  async function purgeTestFactures(){
     if(!confirm('Vider toute la base de factures ? Cette action est irréversible.')) return;
-    localStorage.removeItem('mup_factures');
+    await deleteAllFactures();
     window.location.reload();
   }
   document.getElementById('btn-purge').addEventListener('click', purgeTestFactures);
   document.getElementById('test-banner-purge').addEventListener('click', purgeTestFactures);
 
   // ── INIT ──
+  // Bootstrap data API d'abord, puis lance les renders
+  factures = await loadJSON('mup_factures', []);
+  pipeline = await loadJSON('mup_pipeline', []);
   buildImportDropdown();
   refreshYearFilter();
   // Migration auto contacts existants (clean adresse + recalc factures_ids/ca_total)
   migrateContactsExistants().catch(function(e){ console.error('migrateContactsExistants', e); });
   // Migration auto pipeline (fiches won pour chaque contact issu d'une facture)
-  try { migratePipelineFromContacts(); } catch(e){ console.error('migratePipelineFromContacts', e); }
+  migratePipelineFromContacts().catch(function(e){ console.error('migratePipelineFromContacts', e); });
   // Filtre URL ?client_siret=
   var clientSiretParam = (window.location.search.match(/[?&]client_siret=([^&]+)/) || [])[1];
-  if(clientSiretParam){ applyClientFilter(decodeURIComponent(clientSiretParam)); }
+  if(clientSiretParam){ await applyClientFilter(decodeURIComponent(clientSiretParam)); }
   renderList();
   maybeHighlight();
 
-  window.addEventListener('storage', function(e){
+  // TODO V2 : remplacer par polling/websocket pour sync multi-tab.
+  // Listener inactif tant qu'aucune écriture ne touche localStorage (mup_factures n'est plus écrit).
+  window.addEventListener('storage', async function(e){
     if(['mup_factures','mup_pipeline'].indexOf(e.key) !== -1){
-      factures = loadJSON('mup_factures', []);
-      pipeline = loadJSON('mup_pipeline', []);
+      factures = await loadJSON('mup_factures', []);
+      pipeline = await loadJSON('mup_pipeline', []);
       refreshYearFilter(); renderList(); renderPreview(); renderEdit();
     }
   });

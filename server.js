@@ -1361,6 +1361,226 @@ app.post('/api/factures/from-devis/:devisId', async (req, res) => {
   }
 })
 
+// ── FRAIS ──
+app.get('/api/frais', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM frais WHERE userId = $userId ORDER BY date DESC, createdAt DESC', { userId })
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[frais:list]', err.message)
+    res.status(500).json({ error: 'Lecture frais impossible' })
+  }
+})
+
+app.get('/api/frais/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('frais', req.params.id) || req.params.id
+    const result = await db.query('SELECT * FROM type::record("frais", $id)', { id })
+    const rec = result[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Frais introuvable' })
+    res.json(rec)
+  } catch (err) {
+    console.error('[frais:get]', err.message)
+    res.status(500).json({ error: 'Lecture frais impossible' })
+  }
+})
+
+app.post('/api/frais', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const body = { ...(req.body || {}), userId }
+    const now = new Date().toISOString()
+    if (!body.createdAt) body.createdAt = now
+    body.updatedAt = now
+    const cleanId = cleanRecordId('frais', body.id)
+    if (cleanId) {
+      const { record, status } = await upsertRecord(db, 'frais', cleanId, body)
+      return res.status(status).json(record)
+    }
+    const result = await db.query('CREATE frais CONTENT $body', { body })
+    res.status(201).json(result[0]?.[0] || result[0] || null)
+  } catch (err) {
+    console.error('[frais:post]', err.message)
+    res.status(500).json({ error: 'Enregistrement frais impossible' })
+  }
+})
+
+app.put('/api/frais/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('frais', req.params.id) || req.params.id
+    const existing = await db.query('SELECT * FROM type::record("frais", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Frais introuvable' })
+    const cleanBody = { ...(req.body || {}) }
+    delete cleanBody.id
+    cleanBody.userId = userId
+    cleanBody.updatedAt = new Date().toISOString()
+    const result = await db.query('UPDATE type::record("frais", $id) CONTENT $body', { id, body: cleanBody })
+    res.json(result[0]?.[0] || result[0] || {})
+  } catch (err) {
+    console.error('[frais:put]', err.message)
+    res.status(500).json({ error: 'Mise à jour frais impossible' })
+  }
+})
+
+app.delete('/api/frais/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('frais', req.params.id) || req.params.id
+    const existing = await db.query('SELECT * FROM type::record("frais", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Frais introuvable' })
+    await db.query('DELETE type::record("frais", $id)', { id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[frais:delete]', err.message)
+    res.status(500).json({ error: 'Suppression frais impossible' })
+  }
+})
+
+// ── FRAIS RÉCURRENTS ──
+app.get('/api/frais-recurrents', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM frais_recurrents WHERE userId = $userId ORDER BY createdAt DESC', { userId })
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[frais-recurrents:list]', err.message)
+    res.status(500).json({ error: 'Lecture frais récurrents impossible' })
+  }
+})
+
+app.get('/api/frais-recurrents/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('frais_recurrents', req.params.id) || req.params.id
+    const result = await db.query('SELECT * FROM type::record("frais_recurrents", $id)', { id })
+    const rec = result[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Frais récurrent introuvable' })
+    res.json(rec)
+  } catch (err) {
+    console.error('[frais-recurrents:get]', err.message)
+    res.status(500).json({ error: 'Lecture frais récurrent impossible' })
+  }
+})
+
+app.post('/api/frais-recurrents', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const body = { ...(req.body || {}), userId }
+    const now = new Date().toISOString()
+    if (!body.createdAt) body.createdAt = now
+    body.updatedAt = now
+    const cleanId = cleanRecordId('frais_recurrents', body.id)
+    if (cleanId) {
+      const { record, status } = await upsertRecord(db, 'frais_recurrents', cleanId, body)
+      return res.status(status).json(record)
+    }
+    const result = await db.query('CREATE frais_recurrents CONTENT $body', { body })
+    res.status(201).json(result[0]?.[0] || result[0] || null)
+  } catch (err) {
+    console.error('[frais-recurrents:post]', err.message)
+    res.status(500).json({ error: 'Enregistrement frais récurrent impossible' })
+  }
+})
+
+app.put('/api/frais-recurrents/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('frais_recurrents', req.params.id) || req.params.id
+    const existing = await db.query('SELECT * FROM type::record("frais_recurrents", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Frais récurrent introuvable' })
+    const cleanBody = { ...(req.body || {}) }
+    delete cleanBody.id
+    cleanBody.userId = userId
+    cleanBody.updatedAt = new Date().toISOString()
+    const result = await db.query('UPDATE type::record("frais_recurrents", $id) CONTENT $body', { id, body: cleanBody })
+    res.json(result[0]?.[0] || result[0] || {})
+  } catch (err) {
+    console.error('[frais-recurrents:put]', err.message)
+    res.status(500).json({ error: 'Mise à jour frais récurrent impossible' })
+  }
+})
+
+app.delete('/api/frais-recurrents/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('frais_recurrents', req.params.id) || req.params.id
+    const existing = await db.query('SELECT * FROM type::record("frais_recurrents", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Frais récurrent introuvable' })
+    await db.query('DELETE type::record("frais_recurrents", $id)', { id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[frais-recurrents:delete]', err.message)
+    res.status(500).json({ error: 'Suppression frais récurrent impossible' })
+  }
+})
+
+// ── USER SETTINGS ── (1 record par user, partagé Frais/Statistiques)
+// PUT en MERGE pour que Frais et Statistiques cohabitent sans s'écraser.
+app.get('/api/user-settings', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM type::record("user_settings", $id)', { id: userId })
+    const rec = result[0]?.[0]
+    if (!rec) return res.json({ tvaAssujetti: false, formeJuridique: '', siret: '' })
+    res.json(rec)
+  } catch (err) {
+    console.error('[user-settings:get]', err.message)
+    res.status(500).json({ error: 'Lecture user settings impossible' })
+  }
+})
+
+app.put('/api/user-settings', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const cleanBody = { ...(req.body || {}) }
+    delete cleanBody.id
+    cleanBody.userId = userId
+    cleanBody.updatedAt = new Date().toISOString()
+    const sel = await db.query('SELECT * FROM type::record("user_settings", $id)', { id: userId })
+    const exists = sel[0]?.[0]
+    if (exists) {
+      const r = await db.query('UPDATE type::record("user_settings", $id) MERGE $body', { id: userId, body: cleanBody })
+      return res.status(200).json(r[0]?.[0] || r[0] || null)
+    }
+    const r = await db.query('CREATE type::record("user_settings", $id) CONTENT $body', { id: userId, body: cleanBody })
+    res.status(201).json(r[0]?.[0] || r[0] || null)
+  } catch (err) {
+    console.error('[user-settings:put]', err.message)
+    res.status(500).json({ error: 'Mise à jour user settings impossible' })
+  }
+})
+
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'public', 'dashboard.html'))
 })
@@ -1387,7 +1607,10 @@ app.get('/:page', (req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS devis SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS facture SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS counter SCHEMALESS')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter)')
+    await db.query('DEFINE TABLE IF NOT EXISTS frais SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS frais_recurrents SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS user_settings SCHEMALESS')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

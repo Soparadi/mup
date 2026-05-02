@@ -479,16 +479,32 @@
   };
   var CATEGORIES = Object.keys(TVA_TABLE);
 
-  /* ============ STORAGE ============ */
-  function loadJSON(k, fallback){ try{ return JSON.parse(localStorage.getItem(k) || JSON.stringify(fallback)); }catch(e){ return fallback; } }
-  function saveJSON(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+  /* ============ STORAGE (SurrealDB Cloud via /api/*) ============ */
+  // loadJSON/saveJSON conservent leur signature historique mais dispatchent par clé vers
+  // les routes /api/* (multi-tenant scopées userId côté serveur). localStorage n'est plus écrit.
+  async function loadJSON(k, fb){
+    if(k === 'mup_frais')             return await fetch('/api/frais').then(function(r){ return r.ok ? r.json() : fb; }).catch(function(){ return fb; });
+    if(k === 'mup_frais_recurrents')  return await fetch('/api/frais-recurrents').then(function(r){ return r.ok ? r.json() : fb; }).catch(function(){ return fb; });
+    if(k === 'mup_user_settings')     return await fetch('/api/user-settings').then(function(r){ return r.ok ? r.json() : fb; }).catch(function(){ return fb; });
+    if(k === 'mup_pipeline')          return await fetch('/api/pipeline').then(function(r){ return r.ok ? r.json() : fb; }).catch(function(){ return fb; });
+    if(k === 'mup_agenda')            return await fetch('/api/agenda').then(function(r){ return r.ok ? r.json() : fb; }).catch(function(){ return fb; });
+    return fb;
+  }
+  async function saveJSON(k, v){
+    if(k === 'mup_frais'){
+      for(const f of v){ await fetch('/api/frais', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(f) }); }
+    } else if(k === 'mup_frais_recurrents'){
+      for(const f of v){ await fetch('/api/frais-recurrents', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(f) }); }
+    } else if(k === 'mup_user_settings'){
+      await fetch('/api/user-settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(v) });
+    }
+  }
 
-  var frais = loadJSON('mup_frais', []);
-  var recurrents = loadJSON('mup_frais_recurrents', []);
-  var pipeline = loadJSON('mup_pipeline', []);
-  var agenda = loadJSON('mup_agenda', []);
-  var settings = loadJSON('mup_user_settings', { tvaAssujetti:false, formeJuridique:'', siret:'' });
-  if(settings.tvaAssujetti === undefined) settings.tvaAssujetti = false;
+  var frais = [];
+  var recurrents = [];
+  var pipeline = [];
+  var agenda = [];
+  var settings = { tvaAssujetti:false, formeJuridique:'', siret:'' };
 
   /* ============ HELPERS ============ */
   function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Math.round(n||0)); }
@@ -520,7 +536,7 @@
   }
 
   /* ============ GÉNÉRATION OCCURRENCES RÉCURRENTES ============ */
-  function generateRecurrentOccurrences(){
+  async function generateRecurrentOccurrences(){
     var today = new Date(); today.setHours(0,0,0,0);
     var existingIds = {};
     frais.forEach(function(f){ existingIds[f.id] = true; });
@@ -567,7 +583,7 @@
         d.setMonth(d.getMonth()+1);
       }
     });
-    if(added) saveJSON('mup_frais', frais);
+    if(added) await saveJSON('mup_frais', frais);
   }
 
   /* ============ KPI ============ */
@@ -697,7 +713,7 @@
 
   function bindRowActions(){
     document.querySelectorAll('[data-del]').forEach(function(b){
-      b.addEventListener('click', function(){
+      b.addEventListener('click', async function(){
         var id = this.dataset.del;
         var f = frais.find(function(x){ return x.id === id; });
         if(!f) return;
@@ -708,11 +724,11 @@
           if(rule){
             if(!rule.skippedMonths) rule.skippedMonths = [];
             rule.skippedMonths.push(monthKey(f.date));
-            saveJSON('mup_frais_recurrents', recurrents);
+            await saveJSON('mup_frais_recurrents', recurrents);
           }
         }
         frais = frais.filter(function(x){ return x.id !== id; });
-        saveJSON('mup_frais', frais);
+        await fetch('/api/frais/' + encodeURIComponent(id), { method:'DELETE' });
         renderAll();
       });
     });
@@ -847,13 +863,16 @@
 
     document.querySelectorAll('[data-edit-rec]').forEach(function(b){ b.addEventListener('click', function(){ openRecDrawer(this.dataset.editRec); }); });
     document.querySelectorAll('[data-del-rec]').forEach(function(b){
-      b.addEventListener('click', function(){
+      b.addEventListener('click', async function(){
         var id = this.dataset.delRec;
         if(!confirm('Supprimer ce frais récurrent et toutes ses occurrences générées ?')) return;
+        var fraisToDelete = frais.filter(function(f){ return f.recurrentId === id; });
         recurrents = recurrents.filter(function(r){ return r.id !== id; });
         frais = frais.filter(function(f){ return f.recurrentId !== id; });
-        saveJSON('mup_frais_recurrents', recurrents);
-        saveJSON('mup_frais', frais);
+        await fetch('/api/frais-recurrents/' + encodeURIComponent(id), { method:'DELETE' });
+        for(const occ of fraisToDelete){
+          await fetch('/api/frais/' + encodeURIComponent(occ.id), { method:'DELETE' });
+        }
         renderAll();
       });
     });
@@ -1011,7 +1030,7 @@
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
   document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
 
-  document.getElementById('drawer-save').addEventListener('click', function(){
+  document.getElementById('drawer-save').addEventListener('click', async function(){
     if(!currentCategory){ alert('Sélectionner une catégorie'); return; }
     var amount = parseFloat(document.getElementById('f-amount').value);
     if(!amount || amount <= 0){ alert('Saisir un montant valide'); return; }
@@ -1048,7 +1067,7 @@
       enrichFrais(newF);
       frais.push(newF);
     }
-    saveJSON('mup_frais', frais);
+    await saveJSON('mup_frais', frais);
     closeDrawer();
     renderAll();
   });
@@ -1099,7 +1118,7 @@
   document.getElementById('rec-close').addEventListener('click', closeRecDrawer);
   document.getElementById('rec-overlay').addEventListener('click', closeRecDrawer);
 
-  document.getElementById('rec-save').addEventListener('click', function(){
+  document.getElementById('rec-save').addEventListener('click', async function(){
     if(!currentRecCategory){ alert('Sélectionner une catégorie'); return; }
     var amount = parseFloat(document.getElementById('rec-amount').value);
     if(!amount || amount <= 0){ alert('Saisir un montant valide'); return; }
@@ -1137,8 +1156,8 @@
       };
       recurrents.push(newRec);
     }
-    saveJSON('mup_frais_recurrents', recurrents);
-    generateRecurrentOccurrences();
+    await saveJSON('mup_frais_recurrents', recurrents);
+    await generateRecurrentOccurrences();
     closeRecDrawer();
     renderAll();
   });
@@ -1159,13 +1178,13 @@
   document.getElementById('settings-cancel').addEventListener('click', closeSettings);
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   document.getElementById('settings-overlay').addEventListener('click', closeSettings);
-  document.getElementById('settings-save').addEventListener('click', function(){
+  document.getElementById('settings-save').addEventListener('click', async function(){
     settings.tvaAssujetti = (document.getElementById('set-tva').value === 'true');
     settings.formeJuridique = document.getElementById('set-forme').value;
     settings.siret = document.getElementById('set-siret').value.trim();
-    saveJSON('mup_user_settings', settings);
+    await saveJSON('mup_user_settings', settings);
     frais.forEach(enrichFrais);
-    saveJSON('mup_frais', frais);
+    await saveJSON('mup_frais', frais);
     closeSettings();
     renderAll();
   });
@@ -1198,13 +1217,16 @@
   });
 
   /* ============ STORAGE SYNC ============ */
-  window.addEventListener('storage', function(e){
+  // TODO V2 : remplacer par polling/websocket — depuis migration SurrealDB, localStorage
+  // n'est plus écrit donc cet événement ne se déclenche jamais. Conservé en attendant la
+  // sync multi-tab serveur.
+  window.addEventListener('storage', async function(e){
     if(['mup_frais','mup_frais_recurrents','mup_pipeline','mup_agenda','mup_user_settings'].indexOf(e.key) !== -1){
-      frais = loadJSON('mup_frais', []);
-      recurrents = loadJSON('mup_frais_recurrents', []);
-      pipeline = loadJSON('mup_pipeline', []);
-      agenda = loadJSON('mup_agenda', []);
-      settings = loadJSON('mup_user_settings', settings);
+      frais = await loadJSON('mup_frais', []);
+      recurrents = await loadJSON('mup_frais_recurrents', []);
+      pipeline = await loadJSON('mup_pipeline', []);
+      agenda = await loadJSON('mup_agenda', []);
+      settings = await loadJSON('mup_user_settings', settings);
       renderAll();
     }
   });
@@ -1228,8 +1250,16 @@
     else if(currentView === 'rec') renderRecurrents();
   }
 
-  generateRecurrentOccurrences();
-  renderAll();
+  (async function init(){
+    frais = await loadJSON('mup_frais', []);
+    recurrents = await loadJSON('mup_frais_recurrents', []);
+    pipeline = await loadJSON('mup_pipeline', []);
+    agenda = await loadJSON('mup_agenda', []);
+    settings = await loadJSON('mup_user_settings', { tvaAssujetti:false, formeJuridique:'', siret:'' });
+    if(settings.tvaAssujetti === undefined) settings.tvaAssujetti = false;
+    await generateRecurrentOccurrences();
+    renderAll();
+  })();
 })();
 </script>
 </body>

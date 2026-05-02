@@ -2350,10 +2350,8 @@ function importFromProspects() {
 })();
 
 // ── DICTÉE VOCALE + CORRECTION TYPO FR ──
-let dictationRecognition = null;
-let dictationActive = false;
-let dictationBaseText = '';
-let dictationFinalBuffer = '';
+const isSafari = /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent);
+let dictationRecognition = null; let dictationActive = false; let dictationBaseText = ''; let dictationFinalBuffer = ''; let dictationUserStopped = false;
 
 function toggleDictation(){
   const btn = document.getElementById('notes-mic-btn');
@@ -2362,6 +2360,7 @@ function toggleDictation(){
   if(!btn || !input) return;
 
   if(dictationActive){
+    dictationUserStopped = true;
     if(dictationRecognition) dictationRecognition.stop();
     return;
   }
@@ -2380,6 +2379,7 @@ function toggleDictation(){
   dictationBaseText = input.value;
   if(dictationBaseText && !/[\s\n]$/.test(dictationBaseText)) dictationBaseText += ' ';
   dictationFinalBuffer = '';
+  dictationUserStopped = false;
 
   dictationRecognition.onresult = function(event){
     let interim = '';
@@ -2402,15 +2402,19 @@ function toggleDictation(){
   };
 
   dictationRecognition.onend = function(){
+    if(isSafari && dictationActive && !dictationUserStopped){
+      dictationBaseText = (dictationBaseText + dictationFinalBuffer);
+      if(dictationBaseText && !/[\s\n]$/.test(dictationBaseText)) dictationBaseText += ' ';
+      dictationFinalBuffer = '';
+      try { dictationRecognition.start(); return; } catch(err){ console.warn('Dictation restart failed:', err); }
+    }
     const fullText = dictationBaseText + dictationFinalBuffer;
     const corrected = applyFrenchTypography(fullText);
     input.value = corrected;
-    // Réinitialiser le toggle compte-rendu
     input.dataset.rawVersion = corrected;
     input.dataset.crVersion = '';
     input.dataset.viewMode = 'raw';
     stopDictationUI();
-    // Popup d'action si détection
     const detected = detectActionInNote(corrected);
     if(detected) openActionConfirmPopup(detected);
   };

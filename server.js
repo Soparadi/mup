@@ -737,12 +737,12 @@ app.get('/:page', (req, res) => {
   })
 })
 
-// Initialise mail tables on boot (idempotent: DEFINE TABLE is a no-op if exists)
+// Initialise mail tables on boot (idempotent: IF NOT EXISTS keeps redeploys quiet)
 ;(async () => {
   try {
     const db = await getDb()
-    await db.query('DEFINE TABLE mail_settings SCHEMALESS')
-    await db.query('DEFINE TABLE mail SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS mail_settings SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS mail SCHEMALESS')
     console.log('[mail] tables ready (mail_settings, mail)')
   } catch (e) {
     console.error('[mail] table init failed:', e.message)

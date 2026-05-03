@@ -2845,21 +2845,20 @@ else buildIndex();
   var PLAN_QUOTAS = { gratuit:10, starter:30, pro:100, business:null };
   var PLAN_LABELS = { gratuit:'Gratuit', starter:'Starter', pro:'Pro', business:'Business' };
   var PLAN_NEXT = { gratuit:'Starter à 29€/mois (30 leads/mois)', starter:'Pro à 49€/mois (100 leads/mois)', pro:'Business à 79€/mois (illimité)' };
-  function firstOfMonthIso(){ var d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); }
-  function loadPlan(){
-    var firstIso = firstOfMonthIso();
-    var p;
-    try { p = JSON.parse(localStorage.getItem('mup_user_plan') || 'null'); } catch(e){ p = null; }
-    if(!p || !p.plan){
-      p = { plan:'gratuit', leadsConsumed:0, leadsConsumedThisMonth:0, lastResetDate: firstIso };
-    }
-    if(!p.lastResetDate || new Date(p.lastResetDate) < new Date(firstIso)){
-      p.leadsConsumedThisMonth = 0;
-      p.lastResetDate = firstIso;
-    }
-    return p;
+  // Source de vérité unique : SurrealDB via /api/user-plan (reset mensuel auto côté serveur).
+  // Fallback localStorage transparent si l'API est indisponible.
+  async function loadPlan(){
+    try {
+      var r = await fetch('/api/user-plan');
+      if(r.ok) return await r.json();
+    } catch(e){}
+    return { plan:'gratuit', leadsConsumed:0, leadsConsumedThisMonth:0, lastResetDate: null };
   }
-  function savePlan(p){ localStorage.setItem('mup_user_plan', JSON.stringify(p)); }
+  async function savePlan(p){
+    try {
+      await fetch('/api/user-plan', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(p) });
+    } catch(e){}
+  }
   function quotaConsumed(p){
     return (p.plan === 'starter' || p.plan === 'pro') ? (p.leadsConsumedThisMonth || 0) : (p.leadsConsumed || 0);
   }
@@ -2908,10 +2907,10 @@ else buildIndex();
       try { pipelineAfter = JSON.parse(localStorage.getItem('mup_pipeline') || '[]'); } catch(e2){ pipelineAfter = []; }
     }
     if(pipelineAfter.length > beforeLen){
-      var p = loadPlan();
+      var p = await loadPlan();
       p.leadsConsumed = (p.leadsConsumed || 0) + 1;
       p.leadsConsumedThisMonth = (p.leadsConsumedThisMonth || 0) + 1;
-      savePlan(p);
+      await savePlan(p);
     }
   };
 })();

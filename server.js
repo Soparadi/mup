@@ -1583,6 +1583,126 @@ app.put('/api/user-settings', async (req, res) => {
   }
 })
 
+// ── USER PLAN ── (1 record par user, défaut "gratuit" si absent)
+// PUT en MERGE pour cohabitation Stripe (payment_method écrit séparément du plan choisi)
+// et cohérence cross-pages (Statistiques + leads.html).
+
+// ISO date-only "YYYY-MM-DD" du 1er du mois courant en UTC.
+function firstOfMonthIsoUTC() {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
+}
+
+// Reset lazy : si lastResetDate < 1er du mois courant, on remet à zéro le compteur mensuel
+// et on persiste. Idempotent (no-op si déjà reset).
+async function applyMonthlyReset(db, userId, rec) {
+  const firstIso = firstOfMonthIsoUTC()
+  if (rec.lastResetDate && new Date(rec.lastResetDate) >= new Date(firstIso)) return rec
+  const updatedAt = new Date().toISOString()
+  await db.query(
+    'UPDATE type::record("user_plan", $id) MERGE $body',
+    { id: userId, body: { leadsConsumedThisMonth: 0, lastResetDate: firstIso, updatedAt } }
+  )
+  return { ...rec, leadsConsumedThisMonth: 0, lastResetDate: firstIso, updatedAt }
+}
+
+app.get('/api/user-plan', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
+    const rec = result[0]?.[0]
+    if (!rec) return res.json({ userId, plan: 'gratuit', leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null })
+    const fresh = await applyMonthlyReset(db, userId, rec)
+    res.json(fresh)
+  } catch (err) {
+    console.error('[user-plan:get]', err.message)
+    res.status(500).json({ error: 'Lecture user plan impossible' })
+  }
+})
+
+app.put('/api/user-plan', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const cleanBody = { ...(req.body || {}) }
+    delete cleanBody.id
+    cleanBody.userId = userId
+    cleanBody.updatedAt = new Date().toISOString()
+    const sel = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
+    const exists = sel[0]?.[0]
+    // Logging changement de plan (uniquement si plan_to fourni ET différent du plan_from)
+    const prevPlan = exists?.plan || null
+    const nextPlan = cleanBody.plan
+    if (nextPlan && prevPlan && nextPlan !== prevPlan) {
+      const reason = (cleanBody.history_reason && typeof cleanBody.history_reason === 'string') ? cleanBody.history_reason : 'user_action'
+      delete cleanBody.history_reason
+      await db.query(
+        'CREATE user_plan_history CONTENT { userId: $userId, plan_from: $from, plan_to: $to, changed_at: $now, reason: $reason }',
+        { userId, from: prevPlan, to: nextPlan, now: cleanBody.updatedAt, reason }
+      )
+    } else {
+      delete cleanBody.history_reason
+    }
+    if (exists) {
+      const r = await db.query('UPDATE type::record("user_plan", $id) MERGE $body', { id: userId, body: cleanBody })
+      return res.status(200).json(r[0]?.[0] || r[0] || null)
+    }
+    const r = await db.query('CREATE type::record("user_plan", $id) CONTENT $body', { id: userId, body: cleanBody })
+    res.status(201).json(r[0]?.[0] || r[0] || null)
+  } catch (err) {
+    console.error('[user-plan:put]', err.message)
+    res.status(500).json({ error: 'Mise à jour user plan impossible' })
+  }
+})
+
+// Squelette V1 : retourne toujours allowed:true tant que les paliers ne sont pas validés.
+// Quand PLAN_QUOTAS sera rempli, activer la logique allowed = quotaUsed < quotaLimit ici.
+app.post('/api/user-plan/check-quota', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
+    let rec = result[0]?.[0]
+    if (!rec) {
+      rec = { userId, plan: 'gratuit', leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null }
+    } else {
+      rec = await applyMonthlyReset(db, userId, rec)
+    }
+    res.json({
+      allowed: true,
+      plan: rec.plan || 'gratuit',
+      quotaUsed: rec.leadsConsumedThisMonth || 0,
+      quotaLimit: null,
+      quotaPeriod: 'monthly',
+      upgradeUrl: '/statistiques.html#plan'
+    })
+  } catch (err) {
+    console.error('[user-plan:check-quota]', err.message)
+    res.status(500).json({ error: 'Vérification quota impossible' })
+  }
+})
+
+app.get('/api/user-plan-history', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 5, 1), 50)
+    const result = await db.query(
+      'SELECT * FROM user_plan_history WHERE userId = $userId ORDER BY changed_at DESC LIMIT $limit',
+      { userId, limit }
+    )
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[user-plan-history:list]', err.message)
+    res.status(500).json({ error: 'Lecture historique plan impossible' })
+  }
+})
+
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'public', 'dashboard.html'))
 })
@@ -1612,7 +1732,9 @@ app.get('/:page', (req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS frais SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS frais_recurrents SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS user_settings SCHEMALESS')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings)')
+    await db.query('DEFINE TABLE IF NOT EXISTS user_plan SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS user_plan_history SCHEMALESS')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

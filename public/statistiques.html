@@ -232,6 +232,11 @@
 <aside id="sidebar" class="sidebar"></aside>
 
 <main>
+  <!-- Bandeau erreur global — affiché si une fetch /api/* échoue dans une IIFE async -->
+  <div id="stats-error-banner" style="display:none;background:#FEEBEB;border-left:4px solid #CC0000;padding:12px 28px;font-size:13px;font-weight:600;color:#991B1B;">
+    Données partiellement indisponibles — recharge la page ou réessaie.
+  </div>
+
   <div class="page-header">
     <div class="page-title">Statistiques</div>
     <div class="period-toggle" id="period-toggle">
@@ -244,6 +249,17 @@
   </div>
 
   <div class="container">
+
+    <!-- Plan actuel — affiche le label du plan et un CTA pour ouvrir la modale de changement.
+         Pas d'affichage chiffré tant que PLAN_QUOTAS[plan].leadsMonthly === null. -->
+    <div id="plan-actuel-card" style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">Plan actuel</div>
+        <div id="plan-actuel-label" style="font-size:15px;font-weight:700;color:var(--text);">—</div>
+        <div id="plan-actuel-quota" style="font-size:12px;color:var(--muted);">Quota non défini</div>
+      </div>
+      <button id="plan-actuel-cta" style="background:var(--text);color:#fff;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;">Changer de plan</button>
+    </div>
 
     <div class="grid-kpi">
       <div class="kpi-card k-leads" id="kpi-leads-card">
@@ -316,6 +332,9 @@
             <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">Ticket moyen</div>
             <div id="fact-avg" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:#4338CA;margin-top:4px;font-family:var(--font);">0 €</div>
           </div>
+        </div>
+        <div style="margin-top:14px;font-size:10.5px;color:var(--muted2);font-style:italic;">
+          Chiffres calculés à partir des factures saisies dans MUP. Référez-vous à votre comptabilité officielle pour toute déclaration fiscale.
         </div>
       </div>
     </div>
@@ -465,6 +484,12 @@
       </button>
     </div>
     <div class="plans-grid" id="plans-grid"></div>
+    <div style="margin-top:24px;padding-top:18px;border-top:1px solid var(--border);">
+      <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">Historique des plans</div>
+      <div id="plan-history-list" style="font-size:12.5px;color:var(--text);">
+        <div style="color:var(--muted2);font-style:italic;font-size:11.5px;">Aucun changement enregistré.</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -473,10 +498,36 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function(){
-  function loadJSON(key, fallback){
+  // Bandeau erreur global — set par les fetch failures dans toutes les IIFE async.
+  // L'utilisateur voit que les KPIs peuvent être faux plutôt que de mentir silencieusement.
+  window.__statsError = false;
+  function flagStatsError(){
+    if(window.__statsError) return;
+    window.__statsError = true;
+    var b = document.getElementById('stats-error-banner');
+    if(b) b.style.display = 'block';
+  }
+
+  // STORAGE — dispatch async vers /api/* (multi-tenant scopées userId côté serveur).
+  // Clés non encore migrées (mup_prospects, mup_geocode_cache, mup_leads, mup_mail_*) tombent
+  // sur localStorage en fallback transparent — à migrer dans des sessions dédiées.
+  async function loadJSON(key, fallback){
+    if(key === 'mup_pipeline')      return await fetch('/api/pipeline').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
+    if(key === 'mup_agenda')        return await fetch('/api/agenda').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
+    if(key === 'mup_devis')         return await fetch('/api/devis').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
+    if(key === 'mup_factures')      return await fetch('/api/factures').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
+    if(key === 'mup_frais')         return await fetch('/api/frais').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
+    if(key === 'mup_user_settings') return await fetch('/api/user-settings').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
+    if(key === 'mup_user_plan')     return await fetch('/api/user-plan').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
     try{ return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }catch(e){ return fallback; }
   }
-  function saveJSON(key, value){
+  async function saveJSON(key, value){
+    if(key === 'mup_user_settings'){
+      return fetch('/api/user-settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(value) }).then(function(r){ return r.ok; }).catch(function(){ return false; });
+    }
+    if(key === 'mup_user_plan'){
+      return fetch('/api/user-plan', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(value) }).then(function(r){ return r.ok; }).catch(function(){ return false; });
+    }
     try{ localStorage.setItem(key, JSON.stringify(value)); return true; }catch(e){ return false; }
   }
   function createMupMarker(lat, lng, color){
@@ -488,25 +539,15 @@
     });
   }
 
-  var pipeline = loadJSON('mup_pipeline', []);
-  var agenda = loadJSON('mup_agenda', []);
-  var devis = loadJSON('mup_devis', []);
-  if(!Array.isArray(devis) || devis.length === 0){
-    var legacy = loadJSON('mup_docs', []);
-    if(Array.isArray(legacy) && legacy.length > 0){
-      devis = legacy;
-      // Migration one-shot : on ré-écrit sous la nouvelle clé et on nettoie l'ancienne
-      localStorage.setItem('mup_devis', JSON.stringify(legacy));
-      localStorage.removeItem('mup_docs');
-    }
-  }
-  devis = devis.filter(function(d){
-    return d && (d.type === 'devis' || d.type === 'facture' || !d.type);
-  });
-  var prospects = loadJSON('mup_prospects', []);
-  var frais = loadJSON('mup_frais', []);
-  var geoCache = loadJSON('mup_geocode_cache', {});
-  var settings = loadJSON('mup_user_settings', {});
+  // Init defaults (sync). Récupération réelle dans l'IIFE async d'init en bas du script.
+  var pipeline = [];
+  var agenda = [];
+  var devis = [];
+  var prospects = [];
+  var frais = [];
+  var geoCache = {};
+  var settings = {};
+  var userPlan = null;
 
   function distKm(lat1, lon1, lat2, lon2){
     if(lat1==null||lon1==null||lat2==null||lon2==null) return 0;
@@ -631,32 +672,64 @@
   }
 
   // ─── PLAN UTILISATEUR (quota leads) ───
-  var PLAN_CONFIG = {
-    gratuit:  { quota: 10,    period: 'lifetime', label: 'Gratuit',  price: 0  },
-    starter:  { quota: 30,    period: 'monthly',  label: 'Starter',  price: 29 },
-    pro:      { quota: 100,   period: 'monthly',  label: 'Pro',      price: 49 },
-    business: { quota: null,  period: 'lifetime', label: 'Business', price: 79 }
+  // VALEURS PROVISOIRES — paliers quota et prix à valider avec Ben avant commercialisation.
+  // Tant que leadsMonthly est null, l'UI affiche "—" (jamais de chiffre fictif).
+  // Source de vérité unique pour Statistiques + futurs call sites cross-pages.
+  var PLAN_QUOTAS = {
+    gratuit:  { leadsMonthly: null, emailsDaily: null, label: 'Gratuit',  priceMonthly: null },
+    starter:  { leadsMonthly: null, emailsDaily: null, label: 'Starter',  priceMonthly: null },
+    pro:      { leadsMonthly: null, emailsDaily: null, label: 'Pro',      priceMonthly: null },
+    business: { leadsMonthly: null, emailsDaily: null, label: 'Business', priceMonthly: null }
   };
-  function firstOfMonthIso(){
-    var d = new Date(); d.setDate(1); d.setHours(0,0,0,0);
-    return d.toISOString().slice(0,10);
-  }
-  function loadUserPlan(){
-    var p = loadJSON('mup_user_plan', null);
-    var firstIso = firstOfMonthIso();
+  // Le reset mensuel est pris en charge côté serveur dans GET /api/user-plan.
+  async function loadUserPlan(){
+    var p = await loadJSON('mup_user_plan', null);
     if(!p || !p.plan){
-      p = { plan:'gratuit', leadsConsumed:0, leadsConsumedThisMonth:0, lastResetDate: firstIso };
-      saveJSON('mup_user_plan', p);
-      return p;
-    }
-    if(!p.lastResetDate || new Date(p.lastResetDate) < new Date(firstIso)){
-      p.leadsConsumedThisMonth = 0;
-      p.lastResetDate = firstIso;
-      saveJSON('mup_user_plan', p);
+      // Première visite — création serveur via PUT (valeur initiale "gratuit").
+      p = { plan:'gratuit', leadsConsumed:0, leadsConsumedThisMonth:0, lastResetDate: null };
+      await saveJSON('mup_user_plan', p);
     }
     return p;
   }
-  var userPlan = loadUserPlan();
+  async function renderPlanActuel(){
+    if(!userPlan) userPlan = await loadUserPlan();
+    var plan = userPlan.plan || 'gratuit';
+    var cfg = PLAN_QUOTAS[plan] || PLAN_QUOTAS.gratuit;
+    var labelEl = document.getElementById('plan-actuel-label');
+    var quotaEl = document.getElementById('plan-actuel-quota');
+    if(labelEl) labelEl.textContent = cfg.label;
+    if(quotaEl){
+      if(cfg.leadsMonthly === null){
+        quotaEl.textContent = 'Quota non défini';
+        quotaEl.style.fontStyle = 'italic';
+      } else {
+        quotaEl.textContent = (userPlan.leadsConsumedThisMonth || 0) + ' / ' + cfg.leadsMonthly + ' leads ce mois';
+        quotaEl.style.fontStyle = '';
+      }
+    }
+  }
+  async function renderPlanHistory(){
+    var listEl = document.getElementById('plan-history-list');
+    if(!listEl) return;
+    try {
+      var resp = await fetch('/api/user-plan-history?limit=5');
+      if(!resp.ok){ flagStatsError(); return; }
+      var rows = await resp.json();
+      if(!Array.isArray(rows) || rows.length === 0){
+        listEl.innerHTML = '<div style="color:var(--muted2);font-style:italic;font-size:11.5px;">Aucun changement enregistré.</div>';
+        return;
+      }
+      listEl.innerHTML = rows.map(function(r){
+        var dt = r.changed_at ? new Date(r.changed_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}) : '—';
+        var fromLbl = (PLAN_QUOTAS[r.plan_from] || {}).label || r.plan_from;
+        var toLbl = (PLAN_QUOTAS[r.plan_to] || {}).label || r.plan_to;
+        return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">'
+          + '<span><strong>' + fromLbl + '</strong> → <strong>' + toLbl + '</strong></span>'
+          + '<span style="color:var(--muted);font-size:11px;">' + dt + '</span>'
+          + '</div>';
+      }).join('');
+    } catch(e){ flagStatsError(); }
+  }
   function planColor(plan){
     if(plan === 'gratuit') return '#6E6E73';
     if(plan === 'starter') return '#4338CA';
@@ -667,17 +740,17 @@
     var d = new Date(); d.setMonth(d.getMonth()+1, 1);
     return d.toLocaleDateString('fr-FR',{month:'long'});
   }
-  function renderLeadsCard(){
-    userPlan = loadUserPlan();
+  async function renderLeadsCard(){
+    userPlan = await loadUserPlan();
     var plan = userPlan.plan || 'gratuit';
-    var cfg = PLAN_CONFIG[plan] || PLAN_CONFIG.gratuit;
-    var consumed = (plan === 'starter' || plan === 'pro') ? (userPlan.leadsConsumedThisMonth || 0) : (userPlan.leadsConsumed || 0);
-    var quota = cfg.quota;
+    var cfg = PLAN_QUOTAS[plan] || PLAN_QUOTAS.gratuit;
+    var consumed = userPlan.leadsConsumedThisMonth || 0;
+    var quota = cfg.leadsMonthly;  // null tant que non validé par Ben → UI affiche "—"
     var pillEl = document.getElementById('kpi-plan-pill');
     var card = document.getElementById('kpi-leads-card');
     pillEl.textContent = cfg.label;
     pillEl.className = 'plan-pill ' + plan;
-    document.getElementById('kpi-leads').textContent = consumed;
+    document.getElementById('kpi-leads').textContent = (quota === null) ? '—' : consumed;
     var subEl = document.getElementById('kpi-leads-sub');
     var restEl = document.getElementById('kpi-restants');
     var fillEl = document.getElementById('kpi-gauge-fill');
@@ -685,33 +758,30 @@
     var overflow = quota && consumed > quota;
     var overBy = overflow ? consumed - quota : 0;
 
-    var periodSuffix = (plan === 'gratuit') ? '/ 10' : (plan === 'starter') ? '/ 30 ce mois' : (plan === 'pro') ? '/ 100 ce mois' : null;
-
-    // Sous-ligne
-    if(plan === 'business'){
-      subEl.textContent = consumed + ' générés';
+    // Sous-ligne — quota null → ne rien afficher de chiffré
+    if(quota === null){
+      subEl.textContent = 'Quota non défini';
       subEl.style.color = '';
     } else if(overflow){
-      subEl.innerHTML = consumed + ' ' + periodSuffix + ' · <span style="color:#E24B4A">+' + overBy + ' dépassement test</span>';
+      subEl.innerHTML = consumed + ' / ' + quota + ' ce mois · <span style="color:#E24B4A">+' + overBy + ' dépassement test</span>';
       subEl.style.color = '';
     } else {
-      subEl.textContent = consumed + ' ' + periodSuffix;
+      subEl.textContent = consumed + ' / ' + quota + ' ce mois';
       subEl.style.color = '';
     }
 
     // Texte sous la jauge
-    if(plan === 'business'){
-      restEl.textContent = 'Plan illimité';
+    if(quota === null){
+      restEl.textContent = 'Paliers à définir';
       restEl.style.color = '';
-      restEl.style.fontStyle = '';
+      restEl.style.fontStyle = 'italic';
     } else if(overflow){
       restEl.textContent = 'Mode test · plafond ignoré';
       restEl.style.color = '#E24B4A';
       restEl.style.fontStyle = 'italic';
     } else {
       var rest = Math.max(0, quota - consumed);
-      if(plan === 'gratuit') restEl.textContent = rest + ' restants';
-      else restEl.textContent = rest + ' restants ce mois · reset le 1er ' + nextMonthLabel();
+      restEl.textContent = rest + ' restants ce mois · reset le 1er ' + nextMonthLabel();
       restEl.style.color = '';
       restEl.style.fontStyle = '';
     }
@@ -720,9 +790,9 @@
     var color;
     if(overflow) color = '#E24B4A';
     else if(quota) color = (ratio >= 0.95 ? '#E24B4A' : ratio >= 0.80 ? '#EF9F27' : planColor(plan));
-    else color = '#1D8348';
+    else color = '#AEAEB2';  // gris quand quota non défini
     fillEl.style.background = color;
-    fillEl.style.width = quota ? Math.min(100, ratio * 100) + '%' : '100%';
+    fillEl.style.width = quota ? Math.min(100, ratio * 100) + '%' : '0%';
 
     // Bordure card en mode dépassement
     if(card){
@@ -730,15 +800,13 @@
       else card.style.borderLeftColor = '';
     }
 
-    // Bannière upgrade : seulement entre 80% et 100% inclus, pas en dépassement
+    // Bannière upgrade : désactivée tant que les paliers ne sont pas définis (quota null partout)
     var banner = document.getElementById('leads-upgrade');
     if(plan !== 'business' && quota && ratio >= 0.80 && !overflow){
       var nextPlan = plan === 'gratuit' ? 'starter' : (plan === 'starter' ? 'pro' : 'business');
       banner.style.display = 'block';
       banner.className = 'leads-upgrade upgrade-' + nextPlan;
-      if(plan === 'gratuit') banner.textContent = 'Bientôt à court. Starter à 29€/mois pour 30 leads/mois →';
-      else if(plan === 'starter') banner.textContent = 'Plus que ' + Math.max(0, 30 - consumed) + ' leads ce mois. Pro à 49€/mois pour 100 leads →';
-      else if(plan === 'pro') banner.textContent = 'Plafond proche. Business illimité à 79€/mois →';
+      banner.textContent = 'Plafond proche · passer à ' + (PLAN_QUOTAS[nextPlan]?.label || nextPlan) + ' →';
       banner.onclick = openPlansModal;
     } else {
       banner.style.display = 'none';
@@ -749,10 +817,10 @@
     var grid = document.getElementById('plans-grid');
     var html = '';
     ['gratuit','starter','pro','business'].forEach(function(p){
-      var cfg = PLAN_CONFIG[p];
-      var quotaTxt = cfg.quota ? cfg.quota + ' leads' + (cfg.period === 'monthly' ? ' / mois' : '') : 'Leads illimités';
-      var isCurrent = userPlan.plan === p;
-      var priceHtml = cfg.price === 0 ? 'Gratuit' : cfg.price + '€<span class="plan-card-price-suffix">/mois</span>';
+      var cfg = PLAN_QUOTAS[p];
+      var quotaTxt = (cfg.leadsMonthly === null) ? 'Quota à définir' : (cfg.leadsMonthly + ' leads / mois');
+      var isCurrent = userPlan && userPlan.plan === p;
+      var priceHtml = (cfg.priceMonthly === null) ? '<span style="color:var(--muted2);font-style:italic;">Tarif à définir</span>' : (cfg.priceMonthly === 0 ? 'Gratuit' : cfg.priceMonthly + '€<span class="plan-card-price-suffix">/mois</span>');
       html += '<div class="plan-card' + (isCurrent ? ' current' : '') + '">';
       html += '<div class="plan-pill ' + p + '">' + cfg.label + '</div>';
       html += '<div class="plan-card-price">' + priceHtml + '</div>';
@@ -762,14 +830,17 @@
     });
     grid.innerHTML = html;
     grid.querySelectorAll('button[data-plan]').forEach(function(btn){
-      btn.addEventListener('click', function(){
+      btn.addEventListener('click', async function(){
         userPlan.plan = this.dataset.plan;
-        saveJSON('mup_user_plan', userPlan);
+        await saveJSON('mup_user_plan', userPlan);
         closePlansModal();
-        renderLeadsCard();
+        await renderLeadsCard();
+        await renderPlanActuel();
+        await renderPlanHistory();
       });
     });
     document.getElementById('plans-modal-overlay').classList.add('show');
+    renderPlanHistory();
   }
   function closePlansModal(){
     document.getElementById('plans-modal-overlay').classList.remove('show');
@@ -780,6 +851,8 @@
   if(plansOverlay) plansOverlay.addEventListener('click', function(e){
     if(e.target.id === 'plans-modal-overlay') closePlansModal();
   });
+  var planCta = document.getElementById('plan-actuel-cta');
+  if(planCta) planCta.addEventListener('click', openPlansModal);
 
   function renderKPI(m){
     renderLeadsCard();
@@ -975,14 +1048,7 @@
     var bestMonth = months.slice().sort(function(a,b){ return b.amount - a.amount; })[0];
     var avgMonth = totalAmount / 12;
 
-    var target = parseFloat((settings && settings.yearTarget) || localStorage.getItem('mup_year_target')) || 0;
-    // Migration one-shot : si la valeur était dans l'ancienne clé plate, la déplacer dans settings
-    var legacyTarget = localStorage.getItem('mup_year_target');
-    if(legacyTarget !== null && (!settings.yearTarget || settings.yearTarget === 0)){
-      settings.yearTarget = parseFloat(legacyTarget) || 0;
-      localStorage.setItem('mup_user_settings', JSON.stringify(settings));
-      localStorage.removeItem('mup_year_target');
-    }
+    var target = parseFloat(settings && settings.yearTarget) || 0;
     var targetInput = document.getElementById('calyear-target');
     if(targetInput && target > 0 && targetInput.value === '') targetInput.value = target;
 
@@ -1216,12 +1282,13 @@
   function render(){
     var m = metrics();
     renderKPI(m); renderFunnel(m); renderCalYear(); renderTopDeals(); renderWeek(); renderHotZones(); renderInsights(m); renderROI(m);
+    renderPlanActuel();
   }
 
-  document.getElementById('calyear-target').addEventListener('input', function(e){
+  document.getElementById('calyear-target').addEventListener('input', async function(e){
     var v = parseFloat(e.target.value) || 0;
     settings.yearTarget = v;
-    localStorage.setItem('mup_user_settings', JSON.stringify(settings));
+    await saveJSON('mup_user_settings', settings);
     renderCalYear();
   });
 
@@ -1233,30 +1300,52 @@
     render();
   });
 
-  window.addEventListener('storage', function(e){
+  // TODO V2 : remplacer par polling/websocket — depuis migration SurrealDB, localStorage
+  // n'est plus écrit pour les clés migrées (pipeline, agenda, devis, frais, user_settings,
+  // user_plan), donc cet événement ne se déclenche plus pour elles. Conservé pour la sync
+  // des clés non encore migrées (prospects, geocode_cache).
+  window.addEventListener('storage', async function(e){
     if(['mup_pipeline','mup_agenda','mup_devis','mup_prospects','mup_frais','mup_user_settings','mup_user_plan','mup_geocode_cache'].indexOf(e.key) !== -1){
-      pipeline = loadJSON('mup_pipeline', []);
-      agenda = loadJSON('mup_agenda', []);
-      devis = loadJSON('mup_devis', []);
+      pipeline = await loadJSON('mup_pipeline', []);
+      agenda = await loadJSON('mup_agenda', []);
+      devis = await loadJSON('mup_devis', []);
       if(!Array.isArray(devis)) devis = [];
       devis = devis.filter(function(d){ return d && (d.type === 'devis' || d.type === 'facture' || !d.type); });
-      prospects = loadJSON('mup_prospects', []);
-      frais = loadJSON('mup_frais', []);
-      geoCache = loadJSON('mup_geocode_cache', {});
-      settings = loadJSON('mup_user_settings', {});
+      prospects = await loadJSON('mup_prospects', []);
+      frais = await loadJSON('mup_frais', []);
+      geoCache = await loadJSON('mup_geocode_cache', {});
+      settings = await loadJSON('mup_user_settings', {});
       render();
     }
   });
 
-  render();
+  (async function init(){
+    pipeline = await loadJSON('mup_pipeline', []);
+    agenda = await loadJSON('mup_agenda', []);
+    devis = await loadJSON('mup_devis', []);
+    if(!Array.isArray(devis)) devis = [];
+    devis = devis.filter(function(d){ return d && (d.type === 'devis' || d.type === 'facture' || !d.type); });
+    prospects = await loadJSON('mup_prospects', []);
+    frais = await loadJSON('mup_frais', []);
+    geoCache = await loadJSON('mup_geocode_cache', {});
+    settings = await loadJSON('mup_user_settings', {});
+    userPlan = await loadUserPlan();
+    render();
+  })();
 })();
 </script>
 
 <script>
 // Facturation 2026 — KPIs + bar chart + entity donut + top 5 clients
-(function(){
+(async function(){
   var factures = [];
-  try { factures = JSON.parse(localStorage.getItem('mup_factures') || '[]'); } catch(e){}
+  try {
+    var resp = await fetch('/api/factures');
+    if(resp.ok) factures = await resp.json();
+    else if(typeof window !== 'undefined' && typeof window.__statsError !== 'undefined'){ window.__statsError = true; var b=document.getElementById('stats-error-banner'); if(b) b.style.display='block'; }
+  } catch(e){
+    if(typeof window !== 'undefined' && typeof window.__statsError !== 'undefined'){ window.__statsError = true; var b=document.getElementById('stats-error-banner'); if(b) b.style.display='block'; }
+  }
   function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0); }
   function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   var ENTITY_LBL = { ei:'EI', graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues', mup:'MUP' };
@@ -1372,11 +1461,17 @@
 </script>
 
 <script>
-// Historique pluriannuel — analyses comparatives multi-années depuis mup_factures
+// Historique pluriannuel — analyses comparatives multi-années depuis /api/factures
 (function(){
-  function calculerHistoriquePluriannuel(){
+  async function calculerHistoriquePluriannuel(){
     var factures = [];
-    try { factures = JSON.parse(localStorage.getItem('mup_factures') || '[]'); } catch(e){}
+    try {
+      var resp = await fetch('/api/factures');
+      if(resp.ok) factures = await resp.json();
+      else { var b=document.getElementById('stats-error-banner'); if(b) b.style.display='block'; }
+    } catch(e){
+      var b=document.getElementById('stats-error-banner'); if(b) b.style.display='block';
+    }
     var parAnnee = {};
     factures.forEach(function(f){
       var date = f.date_emission || f.date_prestation;
@@ -1591,8 +1686,8 @@
     tableEl.innerHTML = html;
   }
 
-  function initHistoriquePluriannuel(){
-    var parAnnee = calculerHistoriquePluriannuel();
+  async function initHistoriquePluriannuel(){
+    var parAnnee = await calculerHistoriquePluriannuel();
     renderHistoriqueKpis(parAnnee);
     renderHistoriqueChart(parAnnee);
     renderHistoriqueTable(parAnnee);
@@ -1600,8 +1695,10 @@
 
   initHistoriquePluriannuel();
 
-  window.addEventListener('storage', function(e){
-    if(e.key === 'mup_factures') initHistoriquePluriannuel();
+  // TODO V2 : remplacer par polling/websocket — depuis migration SurrealDB, mup_factures
+  // n'est plus écrit en localStorage donc cet événement ne se déclenche plus.
+  window.addEventListener('storage', async function(e){
+    if(e.key === 'mup_factures') await initHistoriquePluriannuel();
   });
 })();
 </script>

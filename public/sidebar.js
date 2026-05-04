@@ -74,7 +74,12 @@
     html += '</a>';
   }
 
-  html += '<div style="margin-top:auto;padding:16px;border-top:0.5px solid rgba(0,0,0,0.08);">'
+  html += '<div style="margin-top:auto;padding:8px 10px 12px;border-top:0.5px solid rgba(0,0,0,0.08);display:flex;flex-direction:column;gap:8px;">'
+    + '<a href="/mentions-legales.html" class="sb-item sb-item--muted" style="opacity:.6;font-size:11.5px;padding:6px 10px;">'
+    +   '<div class="sb-icon" style="background:transparent;width:20px;height:20px;color:var(--muted,#6E6E73);">'
+    +   '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+    +   '</div>Légal'
+    + '</a>'
     + '<button id="reset-mup-btn" style="width:100%;padding:8px 12px;background:transparent;border:0.5px solid rgba(220,50,50,0.3);border-radius:6px;color:#A32D2D;font-family:inherit;font-size:12px;cursor:pointer;transition:all .12s;">Réinitialiser MUP</button>'
     + '</div>';
 

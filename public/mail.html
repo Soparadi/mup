@@ -183,35 +183,50 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
     <!-- ────── CAMPAGNES (Track 2 — Resend) ────── -->
     <div class="tab-pane" id="tab-campaigns" role="tabpanel">
+
+      <!-- État 1 : aucun domaine vérifié → écran de configuration -->
       <div id="campaigns-setup">
         <div class="card">
           <h3>Configurer votre domaine d'envoi</h3>
           <p class="card-sub">Pour envoyer des campagnes de prospection avec une délivrabilité optimale, vérifiez votre domaine.</p>
-
           <div class="notice">
             <strong>Pourquoi un domaine vérifié ?</strong> Les campagnes à volume sont envoyées via Resend avec une infrastructure dédiée (IP réputée, SPF, DKIM, DMARC gérés). Sans vérification de votre domaine, vos mails finissent en spam.
           </div>
-
           <div class="field">
             <label for="domain-input">Votre domaine d'envoi</label>
-            <input type="text" id="domain-input" placeholder="monentreprise.fr" disabled />
+            <input type="text" id="domain-input" placeholder="monentreprise.fr" />
             <div class="field-hint">Le domaine doit être celui de votre adresse pro (ex : si votre mail est contact@monentreprise.fr, utilisez monentreprise.fr).</div>
           </div>
+          <button class="btn btn-dark" id="btn-verify-domain" onclick="verifyDomain()">Vérifier mon domaine</button>
+        </div>
 
-          <button class="btn btn-dark" disabled onclick="verifyDomain()">Vérifier mon domaine</button>
-
-          <div class="notice notice-warn" style="margin-top:18px;">
-            <strong>Configuration en cours.</strong> L'API Resend sera activée en session 6. Pour l'instant, le domaine movup.io est déjà vérifié comme domaine d'envoi commun.
+        <div class="card" id="dns-records-card" style="display:none;">
+          <h3>Enregistrements DNS à ajouter</h3>
+          <p class="card-sub">Ajoutez ces enregistrements chez votre registrar (Gandi, OVH, Cloudflare…). La propagation DNS prend de 1 à 30 minutes.</p>
+          <div id="dns-records-list"></div>
+          <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
+            <button class="btn btn-outline btn-sm" onclick="checkDomainStatus()">Vérifier maintenant</button>
+            <span id="dns-status-pill" class="detected-pill warn"><span class="dot"></span><span id="dns-status-text">En attente de propagation</span></span>
+            <span id="dns-poll-info" style="font-size:11.5px;color:var(--muted);">Vérification automatique toutes les 30s.</span>
           </div>
         </div>
       </div>
 
+      <!-- État 2 : domaine vérifié → liste des campagnes -->
       <div id="campaigns-active" style="display:none;">
-        <div class="card">
-          <h3>Mes campagnes</h3>
-          <p class="card-sub">Liste des campagnes en cours, programmées et terminées.</p>
-          <button class="btn btn-dark btn-block" disabled>Nouvelle campagne</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div>
+            <span class="detected-pill"><span class="dot"></span>Domaine vérifié <strong id="active-domain"></strong></span>
+          </div>
+          <button class="btn btn-dark" onclick="openCampaignModal()">Nouvelle campagne</button>
         </div>
+        <div class="card" id="campaigns-empty" style="display:none;">
+          <div class="empty-state">
+            <div class="empty-state-title">Aucune campagne pour l'instant</div>
+            <div class="empty-state-sub">Créez votre première campagne pour démarrer la prospection.</div>
+          </div>
+        </div>
+        <div id="campaigns-list"></div>
       </div>
     </div>
 
@@ -337,6 +352,76 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <button class="btn btn-outline btn-sm" onclick="closeImapModal()">Annuler</button>
       <button class="btn btn-outline btn-sm" id="im-test-btn" onclick="testImap()" disabled>Tester</button>
       <button class="btn btn-dark btn-sm" id="im-save-btn" onclick="saveImap()" disabled>Connecter</button>
+    </div>
+  </div>
+</div>
+
+<!-- ────── MODALE CRÉATION CAMPAGNE ────── -->
+<div class="modal-overlay" id="campaign-modal" onclick="if(event.target===this)closeCampaignModal()">
+  <div class="modal" role="dialog" style="max-width:680px;">
+    <div class="modal-head">
+      <span class="modal-title">Nouvelle campagne</span>
+      <button class="modal-close" onclick="closeCampaignModal()" aria-label="Fermer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="cm-name">Nom interne de la campagne</label>
+        <input type="text" id="cm-name" placeholder="Prospection mai 2026" />
+      </div>
+      <div class="field">
+        <label for="cm-from-email">Adresse expéditeur</label>
+        <input type="email" id="cm-from-email" placeholder="prospection@monentreprise.fr" />
+        <div class="field-hint">Doit être sur votre domaine vérifié.</div>
+      </div>
+      <div class="field">
+        <label for="cm-from-name">Nom expéditeur (affiché)</label>
+        <input type="text" id="cm-from-name" placeholder="Votre prénom" />
+      </div>
+      <div class="field">
+        <label for="cm-subject">Sujet</label>
+        <input type="text" id="cm-subject" placeholder="Bonjour {{prenom}}, idée de partenariat avec {{entreprise}}" />
+        <div class="field-hint">Variables disponibles : <code>{{prenom}}</code>, <code>{{entreprise}}</code>, <code>{{secteur}}</code>, <code>{{ville}}</code></div>
+      </div>
+      <div class="field">
+        <label for="cm-html">Corps HTML</label>
+        <textarea id="cm-html" rows="8" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-family:var(--mono);font-size:12px;color:var(--text);background:#fff;outline:none;resize:vertical;line-height:1.5;" placeholder="Bonjour {{prenom}},&#10;&#10;..."></textarea>
+      </div>
+      <div class="field">
+        <label>Destinataires depuis le Pipeline</label>
+        <div class="field-row" style="grid-template-columns:1fr auto;">
+          <select id="cm-pipeline-col">
+            <option value="">— Toutes les colonnes —</option>
+          </select>
+          <button class="btn btn-outline btn-sm" type="button" onclick="loadCampaignRecipients()">Charger</button>
+        </div>
+        <div class="field-hint" id="cm-recipients-info">Sélectionnez une colonne Kanban pour charger les destinataires.</div>
+        <div id="cm-recipients-preview" style="margin-top:10px;font-size:11.5px;color:var(--muted);font-family:var(--mono);max-height:120px;overflow-y:auto;background:var(--surface);padding:8px 10px;border-radius:7px;display:none;"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-sm" onclick="closeCampaignModal()">Annuler</button>
+      <button class="btn btn-dark btn-sm" id="cm-save-btn" onclick="saveCampaignDraft()">Enregistrer brouillon</button>
+      <button class="btn btn-dark btn-sm" id="cm-send-btn" onclick="sendCampaignNow()">Envoyer maintenant</button>
+    </div>
+  </div>
+</div>
+
+<!-- ────── MODALE DÉTAIL CAMPAGNE (stats temps réel) ────── -->
+<div class="modal-overlay" id="campaign-detail-modal" onclick="if(event.target===this)closeCampaignDetail()">
+  <div class="modal" role="dialog" style="max-width:720px;">
+    <div class="modal-head">
+      <span class="modal-title" id="cd-title">Détail campagne</span>
+      <button class="modal-close" onclick="closeCampaignDetail()" aria-label="Fermer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="cd-body">
+      <div style="color:var(--muted);font-size:13px;">Chargement…</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-sm" onclick="closeCampaignDetail()">Fermer</button>
     </div>
   </div>
 </div>
@@ -546,9 +631,332 @@ async function disconnectMail(){
   }
 }
 
-function verifyDomain(){
-  toast('Vérification de domaine disponible en session 6', 'error');
+// ────────────────────────────────────────────────────────────
+// TRACK 2 — RESEND CAMPAGNES
+// ────────────────────────────────────────────────────────────
+
+var pollDomainTimer = null;
+var currentDomain = null; // { resend_domain_id, domain_name, status }
+
+async function loadCampaignsTab(){
+  try {
+    var r = await fetch('/api/v2/campaigns/domain/list');
+    var domains = r.ok ? await r.json() : [];
+    var verified = domains.find(function(d){ return d.status === 'verified'; });
+    if(verified){
+      currentDomain = verified;
+      document.getElementById('campaigns-setup').style.display = 'none';
+      document.getElementById('campaigns-active').style.display = 'block';
+      var el = document.getElementById('active-domain');
+      if(el) el.textContent = verified.domain_name;
+      await loadCampaignsList();
+    } else {
+      document.getElementById('campaigns-setup').style.display = 'block';
+      document.getElementById('campaigns-active').style.display = 'none';
+      // Si un domaine pending existe, le réafficher (DNS records)
+      var pending = domains.find(function(d){ return d.status !== 'verified' && d.status !== 'failed'; });
+      if(pending){
+        currentDomain = pending;
+        renderDnsRecords(pending);
+        startPollDomain();
+      }
+    }
+  } catch(e){ /* silent */ }
 }
+
+async function verifyDomain(){
+  var input = document.getElementById('domain-input');
+  var name = (input.value || '').trim().toLowerCase();
+  if(!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(name)){
+    toast('Domaine invalide', 'error'); return;
+  }
+  var btn = document.getElementById('btn-verify-domain');
+  btn.disabled = true; btn.textContent = 'Vérification…';
+  try {
+    var r = await fetch('/api/v2/campaigns/domain/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ domain_name: name }) });
+    var data = await r.json();
+    if(!r.ok){ toast(data.error || 'Erreur Resend', 'error'); btn.disabled = false; btn.textContent = 'Vérifier mon domaine'; return; }
+    currentDomain = data;
+    if(data.status === 'verified'){
+      toast('Domaine déjà vérifié', 'ok');
+      await loadCampaignsTab();
+    } else {
+      renderDnsRecords(data);
+      startPollDomain();
+    }
+  } catch(e){
+    toast('Erreur réseau', 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Vérifier mon domaine';
+}
+
+function renderDnsRecords(d){
+  var card = document.getElementById('dns-records-card');
+  var list = document.getElementById('dns-records-list');
+  card.style.display = 'block';
+  var records = d.dns_records || [];
+  if(records.length === 0){
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;">Aucun enregistrement à ajouter — domaine déjà configuré.</div>';
+  } else {
+    list.innerHTML = records.map(function(rec){
+      var type = rec.type || rec.record || '';
+      var name = rec.name || '';
+      var value = rec.value || rec.data || '';
+      return '<div class="dns-record">'
+        + '<span class="dns-record-type">' + escHtml(type) + '</span>'
+        + '<span class="dns-record-name" title="' + escHtml(name) + '">' + escHtml(name) + '</span>'
+        + '<span class="dns-record-value" title="' + escHtml(value) + '">' + escHtml(value) + '</span>'
+        + '<button class="btn btn-outline btn-sm" onclick="copyDns(this, ' + JSON.stringify(value).replace(/"/g, '&quot;') + ')">Copier</button>'
+        + '</div>';
+    }).join('');
+  }
+  updateDnsStatusUi(d.status);
+}
+
+function updateDnsStatusUi(status){
+  var pill = document.getElementById('dns-status-pill');
+  var txt = document.getElementById('dns-status-text');
+  if(!pill || !txt) return;
+  if(status === 'verified'){
+    pill.classList.remove('warn');
+    txt.textContent = 'Vérifié';
+  } else if(status === 'failed'){
+    pill.classList.add('warn');
+    txt.textContent = 'Échec — vérifier les enregistrements';
+  } else {
+    pill.classList.add('warn');
+    txt.textContent = 'En attente de propagation DNS';
+  }
+}
+
+function copyDns(btn, val){
+  navigator.clipboard.writeText(val).then(function(){
+    var orig = btn.textContent;
+    btn.textContent = 'Copié';
+    setTimeout(function(){ btn.textContent = orig; }, 1400);
+  });
+}
+
+async function checkDomainStatus(){
+  if(!currentDomain || !currentDomain.resend_domain_id) return;
+  try {
+    var r = await fetch('/api/v2/campaigns/domain/status?domain_id=' + encodeURIComponent(currentDomain.resend_domain_id));
+    if(!r.ok) return;
+    var d = await r.json();
+    updateDnsStatusUi(d.status);
+    if(d.status === 'verified'){
+      stopPollDomain();
+      toast('Domaine vérifié', 'ok');
+      await loadCampaignsTab();
+    }
+  } catch(e){}
+}
+
+function startPollDomain(){
+  stopPollDomain();
+  pollDomainTimer = setInterval(checkDomainStatus, 30000);
+}
+function stopPollDomain(){
+  if(pollDomainTimer){ clearInterval(pollDomainTimer); pollDomainTimer = null; }
+}
+
+// ────── Liste campagnes ──────
+async function loadCampaignsList(){
+  try {
+    var r = await fetch('/api/v2/campaigns');
+    var list = r.ok ? await r.json() : [];
+    var container = document.getElementById('campaigns-list');
+    var empty = document.getElementById('campaigns-empty');
+    if(!list || list.length === 0){
+      empty.style.display = 'block';
+      container.innerHTML = '';
+      return;
+    }
+    empty.style.display = 'none';
+    container.innerHTML = list.map(function(c){
+      var stats = c.stats || {};
+      var rid = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '');
+      var statusColor = c.status === 'completed' ? 'var(--green)' : c.status === 'sending' ? 'var(--orange)' : c.status === 'failed' ? 'var(--red)' : 'var(--muted)';
+      return '<div class="card" style="cursor:pointer;" onclick="openCampaignDetail(' + JSON.stringify(rid).replace(/"/g, '&quot;') + ')">'
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;">'
+        +   '<div style="flex:1;min-width:0;">'
+        +     '<div style="font-size:14.5px;font-weight:700;color:var(--text);margin-bottom:4px;">' + escHtml(c.name || rid) + '</div>'
+        +     '<div style="font-size:12px;color:var(--muted);">' + (c.recipients_count || 0) + ' destinataire(s) · ' + escHtml(c.from_email || '—') + '</div>'
+        +   '</div>'
+        +   '<span style="font-size:11px;font-weight:700;color:' + statusColor + ';text-transform:uppercase;letter-spacing:1.2px;">' + escHtml(c.status || 'draft') + '</span>'
+        + '</div>'
+        + '<div style="display:flex;gap:14px;margin-top:14px;font-size:11.5px;color:var(--muted);font-family:var(--mono);">'
+        +   '<span><strong style="color:var(--text);">' + (stats.sent || 0) + '</strong> envoyés</span>'
+        +   '<span><strong style="color:var(--green);">' + (stats.delivered || 0) + '</strong> livrés</span>'
+        +   '<span><strong style="color:var(--blue);">' + (stats.opened || 0) + '</strong> ouverts</span>'
+        +   '<span><strong style="color:var(--purple);">' + (stats.clicked || 0) + '</strong> cliqués</span>'
+        +   '<span><strong style="color:var(--red);">' + (stats.bounced || 0) + '</strong> bounces</span>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  } catch(e){}
+}
+
+// ────── Modale création ──────
+async function openCampaignModal(){
+  document.getElementById('campaign-modal').classList.add('open');
+  // Préremplir from_email avec le domaine vérifié
+  if(currentDomain && currentDomain.domain_name){
+    var input = document.getElementById('cm-from-email');
+    if(!input.value) input.value = 'prospection@' + currentDomain.domain_name;
+  }
+  // Charger les colonnes pipeline pour le selecteur
+  try {
+    var r = await fetch('/api/pipeline');
+    var cards = r.ok ? await r.json() : [];
+    var cols = [...new Set(cards.map(function(c){ return c.col || 'autre'; }))];
+    var sel = document.getElementById('cm-pipeline-col');
+    var prev = sel.value;
+    sel.innerHTML = '<option value="">— Toutes les colonnes —</option>' + cols.map(function(c){ return '<option value="' + escHtml(c) + '">' + escHtml(c) + '</option>'; }).join('');
+    if(prev) sel.value = prev;
+    window.__pipelineCards = cards;
+  } catch(e){}
+}
+function closeCampaignModal(){
+  document.getElementById('campaign-modal').classList.remove('open');
+  ['cm-name','cm-from-email','cm-from-name','cm-subject','cm-html'].forEach(function(id){ document.getElementById(id).value = ''; });
+  document.getElementById('cm-recipients-preview').style.display = 'none';
+  document.getElementById('cm-recipients-info').textContent = 'Sélectionnez une colonne Kanban pour charger les destinataires.';
+  window.__currentRecipients = null;
+}
+
+function loadCampaignRecipients(){
+  var col = document.getElementById('cm-pipeline-col').value;
+  var cards = window.__pipelineCards || [];
+  var filtered = col ? cards.filter(function(c){ return (c.col || '') === col; }) : cards;
+  var recipients = filtered
+    .map(function(c){
+      var email = c.email || c.mail || c.contactEmail;
+      if(!email) return null;
+      return {
+        email,
+        prenom: (c.contactFirstName || c.firstName || (c.name || '').split(' ')[0] || '').trim(),
+        entreprise: (c.co || c.company || '').trim(),
+        secteur: (c.naf || c.sector || '').trim(),
+        ville: (c.city || '').trim()
+      };
+    })
+    .filter(Boolean);
+  window.__currentRecipients = recipients;
+  var info = document.getElementById('cm-recipients-info');
+  var preview = document.getElementById('cm-recipients-preview');
+  if(recipients.length === 0){
+    info.textContent = 'Aucun destinataire avec une adresse email dans cette colonne.';
+    preview.style.display = 'none';
+    return;
+  }
+  info.textContent = recipients.length + ' destinataire(s) chargés.';
+  preview.style.display = 'block';
+  preview.innerHTML = recipients.slice(0, 10).map(function(r){ return r.email + (r.prenom ? ' (' + r.prenom + ')' : '') + (r.entreprise ? ' — ' + r.entreprise : ''); }).join('<br/>') + (recipients.length > 10 ? '<br/>… +' + (recipients.length - 10) + ' autres' : '');
+}
+
+async function saveCampaignDraft(){ await submitCampaign(false); }
+async function sendCampaignNow(){
+  if(!confirm('Envoyer la campagne maintenant ?')) return;
+  await submitCampaign(true);
+}
+
+async function submitCampaign(sendNow){
+  var name = document.getElementById('cm-name').value.trim();
+  var subject = document.getElementById('cm-subject').value.trim();
+  var html = document.getElementById('cm-html').value.trim();
+  var fromEmail = document.getElementById('cm-from-email').value.trim();
+  var fromName = document.getElementById('cm-from-name').value.trim();
+  var recipients = window.__currentRecipients || [];
+  if(!name || !subject || !html || !fromEmail){ toast('Champs requis : nom, sujet, corps, expéditeur', 'error'); return; }
+  if(recipients.length === 0){ toast('Charger des destinataires d\'abord', 'error'); return; }
+
+  try {
+    var r = await fetch('/api/v2/campaigns/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      name, template_subject: subject, template_html: html,
+      from_email: fromEmail, from_name: fromName, recipients
+    }) });
+    var c = await r.json();
+    if(!r.ok){ toast(c.error || 'Création impossible', 'error'); return; }
+    var rid = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '');
+    if(sendNow){
+      var sr = await fetch('/api/v2/campaigns/' + encodeURIComponent(rid) + '/send', { method:'POST' });
+      var sd = await sr.json();
+      if(!sr.ok){ toast(sd.error || 'Envoi impossible', 'error'); }
+      else { toast(sd.sent_count + ' mail(s) envoyés', 'ok'); }
+    } else {
+      toast('Brouillon enregistré', 'ok');
+    }
+    closeCampaignModal();
+    await loadCampaignsList();
+  } catch(e){ toast('Erreur réseau', 'error'); }
+}
+
+async function openCampaignDetail(rid){
+  document.getElementById('campaign-detail-modal').classList.add('open');
+  document.getElementById('cd-body').innerHTML = '<div style="color:var(--muted);font-size:13px;">Chargement…</div>';
+  await refreshCampaignDetail(rid);
+  // Refresh stats toutes les 5s pendant que la modale est ouverte
+  if(window.__cdTimer) clearInterval(window.__cdTimer);
+  window.__cdTimer = setInterval(function(){ refreshCampaignDetail(rid); }, 5000);
+}
+function closeCampaignDetail(){
+  document.getElementById('campaign-detail-modal').classList.remove('open');
+  if(window.__cdTimer){ clearInterval(window.__cdTimer); window.__cdTimer = null; }
+  loadCampaignsList(); // refresh la liste avec les stats à jour
+}
+
+async function refreshCampaignDetail(rid){
+  try {
+    var r = await fetch('/api/v2/campaigns/' + encodeURIComponent(rid) + '/stats');
+    if(!r.ok) return;
+    var d = await r.json();
+    document.getElementById('cd-title').textContent = 'Détail campagne';
+    var s = d.stats || {};
+    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">'
+      + statCell('Envoyés', s.sent || 0, 'var(--text)')
+      + statCell('Livrés', s.delivered || 0, 'var(--green)')
+      + statCell('Ouverts', s.opened || 0, 'var(--blue)')
+      + statCell('Cliqués', s.clicked || 0, 'var(--purple)')
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">'
+      + statCell('Bounces', s.bounced || 0, 'var(--red)')
+      + statCell('Plaintes', s.complained || 0, 'var(--orange)')
+      + statCell('Désinscrits', s.unsubscribed || 0, 'var(--muted)')
+      + '</div>'
+      + '<div style="font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">Destinataires (' + (d.recipients_status || []).length + ')</div>'
+      + '<div style="max-height:240px;overflow-y:auto;font-family:var(--mono);font-size:11.5px;">'
+      + (d.recipients_status || []).map(function(r){
+          var ev = r.last_event ? r.last_event : '—';
+          var color = r.last_event === 'opened' ? 'var(--blue)' : r.last_event === 'clicked' ? 'var(--purple)' : r.last_event === 'bounced' ? 'var(--red)' : r.last_event === 'delivered' ? 'var(--green)' : 'var(--muted)';
+          return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);">'
+            + '<span>' + escHtml(r.email) + '</span>'
+            + '<span style="color:' + color + ';font-weight:700;">' + escHtml(ev) + '</span>'
+            + '</div>';
+        }).join('')
+      + '</div>';
+    document.getElementById('cd-body').innerHTML = html;
+  } catch(e){}
+}
+
+function statCell(label, value, color){
+  return '<div style="background:var(--surface);border-radius:9px;padding:12px 14px;">'
+    + '<div style="font-size:9.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);">' + label + '</div>'
+    + '<div style="font-size:22px;font-weight:900;color:' + color + ';margin-top:3px;font-family:var(--mono);">' + value + '</div>'
+    + '</div>';
+}
+
+function escHtml(s){
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Charger l'onglet Campagnes au switch
+document.querySelectorAll('.subtab').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    if(btn.dataset.tab === 'campaigns') loadCampaignsTab();
+    if(btn.dataset.tab !== 'campaigns') stopPollDomain();
+  });
+});
 
 // ────── Toast ──────
 function toast(msg, type){

@@ -12,11 +12,24 @@ import { getDb } from './lib/surreal.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
-import { sendOne as mailServiceSendOne, getMailStatus as mailServiceStatus } from './lib/mail-service.js'
+import {
+  sendOne as mailServiceSendOne,
+  getMailStatus as mailServiceStatus,
+  isResendReady,
+  verifyResendDomain,
+  getResendDomainStatus,
+  sendCampaign as mailServiceSendCampaign,
+  verifyResendSignature
+} from './lib/mail-service.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
-app.use(express.json({ limit: '10mb' }))
+// `verify` capture le rawBody pour la validation HMAC des webhooks Resend (Svix).
+// Ne change rien à `req.body` parsé — ajoute juste `req.rawBody` (string).
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8') }
+}))
 
 const DEFAULT_USER_ID = process.env.MUP_DEFAULT_USER_ID || 'default'
 
@@ -1853,6 +1866,391 @@ app.get('/auth/microsoft/callback', (req, res) => {
   res.status(501).json({ error: 'OAuth Microsoft non configuré — voir session 3 (README-mail.md)' })
 })
 
+// ────────────────────────────────────────────────────────────────────────────
+// TRACK 2 — RESEND COLD MAILING CAMPAGNES
+// ────────────────────────────────────────────────────────────────────────────
+
+function ensureResendOrFail(res) {
+  if (!isResendReady()) {
+    res.status(503).json({ error: 'RESEND_API_KEY non configurée — voir README-mail.md' })
+    return false
+  }
+  return true
+}
+
+// Sanitize une chaîne pour l'utiliser comme id SurrealDB (alphanum + underscore + hyphen).
+function safeId(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '_').slice(0, 80)
+}
+
+// ── DOMAINS RESEND ──
+
+// POST /api/v2/campaigns/domain/verify
+// Body : { domain_name }
+// Crée le domaine sur Resend (ou récupère l'existant si 409), retourne records DNS.
+app.post('/api/v2/campaigns/domain/verify', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  if (!ensureResendOrFail(res)) return
+  const { domain_name } = req.body || {}
+  if (!domain_name || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain_name)) {
+    return res.status(400).json({ error: 'domain_name invalide' })
+  }
+  try {
+    const result = await verifyResendDomain(domain_name)
+    const db = await getDb()
+    const recordId = `${userId}__${safeId(domain_name)}`
+    const payload = {
+      userId,
+      domain_name,
+      resend_domain_id: result.id,
+      status: result.status || 'pending',
+      dns_records: result.records || [],
+      verified_at: result.status === 'verified' ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString()
+    }
+    const sel = await db.query('SELECT * FROM type::record("domains_resend", $id)', { id: recordId })
+    if (sel[0]?.[0]) {
+      await db.query('UPDATE type::record("domains_resend", $id) MERGE $body', { id: recordId, body: payload })
+    } else {
+      payload.created_at = new Date().toISOString()
+      await db.query('CREATE type::record("domains_resend", $id) CONTENT $body', { id: recordId, body: payload })
+    }
+    res.json({
+      record_id: recordId,
+      resend_domain_id: result.id,
+      domain_name,
+      status: result.status || 'pending',
+      dns_records: result.records || [],
+      existing: Boolean(result.existing)
+    })
+  } catch (err) {
+    console.error('[campaigns:domain-verify]', err.message)
+    if (/rate limit|429/i.test(err.message)) return res.status(503).json({ error: 'Resend rate limit, réessayez dans quelques secondes' })
+    res.status(500).json({ error: err.message || 'Vérification domaine impossible' })
+  }
+})
+
+// GET /api/v2/campaigns/domain/status?domain_id=xxx
+// Resync l'état Resend → table domains_resend, retourne le statut courant.
+app.get('/api/v2/campaigns/domain/status', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  if (!ensureResendOrFail(res)) return
+  const { domain_id } = req.query
+  if (!domain_id) return res.status(400).json({ error: 'domain_id requis (id Resend)' })
+  try {
+    const live = await getResendDomainStatus(domain_id)
+    const db = await getDb()
+    // Update dans notre table le record matchant resend_domain_id pour ce userId
+    const all = await db.query('SELECT * FROM domains_resend WHERE userId = $userId AND resend_domain_id = $rid', { userId, rid: domain_id })
+    const local = all[0]?.[0]
+    if (local) {
+      const recordId = String(local.id).replace(/^domains_resend:/, '').replace(/^⟨+|⟩+$/g, '')
+      const patch = {
+        status: live.status,
+        dns_records: live.records,
+        updated_at: new Date().toISOString()
+      }
+      if (live.status === 'verified' && !local.verified_at) {
+        patch.verified_at = new Date().toISOString()
+      }
+      await db.query('UPDATE type::record("domains_resend", $id) MERGE $body', { id: recordId, body: patch })
+    }
+    res.json({ resend_domain_id: live.id, domain_name: live.name, status: live.status, dns_records: live.records })
+  } catch (err) {
+    console.error('[campaigns:domain-status]', err.message)
+    res.status(500).json({ error: err.message || 'Lecture statut domaine impossible' })
+  }
+})
+
+// GET /api/v2/campaigns/domain/list — domaines du user en base locale
+app.get('/api/v2/campaigns/domain/list', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM domains_resend WHERE userId = $userId ORDER BY created_at DESC', { userId })
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[campaigns:domain-list]', err.message)
+    res.status(500).json({ error: 'Lecture domaines impossible' })
+  }
+})
+
+// ── CAMPAIGNS ──
+
+// POST /api/v2/campaigns/create
+// Body : { name, template_subject, template_html, template_text?, recipients[], from_email, from_name?, reply_to?, scheduled_at? }
+app.post('/api/v2/campaigns/create', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  const { name, template_subject, template_html, template_text, recipients, from_email, from_name, reply_to, scheduled_at } = req.body || {}
+  if (!name || !template_subject || !from_email) {
+    return res.status(400).json({ error: 'Champs requis : name, template_subject, from_email' })
+  }
+  if (!Array.isArray(recipients) || recipients.length === 0) {
+    return res.status(400).json({ error: 'recipients requis (array non vide)' })
+  }
+  if (!template_html && !template_text) {
+    return res.status(400).json({ error: 'template_html ou template_text requis' })
+  }
+  try {
+    const db = await getDb()
+    const id = 'camp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
+    const now = new Date().toISOString()
+    const status = scheduled_at ? 'scheduled' : 'draft'
+    const body = {
+      userId,
+      name,
+      template_subject,
+      template_html: template_html || null,
+      template_text: template_text || null,
+      recipients,
+      recipients_count: recipients.length,
+      from_email,
+      from_name: from_name || null,
+      reply_to: reply_to || null,
+      scheduled_at: scheduled_at || null,
+      status,
+      stats: { sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0, unsubscribed: 0 },
+      created_at: now,
+      updated_at: now
+    }
+    const result = await db.query('CREATE type::record("campaigns", $id) CONTENT $body', { id, body })
+    res.status(201).json(result[0]?.[0] || result[0] || null)
+  } catch (err) {
+    console.error('[campaigns:create]', err.message)
+    res.status(500).json({ error: 'Création campagne impossible' })
+  }
+})
+
+// POST /api/v2/campaigns/:id/send
+app.post('/api/v2/campaigns/:id/send', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  if (!ensureResendOrFail(res)) return
+  const id = cleanRecordId('campaigns', req.params.id) || req.params.id
+  try {
+    const db = await getDb()
+    const sel = await db.query('SELECT * FROM type::record("campaigns", $id)', { id })
+    const campaign = sel[0]?.[0]
+    if (!campaign || campaign.userId !== userId) return res.status(404).json({ error: 'Campagne introuvable' })
+    if (campaign.status === 'sending' || campaign.status === 'completed') {
+      return res.status(409).json({ error: `Campagne déjà ${campaign.status} — envoi refusé (idempotence)` })
+    }
+
+    // Vérifie qu'au moins un domaine vérifié existe pour ce user (cohérence with from_email)
+    const domains = await db.query('SELECT * FROM domains_resend WHERE userId = $userId AND status = "verified"', { userId })
+    const verified = (domains[0] || []).map(d => d.domain_name)
+    const fromDomain = String(campaign.from_email).split('@')[1]
+    const movupShared = fromDomain === 'movup.io'  // domaine partagé MUP, toujours autorisé
+    if (!verified.includes(fromDomain) && !movupShared) {
+      return res.status(412).json({ error: `Domaine ${fromDomain} non vérifié. Vérifier dans l'onglet Paramètres avant l'envoi.` })
+    }
+
+    // Mark as sending immediately for idempotence guard
+    await db.query('UPDATE type::record("campaigns", $id) MERGE $body', { id, body: { status: 'sending', send_started_at: new Date().toISOString(), updated_at: new Date().toISOString() } })
+
+    const result = await mailServiceSendCampaign(userId, {
+      from: campaign.from_email,
+      fromName: campaign.from_name,
+      replyTo: campaign.reply_to,
+      recipients: campaign.recipients,
+      subject: campaign.template_subject,
+      html: campaign.template_html,
+      text: campaign.template_text
+    })
+
+    const stats = campaign.stats || { sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0, unsubscribed: 0 }
+    stats.sent = (stats.sent || 0) + result.sent_count
+    await db.query('UPDATE type::record("campaigns", $id) MERGE $body', {
+      id,
+      body: {
+        status: result.failed_count > 0 && result.sent_count === 0 ? 'failed' : 'completed',
+        sent_at: new Date().toISOString(),
+        stats,
+        batch_ids: result.batch_ids,
+        sent_count: result.sent_count,
+        failed_count: result.failed_count,
+        updated_at: new Date().toISOString()
+      }
+    })
+    res.json({ id, sent_count: result.sent_count, failed_count: result.failed_count, batch_ids: result.batch_ids, total: result.total })
+  } catch (err) {
+    console.error('[campaigns:send]', err.message)
+    // Reset le status si on a marqué sending mais que l'envoi a totalement échoué avant batch
+    try {
+      const db = await getDb()
+      await db.query('UPDATE type::record("campaigns", $id) MERGE $body', { id, body: { status: 'failed', last_error: err.message, updated_at: new Date().toISOString() } })
+    } catch (e) {/* swallow */}
+    if (/rate limit|429/i.test(err.message)) return res.status(503).json({ error: 'Resend rate limit — réessayez dans quelques secondes' })
+    res.status(500).json({ error: err.message || 'Envoi campagne impossible' })
+  }
+})
+
+// GET /api/v2/campaigns — liste des campagnes du user
+app.get('/api/v2/campaigns', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT id, name, status, recipients_count, from_email, scheduled_at, sent_at, stats, created_at FROM campaigns WHERE userId = $userId AND (status != "deleted" OR status IS NONE) ORDER BY created_at DESC', { userId })
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[campaigns:list]', err.message)
+    res.status(500).json({ error: 'Lecture campagnes impossible' })
+  }
+})
+
+// GET /api/v2/campaigns/:id — détail
+app.get('/api/v2/campaigns/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('campaigns', req.params.id) || req.params.id
+    const sel = await db.query('SELECT * FROM type::record("campaigns", $id)', { id })
+    const campaign = sel[0]?.[0]
+    if (!campaign || campaign.userId !== userId) return res.status(404).json({ error: 'Campagne introuvable' })
+    res.json(campaign)
+  } catch (err) {
+    console.error('[campaigns:get]', err.message)
+    res.status(500).json({ error: 'Lecture campagne impossible' })
+  }
+})
+
+// GET /api/v2/campaigns/:id/stats — agrégats + liste recipients avec dernier event
+app.get('/api/v2/campaigns/:id/stats', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('campaigns', req.params.id) || req.params.id
+    const sel = await db.query('SELECT * FROM type::record("campaigns", $id)', { id })
+    const campaign = sel[0]?.[0]
+    if (!campaign || campaign.userId !== userId) return res.status(404).json({ error: 'Campagne introuvable' })
+
+    // Liste des events de cette campagne
+    const evRes = await db.query('SELECT * FROM campaign_events WHERE campaign_id = $cid ORDER BY timestamp DESC', { cid: String(campaign.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '') })
+    const events = evRes[0] || []
+
+    // Agrégats par destinataire (dernier event par recipient_email)
+    const lastByRecipient = new Map()
+    for (const e of events) {
+      if (!lastByRecipient.has(e.recipient_email)) {
+        lastByRecipient.set(e.recipient_email, e)
+      }
+    }
+    const recipientsStatus = (campaign.recipients || []).map(r => {
+      const last = lastByRecipient.get(r.email) || null
+      return { email: r.email, last_event: last ? last.event_type : null, last_timestamp: last ? last.timestamp : null }
+    })
+
+    res.json({
+      id: campaign.id,
+      stats: campaign.stats || {},
+      status: campaign.status,
+      recipients_count: campaign.recipients_count,
+      recipients_status: recipientsStatus,
+      events_total: events.length
+    })
+  } catch (err) {
+    console.error('[campaigns:stats]', err.message)
+    res.status(500).json({ error: 'Lecture stats campagne impossible' })
+  }
+})
+
+// DELETE /api/v2/campaigns/:id — soft delete
+app.delete('/api/v2/campaigns/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('campaigns', req.params.id) || req.params.id
+    const sel = await db.query('SELECT * FROM type::record("campaigns", $id)', { id })
+    const campaign = sel[0]?.[0]
+    if (!campaign || campaign.userId !== userId) return res.status(404).json({ error: 'Campagne introuvable' })
+    await db.query('UPDATE type::record("campaigns", $id) MERGE $body', { id, body: { status: 'deleted', deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() } })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[campaigns:delete]', err.message)
+    res.status(500).json({ error: 'Suppression campagne impossible' })
+  }
+})
+
+// ── WEBHOOK RESEND ──
+// Validation HMAC Svix obligatoire. Refus 401 si invalide.
+app.post('/api/v2/webhooks/resend', async (req, res) => {
+  const verification = verifyResendSignature(req.rawBody, req.headers)
+  if (!verification.ok) {
+    console.warn('[webhook:resend] signature invalide :', verification.reason)
+    return res.status(401).json({ error: 'signature invalide', reason: verification.reason })
+  }
+  // Réponse 200 immédiate (Resend re-tente si > 5s ou non 2xx)
+  res.status(200).json({ ok: true })
+
+  // Traitement asynchrone — n'affecte pas le 200 déjà envoyé
+  ;(async () => {
+    try {
+      const event = req.body
+      const type = event?.type || ''
+      const data = event?.data || {}
+      const recipient = Array.isArray(data.to) ? data.to[0] : data.email_id || data.to || null
+      const tags = Array.isArray(data.tags) ? data.tags : []
+      const userTag = tags.find(t => t.name === 'user')
+      const userId = userTag ? userTag.value : null
+
+      // Map event type → notre nomenclature interne
+      const map = {
+        'email.delivered': 'delivered',
+        'email.opened': 'opened',
+        'email.clicked': 'clicked',
+        'email.bounced': 'bounced',
+        'email.complained': 'complained',
+        'email.unsubscribed': 'unsubscribed'
+      }
+      const eventType = map[type]
+      if (!eventType) {
+        console.log('[webhook:resend] event type non géré :', type)
+        return
+      }
+
+      const db = await getDb()
+      // Trouver la campagne via batch_ids (Resend renvoie email_id, on doit faire le lien)
+      // Lookup : pour cet userId, dernière campagne completed/sending dont batch_ids contient l'email_id ?
+      // Plus robuste : on retombe via la table campaigns si email_id matche un batch_id stocké.
+      let campaignId = null
+      const emailId = data.email_id
+      if (emailId && userId) {
+        const found = await db.query('SELECT id FROM campaigns WHERE userId = $u AND batch_ids CONTAINS $eid LIMIT 1', { u: userId, eid: emailId })
+        const c = found[0]?.[0]
+        if (c) campaignId = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '')
+      }
+
+      // Insert event
+      const eventDoc = {
+        campaign_id: campaignId,
+        recipient_email: recipient,
+        event_type: eventType,
+        timestamp: data.created_at || new Date().toISOString(),
+        metadata: { resend_email_id: emailId, raw_type: type, click_url: data.click?.link || null, bounce_reason: data.bounce?.message || null }
+      }
+      await db.query('CREATE campaign_events CONTENT $body', { body: eventDoc })
+
+      // Update agrégats si campagne identifiée
+      if (campaignId) {
+        const camp = await db.query('SELECT stats FROM type::record("campaigns", $id)', { id: campaignId })
+        const stats = camp[0]?.[0]?.stats || { sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0, unsubscribed: 0 }
+        stats[eventType] = (stats[eventType] || 0) + 1
+        await db.query('UPDATE type::record("campaigns", $id) MERGE $body', { id: campaignId, body: { stats, updated_at: new Date().toISOString() } })
+      }
+    } catch (e) {
+      console.error('[webhook:resend:async]', e.message)
+    }
+  })()
+})
+
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'public', 'dashboard.html'))
 })
@@ -1887,7 +2285,12 @@ app.get('/:page', (req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS domains_resend SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS campaigns SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS campaign_events SCHEMALESS')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3)')
+    // Indexes pour les requêtes scoping userId et lookups par campagne/destinataire
+    await db.query('DEFINE INDEX IF NOT EXISTS campaigns_user ON TABLE campaigns COLUMNS userId')
+    await db.query('DEFINE INDEX IF NOT EXISTS domains_user ON TABLE domains_resend COLUMNS userId')
+    await db.query('DEFINE INDEX IF NOT EXISTS events_campaign ON TABLE campaign_events COLUMNS campaign_id')
+    await db.query('DEFINE INDEX IF NOT EXISTS events_recipient ON TABLE campaign_events COLUMNS recipient_email')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3 + 4 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

@@ -14,6 +14,7 @@ html{scroll-behavior:smooth;}
   --text:#1D1D1F;--muted:#6E6E73;--muted2:#AEAEB2;
   --green:#1D8348;--orange:#B84C00;--red:#CC0000;
   --blue:#0A66C2;--purple:#4338CA;
+  --cyan:#0BBCD4;--amber:#F59E0B;--violet:#7C3AED;
   --green-l:#E6F4EC;--blue-l:#E8F0FA;--orange-l:#FFF3E0;
   --red-l:#FFEBEB;--purple-l:#EEF2FF;
   --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
@@ -25,242 +26,99 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .shell{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:150;backdrop-filter:blur(2px);}
 .sidebar-overlay.open{display:block;}
-.topbar{padding:16px 28px 12px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;display:flex;flex-direction:column;gap:12px;}
+
+/* TOPBAR + sous-onglets */
+.topbar{padding:16px 28px 0;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;display:flex;flex-direction:column;gap:14px;}
 .topbar-row1{display:flex;align-items:center;justify-content:space-between;}
 .topbar-title{font-size:22px;font-weight:900;letter-spacing:-.6px;}
-.topbar-actions{display:flex;gap:8px;}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .15s;border:none;}
+.subtabs{display:flex;gap:4px;margin-bottom:-1px;}
+.subtab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;background:transparent;border-left:none;border-right:none;border-top:none;font-family:var(--font);}
+.subtab:hover{color:var(--text);}
+.subtab.active{color:var(--text);border-bottom-color:var(--text);}
+
+/* CONTENU */
+.content{flex:1;overflow-y:auto;padding:28px;}
+.tab-pane{display:none;max-width:880px;margin:0 auto;}
+.tab-pane.active{display:block;}
+
+/* Cartes */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px 28px;margin-bottom:18px;}
+.card h3{font-size:16px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px;}
+.card .card-sub{font-size:12.5px;color:var(--muted);margin-bottom:18px;}
+
+/* Boutons */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .15s;border:none;}
 .btn-dark{background:var(--text);color:#fff;}
 .btn-dark:hover{opacity:.85;}
-.btn-outline{background:transparent;color:var(--text);border:1.5px solid var(--border2);}
+.btn-outline{background:#fff;color:var(--text);border:1.5px solid var(--border2);}
 .btn-outline:hover{background:var(--surface);border-color:var(--text);}
-.btn-sm{padding:5px 11px;font-size:12px;}
-.topbar-row2{display:flex;align-items:stretch;gap:8px;}
-.kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0;}
-.kpi-chip{display:flex;align-items:center;gap:6px;padding:8px 14px;border-right:1px solid var(--border);cursor:pointer;transition:background .12s;}
-.kpi-chip:last-child{border-right:none;}
-.kpi-chip:hover{background:var(--surface2);}
-.kpi-chip.active{background:var(--surface2);}
-.kpi-num{font-size:22px;font-weight:900;line-height:1;letter-spacing:-.5px;}
-.kpi-lbl{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;}
-.kpi-campagne{display:flex;align-items:center;gap:6px;padding:8px 16px;background:rgba(29,131,72,.08);border:1px solid rgba(29,131,72,.2);border-radius:12px;flex-shrink:0;cursor:pointer;transition:background .12s;}
-.kpi-campagne:hover{background:rgba(29,131,72,.14);}
-.kpi-mailing{display:flex;align-items:center;gap:6px;padding:8px 16px;background:rgba(184,76,0,.07);border:1px solid rgba(184,76,0,.2);border-radius:12px;flex-shrink:0;cursor:pointer;transition:background .12s;}
-.kpi-mailing:hover{background:rgba(184,76,0,.12);}
-.mail-layout{flex:1;display:grid;grid-template-columns:320px 1fr;overflow:hidden;}
-.mail-list-col{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-.list-toolbar{padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
-.search-box{display:flex;align-items:center;gap:7px;background:var(--surface);border:1.5px solid var(--border);border-radius:9px;padding:7px 11px;}
-.search-box input{border:none;background:transparent;font-size:12.5px;color:var(--text);outline:none;width:100%;font-family:var(--font);}
-.search-box input::placeholder{color:var(--muted2);}
-.pipeline-legend{display:flex;gap:8px;flex-wrap:wrap;padding:7px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
-.leg{display:flex;align-items:center;gap:3px;font-size:10px;font-weight:600;color:var(--muted);}
-.leg-dot{width:7px;height:7px;border-radius:50%;}
-.email-list{flex:1;overflow-y:auto;}
-.date-group-label{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);padding:10px 14px 5px;}
-.email-item{display:flex;align-items:stretch;cursor:pointer;transition:background .12s;border-bottom:0.5px solid var(--border);}
-.email-item:hover{background:var(--surface);}
-.email-item.active{background:var(--blue-l);}
-.pipe-bar{width:3px;flex-shrink:0;}
-.email-inner{display:flex;align-items:flex-start;gap:9px;padding:10px 12px 10px 10px;flex:1;min-width:0;}
-.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;color:#fff;}
-.av-grey{background:var(--surface2);color:var(--muted);}
-.einfo{flex:1;min-width:0;}
-.etop{display:flex;align-items:center;justify-content:space-between;margin-bottom:1px;}
-.esender{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:155px;}
-.esender.bold{font-weight:700;}
-.edate{font-size:10px;color:var(--muted2);font-family:var(--mono);flex-shrink:0;}
-.esubject{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;}
-.epreview{font-size:11px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4;}
-.efooter{display:flex;gap:4px;margin-top:4px;}
-.pbadge{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px;display:inline-flex;align-items:center;}
-.unread-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:5px;}
-.connect-bar{padding:7px 20px;background:var(--orange-l);border-bottom:1px solid #f5c8a0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;}
-.connect-bar span{font-size:12px;color:var(--orange);font-weight:500;}
-.email-view{flex:1;overflow-y:auto;padding:20px 24px;display:none;}
-.email-view.visible{display:block;}
-.ev-header{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:12px;}
-.ev-subject{font-size:16px;font-weight:800;color:#fff;letter-spacing:-.3px;padding:14px 18px;background:#1D1D1F;}
-.ev-meta{display:flex;align-items:center;gap:10px;padding:10px 18px;background:var(--card);}
-.ev-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;}
-.ev-from{font-size:13px;font-weight:600;}
-.ev-email{font-size:11px;color:var(--muted);}
-.ev-date{font-size:11px;color:var(--muted2);font-family:var(--mono);margin-left:auto;}
-.ev-tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:6px;color:#fff;margin:0 18px 12px;cursor:pointer;}
-.ev-body{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:12px;font-size:13.5px;line-height:1.8;}
-.ev-actions{display:flex;gap:8px;}
-.compose-panel{display:none;flex:1;flex-direction:column;overflow:hidden;}
-.compose-panel.open{display:flex;}
-.compose-header{padding:14px 20px;border-bottom:1px solid var(--border);background:#1D1D1F;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-.compose-header h3{font-size:15px;font-weight:800;letter-spacing:-.3px;color:#fff;}
-.compose-body{flex:1;overflow-y:auto;padding:0 20px;background:var(--card);}
-.cf{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
-.cl{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);width:40px;flex-shrink:0;}
-.ci{border:none;background:transparent;font-family:var(--font);font-size:13px;color:var(--text);outline:none;flex:1;}
-.ci::placeholder{color:var(--muted2);}
-.compose-textarea{width:100%;border:none;background:transparent;font-family:var(--font);font-size:13.5px;color:var(--text);outline:none;resize:none;min-height:160px;line-height:1.8;padding:14px 0;display:block;}
-.compose-footer{padding:12px 20px;border-top:1px solid var(--border);background:var(--card);display:flex;align-items:center;gap:8px;flex-shrink:0;}
-.compose-footer-right{margin-left:auto;display:flex;gap:8px;}
-.section-wrap{flex:1;overflow-y:auto;padding:20px 24px;display:none;}
-.section-wrap.visible{display:block;}
-.card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:16px;}
-.card-head{padding:14px 18px;height:56px;box-sizing:border-box;border-bottom:1px solid #000;display:flex;align-items:center;justify-content:space-between;background:#1D1D1F;}
-.card-title{font-size:17px;font-weight:800;letter-spacing:-.3px;color:#fff;}
-.card-sub{font-size:11px;color:rgba(255,255,255,.45);}
-.card-action{font-size:11.5px;font-weight:600;color:rgba(255,255,255,.5);cursor:pointer;}
-.card-action:hover{color:#fff;}
-.card-body{padding:16px 18px;}
-.section-sep{height:1px;background:var(--border);margin:20px 0;}
-.templates-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}
-.template-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:all .15s;}
-.template-card:hover{border-color:var(--border2);box-shadow:0 2px 12px rgba(0,0,0,.06);}
-.template-head{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
-.template-name{font-size:13px;font-weight:700;}
-.template-badge{font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:5px;}
-.template-body{padding:14px;}
-.template-preview{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px;}
-.template-docs{display:flex;flex-direction:column;gap:4px;}
-.template-doc{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);padding:4px 8px;background:var(--surface);border-radius:6px;}
-.template-doc-icon{width:22px;height:26px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;flex-shrink:0;}
-.td-pdf{background:var(--red-l);color:var(--red);}
-.td-ppt{background:var(--orange-l);color:var(--orange);}
-.td-doc{background:var(--blue-l);color:var(--blue);}
-.td-vid{background:var(--purple-l);color:var(--purple);}
-.template-footer{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:7px;}
-.vars-bar{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;}
-.var-chip{font-size:10px;font-weight:600;padding:2px 8px;background:var(--purple-l);color:var(--purple);border-radius:4px;cursor:pointer;font-family:var(--mono);border:none;transition:all .12s;}
-.var-chip:hover{background:var(--purple);color:#fff;}
-.campaigns-layout{display:grid;grid-template-columns:240px 1fr;gap:14px;}
-.campaigns-sidebar{display:flex;flex-direction:column;gap:6px;}
-.campaign-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;cursor:pointer;transition:all .15s;}
-.campaign-card:hover{border-color:var(--border2);}
-.campaign-card.active{border-color:var(--text);}
-.campaign-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
-.campaign-name{font-size:13px;font-weight:700;}
-.cs{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px;}
-.cs-draft{background:var(--surface2);color:var(--muted);}
-.cs-active{background:var(--green-l);color:var(--green);}
-.cs-done{background:var(--surface2);color:var(--muted2);}
-.campaign-meta{font-size:11px;color:var(--muted);line-height:1.5;}
-.campaign-bar{margin-top:7px;height:3px;background:var(--surface2);border-radius:2px;overflow:hidden;}
-.campaign-bar-fill{height:100%;background:var(--green);border-radius:2px;}
-.btn-new-campaign{display:flex;align-items:center;justify-content:center;gap:6px;padding:11px;border:1.5px dashed var(--border2);border-radius:12px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;background:transparent;width:100%;font-family:var(--font);}
-.btn-new-campaign:hover{border-color:var(--text);color:var(--text);}
-.ed-label{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);display:block;margin-bottom:4px;}
-.ed-input{width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;color:var(--text);background:var(--surface);font-family:var(--font);outline:none;}
-.ed-input:focus{border-color:var(--border2);background:var(--card);}
-.ed-textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;color:var(--text);background:var(--surface);font-family:var(--font);outline:none;resize:vertical;min-height:100px;line-height:1.7;}
-.ed-textarea:focus{border-color:var(--border2);background:var(--card);}
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
-.stat-card{background:var(--surface);border-radius:10px;padding:11px 13px;}
-.stat-num{font-size:20px;font-weight:900;letter-spacing:-.5px;font-family:var(--mono);display:block;line-height:1.2;}
-.stat-lbl{font-size:10px;color:var(--muted);display:block;margin-top:2px;}
-.rcp-summary{background:var(--surface);border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
-.rcp-count{font-size:20px;font-weight:900;font-family:var(--mono);letter-spacing:-.5px;}
-.rcp-lbl{font-size:11px;color:var(--muted);}
-.rcp-breakdown{display:flex;gap:14px;}
-.rcp-item{text-align:center;}
-.rcp-num{font-size:13px;font-weight:700;font-family:var(--mono);display:block;}
-.rcp-sub{font-size:10px;color:var(--muted);display:block;}
-.schedule-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.schedule-lbl{font-size:11px;color:var(--muted);margin-bottom:3px;}
-.ed-divider{height:1px;background:var(--border);margin:10px 0;}
-.ed-sub-label{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:7px;}
-.quota-notice{display:none;background:var(--orange-l);border:1.5px solid #f5c8a0;border-radius:9px;padding:10px 13px;font-size:12.5px;color:var(--orange);margin-bottom:10px;}
-.quota-notice strong{display:block;font-weight:700;margin-bottom:1px;}
-.quota-notice a{color:var(--orange);font-weight:600;text-decoration:underline;margin-left:4px;}
-.ed-actions{display:flex;gap:8px;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--border);}
-.data-table{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
-.table-head{display:grid;grid-template-columns:1fr 120px 90px 90px;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--border);}
-.th{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
-.table-row{display:grid;grid-template-columns:1fr 120px 90px 90px;padding:9px 14px;border-bottom:0.5px solid var(--border);transition:background .1s;}
-.table-row:hover{background:var(--surface);}
-.table-row:last-child{border-bottom:none;}
-.td{font-size:12px;color:var(--text);display:flex;align-items:center;}
-.td.muted{color:var(--muted);}
-.ss{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px;}
-.ss-sent{background:var(--blue-l);color:var(--blue);}
-.ss-opened{background:var(--green-l);color:var(--green);}
-.ss-replied{background:var(--purple-l);color:var(--purple);}
-.settings-wrap{max-width:500px;display:flex;flex-direction:column;gap:14px;}
-.settings-block{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
-.sb-head{padding:14px 18px;height:56px;box-sizing:border-box;border-bottom:1px solid #000;background:#1D1D1F;font-size:15px;font-weight:800;letter-spacing:-.3px;color:#fff;display:flex;align-items:center;}
-.sb-body{padding:14px 18px;display:flex;flex-direction:column;gap:11px;}
-.s-row{display:flex;align-items:center;justify-content:space-between;gap:14px;}
-.s-lbl{font-size:13px;flex:1;}
-.s-sub{font-size:11px;color:var(--muted);margin-top:1px;}
-.s-input{width:190px;padding:7px 11px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:var(--font);color:var(--text);background:var(--surface);outline:none;}
-.s-input:focus{border-color:var(--border2);background:var(--card);}
-.s-div{height:1px;background:var(--border);}
-.s-note{background:var(--surface);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted);line-height:1.6;}
-.s-note strong{color:var(--text);display:block;margin-bottom:2px;font-size:12.5px;}
-.toggle{width:34px;height:19px;background:var(--surface2);border-radius:10px;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;border:none;}
-.toggle::after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
-.toggle.on{background:var(--green);}
-.toggle.on::after{transform:translateX(15px);}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--text);color:#fff;padding:9px 18px;border-radius:10px;font-size:12.5px;font-weight:600;opacity:0;transition:all .25s;pointer-events:none;z-index:9999;white-space:nowrap;}
+.btn-danger{background:#fff;color:var(--red);border:1.5px solid var(--red);}
+.btn-danger:hover{background:var(--red-l);}
+.btn-sm{padding:7px 13px;font-size:12px;}
+.btn-block{width:100%;justify-content:center;}
+
+/* Boutons OAuth */
+.oauth-btn{display:flex;align-items:center;justify-content:center;gap:12px;padding:14px 20px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;background:#fff;color:#1F1F1F;border:1.5px solid var(--border2);width:100%;margin-bottom:10px;}
+.oauth-btn:hover{border-color:#1F1F1F;background:var(--surface);}
+.oauth-btn svg{flex-shrink:0;}
+
+/* Empty state Boîte de réception */
+.empty-state{text-align:center;padding:48px 24px;}
+.empty-state-title{font-size:20px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px;}
+.empty-state-sub{font-size:13px;color:var(--muted);margin-bottom:24px;}
+
+/* Encart pédagogique */
+.notice{background:var(--blue-l);border-left:3px solid var(--blue);border-radius:8px;padding:14px 18px;font-size:12.5px;color:var(--blue);margin-bottom:18px;line-height:1.6;}
+.notice-warn{background:var(--orange-l);border-left-color:var(--orange);color:var(--orange);}
+.notice strong{font-weight:700;}
+
+/* Champs */
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.field input, .field select{width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:13.5px;font-family:var(--font);color:var(--text);background:#fff;outline:none;transition:border-color .12s;}
+.field input:focus, .field select:focus{border-color:var(--text);}
+.field-hint{font-size:11px;color:var(--muted);margin-top:5px;}
+.field-row{display:grid;grid-template-columns:1fr 100px;gap:10px;}
+
+/* Lien secondaire */
+.link-secondary{display:inline-block;margin-top:14px;font-size:12.5px;color:var(--muted);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;font-family:var(--font);}
+.link-secondary:hover{color:var(--text);}
+
+/* Modale IMAP autodetect */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px);}
+.modal-overlay.open{display:flex;}
+.modal{background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;}
+.modal-head{padding:18px 24px;border-bottom:1px solid var(--border);background:#1D1D1F;color:#fff;display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:15px;font-weight:800;letter-spacing:-.2px;}
+.modal-close{background:none;border:none;color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;}
+.modal-close:hover{background:rgba(255,255,255,.1);}
+.modal-body{padding:22px 24px;overflow-y:auto;flex:1;}
+.modal-foot{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+
+/* Statut détecté */
+.detected-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;background:var(--surface);font-size:12px;font-weight:600;color:var(--text);margin-bottom:14px;}
+.detected-pill .dot{width:7px;height:7px;border-radius:50%;background:var(--green);}
+.detected-pill.warn{background:var(--orange-l);color:var(--orange);}
+.detected-pill.warn .dot{background:var(--orange);}
+
+/* Sections paramètres */
+.settings-section{margin-bottom:14px;}
+.settings-section .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);}
+.settings-section .row:last-child{border-bottom:none;}
+.row-label{font-size:13px;font-weight:600;color:var(--text);}
+.row-value{font-size:12.5px;color:var(--muted);font-family:var(--mono);}
+
+/* DNS records (Track 2) */
+.dns-record{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:8px;font-family:var(--mono);font-size:12px;display:grid;grid-template-columns:60px 1fr 1fr auto;gap:12px;align-items:center;}
+.dns-record-type{font-weight:700;color:var(--purple);}
+.dns-record-name{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dns-record-value{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--text);color:#fff;padding:10px 18px;border-radius:10px;font-size:12.5px;font-weight:600;opacity:0;transition:all .25s;pointer-events:none;z-index:9999;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-.mail-subnav{padding:10px 10px 6px;display:flex;flex-direction:column;gap:1px;border-bottom:1px solid var(--border);flex-shrink:0;}
-.subnav-section-lbl{font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted2);padding:8px 8px 4px;}
-.subnav-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;cursor:pointer;transition:background .12s;font-size:12.5px;color:var(--muted);font-weight:500;}
-.subnav-item:hover{background:var(--surface);color:var(--text);}
-.subnav-item.active{background:var(--surface2);color:var(--text);font-weight:600;}
-.subnav-item-left{display:flex;align-items:center;gap:8px;}
-.subnav-badge{font-size:10px;font-weight:700;padding:1.5px 6px;border-radius:5px;color:#fff;min-width:18px;text-align:center;}
-.subnav-badge-grey{background:var(--muted2);}
-.onboarding-overlay{display:none;position:absolute;inset:0;background:var(--surface);z-index:10;align-items:center;justify-content:center;padding:32px;}
-.onboarding-overlay.visible{display:flex;}
-.onboarding-box{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:32px;max-width:480px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.08);}
-.onboarding-icon{width:48px;height:48px;background:#1D1D1F;border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:20px;}
-.onboarding-box h2{font-size:20px;font-weight:900;letter-spacing:-.4px;margin-bottom:6px;}
-.onboarding-box p{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:24px;}
-.onboarding-fields{display:flex;flex-direction:column;gap:12px;margin-bottom:20px;}
-.ob-row{display:flex;flex-direction:column;gap:4px;}
-.ob-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);}
-.ob-input{padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:var(--font);color:var(--text);background:var(--surface);outline:none;transition:border-color .12s;}
-.ob-input:focus{border-color:var(--border2);background:var(--card);}
-.ob-row-2{display:grid;grid-template-columns:1fr 80px;gap:8px;}
-.ob-sig-preview{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12px;color:var(--muted);line-height:1.7;display:none;}
-.ob-sig-preview.visible{display:block;}
-.ob-sig-name{font-weight:700;color:var(--text);font-size:13px;}
-.ob-sig-sep{height:1px;background:var(--border);margin:8px 0;}
-.ob-upload{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px dashed var(--border2);border-radius:10px;cursor:pointer;transition:all .12s;font-size:12.5px;color:var(--muted);}
-.ob-upload:hover{border-color:var(--text);color:var(--text);}
-.conversion-wall{display:none;position:absolute;inset:0;background:rgba(255,255,255,.92);backdrop-filter:blur(4px);z-index:20;align-items:center;justify-content:center;padding:32px;}
-.conversion-wall.visible{display:flex;}
-.cw-box{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:36px;max-width:400px;width:100%;text-align:center;box-shadow:0 12px 48px rgba(0,0,0,.12);}
-.cw-badge{display:inline-flex;align-items:center;gap:6px;background:#1D1D1F;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;margin-bottom:20px;}
-.cw-box h2{font-size:22px;font-weight:900;letter-spacing:-.5px;margin-bottom:10px;}
-.cw-box p{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:24px;}
-.cw-price{font-size:36px;font-weight:900;letter-spacing:-.8px;margin-bottom:4px;}
-.cw-price span{font-size:15px;font-weight:500;color:var(--muted);}
-.cw-features{display:flex;flex-direction:column;gap:7px;margin-bottom:24px;text-align:left;}
-.cw-feat{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);}
-.cw-feat svg{flex-shrink:0;color:var(--green);}
-.cw-actions{display:flex;flex-direction:column;gap:8px;}
-.btn-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;border:none;font-family:var(--font);width:100%;transition:all .15s;}
-.btn-cta-primary{background:#1D1D1F;color:#fff;}
-.btn-cta-primary:hover{opacity:.85;}
-.btn-cta-secondary{background:transparent;color:var(--muted);border:1.5px solid var(--border);}
-.btn-cta-secondary:hover{border-color:var(--text);color:var(--text);}
-.mail-main-col{display:flex;flex-direction:column;overflow:hidden;background:var(--surface);position:relative;}
-.tpl-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);backdrop-filter:blur(3px);z-index:100;align-items:center;justify-content:center;padding:24px;}
-.tpl-modal.visible{display:flex;}
-.tpl-modal-box{background:var(--card);border:1px solid var(--border);border-radius:20px;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 16px 60px rgba(0,0,0,.15);}
-.tpl-modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#1D1D1F;}
-.tpl-modal-title{font-size:15px;font-weight:800;letter-spacing:-.3px;color:#fff;}
-.tpl-modal-badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;color:#fff;}
-.tpl-modal-body{flex:1;overflow-y:auto;padding:20px;}
-.tpl-field{margin-bottom:14px;}
-.tpl-field-lbl{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:5px;display:block;}
-.tpl-field-val{font-size:13px;color:var(--text);background:var(--surface);border:1.5px solid var(--border);border-radius:9px;padding:8px 12px;line-height:1.5;}
-.tpl-body-edit{width:100%;min-height:180px;font-size:13px;color:var(--text);background:var(--surface);border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;line-height:1.8;font-family:var(--font);outline:none;resize:vertical;}
-.tpl-body-edit:focus{border-color:var(--border2);background:var(--card);}
-.tpl-vars{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;}
-.tpl-modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0;background:var(--card);}
-.tpl-modal-footer-right{margin-left:auto;display:flex;gap:8px;}
-.tpl-send-blocked{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);padding:6px 12px;background:var(--surface);border-radius:8px;border:1.5px solid var(--border);}
-.tpl-docs-list{display:flex;flex-direction:column;gap:4px;margin-top:6px;}
+.toast.error{background:var(--red);}
+.toast.ok{background:var(--green);}
 </style>
 </head>
 <body>
@@ -269,266 +127,216 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 <aside class="sidebar" id="sidebar"></aside>
 
 <div class="shell">
-    <div class="topbar">
-      <div class="topbar-row1">
-        <span class="topbar-title">Mail</span>
-      </div>
-      <div class="topbar-row2">
-        <div class="kpi-group">
-          <div class="kpi-chip" onclick="showList('inbox')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            <div><div class="kpi-num" id="kpi-inbox" style="color:#B84C00">0</div><div class="kpi-lbl">Recus</div></div>
-          </div>
-          <div class="kpi-chip" onclick="showList('sent')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0A66C2" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            <div><div class="kpi-num" id="kpi-sent" style="color:#0A66C2">0</div><div class="kpi-lbl">Envoyes</div></div>
-          </div>
-          <div class="kpi-chip" onclick="showList('drafts')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-            <div><div class="kpi-num" id="kpi-drafts" style="color:var(--muted)">0</div><div class="kpi-lbl">Brouillons</div></div>
-          </div>
-        </div>
-        <div class="kpi-mailing" onclick="showList('mailing')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          <div><div class="kpi-num" id="kpi-mailing" style="color:#B84C00">0</div><div class="kpi-lbl" style="color:#B84C00;opacity:.7">Mailing</div></div>
-        </div>
-        <div class="kpi-campagne" onclick="showSection('campaigns')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10l6 6v8a2 2 0 0 1-2 2z"/><polyline points="17 2 17 8 11 8"/></svg>
-          <div><div class="kpi-num" id="kpi-newsletter" style="color:var(--green)">0</div><div class="kpi-lbl" style="color:var(--green);opacity:.7">Newsletter</div></div>
-        </div>
-      </div>
+  <div class="topbar">
+    <div class="topbar-row1">
+      <span class="topbar-title">Mail</span>
     </div>
-
-    <div class="mail-layout">
-      <div class="mail-list-col">
-        <div class="mail-subnav">
-          <div class="subnav-section-lbl" style="color:var(--text);font-weight:800;font-size:14px;">Mail</div>
-          <button class="btn btn-dark" style="width:100%;margin-bottom:4px;justify-content:center;" onclick="openCompose()">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Nouveau message
-          </button>
-          <div class="subnav-item" id="snav-inbox" onclick="switchSubnav('inbox')">
-            <div class="subnav-item-left">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-              Recus
-            </div>
-            <span class="subnav-badge" style="background:#B84C00" id="badge-inbox">0</span>
-          </div>
-          <div class="subnav-item" id="snav-sent" onclick="switchSubnav('sent')">
-            <div class="subnav-item-left">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              Envoyes
-            </div>
-            <span class="subnav-badge" style="background:#0A66C2" id="badge-sent">0</span>
-          </div>
-          <div class="subnav-item" id="snav-drafts" onclick="switchSubnav('drafts')">
-            <div class="subnav-item-left">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-              Brouillons
-            </div>
-            <span class="subnav-badge subnav-badge-grey" id="badge-drafts">0</span>
-          </div>
-          <div class="subnav-section-lbl" style="margin-top:4px;color:var(--text);font-weight:800;font-size:14px;">Templates</div>
-          <div class="subnav-item" onclick="previewTemplate('prospection')">
-            <div class="subnav-item-left">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-              Mailing Prospection
-            </div>
-          </div>
-          <div class="subnav-item" onclick="previewTemplate('visio')">
-            <div class="subnav-item-left">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-              Post-visio
-            </div>
-          </div>
-          <div class="subnav-item" onclick="previewTemplate('devis')">
-            <div class="subnav-item-left">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              Devis
-            </div>
-          </div>
-          <div class="subnav-item" onclick="previewTemplate('facture')">
-            <div class="subnav-item-left">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-              Facture
-            </div>
-          </div>
-          <div class="subnav-item" onclick="previewTemplate('newsletter')">
-            <div class="subnav-item-left">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10l6 6v8a2 2 0 0 1-2 2z"/><polyline points="17 2 17 8 11 8"/></svg>
-              Newsletter
-            </div>
-          </div>
-        </div>
-        <div class="list-toolbar">
-          <div class="search-box">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input type="text" placeholder="Rechercher...">
-          </div>
-          <button id="btn-sync" type="button" onclick="syncMails()" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font:600 11.5px var(--font);cursor:pointer;">
-            <svg id="btn-sync-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            <span id="btn-sync-label">Synchroniser</span>
-          </button>
-        </div>
-        <div class="email-list" id="list-inbox">
-          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;text-align:center;color:var(--muted2);">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:.4"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Boite vide</div>
-            <div style="font-size:11.5px;">Connectez votre boite mail pour voir vos messages.</div>
-          </div>
-        </div>
-        <div class="email-list" id="list-sent" style="display:none">
-          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;text-align:center;color:var(--muted2);">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:.4"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Aucun envoi</div>
-            <div style="font-size:11.5px;">Vos emails envoyes apparaitront ici.</div>
-          </div>
-        </div>
-        <div class="email-list" id="list-drafts" style="display:none">
-          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;text-align:center;color:var(--muted2);">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:.4"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-            <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Aucun brouillon</div>
-            <div style="font-size:11.5px;">Vos brouillons sauvegardes apparaitront ici.</div>
-          </div>
-        </div>
-        <div class="email-list" id="list-mailing" style="display:none">
-          <div id="mailing-list-content">
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;text-align:center;color:var(--muted2);">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:.4"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-              <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Aucun prospect en colonne Mailing</div>
-              <div style="font-size:11.5px;">Deplacez des fiches dans la colonne Mailing du Pipeline.</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mail-main-col">
-        <div class="connect-bar" id="connectBar">
-          <span>Boite mail non connectee -- configurez vos parametres SMTP pour envoyer et recevoir.</span>
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn btn-outline btn-sm" onclick="showSection('settings')">Configurer</button>
-            <button class="btn btn-dark btn-sm" onclick="toggleConnect()">Connecter</button>
-          </div>
-        </div>
-
-        <div class="onboarding-overlay visible" id="onboarding-overlay">
-          <div class="onboarding-box">
-            <div class="onboarding-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            </div>
-            <h2>Configurer votre boite mail</h2>
-            <p>Connectez votre adresse email pour envoyer directement depuis MUP, generer votre signature automatique et utiliser les templates de prospection.</p>
-            <div class="onboarding-fields">
-              <div class="ob-row-2">
-                <div class="ob-row">
-                  <div class="ob-lbl">Serveur SMTP</div>
-                  <input class="ob-input" type="text" placeholder="smtp.gmail.com" id="ob-smtp">
-                </div>
-                <div class="ob-row">
-                  <div class="ob-lbl">Port</div>
-                  <input class="ob-input" type="number" placeholder="587" id="ob-port">
-                </div>
-              </div>
-              <div class="ob-row">
-                <div class="ob-lbl">Adresse email</div>
-                <input class="ob-input" type="email" placeholder="vous@exemple.fr" id="ob-email" oninput="updateSigPreview()">
-              </div>
-              <div class="ob-row">
-                <div class="ob-lbl">Mot de passe mail</div>
-                <input class="ob-input" type="password" placeholder="Votre mot de passe email" id="ob-password">
-              </div>
-              <div class="ob-row">
-                <div class="ob-lbl">Nom affiche</div>
-                <input class="ob-input" type="text" placeholder="ex : Marie Dupont -- Acme Events" id="ob-name" oninput="updateSigPreview()">
-              </div>
-              <div class="ob-row">
-                <div class="ob-lbl">Telephone</div>
-                <input class="ob-input" type="tel" placeholder="06 XX XX XX XX" id="ob-phone" oninput="updateSigPreview()">
-              </div>
-              <div class="ob-row" id="sig-preview-row" style="display:none">
-                <div class="ob-lbl">Apercu signature generee</div>
-                <div class="ob-sig-preview visible" id="sig-preview"></div>
-              </div>
-            </div>
-            <div style="display:flex;gap:8px;justify-content:flex-end">
-              <button class="btn btn-outline" onclick="dismissOnboarding()">Plus tard</button>
-              <button class="btn btn-dark" onclick="completeOnboarding()">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                Connecter ma boite
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="compose-panel" id="compose-panel">
-          <div class="compose-header">
-            <h3 id="compose-title">Nouveau message</h3>
-            <button class="btn btn-outline btn-sm" style="border-color:rgba(255,255,255,.3);color:#fff" onclick="closeCompose()">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-          <div class="compose-body">
-            <div class="cf"><span class="cl">A</span><input class="ci" type="text" id="compose-to" placeholder="Destinataire..."></div>
-            <div class="cf"><span class="cl">Objet</span><input class="ci" type="text" id="compose-subject" placeholder="Objet..."></div>
-            <textarea class="compose-textarea" id="compose-body" placeholder="Votre message..."></textarea>
-          </div>
-          <div class="compose-footer">
-            <div class="compose-footer-right">
-              <button class="btn btn-outline btn-sm" onclick="showToast('Brouillon enregistre')">Brouillon</button>
-              <button class="btn btn-dark" onclick="sendEmail()">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Envoyer
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="section-wrap" id="section-settings">
-          <div class="settings-wrap">
-            <div class="settings-block">
-              <div class="sb-head">Connexion boite mail</div>
-              <div class="sb-body">
-                <div class="s-row"><div><div class="s-lbl">Serveur SMTP</div></div><input class="s-input" type="text" placeholder="smtp.gmail.com"></div>
-                <div class="s-row"><div class="s-lbl">Port</div><input class="s-input" type="number" placeholder="587" style="width:90px"></div>
-                <div class="s-row"><div><div class="s-lbl">Adresse email</div></div><input class="s-input" type="email" placeholder="vous@exemple.fr"></div>
-                <div class="s-row"><div><div class="s-lbl">Mot de passe</div></div><input class="s-input" type="password" placeholder="************"></div>
-                <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:2px">
-                  <button class="btn btn-dark btn-sm" onclick="showToast('Parametres enregistres')">Enregistrer</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
+    <div class="subtabs" role="tablist">
+      <button class="subtab active" role="tab" data-tab="inbox">Boîte de réception</button>
+      <button class="subtab" role="tab" data-tab="campaigns">Campagnes</button>
+      <button class="subtab" role="tab" data-tab="settings">Paramètres</button>
     </div>
   </div>
 
-<div class="tpl-modal" id="tpl-modal" onclick="if(event.target===this)closeTplModal()">
-  <div class="tpl-modal-box">
-    <div class="tpl-modal-head">
-      <span class="tpl-modal-title" id="tpl-modal-title">Template</span>
-      <button class="btn btn-outline btn-sm" style="border-color:rgba(255,255,255,.3);color:#fff" onclick="closeTplModal()">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  <div class="content">
+
+    <!-- ────── BOÎTE DE RÉCEPTION (Track 1) ────── -->
+    <div class="tab-pane active" id="tab-inbox" role="tabpanel">
+      <div id="inbox-empty">
+        <div class="card">
+          <div class="empty-state">
+            <div class="empty-state-title">Connectez votre boîte mail professionnelle</div>
+            <div class="empty-state-sub">Recommandé — connexion sécurisée en 1 clic, sans mot de passe à saisir.</div>
+            <div style="max-width:340px;margin:0 auto;">
+              <button class="oauth-btn" onclick="oauthGoogle()">
+                <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A10.99 10.99 0 0 0 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.99 10.99 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A10.99 10.99 0 0 0 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Connecter avec Google
+              </button>
+              <button class="oauth-btn" onclick="oauthMicrosoft()">
+                <svg width="18" height="18" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#F25022" d="M0 0h11v11H0z"/>
+                  <path fill="#7FBA00" d="M12 0h11v11H12z"/>
+                  <path fill="#00A4EF" d="M0 12h11v11H0z"/>
+                  <path fill="#FFB900" d="M12 12h11v11H12z"/>
+                </svg>
+                Connecter avec Microsoft
+              </button>
+              <button class="link-secondary" onclick="openImapModal()">Mon fournisseur n'est pas dans la liste</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="inbox-connected" style="display:none;">
+        <div class="card">
+          <h3>Boîte connectée</h3>
+          <p class="card-sub">Liste des emails reçus, composeur 1:1 — disponible quand votre boîte est connectée.</p>
+          <div id="inbox-info" style="font-size:13px;color:var(--muted);"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────── CAMPAGNES (Track 2 — Resend) ────── -->
+    <div class="tab-pane" id="tab-campaigns" role="tabpanel">
+      <div id="campaigns-setup">
+        <div class="card">
+          <h3>Configurer votre domaine d'envoi</h3>
+          <p class="card-sub">Pour envoyer des campagnes de prospection avec une délivrabilité optimale, vérifiez votre domaine.</p>
+
+          <div class="notice">
+            <strong>Pourquoi un domaine vérifié ?</strong> Les campagnes à volume sont envoyées via Resend avec une infrastructure dédiée (IP réputée, SPF, DKIM, DMARC gérés). Sans vérification de votre domaine, vos mails finissent en spam.
+          </div>
+
+          <div class="field">
+            <label for="domain-input">Votre domaine d'envoi</label>
+            <input type="text" id="domain-input" placeholder="monentreprise.fr" disabled />
+            <div class="field-hint">Le domaine doit être celui de votre adresse pro (ex : si votre mail est contact@monentreprise.fr, utilisez monentreprise.fr).</div>
+          </div>
+
+          <button class="btn btn-dark" disabled onclick="verifyDomain()">Vérifier mon domaine</button>
+
+          <div class="notice notice-warn" style="margin-top:18px;">
+            <strong>Configuration en cours.</strong> L'API Resend sera activée en session 6. Pour l'instant, le domaine movup.io est déjà vérifié comme domaine d'envoi commun.
+          </div>
+        </div>
+      </div>
+
+      <div id="campaigns-active" style="display:none;">
+        <div class="card">
+          <h3>Mes campagnes</h3>
+          <p class="card-sub">Liste des campagnes en cours, programmées et terminées.</p>
+          <button class="btn btn-dark btn-block" disabled>Nouvelle campagne</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────── PARAMÈTRES ────── -->
+    <div class="tab-pane" id="tab-settings" role="tabpanel">
+      <div class="card">
+        <h3>Boîte personnelle (1:1)</h3>
+        <p class="card-sub">Adresse utilisée pour répondre aux prospects et envoyer des messages individuels.</p>
+        <div class="settings-section">
+          <div class="row">
+            <span class="row-label">Statut</span>
+            <span class="row-value" id="settings-mail-status">Non connectée</span>
+          </div>
+          <div class="row">
+            <span class="row-label">Adresse</span>
+            <span class="row-value" id="settings-mail-email">—</span>
+          </div>
+          <div class="row">
+            <span class="row-label">Provider</span>
+            <span class="row-value" id="settings-mail-provider">—</span>
+          </div>
+        </div>
+        <button class="btn btn-danger btn-sm" id="settings-disconnect" onclick="disconnectMail()" style="display:none;">Déconnecter</button>
+      </div>
+
+      <div class="card">
+        <h3>Domaine d'envoi (campagnes)</h3>
+        <p class="card-sub">Domaine vérifié sur Resend pour l'envoi de campagnes à volume.</p>
+        <div class="settings-section">
+          <div class="row">
+            <span class="row-label">Statut</span>
+            <span class="row-value">À configurer (session 6)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Signature email</h3>
+        <p class="card-sub">Bloc inséré automatiquement en bas de vos messages 1:1.</p>
+        <div class="field">
+          <textarea id="signature-input" rows="4" disabled style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-family:var(--font);font-size:13px;color:var(--text);background:#fff;outline:none;resize:vertical;" placeholder="Cordialement,&#10;Prénom NOM&#10;Entreprise"></textarea>
+        </div>
+        <button class="btn btn-outline btn-sm" disabled>Enregistrer</button>
+      </div>
+
+      <div class="card">
+        <h3>Désinscription (RGPD)</h3>
+        <p class="card-sub">URL et page de désabonnement pour les destinataires de campagnes — obligatoire RGPD.</p>
+        <div class="settings-section">
+          <div class="row">
+            <span class="row-label">URL désinscription</span>
+            <span class="row-value">À configurer (session 7)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Adresses techniques (bounce / plainte)</h3>
+        <p class="card-sub">Adresses recevant les notifications techniques d'erreur de livraison et de plainte spam.</p>
+        <div class="settings-section">
+          <div class="row">
+            <span class="row-label">Bounce</span>
+            <span class="row-value">À configurer (session 8)</span>
+          </div>
+          <div class="row">
+            <span class="row-label">Plainte</span>
+            <span class="row-value">À configurer (session 8)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ────── MODALE IMAP AUTODETECT ────── -->
+<div class="modal-overlay" id="imap-modal" onclick="if(event.target===this)closeImapModal()">
+  <div class="modal" role="dialog" aria-labelledby="imap-modal-title">
+    <div class="modal-head">
+      <span class="modal-title" id="imap-modal-title">Connecter une boîte IMAP</span>
+      <button class="modal-close" onclick="closeImapModal()" aria-label="Fermer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
-    <div class="tpl-modal-body">
-      <div class="tpl-field">
-        <span class="tpl-field-lbl">Objet</span>
-        <div class="tpl-field-val" id="tpl-modal-subject"></div>
+    <div class="modal-body">
+
+      <div class="field">
+        <label for="im-email">Votre adresse email</label>
+        <input type="email" id="im-email" placeholder="prenom.nom@exemple.fr" autocomplete="email" />
       </div>
-      <div class="tpl-field">
-        <span class="tpl-field-lbl">Corps du message</span>
-        <textarea class="tpl-body-edit" id="tpl-modal-body-edit"></textarea>
+
+      <div id="im-detected" style="display:none;"></div>
+
+      <div id="im-fields" style="display:none;">
+        <div class="field">
+          <label for="im-password">Mot de passe</label>
+          <input type="password" id="im-password" placeholder="••••••••" autocomplete="current-password" />
+          <div class="field-hint" id="im-password-hint"></div>
+        </div>
+
+        <div id="im-manual" style="display:none;">
+          <div class="field">
+            <label>Serveur IMAP (réception)</label>
+            <div class="field-row">
+              <input type="text" id="im-imap-host" placeholder="imap.exemple.fr" />
+              <input type="number" id="im-imap-port" placeholder="993" value="993" />
+            </div>
+          </div>
+          <div class="field">
+            <label>Serveur SMTP (envoi)</label>
+            <div class="field-row">
+              <input type="text" id="im-smtp-host" placeholder="smtp.exemple.fr" />
+              <input type="number" id="im-smtp-port" placeholder="465" value="465" />
+            </div>
+          </div>
+        </div>
+
+        <div id="im-test-result" style="display:none;margin-top:10px;font-size:12.5px;"></div>
       </div>
+
     </div>
-    <div class="tpl-modal-footer">
-      <div class="tpl-modal-footer-right">
-        <button class="btn btn-outline btn-sm" onclick="closeTplModal()">Fermer</button>
-        <button class="btn btn-dark btn-sm" onclick="useTplInCompose()">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          Utiliser
-        </button>
-      </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-sm" onclick="closeImapModal()">Annuler</button>
+      <button class="btn btn-outline btn-sm" id="im-test-btn" onclick="testImap()" disabled>Tester</button>
+      <button class="btn btn-dark btn-sm" id="im-save-btn" onclick="saveImap()" disabled>Connecter</button>
     </div>
   </div>
 </div>
@@ -536,231 +344,219 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 <div class="toast" id="toast"></div>
 
 <script>
-function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2500);}
-
-var TEMPLATES_DATA = {
-  prospection:{title:'Prospection initiale',subject:'Solutions pour votre activite dans {sector}',body:'Bonjour {contact},\n\nJe me permets de vous contacter au sujet de votre activite dans le secteur {sector}.\n\n{company_sender} accompagne des structures comme {company} dans le deploiement de solutions evenementielles.\n\nSeriez-vous disponible pour un echange de 20 minutes ?\n\nCordialement,'},
-  visio:{title:'Suivi post-visio',subject:'Suite a notre visioconference',body:'Bonsoir {contact},\n\nEncore merci pour le temps que vous m\'avez accorde lors de notre visioconference.\n\nVous trouverez en pieces jointes les documents presentes.\n\nCordialement,'},
-  devis:{title:'Envoi de devis',subject:'Devis #{devis_num}',body:'Bonjour {contact},\n\nSuite a notre echange, veuillez trouver ci-joint le devis #{devis_num}.\n\nCordialement,'},
-  facture:{title:'Envoi de facture',subject:'Facture #{facture_num}',body:'Bonjour {contact},\n\nVeuillez trouver ci-joint la facture #{facture_num}.\n\nReglement sous 30 jours.\n\nCordialement,'},
-  newsletter:{title:'Newsletter mensuelle',subject:'Actualites du mois',body:'Bonjour,\n\nVoici les dernieres actualites du mois.\n\n[BLOC ACTUALITE]\n\nBien cordialement,'}
-};
-
-var currentTpl = null;
-function previewTemplate(type){
-  var t=TEMPLATES_DATA[type];if(!t)return;
-  currentTpl=type;
-  document.getElementById('tpl-modal-title').textContent=t.title;
-  document.getElementById('tpl-modal-subject').textContent=t.subject;
-  document.getElementById('tpl-modal-body-edit').value=t.body;
-  document.getElementById('tpl-modal').classList.add('visible');
-}
-function closeTplModal(){document.getElementById('tpl-modal').classList.remove('visible');currentTpl=null;}
-function useTplInCompose(){
-  if(!currentTpl)return;
-  var t=TEMPLATES_DATA[currentTpl];
-  var body=document.getElementById('tpl-modal-body-edit').value;
-  var subject=document.getElementById('tpl-modal-subject').textContent;
-  closeTplModal();
-  document.getElementById('compose-title').textContent=t.title;
-  document.getElementById('compose-to').value='';
-  document.getElementById('compose-subject').value=subject;
-  document.getElementById('compose-body').value=body;
-  showCompose();
-}
-
-function switchSubnav(id){
-  document.querySelectorAll('.subnav-item').forEach(function(el){el.classList.remove('active');});
-  var item=document.getElementById('snav-'+id);if(item)item.classList.add('active');
-  showList(id);
-}
-function showList(id){
-  hideRight();
-  ['inbox','sent','drafts','mailing'].forEach(function(l){
-    var el=document.getElementById('list-'+l);if(el)el.style.display=l===id?'':'none';
+// ────── Sous-onglets ──────
+document.querySelectorAll('.subtab').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.subtab').forEach(function(b){ b.classList.toggle('active', b === btn); });
+    var name = btn.dataset.tab;
+    document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.toggle('active', p.id === 'tab-' + name); });
   });
-}
-function showSection(id){
-  hideRight();
-  var sec=document.getElementById('section-'+id);if(sec)sec.classList.add('visible');
-}
-function hideRight(){
-  var cp=document.getElementById('compose-panel');cp.style.display='none';cp.classList.remove('open');
-  ['settings'].forEach(function(s){
-    var el=document.getElementById('section-'+s);if(el)el.classList.remove('visible');
-  });
-}
-function openCompose(){
-  document.getElementById('compose-title').textContent='Nouveau message';
-  document.getElementById('compose-to').value='';
-  document.getElementById('compose-subject').value='';
-  document.getElementById('compose-body').value='';
-  showCompose();
-}
-function showCompose(){
-  hideRight();
-  var cp=document.getElementById('compose-panel');cp.style.display='flex';cp.classList.add('open');
-}
-function closeCompose(){
-  var cp=document.getElementById('compose-panel');cp.style.display='none';cp.classList.remove('open');
-}
-var MUP_USER_ID='default';
-async function sendEmail(){
-  var to=document.getElementById('compose-to').value.trim();
-  var subject=document.getElementById('compose-subject').value.trim();
-  var body_text=document.getElementById('compose-body').value;
-  if(!to){showToast('Indiquez un destinataire');return;}
-  if(!subject){showToast('Indiquez un objet');return;}
-  showToast('Transmission en cours...');
+});
+
+// ────── Status mail (charge au boot) ──────
+async function loadStatus(){
   try {
-    var resp=await fetch('/api/mail/send',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({userId:MUP_USER_ID,to:to,subject:subject,body_text:body_text})
-    });
-    var data=await resp.json().catch(function(){return {};});
-    if(resp.status===201){
-      showToast('Mail transmis');
-      closeCompose();
-    } else if(resp.status===503){
-      showToast('Mail non configuré sur le serveur — contactez le support');
-    } else if(resp.status===502){
-      showToast('Erreur SMTP — '+(data.error||'serveur tiers indisponible'));
-    } else if(resp.status===400){
-      showToast(data.error||'Paramètres invalides');
-    } else {
-      showToast('Erreur — '+(data.error||resp.status));
-    }
-  } catch(e){
-    showToast('Erreur réseau — '+e.message);
-  }
-}
-async function syncMails(){
-  var btn=document.getElementById('btn-sync');
-  var label=document.getElementById('btn-sync-label');
-  if(btn) btn.disabled=true;
-  if(label) label.textContent='Synchronisation...';
-  try {
-    var resp=await fetch('/api/mail/sync',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({userId:MUP_USER_ID})
-    });
-    var data=await resp.json().catch(function(){return {};});
-    if(resp.ok){
-      showToast(data.synced+' mail'+(data.synced>1?'s':'')+' synchronisé'+(data.synced>1?'s':''));
-    } else if(resp.status===503){
-      showToast('Mail non configuré');
-    } else if(resp.status===502){
-      showToast('Erreur IMAP — '+(data.error||'serveur tiers indisponible'));
-    } else {
-      showToast('Erreur — '+(data.error||resp.status));
-    }
-  } catch(e){
-    showToast('Erreur réseau — '+e.message);
-  } finally {
-    if(btn) btn.disabled=false;
-    if(label) label.textContent='Synchroniser';
-  }
-}
-function toggleConnect(){
-  var bar=document.getElementById('connectBar');
-  if(bar)bar.style.display='none';
-  showToast('Boite mail connectee');
-}
-function updateSigPreview(){
-  var name=document.getElementById('ob-name').value;
-  var email=document.getElementById('ob-email').value;
-  var phone=document.getElementById('ob-phone').value;
-  if(!name&&!email)return;
-  var row=document.getElementById('sig-preview-row');
-  var preview=document.getElementById('sig-preview');
-  row.style.display='block';
-  preview.innerHTML='<div class="ob-sig-name">'+(name||'Votre nom')+' -- {company_sender}</div><div class="ob-sig-sep"></div>'+(email?'<div>'+email+'</div>':'')+(phone?'<div>'+phone+'</div>':'');
-}
-function dismissOnboarding(){document.getElementById('onboarding-overlay').classList.remove('visible');}
-async function completeOnboarding(){
-  var smtp_host=document.getElementById('ob-smtp').value.trim();
-  var smtp_port=parseInt(document.getElementById('ob-port').value,10)||587;
-  var email=document.getElementById('ob-email').value.trim();
-  var password=document.getElementById('ob-password').value;
-  var name=document.getElementById('ob-name').value.trim();
-  var phone=document.getElementById('ob-phone').value.trim();
-  if(!smtp_host||!email||!password){showToast('Renseignez serveur SMTP, email et mot de passe');return;}
-  showToast('Vérification SMTP...');
-  var smtpTest=await fetch('/api/mail/test-smtp',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({smtp_host:smtp_host,smtp_port:smtp_port,smtp_secure:smtp_port===465,smtp_user:email,smtp_pass:password})
-  });
-  var smtpData=await smtpTest.json().catch(function(){return {};});
-  if(!smtpTest.ok){showToast('SMTP refusé — '+(smtpData.error||smtpTest.status));return;}
-  showToast('Vérification IMAP...');
-  var imapTest=await fetch('/api/mail/test-imap',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({smtp_host:smtp_host,smtp_user:email,smtp_pass:password})
-  });
-  var imapData=await imapTest.json().catch(function(){return {};});
-  if(!imapTest.ok){showToast('IMAP refusé — '+(imapData.error||imapTest.status));return;}
-  var sigHtml='<div style="font-weight:700">'+(name||email)+'</div>'+(email?'<div>'+email+'</div>':'')+(phone?'<div>'+phone+'</div>':'');
-  var sigText=(name||email)+(email?'\n'+email:'')+(phone?'\n'+phone:'');
-  var save=await fetch('/api/mail/settings',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      userId:MUP_USER_ID,
-      smtp_host:smtp_host,smtp_port:smtp_port,smtp_secure:smtp_port===465,
-      smtp_user:email,smtp_pass:password,
-      from_name:name,from_email:email,
-      signature_html:sigHtml,signature_text:sigText
-    })
-  });
-  if(!save.ok){var sd=await save.json().catch(function(){return {};});showToast('Enregistrement échoué — '+(sd.error||save.status));return;}
-  document.getElementById('onboarding-overlay').classList.remove('visible');
-  var bar=document.getElementById('connectBar');if(bar)bar.style.display='none';
-  showToast('Boîte mail configurée');
-}
-
-// Load mailing from pipeline
-async function loadMailingList(){
-  var cards=[];
-  try { var resp=await fetch('/api/pipeline'); if(resp.ok){ var data=await resp.json(); if(Array.isArray(data)) cards=data; } } catch(e){}
-  var mailing=cards.filter(function(c){return c.col==='mailing';});
-  var kpi=document.getElementById('kpi-mailing');
-  if(kpi)kpi.textContent=mailing.length;
-  var container=document.getElementById('mailing-list-content');
-  if(!container||!mailing.length)return;
-  var html='<div class="date-group-label">'+mailing.length+' prospect'+(mailing.length>1?'s':'')+' -- Colonne Mailing</div>';
-  mailing.forEach(function(c){
-    var name=c.company||c.co||c.name||'Contact';
-    var email=c.email||'';
-    var initials=name.split(' ').map(function(w){return w[0]||'';}).join('').substring(0,2).toUpperCase();
-    html+='<div class="email-item" onclick="openComposeTo(\''+name.replace(/'/g,"\\'")+'\',\''+email.replace(/'/g,"\\'")+'\')"><div class="pipe-bar" style="background:#B84C00"></div><div class="email-inner"><div class="av" style="background:#B84C00">'+initials+'</div><div class="einfo"><div class="etop"><span class="esender bold">'+name+'</span><span class="edate">Mailing</span></div>'+(email?'<div class="epreview">'+email+'</div>':'<div class="epreview" style="color:var(--muted2)">Pas d\'email</div>')+'</div></div></div>';
-  });
-  container.innerHTML=html;
-}
-function openComposeTo(name,email){
-  document.getElementById('compose-title').textContent='Prospection -- '+name;
-  document.getElementById('compose-to').value=email||'';
-  document.getElementById('compose-subject').value='Solutions pour votre activite';
-  document.getElementById('compose-body').value='';
-  showCompose();
-}
-
-document.addEventListener('DOMContentLoaded',async function(){
-  loadMailingList();
-  try {
-    var resp=await fetch('/api/mail/settings/'+encodeURIComponent(MUP_USER_ID));
-    if(resp.ok){
-      var data=await resp.json();
-      if(data && data.onboarded_at){
-        document.getElementById('onboarding-overlay').classList.remove('visible');
-        var bar=document.getElementById('connectBar');if(bar)bar.style.display='none';
-      }
+    var r = await fetch('/api/v2/mail/status');
+    if(!r.ok) return;
+    var s = await r.json();
+    document.getElementById('settings-mail-status').textContent = s.connected ? 'Connectée' : 'Non connectée';
+    document.getElementById('settings-mail-email').textContent = s.email || '—';
+    document.getElementById('settings-mail-provider').textContent = s.provider ? s.provider.toUpperCase() : '—';
+    if(s.connected){
+      document.getElementById('inbox-empty').style.display = 'none';
+      document.getElementById('inbox-connected').style.display = 'block';
+      document.getElementById('inbox-info').textContent = 'Connecté à ' + (s.email || '—') + ' via ' + (s.provider || '—').toUpperCase() + '. Liste des emails disponible en session ultérieure.';
+      document.getElementById('settings-disconnect').style.display = 'inline-flex';
     }
   } catch(e){}
-});
+}
+loadStatus();
+
+// ────── OAuth stubs (sessions 2 et 3) ──────
+async function oauthGoogle(){
+  toast('OAuth Google disponible en session 2 (voir README-mail.md)', 'error');
+}
+async function oauthMicrosoft(){
+  toast('OAuth Microsoft disponible en session 3 (voir README-mail.md)', 'error');
+}
+
+// ────── Modale IMAP autodetect ──────
+var PRESETS = null;
+var currentPreset = null;
+
+async function loadPresets(){
+  if(PRESETS) return PRESETS;
+  try {
+    var r = await fetch('/js/provider-presets.json');
+    PRESETS = await r.json();
+    return PRESETS;
+  } catch(e){ PRESETS = {}; return PRESETS; }
+}
+
+function openImapModal(){
+  document.getElementById('imap-modal').classList.add('open');
+  document.getElementById('im-email').focus();
+}
+function closeImapModal(){
+  document.getElementById('imap-modal').classList.remove('open');
+  document.getElementById('im-email').value = '';
+  document.getElementById('im-password').value = '';
+  document.getElementById('im-detected').style.display = 'none';
+  document.getElementById('im-fields').style.display = 'none';
+  document.getElementById('im-manual').style.display = 'none';
+  document.getElementById('im-test-btn').disabled = true;
+  document.getElementById('im-save-btn').disabled = true;
+  document.getElementById('im-test-result').style.display = 'none';
+  currentPreset = null;
+}
+
+document.getElementById('im-email').addEventListener('blur', autodetectProvider);
+document.getElementById('im-email').addEventListener('change', autodetectProvider);
+
+async function autodetectProvider(){
+  var email = (document.getElementById('im-email').value || '').trim().toLowerCase();
+  if(!email || !email.includes('@')) return;
+  var domain = email.split('@')[1];
+  if(!domain) return;
+  await loadPresets();
+  var preset = PRESETS[domain] || PRESETS._default;
+  currentPreset = preset;
+
+  var det = document.getElementById('im-detected');
+  var fields = document.getElementById('im-fields');
+  var manual = document.getElementById('im-manual');
+  var hint = document.getElementById('im-password-hint');
+
+  // OAuth recommandé ?
+  if(preset.provider === 'oauth-google'){
+    det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice">Connexion <strong>OAuth Google</strong> recommandée — bouton "Connecter avec Google" ci-dessous, plus sécurisée. Si vous préférez utiliser un mot de passe d\'application, continuez ci-dessous.</div>';
+    det.style.display = 'block';
+  } else if(preset.provider === 'oauth-microsoft'){
+    det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice">Connexion <strong>OAuth Microsoft</strong> recommandée. Si vous préférez utiliser un mot de passe IMAP, continuez ci-dessous.</div>';
+    det.style.display = 'block';
+  } else if(preset.provider === 'imap-bridge'){
+    det.innerHTML = '<div class="detected-pill warn"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice notice-warn"><strong>Configuration spéciale.</strong> ' + (preset.note || '') + ' <a href="' + (preset.help_url || '#') + '" target="_blank" style="color:inherit;text-decoration:underline;">Aide officielle</a></div>';
+    det.style.display = 'block';
+  } else if(preset.provider === 'imap-manual' || preset.manual){
+    det.innerHTML = '<div class="detected-pill warn"><span class="dot"></span>Domaine personnalisé</div><div class="notice notice-warn">Saisissez les paramètres IMAP/SMTP manuellement ci-dessous. Demandez-les à votre administrateur si besoin.</div>';
+    det.style.display = 'block';
+    manual.style.display = 'block';
+  } else {
+    det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div>';
+    if(preset.app_password_required){
+      det.innerHTML += '<div class="notice notice-warn"><strong>Mot de passe d\'application requis.</strong> ' + (preset.note || '') + ' <a href="' + (preset.help_url || '#') + '" target="_blank" style="color:inherit;text-decoration:underline;">Générer mon mot de passe</a></div>';
+    }
+    det.style.display = 'block';
+  }
+
+  if(preset.app_password_required){
+    hint.innerHTML = 'Mot de passe d\'application 16 caractères. <a href="' + (preset.help_url || '#') + '" target="_blank" style="color:var(--text);text-decoration:underline;">Comment l\'obtenir ?</a>';
+  } else if(preset.help_url){
+    hint.innerHTML = '<a href="' + (preset.help_url || '#') + '" target="_blank" style="color:var(--muted);text-decoration:underline;">Mot de passe oublié ? Espace client ' + preset.label + '</a>';
+  } else {
+    hint.textContent = '';
+  }
+
+  // Préremplissage manuel si applicable
+  if(preset.imap_host) document.getElementById('im-imap-host').value = preset.imap_host;
+  if(preset.imap_port) document.getElementById('im-imap-port').value = preset.imap_port;
+  if(preset.smtp_host) document.getElementById('im-smtp-host').value = preset.smtp_host;
+  if(preset.smtp_port) document.getElementById('im-smtp-port').value = preset.smtp_port;
+
+  fields.style.display = 'block';
+  document.getElementById('im-test-btn').disabled = false;
+  document.getElementById('im-save-btn').disabled = false;
+}
+
+function buildImapPayload(){
+  var email = document.getElementById('im-email').value.trim();
+  var password = document.getElementById('im-password').value;
+  var imap_host = document.getElementById('im-imap-host').value || (currentPreset && currentPreset.imap_host) || '';
+  var imap_port = parseInt(document.getElementById('im-imap-port').value || (currentPreset && currentPreset.imap_port) || 993, 10);
+  var imap_secure = currentPreset ? currentPreset.imap_secure !== false : true;
+  var smtp_host = document.getElementById('im-smtp-host').value || (currentPreset && currentPreset.smtp_host) || '';
+  var smtp_port = parseInt(document.getElementById('im-smtp-port').value || (currentPreset && currentPreset.smtp_port) || 465, 10);
+  var smtp_secure = currentPreset ? currentPreset.smtp_secure !== false : true;
+  return { email, password, imap_host, imap_port, imap_secure, smtp_host, smtp_port, smtp_secure, provider_hint: currentPreset ? currentPreset.label : null };
+}
+
+async function testImap(){
+  var payload = buildImapPayload();
+  if(!payload.email || !payload.password || !payload.imap_host || !payload.smtp_host){
+    toast('Champs manquants — vérifiez email, mot de passe et serveurs IMAP/SMTP', 'error');
+    return;
+  }
+  var btn = document.getElementById('im-test-btn');
+  btn.disabled = true; btn.textContent = 'Test en cours…';
+  try {
+    var r = await fetch('/api/v2/mail/imap/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    var data = await r.json();
+    var result = document.getElementById('im-test-result');
+    result.style.display = 'block';
+    if(data.imap_ok && data.smtp_ok){
+      result.innerHTML = '<span style="color:var(--green);font-weight:700;">Connexion IMAP et SMTP validées.</span>';
+      toast('Test réussi', 'ok');
+    } else {
+      var errs = [];
+      if(!data.imap_ok) errs.push('IMAP : ' + (data.errors?.imap || 'erreur'));
+      if(!data.smtp_ok) errs.push('SMTP : ' + (data.errors?.smtp || 'erreur'));
+      result.innerHTML = '<span style="color:var(--red);font-weight:700;">Échec.</span><br/><span style="color:var(--muted);">' + errs.join(' · ') + '</span>';
+    }
+  } catch(e){
+    toast('Erreur réseau pendant le test', 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Tester';
+}
+
+async function saveImap(){
+  var payload = buildImapPayload();
+  if(!payload.email || !payload.password || !payload.imap_host || !payload.smtp_host){
+    toast('Champs manquants', 'error');
+    return;
+  }
+  var btn = document.getElementById('im-save-btn');
+  btn.disabled = true; btn.textContent = 'Connexion…';
+  try {
+    var r = await fetch('/api/v2/mail/imap/connect', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    var data = await r.json();
+    if(r.ok && data.ok){
+      toast('Boîte connectée', 'ok');
+      closeImapModal();
+      await loadStatus();
+    } else {
+      toast(data.error || 'Échec de la sauvegarde', 'error');
+    }
+  } catch(e){
+    toast('Erreur réseau', 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Connecter';
+}
+
+async function disconnectMail(){
+  if(!confirm('Déconnecter votre boîte mail ? Vos emails reçus restent en base.')) return;
+  try {
+    await fetch('/api/v2/mail/disconnect', { method:'POST' });
+    toast('Déconnectée', 'ok');
+    await loadStatus();
+    document.getElementById('inbox-empty').style.display = 'block';
+    document.getElementById('inbox-connected').style.display = 'none';
+    document.getElementById('settings-disconnect').style.display = 'none';
+  } catch(e){
+    toast('Erreur lors de la déconnexion', 'error');
+  }
+}
+
+function verifyDomain(){
+  toast('Vérification de domaine disponible en session 6', 'error');
+}
+
+// ────── Toast ──────
+function toast(msg, type){
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type === 'ok' ? 'ok' : type === 'error' ? 'error' : '');
+  setTimeout(function(){ el.classList.remove('show'); }, 2800);
+}
 </script>
 <script src="/sidebar.js"></script>
 </body>

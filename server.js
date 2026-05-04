@@ -12,6 +12,7 @@ import { getDb } from './lib/surreal.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
+import { sendOne as mailServiceSendOne, getMailStatus as mailServiceStatus } from './lib/mail-service.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -1703,6 +1704,155 @@ app.get('/api/user-plan-history', async (req, res) => {
   }
 })
 
+// ── /api/v2/mail/* ── (refonte mail double track : Track 1 OAuth/IMAP, Track 2 Resend)
+// Session 1 : seules les routes IMAP fallback sont implémentées.
+// OAuth Google/Microsoft = sessions 2/3, Resend = sessions 6-8.
+
+// Status général de la boîte mail du user (UI mail.html consomme).
+app.get('/api/v2/mail/status', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const status = await mailServiceStatus(db, userId)
+    res.json(status)
+  } catch (err) {
+    console.error('[v2/mail:status]', err.message)
+    res.status(500).json({ error: 'Lecture statut mail impossible' })
+  }
+})
+
+// Test la connexion IMAP+SMTP avant sauvegarde. Body : { email, password, imap_host, imap_port,
+// imap_secure, smtp_host, smtp_port, smtp_secure }. Renvoie { imap_ok, smtp_ok, errors }.
+app.post('/api/v2/mail/imap/test', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  if (!isCryptoReady()) return res.status(503).json({ error: 'Mail non configuré sur le serveur — SECRET_KEY absente' })
+  const { email, password, imap_host, imap_port, imap_secure, smtp_host, smtp_port, smtp_secure } = req.body || {}
+  if (!email || !password || !imap_host || !smtp_host) {
+    return res.status(400).json({ error: 'Champs requis : email, password, imap_host, smtp_host' })
+  }
+  const errors = {}
+  let imap_ok = false, smtp_ok = false
+  try {
+    const client = new ImapFlow({
+      host: imap_host,
+      port: Number(imap_port || 993),
+      secure: imap_secure !== false,
+      auth: { user: email, pass: password },
+      logger: false
+    })
+    await client.connect()
+    await client.logout()
+    imap_ok = true
+  } catch (e) {
+    errors.imap = e.message
+  }
+  try {
+    const port = Number(smtp_port || 465)
+    const transport = nodemailer.createTransport({
+      host: smtp_host,
+      port,
+      secure: smtp_secure !== false && port === 465,
+      auth: { user: email, pass: password },
+      tls: { rejectUnauthorized: true }
+    })
+    await transport.verify()
+    smtp_ok = true
+  } catch (e) {
+    errors.smtp = e.message
+  }
+  res.json({ imap_ok, smtp_ok, errors })
+})
+
+// Sauvegarde la config IMAP du user (chiffrement password). Body identique à imap/test.
+// Stockage dans mail_settings:userId (réutilise la table existante, schéma SCHEMALESS).
+app.post('/api/v2/mail/imap/connect', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  if (!isCryptoReady()) return res.status(503).json({ error: 'Mail non configuré sur le serveur — SECRET_KEY absente' })
+  const { email, password, imap_host, imap_port, imap_secure, smtp_host, smtp_port, smtp_secure, provider_hint } = req.body || {}
+  if (!email || !password || !imap_host || !smtp_host) {
+    return res.status(400).json({ error: 'Champs requis : email, password, imap_host, smtp_host' })
+  }
+  try {
+    const db = await getDb()
+    const payload = {
+      userId,
+      email,
+      provider: 'imap',
+      provider_hint: provider_hint || null,
+      imap_host,
+      imap_port: Number(imap_port || 993),
+      imap_secure: imap_secure !== false,
+      imap_user: email,
+      imap_password_encrypted: encrypt(password),
+      smtp_host,
+      smtp_port: Number(smtp_port || 465),
+      smtp_secure: smtp_secure !== false,
+      smtp_pass_encrypted: encrypt(password),
+      needs_reconnect: false,
+      updated_at: new Date().toISOString()
+    }
+    const sel = await db.query('SELECT * FROM type::record("mail_settings", $id)', { id: userId })
+    if (sel[0]?.[0]) {
+      const r = await db.query('UPDATE type::record("mail_settings", $id) MERGE $body', { id: userId, body: payload })
+      return res.status(200).json({ ok: true, provider: 'imap', email, record: r[0]?.[0] || null })
+    }
+    payload.created_at = new Date().toISOString()
+    const r = await db.query('CREATE type::record("mail_settings", $id) CONTENT $body', { id: userId, body: payload })
+    res.status(201).json({ ok: true, provider: 'imap', email, record: r[0]?.[0] || null })
+  } catch (err) {
+    console.error('[v2/mail:imap-connect]', err.message)
+    res.status(500).json({ error: 'Sauvegarde config IMAP impossible' })
+  }
+})
+
+// Déconnecte la boîte mail du user — supprime le record mail_settings.
+app.post('/api/v2/mail/disconnect', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    await db.query('DELETE type::record("mail_settings", $id)', { id: userId })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[v2/mail:disconnect]', err.message)
+    res.status(500).json({ error: 'Déconnexion impossible' })
+  }
+})
+
+// Envoi 1:1 — utilise mail-service.js (route sur le bon provider).
+// Session 1 : seul provider:'imap' fonctionne.
+app.post('/api/v2/mail/send', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  const { to, subject, body, html, attachments } = req.body || {}
+  if (!to || !subject) return res.status(400).json({ error: 'Champs requis : to, subject' })
+  try {
+    const db = await getDb()
+    const result = await mailServiceSendOne(db, userId, { to, subject, body, html, attachments })
+    res.json(result)
+  } catch (err) {
+    console.error('[v2/mail:send]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Stubs OAuth — session 2/3.
+app.get('/auth/google', (req, res) => {
+  res.status(501).json({ error: 'OAuth Google non configuré — voir session 2 (README-mail.md)' })
+})
+app.get('/auth/google/callback', (req, res) => {
+  res.status(501).json({ error: 'OAuth Google non configuré — voir session 2 (README-mail.md)' })
+})
+app.get('/auth/microsoft', (req, res) => {
+  res.status(501).json({ error: 'OAuth Microsoft non configuré — voir session 3 (README-mail.md)' })
+})
+app.get('/auth/microsoft/callback', (req, res) => {
+  res.status(501).json({ error: 'OAuth Microsoft non configuré — voir session 3 (README-mail.md)' })
+})
+
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'public', 'dashboard.html'))
 })
@@ -1734,7 +1884,10 @@ app.get('/:page', (req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS user_settings SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS user_plan SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS user_plan_history SCHEMALESS')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2)')
+    await db.query('DEFINE TABLE IF NOT EXISTS domains_resend SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS campaigns SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS campaign_events SCHEMALESS')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

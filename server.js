@@ -2222,27 +2222,37 @@ app.post('/api/v2/webhooks/resend', async (req, res) => {
       }
 
       const db = await getDb()
-      // Lookup campagne via batch_ids match (sans dépendre des tags Resend qui ne remontent
-      // pas toujours dans les webhooks events). Les batch_ids étant uniques globalement,
-      // un match suffit à identifier la campagne.
+      // Lookup campagne via batch_ids match. Les batch_ids étant uniques globalement,
+      // un match suffit à identifier la campagne (pas de dépendance aux tags Resend).
+      // Race condition : Resend envoie le webhook ~500ms après batch.send(), mais l'écriture
+      // batch_ids côté SurrealDB Cloud peut prendre 700-1000ms (round-trip).
+      // → retry court (4 tentatives, 500ms entre chaque, 1.5s max) couvre la fenêtre.
       let campaignId = null
       const emailId = data.email_id
       if (emailId) {
-        // CONTAINS opérateur SurrealDB pour array → string
-        try {
-          const found = await db.query('SELECT id, userId FROM campaigns WHERE batch_ids CONTAINS $eid LIMIT 1', { eid: emailId })
-          const c = found[0]?.[0]
-          if (c) campaignId = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '')
-        } catch (e) {
-          // Fallback IN syntax si CONTAINS rejeté par version SurrealDB
+        const lookup = async () => {
           try {
-            const found2 = await db.query('SELECT id FROM campaigns WHERE $eid IN batch_ids LIMIT 1', { eid: emailId })
-            const c2 = found2[0]?.[0]
-            if (c2) campaignId = String(c2.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '')
-          } catch (e2) {
-            console.error('[webhook:resend] lookup campaign_id échoué :', e2.message)
+            const found = await db.query('SELECT id FROM campaigns WHERE batch_ids CONTAINS $eid LIMIT 1', { eid: emailId })
+            return found[0]?.[0] || null
+          } catch (e) {
+            try {
+              const found2 = await db.query('SELECT id FROM campaigns WHERE $eid IN batch_ids LIMIT 1', { eid: emailId })
+              return found2[0]?.[0] || null
+            } catch (e2) {
+              console.error('[webhook:resend] lookup query error :', e2.message)
+              return null
+            }
           }
         }
+        let c = await lookup()
+        let retries = 0
+        while (!c && retries < 3) {
+          await new Promise(res => setTimeout(res, 500))
+          retries++
+          c = await lookup()
+        }
+        if (c) campaignId = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '')
+        else console.warn('[webhook:resend] campaign_id introuvable après retries pour email_id', emailId)
       }
 
       // Insert event

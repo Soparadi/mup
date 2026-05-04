@@ -1,49 +1,74 @@
-/* ================================================================== */
-/* MovUP APP MICRO-FOOTER — pages authentifiées                        */
-/* Discret, conformité LCEN art. 6 (accès aux mentions légales)        */
-/* ================================================================== */
+/* ================================================================ */
+/* MICRO-FOOTER PAGES APP MOVUP                                     */
+/* Position fixed bas, aligné sur la sidebar dynamique              */
+/* clamp(200px,16vw,280px) — match exactement aside#sidebar.sidebar */
+/* ================================================================ */
 
 .mup-app-footer{
-  border-top:1px solid var(--border, #E8E8ED);
-  padding:16px 24px;
-  margin-top:48px;
-  font-size:12px;
-  color:var(--muted, #7A7A7A);
-  font-family:'Geist',-apple-system,sans-serif;
-  background:var(--card, #FFFFFF);
+  position: fixed;
+  bottom: 0;
+  left: clamp(200px, 16vw, 280px);
+  right: 0;
+  z-index: 5;
+
+  background: var(--card, #FFFFFF);
+  border-top: 1px solid var(--border, #E8E8ED);
+  padding: 10px 24px;
+
+  font-size: 11.5px;
+  color: var(--muted, #7A7A7A);
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
 }
+
 .mup-app-footer__inner{
-  max-width:1400px;
-  margin:0 auto;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  flex-wrap:wrap;
-  gap:12px;
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
+
 .mup-app-footer__inner strong{
-  color:var(--text, #1D1D1F);
-  font-weight:600;
+  color: var(--text, #1D1D1F);
+  font-weight: 600;
 }
+
 .mup-app-footer nav{
-  display:flex;
-  gap:20px;
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
 }
+
 .mup-app-footer nav a{
-  color:var(--muted, #7A7A7A);
-  text-decoration:none;
-  transition:color .15s ease;
+  color: var(--muted, #7A7A7A);
+  text-decoration: none;
+  transition: color .15s ease;
 }
+
 .mup-app-footer nav a:hover{
-  color:var(--text, #1D1D1F);
+  color: var(--text, #1D1D1F);
 }
-@media (max-width:640px){
+
+/* Mobile : sidebar masquée, footer pleine largeur */
+@media (max-width: 1024px){
+  .mup-app-footer{
+    left: 0;
+  }
+}
+
+@media (max-width: 640px){
+  .mup-app-footer{
+    padding: 8px 14px;
+    font-size: 11px;
+  }
   .mup-app-footer__inner{
-    flex-direction:column;
-    align-items:flex-start;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
   .mup-app-footer nav{
-    flex-wrap:wrap;
-    gap:12px 16px;
+    gap: 8px 14px;
   }
 }

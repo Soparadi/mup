@@ -21,7 +21,8 @@ import {
   sendCampaign as mailServiceSendCampaign,
   verifyResendSignature,
   listMailboxCredentials,
-  listGoogleMessages
+  listGoogleMessages,
+  sendWelcomeEmail
 } from './lib/mail-service.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1875,7 +1876,7 @@ app.get('/auth/google', async (req, res) => {
 
 app.get('/auth/google/callback', async (req, res) => {
   try {
-    const { isGoogleReady, verifyState, exchangeCode, fetchUserEmail } = await import('./lib/oauth-google.js')
+    const { isGoogleReady, verifyState, exchangeCode, fetchUserInfo } = await import('./lib/oauth-google.js')
     const { encryptMailToken, isMailCryptoReady } = await import('./lib/crypto.js')
     if (!isGoogleReady()) return res.status(503).send('OAuth Google non configuré')
     if (!isMailCryptoReady()) return res.status(503).send('MAIL_ENCRYPTION_KEY/SECRET_KEY manquante')
@@ -1888,12 +1889,11 @@ app.get('/auth/google/callback', async (req, res) => {
 
     const tokens = await exchangeCode(String(code))
     if (!tokens.refresh_token) {
-      // L'utilisateur a déjà accordé l'app sans prompt=consent → pas de refresh_token retourné.
-      // Notre signState force prompt=consent donc ce cas est rare. Message explicite.
       return res.redirect(302, '/mail.html?google_error=' + encodeURIComponent('Aucun refresh_token reçu — révoquer l\'app dans les paramètres Google et réessayer'))
     }
-    const email = await fetchUserEmail(tokens)
-    if (!email) return res.status(502).send('Email utilisateur introuvable via Google API')
+    const userInfo = await fetchUserInfo(tokens)
+    if (!userInfo?.email) return res.status(502).send('Email utilisateur introuvable via Google API')
+    const email = userInfo.email
 
     const db = await getDb()
     const recordId = `${claims.ownerId}__google__${email.replace(/[^a-zA-Z0-9._-]/g, '_')}`
@@ -1903,6 +1903,8 @@ app.get('/auth/google/callback', async (req, res) => {
       companyId: claims.companyId || null,
       provider: 'google',
       email,
+      userName: userInfo.name || null,
+      givenName: userInfo.given_name || null,
       accessToken: encryptMailToken(tokens.access_token),
       refreshToken: encryptMailToken(tokens.refresh_token),
       tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
@@ -1916,6 +1918,26 @@ app.get('/auth/google/callback', async (req, res) => {
       payload.createdAt = now
       await db.query('CREATE type::record("mailbox_credentials", $id) CONTENT $body', { id: recordId, body: payload })
     }
+
+    // Welcome email auto via Resend (idempotent — skip si welcomeEmailSentAt déjà set).
+    // try/catch — un échec d'envoi ne casse pas le flow OAuth.
+    try {
+      if (isResendReady()) {
+        const result = await sendWelcomeEmail(db, {
+          ownerId: claims.ownerId,
+          companyId: claims.companyId || null,
+          userEmail: email,
+          userName: userInfo.given_name || userInfo.name || null
+        })
+        if (result.sent) console.log('[oauth-google:welcome] envoyé pour', email)
+        else if (result.skipped) console.log('[oauth-google:welcome] skip (' + result.reason + ') pour', email)
+      } else {
+        console.warn('[oauth-google:welcome] RESEND_API_KEY absente, welcome non envoyé')
+      }
+    } catch (e) {
+      console.warn('[oauth-google:welcome] erreur (non bloquante) :', e.message)
+    }
+
     res.redirect(302, '/mail.html?google_connected=1&email=' + encodeURIComponent(email))
   } catch (err) {
     console.error('[oauth-google:callback]', err.message)

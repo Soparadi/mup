@@ -27,98 +27,165 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:150;backdrop-filter:blur(2px);}
 .sidebar-overlay.open{display:block;}
 
-/* TOPBAR + sous-onglets */
-.topbar{padding:16px 28px 0;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;display:flex;flex-direction:column;gap:14px;}
-.topbar-row1{display:flex;align-items:center;justify-content:space-between;}
+/* TOPBAR + sous-onglets + KPI chips */
+.topbar{padding:14px 24px 0;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;display:flex;flex-direction:column;gap:12px;}
+.topbar-row1{display:flex;align-items:center;justify-content:space-between;gap:14px;}
 .topbar-title{font-size:22px;font-weight:900;letter-spacing:-.6px;}
+.kpi-row{display:flex;align-items:stretch;gap:8px;}
+.kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0;}
+.kpi-chip{display:flex;align-items:center;gap:10px;padding:8px 14px;border-right:1px solid var(--border);cursor:pointer;transition:background .12s;font-family:var(--font);background:transparent;border-top:none;border-bottom:none;border-left:none;}
+.kpi-chip:last-child{border-right:none;}
+.kpi-chip:hover{background:var(--surface2);}
+.kpi-chip.active{background:var(--surface2);box-shadow:inset 0 -2px 0 currentColor;}
+.kpi-num{font-size:18px;font-weight:900;line-height:1;letter-spacing:-.4px;font-family:var(--mono);}
+.kpi-num.pulse{animation:pulse .8s ease-in-out 2;}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.18);color:var(--green);}}
+.kpi-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin-top:2px;}
+.kpi-campagne{display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(184,76,0,.08);border:1px solid rgba(184,76,0,.2);border-radius:12px;flex-shrink:0;cursor:pointer;font-family:var(--font);}
+.kpi-newsletter{display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(67,56,202,.08);border:1px solid rgba(67,56,202,.2);border-radius:12px;flex-shrink:0;cursor:pointer;font-family:var(--font);}
 .subtabs{display:flex;gap:4px;margin-bottom:-1px;}
-.subtab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;background:transparent;border-left:none;border-right:none;border-top:none;font-family:var(--font);}
+.subtab{padding:9px 16px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;background:transparent;border-left:none;border-right:none;border-top:none;font-family:var(--font);transition:all .12s;}
 .subtab:hover{color:var(--text);}
 .subtab.active{color:var(--text);border-bottom-color:var(--text);}
 
 /* CONTENU */
-.content{flex:1;overflow-y:auto;padding:28px;}
-.tab-pane{display:none;max-width:880px;margin:0 auto;}
-.tab-pane.active{display:block;}
+.content{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.tab-pane{display:none;flex:1;overflow:hidden;}
+.tab-pane.active{display:flex;flex-direction:column;}
 
-/* Cartes */
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px 28px;margin-bottom:18px;}
-.card h3{font-size:16px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px;}
-.card .card-sub{font-size:12.5px;color:var(--muted);margin-bottom:18px;}
+/* INBOX layout 3 colonnes */
+.mail-layout{flex:1;display:grid;grid-template-columns:240px 360px 1fr;overflow:hidden;min-height:0;}
+.col-left{border-right:1px solid var(--border);background:var(--bg);display:flex;flex-direction:column;overflow:hidden;}
+.col-center{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
+.col-right{display:flex;flex-direction:column;overflow:hidden;background:var(--surface);}
+
+/* col-left — sections MAIL / TEMPLATES + recherche + sync */
+.subnav-section{padding:14px 14px 6px;}
+.subnav-lbl{font-size:9px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted2);padding:0 4px 8px;}
+.btn-newmsg{display:flex;align-items:center;gap:8px;width:100%;background:var(--text);color:#fff;border:none;border-radius:9px;padding:10px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);margin-bottom:8px;}
+.btn-newmsg:hover{opacity:.88;}
+.subnav-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:12.5px;color:var(--muted);font-weight:500;transition:background .1s;}
+.subnav-item:hover{background:var(--surface);color:var(--text);}
+.subnav-item.active{background:var(--surface);color:var(--text);font-weight:700;}
+.subnav-item-svg{width:14px;height:14px;flex-shrink:0;margin-right:8px;}
+.subnav-item-name{flex:1;display:flex;align-items:center;}
+.subnav-badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;color:var(--muted);background:var(--surface);font-family:var(--mono);min-width:22px;text-align:center;}
+.col-left-search{padding:12px 14px;border-top:1px solid var(--border);}
+.col-left-search input{width:100%;padding:8px 10px 8px 30px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--surface);outline:none;}
+.col-left-search input:focus{border-color:var(--text);background:var(--card);}
+.search-wrap{position:relative;}
+.search-wrap svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--muted2);pointer-events:none;}
+.col-left-sync{padding:0 14px 14px;}
+.btn-sync{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px 10px;border:1.5px solid var(--border);background:var(--card);border-radius:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s;}
+.btn-sync:hover{border-color:var(--text);color:var(--text);}
+.btn-sync.loading svg{animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* col-center — empty state + liste */
+.col-center-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);font-weight:600;letter-spacing:1.2px;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.email-list{flex:1;overflow-y:auto;}
+.email-item{display:flex;align-items:stretch;cursor:pointer;border-bottom:0.5px solid var(--border);transition:background .1s;}
+.email-item:hover{background:var(--surface);}
+.email-item.active{background:var(--blue-l);}
+.email-bar{width:3px;flex-shrink:0;background:var(--text);}
+.email-bar.col-mail{background:var(--orange);}
+.email-bar.col-newsletter{background:var(--purple);}
+.email-bar.col-prospects{background:var(--text);}
+.email-inner{display:flex;align-items:flex-start;gap:10px;padding:11px 14px 11px 11px;flex:1;min-width:0;}
+.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;color:#fff;background:var(--surface2);color:var(--muted);}
+.einfo{flex:1;min-width:0;}
+.etop{display:flex;align-items:center;justify-content:space-between;margin-bottom:1px;}
+.esender{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;}
+.esender.bold{font-weight:800;}
+.edate{font-size:10px;color:var(--muted2);font-family:var(--mono);flex-shrink:0;}
+.esubject{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;}
+.epreview{font-size:11px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4;}
+.unread-dot{width:7px;height:7px;border-radius:50%;background:var(--blue);flex-shrink:0;margin-top:6px;}
+
+/* Empty state col-center */
+.empty-state{padding:48px 28px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;}
+.empty-state-icon{width:48px;height:48px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:var(--muted);}
+.empty-state-title{font-size:17px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px;color:var(--text);}
+.empty-state-sub{font-size:12.5px;color:var(--muted);margin-bottom:22px;line-height:1.55;}
+.empty-state-actions{width:100%;max-width:280px;display:flex;flex-direction:column;gap:8px;}
+
+/* col-right — viewer */
+.viewer-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;color:var(--muted2);}
+.viewer-empty-title{font-size:13px;font-weight:600;color:var(--muted);margin-top:14px;}
+.viewer{flex:1;overflow-y:auto;padding:0;display:none;}
+.viewer.active{display:flex;flex-direction:column;}
+.viewer-head{padding:18px 24px;background:var(--text);color:#fff;flex-shrink:0;}
+.viewer-subject{font-size:16px;font-weight:800;letter-spacing:-.3px;line-height:1.3;}
+.viewer-meta{display:flex;align-items:center;gap:10px;padding:12px 24px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0;}
+.viewer-meta-from{font-size:13px;font-weight:700;}
+.viewer-meta-date{font-size:11px;color:var(--muted2);font-family:var(--mono);margin-left:auto;}
+.viewer-actions{display:flex;gap:8px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--card);flex-shrink:0;}
+.viewer-body{flex:1;overflow-y:auto;padding:18px 24px;font-size:13px;line-height:1.7;background:var(--card);}
 
 /* Boutons */
-.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .15s;border:none;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;border:none;}
 .btn-dark{background:var(--text);color:#fff;}
 .btn-dark:hover{opacity:.85;}
 .btn-outline{background:#fff;color:var(--text);border:1.5px solid var(--border2);}
 .btn-outline:hover{background:var(--surface);border-color:var(--text);}
 .btn-danger{background:#fff;color:var(--red);border:1.5px solid var(--red);}
 .btn-danger:hover{background:var(--red-l);}
-.btn-sm{padding:7px 13px;font-size:12px;}
-.btn-block{width:100%;justify-content:center;}
+.btn-sm{padding:7px 12px;font-size:12px;}
 
-/* Boutons OAuth */
-.oauth-btn{display:flex;align-items:center;justify-content:center;gap:12px;padding:14px 20px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;background:#fff;color:#1F1F1F;border:1.5px solid var(--border2);width:100%;margin-bottom:10px;}
+/* Boutons OAuth (réutilisés dans empty state + Paramètres) */
+.oauth-btn{display:flex;align-items:center;justify-content:center;gap:10px;padding:11px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;background:#fff;color:#1F1F1F;border:1.5px solid var(--border2);width:100%;}
 .oauth-btn:hover{border-color:#1F1F1F;background:var(--surface);}
 .oauth-btn svg{flex-shrink:0;}
 
-/* Empty state Boîte de réception */
-.empty-state{text-align:center;padding:48px 24px;}
-.empty-state-title{font-size:20px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px;}
-.empty-state-sub{font-size:13px;color:var(--muted);margin-bottom:24px;}
-
-/* Encart pédagogique */
-.notice{background:var(--blue-l);border-left:3px solid var(--blue);border-radius:8px;padding:14px 18px;font-size:12.5px;color:var(--blue);margin-bottom:18px;line-height:1.6;}
+/* Paramètres + Campagnes (cards) */
+.tab-scroll{flex:1;overflow-y:auto;padding:24px;}
+.tab-scroll-inner{max-width:880px;margin:0 auto;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px 26px;margin-bottom:16px;}
+.card h3{font-size:15.5px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px;}
+.card .card-sub{font-size:12.5px;color:var(--muted);margin-bottom:16px;}
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+.field input,.field select,.field textarea{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:var(--font);color:var(--text);background:#fff;outline:none;transition:border-color .12s;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--text);}
+.field-hint{font-size:11px;color:var(--muted);margin-top:4px;}
+.field-row{display:grid;grid-template-columns:1fr 100px;gap:10px;}
+.notice{background:var(--blue-l);border-left:3px solid var(--blue);border-radius:8px;padding:12px 16px;font-size:12.5px;color:var(--blue);margin-bottom:14px;line-height:1.55;}
 .notice-warn{background:var(--orange-l);border-left-color:var(--orange);color:var(--orange);}
 .notice strong{font-weight:700;}
-
-/* Champs */
-.field{margin-bottom:14px;}
-.field label{display:block;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
-.field input, .field select{width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:13.5px;font-family:var(--font);color:var(--text);background:#fff;outline:none;transition:border-color .12s;}
-.field input:focus, .field select:focus{border-color:var(--text);}
-.field-hint{font-size:11px;color:var(--muted);margin-top:5px;}
-.field-row{display:grid;grid-template-columns:1fr 100px;gap:10px;}
-
-/* Lien secondaire */
-.link-secondary{display:inline-block;margin-top:14px;font-size:12.5px;color:var(--muted);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;font-family:var(--font);}
-.link-secondary:hover{color:var(--text);}
-
-/* Modale IMAP autodetect */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px);}
-.modal-overlay.open{display:flex;}
-.modal{background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;}
-.modal-head{padding:18px 24px;border-bottom:1px solid var(--border);background:#1D1D1F;color:#fff;display:flex;align-items:center;justify-content:space-between;}
-.modal-title{font-size:15px;font-weight:800;letter-spacing:-.2px;}
-.modal-close{background:none;border:none;color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;}
-.modal-close:hover{background:rgba(255,255,255,.1);}
-.modal-body{padding:22px 24px;overflow-y:auto;flex:1;}
-.modal-foot{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
-
-/* Statut détecté */
-.detected-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;background:var(--surface);font-size:12px;font-weight:600;color:var(--text);margin-bottom:14px;}
+.detected-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:6px;background:var(--surface);font-size:12px;font-weight:600;color:var(--text);}
 .detected-pill .dot{width:7px;height:7px;border-radius:50%;background:var(--green);}
 .detected-pill.warn{background:var(--orange-l);color:var(--orange);}
 .detected-pill.warn .dot{background:var(--orange);}
-
-/* Sections paramètres */
-.settings-section{margin-bottom:14px;}
-.settings-section .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);}
+.dns-record{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:8px;font-family:var(--mono);font-size:11.5px;display:grid;grid-template-columns:60px 1fr 1fr auto;gap:10px;align-items:center;}
+.dns-record-type{font-weight:700;color:var(--purple);}
+.dns-record-name,.dns-record-value{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dns-record-value{color:var(--muted);}
+.settings-section .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);}
 .settings-section .row:last-child{border-bottom:none;}
 .row-label{font-size:13px;font-weight:600;color:var(--text);}
 .row-value{font-size:12.5px;color:var(--muted);font-family:var(--mono);}
+.link-secondary{display:inline-block;font-size:12px;color:var(--muted);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;font-family:var(--font);}
+.link-secondary:hover{color:var(--text);}
 
-/* DNS records (Track 2) */
-.dns-record{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:8px;font-family:var(--mono);font-size:12px;display:grid;grid-template-columns:60px 1fr 1fr auto;gap:12px;align-items:center;}
-.dns-record-type{font-weight:700;color:var(--purple);}
-.dns-record-name{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.dns-record-value{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Modale (IMAP / Compose / Détail campagne) */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px);}
+.modal-overlay.open{display:flex;}
+.modal{background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;}
+.modal-head{padding:16px 22px;border-bottom:1px solid var(--border);background:#1D1D1F;color:#fff;display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:15px;font-weight:800;letter-spacing:-.2px;}
+.modal-close{background:none;border:none;color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;}
+.modal-close:hover{background:rgba(255,255,255,.1);}
+.modal-body{padding:20px 22px;overflow-y:auto;flex:1;}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
 
 /* Toast */
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--text);color:#fff;padding:10px 18px;border-radius:10px;font-size:12.5px;font-weight:600;opacity:0;transition:all .25s;pointer-events:none;z-index:9999;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--text);color:#fff;padding:9px 18px;border-radius:10px;font-size:12.5px;font-weight:600;opacity:0;transition:all .25s;pointer-events:none;z-index:9999;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .toast.error{background:var(--red);}
 .toast.ok{background:var(--green);}
+
+/* Block links color override */
+.dns-record .btn{padding:5px 10px;font-size:11px;}
 </style>
 </head>
 <body>
@@ -130,6 +197,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   <div class="topbar">
     <div class="topbar-row1">
       <span class="topbar-title">Mail</span>
+      <div class="kpi-row">
+        <div class="kpi-group">
+          <button class="kpi-chip active" data-folder="inbox">
+            <div><div class="kpi-num" id="kpi-inbox">0</div><div class="kpi-lbl">Reçus</div></div>
+          </button>
+          <button class="kpi-chip" data-folder="sent">
+            <div><div class="kpi-num" id="kpi-sent">0</div><div class="kpi-lbl">Envoyés</div></div>
+          </button>
+          <button class="kpi-chip" data-folder="drafts">
+            <div><div class="kpi-num" id="kpi-drafts">0</div><div class="kpi-lbl">Brouillons</div></div>
+          </button>
+        </div>
+        <button class="kpi-campagne" onclick="document.querySelector('.subtab[data-tab=campaigns]').click()">
+          <div><div class="kpi-num" id="kpi-mailing" style="color:var(--orange);">0</div><div class="kpi-lbl" style="color:var(--orange);">Mailing</div></div>
+        </button>
+        <button class="kpi-newsletter" onclick="document.querySelector('.subtab[data-tab=campaigns]').click()">
+          <div><div class="kpi-num" id="kpi-newsletter" style="color:var(--purple);">0</div><div class="kpi-lbl" style="color:var(--purple);">Newsletter</div></div>
+        </button>
+      </div>
     </div>
     <div class="subtabs" role="tablist">
       <button class="subtab active" role="tab" data-tab="inbox">Boîte de réception</button>
@@ -140,16 +226,69 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
   <div class="content">
 
-    <!-- ────── BOÎTE DE RÉCEPTION (Track 1) ────── -->
+    <!-- ────── BOÎTE DE RÉCEPTION (3 colonnes) ────── -->
     <div class="tab-pane active" id="tab-inbox" role="tabpanel">
-      <div id="inbox-empty">
-        <div class="card">
-          <div class="empty-state">
-            <div class="empty-state-title">Connectez votre boîte mail professionnelle</div>
-            <div class="empty-state-sub">Recommandé — connexion sécurisée en 1 clic, sans mot de passe à saisir.</div>
-            <div style="max-width:340px;margin:0 auto;">
+      <div class="mail-layout">
+
+        <!-- COLONNE GAUCHE : Mail + Templates + Recherche + Sync -->
+        <div class="col-left">
+          <div class="subnav-section">
+            <div class="subnav-lbl">Mail</div>
+            <button class="btn-newmsg" onclick="openCompose()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Nouveau message
+            </button>
+            <div class="subnav-item active" data-folder="inbox" onclick="setFolder('inbox')">
+              <span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Reçus</span>
+              <span class="subnav-badge" id="badge-inbox">0</span>
+            </div>
+            <div class="subnav-item" data-folder="sent" onclick="setFolder('sent')">
+              <span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Envoyés</span>
+              <span class="subnav-badge" id="badge-sent">0</span>
+            </div>
+            <div class="subnav-item" data-folder="drafts" onclick="setFolder('drafts')">
+              <span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Brouillons</span>
+              <span class="subnav-badge" id="badge-drafts">0</span>
+            </div>
+          </div>
+
+          <div class="subnav-section">
+            <div class="subnav-lbl">Templates</div>
+            <div class="subnav-item" data-template="prospection"><span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Mailing Prospection</span></div>
+            <div class="subnav-item" data-template="post-visio"><span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Post-visio</span></div>
+            <div class="subnav-item" data-template="devis"><span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Devis</span></div>
+            <div class="subnav-item" data-template="facture"><span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Facture</span></div>
+            <div class="subnav-item" data-template="newsletter"><span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>Newsletter</span></div>
+          </div>
+
+          <div class="col-left-search">
+            <div class="search-wrap">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="mail-search" placeholder="Rechercher dans les mails..." />
+            </div>
+          </div>
+          <div class="col-left-sync">
+            <button class="btn-sync" id="btn-sync" onclick="syncInbox()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>Synchroniser</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- COLONNE CENTRALE : empty state OU liste emails -->
+        <div class="col-center">
+          <div class="col-center-toolbar" id="cc-toolbar"><span id="cc-toolbar-label">Reçus</span></div>
+
+          <!-- Empty state : aucun compte connecté -->
+          <div class="empty-state" id="empty-state-noaccount">
+            <div class="empty-state-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
+            </div>
+            <div class="empty-state-title">Connectez votre boîte mail</div>
+            <div class="empty-state-sub">Pour envoyer et recevoir vos messages depuis MUP, connectez d'abord votre boîte professionnelle. Connexion sécurisée OAuth en 1 clic.</div>
+            <div class="empty-state-actions">
               <button class="oauth-btn" onclick="oauthGoogle()">
-                <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A10.99 10.99 0 0 0 12 23z"/>
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.99 10.99 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z"/>
@@ -158,7 +297,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
                 Connecter avec Google
               </button>
               <button class="oauth-btn" onclick="oauthMicrosoft()">
-                <svg width="18" height="18" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
+                <svg width="16" height="16" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
                   <path fill="#F25022" d="M0 0h11v11H0z"/>
                   <path fill="#7FBA00" d="M12 0h11v11H12z"/>
                   <path fill="#00A4EF" d="M0 12h11v11H0z"/>
@@ -166,173 +305,140 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
                 </svg>
                 Connecter avec Microsoft
               </button>
-              <button class="link-secondary" onclick="openImapModal()">Mon fournisseur n'est pas dans la liste</button>
+              <button class="link-secondary" onclick="openImapModal()" style="margin-top:6px;">Mon fournisseur n'est pas dans la liste</button>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div id="inbox-connected" style="display:none;">
-        <div class="card">
-          <h3>Boîte connectée</h3>
-          <p class="card-sub">Liste des emails reçus, composeur 1:1 — disponible quand votre boîte est connectée.</p>
-          <div id="inbox-info" style="font-size:13px;color:var(--muted);"></div>
+          <!-- Liste emails -->
+          <div class="email-list" id="email-list" style="display:none;"></div>
+
+          <!-- État chargement -->
+          <div class="empty-state" id="empty-state-loading" style="display:none;">
+            <div style="font-size:12.5px;color:var(--muted);">Chargement…</div>
+          </div>
+
+          <!-- État vide (compte connecté mais 0 mails) -->
+          <div class="empty-state" id="empty-state-empty" style="display:none;">
+            <div class="empty-state-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            </div>
+            <div class="empty-state-title">Boîte vide</div>
+            <div class="empty-state-sub">Aucun email récent dans cette boîte. Cliquer sur Synchroniser pour rafraîchir.</div>
+          </div>
         </div>
+
+        <!-- COLONNE DROITE : viewer email -->
+        <div class="col-right">
+          <div class="viewer-empty" id="viewer-empty">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/></svg>
+            <div class="viewer-empty-title">Sélectionnez un email pour le lire</div>
+          </div>
+          <div class="viewer" id="viewer">
+            <div class="viewer-head"><div class="viewer-subject" id="v-subject">—</div></div>
+            <div class="viewer-meta"><div class="viewer-meta-from" id="v-from">—</div><div class="viewer-meta-date" id="v-date"></div></div>
+            <div class="viewer-actions">
+              <button class="btn btn-outline btn-sm" onclick="alert('Réponse — disponible prochainement')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>Répondre</button>
+              <button class="btn btn-outline btn-sm" onclick="alert('Transfert — disponible prochainement')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Transférer</button>
+              <button class="btn btn-outline btn-sm" onclick="alert('Archivage — disponible prochainement')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archiver</button>
+            </div>
+            <div class="viewer-body" id="v-body"></div>
+          </div>
+        </div>
+
       </div>
     </div>
 
-    <!-- ────── CAMPAGNES (Track 2 — Resend) ────── -->
+    <!-- ────── CAMPAGNES ────── -->
     <div class="tab-pane" id="tab-campaigns" role="tabpanel">
-
-      <!-- État 1 : aucun domaine vérifié → écran de configuration -->
-      <div id="campaigns-setup">
-        <div class="card">
-          <h3>Configurer votre domaine d'envoi</h3>
-          <p class="card-sub">Pour envoyer des campagnes de prospection avec une délivrabilité optimale, vérifiez votre domaine.</p>
-          <div class="notice">
-            <strong>Pourquoi un domaine vérifié ?</strong> Les campagnes à volume sont envoyées via Resend avec une infrastructure dédiée (IP réputée, SPF, DKIM, DMARC gérés). Sans vérification de votre domaine, vos mails finissent en spam.
+      <div class="tab-scroll"><div class="tab-scroll-inner">
+        <div id="campaigns-setup">
+          <div class="card">
+            <h3>Configurer votre domaine d'envoi</h3>
+            <p class="card-sub">Pour envoyer des campagnes de prospection avec une délivrabilité optimale, vérifiez votre domaine.</p>
+            <div class="notice"><strong>Pourquoi un domaine vérifié ?</strong> Les campagnes à volume sont envoyées via Resend avec une infrastructure dédiée (IP réputée, SPF, DKIM, DMARC gérés). Sans vérification de votre domaine, vos mails finissent en spam.</div>
+            <div class="field">
+              <label for="domain-input">Votre domaine d'envoi</label>
+              <input type="text" id="domain-input" placeholder="monentreprise.fr" />
+              <div class="field-hint">Le domaine doit être celui de votre adresse pro.</div>
+            </div>
+            <button class="btn btn-dark" id="btn-verify-domain" onclick="verifyDomain()">Vérifier mon domaine</button>
           </div>
-          <div class="field">
-            <label for="domain-input">Votre domaine d'envoi</label>
-            <input type="text" id="domain-input" placeholder="monentreprise.fr" />
-            <div class="field-hint">Le domaine doit être celui de votre adresse pro (ex : si votre mail est contact@monentreprise.fr, utilisez monentreprise.fr).</div>
-          </div>
-          <button class="btn btn-dark" id="btn-verify-domain" onclick="verifyDomain()">Vérifier mon domaine</button>
-        </div>
-
-        <div class="card" id="dns-records-card" style="display:none;">
-          <h3>Enregistrements DNS à ajouter</h3>
-          <p class="card-sub">Ajoutez ces enregistrements chez votre registrar (Gandi, OVH, Cloudflare…). La propagation DNS prend de 1 à 30 minutes.</p>
-          <div id="dns-records-list"></div>
-          <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
-            <button class="btn btn-outline btn-sm" onclick="checkDomainStatus()">Vérifier maintenant</button>
-            <span id="dns-status-pill" class="detected-pill warn"><span class="dot"></span><span id="dns-status-text">En attente de propagation</span></span>
-            <span id="dns-poll-info" style="font-size:11.5px;color:var(--muted);">Vérification automatique toutes les 30s.</span>
+          <div class="card" id="dns-records-card" style="display:none;">
+            <h3>Enregistrements DNS à ajouter</h3>
+            <p class="card-sub">Ajoutez ces enregistrements chez votre registrar (Gandi, OVH, Cloudflare…). La propagation DNS prend de 1 à 30 minutes.</p>
+            <div id="dns-records-list"></div>
+            <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
+              <button class="btn btn-outline btn-sm" onclick="checkDomainStatus()">Vérifier maintenant</button>
+              <span id="dns-status-pill" class="detected-pill warn"><span class="dot"></span><span id="dns-status-text">En attente de propagation</span></span>
+              <span id="dns-poll-info" style="font-size:11.5px;color:var(--muted);">Vérification automatique toutes les 30s.</span>
+            </div>
           </div>
         </div>
-      </div>
-
-      <!-- État 2 : domaine vérifié → liste des campagnes -->
-      <div id="campaigns-active" style="display:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-          <div>
-            <span class="detected-pill"><span class="dot"></span>Domaine vérifié <strong id="active-domain"></strong></span>
+        <div id="campaigns-active" style="display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div><span class="detected-pill"><span class="dot"></span>Domaine vérifié <strong id="active-domain"></strong></span></div>
+            <button class="btn btn-dark" onclick="openCampaignModal()">Nouvelle campagne</button>
           </div>
-          <button class="btn btn-dark" onclick="openCampaignModal()">Nouvelle campagne</button>
-        </div>
-        <div class="card" id="campaigns-empty" style="display:none;">
-          <div class="empty-state">
-            <div class="empty-state-title">Aucune campagne pour l'instant</div>
-            <div class="empty-state-sub">Créez votre première campagne pour démarrer la prospection.</div>
+          <div class="card" id="campaigns-empty" style="display:none;">
+            <div class="empty-state"><div class="empty-state-title">Aucune campagne pour l'instant</div><div class="empty-state-sub">Créez votre première campagne pour démarrer la prospection.</div></div>
           </div>
+          <div id="campaigns-list"></div>
         </div>
-        <div id="campaigns-list"></div>
-      </div>
+      </div></div>
     </div>
 
     <!-- ────── PARAMÈTRES ────── -->
     <div class="tab-pane" id="tab-settings" role="tabpanel">
-
-      <!-- Comptes connectés (Track 1) — OAuth Google + Microsoft + IMAP legacy -->
-      <div class="card">
-        <h3>Comptes connectés</h3>
-        <p class="card-sub">Boîtes mail utilisées pour les conversations 1:1 avec vos prospects.</p>
-        <div id="accounts-list" style="margin-bottom:14px;"></div>
-        <div style="display:flex;flex-direction:column;gap:10px;max-width:340px;">
-          <button class="oauth-btn" onclick="oauthGoogle()">
-            <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A10.99 10.99 0 0 0 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.99 10.99 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A10.99 10.99 0 0 0 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Connecter un compte Google
-          </button>
-          <button class="oauth-btn" onclick="oauthMicrosoft()">
-            <svg width="18" height="18" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
-              <path fill="#F25022" d="M0 0h11v11H0z"/>
-              <path fill="#7FBA00" d="M12 0h11v11H12z"/>
-              <path fill="#00A4EF" d="M0 12h11v11H0z"/>
-              <path fill="#FFB900" d="M12 12h11v11H12z"/>
-            </svg>
-            Connecter un compte Microsoft
-          </button>
-          <button class="link-secondary" onclick="openImapModal()">Ajouter un autre fournisseur (IMAP)</button>
-        </div>
-      </div>
-
-      <!-- Boîte IMAP legacy (rétrocompat affichage) -->
-      <div class="card" id="settings-imap-card" style="display:none;">
-        <h3>Boîte IMAP legacy</h3>
-        <p class="card-sub">Configuration IMAP/SMTP de session 1.</p>
-        <div class="settings-section">
-          <div class="row">
-            <span class="row-label">Statut</span>
-            <span class="row-value" id="settings-mail-status">Non connectée</span>
-          </div>
-          <div class="row">
-            <span class="row-label">Adresse</span>
-            <span class="row-value" id="settings-mail-email">—</span>
-          </div>
-          <div class="row">
-            <span class="row-label">Provider</span>
-            <span class="row-value" id="settings-mail-provider">—</span>
+      <div class="tab-scroll"><div class="tab-scroll-inner">
+        <div class="card">
+          <h3>Comptes connectés</h3>
+          <p class="card-sub">Boîtes mail utilisées pour les conversations 1:1 avec vos prospects.</p>
+          <div id="accounts-list" style="margin-bottom:14px;"></div>
+          <div style="display:flex;flex-direction:column;gap:8px;max-width:340px;">
+            <button class="oauth-btn" onclick="oauthGoogle()">
+              <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A10.99 10.99 0 0 0 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.99 10.99 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A10.99 10.99 0 0 0 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Connecter un compte Google
+            </button>
+            <button class="oauth-btn" onclick="oauthMicrosoft()">
+              <svg width="16" height="16" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
+                <path fill="#F25022" d="M0 0h11v11H0z"/>
+                <path fill="#7FBA00" d="M12 0h11v11H12z"/>
+                <path fill="#00A4EF" d="M0 12h11v11H0z"/>
+                <path fill="#FFB900" d="M12 12h11v11H12z"/>
+              </svg>
+              Connecter un compte Microsoft
+            </button>
+            <button class="link-secondary" onclick="openImapModal()" style="margin-top:6px;">Ajouter un fournisseur (IMAP)</button>
           </div>
         </div>
-        <button class="btn btn-danger btn-sm" id="settings-disconnect" onclick="disconnectMail()" style="display:none;">Déconnecter</button>
-      </div>
 
-      <div class="card">
-        <h3>Domaine d'envoi (campagnes)</h3>
-        <p class="card-sub">Domaine vérifié sur Resend pour l'envoi de campagnes à volume.</p>
-        <div class="settings-section">
-          <div class="row">
-            <span class="row-label">Statut</span>
-            <span class="row-value">À configurer (session 6)</span>
+        <div class="card">
+          <h3>Domaine d'envoi (campagnes)</h3>
+          <p class="card-sub">Domaine vérifié sur Resend pour l'envoi de campagnes à volume.</p>
+          <div class="settings-section">
+            <div class="row"><span class="row-label">Statut</span><span class="row-value" id="settings-domain-status">À configurer</span></div>
           </div>
         </div>
-      </div>
 
-      <div class="card">
-        <h3>Signature email</h3>
-        <p class="card-sub">Bloc inséré automatiquement en bas de vos messages 1:1.</p>
-        <div class="field">
-          <textarea id="signature-input" rows="4" disabled style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-family:var(--font);font-size:13px;color:var(--text);background:#fff;outline:none;resize:vertical;" placeholder="Cordialement,&#10;Prénom NOM&#10;Entreprise"></textarea>
+        <div class="card">
+          <h3>Signature email</h3>
+          <p class="card-sub">Bloc inséré automatiquement en bas de vos messages 1:1.</p>
+          <div class="field"><textarea id="signature-input" rows="4" disabled placeholder="Cordialement,&#10;Prénom NOM&#10;Entreprise"></textarea></div>
+          <button class="btn btn-outline btn-sm" disabled>Enregistrer</button>
         </div>
-        <button class="btn btn-outline btn-sm" disabled>Enregistrer</button>
-      </div>
 
-      <div class="card">
-        <h3>Désinscription (RGPD)</h3>
-        <p class="card-sub">URL et page de désabonnement pour les destinataires de campagnes — obligatoire RGPD.</p>
-        <div class="settings-section">
-          <div class="row">
-            <span class="row-label">URL désinscription</span>
-            <span class="row-value">À configurer (session 7)</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Adresses techniques (bounce / plainte)</h3>
-        <p class="card-sub">Adresses recevant les notifications techniques d'erreur de livraison et de plainte spam.</p>
-        <div class="settings-section">
-          <div class="row">
-            <span class="row-label">Bounce</span>
-            <span class="row-value">À configurer (session 8)</span>
-          </div>
-          <div class="row">
-            <span class="row-label">Plainte</span>
-            <span class="row-value">À configurer (session 8)</span>
-          </div>
-        </div>
-      </div>
+      </div></div>
     </div>
 
   </div>
 </div>
 
-<!-- ────── MODALE IMAP AUTODETECT ────── -->
+<!-- ────── MODALE IMAP (accessible UNIQUEMENT via Paramètres / lien empty state) ────── -->
 <div class="modal-overlay" id="imap-modal" onclick="if(event.target===this)closeImapModal()">
   <div class="modal" role="dialog" aria-labelledby="imap-modal-title">
     <div class="modal-head">
@@ -342,41 +448,23 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       </button>
     </div>
     <div class="modal-body">
-
       <div class="field">
         <label for="im-email">Votre adresse email</label>
         <input type="email" id="im-email" placeholder="prenom.nom@exemple.fr" autocomplete="email" />
       </div>
-
       <div id="im-detected" style="display:none;"></div>
-
       <div id="im-fields" style="display:none;">
         <div class="field">
           <label for="im-password">Mot de passe</label>
           <input type="password" id="im-password" placeholder="••••••••" autocomplete="current-password" />
           <div class="field-hint" id="im-password-hint"></div>
         </div>
-
         <div id="im-manual" style="display:none;">
-          <div class="field">
-            <label>Serveur IMAP (réception)</label>
-            <div class="field-row">
-              <input type="text" id="im-imap-host" placeholder="imap.exemple.fr" />
-              <input type="number" id="im-imap-port" placeholder="993" value="993" />
-            </div>
-          </div>
-          <div class="field">
-            <label>Serveur SMTP (envoi)</label>
-            <div class="field-row">
-              <input type="text" id="im-smtp-host" placeholder="smtp.exemple.fr" />
-              <input type="number" id="im-smtp-port" placeholder="465" value="465" />
-            </div>
-          </div>
+          <div class="field"><label>Serveur IMAP (réception)</label><div class="field-row"><input type="text" id="im-imap-host" placeholder="imap.exemple.fr" /><input type="number" id="im-imap-port" placeholder="993" value="993" /></div></div>
+          <div class="field"><label>Serveur SMTP (envoi)</label><div class="field-row"><input type="text" id="im-smtp-host" placeholder="smtp.exemple.fr" /><input type="number" id="im-smtp-port" placeholder="465" value="465" /></div></div>
         </div>
-
         <div id="im-test-result" style="display:none;margin-top:10px;font-size:12.5px;"></div>
       </div>
-
     </div>
     <div class="modal-foot">
       <button class="btn btn-outline btn-sm" onclick="closeImapModal()">Annuler</button>
@@ -386,134 +474,295 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   </div>
 </div>
 
-<!-- ────── MODALE CRÉATION CAMPAGNE ────── -->
+<!-- ────── MODALES CAMPAGNES (création + détail) ────── -->
 <div class="modal-overlay" id="campaign-modal" onclick="if(event.target===this)closeCampaignModal()">
-  <div class="modal" role="dialog" style="max-width:680px;">
-    <div class="modal-head">
-      <span class="modal-title">Nouvelle campagne</span>
-      <button class="modal-close" onclick="closeCampaignModal()" aria-label="Fermer">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-head"><span class="modal-title">Nouvelle campagne</span><button class="modal-close" onclick="closeCampaignModal()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="modal-body">
-      <div class="field">
-        <label for="cm-name">Nom interne de la campagne</label>
-        <input type="text" id="cm-name" placeholder="Prospection mai 2026" />
-      </div>
-      <div class="field">
-        <label for="cm-from-email">Adresse expéditeur</label>
-        <input type="email" id="cm-from-email" placeholder="prospection@monentreprise.fr" />
-        <div class="field-hint">Doit être sur votre domaine vérifié.</div>
-      </div>
-      <div class="field">
-        <label for="cm-from-name">Nom expéditeur (affiché)</label>
-        <input type="text" id="cm-from-name" placeholder="Votre prénom" />
-      </div>
-      <div class="field">
-        <label for="cm-subject">Sujet</label>
-        <input type="text" id="cm-subject" placeholder="Bonjour {{prenom}}, idée de partenariat avec {{entreprise}}" />
-        <div class="field-hint">Variables disponibles : <code>{{prenom}}</code>, <code>{{entreprise}}</code>, <code>{{secteur}}</code>, <code>{{ville}}</code></div>
-      </div>
-      <div class="field">
-        <label for="cm-html">Corps HTML</label>
-        <textarea id="cm-html" rows="8" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;font-family:var(--mono);font-size:12px;color:var(--text);background:#fff;outline:none;resize:vertical;line-height:1.5;" placeholder="Bonjour {{prenom}},&#10;&#10;..."></textarea>
-      </div>
+      <div class="field"><label for="cm-name">Nom interne</label><input type="text" id="cm-name" placeholder="Prospection mai 2026" /></div>
+      <div class="field"><label for="cm-from-email">Adresse expéditeur</label><input type="email" id="cm-from-email" placeholder="prospection@monentreprise.fr" /><div class="field-hint">Doit être sur votre domaine vérifié.</div></div>
+      <div class="field"><label for="cm-from-name">Nom expéditeur</label><input type="text" id="cm-from-name" placeholder="Votre prénom" /></div>
+      <div class="field"><label for="cm-subject">Sujet</label><input type="text" id="cm-subject" placeholder="Bonjour {{prenom}}…" /><div class="field-hint">Variables : <code>{{prenom}}</code>, <code>{{entreprise}}</code>, <code>{{secteur}}</code>, <code>{{ville}}</code></div></div>
+      <div class="field"><label for="cm-html">Corps HTML</label><textarea id="cm-html" rows="8" style="font-family:var(--mono);font-size:12px;line-height:1.5;"></textarea></div>
       <div class="field">
         <label>Destinataires depuis le Pipeline</label>
-        <div class="field-row" style="grid-template-columns:1fr auto;">
-          <select id="cm-pipeline-col">
-            <option value="">— Toutes les colonnes —</option>
-          </select>
-          <button class="btn btn-outline btn-sm" type="button" onclick="loadCampaignRecipients()">Charger</button>
-        </div>
+        <div class="field-row" style="grid-template-columns:1fr auto;"><select id="cm-pipeline-col"><option value="">— Toutes —</option></select><button class="btn btn-outline btn-sm" type="button" onclick="loadCampaignRecipients()">Charger</button></div>
         <div class="field-hint" id="cm-recipients-info">Sélectionnez une colonne Kanban pour charger les destinataires.</div>
-        <div id="cm-recipients-preview" style="margin-top:10px;font-size:11.5px;color:var(--muted);font-family:var(--mono);max-height:120px;overflow-y:auto;background:var(--surface);padding:8px 10px;border-radius:7px;display:none;"></div>
+        <div id="cm-recipients-preview" style="margin-top:8px;font-size:11.5px;color:var(--muted);font-family:var(--mono);max-height:120px;overflow-y:auto;background:var(--surface);padding:8px 10px;border-radius:7px;display:none;"></div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-outline btn-sm" onclick="closeCampaignModal()">Annuler</button>
-      <button class="btn btn-dark btn-sm" id="cm-save-btn" onclick="saveCampaignDraft()">Enregistrer brouillon</button>
-      <button class="btn btn-dark btn-sm" id="cm-send-btn" onclick="sendCampaignNow()">Envoyer maintenant</button>
+      <button class="btn btn-dark btn-sm" onclick="saveCampaignDraft()">Enregistrer brouillon</button>
+      <button class="btn btn-dark btn-sm" onclick="sendCampaignNow()">Envoyer maintenant</button>
     </div>
   </div>
 </div>
-
-<!-- ────── MODALE DÉTAIL CAMPAGNE (stats temps réel) ────── -->
 <div class="modal-overlay" id="campaign-detail-modal" onclick="if(event.target===this)closeCampaignDetail()">
-  <div class="modal" role="dialog" style="max-width:720px;">
-    <div class="modal-head">
-      <span class="modal-title" id="cd-title">Détail campagne</span>
-      <button class="modal-close" onclick="closeCampaignDetail()" aria-label="Fermer">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+  <div class="modal" style="max-width:720px;">
+    <div class="modal-head"><span class="modal-title" id="cd-title">Détail campagne</span><button class="modal-close" onclick="closeCampaignDetail()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body" id="cd-body"><div style="color:var(--muted);font-size:13px;">Chargement…</div></div>
+    <div class="modal-foot"><button class="btn btn-outline btn-sm" onclick="closeCampaignDetail()">Fermer</button></div>
+  </div>
+</div>
+
+<!-- ────── MODALE COMPOSE (placeholder, complète en session ultérieure) ────── -->
+<div class="modal-overlay" id="compose-modal" onclick="if(event.target===this)closeCompose()">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-head"><span class="modal-title">Nouveau message</span><button class="modal-close" onclick="closeCompose()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="field"><label>De</label><select id="cmp-from"></select></div>
+      <div class="field"><label>À</label><input type="email" id="cmp-to" placeholder="destinataire@exemple.fr" /></div>
+      <div class="field"><label>Sujet</label><input type="text" id="cmp-subject" /></div>
+      <div class="field"><label>Message</label><textarea id="cmp-body" rows="9"></textarea></div>
+      <div id="cmp-result" style="display:none;margin-top:8px;font-size:12.5px;"></div>
     </div>
-    <div class="modal-body" id="cd-body">
-      <div style="color:var(--muted);font-size:13px;">Chargement…</div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-outline btn-sm" onclick="closeCampaignDetail()">Fermer</button>
-    </div>
+    <div class="modal-foot"><button class="btn btn-outline btn-sm" onclick="closeCompose()">Annuler</button><button class="btn btn-dark btn-sm" onclick="sendCompose()">Envoyer</button></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
-// ────── Sous-onglets ──────
+// ────────────────────────────────────────────────
+// SOUS-ONGLETS
+// ────────────────────────────────────────────────
 document.querySelectorAll('.subtab').forEach(function(btn){
   btn.addEventListener('click', function(){
     document.querySelectorAll('.subtab').forEach(function(b){ b.classList.toggle('active', b === btn); });
     var name = btn.dataset.tab;
     document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.toggle('active', p.id === 'tab-' + name); });
+    if(name === 'inbox') refreshInboxIfReady();
+    if(name === 'campaigns') loadCampaignsTab();
+    if(name === 'settings') loadAccounts();
   });
 });
 
-// ────── Status mail (charge au boot) ──────
-async function loadStatus(){
+// ────────────────────────────────────────────────
+// ÉTAT GLOBAL
+// ────────────────────────────────────────────────
+var STATE = {
+  primaryAccount: null,    // { provider, email } — premier compte connecté
+  emails: [],              // liste emails inbox-preview
+  selectedEmailId: null,
+  folder: 'inbox',
+  welcomePollTimer: null
+};
+
+// ────────────────────────────────────────────────
+// CHARGEMENT INITIAL
+// ────────────────────────────────────────────────
+async function loadAccountsAndInbox(){
   try {
-    var r = await fetch('/api/v2/mail/status');
-    if(!r.ok) return;
-    var s = await r.json();
-    var imapCard = document.getElementById('settings-imap-card');
-    var statusEl = document.getElementById('settings-mail-status');
-    var emailEl = document.getElementById('settings-mail-email');
-    var providerEl = document.getElementById('settings-mail-provider');
-    var disconnectBtn = document.getElementById('settings-disconnect');
-    if(statusEl) statusEl.textContent = s.connected ? 'Connectée' : 'Non connectée';
-    if(emailEl) emailEl.textContent = s.email || '—';
-    if(providerEl) providerEl.textContent = s.provider ? s.provider.toUpperCase() : '—';
-    // Affiche la card IMAP legacy uniquement si une config IMAP existe
-    if(imapCard) imapCard.style.display = s.connected ? 'block' : 'none';
-    if(s.connected){
-      document.getElementById('inbox-empty').style.display = 'none';
-      document.getElementById('inbox-connected').style.display = 'block';
-      document.getElementById('inbox-info').textContent = 'Connecté à ' + (s.email || '—') + ' via ' + (s.provider || '—').toUpperCase() + '. Liste des emails disponible en session ultérieure.';
-      if(disconnectBtn) disconnectBtn.style.display = 'inline-flex';
+    var r = await fetch('/api/v2/mail/accounts');
+    var accounts = r.ok ? await r.json() : [];
+    if(accounts.length > 0){
+      STATE.primaryAccount = accounts[0];
+      showInboxList();
+      await loadInbox();
+    } else {
+      STATE.primaryAccount = null;
+      showEmptyNoAccount();
     }
+  } catch(e){ showEmptyNoAccount(); }
+}
+
+function showEmptyNoAccount(){
+  document.getElementById('empty-state-noaccount').style.display = 'flex';
+  document.getElementById('empty-state-empty').style.display = 'none';
+  document.getElementById('empty-state-loading').style.display = 'none';
+  document.getElementById('email-list').style.display = 'none';
+}
+function showInboxList(){
+  document.getElementById('empty-state-noaccount').style.display = 'none';
+  document.getElementById('empty-state-empty').style.display = 'none';
+  document.getElementById('empty-state-loading').style.display = 'none';
+  document.getElementById('email-list').style.display = 'block';
+}
+function showLoading(){
+  document.getElementById('empty-state-noaccount').style.display = 'none';
+  document.getElementById('empty-state-empty').style.display = 'none';
+  document.getElementById('empty-state-loading').style.display = 'flex';
+  document.getElementById('email-list').style.display = 'none';
+}
+function showInboxEmpty(){
+  document.getElementById('empty-state-noaccount').style.display = 'none';
+  document.getElementById('empty-state-empty').style.display = 'flex';
+  document.getElementById('empty-state-loading').style.display = 'none';
+  document.getElementById('email-list').style.display = 'none';
+}
+
+// ────────────────────────────────────────────────
+// INBOX (Gmail)
+// ────────────────────────────────────────────────
+async function loadInbox(opts){
+  if(!STATE.primaryAccount || STATE.primaryAccount.provider !== 'google'){
+    if(!STATE.primaryAccount) showEmptyNoAccount();
+    return;
+  }
+  if(!opts || !opts.silent) showLoading();
+  try {
+    var url = '/api/v2/mail/inbox-preview?email=' + encodeURIComponent(STATE.primaryAccount.email) + '&limit=50';
+    var r = await fetch(url);
+    if(!r.ok){ throw new Error('Lecture inbox impossible'); }
+    var msgs = await r.json();
+    var prevCount = STATE.emails.length;
+    STATE.emails = msgs;
+    renderInbox(msgs);
+    updateKpis();
+    // Pulse si count est passé de 0 à >=1 (welcome arrivé)
+    if(prevCount === 0 && msgs.length >= 1){
+      var k = document.getElementById('kpi-inbox');
+      k.classList.remove('pulse'); void k.offsetWidth; k.classList.add('pulse');
+    }
+  } catch(e){
+    if(!opts || !opts.silent) showEmptyNoAccount();
+  }
+}
+
+function renderInbox(msgs){
+  var list = document.getElementById('email-list');
+  if(!msgs || msgs.length === 0){
+    showInboxEmpty();
+    return;
+  }
+  showInboxList();
+  list.innerHTML = msgs.map(function(m){
+    var senderRaw = m.from || '—';
+    var senderName = senderRaw.replace(/<[^>]+>/, '').trim() || senderRaw;
+    var initials = (senderName.match(/\b\w/g) || ['•']).slice(0,2).join('').toUpperCase();
+    var dateStr = m.date ? formatRelativeDate(m.date) : '';
+    var bold = m.unread ? ' bold' : '';
+    var dot = m.unread ? '<div class="unread-dot"></div>' : '';
+    var barCol = guessBarColor(m.subject);
+    return '<div class="email-item" data-id="' + escAttr(m.id) + '" onclick="selectEmail(' + JSON.stringify(m.id).replace(/"/g, '&quot;') + ')">'
+      +   '<div class="email-bar ' + barCol + '"></div>'
+      +   '<div class="email-inner">'
+      +     '<div class="av">' + escHtml(initials) + '</div>'
+      +     '<div class="einfo">'
+      +       '<div class="etop"><div class="esender' + bold + '">' + escHtml(senderName) + '</div><div class="edate">' + escHtml(dateStr) + '</div></div>'
+      +       '<div class="esubject">' + escHtml(m.subject || '(sans sujet)') + '</div>'
+      +       '<div class="epreview">' + escHtml(m.snippet || '') + '</div>'
+      +     '</div>'
+      +     dot
+      +   '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function guessBarColor(subject){
+  var s = String(subject || '').toLowerCase();
+  if(s.includes('newsletter')) return 'col-newsletter';
+  if(s.includes('mailing') || s.includes('prospection') || s.includes('campagne')) return 'col-mail';
+  return 'col-prospects';
+}
+
+function formatRelativeDate(dateStr){
+  var d = new Date(dateStr);
+  if(isNaN(d.getTime())) return '';
+  var diff = Date.now() - d.getTime();
+  var days = Math.floor(diff / 86400000);
+  if(days === 0){ var h = d.getHours().toString().padStart(2,'0'); var m = d.getMinutes().toString().padStart(2,'0'); return h + ':' + m; }
+  if(days === 1) return 'hier';
+  if(days < 7) return days + 'j';
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+}
+
+function selectEmail(id){
+  STATE.selectedEmailId = id;
+  document.querySelectorAll('.email-item').forEach(function(el){ el.classList.toggle('active', el.dataset.id === id); });
+  var msg = STATE.emails.find(function(m){ return m.id === id; });
+  if(!msg) return;
+  document.getElementById('viewer-empty').style.display = 'none';
+  document.getElementById('viewer').classList.add('active');
+  document.getElementById('v-subject').textContent = msg.subject || '(sans sujet)';
+  document.getElementById('v-from').textContent = msg.from || '—';
+  document.getElementById('v-date').textContent = msg.date ? new Date(msg.date).toLocaleString('fr-FR') : '';
+  document.getElementById('v-body').innerHTML = '<div style="color:var(--muted);font-size:12.5px;font-style:italic;margin-bottom:14px;">Aperçu rapide (snippet) — corps complet à charger en session ultérieure</div><div>' + escHtml(msg.snippet || '') + '</div>';
+}
+
+function setFolder(folder){
+  STATE.folder = folder;
+  document.querySelectorAll('.subnav-item').forEach(function(it){ it.classList.toggle('active', it.dataset.folder === folder); });
+  var lblEl = document.getElementById('cc-toolbar-label');
+  if(lblEl) lblEl.textContent = folder === 'inbox' ? 'Reçus' : folder === 'sent' ? 'Envoyés' : 'Brouillons';
+  // Pour V1, seul inbox est supporté
+  if(folder === 'inbox') loadInbox();
+  else { renderInbox([]); }
+}
+
+async function syncInbox(){
+  var btn = document.getElementById('btn-sync');
+  btn.classList.add('loading');
+  await loadInbox({ silent: false });
+  btn.classList.remove('loading');
+}
+
+function refreshInboxIfReady(){
+  if(STATE.primaryAccount){ loadInbox({ silent: true }); }
+}
+
+function updateKpis(){
+  document.getElementById('kpi-inbox').textContent = STATE.emails.length;
+  document.getElementById('badge-inbox').textContent = STATE.emails.length;
+  // Sent/Drafts/Mailing/Newsletter restent à 0 en V1 (sessions ultérieures pour Gmail labels)
+}
+
+// ────────────────────────────────────────────────
+// COMPOSE
+// ────────────────────────────────────────────────
+async function openCompose(){
+  if(!STATE.primaryAccount){ toast('Connectez d\'abord une boîte mail', 'error'); return; }
+  document.getElementById('compose-modal').classList.add('open');
+  // Remplit le selecteur "De" avec les comptes connectés
+  try {
+    var r = await fetch('/api/v2/mail/accounts');
+    var accounts = r.ok ? await r.json() : [];
+    var sel = document.getElementById('cmp-from');
+    sel.innerHTML = accounts.map(function(a){ return '<option value="' + escAttr(a.email) + '">' + escHtml(a.email) + ' (' + escHtml(a.provider) + ')</option>'; }).join('');
   } catch(e){}
 }
-loadStatus();
-
-// ────── OAuth Google (Track 1) ──────
-async function oauthGoogle(){
-  // Redirection 302 côté serveur → Google account chooser
-  window.location.href = '/auth/google';
+function closeCompose(){
+  document.getElementById('compose-modal').classList.remove('open');
+  ['cmp-to','cmp-subject','cmp-body'].forEach(function(id){ document.getElementById(id).value = ''; });
+  document.getElementById('cmp-result').style.display = 'none';
 }
-async function oauthMicrosoft(){
-  toast('OAuth Microsoft disponible en session 3 (voir README-mail.md)', 'error');
+async function sendCompose(){
+  var from_email = document.getElementById('cmp-from').value;
+  var to = document.getElementById('cmp-to').value.trim();
+  var subject = document.getElementById('cmp-subject').value.trim();
+  var body = document.getElementById('cmp-body').value;
+  if(!to || !subject){ toast('Champs requis : à, sujet', 'error'); return; }
+  var resEl = document.getElementById('cmp-result');
+  resEl.style.display = 'block'; resEl.innerHTML = '<span style="color:var(--muted);">Envoi…</span>';
+  try {
+    var r = await fetch('/api/v2/mail/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to, subject, body, from_email }) });
+    var d = await r.json();
+    if(r.ok){
+      resEl.innerHTML = '<span style="color:var(--green);font-weight:700;">Envoyé via ' + (d.provider || 'IMAP') + '</span>';
+      setTimeout(closeCompose, 1100);
+      toast('Message envoyé', 'ok');
+    } else {
+      resEl.innerHTML = '<span style="color:var(--red);">' + escHtml(d.error || 'Erreur') + '</span>';
+    }
+  } catch(e){ resEl.innerHTML = '<span style="color:var(--red);">Erreur réseau</span>'; }
 }
 
-// Détecte les query params au retour du callback OAuth
+// ────────────────────────────────────────────────
+// OAUTH RETOUR + WELCOME EMAIL POLLING
+// ────────────────────────────────────────────────
 (function handleOAuthReturn(){
   var params = new URLSearchParams(window.location.search);
   if(params.has('google_connected')){
     var email = params.get('email') || '';
     setTimeout(function(){ toast('Compte Gmail connecté : ' + email, 'ok'); }, 200);
-    // Switch sur l'onglet Paramètres pour voir le compte ajouté
-    var tab = document.querySelector('.subtab[data-tab="settings"]');
-    if(tab) tab.click();
-    // Nettoie l'URL
-    window.history.replaceState(null, '', window.location.pathname + '#settings');
+    window.history.replaceState(null, '', window.location.pathname);
+    // Trigger inbox immédiat + polling 5s pendant 30s pour capturer welcome
+    setTimeout(function(){
+      loadAccountsAndInbox().then(function(){
+        startWelcomePoll();
+      });
+    }, 600);
   }
   if(params.has('google_error')){
     var err = params.get('google_error') || 'Erreur OAuth';
@@ -522,34 +771,48 @@ async function oauthMicrosoft(){
   }
 })();
 
-// ────── Liste des comptes connectés ──────
+function startWelcomePoll(){
+  if(STATE.welcomePollTimer) clearInterval(STATE.welcomePollTimer);
+  var attempts = 0;
+  var initialCount = STATE.emails.length;
+  STATE.welcomePollTimer = setInterval(async function(){
+    attempts++;
+    await loadInbox({ silent: true });
+    var hasWelcome = STATE.emails.some(function(m){ return /bienvenue/i.test(m.subject || ''); });
+    if(hasWelcome || STATE.emails.length > initialCount){
+      clearInterval(STATE.welcomePollTimer);
+      STATE.welcomePollTimer = null;
+    } else if(attempts >= 6){
+      clearInterval(STATE.welcomePollTimer);
+      STATE.welcomePollTimer = null;
+    }
+  }, 5000);
+}
+
+// ────────────────────────────────────────────────
+// COMPTES (Paramètres)
+// ────────────────────────────────────────────────
+async function oauthGoogle(){ window.location.href = '/auth/google'; }
+async function oauthMicrosoft(){ toast('OAuth Microsoft disponible en session 3 (voir README-mail.md)', 'error'); }
+
 async function loadAccounts(){
   try {
     var r = await fetch('/api/v2/mail/accounts');
-    if(!r.ok){ document.getElementById('accounts-list').innerHTML = ''; return; }
+    if(!r.ok) return;
     var accounts = await r.json();
     var list = document.getElementById('accounts-list');
-    if(!accounts || accounts.length === 0){
-      list.innerHTML = '<div style="font-size:12.5px;color:var(--muted);font-style:italic;">Aucun compte connecté pour l\'instant.</div>';
-      return;
-    }
+    if(!accounts || accounts.length === 0){ list.innerHTML = '<div style="font-size:12.5px;color:var(--muted);font-style:italic;">Aucun compte connecté pour l\'instant.</div>'; return; }
     list.innerHTML = accounts.map(function(a){
       var providerLabel = a.provider === 'google' ? 'Google' : a.provider === 'microsoft' ? 'Microsoft' : 'IMAP';
       var providerColor = a.provider === 'google' ? '#4285F4' : a.provider === 'microsoft' ? '#00A4EF' : 'var(--text)';
       var legacyBadge = a.legacy ? ' <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-left:6px;">legacy</span>' : '';
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px;">'
-        + '<div>'
-        +   '<div style="font-size:13.5px;font-weight:700;color:var(--text);">' + escHtmlMail(a.email) + legacyBadge + '</div>'
-        +   '<div style="font-size:11.5px;color:' + providerColor + ';font-weight:600;text-transform:uppercase;letter-spacing:1.2px;margin-top:3px;">' + providerLabel + '</div>'
-        + '</div>'
+        + '<div><div style="font-size:13.5px;font-weight:700;color:var(--text);">' + escHtml(a.email) + legacyBadge + '</div>'
+        + '<div style="font-size:11.5px;color:' + providerColor + ';font-weight:600;text-transform:uppercase;letter-spacing:1.2px;margin-top:3px;">' + providerLabel + '</div></div>'
         + '<button class="btn btn-outline btn-sm" onclick="disconnectAccount(' + JSON.stringify(a.provider).replace(/"/g, '&quot;') + ', ' + JSON.stringify(a.email).replace(/"/g, '&quot;') + ')">Déconnecter</button>'
         + '</div>';
     }).join('');
-  } catch(e){ /* silent */ }
-}
-
-function escHtmlMail(s){
-  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  } catch(e){}
 }
 
 async function disconnectAccount(provider, email){
@@ -560,116 +823,225 @@ async function disconnectAccount(provider, email){
       if(r.status === 204){ toast('Compte Google déconnecté', 'ok'); }
       else { var err = await r.json().catch(function(){return{}}); toast(err.error || 'Échec', 'error'); }
     } else if(provider === 'imap'){
-      // Legacy IMAP : route session 1
       await fetch('/api/v2/mail/disconnect', { method:'POST' });
       toast('Boîte IMAP déconnectée', 'ok');
-    } else {
-      toast('Déconnexion ' + provider + ' non implémentée (session ultérieure)', 'error');
-      return;
-    }
+    } else { toast('Déconnexion ' + provider + ' non implémentée', 'error'); return; }
     await loadAccounts();
-    await loadStatus();
+    await loadAccountsAndInbox();
   } catch(e){ toast('Erreur réseau', 'error'); }
 }
 
-// Recharge la liste comptes au switch sur l'onglet Paramètres
-document.querySelectorAll('.subtab').forEach(function(btn){
-  btn.addEventListener('click', function(){
-    if(btn.dataset.tab === 'settings') loadAccounts();
-  });
-});
+// ────────────────────────────────────────────────
+// CAMPAGNES (Track 2 — code session 6+7+8 inchangé, simplifié pour layout)
+// ────────────────────────────────────────────────
+var pollDomainTimer = null;
+var currentDomain = null;
 
-// Charge initialement
-loadAccounts();
-
-// ────── Modale IMAP autodetect ──────
-var PRESETS = null;
-var currentPreset = null;
-
-async function loadPresets(){
-  if(PRESETS) return PRESETS;
+async function loadCampaignsTab(){
   try {
-    var r = await fetch('/js/provider-presets.json');
-    PRESETS = await r.json();
-    return PRESETS;
-  } catch(e){ PRESETS = {}; return PRESETS; }
+    var r = await fetch('/api/v2/campaigns/domain/list');
+    var domains = r.ok ? await r.json() : [];
+    var verified = domains.find(function(d){ return d.status === 'verified'; });
+    if(verified){
+      currentDomain = verified;
+      document.getElementById('campaigns-setup').style.display = 'none';
+      document.getElementById('campaigns-active').style.display = 'block';
+      var el = document.getElementById('active-domain'); if(el) el.textContent = verified.domain_name;
+      await loadCampaignsList();
+    } else {
+      document.getElementById('campaigns-setup').style.display = 'block';
+      document.getElementById('campaigns-active').style.display = 'none';
+      var pending = domains.find(function(d){ return d.status !== 'verified' && d.status !== 'failed'; });
+      if(pending){ currentDomain = pending; renderDnsRecords(pending); startPollDomain(); }
+    }
+  } catch(e){}
 }
 
-function openImapModal(){
-  document.getElementById('imap-modal').classList.add('open');
-  document.getElementById('im-email').focus();
+async function verifyDomain(){
+  var name = (document.getElementById('domain-input').value || '').trim().toLowerCase();
+  if(!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(name)){ toast('Domaine invalide', 'error'); return; }
+  var btn = document.getElementById('btn-verify-domain'); btn.disabled = true; btn.textContent = 'Vérification…';
+  try {
+    var r = await fetch('/api/v2/campaigns/domain/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ domain_name: name }) });
+    var data = await r.json();
+    if(!r.ok){ toast(data.error || 'Erreur', 'error'); btn.disabled = false; btn.textContent = 'Vérifier mon domaine'; return; }
+    currentDomain = data;
+    if(data.status === 'verified'){ toast('Domaine déjà vérifié', 'ok'); await loadCampaignsTab(); }
+    else { renderDnsRecords(data); startPollDomain(); }
+  } catch(e){ toast('Erreur réseau', 'error'); }
+  btn.disabled = false; btn.textContent = 'Vérifier mon domaine';
 }
+
+function renderDnsRecords(d){
+  document.getElementById('dns-records-card').style.display = 'block';
+  var list = document.getElementById('dns-records-list');
+  var records = d.dns_records || [];
+  list.innerHTML = records.length ? records.map(function(rec){
+    var type = rec.type || rec.record || ''; var name = rec.name || ''; var value = rec.value || rec.data || '';
+    return '<div class="dns-record"><span class="dns-record-type">' + escHtml(type) + '</span><span class="dns-record-name" title="' + escAttr(name) + '">' + escHtml(name) + '</span><span class="dns-record-value" title="' + escAttr(value) + '">' + escHtml(value) + '</span><button class="btn btn-outline btn-sm" onclick="copyDns(this, ' + JSON.stringify(value).replace(/"/g, '&quot;') + ')">Copier</button></div>';
+  }).join('') : '<div style="color:var(--muted);font-size:12px;">Aucun enregistrement à ajouter — domaine déjà configuré.</div>';
+  updateDnsStatusUi(d.status);
+}
+function updateDnsStatusUi(status){
+  var pill = document.getElementById('dns-status-pill'); var txt = document.getElementById('dns-status-text');
+  if(!pill || !txt) return;
+  if(status === 'verified'){ pill.classList.remove('warn'); txt.textContent = 'Vérifié'; }
+  else if(status === 'failed'){ pill.classList.add('warn'); txt.textContent = 'Échec — vérifier les enregistrements'; }
+  else { pill.classList.add('warn'); txt.textContent = 'En attente de propagation DNS'; }
+}
+function copyDns(btn, val){ navigator.clipboard.writeText(val).then(function(){ var orig=btn.textContent; btn.textContent='Copié'; setTimeout(function(){btn.textContent=orig;},1400); }); }
+async function checkDomainStatus(){ if(!currentDomain || !currentDomain.resend_domain_id) return;
+  try { var r = await fetch('/api/v2/campaigns/domain/status?domain_id=' + encodeURIComponent(currentDomain.resend_domain_id));
+    if(!r.ok) return; var d = await r.json(); updateDnsStatusUi(d.status);
+    if(d.status === 'verified'){ stopPollDomain(); toast('Domaine vérifié', 'ok'); await loadCampaignsTab(); }
+  } catch(e){} }
+function startPollDomain(){ stopPollDomain(); pollDomainTimer = setInterval(checkDomainStatus, 30000); }
+function stopPollDomain(){ if(pollDomainTimer){ clearInterval(pollDomainTimer); pollDomainTimer = null; } }
+
+async function loadCampaignsList(){
+  try {
+    var r = await fetch('/api/v2/campaigns');
+    var list = r.ok ? await r.json() : [];
+    var container = document.getElementById('campaigns-list');
+    var empty = document.getElementById('campaigns-empty');
+    if(!list || list.length === 0){ empty.style.display='block'; container.innerHTML=''; return; }
+    empty.style.display='none';
+    container.innerHTML = list.map(function(c){
+      var stats = c.stats || {};
+      var rid = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '');
+      var statusColor = c.status === 'completed' ? 'var(--green)' : c.status === 'sending' ? 'var(--orange)' : c.status === 'failed' ? 'var(--red)' : 'var(--muted)';
+      return '<div class="card" style="cursor:pointer;" onclick="openCampaignDetail(' + JSON.stringify(rid).replace(/"/g, '&quot;') + ')">'
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;"><div style="flex:1;min-width:0;"><div style="font-size:14.5px;font-weight:700;color:var(--text);margin-bottom:4px;">' + escHtml(c.name || rid) + '</div><div style="font-size:12px;color:var(--muted);">' + (c.recipients_count || 0) + ' destinataire(s) · ' + escHtml(c.from_email || '—') + '</div></div><span style="font-size:11px;font-weight:700;color:' + statusColor + ';text-transform:uppercase;letter-spacing:1.2px;">' + escHtml(c.status || 'draft') + '</span></div>'
+        + '<div style="display:flex;gap:14px;margin-top:14px;font-size:11.5px;color:var(--muted);font-family:var(--mono);"><span><strong style="color:var(--text);">' + (stats.sent || 0) + '</strong> envoyés</span><span><strong style="color:var(--green);">' + (stats.delivered || 0) + '</strong> livrés</span><span><strong style="color:var(--blue);">' + (stats.opened || 0) + '</strong> ouverts</span><span><strong style="color:var(--purple);">' + (stats.clicked || 0) + '</strong> cliqués</span><span><strong style="color:var(--red);">' + (stats.bounced || 0) + '</strong> bounces</span></div></div>';
+    }).join('');
+  } catch(e){}
+}
+
+async function openCampaignModal(){
+  document.getElementById('campaign-modal').classList.add('open');
+  if(currentDomain && currentDomain.domain_name){ var input = document.getElementById('cm-from-email'); if(!input.value) input.value = 'prospection@' + currentDomain.domain_name; }
+  try { var r = await fetch('/api/pipeline'); var cards = r.ok ? await r.json() : [];
+    var cols = [...new Set(cards.map(function(c){ return c.col || 'autre'; }))];
+    var sel = document.getElementById('cm-pipeline-col');
+    sel.innerHTML = '<option value="">— Toutes —</option>' + cols.map(function(c){ return '<option value="' + escHtml(c) + '">' + escHtml(c) + '</option>'; }).join('');
+    window.__pipelineCards = cards;
+  } catch(e){}
+}
+function closeCampaignModal(){
+  document.getElementById('campaign-modal').classList.remove('open');
+  ['cm-name','cm-from-email','cm-from-name','cm-subject','cm-html'].forEach(function(id){ document.getElementById(id).value = ''; });
+  document.getElementById('cm-recipients-preview').style.display = 'none';
+  window.__currentRecipients = null;
+}
+function loadCampaignRecipients(){
+  var col = document.getElementById('cm-pipeline-col').value;
+  var cards = window.__pipelineCards || [];
+  var filtered = col ? cards.filter(function(c){ return (c.col || '') === col; }) : cards;
+  var recipients = filtered.map(function(c){ var email = c.email || c.mail || c.contactEmail; if(!email) return null;
+    return { email, prenom: (c.contactFirstName || c.firstName || (c.name || '').split(' ')[0] || '').trim(), entreprise: (c.co || c.company || '').trim(), secteur: (c.naf || c.sector || '').trim(), ville: (c.city || '').trim() };
+  }).filter(Boolean);
+  window.__currentRecipients = recipients;
+  var info = document.getElementById('cm-recipients-info'); var preview = document.getElementById('cm-recipients-preview');
+  if(recipients.length === 0){ info.textContent = 'Aucun destinataire avec une adresse email dans cette colonne.'; preview.style.display = 'none'; return; }
+  info.textContent = recipients.length + ' destinataire(s) chargés.';
+  preview.style.display = 'block';
+  preview.innerHTML = recipients.slice(0, 10).map(function(r){ return r.email + (r.prenom ? ' (' + r.prenom + ')' : '') + (r.entreprise ? ' — ' + r.entreprise : ''); }).join('<br/>') + (recipients.length > 10 ? '<br/>… +' + (recipients.length - 10) + ' autres' : '');
+}
+async function saveCampaignDraft(){ await submitCampaign(false); }
+async function sendCampaignNow(){ if(!confirm('Envoyer la campagne maintenant ?')) return; await submitCampaign(true); }
+async function submitCampaign(sendNow){
+  var name = document.getElementById('cm-name').value.trim();
+  var subject = document.getElementById('cm-subject').value.trim();
+  var html = document.getElementById('cm-html').value.trim();
+  var fromEmail = document.getElementById('cm-from-email').value.trim();
+  var fromName = document.getElementById('cm-from-name').value.trim();
+  var recipients = window.__currentRecipients || [];
+  if(!name || !subject || !html || !fromEmail){ toast('Champs requis : nom, sujet, corps, expéditeur', 'error'); return; }
+  if(recipients.length === 0){ toast('Charger des destinataires d\'abord', 'error'); return; }
+  try {
+    var r = await fetch('/api/v2/campaigns/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, template_subject: subject, template_html: html, from_email: fromEmail, from_name: fromName, recipients }) });
+    var c = await r.json();
+    if(!r.ok){ toast(c.error || 'Création impossible', 'error'); return; }
+    var rid = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '');
+    if(sendNow){
+      var sr = await fetch('/api/v2/campaigns/' + encodeURIComponent(rid) + '/send', { method:'POST' });
+      var sd = await sr.json();
+      if(!sr.ok){ toast(sd.error || 'Envoi impossible', 'error'); }
+      else { toast(sd.sent_count + ' mail(s) envoyés', 'ok'); }
+    } else { toast('Brouillon enregistré', 'ok'); }
+    closeCampaignModal(); await loadCampaignsList();
+  } catch(e){ toast('Erreur réseau', 'error'); }
+}
+async function openCampaignDetail(rid){
+  document.getElementById('campaign-detail-modal').classList.add('open');
+  document.getElementById('cd-body').innerHTML = '<div style="color:var(--muted);font-size:13px;">Chargement…</div>';
+  await refreshCampaignDetail(rid);
+  if(window.__cdTimer) clearInterval(window.__cdTimer);
+  window.__cdTimer = setInterval(function(){ refreshCampaignDetail(rid); }, 5000);
+}
+function closeCampaignDetail(){
+  document.getElementById('campaign-detail-modal').classList.remove('open');
+  if(window.__cdTimer){ clearInterval(window.__cdTimer); window.__cdTimer = null; }
+  loadCampaignsList();
+}
+async function refreshCampaignDetail(rid){
+  try { var r = await fetch('/api/v2/campaigns/' + encodeURIComponent(rid) + '/stats'); if(!r.ok) return;
+    var d = await r.json(); var s = d.stats || {};
+    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">'
+      + statCell('Envoyés', s.sent || 0, 'var(--text)') + statCell('Livrés', s.delivered || 0, 'var(--green)')
+      + statCell('Ouverts', s.opened || 0, 'var(--blue)') + statCell('Cliqués', s.clicked || 0, 'var(--purple)') + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">'
+      + statCell('Bounces', s.bounced || 0, 'var(--red)') + statCell('Plaintes', s.complained || 0, 'var(--orange)')
+      + statCell('Désinscrits', s.unsubscribed || 0, 'var(--muted)') + '</div>'
+      + '<div style="font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">Destinataires (' + (d.recipients_status || []).length + ')</div>'
+      + '<div style="max-height:240px;overflow-y:auto;font-family:var(--mono);font-size:11.5px;">'
+      + (d.recipients_status || []).map(function(r){ var ev = r.last_event ? r.last_event : '—'; var color = r.last_event === 'opened' ? 'var(--blue)' : r.last_event === 'clicked' ? 'var(--purple)' : r.last_event === 'bounced' ? 'var(--red)' : r.last_event === 'delivered' ? 'var(--green)' : 'var(--muted)'; return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span>' + escHtml(r.email) + '</span><span style="color:' + color + ';font-weight:700;">' + escHtml(ev) + '</span></div>'; }).join('') + '</div>';
+    document.getElementById('cd-body').innerHTML = html;
+  } catch(e){}
+}
+function statCell(label, value, color){
+  return '<div style="background:var(--surface);border-radius:9px;padding:12px 14px;"><div style="font-size:9.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);">' + label + '</div><div style="font-size:22px;font-weight:900;color:' + color + ';margin-top:3px;font-family:var(--mono);">' + value + '</div></div>';
+}
+
+// ────────────────────────────────────────────────
+// MODALE IMAP (autodetect)
+// ────────────────────────────────────────────────
+var PRESETS = null; var currentPreset = null;
+async function loadPresets(){ if(PRESETS) return PRESETS; try { var r = await fetch('/js/provider-presets.json'); PRESETS = await r.json(); return PRESETS; } catch(e){ PRESETS = {}; return PRESETS; } }
+function openImapModal(){ document.getElementById('imap-modal').classList.add('open'); document.getElementById('im-email').focus(); }
 function closeImapModal(){
   document.getElementById('imap-modal').classList.remove('open');
-  document.getElementById('im-email').value = '';
-  document.getElementById('im-password').value = '';
-  document.getElementById('im-detected').style.display = 'none';
-  document.getElementById('im-fields').style.display = 'none';
-  document.getElementById('im-manual').style.display = 'none';
-  document.getElementById('im-test-btn').disabled = true;
-  document.getElementById('im-save-btn').disabled = true;
-  document.getElementById('im-test-result').style.display = 'none';
+  ['im-email','im-password'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('im-detected').style.display='none';
+  document.getElementById('im-fields').style.display='none';
+  document.getElementById('im-manual').style.display='none';
+  document.getElementById('im-test-btn').disabled=true;
+  document.getElementById('im-save-btn').disabled=true;
+  document.getElementById('im-test-result').style.display='none';
   currentPreset = null;
 }
-
 document.getElementById('im-email').addEventListener('blur', autodetectProvider);
 document.getElementById('im-email').addEventListener('change', autodetectProvider);
-
 async function autodetectProvider(){
   var email = (document.getElementById('im-email').value || '').trim().toLowerCase();
   if(!email || !email.includes('@')) return;
-  var domain = email.split('@')[1];
-  if(!domain) return;
-  await loadPresets();
-  var preset = PRESETS[domain] || PRESETS._default;
-  currentPreset = preset;
-
-  var det = document.getElementById('im-detected');
-  var fields = document.getElementById('im-fields');
-  var manual = document.getElementById('im-manual');
-  var hint = document.getElementById('im-password-hint');
-
-  // OAuth recommandé ?
-  if(preset.provider === 'oauth-google'){
-    det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice">Connexion <strong>OAuth Google</strong> recommandée — bouton "Connecter avec Google" ci-dessous, plus sécurisée. Si vous préférez utiliser un mot de passe d\'application, continuez ci-dessous.</div>';
-    det.style.display = 'block';
-  } else if(preset.provider === 'oauth-microsoft'){
-    det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice">Connexion <strong>OAuth Microsoft</strong> recommandée. Si vous préférez utiliser un mot de passe IMAP, continuez ci-dessous.</div>';
-    det.style.display = 'block';
-  } else if(preset.provider === 'imap-bridge'){
-    det.innerHTML = '<div class="detected-pill warn"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice notice-warn"><strong>Configuration spéciale.</strong> ' + (preset.note || '') + ' <a href="' + (preset.help_url || '#') + '" target="_blank" style="color:inherit;text-decoration:underline;">Aide officielle</a></div>';
-    det.style.display = 'block';
-  } else if(preset.provider === 'imap-manual' || preset.manual){
-    det.innerHTML = '<div class="detected-pill warn"><span class="dot"></span>Domaine personnalisé</div><div class="notice notice-warn">Saisissez les paramètres IMAP/SMTP manuellement ci-dessous. Demandez-les à votre administrateur si besoin.</div>';
-    det.style.display = 'block';
-    manual.style.display = 'block';
-  } else {
-    det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div>';
-    if(preset.app_password_required){
-      det.innerHTML += '<div class="notice notice-warn"><strong>Mot de passe d\'application requis.</strong> ' + (preset.note || '') + ' <a href="' + (preset.help_url || '#') + '" target="_blank" style="color:inherit;text-decoration:underline;">Générer mon mot de passe</a></div>';
-    }
-    det.style.display = 'block';
-  }
-
-  if(preset.app_password_required){
-    hint.innerHTML = 'Mot de passe d\'application 16 caractères. <a href="' + (preset.help_url || '#') + '" target="_blank" style="color:var(--text);text-decoration:underline;">Comment l\'obtenir ?</a>';
-  } else if(preset.help_url){
-    hint.innerHTML = '<a href="' + (preset.help_url || '#') + '" target="_blank" style="color:var(--muted);text-decoration:underline;">Mot de passe oublié ? Espace client ' + preset.label + '</a>';
-  } else {
-    hint.textContent = '';
-  }
-
-  // Préremplissage manuel si applicable
+  var domain = email.split('@')[1]; if(!domain) return;
+  await loadPresets(); var preset = PRESETS[domain] || PRESETS._default; currentPreset = preset;
+  var det = document.getElementById('im-detected'); var fields = document.getElementById('im-fields');
+  var manual = document.getElementById('im-manual'); var hint = document.getElementById('im-password-hint');
+  if(preset.provider === 'oauth-google'){ det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice">Connexion <strong>OAuth Google</strong> recommandée — bouton "Connecter avec Google".</div>'; det.style.display='block'; }
+  else if(preset.provider === 'oauth-microsoft'){ det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice">Connexion <strong>OAuth Microsoft</strong> recommandée.</div>'; det.style.display='block'; }
+  else if(preset.provider === 'imap-bridge'){ det.innerHTML = '<div class="detected-pill warn"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice notice-warn"><strong>Configuration spéciale.</strong> ' + (preset.note || '') + '</div>'; det.style.display='block'; }
+  else if(preset.provider === 'imap-manual' || preset.manual){ det.innerHTML = '<div class="detected-pill warn"><span class="dot"></span>Domaine personnalisé</div>'; det.style.display='block'; manual.style.display='block'; }
+  else { det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div>'; if(preset.app_password_required) det.innerHTML += '<div class="notice notice-warn"><strong>Mot de passe d\'application requis.</strong> ' + (preset.note || '') + '</div>'; det.style.display='block'; }
+  if(preset.app_password_required){ hint.innerHTML = 'Mot de passe d\'application 16 caractères. <a href="' + (preset.help_url || '#') + '" target="_blank" style="color:var(--text);">Comment l\'obtenir ?</a>'; }
+  else if(preset.help_url){ hint.innerHTML = '<a href="' + (preset.help_url || '#') + '" target="_blank" style="color:var(--muted);">Aide ' + preset.label + '</a>'; } else { hint.textContent = ''; }
   if(preset.imap_host) document.getElementById('im-imap-host').value = preset.imap_host;
   if(preset.imap_port) document.getElementById('im-imap-port').value = preset.imap_port;
   if(preset.smtp_host) document.getElementById('im-smtp-host').value = preset.smtp_host;
   if(preset.smtp_port) document.getElementById('im-smtp-port').value = preset.smtp_port;
-
-  fields.style.display = 'block';
-  document.getElementById('im-test-btn').disabled = false;
-  document.getElementById('im-save-btn').disabled = false;
+  fields.style.display='block'; document.getElementById('im-test-btn').disabled=false; document.getElementById('im-save-btn').disabled=false;
 }
-
 function buildImapPayload(){
   var email = document.getElementById('im-email').value.trim();
   var password = document.getElementById('im-password').value;
@@ -681,407 +1053,44 @@ function buildImapPayload(){
   var smtp_secure = currentPreset ? currentPreset.smtp_secure !== false : true;
   return { email, password, imap_host, imap_port, imap_secure, smtp_host, smtp_port, smtp_secure, provider_hint: currentPreset ? currentPreset.label : null };
 }
-
 async function testImap(){
   var payload = buildImapPayload();
-  if(!payload.email || !payload.password || !payload.imap_host || !payload.smtp_host){
-    toast('Champs manquants — vérifiez email, mot de passe et serveurs IMAP/SMTP', 'error');
-    return;
-  }
-  var btn = document.getElementById('im-test-btn');
-  btn.disabled = true; btn.textContent = 'Test en cours…';
-  try {
-    var r = await fetch('/api/v2/mail/imap/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    var data = await r.json();
-    var result = document.getElementById('im-test-result');
-    result.style.display = 'block';
-    if(data.imap_ok && data.smtp_ok){
-      result.innerHTML = '<span style="color:var(--green);font-weight:700;">Connexion IMAP et SMTP validées.</span>';
-      toast('Test réussi', 'ok');
-    } else {
-      var errs = [];
-      if(!data.imap_ok) errs.push('IMAP : ' + (data.errors?.imap || 'erreur'));
-      if(!data.smtp_ok) errs.push('SMTP : ' + (data.errors?.smtp || 'erreur'));
-      result.innerHTML = '<span style="color:var(--red);font-weight:700;">Échec.</span><br/><span style="color:var(--muted);">' + errs.join(' · ') + '</span>';
-    }
-  } catch(e){
-    toast('Erreur réseau pendant le test', 'error');
-  }
+  if(!payload.email || !payload.password || !payload.imap_host || !payload.smtp_host){ toast('Champs manquants', 'error'); return; }
+  var btn = document.getElementById('im-test-btn'); btn.disabled = true; btn.textContent = 'Test…';
+  try { var r = await fetch('/api/v2/mail/imap/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    var data = await r.json(); var result = document.getElementById('im-test-result'); result.style.display='block';
+    if(data.imap_ok && data.smtp_ok){ result.innerHTML = '<span style="color:var(--green);font-weight:700;">Connexion validée.</span>'; toast('Test réussi', 'ok'); }
+    else { var errs = []; if(!data.imap_ok) errs.push('IMAP : ' + (data.errors?.imap || 'erreur')); if(!data.smtp_ok) errs.push('SMTP : ' + (data.errors?.smtp || 'erreur'));
+      result.innerHTML = '<span style="color:var(--red);font-weight:700;">Échec.</span><br/><span style="color:var(--muted);">' + errs.join(' · ') + '</span>'; }
+  } catch(e){ toast('Erreur réseau', 'error'); }
   btn.disabled = false; btn.textContent = 'Tester';
 }
-
 async function saveImap(){
   var payload = buildImapPayload();
-  if(!payload.email || !payload.password || !payload.imap_host || !payload.smtp_host){
-    toast('Champs manquants', 'error');
-    return;
-  }
-  var btn = document.getElementById('im-save-btn');
-  btn.disabled = true; btn.textContent = 'Connexion…';
-  try {
-    var r = await fetch('/api/v2/mail/imap/connect', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    var data = await r.json();
-    if(r.ok && data.ok){
-      toast('Boîte connectée', 'ok');
-      closeImapModal();
-      await loadStatus();
-    } else {
-      toast(data.error || 'Échec de la sauvegarde', 'error');
-    }
-  } catch(e){
-    toast('Erreur réseau', 'error');
-  }
+  if(!payload.email || !payload.password || !payload.imap_host || !payload.smtp_host){ toast('Champs manquants', 'error'); return; }
+  var btn = document.getElementById('im-save-btn'); btn.disabled = true; btn.textContent = 'Connexion…';
+  try { var r = await fetch('/api/v2/mail/imap/connect', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    var data = await r.json(); if(r.ok && data.ok){ toast('Boîte connectée', 'ok'); closeImapModal(); await loadAccountsAndInbox(); }
+    else { toast(data.error || 'Échec', 'error'); }
+  } catch(e){ toast('Erreur réseau', 'error'); }
   btn.disabled = false; btn.textContent = 'Connecter';
 }
 
-async function disconnectMail(){
-  if(!confirm('Déconnecter votre boîte mail ? Vos emails reçus restent en base.')) return;
-  try {
-    await fetch('/api/v2/mail/disconnect', { method:'POST' });
-    toast('Déconnectée', 'ok');
-    await loadStatus();
-    document.getElementById('inbox-empty').style.display = 'block';
-    document.getElementById('inbox-connected').style.display = 'none';
-    document.getElementById('settings-disconnect').style.display = 'none';
-  } catch(e){
-    toast('Erreur lors de la déconnexion', 'error');
-  }
-}
-
-// ────────────────────────────────────────────────────────────
-// TRACK 2 — RESEND CAMPAGNES
-// ────────────────────────────────────────────────────────────
-
-var pollDomainTimer = null;
-var currentDomain = null; // { resend_domain_id, domain_name, status }
-
-async function loadCampaignsTab(){
-  try {
-    var r = await fetch('/api/v2/campaigns/domain/list');
-    var domains = r.ok ? await r.json() : [];
-    var verified = domains.find(function(d){ return d.status === 'verified'; });
-    if(verified){
-      currentDomain = verified;
-      document.getElementById('campaigns-setup').style.display = 'none';
-      document.getElementById('campaigns-active').style.display = 'block';
-      var el = document.getElementById('active-domain');
-      if(el) el.textContent = verified.domain_name;
-      await loadCampaignsList();
-    } else {
-      document.getElementById('campaigns-setup').style.display = 'block';
-      document.getElementById('campaigns-active').style.display = 'none';
-      // Si un domaine pending existe, le réafficher (DNS records)
-      var pending = domains.find(function(d){ return d.status !== 'verified' && d.status !== 'failed'; });
-      if(pending){
-        currentDomain = pending;
-        renderDnsRecords(pending);
-        startPollDomain();
-      }
-    }
-  } catch(e){ /* silent */ }
-}
-
-async function verifyDomain(){
-  var input = document.getElementById('domain-input');
-  var name = (input.value || '').trim().toLowerCase();
-  if(!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(name)){
-    toast('Domaine invalide', 'error'); return;
-  }
-  var btn = document.getElementById('btn-verify-domain');
-  btn.disabled = true; btn.textContent = 'Vérification…';
-  try {
-    var r = await fetch('/api/v2/campaigns/domain/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ domain_name: name }) });
-    var data = await r.json();
-    if(!r.ok){ toast(data.error || 'Erreur Resend', 'error'); btn.disabled = false; btn.textContent = 'Vérifier mon domaine'; return; }
-    currentDomain = data;
-    if(data.status === 'verified'){
-      toast('Domaine déjà vérifié', 'ok');
-      await loadCampaignsTab();
-    } else {
-      renderDnsRecords(data);
-      startPollDomain();
-    }
-  } catch(e){
-    toast('Erreur réseau', 'error');
-  }
-  btn.disabled = false; btn.textContent = 'Vérifier mon domaine';
-}
-
-function renderDnsRecords(d){
-  var card = document.getElementById('dns-records-card');
-  var list = document.getElementById('dns-records-list');
-  card.style.display = 'block';
-  var records = d.dns_records || [];
-  if(records.length === 0){
-    list.innerHTML = '<div style="color:var(--muted);font-size:12px;">Aucun enregistrement à ajouter — domaine déjà configuré.</div>';
-  } else {
-    list.innerHTML = records.map(function(rec){
-      var type = rec.type || rec.record || '';
-      var name = rec.name || '';
-      var value = rec.value || rec.data || '';
-      return '<div class="dns-record">'
-        + '<span class="dns-record-type">' + escHtml(type) + '</span>'
-        + '<span class="dns-record-name" title="' + escHtml(name) + '">' + escHtml(name) + '</span>'
-        + '<span class="dns-record-value" title="' + escHtml(value) + '">' + escHtml(value) + '</span>'
-        + '<button class="btn btn-outline btn-sm" onclick="copyDns(this, ' + JSON.stringify(value).replace(/"/g, '&quot;') + ')">Copier</button>'
-        + '</div>';
-    }).join('');
-  }
-  updateDnsStatusUi(d.status);
-}
-
-function updateDnsStatusUi(status){
-  var pill = document.getElementById('dns-status-pill');
-  var txt = document.getElementById('dns-status-text');
-  if(!pill || !txt) return;
-  if(status === 'verified'){
-    pill.classList.remove('warn');
-    txt.textContent = 'Vérifié';
-  } else if(status === 'failed'){
-    pill.classList.add('warn');
-    txt.textContent = 'Échec — vérifier les enregistrements';
-  } else {
-    pill.classList.add('warn');
-    txt.textContent = 'En attente de propagation DNS';
-  }
-}
-
-function copyDns(btn, val){
-  navigator.clipboard.writeText(val).then(function(){
-    var orig = btn.textContent;
-    btn.textContent = 'Copié';
-    setTimeout(function(){ btn.textContent = orig; }, 1400);
-  });
-}
-
-async function checkDomainStatus(){
-  if(!currentDomain || !currentDomain.resend_domain_id) return;
-  try {
-    var r = await fetch('/api/v2/campaigns/domain/status?domain_id=' + encodeURIComponent(currentDomain.resend_domain_id));
-    if(!r.ok) return;
-    var d = await r.json();
-    updateDnsStatusUi(d.status);
-    if(d.status === 'verified'){
-      stopPollDomain();
-      toast('Domaine vérifié', 'ok');
-      await loadCampaignsTab();
-    }
-  } catch(e){}
-}
-
-function startPollDomain(){
-  stopPollDomain();
-  pollDomainTimer = setInterval(checkDomainStatus, 30000);
-}
-function stopPollDomain(){
-  if(pollDomainTimer){ clearInterval(pollDomainTimer); pollDomainTimer = null; }
-}
-
-// ────── Liste campagnes ──────
-async function loadCampaignsList(){
-  try {
-    var r = await fetch('/api/v2/campaigns');
-    var list = r.ok ? await r.json() : [];
-    var container = document.getElementById('campaigns-list');
-    var empty = document.getElementById('campaigns-empty');
-    if(!list || list.length === 0){
-      empty.style.display = 'block';
-      container.innerHTML = '';
-      return;
-    }
-    empty.style.display = 'none';
-    container.innerHTML = list.map(function(c){
-      var stats = c.stats || {};
-      var rid = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '');
-      var statusColor = c.status === 'completed' ? 'var(--green)' : c.status === 'sending' ? 'var(--orange)' : c.status === 'failed' ? 'var(--red)' : 'var(--muted)';
-      return '<div class="card" style="cursor:pointer;" onclick="openCampaignDetail(' + JSON.stringify(rid).replace(/"/g, '&quot;') + ')">'
-        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;">'
-        +   '<div style="flex:1;min-width:0;">'
-        +     '<div style="font-size:14.5px;font-weight:700;color:var(--text);margin-bottom:4px;">' + escHtml(c.name || rid) + '</div>'
-        +     '<div style="font-size:12px;color:var(--muted);">' + (c.recipients_count || 0) + ' destinataire(s) · ' + escHtml(c.from_email || '—') + '</div>'
-        +   '</div>'
-        +   '<span style="font-size:11px;font-weight:700;color:' + statusColor + ';text-transform:uppercase;letter-spacing:1.2px;">' + escHtml(c.status || 'draft') + '</span>'
-        + '</div>'
-        + '<div style="display:flex;gap:14px;margin-top:14px;font-size:11.5px;color:var(--muted);font-family:var(--mono);">'
-        +   '<span><strong style="color:var(--text);">' + (stats.sent || 0) + '</strong> envoyés</span>'
-        +   '<span><strong style="color:var(--green);">' + (stats.delivered || 0) + '</strong> livrés</span>'
-        +   '<span><strong style="color:var(--blue);">' + (stats.opened || 0) + '</strong> ouverts</span>'
-        +   '<span><strong style="color:var(--purple);">' + (stats.clicked || 0) + '</strong> cliqués</span>'
-        +   '<span><strong style="color:var(--red);">' + (stats.bounced || 0) + '</strong> bounces</span>'
-        + '</div>'
-        + '</div>';
-    }).join('');
-  } catch(e){}
-}
-
-// ────── Modale création ──────
-async function openCampaignModal(){
-  document.getElementById('campaign-modal').classList.add('open');
-  // Préremplir from_email avec le domaine vérifié
-  if(currentDomain && currentDomain.domain_name){
-    var input = document.getElementById('cm-from-email');
-    if(!input.value) input.value = 'prospection@' + currentDomain.domain_name;
-  }
-  // Charger les colonnes pipeline pour le selecteur
-  try {
-    var r = await fetch('/api/pipeline');
-    var cards = r.ok ? await r.json() : [];
-    var cols = [...new Set(cards.map(function(c){ return c.col || 'autre'; }))];
-    var sel = document.getElementById('cm-pipeline-col');
-    var prev = sel.value;
-    sel.innerHTML = '<option value="">— Toutes les colonnes —</option>' + cols.map(function(c){ return '<option value="' + escHtml(c) + '">' + escHtml(c) + '</option>'; }).join('');
-    if(prev) sel.value = prev;
-    window.__pipelineCards = cards;
-  } catch(e){}
-}
-function closeCampaignModal(){
-  document.getElementById('campaign-modal').classList.remove('open');
-  ['cm-name','cm-from-email','cm-from-name','cm-subject','cm-html'].forEach(function(id){ document.getElementById(id).value = ''; });
-  document.getElementById('cm-recipients-preview').style.display = 'none';
-  document.getElementById('cm-recipients-info').textContent = 'Sélectionnez une colonne Kanban pour charger les destinataires.';
-  window.__currentRecipients = null;
-}
-
-function loadCampaignRecipients(){
-  var col = document.getElementById('cm-pipeline-col').value;
-  var cards = window.__pipelineCards || [];
-  var filtered = col ? cards.filter(function(c){ return (c.col || '') === col; }) : cards;
-  var recipients = filtered
-    .map(function(c){
-      var email = c.email || c.mail || c.contactEmail;
-      if(!email) return null;
-      return {
-        email,
-        prenom: (c.contactFirstName || c.firstName || (c.name || '').split(' ')[0] || '').trim(),
-        entreprise: (c.co || c.company || '').trim(),
-        secteur: (c.naf || c.sector || '').trim(),
-        ville: (c.city || '').trim()
-      };
-    })
-    .filter(Boolean);
-  window.__currentRecipients = recipients;
-  var info = document.getElementById('cm-recipients-info');
-  var preview = document.getElementById('cm-recipients-preview');
-  if(recipients.length === 0){
-    info.textContent = 'Aucun destinataire avec une adresse email dans cette colonne.';
-    preview.style.display = 'none';
-    return;
-  }
-  info.textContent = recipients.length + ' destinataire(s) chargés.';
-  preview.style.display = 'block';
-  preview.innerHTML = recipients.slice(0, 10).map(function(r){ return r.email + (r.prenom ? ' (' + r.prenom + ')' : '') + (r.entreprise ? ' — ' + r.entreprise : ''); }).join('<br/>') + (recipients.length > 10 ? '<br/>… +' + (recipients.length - 10) + ' autres' : '');
-}
-
-async function saveCampaignDraft(){ await submitCampaign(false); }
-async function sendCampaignNow(){
-  if(!confirm('Envoyer la campagne maintenant ?')) return;
-  await submitCampaign(true);
-}
-
-async function submitCampaign(sendNow){
-  var name = document.getElementById('cm-name').value.trim();
-  var subject = document.getElementById('cm-subject').value.trim();
-  var html = document.getElementById('cm-html').value.trim();
-  var fromEmail = document.getElementById('cm-from-email').value.trim();
-  var fromName = document.getElementById('cm-from-name').value.trim();
-  var recipients = window.__currentRecipients || [];
-  if(!name || !subject || !html || !fromEmail){ toast('Champs requis : nom, sujet, corps, expéditeur', 'error'); return; }
-  if(recipients.length === 0){ toast('Charger des destinataires d\'abord', 'error'); return; }
-
-  try {
-    var r = await fetch('/api/v2/campaigns/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-      name, template_subject: subject, template_html: html,
-      from_email: fromEmail, from_name: fromName, recipients
-    }) });
-    var c = await r.json();
-    if(!r.ok){ toast(c.error || 'Création impossible', 'error'); return; }
-    var rid = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '');
-    if(sendNow){
-      var sr = await fetch('/api/v2/campaigns/' + encodeURIComponent(rid) + '/send', { method:'POST' });
-      var sd = await sr.json();
-      if(!sr.ok){ toast(sd.error || 'Envoi impossible', 'error'); }
-      else { toast(sd.sent_count + ' mail(s) envoyés', 'ok'); }
-    } else {
-      toast('Brouillon enregistré', 'ok');
-    }
-    closeCampaignModal();
-    await loadCampaignsList();
-  } catch(e){ toast('Erreur réseau', 'error'); }
-}
-
-async function openCampaignDetail(rid){
-  document.getElementById('campaign-detail-modal').classList.add('open');
-  document.getElementById('cd-body').innerHTML = '<div style="color:var(--muted);font-size:13px;">Chargement…</div>';
-  await refreshCampaignDetail(rid);
-  // Refresh stats toutes les 5s pendant que la modale est ouverte
-  if(window.__cdTimer) clearInterval(window.__cdTimer);
-  window.__cdTimer = setInterval(function(){ refreshCampaignDetail(rid); }, 5000);
-}
-function closeCampaignDetail(){
-  document.getElementById('campaign-detail-modal').classList.remove('open');
-  if(window.__cdTimer){ clearInterval(window.__cdTimer); window.__cdTimer = null; }
-  loadCampaignsList(); // refresh la liste avec les stats à jour
-}
-
-async function refreshCampaignDetail(rid){
-  try {
-    var r = await fetch('/api/v2/campaigns/' + encodeURIComponent(rid) + '/stats');
-    if(!r.ok) return;
-    var d = await r.json();
-    document.getElementById('cd-title').textContent = 'Détail campagne';
-    var s = d.stats || {};
-    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">'
-      + statCell('Envoyés', s.sent || 0, 'var(--text)')
-      + statCell('Livrés', s.delivered || 0, 'var(--green)')
-      + statCell('Ouverts', s.opened || 0, 'var(--blue)')
-      + statCell('Cliqués', s.clicked || 0, 'var(--purple)')
-      + '</div>'
-      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">'
-      + statCell('Bounces', s.bounced || 0, 'var(--red)')
-      + statCell('Plaintes', s.complained || 0, 'var(--orange)')
-      + statCell('Désinscrits', s.unsubscribed || 0, 'var(--muted)')
-      + '</div>'
-      + '<div style="font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">Destinataires (' + (d.recipients_status || []).length + ')</div>'
-      + '<div style="max-height:240px;overflow-y:auto;font-family:var(--mono);font-size:11.5px;">'
-      + (d.recipients_status || []).map(function(r){
-          var ev = r.last_event ? r.last_event : '—';
-          var color = r.last_event === 'opened' ? 'var(--blue)' : r.last_event === 'clicked' ? 'var(--purple)' : r.last_event === 'bounced' ? 'var(--red)' : r.last_event === 'delivered' ? 'var(--green)' : 'var(--muted)';
-          return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);">'
-            + '<span>' + escHtml(r.email) + '</span>'
-            + '<span style="color:' + color + ';font-weight:700;">' + escHtml(ev) + '</span>'
-            + '</div>';
-        }).join('')
-      + '</div>';
-    document.getElementById('cd-body').innerHTML = html;
-  } catch(e){}
-}
-
-function statCell(label, value, color){
-  return '<div style="background:var(--surface);border-radius:9px;padding:12px 14px;">'
-    + '<div style="font-size:9.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);">' + label + '</div>'
-    + '<div style="font-size:22px;font-weight:900;color:' + color + ';margin-top:3px;font-family:var(--mono);">' + value + '</div>'
-    + '</div>';
-}
-
-function escHtml(s){
-  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-// Charger l'onglet Campagnes au switch
-document.querySelectorAll('.subtab').forEach(function(btn){
-  btn.addEventListener('click', function(){
-    if(btn.dataset.tab === 'campaigns') loadCampaignsTab();
-    if(btn.dataset.tab !== 'campaigns') stopPollDomain();
-  });
-});
-
-// ────── Toast ──────
+// ────────────────────────────────────────────────
+// HELPERS
+// ────────────────────────────────────────────────
+function escHtml(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function escAttr(s){ return escHtml(s); }
 function toast(msg, type){
-  var el = document.getElementById('toast');
-  el.textContent = msg;
+  var el = document.getElementById('toast'); el.textContent = msg;
   el.className = 'toast show ' + (type === 'ok' ? 'ok' : type === 'error' ? 'error' : '');
   setTimeout(function(){ el.classList.remove('show'); }, 2800);
 }
+
+// ────────────────────────────────────────────────
+// INIT
+// ────────────────────────────────────────────────
+loadAccountsAndInbox();
 </script>
 <script src="/sidebar.js"></script>
 </body>

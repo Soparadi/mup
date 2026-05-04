@@ -19,7 +19,9 @@ import {
   verifyResendDomain,
   getResendDomainStatus,
   sendCampaign as mailServiceSendCampaign,
-  verifyResendSignature
+  verifyResendSignature,
+  listMailboxCredentials,
+  listGoogleMessages
 } from './lib/mail-service.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1852,18 +1854,161 @@ app.post('/api/v2/mail/send', async (req, res) => {
   }
 })
 
-// Stubs OAuth — session 2/3.
-app.get('/auth/google', (req, res) => {
-  res.status(501).json({ error: 'OAuth Google non configuré — voir session 2 (README-mail.md)' })
+// ── OAuth Google (Track 1 — boîte personnelle Gmail) ──
+
+import('./lib/oauth-google.js').then(() => {})  // pre-warm import (no-op)
+
+app.get('/auth/google', async (req, res) => {
+  const ownerId = requireUserId(req, res)
+  if (!ownerId) return
+  try {
+    const { isGoogleReady, signState, generateAuthUrl } = await import('./lib/oauth-google.js')
+    if (!isGoogleReady()) return res.status(503).json({ error: 'OAuth Google non configuré (variables GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI manquantes)' })
+    const state = signState({ ownerId, companyId: req.query.companyId || null })
+    const url = generateAuthUrl(state)
+    res.redirect(302, url)
+  } catch (err) {
+    console.error('[oauth-google:start]', err.message)
+    res.status(500).json({ error: 'Démarrage OAuth Google impossible' })
+  }
 })
-app.get('/auth/google/callback', (req, res) => {
-  res.status(501).json({ error: 'OAuth Google non configuré — voir session 2 (README-mail.md)' })
+
+app.get('/auth/google/callback', async (req, res) => {
+  try {
+    const { isGoogleReady, verifyState, exchangeCode, fetchUserEmail } = await import('./lib/oauth-google.js')
+    const { encryptMailToken, isMailCryptoReady } = await import('./lib/crypto.js')
+    if (!isGoogleReady()) return res.status(503).send('OAuth Google non configuré')
+    if (!isMailCryptoReady()) return res.status(503).send('MAIL_ENCRYPTION_KEY/SECRET_KEY manquante')
+
+    const { code, state, error: googleErr } = req.query
+    if (googleErr) return res.redirect(302, '/mail.html?google_error=' + encodeURIComponent(String(googleErr)))
+    if (!code || !state) return res.status(400).send('code/state manquants')
+    const claims = verifyState(String(state))
+    if (!claims) return res.status(401).send('state JWT invalide ou expiré (>10 min)')
+
+    const tokens = await exchangeCode(String(code))
+    if (!tokens.refresh_token) {
+      // L'utilisateur a déjà accordé l'app sans prompt=consent → pas de refresh_token retourné.
+      // Notre signState force prompt=consent donc ce cas est rare. Message explicite.
+      return res.redirect(302, '/mail.html?google_error=' + encodeURIComponent('Aucun refresh_token reçu — révoquer l\'app dans les paramètres Google et réessayer'))
+    }
+    const email = await fetchUserEmail(tokens)
+    if (!email) return res.status(502).send('Email utilisateur introuvable via Google API')
+
+    const db = await getDb()
+    const recordId = `${claims.ownerId}__google__${email.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const now = new Date().toISOString()
+    const payload = {
+      ownerId: claims.ownerId,
+      companyId: claims.companyId || null,
+      provider: 'google',
+      email,
+      accessToken: encryptMailToken(tokens.access_token),
+      refreshToken: encryptMailToken(tokens.refresh_token),
+      tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
+      scope: tokens.scope || null,
+      updatedAt: now
+    }
+    const sel = await db.query('SELECT * FROM type::record("mailbox_credentials", $id)', { id: recordId })
+    if (sel[0]?.[0]) {
+      await db.query('UPDATE type::record("mailbox_credentials", $id) MERGE $body', { id: recordId, body: payload })
+    } else {
+      payload.createdAt = now
+      await db.query('CREATE type::record("mailbox_credentials", $id) CONTENT $body', { id: recordId, body: payload })
+    }
+    res.redirect(302, '/mail.html?google_connected=1&email=' + encodeURIComponent(email))
+  } catch (err) {
+    console.error('[oauth-google:callback]', err.message)
+    res.redirect(302, '/mail.html?google_error=' + encodeURIComponent(err.message || 'Erreur OAuth Google'))
+  }
 })
+
+app.post('/auth/google/disconnect', async (req, res) => {
+  const ownerId = requireUserId(req, res)
+  if (!ownerId) return
+  const { email } = req.body || {}
+  if (!email) return res.status(400).json({ error: 'email requis' })
+  try {
+    const db = await getDb()
+    const recordId = `${ownerId}__google__${String(email).replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const sel = await db.query('SELECT * FROM type::record("mailbox_credentials", $id)', { id: recordId })
+    const cred = sel[0]?.[0]
+    if (!cred || cred.ownerId !== ownerId) return res.status(404).json({ error: 'Compte introuvable' })
+
+    // Révocation côté Google (best effort)
+    try {
+      const { decryptMailToken } = await import('./lib/crypto.js')
+      const { revokeRefreshToken, isGoogleReady } = await import('./lib/oauth-google.js')
+      if (isGoogleReady() && cred.refreshToken) {
+        const refreshToken = decryptMailToken(cred.refreshToken)
+        await revokeRefreshToken(refreshToken)
+      }
+    } catch (e) {
+      console.warn('[oauth-google:revoke] échec révocation côté Google :', e.message)
+    }
+
+    await db.query('DELETE type::record("mailbox_credentials", $id)', { id: recordId })
+    res.status(204).end()
+  } catch (err) {
+    console.error('[oauth-google:disconnect]', err.message)
+    res.status(500).json({ error: 'Déconnexion impossible' })
+  }
+})
+
+// Stub OAuth Microsoft — session 3.
 app.get('/auth/microsoft', (req, res) => {
   res.status(501).json({ error: 'OAuth Microsoft non configuré — voir session 3 (README-mail.md)' })
 })
 app.get('/auth/microsoft/callback', (req, res) => {
   res.status(501).json({ error: 'OAuth Microsoft non configuré — voir session 3 (README-mail.md)' })
+})
+
+// ── Liste tous les comptes mail connectés du user (mailbox_credentials + mail_settings IMAP)
+app.get('/api/v2/mail/accounts', async (req, res) => {
+  const ownerId = requireUserId(req, res)
+  if (!ownerId) return
+  try {
+    const db = await getDb()
+    const oauth = await listMailboxCredentials(db, ownerId)
+    // Aplatit (jamais de token retourné — listMailboxCredentials ne sélectionne pas access/refresh)
+    const accounts = oauth.map(c => ({
+      id: c.id,
+      provider: c.provider,
+      email: c.email,
+      scope: c.scope,
+      tokenExpiresAt: c.tokenExpiresAt,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt
+    }))
+    // Inclut aussi la config IMAP legacy si existe
+    const imapStatus = await mailServiceStatus(db, ownerId)
+    if (imapStatus.connected && imapStatus.provider === 'imap' && imapStatus.email) {
+      accounts.push({ id: `mail_settings:${ownerId}`, provider: 'imap', email: imapStatus.email, legacy: true })
+    }
+    res.json(accounts)
+  } catch (err) {
+    console.error('[v2/mail:accounts]', err.message)
+    res.status(500).json({ error: 'Lecture comptes impossible' })
+  }
+})
+
+// Preview inbox d'un compte Google connecté (Track 1 OAuth).
+app.get('/api/v2/mail/inbox-preview', async (req, res) => {
+  const ownerId = requireUserId(req, res)
+  if (!ownerId) return
+  const { email, limit, query } = req.query
+  if (!email) return res.status(400).json({ error: 'email requis (du compte Google connecté)' })
+  try {
+    const db = await getDb()
+    const messages = await listGoogleMessages(db, ownerId, String(email), {
+      limit: limit ? Number(limit) : 25,
+      query: query ? String(query) : 'newer_than:7d'
+    })
+    res.json(messages)
+  } catch (err) {
+    console.error('[v2/mail:inbox-preview]', err.message)
+    res.status(500).json({ error: err.message || 'Lecture inbox impossible' })
+  }
 })
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -2312,12 +2457,16 @@ app.get('/:page', (req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS domains_resend SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS campaigns SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS campaign_events SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS mailbox_credentials SCHEMALESS')
     // Indexes pour les requêtes scoping userId et lookups par campagne/destinataire
     await db.query('DEFINE INDEX IF NOT EXISTS campaigns_user ON TABLE campaigns COLUMNS userId')
     await db.query('DEFINE INDEX IF NOT EXISTS domains_user ON TABLE domains_resend COLUMNS userId')
     await db.query('DEFINE INDEX IF NOT EXISTS events_campaign ON TABLE campaign_events COLUMNS campaign_id')
     await db.query('DEFINE INDEX IF NOT EXISTS events_recipient ON TABLE campaign_events COLUMNS recipient_email')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3 + 4 indexes)')
+    // Unicité (ownerId, email, provider) — un user ne peut connecter 2x la même boîte sur le même provider
+    await db.query('DEFINE INDEX IF NOT EXISTS mailbox_creds_unique ON TABLE mailbox_credentials COLUMNS ownerId, email, provider UNIQUE')
+    await db.query('DEFINE INDEX IF NOT EXISTS mailbox_creds_owner ON TABLE mailbox_credentials COLUMNS ownerId')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials + 6 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

@@ -55,7 +55,7 @@
     + '<div class="sb-logo-icon">'
     + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>'
     + '</div>'
-    + '<span class="sb-logo-name">MUP</span>'
+    + '<span class="sb-logo-name">MovUP</span>'
     + '</a>'
     + '<div class="sb-label">Navigation</div>';
 
@@ -80,7 +80,7 @@
     +   '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
     +   '</div>Légal'
     + '</a>'
-    + '<button id="reset-mup-btn" style="width:100%;padding:8px 12px;background:transparent;border:0.5px solid rgba(220,50,50,0.3);border-radius:6px;color:#A32D2D;font-family:inherit;font-size:12px;cursor:pointer;transition:all .12s;">Réinitialiser MUP</button>'
+    + '<button id="reset-mup-btn" style="width:100%;padding:8px 12px;background:transparent;border:0.5px solid rgba(220,50,50,0.3);border-radius:6px;color:#A32D2D;font-family:inherit;font-size:12px;cursor:pointer;transition:all .12s;">Réinitialiser MovUP</button>'
     + '</div>';
 
   el.innerHTML = html;
@@ -110,7 +110,7 @@
   }
   // Exposer globalement pour debug console
   window.MUP_RESET = function(){
-    if(confirm('Réinitialiser MUP ? (factures conservées)')) resetMUP();
+    if(confirm('Réinitialiser MovUP ? (factures conservées)')) resetMUP();
   };
 
   // ── MODALE DOUBLE CONFIRMATION ──
@@ -122,7 +122,7 @@
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:Geist,-apple-system,sans-serif;';
     ov.innerHTML = '<div id="reset-mup-card" style="background:#fff;border-radius:14px;padding:26px;width:480px;max-width:92vw;">'
       +'<div id="reset-step-1">'
-      +'<div style="font-size:17px;font-weight:800;letter-spacing:-.3px;margin-bottom:10px;">Réinitialiser MUP</div>'
+      +'<div style="font-size:17px;font-weight:800;letter-spacing:-.3px;margin-bottom:10px;">Réinitialiser MovUP</div>'
       +'<div style="font-size:13px;color:#6E6E73;line-height:1.5;margin-bottom:18px;">Cette action va supprimer tous les prospects, RDV, leads, contacts, devis, agenda. Les <strong>factures réelles seront conservées</strong>.</div>'
       +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
       +'<button id="rmu-cancel-1" style="padding:9px 16px;border:1px solid #E8E8ED;background:#fff;color:#1D1D1F;border-radius:8px;font-family:inherit;font-weight:600;font-size:12.5px;cursor:pointer;">Annuler</button>'

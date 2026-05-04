@@ -19,12 +19,12 @@ html{scroll-behavior:smooth;}
   --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
   --mono:'Geist Mono','SF Mono','Menlo',monospace;
 }
-body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow:hidden;display:flex;}
 ::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
-.shell{display:grid;grid-template-columns:220px 1fr;height:100vh;}
+.sidebar{width:220px;height:100vh;flex-shrink:0;}
+.shell{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:150;backdrop-filter:blur(2px);}
 .sidebar-overlay.open{display:block;}
-.main-content{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
 .topbar{padding:16px 28px 12px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;display:flex;flex-direction:column;gap:12px;}
 .topbar-row1{display:flex;align-items:center;justify-content:space-between;}
 .topbar-title{font-size:22px;font-weight:900;letter-spacing:-.6px;}
@@ -266,10 +266,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 <body>
 
 <div class="sidebar-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
-<div class="shell">
-  <aside class="sidebar" id="sidebar"></aside>
+<aside class="sidebar" id="sidebar"></aside>
 
-  <div class="main-content">
+<div class="shell">
     <div class="topbar">
       <div class="topbar-row1">
         <span class="topbar-title">Mail</span>
@@ -503,7 +502,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       </div>
     </div>
   </div>
-</div>
 
 <div class="tpl-modal" id="tpl-modal" onclick="if(event.target===this)closeTplModal()">
   <div class="tpl-modal-box">

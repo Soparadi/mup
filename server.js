@@ -2205,9 +2205,6 @@ app.post('/api/v2/webhooks/resend', async (req, res) => {
       const type = event?.type || ''
       const data = event?.data || {}
       const recipient = Array.isArray(data.to) ? data.to[0] : data.email_id || data.to || null
-      const tags = Array.isArray(data.tags) ? data.tags : []
-      const userTag = tags.find(t => t.name === 'user')
-      const userId = userTag ? userTag.value : null
 
       // Map event type → notre nomenclature interne
       const map = {
@@ -2225,15 +2222,27 @@ app.post('/api/v2/webhooks/resend', async (req, res) => {
       }
 
       const db = await getDb()
-      // Trouver la campagne via batch_ids (Resend renvoie email_id, on doit faire le lien)
-      // Lookup : pour cet userId, dernière campagne completed/sending dont batch_ids contient l'email_id ?
-      // Plus robuste : on retombe via la table campaigns si email_id matche un batch_id stocké.
+      // Lookup campagne via batch_ids match (sans dépendre des tags Resend qui ne remontent
+      // pas toujours dans les webhooks events). Les batch_ids étant uniques globalement,
+      // un match suffit à identifier la campagne.
       let campaignId = null
       const emailId = data.email_id
-      if (emailId && userId) {
-        const found = await db.query('SELECT id FROM campaigns WHERE userId = $u AND batch_ids CONTAINS $eid LIMIT 1', { u: userId, eid: emailId })
-        const c = found[0]?.[0]
-        if (c) campaignId = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '')
+      if (emailId) {
+        // CONTAINS opérateur SurrealDB pour array → string
+        try {
+          const found = await db.query('SELECT id, userId FROM campaigns WHERE batch_ids CONTAINS $eid LIMIT 1', { eid: emailId })
+          const c = found[0]?.[0]
+          if (c) campaignId = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '')
+        } catch (e) {
+          // Fallback IN syntax si CONTAINS rejeté par version SurrealDB
+          try {
+            const found2 = await db.query('SELECT id FROM campaigns WHERE $eid IN batch_ids LIMIT 1', { eid: emailId })
+            const c2 = found2[0]?.[0]
+            if (c2) campaignId = String(c2.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '')
+          } catch (e2) {
+            console.error('[webhook:resend] lookup campaign_id échoué :', e2.message)
+          }
+        }
       }
 
       // Insert event

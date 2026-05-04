@@ -2076,7 +2076,15 @@ app.post('/api/v2/campaigns/:id/send', async (req, res) => {
         updated_at: new Date().toISOString()
       }
     })
-    res.json({ id, sent_count: result.sent_count, failed_count: result.failed_count, batch_ids: result.batch_ids, total: result.total })
+    const responseStatus = result.failed_count > 0 && result.sent_count === 0 ? 502 : 200
+    res.status(responseStatus).json({
+      id,
+      sent_count: result.sent_count,
+      failed_count: result.failed_count,
+      batch_ids: result.batch_ids,
+      total: result.total,
+      last_error: result.last_error || undefined
+    })
   } catch (err) {
     console.error('[campaigns:send]', err.message)
     // Reset le status si on a marqué sending mais que l'envoi a totalement échoué avant batch

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vérification email — Movup</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--surface:#F5F5F7;--card:#FFFFFF;--border:#E8E8ED;--text:#1D1D1F;--muted:#6E6E73;--green:#1D8348;--red:#CC0000;--font:'Geist',-apple-system,'Helvetica Neue',sans-serif}
+  body{background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:48px 20px}
+  .auth{width:100%;max-width:460px;text-align:center}
+  .auth-brand{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:24px;text-decoration:none;color:var(--text);font-weight:800;font-size:18px;letter-spacing:-.4px}
+  .auth-brand-dot{display:flex;gap:4px}
+  .auth-brand-dot span{width:7px;height:7px;border-radius:50%}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:32px 28px}
+  .icon-wrap{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+  .icon-success{background:rgba(29,131,72,.1);color:var(--green)}
+  .icon-error{background:rgba(204,0,0,.1);color:var(--red)}
+  .icon-info{background:#1D1D1F;color:#fff}
+  h1{font-size:20px;font-weight:800;letter-spacing:-.3px;margin-bottom:8px}
+  p{font-size:13.5px;color:var(--muted);margin-bottom:18px;line-height:1.6}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:13.5px;font-weight:700;padding:11px 20px;border-radius:10px;border:1px solid var(--text);cursor:pointer;background:var(--text);color:#fff;text-decoration:none}
+  .btn:hover{background:#000}
+</style>
+</head>
+<body>
+<main class="auth">
+  <a href="/" class="auth-brand">
+    <span class="auth-brand-dot"><span style="background:#1D8348"></span><span style="background:#4338CA"></span><span style="background:#0BBCD4"></span></span>
+    Movup
+  </a>
+  <div class="card" id="card-content">
+    <div class="icon-wrap icon-info" id="icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4M12 16h.01"></path></svg>
+    </div>
+    <h1 id="title">Vérification en cours</h1>
+    <p id="msg">Patientez quelques instants pendant que nous activons votre compte.</p>
+    <a id="cta" class="btn" href="/login">Aller à la connexion</a>
+  </div>
+</main>
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search)
+  var status = params.get('status')
+  var reason = params.get('reason')
+  var icon = document.getElementById('icon')
+  var title = document.getElementById('title')
+  var msg = document.getElementById('msg')
+  var cta = document.getElementById('cta')
+  var iconSuccess = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+  var iconError = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+
+  if(status === 'error'){
+    icon.className = 'icon-wrap icon-error'
+    icon.innerHTML = iconError
+    title.textContent = 'Lien invalide'
+    var reasons = {
+      missing_token: 'Aucun token de vérification fourni.',
+      invalid_or_expired: 'Ce lien est invalide ou a expiré (validité 24h).',
+      server_error: 'Une erreur est survenue. Réessayez ou contactez le support.'
+    }
+    msg.textContent = reasons[reason] || 'Le lien de vérification est invalide.'
+    cta.textContent = 'Retour à la connexion'
+  } else {
+    // Cas par défaut : on arrive ici en standalone (sans status), affichage neutre.
+    icon.className = 'icon-wrap icon-success'
+    icon.innerHTML = iconSuccess
+    title.textContent = 'Email vérifié'
+    msg.textContent = 'Votre adresse email a été confirmée. Connectez-vous pour accéder à votre compte.'
+    cta.textContent = 'Aller à la connexion'
+  }
+})()
+</script>
+</body>
+</html>

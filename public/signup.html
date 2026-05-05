@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Créer un compte — Movup</title>
+<meta name="description" content="Créez votre compte Movup. SIRET requis. Vérification email.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#FFFFFF;--surface:#F5F5F7;--surface2:#EBEBF0;
+    --card:#FFFFFF;--border:#E8E8ED;--border2:#C7C7CC;
+    --text:#1D1D1F;--muted:#6E6E73;--muted2:#AEAEB2;
+    --green:#1D8348;--red:#CC0000;--orange:#B84C00;
+    --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+  }
+  body{background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:48px 20px}
+  .auth{width:100%;max-width:460px}
+  .auth-brand{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:24px;text-decoration:none;color:var(--text);font-weight:800;font-size:18px;letter-spacing:-.4px}
+  .auth-brand-dot{display:flex;gap:4px}
+  .auth-brand-dot span{width:7px;height:7px;border-radius:50%}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+  .card-head{background:#1D1D1F;color:#fff;padding:18px 24px}
+  .card-head h1{font-size:18px;font-weight:800;letter-spacing:-.3px;margin:0}
+  .card-head p{font-size:12px;color:rgba(255,255,255,.6);margin-top:3px}
+  .card-body{padding:22px 24px}
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .field label{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+  .field input{font-family:var(--font);font-size:14px;padding:10px 12px;border:1px solid var(--border2);border-radius:9px;background:#fff;color:var(--text);outline:none;transition:border-color .12s,box-shadow .12s}
+  .field input:focus{border-color:var(--text);box-shadow:0 0 0 3px rgba(29,29,31,.08)}
+  .field input[disabled]{background:var(--surface);color:var(--muted)}
+  .field .hint{font-size:11.5px;color:var(--muted)}
+  .field .preview{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 12px;font-size:12.5px;color:var(--text);line-height:1.5}
+  .field .preview-label{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+  .row{display:flex;gap:10px}
+  .row .field{flex:1}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:13.5px;font-weight:700;padding:11px 18px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:all .15s;text-decoration:none;width:100%}
+  .btn-dark{background:var(--text);color:#fff;border-color:var(--text)}
+  .btn-dark:hover:not(:disabled){background:#000}
+  .btn-dark:disabled{opacity:.5;cursor:not-allowed}
+  .btn-ghost{background:transparent;color:var(--text);border-color:var(--border2)}
+  .btn-ghost:hover{border-color:var(--text)}
+  .alert{padding:10px 12px;border-radius:9px;font-size:12.5px;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px}
+  .alert-error{background:rgba(204,0,0,.08);color:var(--red);border:1px solid rgba(204,0,0,.2)}
+  .alert-success{background:rgba(29,131,72,.08);color:var(--green);border:1px solid rgba(29,131,72,.2)}
+  .alert-info{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+  .alert svg{flex-shrink:0;margin-top:1px}
+  .auth-foot{text-align:center;margin-top:18px;font-size:12.5px;color:var(--muted)}
+  .auth-foot a{color:var(--text);font-weight:600;text-decoration:none}
+  .auth-foot a:hover{text-decoration:underline}
+  .lookup-row{display:flex;gap:8px}
+  .lookup-row input{flex:1}
+  .lookup-row button{flex-shrink:0;width:auto;padding:10px 16px;font-size:12.5px}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+  .spinner-dark{border-color:rgba(29,29,31,.3);border-top-color:var(--text)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<main class="auth">
+  <a href="/" class="auth-brand">
+    <span class="auth-brand-dot"><span style="background:#1D8348"></span><span style="background:#4338CA"></span><span style="background:#0BBCD4"></span></span>
+    Movup
+  </a>
+  <div class="card">
+    <div class="card-head">
+      <h1>Créer votre compte</h1>
+      <p>Renseignez votre SIRET pour commencer.</p>
+    </div>
+    <div class="card-body">
+      <div id="alert" class="alert hidden"></div>
+
+      <form id="form-signup" autocomplete="off" novalidate>
+        <div class="field">
+          <label for="siret">SIRET (14 chiffres)</label>
+          <div class="lookup-row">
+            <input id="siret" name="siret" type="text" inputmode="numeric" maxlength="14" required placeholder="12345678900012" autocomplete="off">
+            <button type="button" id="btn-lookup" class="btn btn-ghost">Vérifier</button>
+          </div>
+          <div class="hint">Nous récupérons votre raison sociale et votre adresse via la base SIRENE.</div>
+        </div>
+
+        <div id="company-preview" class="field hidden">
+          <span class="preview-label">Entreprise détectée</span>
+          <div class="preview">
+            <div id="prev-raison" style="font-weight:700"></div>
+            <div id="prev-adresse" style="color:var(--muted);margin-top:2px"></div>
+            <div id="prev-naf" style="color:var(--muted);font-size:11px;margin-top:2px"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="email">Email professionnel</label>
+          <input id="email" name="email" type="email" required autocomplete="email" placeholder="vous@entreprise.fr">
+        </div>
+
+        <div class="field">
+          <label for="password">Mot de passe (10 caractères minimum)</label>
+          <input id="password" name="password" type="password" required minlength="10" autocomplete="new-password">
+        </div>
+
+        <button type="submit" id="btn-submit" class="btn btn-dark">Créer mon compte</button>
+      </form>
+    </div>
+  </div>
+  <div class="auth-foot">
+    Déjà inscrit ? <a href="/login">Se connecter</a>
+  </div>
+</main>
+
+<script>
+(function(){
+  var alertBox = document.getElementById('alert')
+  var preview = document.getElementById('company-preview')
+  var form = document.getElementById('form-signup')
+  var btnSubmit = document.getElementById('btn-submit')
+  var btnLookup = document.getElementById('btn-lookup')
+  var siretInput = document.getElementById('siret')
+  var lookupCache = null
+
+  function setAlert(type, msg){
+    alertBox.className = 'alert alert-' + type
+    alertBox.textContent = msg
+    alertBox.classList.remove('hidden')
+  }
+  function clearAlert(){ alertBox.classList.add('hidden'); alertBox.textContent = '' }
+
+  siretInput.addEventListener('input', function(){
+    siretInput.value = siretInput.value.replace(/\D/g, '').slice(0,14)
+    preview.classList.add('hidden')
+    lookupCache = null
+  })
+
+  function doLookup(){
+    var siret = siretInput.value.trim()
+    if(!/^\d{14}$/.test(siret)){
+      setAlert('error', 'Le SIRET doit comporter 14 chiffres.')
+      return Promise.reject()
+    }
+    clearAlert()
+    btnLookup.disabled = true
+    btnLookup.textContent = 'Recherche...'
+    return fetch('/api/auth/lookup-siret', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ siret: siret })
+    }).then(function(r){
+      return r.json().then(function(data){ return { ok:r.ok, data:data } })
+    }).then(function(res){
+      btnLookup.disabled = false
+      btnLookup.textContent = 'Vérifier'
+      if(!res.ok){
+        setAlert('error', res.data.error || 'SIRET introuvable.')
+        return Promise.reject()
+      }
+      lookupCache = res.data
+      document.getElementById('prev-raison').textContent = res.data.raison_sociale || ''
+      document.getElementById('prev-adresse').textContent = [res.data.adresse, res.data.code_postal, res.data.ville].filter(Boolean).join(' · ')
+      document.getElementById('prev-naf').textContent = res.data.code_naf ? ('NAF ' + res.data.code_naf) : ''
+      preview.classList.remove('hidden')
+      return res.data
+    }).catch(function(err){
+      btnLookup.disabled = false
+      btnLookup.textContent = 'Vérifier'
+      if(err) console.error(err)
+      throw err
+    })
+  }
+
+  btnLookup.addEventListener('click', function(){ doLookup().catch(function(){}) })
+
+  form.addEventListener('submit', function(ev){
+    ev.preventDefault()
+    clearAlert()
+    var siret = siretInput.value.trim()
+    var email = document.getElementById('email').value.trim()
+    var password = document.getElementById('password').value
+    if(!/^\d{14}$/.test(siret)){ setAlert('error', 'SIRET invalide (14 chiffres).'); return }
+    if(!email){ setAlert('error', 'Email requis.'); return }
+    if(password.length < 10){ setAlert('error', 'Mot de passe trop court (10 caractères minimum).'); return }
+    btnSubmit.disabled = true
+    btnSubmit.innerHTML = '<span class="spinner"></span> Création...'
+    fetch('/api/auth/signup', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email: email, password: password, siret: siret })
+    }).then(function(r){
+      return r.json().then(function(data){ return { ok:r.ok, status:r.status, data:data } })
+    }).then(function(res){
+      btnSubmit.disabled = false
+      btnSubmit.textContent = 'Créer mon compte'
+      if(!res.ok){
+        setAlert('error', res.data.error || 'Erreur lors de la création du compte.')
+        return
+      }
+      setAlert('success', 'Compte créé. Consultez votre boîte mail pour activer votre accès.')
+      form.reset()
+      preview.classList.add('hidden')
+    }).catch(function(err){
+      btnSubmit.disabled = false
+      btnSubmit.textContent = 'Créer mon compte'
+      setAlert('error', 'Erreur réseau. Réessayez.')
+      console.error(err)
+    })
+  })
+})()
+</script>
+</body>
+</html>

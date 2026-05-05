@@ -86,27 +86,44 @@
   el.innerHTML = html;
 
   // ── PURGE LOGIC ──
-  var PRESERVE_KEYS = ['mup_factures'];
-  function resetMUP(){
-    var allKeys = [];
-    for(var i = 0; i < localStorage.length; i++){
-      var k = localStorage.key(i);
-      if(k && k.indexOf('mup_') === 0) allKeys.push(k);
+  // 1. DELETE /api/reset-all → purge SurrealDB scopé userId (pipeline, agenda, contacts, devis,
+  //    factures, frais, mail, visio, user_plan, user_settings, counter, etc.)
+  // 2. Purge localStorage (préférences UI, caches obsolètes)
+  // 3. Reload pour repartir d'un état vierge.
+  // Si la route API échoue → alerte utilisateur, localStorage non purgé (état cohérent).
+  async function resetMUP(){
+    try {
+      var res = await fetch('/api/reset-all', {
+        method: 'DELETE',
+        headers: { 'x-user-id': 'default' }
+      });
+      if (!res.ok) {
+        var errBody = null;
+        try { errBody = await res.json(); } catch(e){}
+        alert('Erreur reset backend (HTTP ' + res.status + ')' + (errBody && errBody.error ? ' : ' + errBody.error : '') + '. Annulé.');
+        return;
+      }
+      var data = await res.json();
+      console.log('[reset]', data.deleted);
+      // Purge localStorage (mup_*) après succès API
+      var keysToDelete = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('mup_') === 0) keysToDelete.push(k);
+      }
+      keysToDelete.forEach(function(k){ localStorage.removeItem(k); });
+      // Compte total purgé côté SurrealDB pour feedback utilisateur
+      var totalDb = 0;
+      Object.keys(data.deleted || {}).forEach(function(t){
+        var v = data.deleted[t];
+        if (typeof v === 'number') totalDb += v;
+      });
+      alert('Réinitialisation effectuée. ' + totalDb + ' record(s) supprimé(s) en base · ' + keysToDelete.length + ' clé(s) localStorage purgée(s).');
+      location.reload();
+    } catch (e) {
+      console.error('[reset]', e);
+      alert('Erreur reset : ' + e.message);
     }
-    var toDelete = allKeys.filter(function(k){ return PRESERVE_KEYS.indexOf(k) === -1; });
-    var preservedSnapshot = localStorage.getItem('mup_factures');
-    toDelete.forEach(function(k){ localStorage.removeItem(k); });
-    var facturesIntactes = localStorage.getItem('mup_factures');
-    if(!facturesIntactes && preservedSnapshot){
-      // Garde-fou : restaurer si quelqu'un a touché par erreur
-      localStorage.setItem('mup_factures', preservedSnapshot);
-      alert('Garde-fou déclenché : mup_factures restauré.');
-      return;
-    }
-    var nFactures = 0;
-    try { nFactures = JSON.parse(facturesIntactes || '[]').length; } catch(e){}
-    alert('Réinitialisation effectuée. ' + toDelete.length + ' clés supprimées. ' + nFactures + ' facture' + (nFactures>1?'s':'') + ' conservée' + (nFactures>1?'s':'') + '.');
-    location.reload();
   }
   // Exposer globalement pour debug console
   window.MUP_RESET = function(){

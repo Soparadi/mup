@@ -1,0 +1,539 @@
+/* ================================================================== */
+/* MovUP MARKETING PAGES — fonctionnalites + tarifs                    */
+/* Étend marketing-layout.css avec les classes spécifiques pages       */
+/* ================================================================== */
+
+body.marketing-page {
+  margin: 0;
+  background: var(--mk-bg, #FFFFFF);
+  color: var(--mk-fg, #0A0A0A);
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mk-container{
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+@media (max-width: 768px){
+  .mk-container{ padding: 0 20px; }
+}
+
+/* ── HERO ────────────────────────────────────────────────────────── */
+.mk-hero{
+  padding: 80px 0 48px;
+  text-align: center;
+}
+.mk-hero h1{
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  margin: 0 0 20px;
+  color: var(--mk-fg);
+}
+.mk-hero__sub{
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--mk-fg-soft);
+  max-width: 680px;
+  margin: 0 auto 32px;
+}
+.mk-hero__cta{
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 64px;
+}
+.mk-btn{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 22px;
+  border-radius: 9px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all .12s ease;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.mk-btn--primary{
+  background: var(--mk-fg);
+  color: #FFFFFF;
+  border-color: var(--mk-fg);
+}
+.mk-btn--primary:hover{ opacity: .88; }
+.mk-btn--ghost{
+  color: var(--mk-fg);
+  background: transparent;
+  border-color: var(--mk-border);
+}
+.mk-btn--ghost:hover{
+  border-color: var(--mk-fg);
+}
+.mk-hero__visual{
+  background: #F5F5F7;
+  border: 1px solid var(--mk-border);
+  border-radius: 14px;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mk-fg-subtle);
+  font-size: 13px;
+  font-style: italic;
+  margin-top: 24px;
+}
+@media (max-width: 768px){
+  .mk-hero{ padding: 48px 0 32px; }
+  .mk-hero h1{ font-size: 36px; letter-spacing: -0.02em; }
+  .mk-hero__sub{ font-size: 16px; }
+  .mk-hero__visual{ aspect-ratio: 16 / 9; }
+}
+
+/* ── SECTIONS GÉNÉRIQUES ────────────────────────────────────────── */
+.mk-section{
+  padding: 64px 0;
+  border-top: 1px solid var(--mk-border);
+}
+.mk-section h2{
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin: 0 0 16px;
+  color: var(--mk-fg);
+}
+.mk-section__sub{
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--mk-fg-soft);
+  max-width: 680px;
+  margin: 0 0 40px;
+}
+@media (max-width: 768px){
+  .mk-section{ padding: 48px 0; }
+  .mk-section h2{ font-size: 28px; }
+  .mk-section__sub{ font-size: 15.5px; }
+}
+
+/* ── MODULES (fonctionnalites) ──────────────────────────────────── */
+.mk-modules{
+  display: grid;
+  gap: 56px;
+}
+.mk-module{
+  display: grid;
+  gap: 16px;
+}
+.mk-module h2{
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+  color: var(--mk-fg);
+}
+.mk-module__desc{
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--mk-fg-soft);
+  margin: 0;
+  max-width: 760px;
+}
+.mk-module__bullets{
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 10px;
+}
+.mk-module__bullets li{
+  position: relative;
+  padding-left: 26px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--mk-fg-soft);
+}
+.mk-module__bullets li::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: #1D1D1F;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
+  background-size: 10px 10px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* ── DIFFÉRENCIATION (4 blocs "Ce que MovUP ne fera jamais") ────── */
+.mk-diff{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+.mk-diff__card{
+  background: #FAFAFA;
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius);
+  padding: 28px;
+}
+.mk-diff__card h3{
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  color: var(--mk-fg);
+  letter-spacing: -0.01em;
+}
+.mk-diff__card p{
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--mk-fg-soft);
+  margin: 0;
+}
+@media (max-width: 768px){
+  .mk-diff{ grid-template-columns: 1fr; }
+  .mk-diff__card{ padding: 22px; }
+}
+
+/* ── CTA FINAL ──────────────────────────────────────────────────── */
+.mk-cta-final{
+  text-align: center;
+  padding: 80px 0;
+  border-top: 1px solid var(--mk-border);
+}
+.mk-cta-final h2{
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin: 0 0 12px;
+  color: var(--mk-fg);
+}
+.mk-cta-final__sub{
+  font-size: 17px;
+  color: var(--mk-fg-soft);
+  margin: 0 0 28px;
+}
+.mk-cta-final__buttons{
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+@media (max-width: 768px){
+  .mk-cta-final{ padding: 56px 0; }
+  .mk-cta-final h2{ font-size: 28px; }
+}
+
+/* ── PRICING TOGGLE ─────────────────────────────────────────────── */
+.mk-toggle{
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  background: #F5F5F7;
+  border: 1px solid var(--mk-border);
+  border-radius: 999px;
+  padding: 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.mk-toggle button{
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  padding: 8px 18px;
+  border: none;
+  background: transparent;
+  color: var(--mk-fg-muted);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all .15s ease;
+  white-space: nowrap;
+}
+.mk-toggle button.active{
+  background: var(--mk-fg);
+  color: #FFFFFF;
+}
+.mk-toggle__save{
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #1D8348;
+  margin-left: 4px;
+}
+.mk-tva-mention{
+  font-size: 12.5px;
+  color: var(--mk-fg-muted);
+  margin-top: 12px;
+}
+
+/* ── PRICING GRID ──────────────────────────────────────────────── */
+.mk-pricing{
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-top: 32px;
+}
+.mk-plan{
+  display: flex;
+  flex-direction: column;
+  background: #FFFFFF;
+  border: 1px solid var(--mk-border);
+  border-radius: 14px;
+  padding: 28px 24px;
+  position: relative;
+}
+.mk-plan--featured{
+  border-color: var(--mk-fg);
+  box-shadow: 0 0 0 4px rgba(29,29,31,.04);
+}
+.mk-plan__badge{
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--mk-fg);
+  color: #FFFFFF;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.mk-plan__name{
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--mk-fg-muted);
+  margin: 0 0 12px;
+}
+.mk-plan__price{
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 4px;
+}
+.mk-plan__price-amount{
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--mk-fg);
+  font-feature-settings: "tnum";
+}
+.mk-plan__price-suffix{
+  font-size: 14px;
+  color: var(--mk-fg-muted);
+  font-weight: 500;
+}
+.mk-plan__period-note{
+  font-size: 12px;
+  color: var(--mk-fg-muted);
+  height: 18px;
+  margin: 0 0 14px;
+}
+.mk-plan__sub{
+  font-size: 13.5px;
+  color: var(--mk-fg-soft);
+  margin: 0 0 20px;
+  min-height: 38px;
+}
+.mk-plan__features{
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+  display: grid;
+  gap: 10px;
+  flex: 1;
+}
+.mk-plan__features li{
+  position: relative;
+  padding-left: 22px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--mk-fg-soft);
+}
+.mk-plan__features li::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 14px;
+  height: 14px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231D1D1F' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
+  background-size: 14px 14px;
+}
+.mk-plan__features li.is-strong{
+  font-weight: 600;
+  color: var(--mk-fg);
+  padding-left: 0;
+}
+.mk-plan__features li.is-strong::before{ display: none; }
+.mk-plan__cta{
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+}
+@media (max-width: 1024px){
+  .mk-pricing{ grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px){
+  .mk-pricing{ grid-template-columns: 1fr; gap: 14px; }
+}
+
+/* ── COMPARAISON TABLE ──────────────────────────────────────────── */
+.mk-compare-wrap{
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--mk-border);
+  border-radius: 14px;
+  margin-top: 24px;
+}
+.mk-compare{
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.mk-compare th, .mk-compare td{
+  padding: 14px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--mk-border);
+  vertical-align: middle;
+}
+.mk-compare thead th{
+  background: #FAFAFA;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--mk-fg-muted);
+}
+.mk-compare th:first-child, .mk-compare td:first-child{
+  font-weight: 500;
+  color: var(--mk-fg);
+  min-width: 280px;
+}
+.mk-compare td:not(:first-child){
+  text-align: center;
+  color: var(--mk-fg-soft);
+  min-width: 110px;
+}
+.mk-compare td.has{
+  color: var(--mk-fg);
+}
+.mk-compare td.no{
+  color: var(--mk-fg-subtle);
+}
+.mk-compare tr:last-child td{ border-bottom: none; }
+
+/* ── FAQ ────────────────────────────────────────────────────────── */
+.mk-faq{
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--mk-border);
+}
+.mk-faq details{
+  border-bottom: 1px solid var(--mk-border);
+  padding: 22px 0;
+}
+.mk-faq summary{
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 16.5px;
+  font-weight: 600;
+  color: var(--mk-fg);
+  letter-spacing: -0.01em;
+}
+.mk-faq summary::-webkit-details-marker{ display: none; }
+.mk-faq summary::after{
+  content: "";
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236E6E73' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-size: contain;
+  background-repeat: no-repeat;
+  transition: transform .18s ease;
+}
+.mk-faq details[open] summary::after{
+  transform: rotate(180deg);
+}
+.mk-faq details > p{
+  margin: 14px 0 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--mk-fg-soft);
+  max-width: 880px;
+}
+
+/* ── CONFIANCE (3 blocs avec icône) ─────────────────────────────── */
+.mk-trust{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+}
+.mk-trust__card{
+  background: #FAFAFA;
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius);
+  padding: 28px;
+}
+.mk-trust__icon{
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--mk-fg);
+  color: #FFFFFF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.mk-trust__card h3{
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--mk-fg);
+  letter-spacing: -0.01em;
+}
+.mk-trust__card p{
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--mk-fg-soft);
+  margin: 0;
+}
+@media (max-width: 1024px){
+  .mk-trust{ grid-template-columns: 1fr; }
+}
+
+/* ── BLOC NOTE SOUS PRICING ─────────────────────────────────────── */
+.mk-pricing-footnote{
+  font-size: 13px;
+  color: var(--mk-fg-muted);
+  margin-top: 24px;
+  text-align: center;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}

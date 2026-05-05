@@ -140,7 +140,7 @@ app.get('/api/health', async (req, res) => {
   res.json(status)
 })
 
-app.use(express.static(join(__dirname, 'public')))
+app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }))
 
 app.get('/api/pipeline', async (req, res) => {
   const userId = requireUserId(req, res)

@@ -12,6 +12,9 @@ import { getDb } from './lib/surreal.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
+import { router as authRouter } from './server/auth/routes.js'
+import { requireAuth } from './server/middleware/requireAuth.js'
+import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import {
   sendOne as mailServiceSendOne,
   getMailStatus as mailServiceStatus,
@@ -138,6 +141,18 @@ app.get('/api/health', async (req, res) => {
     return res.status(503).json(status)
   }
   res.json(status)
+})
+
+// ── Auth Phase 1 — routes publiques /api/auth/* ──
+app.use('/api/auth', authRouter)
+
+// ── Gate auth pour toutes les autres routes /api/* ──
+// Exceptions : /api/auth/* (déjà mounté ci-dessus), /api/health (déjà déclaré ci-dessus,
+// donc terminé avant ce middleware), webhook Resend (signature HMAC fait office d'auth).
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/auth/') || req.path === '/auth' || req.path === '/health') return next()
+  if (req.path.startsWith('/v2/webhooks/')) return next()
+  return requireAuth(req, res, next)
 })
 
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }))
@@ -2525,6 +2540,13 @@ app.get('/:page', (req, res) => {
     console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials + 6 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
+  }
+  // Auth Phase 1 — applique migration tables user/session/verification_token/audit_log.
+  try {
+    await runAuthMigration()
+    console.log('[boot] auth tables ready (user, session, verification_token, audit_log)')
+  } catch (e) {
+    console.error('[boot] auth migration failed:', e.message)
   }
 })()
 

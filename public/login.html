@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connexion — Movup</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#FFFFFF;--surface:#F5F5F7;
+    --card:#FFFFFF;--border:#E8E8ED;--border2:#C7C7CC;
+    --text:#1D1D1F;--muted:#6E6E73;
+    --green:#1D8348;--red:#CC0000;
+    --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+  }
+  body{background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:48px 20px}
+  .auth{width:100%;max-width:420px}
+  .auth-brand{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:24px;text-decoration:none;color:var(--text);font-weight:800;font-size:18px;letter-spacing:-.4px}
+  .auth-brand-dot{display:flex;gap:4px}
+  .auth-brand-dot span{width:7px;height:7px;border-radius:50%}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+  .card-head{background:#1D1D1F;color:#fff;padding:18px 24px}
+  .card-head h1{font-size:18px;font-weight:800;letter-spacing:-.3px;margin:0}
+  .card-head p{font-size:12px;color:rgba(255,255,255,.6);margin-top:3px}
+  .card-body{padding:22px 24px}
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .field label{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+  .field input{font-family:var(--font);font-size:14px;padding:10px 12px;border:1px solid var(--border2);border-radius:9px;background:#fff;color:var(--text);outline:none;transition:border-color .12s,box-shadow .12s}
+  .field input:focus{border-color:var(--text);box-shadow:0 0 0 3px rgba(29,29,31,.08)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:13.5px;font-weight:700;padding:11px 18px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:all .15s;text-decoration:none;width:100%}
+  .btn-dark{background:var(--text);color:#fff;border-color:var(--text)}
+  .btn-dark:hover:not(:disabled){background:#000}
+  .btn-dark:disabled{opacity:.5;cursor:not-allowed}
+  .alert{padding:10px 12px;border-radius:9px;font-size:12.5px;margin-bottom:14px}
+  .alert-error{background:rgba(204,0,0,.08);color:var(--red);border:1px solid rgba(204,0,0,.2)}
+  .alert-success{background:rgba(29,131,72,.08);color:var(--green);border:1px solid rgba(29,131,72,.2)}
+  .auth-foot{text-align:center;margin-top:18px;font-size:12.5px;color:var(--muted)}
+  .auth-foot a{color:var(--text);font-weight:600;text-decoration:none}
+  .auth-foot a:hover{text-decoration:underline}
+  .row-foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px}
+  .row-foot a{color:var(--muted);text-decoration:none}
+  .row-foot a:hover{color:var(--text);text-decoration:underline}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<main class="auth">
+  <a href="/" class="auth-brand">
+    <span class="auth-brand-dot"><span style="background:#1D8348"></span><span style="background:#4338CA"></span><span style="background:#0BBCD4"></span></span>
+    Movup
+  </a>
+  <div class="card">
+    <div class="card-head">
+      <h1>Connexion</h1>
+      <p>Accédez à votre pipeline.</p>
+    </div>
+    <div class="card-body">
+      <div id="alert" class="alert hidden"></div>
+      <form id="form-login" autocomplete="on" novalidate>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required autocomplete="email" placeholder="vous@entreprise.fr">
+        </div>
+        <div class="field">
+          <label for="password">Mot de passe</label>
+          <input id="password" name="password" type="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" id="btn-submit" class="btn btn-dark">Se connecter</button>
+        <div class="row-foot">
+          <a href="/forgot-password">Mot de passe oublié ?</a>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="auth-foot">
+    Pas encore de compte ? <a href="/signup">Créer un compte</a>
+  </div>
+</main>
+
+<script>
+(function(){
+  var alertBox = document.getElementById('alert')
+  var form = document.getElementById('form-login')
+  var btnSubmit = document.getElementById('btn-submit')
+
+  function setAlert(type, msg){
+    alertBox.className = 'alert alert-' + type
+    alertBox.textContent = msg
+    alertBox.classList.remove('hidden')
+  }
+
+  // ?verified=1 affiche un message après email validé
+  var params = new URLSearchParams(window.location.search)
+  if(params.get('verified') === '1'){
+    setAlert('success', 'Email confirmé. Vous pouvez maintenant vous connecter.')
+  }
+
+  form.addEventListener('submit', function(ev){
+    ev.preventDefault()
+    var email = document.getElementById('email').value.trim()
+    var password = document.getElementById('password').value
+    if(!email || !password){ setAlert('error', 'Email et mot de passe requis.'); return }
+    btnSubmit.disabled = true
+    btnSubmit.innerHTML = '<span class="spinner"></span> Connexion...'
+    fetch('/api/auth/login', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      credentials:'same-origin',
+      body: JSON.stringify({ email: email, password: password })
+    }).then(function(r){
+      return r.json().then(function(data){ return { ok:r.ok, status:r.status, data:data } })
+    }).then(function(res){
+      btnSubmit.disabled = false
+      btnSubmit.textContent = 'Se connecter'
+      if(!res.ok){
+        setAlert('error', res.data.error || 'Connexion impossible.')
+        return
+      }
+      window.location.href = '/dashboard'
+    }).catch(function(err){
+      btnSubmit.disabled = false
+      btnSubmit.textContent = 'Se connecter'
+      setAlert('error', 'Erreur réseau. Réessayez.')
+      console.error(err)
+    })
+  })
+})()
+</script>
+</body>
+</html>

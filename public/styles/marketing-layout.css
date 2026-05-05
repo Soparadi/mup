@@ -1,0 +1,255 @@
+/* ================================================================== */
+/* MovUP MARKETING LAYOUT                                              */
+/* Header public sticky + breadcrumb pour pages publiques (légales,    */
+/* future landing, /tarifs, /fonctionnalites, /a-propos, /blog)        */
+/* ================================================================== */
+
+:root {
+  --mk-bg: #FFFFFF;
+  --mk-fg: #0A0A0A;
+  --mk-fg-soft: #4A4A4A;
+  --mk-fg-muted: #6E6E73;
+  --mk-fg-subtle: #9A9A9A;
+  --mk-border: #E5E5E5;
+  --mk-accent: #0A0A0A;
+  --mk-radius: 10px;
+}
+
+/* Hauteur fixe du header (= scroll-margin pour ancres + offset breadcrumb) */
+:root { --mk-header-h: 64px; }
+@media (max-width: 768px) { :root { --mk-header-h: 56px; } }
+
+body.legal-page,
+body.marketing-page {
+  scroll-padding-top: calc(var(--mk-header-h) + 16px);
+}
+
+/* ── HEADER ─────────────────────────────────────────────────────── */
+
+.mup-mk-header{
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--mk-header-h);
+  background: var(--mk-bg);
+  border-bottom: 1px solid var(--mk-border);
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.mup-mk-header__inner{
+  max-width: 1280px;
+  margin: 0 auto;
+  height: 100%;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.mup-mk-logo{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--mk-fg);
+  flex-shrink: 0;
+}
+
+.mup-mk-logo__name{
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.mup-mk-nav{
+  display: flex;
+  gap: 28px;
+  flex: 1;
+  margin-left: 16px;
+}
+
+.mup-mk-nav a{
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--mk-fg-muted);
+  text-decoration: none;
+  transition: color .12s ease;
+  padding: 8px 0;
+}
+
+.mup-mk-nav a:hover{
+  color: var(--mk-fg);
+}
+
+.mup-mk-actions{
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.mup-mk-btn{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all .12s ease;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.mup-mk-btn--ghost{
+  color: var(--mk-fg-muted);
+  background: transparent;
+}
+.mup-mk-btn--ghost:hover{
+  color: var(--mk-fg);
+}
+
+.mup-mk-btn--primary{
+  background: var(--mk-accent);
+  color: #FFFFFF;
+  border-color: var(--mk-accent);
+}
+.mup-mk-btn--primary:hover{
+  opacity: .88;
+}
+
+/* Toggle hamburger (caché desktop) */
+.mup-mk-toggle{
+  display: none;
+  background: transparent;
+  border: none;
+  padding: 8px;
+  margin-left: auto;
+  cursor: pointer;
+  color: var(--mk-fg);
+  border-radius: 8px;
+}
+.mup-mk-toggle:hover{
+  background: #F5F5F7;
+}
+
+/* Drawer mobile (caché desktop) */
+.mup-mk-drawer{
+  display: none;
+}
+
+/* ── BREADCRUMB ─────────────────────────────────────────────────── */
+
+.mup-mk-breadcrumb{
+  background: #FAFAFA;
+  border-bottom: 1px solid var(--mk-border);
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px;
+}
+
+.mup-mk-breadcrumb__inner{
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 12px 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mk-fg-muted);
+  flex-wrap: wrap;
+}
+
+.mup-mk-breadcrumb a{
+  color: var(--mk-fg-muted);
+  text-decoration: none;
+  transition: color .12s ease;
+}
+.mup-mk-breadcrumb a:hover{
+  color: var(--mk-fg);
+}
+
+.mup-mk-breadcrumb__sep{
+  color: var(--mk-fg-subtle);
+  font-size: 12px;
+}
+
+.mup-mk-breadcrumb__current{
+  color: var(--mk-fg);
+  font-weight: 500;
+}
+
+/* Sur les pages légales, retirer le padding-top initial du contenu
+   (header + breadcrumb fournissent déjà la séparation visuelle) */
+body.legal-page .legal-content{
+  padding-top: 56px;
+}
+
+/* ── RESPONSIVE ────────────────────────────────────────────────── */
+
+@media (max-width: 768px){
+  .mup-mk-header__inner{
+    padding: 0 16px;
+    gap: 12px;
+  }
+  .mup-mk-nav{
+    display: none;
+  }
+  /* On garde le CTA primaire visible mobile, on masque "Connexion" */
+  .mup-mk-actions .mup-mk-btn--ghost{
+    display: none;
+  }
+  .mup-mk-actions{
+    margin-left: auto;
+  }
+  .mup-mk-toggle{
+    display: inline-flex;
+    order: 99;
+  }
+  .mup-mk-btn{
+    font-size: 13px;
+    padding: 8px 14px;
+  }
+  /* Drawer ouvert (header-marketing.js gère .open) */
+  .mup-mk-drawer{
+    display: block;
+    position: fixed;
+    top: var(--mk-header-h);
+    left: 0;
+    right: 0;
+    background: var(--mk-bg);
+    border-bottom: 1px solid var(--mk-border);
+    box-shadow: 0 8px 24px rgba(0,0,0,.06);
+    transform: translateY(-110%);
+    transition: transform .25s ease;
+    z-index: 99;
+  }
+  .mup-mk-drawer.open{
+    transform: translateY(0);
+  }
+  .mup-mk-drawer__list{
+    list-style: none;
+    margin: 0;
+    padding: 8px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .mup-mk-drawer__list a{
+    display: block;
+    padding: 12px 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--mk-fg);
+    text-decoration: none;
+    border-radius: 8px;
+  }
+  .mup-mk-drawer__list a:hover{
+    background: #F5F5F7;
+  }
+  .mup-mk-breadcrumb__inner{
+    padding: 10px 16px;
+    font-size: 12.5px;
+  }
+}

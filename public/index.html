@@ -1,0 +1,2513 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MovUP — Le pipeline commercial pour indépendants et PME</title>
+<meta name="description" content="MovUP regroupe pipeline, contacts, devis, mail et visio dans une seule interface. Pour les indépendants et PME qui veulent vendre, sans IA marketing ni modules à activer." />
+<meta name="keywords" content="CRM indépendant, CRM auto-entrepreneur, pipeline commercial, prospection française, NAF SIRENE, devis facture" />
+<link rel="canonical" href="https://movup.io/" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="MovUP — Le pipeline commercial pour indépendants et PME" />
+<meta property="og:description" content="Pipeline, contacts, devis, mail et visio dans une seule interface. Pour les indépendants et PME qui veulent vendre, sans IA marketing." />
+<meta property="og:url" content="https://movup.io/" />
+<meta property="og:image" content="https://movup.io/favicon.svg" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="MovUP — Le pipeline commercial pour indépendants et PME" />
+<meta name="twitter:description" content="Pipeline, contacts, devis, mail et visio dans une seule interface. Pour les indépendants et PME qui veulent vendre." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "MovUP",
+  "operatingSystem": "Web",
+  "applicationCategory": "BusinessApplication",
+  "description": "Pipeline commercial pour indépendants et PME : pipeline, contacts, devis, mail et visio dans une seule interface.",
+  "url": "https://movup.io/",
+  "offers": [
+    {"@type": "Offer", "name": "Gratuit", "price": "0", "priceCurrency": "EUR"},
+    {"@type": "Offer", "name": "Starter", "price": "29", "priceCurrency": "EUR"},
+    {"@type": "Offer", "name": "Pro", "price": "49", "priceCurrency": "EUR"},
+    {"@type": "Offer", "name": "Business", "price": "79", "priceCurrency": "EUR"}
+  ],
+  "publisher": {
+    "@type": "Organization",
+    "name": "EI So Paradi",
+    "url": "https://movup.io",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "18 place du Marchix",
+      "postalCode": "22100",
+      "addressLocality": "Dinan",
+      "addressCountry": "FR"
+    }
+  }
+}
+</script>
+
+<style>
+/* ──────────────────────────────────────────────────────────────
+   DESIGN TOKENS — MovUP
+   ────────────────────────────────────────────────────────────── */
+:root {
+  /* Colors — alignées exactement sur les pages app et légales */
+  --bg: #FFFFFF;
+  --surface: #F5F5F7;
+  --surface-2: #EBEBF0;
+  --card: #FFFFFF;
+  --border: #E8E8ED;
+  --border-2: #C7C7CC;
+  --text: #1D1D1F;
+  --text-muted: #6E6E73;
+  --text-soft: #AEAEB2;
+
+  /* Module colors — cohérents avec les modules MovUP */
+  --c-generer: #E67E00;        /* orange Leads / Frais */
+  --c-generer-soft: #FFF4E6;
+  --c-pipeline: #4338CA;       /* violet Phoning / Mail campagne */
+  --c-pipeline-soft: #EEF0FF;
+  --c-rdv: #0BBCD4;            /* cyan RDV / Visio */
+  --c-rdv-soft: #E5F8FB;
+  --c-success: #1D8348;        /* vert Gagné / Stats */
+  --c-success-soft: #E5F4EB;
+  --c-prospect: #CC0000;       /* rouge Prospect / SIRENE */
+  --c-prospect-soft: #FCE5E5;
+
+  /* Typography */
+  --font-sans: 'Geist', -apple-system, 'Helvetica Neue', sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-mono: 'Geist Mono', 'SF Mono', Menlo, monospace;
+
+  /* Layout */
+  --container: 1200px;
+  --container-narrow: 880px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 28px;
+
+  /* Easing */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern", "ss01", "cv01";
+}
+
+img, svg { display: block; max-width: 100%; }
+
+a { color: inherit; text-decoration: none; transition: color .2s var(--ease-out); }
+button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; }
+
+/* ──────────────────────────────────────────────────────────────
+   LAYOUT PRIMITIVES
+   ────────────────────────────────────────────────────────────── */
+.container { max-width: var(--container); margin: 0 auto; padding: 0 24px; }
+.container-narrow { max-width: var(--container-narrow); margin: 0 auto; padding: 0 24px; }
+
+@media (max-width: 768px) {
+  .container, .container-narrow { padding: 0 20px; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   HEADER — MarketingLayout aligné production
+   ────────────────────────────────────────────────────────────── */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  gap: 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: var(--text);
+}
+
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #1D1D1F;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.nav-links a {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.nav-links a:hover { color: var(--text); }
+
+.header-cta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.btn-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.btn-link:hover { color: var(--text); }
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  background: #1D1D1F;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  border-radius: 999px;
+  transition: background .2s var(--ease-out), transform .15s var(--ease-out);
+}
+
+.btn-primary:hover { background: #000; transform: translateY(-1px); }
+
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition: all .2s var(--ease-out);
+}
+
+.btn-outline:hover { background: var(--surface); border-color: var(--border-2); }
+
+.menu-toggle { display: none; }
+
+@media (max-width: 880px) {
+  .nav-links, .btn-link { display: none; }
+  .menu-toggle {
+    display: flex;
+    width: 38px;
+    height: 38px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+  }
+}
+
+
+/* ──────────────────────────────────────────────────────────────
+   HERO LEADS TOOL — La carte interactive devient le hero visuel
+   ────────────────────────────────────────────────────────────── */
+.hero-leads-tool {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 12px 40px rgba(0, 0, 0, 0.06),
+    0 32px 80px rgba(0, 0, 0, 0.08);
+}
+
+.hero-trust {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.hero-trust-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-trust-item strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.hero-trust-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .hero-trust { gap: 16px; flex-direction: column; align-items: flex-start; padding: 0 8px; font-size: 12px; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   MANIFESTO — Bloc court "Pas d'IA"
+   ────────────────────────────────────────────────────────────── */
+.manifesto {
+  padding: 80px 0 60px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.manifesto-inner {
+  text-align: center;
+}
+
+.manifesto-mark {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--c-generer);
+  margin-bottom: 22px;
+  font-family: var(--font-mono);
+}
+
+.manifesto-text {
+  font-size: clamp(20px, 2.4vw, 28px);
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: -0.018em;
+  color: var(--text);
+  max-width: 30ch;
+  margin: 0 auto;
+}
+
+.manifesto-text em {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 768px) {
+  .manifesto { padding: 56px 0 44px; }
+  .manifesto-text { font-size: 19px; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   HERO
+   ────────────────────────────────────────────────────────────── */
+.hero {
+  padding: 96px 0 80px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 1400px;
+  height: 600px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(230, 126, 0, 0.06) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: -0.1px;
+  margin-bottom: 32px;
+}
+
+.hero-eyebrow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-generer);
+  box-shadow: 0 0 0 3px rgba(230, 126, 0, 0.15);
+  animation: pulse-soft 2.5s ease-in-out infinite;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.hero-title {
+  font-size: clamp(44px, 7.5vw, 88px);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  color: var(--text);
+  max-width: 12ch;
+  margin: 0 auto 28px;
+}
+
+.hero-title em {
+  font-style: italic;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+.hero-subtitle {
+  font-size: clamp(17px, 1.6vw, 20px);
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 640px;
+  margin: 0 auto 40px;
+  font-weight: 400;
+}
+
+.hero-cta {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.hero-cta .btn-primary,
+.hero-cta .btn-outline {
+  padding: 13px 24px;
+  font-size: 15px;
+}
+
+.hero-meta {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+}
+
+/* Hero visual — capture produit */
+.hero-visual {
+  margin-top: 72px;
+  position: relative;
+}
+
+.hero-visual-frame {
+  background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 14px;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 12px 40px rgba(0, 0, 0, 0.06),
+    0 32px 80px rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-visual-inner {
+  background: var(--bg);
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  min-height: 520px;
+}
+
+/* Mock sidebar */
+.mock-sidebar {
+  width: 220px;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.mock-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  margin-bottom: 18px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.mock-sidebar-brand-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: #1D1D1F;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mock-sidebar-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  padding: 14px 10px 6px;
+}
+
+.mock-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: default;
+  transition: background .15s ease;
+}
+
+.mock-nav-item.active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.mock-nav-item-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Mock pipeline canvas */
+.mock-canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  min-width: 0;
+}
+
+.mock-canvas-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mock-canvas-title {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
+
+.mock-canvas-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mock-pill {
+  padding: 4px 11px;
+  background: var(--surface);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.mock-canvas-body {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.mock-col {
+  width: 165px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mock-col-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mock-col-bar {
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.mock-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 11px;
+  font-size: 12px;
+  border-left: 3px solid var(--c-prospect);
+}
+
+.mock-card-name {
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.1px;
+  margin-bottom: 2px;
+}
+
+.mock-card-co {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.mock-card-foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 880px) {
+  .hero { padding: 64px 0 56px; }
+  .hero-visual { margin-top: 48px; }
+  .mock-sidebar { display: none; }
+  .hero-visual-inner { min-height: 380px; }
+  .mock-canvas-body { padding: 12px; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   SECTION COMMON
+   ────────────────────────────────────────────────────────────── */
+.section {
+  padding: 110px 0;
+  position: relative;
+}
+
+.section-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+
+.section-eyebrow-num {
+  font-family: var(--font-mono);
+  color: var(--text-soft);
+}
+
+.section-title {
+  font-size: clamp(34px, 4.4vw, 56px);
+  font-weight: 800;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  margin-bottom: 20px;
+  max-width: 18ch;
+}
+
+.section-title em {
+  font-style: italic;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.section-lead {
+  font-size: clamp(16px, 1.4vw, 19px);
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 56ch;
+  margin-bottom: 36px;
+}
+
+.section-points {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.section-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.section-points-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--c-success-soft);
+  color: var(--c-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.section-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+
+.section-grid.reverse { direction: rtl; }
+.section-grid.reverse > * { direction: ltr; }
+
+@media (max-width: 880px) {
+  .section { padding: 72px 0; }
+  .section-grid { grid-template-columns: 1fr; gap: 48px; }
+  .section-grid.reverse { direction: ltr; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   SECTION 1 — PIPELINE
+   ────────────────────────────────────────────────────────────── */
+.pipeline-mock {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+}
+
+.pipeline-mock .mock-col { width: 145px; }
+
+.leads-tool {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02), 0 16px 40px rgba(0, 0, 0, 0.04);
+}
+
+.leads-config {
+  padding: 24px 28px;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 18px;
+  align-items: end;
+}
+
+.leads-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.leads-field-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.leads-select {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: border-color .2s var(--ease-out);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236E6E73' stroke-width='2.5' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 38px;
+}
+
+.leads-select:hover { border-color: var(--border-2); }
+.leads-select:focus { outline: 2px solid var(--text); outline-offset: -1px; }
+
+.leads-launch-btn {
+  padding: 11px 22px;
+  background: var(--text);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background .2s var(--ease-out);
+}
+
+.leads-launch-btn:hover { background: #000; }
+.leads-launch-btn:disabled { background: var(--text-soft); cursor: not-allowed; }
+
+.leads-canvas {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  min-height: 480px;
+}
+
+.leads-map-wrap {
+  position: relative;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  min-height: 480px;
+}
+
+#leads-map {
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  background: var(--surface);
+}
+
+.leads-map-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.62) 100%);
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+  pointer-events: none;
+  text-align: center;
+  padding: 24px;
+  transition: opacity .4s var(--ease-out);
+  z-index: 400;
+}
+
+.leads-map-overlay.hidden { opacity: 0; pointer-events: none; }
+
+.leads-map-overlay-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-soft);
+  margin-bottom: 8px;
+}
+
+.leads-map-overlay-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.leads-map-overlay-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 24ch;
+}
+
+.leads-results {
+  display: flex;
+  flex-direction: column;
+}
+
+.leads-results-header {
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.leads-results-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.leads-results-count {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.leads-list {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+}
+
+.leads-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.leads-empty-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-soft);
+}
+
+.leads-empty-title {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.leads-empty-sub {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  max-width: 28ch;
+}
+
+.lead-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 13px 14px;
+  cursor: pointer;
+  transition: all .2s var(--ease-out);
+  position: relative;
+}
+
+.lead-card:hover {
+  border-color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+.lead-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.lead-card-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.lead-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lead-card-tag {
+  padding: 2px 8px;
+  background: var(--surface);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.lead-card-locked {
+  font-size: 11px;
+  color: var(--text-soft);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (max-width: 880px) {
+  .leads-config { grid-template-columns: 1fr; gap: 12px; padding: 18px; }
+  .leads-canvas { grid-template-columns: 1fr; }
+  .leads-map-wrap { border-right: none; border-bottom: 1px solid var(--border); }
+  #leads-map, .leads-map-wrap { min-height: 320px; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   MODAL — Inscription pour débloquer leads
+   ────────────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 22, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s var(--ease-out);
+}
+
+.modal-overlay.show { opacity: 1; pointer-events: auto; }
+
+.modal {
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  max-width: 460px;
+  width: 100%;
+  padding: 36px 32px 28px;
+  position: relative;
+  transform: translateY(12px) scale(0.98);
+  transition: transform .3s var(--ease-out);
+  text-align: center;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.18);
+}
+
+.modal-overlay.show .modal { transform: translateY(0) scale(1); }
+
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover { background: var(--surface-2); color: var(--text); }
+
+.modal-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--c-generer-soft);
+  color: var(--c-generer);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 18px;
+}
+
+.modal-title {
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 10px;
+  line-height: 1.2;
+}
+
+.modal-lead {
+  font-size: 14.5px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-bottom: 24px;
+}
+
+.modal-perks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+}
+
+.modal-perk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.modal-perk-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--c-success-soft);
+  color: var(--c-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.modal-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-cta .btn-primary {
+  padding: 13px 22px;
+  font-size: 14.5px;
+  width: 100%;
+  justify-content: center;
+}
+
+.modal-cta-link {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.modal-cta-link:hover { color: var(--text); }
+
+/* ──────────────────────────────────────────────────────────────
+   PRICING + QUIZZ
+   ────────────────────────────────────────────────────────────── */
+.pricing-section { padding: 110px 0; }
+
+.pricing-header {
+  text-align: center;
+  max-width: 680px;
+  margin: 0 auto 48px;
+}
+
+.pricing-header .section-title { margin-left: auto; margin-right: auto; }
+.pricing-header .section-lead { margin: 0 auto 24px; }
+
+.billing-toggle {
+  display: inline-flex;
+  background: var(--surface);
+  padding: 5px;
+  border-radius: 999px;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.billing-toggle button {
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all .2s var(--ease-out);
+}
+
+.billing-toggle button.active {
+  background: var(--text);
+  color: #fff;
+}
+
+.billing-toggle .save {
+  color: var(--c-success);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.tva-mention {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+}
+
+/* Quizz */
+.quizz {
+  max-width: 760px;
+  margin: 0 auto 56px;
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.quizz-q {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.quizz-options {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.quizz-opt {
+  padding: 14px 10px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all .2s var(--ease-out);
+  position: relative;
+  text-align: center;
+}
+
+.quizz-opt:hover { border-color: var(--border-2); }
+
+.quizz-opt.selected {
+  border-color: var(--text);
+  background: var(--text);
+  color: #fff;
+}
+
+.quizz-opt.selected[data-plan="starter"] { background: var(--c-generer); border-color: var(--c-generer); }
+.quizz-opt.selected[data-plan="pro"] { background: var(--c-pipeline); border-color: var(--c-pipeline); }
+.quizz-opt.selected[data-plan="business"] { background: var(--text); border-color: var(--text); }
+
+.quizz-reset {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.quizz-reset button {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 768px) {
+  .quizz-options { grid-template-columns: 1fr 1fr; }
+}
+
+/* Plans grid */
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.plan {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: all .3s var(--ease-out);
+}
+
+.plan.dimmed { opacity: 0.4; filter: grayscale(0.5); }
+
+.plan.recommended {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
+}
+
+.plan.recommended[data-plan="gratuit"] { border-color: var(--text); }
+.plan.recommended[data-plan="starter"] { border-color: var(--c-generer); box-shadow: 0 16px 40px rgba(230, 126, 0, 0.18); }
+.plan.recommended[data-plan="pro"] { border-color: var(--c-pipeline); box-shadow: 0 16px 40px rgba(67, 56, 202, 0.18); }
+.plan.recommended[data-plan="business"] { border-color: var(--text); box-shadow: 0 16px 40px rgba(29, 29, 31, 0.18); }
+
+.plan-recommend-badge {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  background: var(--text);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  white-space: nowrap;
+  display: none;
+}
+
+.plan.recommended[data-plan="starter"] .plan-recommend-badge { background: var(--c-generer); }
+.plan.recommended[data-plan="pro"] .plan-recommend-badge { background: var(--c-pipeline); }
+.plan.recommended .plan-recommend-badge { display: inline-block; }
+
+.plan-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.plan-price {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.plan-price-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.plan-bill {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.plan-tagline {
+  font-size: 13.5px;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 22px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan-features {
+  list-style: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin-bottom: 24px;
+}
+
+.plan-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.plan-features-check {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--c-success);
+  margin-top: 2px;
+}
+
+.plan-cta {
+  display: block;
+  text-align: center;
+  padding: 11px 16px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: all .2s var(--ease-out);
+}
+
+.plan-cta:hover { border-color: var(--text); }
+
+.plan.recommended .plan-cta {
+  background: var(--text);
+  color: #fff;
+  border-color: var(--text);
+}
+
+.plan.recommended[data-plan="starter"] .plan-cta { background: var(--c-generer); border-color: var(--c-generer); }
+.plan.recommended[data-plan="pro"] .plan-cta { background: var(--c-pipeline); border-color: var(--c-pipeline); }
+
+@media (max-width: 968px) {
+  .plans-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 568px) {
+  .plans-grid { grid-template-columns: 1fr; }
+  .plan { padding: 24px 22px 22px; }
+}
+
+.pricing-footnote {
+  text-align: center;
+  margin-top: 32px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* ──────────────────────────────────────────────────────────────
+   FAQ
+   ────────────────────────────────────────────────────────────── */
+.faq-section {
+  padding: 110px 0;
+  background: var(--surface);
+}
+
+.faq-header {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto 48px;
+}
+
+.faq-list {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.faq-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.faq-q {
+  width: 100%;
+  text-align: left;
+  padding: 22px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-sans);
+}
+
+.faq-q-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform .25s var(--ease-out);
+}
+
+.faq-item.open .faq-q-icon { transform: rotate(45deg); }
+
+.faq-a {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .35s var(--ease-out);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.faq-item.open .faq-a { max-height: 600px; padding-bottom: 22px; }
+
+/* ──────────────────────────────────────────────────────────────
+   FINAL CTA
+   ────────────────────────────────────────────────────────────── */
+.final-cta {
+  padding: 120px 0;
+  text-align: center;
+}
+
+.final-cta-title {
+  font-size: clamp(40px, 6vw, 72px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  margin-bottom: 20px;
+  max-width: 14ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.final-cta-title em {
+  font-style: italic;
+  font-family: var(--font-serif);
+  font-weight: 400;
+}
+
+.final-cta-lead {
+  font-size: clamp(16px, 1.5vw, 19px);
+  color: var(--text-muted);
+  max-width: 50ch;
+  margin: 0 auto 36px;
+}
+
+.final-cta-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.final-cta-buttons .btn-primary,
+.final-cta-buttons .btn-outline {
+  padding: 14px 28px;
+  font-size: 15.5px;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   FOOTER NOIR — aligné pages légales
+   ────────────────────────────────────────────────────────────── */
+.footer-dark {
+  background: #0A0A0A;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 72px 0 36px;
+  font-family: var(--font-sans);
+}
+
+.footer-top {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 48px;
+  padding-bottom: 48px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 360px;
+}
+
+.footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: #fff;
+}
+
+.footer-logo-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #1D1D1F;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.footer-tagline {
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.6;
+}
+
+.footer-col-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 16px;
+}
+
+.footer-col-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.footer-col-list a {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13.5px;
+  transition: color .15s var(--ease-out);
+}
+
+.footer-col-list a:hover { color: #fff; }
+
+.footer-postal {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.65;
+  margin-top: 4px;
+}
+
+.footer-bottom {
+  padding-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.footer-mentions, .footer-infra, .footer-rgpd {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.7;
+}
+
+.footer-mentions strong, .footer-infra strong, .footer-rgpd strong {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+}
+
+.footer-rgpd a {
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.footer-shortlinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding-top: 14px;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+}
+
+.footer-shortlinks a { color: rgba(255, 255, 255, 0.65); }
+.footer-shortlinks a:hover { color: #fff; }
+.footer-shortlinks span { color: rgba(255, 255, 255, 0.25); }
+
+@media (max-width: 768px) {
+  .footer-top { grid-template-columns: 1fr; gap: 32px; padding-bottom: 32px; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   REVEAL ANIMATIONS
+   ────────────────────────────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity .8s var(--ease-out), transform .8s var(--ease-out);
+}
+
+.reveal.visible { opacity: 1; transform: none; }
+
+.reveal-d1 { transition-delay: 0.08s; }
+.reveal-d2 { transition-delay: 0.16s; }
+.reveal-d3 { transition-delay: 0.24s; }
+.reveal-d4 { transition-delay: 0.32s; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  .reveal { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ──────────────────────────────────────────────────────────
+     HEADER
+     ────────────────────────────────────────────────────────── -->
+<header class="site-header">
+  <div class="container">
+    <div class="header-inner">
+      <a href="/" class="brand" aria-label="MovUP — Accueil">
+        <div class="brand-icon">
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+          </svg>
+        </div>
+        MovUP
+      </a>
+
+      <nav class="nav-links" aria-label="Principal">
+        <a href="/fonctionnalites">Fonctionnalités</a>
+        <a href="/tarifs">Tarifs</a>
+      </nav>
+
+      <div class="header-cta">
+        <a href="/login" class="btn-link">Connexion</a>
+        <a href="/signup" class="btn-primary">Essayer gratuitement</a>
+        <button class="menu-toggle" aria-label="Menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <path d="M3 6h18M3 12h18M3 18h18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ──────────────────────────────────────────────────────────
+     HERO
+     ────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-inner">
+      <div class="hero-eyebrow reveal">
+        <span class="hero-eyebrow-dot"></span>
+        <span>Indépendants &middot; PME</span>
+      </div>
+
+      <h1 class="hero-title reveal reveal-d1">
+        Trouvez vos clients.<br/>
+        Closez <em>plus vite.</em>
+      </h1>
+
+      <p class="hero-subtitle reveal reveal-d2">
+        Trouvez vos clients dans la base SIRENE INSEE, suivez-les dans votre pipeline, signez plus &mdash; <strong>tout dans une seule interface</strong>, hébergée en France.
+      </p>
+
+      <div class="hero-cta reveal reveal-d3">
+        <a href="/signup" class="btn-primary">
+          Essayer gratuitement
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+        <a href="/tarifs" class="btn-outline">Voir les tarifs</a>
+      </div>
+
+      <div class="hero-meta reveal reveal-d4">Aperçu en direct &middot; 14 jours gratuits, sans carte bancaire</div>
+    </div>
+
+    <!-- Visuel produit -->
+    <!-- Carte interactive Leads — élément central du hero -->
+    <div class="hero-visual reveal reveal-d4">
+      <div class="hero-leads-tool">
+
+        <div class="leads-config">
+          <div class="leads-field">
+            <label for="lead-secteur" class="leads-field-label">Secteur</label>
+            <select class="leads-select" id="lead-secteur">
+              <option value="">Tous les secteurs</option>
+              <option value="boucher">Boucher · charcutier</option>
+              <option value="boulanger">Boulanger · pâtissier</option>
+              <option value="restaurant">Restaurant · café</option>
+              <option value="opticien">Opticien</option>
+              <option value="coiffeur">Coiffeur · barbier</option>
+              <option value="plombier">Plombier · chauffagiste</option>
+              <option value="electricien">Électricien</option>
+              <option value="agence">Agence immobilière</option>
+              <option value="garage">Garage · réparation auto</option>
+              <option value="cabinet">Cabinet conseil · expert-comptable</option>
+            </select>
+          </div>
+          <div class="leads-field">
+            <label for="lead-region" class="leads-field-label">Région</label>
+            <select class="leads-select" id="lead-region">
+              <option value="">Toutes les régions</option>
+              <option value="ara" data-lat="45.7640" data-lng="4.8357" data-zoom="7">Auvergne-Rhône-Alpes</option>
+              <option value="bfc" data-lat="47.3221" data-lng="5.0415" data-zoom="7">Bourgogne-Franche-Comté</option>
+              <option value="bre" data-lat="48.2020" data-lng="-2.9326" data-zoom="8">Bretagne</option>
+              <option value="cvl" data-lat="47.7516" data-lng="1.6751" data-zoom="7">Centre-Val de Loire</option>
+              <option value="cor" data-lat="42.0396" data-lng="9.0129" data-zoom="8">Corse</option>
+              <option value="ges" data-lat="48.6921" data-lng="6.1844" data-zoom="7">Grand Est</option>
+              <option value="hdf" data-lat="50.4801" data-lng="2.7935" data-zoom="8">Hauts-de-France</option>
+              <option value="idf" data-lat="48.8566" data-lng="2.3522" data-zoom="9">Île-de-France</option>
+              <option value="nor" data-lat="49.1829" data-lng="-0.3707" data-zoom="8">Normandie</option>
+              <option value="naq" data-lat="44.8378" data-lng="-0.5792" data-zoom="7">Nouvelle-Aquitaine</option>
+              <option value="occ" data-lat="43.6045" data-lng="1.4442" data-zoom="7">Occitanie</option>
+              <option value="pdl" data-lat="47.4784" data-lng="-0.5632" data-zoom="8">Pays de la Loire</option>
+              <option value="pac" data-lat="43.9352" data-lng="6.0679" data-zoom="7">Provence-Alpes-Côte d'Azur</option>
+            </select>
+          </div>
+          <button class="leads-launch-btn" id="leads-launch-btn" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            Voir les leads
+          </button>
+        </div>
+
+        <div class="leads-canvas">
+          <div class="leads-map-wrap">
+            <div id="leads-map"></div>
+            <div class="leads-map-overlay" id="leads-overlay">
+              <div class="leads-map-overlay-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              </div>
+              <div class="leads-map-overlay-title">Choisissez secteur et région</div>
+              <div class="leads-map-overlay-sub">5 entreprises s'afficheront immédiatement</div>
+            </div>
+          </div>
+
+          <div class="leads-results">
+            <div class="leads-results-header">
+              <div class="leads-results-title">Aperçu</div>
+              <div class="leads-results-count" id="leads-count">0 résultat</div>
+            </div>
+            <div class="leads-list" id="leads-list">
+              <div class="leads-empty">
+                <div class="leads-empty-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </div>
+                <div class="leads-empty-title">Aucune recherche</div>
+                <div class="leads-empty-sub">Choisissez un secteur et une région pour démarrer</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Trust strip sous la carte -->
+      <div class="hero-trust">
+        <div class="hero-trust-item">
+          <span class="hero-trust-dot" style="background:#CC0000"></span>
+          <span><strong>SIRENE INSEE</strong> — 30M+ entreprises</span>
+        </div>
+        <div class="hero-trust-item">
+          <span class="hero-trust-dot" style="background:#1D8348"></span>
+          <span><strong>BAN Géocodage</strong> — adresses officielles</span>
+        </div>
+        <div class="hero-trust-item">
+          <span class="hero-trust-dot" style="background:#4285F4"></span>
+          <span><strong>936 codes NAF</strong> — secteurs activité</span>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ──────────────────────────────────────────────────────────
+     MANIFESTE COURT — "Pas d'IA"
+     ────────────────────────────────────────────────────────── -->
+<section class="manifesto">
+  <div class="container-narrow">
+    <div class="manifesto-inner reveal">
+      <div class="manifesto-mark">— Manifeste</div>
+      <p class="manifesto-text">
+        Vos clients ne sont pas des probabilités, ce sont des personnes. <em>MovUP n'embarque pas d'IA dans le produit</em> — pas de scoring opaque, pas de génération automatique. Vous gardez la décision, on vous donne les outils.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────
+     SECTION 1 — PIPELINE
+     ────────────────────────────────────────────────────────── -->
+<section class="section" id="pipeline">
+  <div class="container">
+    <div class="section-grid">
+      <div class="reveal">
+        <div class="section-eyebrow">
+          <span class="section-eyebrow-num">01</span>
+          <span>Pipeline</span>
+        </div>
+        <h2 class="section-title">
+          Voir ses deals.<br/>
+          <em>Les faire avancer.</em>
+        </h2>
+        <p class="section-lead">
+          Un pipeline visuel, en colonnes, où chaque carte est un deal. Vous glissez, vous déposez, vous closez. Stages personnalisables selon votre cycle de vente, sans toucher au code.
+        </p>
+        <ul class="section-points">
+          <li>
+            <span class="section-points-check">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <span>Stages renommables, ajoutables, réordonnables &mdash; votre process, pas le nôtre</span>
+          </li>
+          <li>
+            <span class="section-points-check">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <span>Vue unifiée de votre carnet de commande, montant total en temps réel</span>
+          </li>
+          <li>
+            <span class="section-points-check">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <span>Étapes Gagné et Perdu protégées pour des statistiques fiables</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="reveal reveal-d2">
+        <div class="pipeline-mock">
+          <div class="mock-col">
+            <div class="mock-col-head"><span class="mock-col-bar" style="background:var(--c-prospect)"></span>Prospects</div>
+            <div class="mock-card" style="border-left-color:var(--c-prospect)">
+              <div class="mock-card-name">Bernard Élec</div>
+              <div class="mock-card-co">Lyon</div>
+              <div class="mock-card-foot"><span>—</span><span>J+0</span></div>
+            </div>
+            <div class="mock-card" style="border-left-color:var(--c-prospect)">
+              <div class="mock-card-name">Atelier Bois</div>
+              <div class="mock-card-co">Brest</div>
+              <div class="mock-card-foot"><span>—</span><span>J+2</span></div>
+            </div>
+          </div>
+          <div class="mock-col">
+            <div class="mock-col-head"><span class="mock-col-bar" style="background:var(--c-pipeline)"></span>Phoning</div>
+            <div class="mock-card" style="border-left-color:var(--c-pipeline)">
+              <div class="mock-card-name">Cabinet J&amp;K</div>
+              <div class="mock-card-co">Lille</div>
+              <div class="mock-card-foot"><span>4,1k€</span><span>J+3</span></div>
+            </div>
+          </div>
+          <div class="mock-col">
+            <div class="mock-col-head"><span class="mock-col-bar" style="background:var(--c-rdv)"></span>RDV</div>
+            <div class="mock-card" style="border-left-color:var(--c-rdv)">
+              <div class="mock-card-name">Martin IT</div>
+              <div class="mock-card-co">Paris</div>
+              <div class="mock-card-foot"><span>8k€</span><span>J+5</span></div>
+            </div>
+            <div class="mock-card" style="border-left-color:var(--c-rdv)">
+              <div class="mock-card-name">Santé+</div>
+              <div class="mock-card-co">Bordeaux</div>
+              <div class="mock-card-foot"><span>4,5k€</span><span>J+7</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Modal d'inscription -->
+<div class="modal-overlay" id="lead-modal" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <button class="modal-close" id="modal-close" aria-label="Fermer">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="modal-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    </div>
+    <h3 class="modal-title" id="modal-title">Voir tous les leads de votre région</h3>
+    <p class="modal-lead">Créez votre compte gratuit en 30 secondes &mdash; <strong>10 leads inclus</strong> + accès complet à MovUP.</p>
+    <div class="modal-perks">
+      <div class="modal-perk">
+        <span class="modal-perk-icon">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <span>Coordonnées complètes (téléphone, email, SIRET)</span>
+      </div>
+      <div class="modal-perk">
+        <span class="modal-perk-icon">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <span>Export Pipeline en un clic</span>
+      </div>
+      <div class="modal-perk">
+        <span class="modal-perk-icon">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <span>Sans carte bancaire, sans engagement</span>
+      </div>
+    </div>
+    <div class="modal-cta">
+      <a href="/signup" class="btn-primary">
+        Créer mon compte gratuit
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <a href="/login" class="modal-cta-link">J'ai déjà un compte</a>
+    </div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────
+     SECTION 2 — PRICING + QUIZZ
+     ────────────────────────────────────────────────────────── -->
+<section class="pricing-section" id="tarifs">
+  <div class="container">
+    <div class="pricing-header reveal">
+      <div class="section-eyebrow" style="justify-content: center; display: inline-flex;">
+        <span class="section-eyebrow-num">02</span>
+        <span>Tarifs</span>
+      </div>
+      <h2 class="section-title">
+        Un prix juste<br/>
+        <em>pour chaque besoin.</em>
+      </h2>
+      <p class="section-lead">
+        Pas de frais cachés, pas d'engagement, pas de palier surprise. Choisissez le plan adapté à votre activité, changez quand vous voulez.
+      </p>
+      <div class="billing-toggle">
+        <button class="active" data-bill="monthly">Mensuel</button>
+        <button data-bill="annual">Annuel <span class="save">&minus; 15 %</span></button>
+      </div>
+      <div class="tva-mention">Tarifs en franchise de TVA &mdash; art. 293 B du CGI</div>
+    </div>
+
+    <!-- QUIZZ -->
+    <div class="quizz reveal reveal-d2">
+      <div class="quizz-q">Combien de temps consacrez-vous à la prospection commerciale chaque semaine ?</div>
+      <div class="quizz-options" id="quizz-options">
+        <button class="quizz-opt" data-plan="gratuit">Moins d'1 heure</button>
+        <button class="quizz-opt" data-plan="starter">1 à 3 heures</button>
+        <button class="quizz-opt" data-plan="pro">3 à 5 heures</button>
+        <button class="quizz-opt" data-plan="business">Plus de 5 heures</button>
+      </div>
+      <div class="quizz-reset" id="quizz-reset" style="display:none;">
+        <button onclick="resetQuizz()">Voir tous les plans</button>
+      </div>
+    </div>
+
+    <!-- PLANS -->
+    <div class="plans-grid reveal reveal-d3">
+      <!-- GRATUIT -->
+      <div class="plan" data-plan="gratuit">
+        <span class="plan-recommend-badge">Recommandé pour vous</span>
+        <div class="plan-name">Gratuit</div>
+        <div class="plan-price"><span class="price-amount" data-monthly="0" data-annual="0">0&nbsp;€</span><span class="plan-price-unit">/mois</span></div>
+        <div class="plan-bill">Sans engagement</div>
+        <div class="plan-tagline">Pour tester MovUP sereinement.</div>
+        <ul class="plan-features">
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>1 utilisateur</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Quotas découverte</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Pipeline visuel</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>1 boîte mail connectée</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Statistiques de base</li>
+        </ul>
+        <a href="/signup" class="plan-cta">Démarrer gratuitement</a>
+      </div>
+
+      <!-- STARTER -->
+      <div class="plan" data-plan="starter">
+        <span class="plan-recommend-badge">Recommandé pour vous</span>
+        <div class="plan-name">Starter</div>
+        <div class="plan-price"><span class="price-amount" data-monthly="29" data-annual="25">29&nbsp;€</span><span class="plan-price-unit">/mois</span></div>
+        <div class="plan-bill">Facturé mensuellement</div>
+        <div class="plan-tagline">Pour les indépendants qui prospectent activement.</div>
+        <ul class="plan-features">
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>1 utilisateur</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Contacts illimités</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Devis et factures illimités</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>1 boîte mail OAuth + IMAP</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Carte et tournées</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Frais et OCR</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Support email sous 24 h</li>
+        </ul>
+        <a href="/signup?plan=starter" class="plan-cta">Essayer 14 jours</a>
+      </div>
+
+      <!-- PRO -->
+      <div class="plan" data-plan="pro">
+        <span class="plan-recommend-badge">Recommandé pour vous</span>
+        <div class="plan-name">Pro</div>
+        <div class="plan-price"><span class="price-amount" data-monthly="49" data-annual="42">49&nbsp;€</span><span class="plan-price-unit">/mois</span></div>
+        <div class="plan-bill">Facturé mensuellement</div>
+        <div class="plan-tagline">Pour les indépendants au volume soutenu et petites équipes.</div>
+        <ul class="plan-features">
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Tout Starter, plus :</strong></li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Jusqu'à 3 utilisateurs</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>2 boîtes mail / utilisateur</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Visio intégrée illimitée</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Pipelines multiples</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Statistiques avancées</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Support email sous 8 h</li>
+        </ul>
+        <a href="/signup?plan=pro" class="plan-cta">Essayer 14 jours</a>
+      </div>
+
+      <!-- BUSINESS -->
+      <div class="plan" data-plan="business">
+        <span class="plan-recommend-badge">Recommandé pour vous</span>
+        <div class="plan-name">Business</div>
+        <div class="plan-price"><span class="price-amount" data-monthly="79" data-annual="67">79&nbsp;€</span><span class="plan-price-unit">/mois</span></div>
+        <div class="plan-bill">Facturé mensuellement</div>
+        <div class="plan-tagline">Pour les PME structurées et équipes commerciales.</div>
+        <ul class="plan-features">
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Tout Pro, plus :</strong></li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Jusqu'à 10 utilisateurs</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>5 boîtes mail / utilisateur</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Permissions par rôle</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>API publique</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>DPA signé, registre</li>
+          <li><svg class="plan-features-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Support prioritaire 4 h</li>
+        </ul>
+        <a href="/signup?plan=business" class="plan-cta">Essayer 14 jours</a>
+      </div>
+    </div>
+
+    <div class="pricing-footnote">
+      Tarifs en franchise de TVA, art. 293 B du CGI. Sans engagement. Annulation à tout moment depuis votre espace.
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────
+     FAQ
+     ────────────────────────────────────────────────────────── -->
+<section class="faq-section" id="faq">
+  <div class="container">
+    <div class="faq-header reveal">
+      <div class="section-eyebrow" style="justify-content: center; display: inline-flex;">
+        <span class="section-eyebrow-num">03</span>
+        <span>Questions fréquentes</span>
+      </div>
+      <h2 class="section-title">
+        Tout ce qu'il faut<br/>
+        <em>savoir avant.</em>
+      </h2>
+    </div>
+
+    <div class="faq-list reveal reveal-d1">
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Puis-je changer de plan à tout moment ?
+          <span class="faq-q-icon">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </span>
+        </button>
+        <div class="faq-a">Oui. Vous pouvez monter ou descendre de plan à n'importe quel moment depuis votre espace facturation. Le changement est proratisé sur le mois en cours.</div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          L'engagement est-il obligatoire ?
+          <span class="faq-q-icon">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </span>
+        </button>
+        <div class="faq-a">Non. Tous les plans sont sans engagement. Vous pouvez résilier à tout moment, sans justification, depuis votre espace. Vos données restent récupérables 30 jours après résiliation.</div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          MovUP applique-t-il la TVA ?
+          <span class="faq-q-icon">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </span>
+        </button>
+        <div class="faq-a">Non. MovUP est édité par EI So Paradi, en franchise en base de TVA (article 293 B du CGI). Aucune TVA n'est facturée sur vos abonnements. La mention « TVA non applicable, art. 293 B du CGI » figure sur toutes nos factures.</div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Comment migrer depuis Pipedrive, HubSpot ou un autre CRM ?
+          <span class="faq-q-icon">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </span>
+        </button>
+        <div class="faq-a">Exportez votre base actuelle au format CSV depuis votre CRM, puis importez-la dans MovUP via la page Contacts ou Leads. Le mapping des colonnes est interactif : vous validez que "Société" correspond bien à "Société" et c'est parti. Migration moyenne : 15 minutes pour 500 contacts.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────
+     CTA FINAL
+     ────────────────────────────────────────────────────────── -->
+<section class="final-cta">
+  <div class="container">
+    <h2 class="final-cta-title reveal">
+      Commencez à structurer<br/>
+      <em>vos ventes aujourd'hui.</em>
+    </h2>
+    <p class="final-cta-lead reveal reveal-d1">
+      14 jours gratuits, sans carte bancaire. Sans engagement. Vos données partent avec vous si vous décidez d'arrêter.
+    </p>
+    <div class="final-cta-buttons reveal reveal-d2">
+      <a href="/signup" class="btn-primary">
+        Essayer MovUP gratuitement
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </a>
+      <a href="/fonctionnalites" class="btn-outline">Voir toutes les fonctionnalités</a>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────────────────────────────────
+     FOOTER NOIR — aligné pages légales
+     ────────────────────────────────────────────────────────── -->
+<footer class="footer-dark">
+  <div class="container">
+
+    <div class="footer-top">
+      <div class="footer-brand">
+        <div class="footer-logo">
+          <div class="footer-logo-icon">
+            <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+            </svg>
+          </div>
+          MovUP
+        </div>
+        <div class="footer-tagline">Le pipeline commercial pour indépendants et PME. Conçu en Bretagne, hébergé en Europe.</div>
+      </div>
+
+      <div>
+        <div class="footer-col-title">Légal</div>
+        <ul class="footer-col-list">
+          <li><a href="/mentions-legales">Mentions légales</a></li>
+          <li><a href="/cgu">CGU</a></li>
+          <li><a href="/cgv">CGV</a></li>
+          <li><a href="/confidentialite">Confidentialité</a></li>
+          <li><a href="/cookies">Cookies</a></li>
+          <li><a href="/dpa">Accord de traitement (DPA)</a></li>
+          <li><a href="/sous-traitants">Sous-traitants</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="footer-col-title">Contact</div>
+        <ul class="footer-col-list">
+          <li><a href="mailto:contact@movup.io">contact@movup.io</a></li>
+          <li class="footer-postal">EI So Paradi<br/>18 place du Marchix<br/>22100 Dinan, France</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="footer-mentions">
+        © 2026 <strong>MovUP</strong> &mdash; Édité par <strong>EI So Paradi</strong>. SIRET 453 388 456 00031 &middot; Code APE 7410Z &middot; TVA non applicable, art. 293 B du CGI &middot; Siège : 18 place du Marchix, 22100 Dinan, France.
+      </div>
+      <div class="footer-infra">
+        Hébergement applicatif : <strong>Railway Corp.</strong> (régions UE) &middot; Base de données : <strong>SurrealDB Cloud</strong> (UE) &middot; Réseau et CDN : <strong>Cloudflare, Inc.</strong> &middot; Email transactionnel : <strong>Resend, Inc.</strong> &middot; Paiement : <strong>Stripe Payments Europe Ltd</strong> (Irlande).
+      </div>
+      <div class="footer-rgpd">
+        Site déclaré conforme au RGPD (règlement UE 2016/679) et à la loi Informatique et Libertés modifiée. Pour exercer vos droits, écrivez à <a href="mailto:dpo@movup.io">dpo@movup.io</a>.
+      </div>
+      <div class="footer-shortlinks">
+        <a href="/mentions-legales">Mentions légales</a>
+        <span aria-hidden="true">·</span>
+        <a href="/cgu">CGU</a>
+        <span aria-hidden="true">·</span>
+        <a href="/cgv">CGV</a>
+        <span aria-hidden="true">·</span>
+        <a href="/confidentialite">Confidentialité</a>
+        <span aria-hidden="true">·</span>
+        <a href="/cookies">Cookies</a>
+      </div>
+    </div>
+
+  </div>
+</footer>
+
+<!-- ──────────────────────────────────────────────────────────
+     SCRIPTS
+     ────────────────────────────────────────────────────────── -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ───────────────── REVEAL ON SCROLL ───────────────── */
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      observer.unobserve(entry.target);
+    }
+  });
+}, { rootMargin: '0px 0px -80px 0px', threshold: 0.05 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+/* ───────────────── FAQ TOGGLE ───────────────── */
+function toggleFaq(btn) {
+  const item = btn.closest('.faq-item');
+  item.classList.toggle('open');
+}
+
+/* ───────────────── BILLING TOGGLE ───────────────── */
+document.querySelectorAll('.billing-toggle button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.billing-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const mode = btn.dataset.bill;
+    document.querySelectorAll('.price-amount').forEach(el => {
+      const v = mode === 'annual' ? el.dataset.annual : el.dataset.monthly;
+      el.textContent = v + ' €';
+    });
+  });
+});
+
+/* ───────────────── QUIZZ PLAN ───────────────── */
+const quizzOpts = document.querySelectorAll('.quizz-opt');
+const quizzReset = document.getElementById('quizz-reset');
+const plans = document.querySelectorAll('.plan');
+
+quizzOpts.forEach(opt => {
+  opt.addEventListener('click', () => {
+    const recommended = opt.dataset.plan;
+    quizzOpts.forEach(o => o.classList.remove('selected'));
+    opt.classList.add('selected');
+
+    plans.forEach(p => {
+      if (p.dataset.plan === recommended) {
+        p.classList.add('recommended');
+        p.classList.remove('dimmed');
+      } else {
+        p.classList.add('dimmed');
+        p.classList.remove('recommended');
+      }
+    });
+
+    quizzReset.style.display = 'block';
+
+    setTimeout(() => {
+      const target = document.querySelector(`.plan[data-plan="${recommended}"]`);
+      if (target) {
+        const top = target.getBoundingClientRect().top + window.pageYOffset - 120;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }
+    }, 200);
+  });
+});
+
+function resetQuizz() {
+  quizzOpts.forEach(o => o.classList.remove('selected'));
+  plans.forEach(p => {
+    p.classList.remove('recommended', 'dimmed');
+  });
+  quizzReset.style.display = 'none';
+}
+
+/* ───────────────── LEAFLET MAP + LEADS ───────────────── */
+let leadsMap = null;
+let leadMarkers = [];
+
+function initLeadsMap() {
+  if (leadsMap) return;
+  const mapEl = document.getElementById('leads-map');
+  if (!mapEl || !window.L) {
+    // Retry si Leaflet pas encore chargé
+    if (!window.L) setTimeout(initLeadsMap, 200);
+    return;
+  }
+
+  leadsMap = L.map('leads-map', {
+    center: [46.6, 2.5],
+    zoom: 5.5,
+    zoomControl: true,
+    attributionControl: false,
+    scrollWheelZoom: false,
+    dragging: true
+  });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    opacity: 0.92,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(leadsMap);
+
+  // Forcer le recalcul de la taille après render initial
+  setTimeout(() => {
+    if (leadsMap) leadsMap.invalidateSize();
+  }, 250);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // La carte est dans le hero — on l'initialise immédiatement
+  initLeadsMap();
+});
+
+// Fallback : si Leaflet charge après DOMContentLoaded
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  setTimeout(initLeadsMap, 100);
+}
+
+/* Génération de leads démo */
+const FAKE_LEADS = {
+  // 5 leads par région-secteur, structurés réalistes (anonymisés)
+  // On utilise des coordonnées approximatives autour du centre régional
+  generate: function(secteur, regionLat, regionLng) {
+    const labels = {
+      'boucher': 'Boucherie',
+      'boulanger': 'Boulangerie',
+      'restaurant': 'Restaurant',
+      'opticien': 'Optique',
+      'coiffeur': 'Coiffure',
+      'plombier': 'Plomberie',
+      'electricien': 'Électricité',
+      'agence': 'Agence Immo',
+      'garage': 'Garage Auto',
+      'cabinet': 'Cabinet'
+    };
+    const noms = ['D...', 'M...', 'L...', 'P...', 'B...', 'V...', 'R...'];
+    const prefix = labels[secteur] || 'Entreprise';
+    const out = [];
+    const rng = (i) => Math.sin(i * 73.13) * 10000;
+    for (let i = 0; i < 5; i++) {
+      const dlat = (rng(i*2) % 1) * 1.4 - 0.7;
+      const dlng = (rng(i*2+1) % 1) * 1.6 - 0.8;
+      out.push({
+        id: 'l' + i,
+        name: prefix + ' ' + noms[i % noms.length],
+        ville: ['Centre-ville', 'Périphérie', 'Zone artisanale', 'Quartier historique', 'Banlieue sud'][i],
+        lat: regionLat + dlat,
+        lng: regionLng + dlng
+      });
+    }
+    return out;
+  }
+};
+
+const secteurEl = document.getElementById('lead-secteur');
+const regionEl = document.getElementById('lead-region');
+const launchBtn = document.getElementById('leads-launch-btn');
+const leadsList = document.getElementById('leads-list');
+const leadsCount = document.getElementById('leads-count');
+const leadsOverlay = document.getElementById('leads-overlay');
+
+function checkLaunchBtn() {
+  launchBtn.disabled = !(secteurEl.value && regionEl.value);
+}
+secteurEl.addEventListener('change', checkLaunchBtn);
+regionEl.addEventListener('change', checkLaunchBtn);
+
+launchBtn.addEventListener('click', () => {
+  if (!secteurEl.value || !regionEl.value) return;
+  initLeadsMap();
+  if (!leadsMap) return;
+
+  const opt = regionEl.options[regionEl.selectedIndex];
+  const lat = parseFloat(opt.dataset.lat);
+  const lng = parseFloat(opt.dataset.lng);
+  const zoom = parseInt(opt.dataset.zoom, 10) || 7;
+
+  leadsMap.setView([lat, lng], zoom, { animate: true });
+  leadsOverlay.classList.add('hidden');
+
+  // Clear previous markers
+  leadMarkers.forEach(m => leadsMap.removeLayer(m));
+  leadMarkers = [];
+
+  const leads = FAKE_LEADS.generate(secteurEl.value, lat, lng);
+  leads.forEach((lead, i) => {
+    const icon = L.divIcon({
+      className: 'lead-marker',
+      html: `<div style="width:18px;height:18px;border-radius:50%;background:#1D1D1F;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.25);"></div>`,
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
+    });
+    const m = L.marker([lead.lat, lead.lng], { icon }).addTo(leadsMap);
+    m.bindPopup(`<div style="font-family:Geist,sans-serif;padding:6px 8px;min-width:180px;"><strong>${lead.name}</strong><br/><span style="font-size:11px;color:#6E6E73;">${lead.ville}</span><br/><a href="#" onclick="openLeadModal(event)" style="font-size:11px;color:#E67E00;text-decoration:underline;margin-top:6px;display:inline-block;">Voir les coordonnées →</a></div>`);
+    leadMarkers.push(m);
+  });
+
+  // Update list
+  leadsCount.textContent = '5 résultats — aperçu';
+  leadsList.innerHTML = leads.map((lead, i) => `
+    <div class="lead-card" onclick="openLeadModal(event)">
+      <div class="lead-card-name">${lead.name}</div>
+      <div class="lead-card-meta">${lead.ville}</div>
+      <div class="lead-card-foot">
+        <span class="lead-card-tag">${secteurEl.options[secteurEl.selectedIndex].text}</span>
+        <span class="lead-card-locked">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Verrouillé
+        </span>
+      </div>
+    </div>
+  `).join('');
+});
+
+/* MODAL */
+const modal = document.getElementById('lead-modal');
+const modalClose = document.getElementById('modal-close');
+
+function openLeadModal(e) {
+  if (e) e.preventDefault();
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLeadModal() {
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+
+modalClose.addEventListener('click', closeLeadModal);
+modal.addEventListener('click', (e) => {
+  if (e.target === modal) closeLeadModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && modal.classList.contains('show')) closeLeadModal();
+});
+
+window.openLeadModal = openLeadModal;
+window.resetQuizz = resetQuizz;
+</script>
+
+</body>
+</html>

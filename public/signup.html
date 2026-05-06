@@ -28,11 +28,13 @@
 
   .auth-head{text-align:center;margin-bottom:22px}
   .auth-head h1{font-size:26px;font-weight:800;letter-spacing:-.6px;color:var(--text);margin-bottom:8px;line-height:1.2}
-  .auth-head p{font-size:14px;color:var(--muted);max-width:420px;margin:0 auto;line-height:1.55}
+  /* Sous-titre tient sur 1 ligne en desktop ; retour à la ligne autorisé en mobile. */
+  .auth-head p{font-size:14px;color:var(--muted);margin:0 auto;line-height:1.55;max-width:none}
+  @media (min-width:768px){
+    .auth-head p{white-space:nowrap}
+  }
 
   .card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
-  .card-head{background:#1D1D1F;color:#fff;padding:16px 24px}
-  .card-head h2{font-size:14px;font-weight:700;letter-spacing:-.2px;margin:0}
   .card-body{padding:22px 24px 24px}
 
   .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -52,13 +54,15 @@
   .pw-toggle:hover{color:var(--text);background:var(--surface)}
   .pw-toggle svg{width:18px;height:18px}
 
-  /* Indicateur de force discret */
-  .pw-strength{display:flex;gap:4px;margin-top:4px}
-  .pw-strength span{flex:1;height:3px;border-radius:2px;background:var(--surface2);transition:background .15s}
-  .pw-strength.s1 span:nth-child(1){background:var(--red)}
-  .pw-strength.s2 span:nth-child(-n+2){background:var(--orange)}
-  .pw-strength.s3 span{background:var(--green)}
-  .pw-label{font-size:11px;color:var(--muted);margin-top:4px;font-weight:500;letter-spacing:.2px}
+  /* Indicateur de force — masqué tant que le champ est vide (.is-on ajouté par le JS). */
+  .pw-strength{display:none;gap:6px;margin-top:6px}
+  .pw-strength.is-on{display:flex}
+  .pw-strength span{flex:1;height:4px;border-radius:2px;background:#E5E5E5;transition:background .15s}
+  .pw-strength.s1 span:nth-child(1){background:#DC2626}
+  .pw-strength.s2 span:nth-child(-n+2){background:#F59E0B}
+  .pw-strength.s3 span{background:#16A34A}
+  .pw-label{display:none;font-size:12px;color:#6B7280;margin-top:4px;font-weight:500;letter-spacing:.2px;text-align:left}
+  .pw-label.is-on{display:block}
 
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:14px;font-weight:700;padding:12px 18px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:all .15s;text-decoration:none;width:100%}
   .btn-dark{background:var(--text);color:#fff;border-color:var(--text);margin-top:6px}
@@ -100,7 +104,6 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>Vos informations</h2></div>
     <div class="card-body">
       <div id="alert" class="alert hidden" role="alert"></div>
 
@@ -119,7 +122,7 @@
         </div>
 
         <div class="field">
-          <label for="email">Email professionnel</label>
+          <label for="email">Email</label>
           <input id="email" name="email" type="email" required autocomplete="email" maxlength="160">
           <div class="field-err" id="err-email"></div>
         </div>
@@ -130,29 +133,28 @@
           <div class="field-err" id="err-telephone"></div>
         </div>
 
-        <div class="grid-2">
-          <div class="field">
-            <label for="password">Mot de passe (10 caractères min)</label>
-            <div class="password-wrap">
-              <input id="password" name="password" type="password" required autocomplete="new-password" minlength="10">
-              <button type="button" class="pw-toggle" data-target="password" aria-label="Afficher le mot de passe">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-eye><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
-            </div>
-            <div class="pw-strength" id="pw-strength" aria-hidden="true"><span></span><span></span><span></span></div>
-            <div class="pw-label" id="pw-label"></div>
-            <div class="field-err" id="err-password"></div>
+        <div class="field">
+          <label for="password">Mot de passe (10 caractères min)</label>
+          <div class="password-wrap">
+            <input id="password" name="password" type="password" required autocomplete="new-password" minlength="10">
+            <button type="button" class="pw-toggle" data-target="password" aria-label="Afficher le mot de passe">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-eye><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
           </div>
-          <div class="field">
-            <label for="password2">Confirmer le mot de passe</label>
-            <div class="password-wrap">
-              <input id="password2" name="password2" type="password" required autocomplete="new-password" minlength="10">
-              <button type="button" class="pw-toggle" data-target="password2" aria-label="Afficher le mot de passe">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-eye><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
-            </div>
-            <div class="field-err" id="err-password2"></div>
+          <div class="pw-strength" id="pw-strength" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div class="pw-label" id="pw-label"></div>
+          <div class="field-err" id="err-password"></div>
+        </div>
+
+        <div class="field">
+          <label for="password2">Confirmer le mot de passe</label>
+          <div class="password-wrap">
+            <input id="password2" name="password2" type="password" required autocomplete="new-password" minlength="10">
+            <button type="button" class="pw-toggle" data-target="password2" aria-label="Afficher le mot de passe">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-eye><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
           </div>
+          <div class="field-err" id="err-password2"></div>
         </div>
 
         <button type="submit" id="btn-submit" class="btn btn-dark" disabled>Créer mon compte</button>
@@ -254,10 +256,20 @@
   }
 
   function refreshStrength(){
+    var hasValue = inputs.password.value.length > 0
     var s = pwScore(inputs.password.value)
-    pwStrength.className = 'pw-strength' + (s>0 ? ' s'+s : '')
-    var labels = ['', 'Faible', 'Moyen', 'Fort']
-    pwLabel.textContent = inputs.password.value ? labels[s] : ''
+    var classes = 'pw-strength'
+    if(hasValue){ classes += ' is-on' }
+    if(s>0){ classes += ' s'+s }
+    pwStrength.className = classes
+    var labels = ['Faible', 'Faible', 'Moyen', 'Fort']
+    if(hasValue){
+      pwLabel.textContent = labels[s]
+      pwLabel.classList.add('is-on')
+    } else {
+      pwLabel.textContent = ''
+      pwLabel.classList.remove('is-on')
+    }
   }
 
   // ── Toggle œil ──

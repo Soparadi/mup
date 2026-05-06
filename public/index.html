@@ -297,7 +297,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
    MANIFESTO — Bloc court entre hero et fonctionnalités
    ────────────────────────────────────────────────────────────── */
 .manifesto {
-  padding: 80px 0 60px;
+  padding: 64px 0;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   background: var(--bg);
@@ -308,13 +308,15 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 }
 
 .manifesto-text {
-  font-size: clamp(20px, 2.4vw, 28px);
+  font-size: clamp(18px, 1.6vw, 24px);
   font-weight: 500;
-  line-height: 1.45;
-  letter-spacing: -0.018em;
+  line-height: 1.5;
+  letter-spacing: -0.014em;
   color: var(--text);
-  max-width: 30ch;
+  max-width: 720px;
   margin: 0 auto;
+  /* Évite les veuves type "ce" isolé en fin de ligne (Chrome/Safari récents) */
+  text-wrap: pretty;
 }
 
 .manifesto-text em {
@@ -325,8 +327,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 }
 
 @media (max-width: 768px) {
-  .manifesto { padding: 56px 0 44px; }
-  .manifesto-text { font-size: 19px; }
+  .manifesto { padding: 48px 0; }
 }
 
 /* ──────────────────────────────────────────────────────────────

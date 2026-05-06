@@ -1002,51 +1002,6 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   background: var(--surface);
 }
 
-.leads-map-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.62) 100%);
-  backdrop-filter: blur(1px);
-  -webkit-backdrop-filter: blur(1px);
-  pointer-events: none;
-  text-align: center;
-  padding: 24px;
-  transition: opacity .4s var(--ease-out);
-  z-index: 400;
-}
-
-.leads-map-overlay.hidden { opacity: 0; pointer-events: none; }
-
-.leads-map-overlay-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--card);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-soft);
-  margin-bottom: 8px;
-}
-
-.leads-map-overlay-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.leads-map-overlay-sub {
-  font-size: 13px;
-  color: var(--text-muted);
-  max-width: 24ch;
-}
-
 .leads-results {
   display: flex;
   flex-direction: column;
@@ -2827,13 +2782,6 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
         <div class="leads-canvas">
           <div class="leads-map-wrap">
             <div id="leads-map"></div>
-            <div class="leads-map-overlay" id="leads-overlay">
-              <div class="leads-map-overlay-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-              </div>
-              <div class="leads-map-overlay-title">Choisissez secteur et région</div>
-              <div class="leads-map-overlay-sub">5 entreprises s'afficheront immédiatement</div>
-            </div>
           </div>
 
           <div class="leads-results">
@@ -3529,7 +3477,6 @@ const regionEl = document.getElementById('lead-region');
 const launchBtn = document.getElementById('leads-launch-btn');
 const leadsList = document.getElementById('leads-list');
 const leadsCount = document.getElementById('leads-count');
-const leadsOverlay = document.getElementById('leads-overlay');
 
 // Autocomplete secteur — instance partagée avec leads.html (composant réutilisable)
 let sectorAC = null;
@@ -3567,7 +3514,6 @@ launchBtn.addEventListener('click', async () => {
   // Prépa UI : loader + reset markers
   leadsCount.textContent = 'Chargement…';
   leadsList.innerHTML = '<div class="leads-empty"><div class="leads-empty-title">Recherche en cours</div><div class="leads-empty-sub">Connexion à la base SIRENE</div></div>';
-  leadsOverlay.classList.add('hidden');
   leadMarkers.forEach(m => leadsMap.removeLayer(m));
   leadMarkers = [];
 

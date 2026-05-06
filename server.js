@@ -163,12 +163,21 @@ app.use('/api/auth', authRouter)
 // `totalCapped: true` pour que le front affiche "10 000+".
 
 // ── Filtre qualité fiches ──
-// Une fiche est "active" si elle déclare au moins un dirigeant identifié.
-// L'API gouv expose deux types : "personne physique" (nom + prenoms) et
-// "personne morale" (denomination + siren). Les deux comptent : une SAS
-// dirigée par une autre société est une entreprise réelle. Les coquilles
-// juridiques (holdings dormantes, anciennes entités, fiches sans dirigeant
-// déclaré) tombent par ce filtre.
+// Une fiche est "prospectable" si :
+//   1. au moins un dirigeant identifié (personne physique avec nom/prenoms,
+//      ou personne morale avec denomination)
+//   2. etat_administratif === 'A' (entreprise active — exclut les liquidations
+//      finalisées et les radiations)
+//   3. nature_juridique pas dans la liste exclue (54xx SCI patrimoniales,
+//      71/72/73 organismes publics, 74 droit étranger)
+//
+// Limite connue : l'API gouv recherche-entreprises N'EXPOSE PAS de champ
+// procedures_collectives / en_redressement / en_liquidation. Le filtre
+// etat_administratif === 'A' capture seulement les liquidations CLÔTURÉES,
+// pas les redressements en cours. Pour ces derniers il faudrait enrichir
+// via Pappers ou BODACC en Phase 2.5.
+const EXCLUDED_NATURE_JURIDIQUE_PREFIXES = ['54', '71', '72', '73', '74']
+
 function hasNamedDirigeant(item) {
   const dirs = item && item.dirigeants
   if (!Array.isArray(dirs) || dirs.length === 0) return false
@@ -180,6 +189,14 @@ function hasNamedDirigeant(item) {
     if (nom || prenoms || denom) return true
   }
   return false
+}
+
+function isProspectable(item) {
+  if (!item) return false
+  if (item.etat_administratif !== 'A') return false
+  const nat = typeof item.nature_juridique === 'string' ? item.nature_juridique : ''
+  if (nat && EXCLUDED_NATURE_JURIDIQUE_PREFIXES.some(p => nat.startsWith(p))) return false
+  return hasNamedDirigeant(item)
 }
 
 const REGION_DEPTS = {
@@ -278,13 +295,13 @@ app.get('/api/public/search-demo', async (req, res) => {
       more.forEach(d => { if (d && Array.isArray(d.results)) raw = raw.concat(d.results) })
     }
 
-    // Filtre qualité : on ne garde que les fiches avec au moins un dirigeant nommé.
-    // Le ratio observé sur l'échantillon fetchedfiltered/fetched sert à extrapoler
-    // le total estimé sur la totalité de la région (l'API gouv ne renvoie pas le
-    // dirigeant dans les compteurs, donc impossible d'avoir le compte exact sans
-    // tout pager — extrapolation = compromis acceptable).
+    // Filtre qualité : on ne garde que les fiches "prospectables" (dirigeant
+    // nommé + état actif + nature juridique pertinente). Le ratio observé sur
+    // l'échantillon filtered/fetched sert à extrapoler le total estimé sur la
+    // totalité de la région — l'API gouv ne donne pas le compte filtré exact
+    // sans tout pager, extrapolation = compromis acceptable.
     const fetchedCount = raw.length
-    const filteredRaw = raw.filter(hasNamedDirigeant)
+    const filteredRaw = raw.filter(isProspectable)
     const ratio = fetchedCount > 0 ? (filteredRaw.length / fetchedCount) : 1
     const totalEstimated = Math.round(totalRaw * ratio)
 
@@ -577,13 +594,14 @@ app.get('/api/search', async (req, res) => {
   try {
     const r = await fetch('https://recherche-entreprises.api.gouv.fr/search?' + params.toString())
     const data = await r.json()
-    // Filtre qualité : on retire les fiches sans dirigeant nommé (coquilles
-    // juridiques, holdings dormantes). total_results est ré-estimé via le ratio
-    // observé sur la page courante — extrapolation acceptable car l'API ne
-    // donne pas le compte exact filtré.
+    // Filtre qualité : on retire les fiches non-prospectables (sans dirigeant,
+    // cessées, ou nature juridique exclue — SCI/organismes publics/droit
+    // étranger). total_results est ré-estimé via le ratio observé sur la page
+    // courante — extrapolation acceptable car l'API ne donne pas le compte
+    // exact filtré.
     if (Array.isArray(data.results)) {
       const fetched = data.results.length
-      const kept = data.results.filter(hasNamedDirigeant)
+      const kept = data.results.filter(isProspectable)
       data.results = kept
       if (fetched > 0 && typeof data.total_results === 'number') {
         const ratio = kept.length / fetched

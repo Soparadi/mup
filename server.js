@@ -15,6 +15,7 @@ import { cleanRecordId } from './lib/db.js'
 import { router as authRouter } from './server/auth/routes.js'
 import { requireAuth } from './server/middleware/requireAuth.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
+import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
 import {
   sendOne as mailServiceSendOne,
   getMailStatus as mailServiceStatus,
@@ -609,8 +610,40 @@ app.get('/api/search', async (req, res) => {
       }
     }
     res.json(data)
+    // Fire-and-forget : tracking historique recherches. Lancé APRÈS res.json
+    // pour ne jamais bloquer la réponse au front. Échec silencieux côté
+    // search-tracker, .catch final pour neutraliser toute promesse rejetée.
+    if (req.userId) {
+      trackLeadSearch({
+        userId: req.userId,
+        nafCode: req.query.activite_principale || req.query.code_naf || req.query.q || '',
+        nafLabel: req.query.naf_label || null,
+        regionCode: req.query.code_region || req.query.region || null,
+        regionName: req.query.region_name || null,
+        departmentCode: req.query.code_departement || req.query.departement || null,
+        departmentName: req.query.department_name || null,
+        cityName: req.query.code_commune || req.query.ville || null,
+        resultsCount: typeof data.total_results === 'number' ? data.total_results : (Array.isArray(data.results) ? data.results.length : 0),
+        fichesCompletesFilter: req.query.fiches_completes === 'true' || req.query.fiches_completes === '1'
+      }).catch(() => {})
+    }
   } catch(e) {
     res.status(502).json({ error: 'Service temporairement indisponible' })
+  }
+})
+
+// ── Historique des recherches Leads pour l'utilisateur authentifié ──
+// Protégé automatiquement par la gate auth /api/* (req.userId déjà rempli).
+app.get('/api/user/search-history', async (req, res) => {
+  try {
+    const result = await getSearchHistory(req.userId, {
+      limit: req.query.limit,
+      offset: req.query.offset
+    })
+    res.json(result)
+  } catch (err) {
+    console.error('[search-history]', err.message)
+    res.status(500).json({ error: 'Impossible de lire l\'historique' })
   }
 })
 
@@ -2734,6 +2767,13 @@ app.get('/:page', (req, res) => {
     console.log('[boot] auth tables ready (user, session, verification_token, audit_log)')
   } catch (e) {
     console.error('[boot] auth migration failed:', e.message)
+  }
+  // Tracking historique recherches Leads — table lead_search + 3 index.
+  try {
+    await runLeadSearchMigration()
+    console.log('[boot] lead_search table ready (+ 3 indexes)')
+  } catch (e) {
+    console.error('[boot] lead_search migration failed:', e.message)
   }
 })()
 

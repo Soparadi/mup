@@ -146,12 +146,60 @@ app.get('/api/health', async (req, res) => {
 // ── Auth Phase 1 — routes publiques /api/auth/* ──
 app.use('/api/auth', authRouter)
 
+// ── Démo publique landing — proxy /api/search anonymisé, 5 résultats max ──
+// Mounté AVANT la gate auth pour rester ouvert au public sans cookie session.
+app.get('/api/public/search-demo', async (req, res) => {
+  const naf = String(req.query.naf || '').trim()
+  const region = String(req.query.region || '').trim()
+  if (!naf) return res.status(400).json({ error: 'naf requis' })
+  if (!region) return res.status(400).json({ error: 'region requise' })
+
+  // Conversion NAF sans point → format pointé attendu par recherche-entreprises
+  // (ex. "4778A" → "47.78A").
+  let nafDotted = naf
+  if (naf.length >= 4 && naf.indexOf('.') === -1) {
+    nafDotted = naf.substring(0, 2) + '.' + naf.substring(2)
+  }
+
+  const params = new URLSearchParams()
+  params.set('activite_principale', nafDotted)
+  params.set('code_region', region)
+  params.set('per_page', '5')
+  params.set('page', '1')
+
+  try {
+    const r = await fetch('https://recherche-entreprises.api.gouv.fr/search?' + params.toString())
+    if (!r.ok) return res.status(r.status).json({ error: 'Recherche indisponible' })
+    const data = await r.json()
+    // Strip côté serveur : on ne renvoie au public que ce qui est nécessaire
+    // à l'affichage anonymisé (NAF, ville, géo). Pas d'adresse précise, pas
+    // de SIREN/SIRET, pas de téléphone/email — données complètes derrière signup.
+    const results = (data.results || []).slice(0, 5).map(item => {
+      const etab = item.siege || {}
+      return {
+        nom_entreprise: item.nom_complet || item.nom_raison_sociale || '',
+        ville: etab.libelle_commune || '',
+        code_naf: nafDotted,
+        libelle_naf: item.activite_principale_libelle || etab.activite_principale_libelle || '',
+        lat: etab.latitude ? Number(etab.latitude) : null,
+        lng: etab.longitude ? Number(etab.longitude) : null
+      }
+    })
+    res.json({ count: results.length, results })
+  } catch (e) {
+    console.error('[public:search-demo]', e.message)
+    res.status(502).json({ error: 'Service temporairement indisponible' })
+  }
+})
+
 // ── Gate auth pour toutes les autres routes /api/* ──
-// Exceptions : /api/auth/* (déjà mounté ci-dessus), /api/health (déjà déclaré ci-dessus,
-// donc terminé avant ce middleware), webhook Resend (signature HMAC fait office d'auth).
+// Exceptions : /api/auth/* (déjà mounté ci-dessus), /api/health (déjà déclaré
+// ci-dessus, donc terminé avant ce middleware), webhook Resend (signature HMAC
+// fait office d'auth), /api/public/* (démo landing déjà mountée ci-dessus).
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/') || req.path === '/auth' || req.path === '/health') return next()
   if (req.path.startsWith('/v2/webhooks/')) return next()
+  if (req.path.startsWith('/public/')) return next()
   return requireAuth(req, res, next)
 })
 

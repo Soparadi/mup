@@ -162,6 +162,26 @@ app.use('/api/auth', authRouter)
 // recherche-entreprises plafonne `total_results` à 10 000 — au-delà on retourne
 // `totalCapped: true` pour que le front affiche "10 000+".
 
+// ── Filtre qualité fiches ──
+// Une fiche est "active" si elle déclare au moins un dirigeant identifié.
+// L'API gouv expose deux types : "personne physique" (nom + prenoms) et
+// "personne morale" (denomination + siren). Les deux comptent : une SAS
+// dirigée par une autre société est une entreprise réelle. Les coquilles
+// juridiques (holdings dormantes, anciennes entités, fiches sans dirigeant
+// déclaré) tombent par ce filtre.
+function hasNamedDirigeant(item) {
+  const dirs = item && item.dirigeants
+  if (!Array.isArray(dirs) || dirs.length === 0) return false
+  for (const d of dirs) {
+    if (!d || typeof d !== 'object') continue
+    const nom = typeof d.nom === 'string' ? d.nom.trim() : ''
+    const prenoms = typeof d.prenoms === 'string' ? d.prenoms.trim() : ''
+    const denom = typeof d.denomination === 'string' ? d.denomination.trim() : ''
+    if (nom || prenoms || denom) return true
+  }
+  return false
+}
+
 const REGION_DEPTS = {
   '11': ['75','77','78','91','92','93','94','95'],
   '24': ['18','28','36','37','41','45'],
@@ -258,12 +278,22 @@ app.get('/api/public/search-demo', async (req, res) => {
       more.forEach(d => { if (d && Array.isArray(d.results)) raw = raw.concat(d.results) })
     }
 
-    const mapped = raw.map(mapItem).filter(Boolean)
+    // Filtre qualité : on ne garde que les fiches avec au moins un dirigeant nommé.
+    // Le ratio observé sur l'échantillon fetchedfiltered/fetched sert à extrapoler
+    // le total estimé sur la totalité de la région (l'API gouv ne renvoie pas le
+    // dirigeant dans les compteurs, donc impossible d'avoir le compte exact sans
+    // tout pager — extrapolation = compromis acceptable).
+    const fetchedCount = raw.length
+    const filteredRaw = raw.filter(hasNamedDirigeant)
+    const ratio = fetchedCount > 0 ? (filteredRaw.length / fetchedCount) : 1
+    const totalEstimated = Math.round(totalRaw * ratio)
+
+    const mapped = filteredRaw.map(mapItem).filter(Boolean)
     const preview = mapped.slice(0, 5)
     const markers = mapped.slice(5, 5 + (MAX_MARKERS - preview.length))
                           .map(m => ({ lat: m.lat, lng: m.lng }))
 
-    res.json({ total: totalRaw, totalCapped, preview, markers })
+    res.json({ total: totalEstimated, totalCapped, preview, markers })
   } catch (e) {
     console.error('[public:search-demo]', e.message)
     res.status(502).json({ error: 'Service temporairement indisponible' })
@@ -547,6 +577,19 @@ app.get('/api/search', async (req, res) => {
   try {
     const r = await fetch('https://recherche-entreprises.api.gouv.fr/search?' + params.toString())
     const data = await r.json()
+    // Filtre qualité : on retire les fiches sans dirigeant nommé (coquilles
+    // juridiques, holdings dormantes). total_results est ré-estimé via le ratio
+    // observé sur la page courante — extrapolation acceptable car l'API ne
+    // donne pas le compte exact filtré.
+    if (Array.isArray(data.results)) {
+      const fetched = data.results.length
+      const kept = data.results.filter(hasNamedDirigeant)
+      data.results = kept
+      if (fetched > 0 && typeof data.total_results === 'number') {
+        const ratio = kept.length / fetched
+        data.total_results = Math.round(data.total_results * ratio)
+      }
+    }
     res.json(data)
   } catch(e) {
     res.status(502).json({ error: 'Service temporairement indisponible' })

@@ -152,6 +152,24 @@ Champs : `user_id` (option), `event`, `ip`, `user_agent`, `metadata`, `created_a
 | `SESSION_SECRET` | Réservé — non utilisé en Phase 1 (token DB-side only) |
 | `NODE_ENV` | `production` active le flag `Secure` sur le cookie |
 
+## Purge des données auth (développement)
+
+Pendant la mise au point du flow auth, pour repartir d'une base propre :
+
+```bash
+npm run purge:auth
+```
+
+Le script :
+- Affiche le nombre de users / sessions / verification_tokens / audit_logs en base
+- Demande confirmation explicite (tapez `SUPPRIMER`)
+- Vide les 4 tables auth (`session`, `verification_token`, `audit_log`, `user`)
+- Refuse de tourner si `NODE_ENV=production`
+
+Attention : la purge est irréversible. À utiliser uniquement en développement
+ou sur une base de test. Pour la prod, utiliser Surrealist Studio
+(<https://surrealist.app>) avec une session manuelle.
+
 ## Migration
 
 Au démarrage du serveur, `runAuthMigration()` joue idempotemment toutes les

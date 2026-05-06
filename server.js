@@ -148,21 +148,44 @@ app.use('/api/auth', authRouter)
 
 // ── Démo publique landing — proxy /api/search anonymisé ──
 // Mounté AVANT la gate auth. Retourne :
-//   { total, preview[5], markers[<=500] }
-// - total   : nombre total réel d'entreprises trouvées dans la région (header)
-// - preview : 5 premières fiches anonymisées (cartes du panneau Aperçu)
-// - markers : coordonnées brutes (lat/lng) des entreprises restantes géocodées,
-//             tronqué à 500 max — uniquement géographique, aucun champ sensible.
+//   { total, totalCapped, preview[5], markers[<=500] }
 //
-// recherche-entreprises.api.gouv.fr est paginé à 25 max par page : on fetch
-// page 1 d'abord pour récupérer total_results, puis pages 2..MAX_PAGES en
-// parallèle pour densifier la carte (jusqu'à 5 pages = 125 entrées brutes
-// avant filtre géocodage).
+// Filtrage région : recherche-entreprises.api.gouv.fr ignore `code_region`
+// (renvoie le siège social, souvent IDF pour les chaînes nationales).
+// On utilise `departement=CSV` : pour Bretagne (code 53) → "22,29,35,56".
+//
+// Sélection lat/lng : pour chaque résultat on pioche dans matching_etablissements
+// le premier établissement physiquement dans la région (CP commençant par
+// l'un des départements). Le `siege` n'est utilisé qu'en dernier recours
+// (et seulement si son CP appartient bien à la région).
+//
+// recherche-entreprises plafonne `total_results` à 10 000 — au-delà on retourne
+// `totalCapped: true` pour que le front affiche "10 000+".
+
+const REGION_DEPTS = {
+  '11': ['75','77','78','91','92','93','94','95'],
+  '24': ['18','28','36','37','41','45'],
+  '27': ['21','25','39','58','70','71','89','90'],
+  '28': ['14','27','50','61','76'],
+  '32': ['02','59','60','62','80'],
+  '44': ['08','10','51','52','54','55','57','67','68','88'],
+  '52': ['44','49','53','72','85'],
+  '53': ['22','29','35','56'],
+  '75': ['16','17','19','23','24','33','40','47','64','79','86','87'],
+  '76': ['09','11','12','30','31','32','34','46','48','65','66','81','82'],
+  '84': ['01','03','07','15','26','38','42','43','63','69','73','74'],
+  '93': ['04','05','06','13','83','84'],
+  '94': ['2A','2B','20']
+}
+
 app.get('/api/public/search-demo', async (req, res) => {
   const naf = String(req.query.naf || '').trim()
   const region = String(req.query.region || '').trim()
   if (!naf) return res.status(400).json({ error: 'naf requis' })
   if (!region) return res.status(400).json({ error: 'region requise' })
+
+  const depts = REGION_DEPTS[region]
+  if (!depts) return res.status(400).json({ error: 'region inconnue' })
 
   let nafDotted = naf
   if (naf.length >= 4 && naf.indexOf('.') === -1) {
@@ -170,40 +193,62 @@ app.get('/api/public/search-demo', async (req, res) => {
   }
 
   const PAGE_SIZE = 25
-  const MAX_PAGES = 5      // 5 × 25 = 125 entrées max depuis l'API par recherche
-  const MAX_MARKERS = 500  // garde-fou côté navigateur Leaflet
+  const MAX_PAGES = 5
+  const MAX_MARKERS = 500
+  const deptCsv = depts.join(',')
 
   function buildUrl(page) {
     const p = new URLSearchParams()
     p.set('activite_principale', nafDotted)
-    p.set('code_region', region)
+    p.set('departement', deptCsv)
     p.set('per_page', String(PAGE_SIZE))
     p.set('page', String(page))
     return 'https://recherche-entreprises.api.gouv.fr/search?' + p.toString()
   }
 
+  // Pour chaque résultat, choisir un établissement physique en région.
+  // Priorité : matching_etablissements (le plus pertinent), fallback siège
+  // si son CP est aussi dans la région.
+  function pickLocalEtab(item) {
+    const matching = Array.isArray(item.matching_etablissements) ? item.matching_etablissements : []
+    for (let i = 0; i < matching.length; i++) {
+      const cp = String(matching[i].code_postal || '')
+      const dept = cp.length >= 2 ? cp.slice(0, 2) : ''
+      if (depts.indexOf(dept) !== -1) return matching[i]
+    }
+    const siege = item.siege || {}
+    const cp = String(siege.code_postal || '')
+    const dept = cp.length >= 2 ? cp.slice(0, 2) : ''
+    if (depts.indexOf(dept) !== -1) return siege
+    return null
+  }
+
   function mapItem(item) {
-    const etab = item.siege || {}
+    const etab = pickLocalEtab(item)
+    if (!etab) return null
+    const lat = etab.latitude != null ? Number(etab.latitude) : null
+    const lng = etab.longitude != null ? Number(etab.longitude) : null
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+    if (lat === 0 && lng === 0) return null   // garde-fou (0,0) → dézoome
     return {
       nom_entreprise: item.nom_complet || item.nom_raison_sociale || '',
       ville: etab.libelle_commune || '',
       code_naf: nafDotted,
       libelle_naf: item.activite_principale_libelle || etab.activite_principale_libelle || '',
-      lat: etab.latitude ? Number(etab.latitude) : null,
-      lng: etab.longitude ? Number(etab.longitude) : null
+      lat,
+      lng
     }
   }
 
   try {
-    // Page 1 séquentielle (fournit total_results)
     const r1 = await fetch(buildUrl(1))
     if (!r1.ok) return res.status(r1.status).json({ error: 'Recherche indisponible' })
     const data1 = await r1.json()
-    const total = Number(data1.total_results || 0)
+    const totalRaw = Number(data1.total_results || 0)
+    const totalCapped = totalRaw >= 10000
     let raw = Array.isArray(data1.results) ? data1.results.slice() : []
 
-    // Pages additionnelles en parallèle si on n'a pas déjà tout
-    const pagesAvailable = Math.min(Math.ceil(total / PAGE_SIZE) || 1, MAX_PAGES)
+    const pagesAvailable = Math.min(Math.ceil(totalRaw / PAGE_SIZE) || 1, MAX_PAGES)
     if (pagesAvailable > 1) {
       const promises = []
       for (let p = 2; p <= pagesAvailable; p++) {
@@ -213,13 +258,12 @@ app.get('/api/public/search-demo', async (req, res) => {
       more.forEach(d => { if (d && Array.isArray(d.results)) raw = raw.concat(d.results) })
     }
 
-    const geocoded = raw.map(mapItem).filter(m => Number.isFinite(m.lat) && Number.isFinite(m.lng))
-    const preview = geocoded.slice(0, 5)
-    // Markers = entrées restantes (anonymisées au strict minimum géo), capés.
-    const markers = geocoded.slice(5, 5 + (MAX_MARKERS - preview.length))
-                            .map(m => ({ lat: m.lat, lng: m.lng }))
+    const mapped = raw.map(mapItem).filter(Boolean)
+    const preview = mapped.slice(0, 5)
+    const markers = mapped.slice(5, 5 + (MAX_MARKERS - preview.length))
+                          .map(m => ({ lat: m.lat, lng: m.lng }))
 
-    res.json({ total, preview, markers })
+    res.json({ total: totalRaw, totalCapped, preview, markers })
   } catch (e) {
     console.error('[public:search-demo]', e.message)
     res.status(502).json({ error: 'Service temporairement indisponible' })

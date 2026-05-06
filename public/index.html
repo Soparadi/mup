@@ -3438,21 +3438,24 @@ launchBtn.addEventListener('click', async () => {
 
   // ── 4. Header compteur dual (visibles · disponibles)
   const visible = preview.length;
+  const totalLabel = data.totalCapped ? '10 000+' : String(total);
   if (total > visible) {
     leadsCount.innerHTML = ''
       + '<span class="lc-visible">' + visible + ' visible' + (visible > 1 ? 's' : '') + '</span>'
       + '<span class="lc-sep">·</span>'
-      + '<span class="lc-total">' + total + ' disponible' + (total > 1 ? 's' : '') + '</span>';
+      + '<span class="lc-total">' + totalLabel + ' disponible' + (total > 1 ? 's' : '') + '</span>';
   } else {
     leadsCount.textContent = visible + ' résultat' + (visible > 1 ? 's' : '');
   }
 
   // ── 5. Légende sous la carte
   if (legendEl) {
-    const lockedCount = Math.max(total - visible, lockedMarkers.length);
+    const lockedRaw = total - visible;
+    const lockedCount = Math.max(lockedRaw, lockedMarkers.length);
     if (lockedCount > 0) {
+      const lockedLabel = data.totalCapped ? '10 000+' : String(lockedCount);
       lgVisible.textContent = visible + ' visible' + (visible > 1 ? 's' : '');
-      lgLocked.textContent = lockedCount + ' verrouillé' + (lockedCount > 1 ? 's' : '');
+      lgLocked.textContent = lockedLabel + ' verrouillé' + (lockedCount > 1 ? 's' : '');
       legendEl.hidden = false;
     } else {
       legendEl.hidden = true;

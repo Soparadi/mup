@@ -92,9 +92,16 @@
   --radius-lg: 18px;
   --radius-xl: 28px;
 
+  /* Padding vertical commun aux sections (Pipeline, Tarifs, FAQ, CTA final) */
+  --section-pad-y: 80px;
+
   /* Easing */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@media (max-width: 880px) {
+  :root { --section-pad-y: 56px; }
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -655,7 +662,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
    SECTION COMMON
    ────────────────────────────────────────────────────────────── */
 .section {
-  padding: 110px 0;
+  padding: var(--section-pad-y) 0;
   position: relative;
 }
 
@@ -735,7 +742,6 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .section-grid.reverse > * { direction: ltr; }
 
 @media (max-width: 880px) {
-  .section { padding: 72px 0; }
   .section-grid { grid-template-columns: 1fr; gap: 48px; }
   .section-grid.reverse { direction: ltr; }
 }
@@ -1166,7 +1172,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 /* ──────────────────────────────────────────────────────────────
    PRICING + QUIZZ
    ────────────────────────────────────────────────────────────── */
-.pricing-section { padding: 110px 0; }
+.pricing-section { padding: var(--section-pad-y) 0; }
 
 .pricing-header {
   text-align: center;
@@ -1439,7 +1445,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
    FAQ
    ────────────────────────────────────────────────────────────── */
 .faq-section {
-  padding: 110px 0;
+  padding: var(--section-pad-y) 0;
   background: var(--surface);
 }
 
@@ -1502,7 +1508,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
    FINAL CTA
    ────────────────────────────────────────────────────────────── */
 .final-cta {
-  padding: 120px 0;
+  padding: var(--section-pad-y) 0;
   text-align: center;
 }
 

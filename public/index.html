@@ -398,13 +398,21 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 }
 
 .hero-title {
-  font-size: clamp(44px, 7.5vw, 88px);
+  /* Cap font-size un peu plus bas pour que "Chercher. Trouver. Signer." tienne
+     sur une ligne en desktop ; mobile autorise le wrap naturel. */
+  font-size: clamp(40px, 6vw, 76px);
   font-weight: 800;
-  line-height: 0.98;
+  line-height: 1.02;
   letter-spacing: -0.045em;
   color: var(--text);
-  max-width: 12ch;
+  max-width: 18ch;
   margin: 0 auto 28px;
+}
+@media (min-width: 768px) {
+  .hero-title { max-width: none; white-space: nowrap; }
+}
+@media (max-width: 767px) {
+  .hero-title { max-width: 18ch; }
 }
 
 .hero-title em {
@@ -1807,12 +1815,11 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
       </div>
 
       <h1 class="hero-title reveal reveal-d1">
-        Trouvez vos clients.<br/>
-        Signez <em>plus vite.</em>
+        Chercher. Trouver. <em>Signer.</em>
       </h1>
 
       <p class="hero-subtitle reveal reveal-d2">
-        Trouvez vos clients dans la base SIRENE INSEE, suivez-les dans votre pipeline, signez plus &mdash; <strong>tout dans une seule interface</strong>, hébergée en France.
+        Recherche de clients, suivi, agenda, mail, visio, devis, factures. <strong>MovUP regroupe votre cycle commercial dans une seule interface.</strong>
       </p>
 
       <div class="hero-cta reveal reveal-d3">

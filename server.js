@@ -146,46 +146,80 @@ app.get('/api/health', async (req, res) => {
 // ── Auth Phase 1 — routes publiques /api/auth/* ──
 app.use('/api/auth', authRouter)
 
-// ── Démo publique landing — proxy /api/search anonymisé, 5 résultats max ──
-// Mounté AVANT la gate auth pour rester ouvert au public sans cookie session.
+// ── Démo publique landing — proxy /api/search anonymisé ──
+// Mounté AVANT la gate auth. Retourne :
+//   { total, preview[5], markers[<=500] }
+// - total   : nombre total réel d'entreprises trouvées dans la région (header)
+// - preview : 5 premières fiches anonymisées (cartes du panneau Aperçu)
+// - markers : coordonnées brutes (lat/lng) des entreprises restantes géocodées,
+//             tronqué à 500 max — uniquement géographique, aucun champ sensible.
+//
+// recherche-entreprises.api.gouv.fr est paginé à 25 max par page : on fetch
+// page 1 d'abord pour récupérer total_results, puis pages 2..MAX_PAGES en
+// parallèle pour densifier la carte (jusqu'à 5 pages = 125 entrées brutes
+// avant filtre géocodage).
 app.get('/api/public/search-demo', async (req, res) => {
   const naf = String(req.query.naf || '').trim()
   const region = String(req.query.region || '').trim()
   if (!naf) return res.status(400).json({ error: 'naf requis' })
   if (!region) return res.status(400).json({ error: 'region requise' })
 
-  // Conversion NAF sans point → format pointé attendu par recherche-entreprises
-  // (ex. "4778A" → "47.78A").
   let nafDotted = naf
   if (naf.length >= 4 && naf.indexOf('.') === -1) {
     nafDotted = naf.substring(0, 2) + '.' + naf.substring(2)
   }
 
-  const params = new URLSearchParams()
-  params.set('activite_principale', nafDotted)
-  params.set('code_region', region)
-  params.set('per_page', '5')
-  params.set('page', '1')
+  const PAGE_SIZE = 25
+  const MAX_PAGES = 5      // 5 × 25 = 125 entrées max depuis l'API par recherche
+  const MAX_MARKERS = 500  // garde-fou côté navigateur Leaflet
+
+  function buildUrl(page) {
+    const p = new URLSearchParams()
+    p.set('activite_principale', nafDotted)
+    p.set('code_region', region)
+    p.set('per_page', String(PAGE_SIZE))
+    p.set('page', String(page))
+    return 'https://recherche-entreprises.api.gouv.fr/search?' + p.toString()
+  }
+
+  function mapItem(item) {
+    const etab = item.siege || {}
+    return {
+      nom_entreprise: item.nom_complet || item.nom_raison_sociale || '',
+      ville: etab.libelle_commune || '',
+      code_naf: nafDotted,
+      libelle_naf: item.activite_principale_libelle || etab.activite_principale_libelle || '',
+      lat: etab.latitude ? Number(etab.latitude) : null,
+      lng: etab.longitude ? Number(etab.longitude) : null
+    }
+  }
 
   try {
-    const r = await fetch('https://recherche-entreprises.api.gouv.fr/search?' + params.toString())
-    if (!r.ok) return res.status(r.status).json({ error: 'Recherche indisponible' })
-    const data = await r.json()
-    // Strip côté serveur : on ne renvoie au public que ce qui est nécessaire
-    // à l'affichage anonymisé (NAF, ville, géo). Pas d'adresse précise, pas
-    // de SIREN/SIRET, pas de téléphone/email — données complètes derrière signup.
-    const results = (data.results || []).slice(0, 5).map(item => {
-      const etab = item.siege || {}
-      return {
-        nom_entreprise: item.nom_complet || item.nom_raison_sociale || '',
-        ville: etab.libelle_commune || '',
-        code_naf: nafDotted,
-        libelle_naf: item.activite_principale_libelle || etab.activite_principale_libelle || '',
-        lat: etab.latitude ? Number(etab.latitude) : null,
-        lng: etab.longitude ? Number(etab.longitude) : null
+    // Page 1 séquentielle (fournit total_results)
+    const r1 = await fetch(buildUrl(1))
+    if (!r1.ok) return res.status(r1.status).json({ error: 'Recherche indisponible' })
+    const data1 = await r1.json()
+    const total = Number(data1.total_results || 0)
+    let raw = Array.isArray(data1.results) ? data1.results.slice() : []
+
+    // Pages additionnelles en parallèle si on n'a pas déjà tout
+    const pagesAvailable = Math.min(Math.ceil(total / PAGE_SIZE) || 1, MAX_PAGES)
+    if (pagesAvailable > 1) {
+      const promises = []
+      for (let p = 2; p <= pagesAvailable; p++) {
+        promises.push(fetch(buildUrl(p)).then(r => r.ok ? r.json() : null).catch(() => null))
       }
-    })
-    res.json({ count: results.length, results })
+      const more = await Promise.all(promises)
+      more.forEach(d => { if (d && Array.isArray(d.results)) raw = raw.concat(d.results) })
+    }
+
+    const geocoded = raw.map(mapItem).filter(m => Number.isFinite(m.lat) && Number.isFinite(m.lng))
+    const preview = geocoded.slice(0, 5)
+    // Markers = entrées restantes (anonymisées au strict minimum géo), capés.
+    const markers = geocoded.slice(5, 5 + (MAX_MARKERS - preview.length))
+                            .map(m => ({ lat: m.lat, lng: m.lng }))
+
+    res.json({ total, preview, markers })
   } catch (e) {
     console.error('[public:search-demo]', e.message)
     res.status(502).json({ error: 'Service temporairement indisponible' })

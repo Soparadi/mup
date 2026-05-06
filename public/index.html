@@ -79,6 +79,17 @@
   --c-prospect: #CC0000;       /* rouge Prospect / SIRENE */
   --c-prospect-soft: #FCE5E5;
 
+  /* Stage colors — alignées sur STAGES de pipeline.html (source de vérité produit) */
+  --stage-prospects: #CC0000;
+  --stage-linkedin:  #0A66C2;
+  --stage-mailing:   #B84C00;
+  --stage-phoning:   #4338CA;
+  --stage-visio:     #7C3AED;
+  --stage-rdv:       #0BBCD4;
+  --stage-nego:      #EA580C;
+  --stage-devis:     #F59E0B;
+  --stage-gagne:     #1D8348;
+
   /* Typography */
   --font-sans: 'Geist', -apple-system, 'Helvetica Neue', sans-serif;
   --font-serif: 'Instrument Serif', Georgia, serif;
@@ -612,13 +623,26 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
+  border-top: 3px solid var(--stage-prospects);
+  padding-top: 8px;
+  margin-top: -3px;
+}
+.mock-col[data-stage="phoning"] .mock-col-head { border-top-color: var(--stage-phoning); }
+.mock-col[data-stage="rdv"] .mock-col-head { border-top-color: var(--stage-rdv); }
+
+.mock-col-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(0,0,0,0.04);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0;
 }
 
-.mock-col-bar {
-  width: 18px;
-  height: 3px;
-  border-radius: 2px;
-}
+.mock-col-bar { display: none; } /* remplacé par border-top sur le head */
 
 .mock-card {
   background: var(--card);
@@ -626,7 +650,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   border-radius: var(--radius-sm);
   padding: 10px 11px;
   font-size: 12px;
-  border-left: 3px solid var(--c-prospect);
+  border-left: 4px solid var(--stage-prospects);
 }
 
 .mock-card-name {
@@ -634,6 +658,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   color: var(--text);
   letter-spacing: -0.1px;
   margin-bottom: 2px;
+  font-size: 12.5px;
 }
 
 .mock-card-co {
@@ -642,12 +667,119 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   margin-bottom: 6px;
 }
 
+.mock-card-tag {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(0,0,0,0.04);
+  color: rgba(0,0,0,0.55);
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 4px;
+}
+
+/* Pastilles de progression — 9 étapes funnel */
+.mock-progress {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin: 8px 0 10px;
+  height: 12px;
+}
+.mock-progress span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.08);
+  flex-shrink: 0;
+}
+.mock-progress span[data-on="prospects"] { background: var(--stage-prospects); }
+.mock-progress span[data-on="linkedin"]  { background: var(--stage-linkedin); }
+.mock-progress span[data-on="mailing"]   { background: var(--stage-mailing); }
+.mock-progress span[data-on="phoning"]   { background: var(--stage-phoning); }
+.mock-progress span[data-on="visio"]     { background: var(--stage-visio); }
+.mock-progress span[data-on="rdv"]       { background: var(--stage-rdv); }
+.mock-progress span[data-on="nego"]      { background: var(--stage-nego); }
+.mock-progress span[data-on="devis"]     { background: var(--stage-devis); }
+.mock-progress span[data-on="gagne"]     { background: var(--stage-gagne); }
+/* Étape courante : anneau externe coloré pour signaler "EN cette étape" */
+.mock-progress span[data-current] {
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.05), 0 0 0 4px currentColor;
+  position: relative;
+}
+.mock-progress span[data-current="prospects"] { color: rgba(204,0,0,0.35); }
+.mock-progress span[data-current="phoning"]   { color: rgba(67,56,202,0.35); }
+.mock-progress span[data-current="rdv"]       { color: rgba(11,188,212,0.4); }
+
 .mock-card-foot {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
-  color: var(--text-soft);
+  align-items: center;
+  font-size: 10.5px;
+}
+.mock-card-amount {
+  font-weight: 600;
+  color: #1A1A1A;
   font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.mock-card-amount.empty {
+  color: var(--text-soft);
+  font-weight: 400;
+}
+.mock-card-day {
+  background: rgba(0,0,0,0.04);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+/* KPI bar en haut de la maquette pipeline */
+.mock-kpi-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.mock-kpi-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  color: var(--text-muted);
+}
+.mock-kpi-count { display: inline-flex; align-items: baseline; gap: 5px; }
+.mock-kpi-count b { font-family: var(--font-mono); font-weight: 800; font-size: 13px; }
+.mock-kpi-count[data-stage="prospects"] b { color: var(--stage-prospects); }
+.mock-kpi-count[data-stage="phoning"]   b { color: var(--stage-phoning); }
+.mock-kpi-count[data-stage="rdv"]       b { color: var(--stage-rdv); }
+.mock-kpi-count[data-stage="devis"]     b { color: var(--stage-devis); }
+.mock-kpi-total {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  color: var(--stage-gagne);
+  background: rgba(29,131,72,0.08);
+  border: 1px solid rgba(29,131,72,0.16);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+@media (max-width: 540px) {
+  .mock-kpi-bar { flex-direction: column; align-items: flex-start; gap: 8px; }
 }
 
 @media (max-width: 880px) {
@@ -754,12 +886,20 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   border-radius: var(--radius-lg);
   padding: 18px;
   display: flex;
-  gap: 10px;
-  overflow-x: auto;
+  flex-direction: column;
+  gap: 12px;
   border: 1px solid var(--border);
 }
 
-.pipeline-mock .mock-col { width: 145px; }
+.pipeline-mock-cols {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+}
+.pipeline-mock-cols::-webkit-scrollbar { height: 4px; }
+.pipeline-mock-cols::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+
+.pipeline-mock .mock-col { width: 158px; }
 
 /* ──────────────────────────────────────────────────────────────
    SECTION CARTE — maquette France stylisée + tournée
@@ -2859,39 +2999,112 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 
       <div class="reveal reveal-d2">
         <div class="pipeline-mock">
-          <div class="mock-col">
-            <div class="mock-col-head"><span class="mock-col-bar" style="background:var(--c-prospect)"></span>Prospects</div>
-            <div class="mock-card" style="border-left-color:var(--c-prospect)">
-              <div class="mock-card-name">Bernard Élec</div>
-              <div class="mock-card-co">Lyon</div>
-              <div class="mock-card-foot"><span>—</span><span>J+0</span></div>
+
+          <!-- KPI bar : compteurs colorés + total CA en cours -->
+          <div class="mock-kpi-bar">
+            <div class="mock-kpi-counts">
+              <span class="mock-kpi-count" data-stage="prospects"><b>5</b> prospects</span>
+              <span class="mock-kpi-count" data-stage="phoning"><b>2</b> phoning</span>
+              <span class="mock-kpi-count" data-stage="rdv"><b>4</b> rdv</span>
+              <span class="mock-kpi-count" data-stage="devis"><b>2</b> devis</span>
             </div>
-            <div class="mock-card" style="border-left-color:var(--c-prospect)">
-              <div class="mock-card-name">Atelier Bois</div>
-              <div class="mock-card-co">Brest</div>
-              <div class="mock-card-foot"><span>—</span><span>J+2</span></div>
-            </div>
+            <div class="mock-kpi-total">7 800 € en cours</div>
           </div>
-          <div class="mock-col">
-            <div class="mock-col-head"><span class="mock-col-bar" style="background:var(--c-pipeline)"></span>Phoning</div>
-            <div class="mock-card" style="border-left-color:var(--c-pipeline)">
-              <div class="mock-card-name">Cabinet J&amp;K</div>
-              <div class="mock-card-co">Lille</div>
-              <div class="mock-card-foot"><span>4,1k€</span><span>J+3</span></div>
+
+          <div class="pipeline-mock-cols">
+
+            <div class="mock-col" data-stage="prospects">
+              <div class="mock-col-head">Prospects<span class="mock-col-count">2</span></div>
+              <div class="mock-card" style="border-left-color:var(--stage-prospects)">
+                <div class="mock-card-name">Bernard Élec</div>
+                <span class="mock-card-tag">Travaux électriques</span>
+                <div class="mock-card-co">Lyon</div>
+                <div class="mock-progress" aria-label="Étape Prospects">
+                  <span data-on="prospects" data-current="prospects"></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span>
+                </div>
+                <div class="mock-card-foot">
+                  <span class="mock-card-amount empty">—</span>
+                  <span class="mock-card-day">J+0</span>
+                </div>
+              </div>
+              <div class="mock-card" style="border-left-color:var(--stage-prospects)">
+                <div class="mock-card-name">Atelier Bois</div>
+                <span class="mock-card-tag">Travaux menuiserie</span>
+                <div class="mock-card-co">Brest</div>
+                <div class="mock-progress" aria-label="Étape Prospects">
+                  <span data-on="prospects" data-current="prospects"></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span>
+                </div>
+                <div class="mock-card-foot">
+                  <span class="mock-card-amount empty">—</span>
+                  <span class="mock-card-day">J+2</span>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="mock-col">
-            <div class="mock-col-head"><span class="mock-col-bar" style="background:var(--c-rdv)"></span>RDV</div>
-            <div class="mock-card" style="border-left-color:var(--c-rdv)">
-              <div class="mock-card-name">Martin IT</div>
-              <div class="mock-card-co">Paris</div>
-              <div class="mock-card-foot"><span>8k€</span><span>J+5</span></div>
+
+            <div class="mock-col" data-stage="phoning">
+              <div class="mock-col-head">Phoning<span class="mock-col-count">1</span></div>
+              <div class="mock-card" style="border-left-color:var(--stage-phoning)">
+                <div class="mock-card-name">Cabinet J&amp;K</div>
+                <span class="mock-card-tag">Conseil en gestion</span>
+                <div class="mock-card-co">Lille</div>
+                <div class="mock-progress" aria-label="Étape Phoning">
+                  <span data-on="prospects"></span>
+                  <span data-on="linkedin"></span>
+                  <span data-on="mailing"></span>
+                  <span data-on="phoning" data-current="phoning"></span>
+                  <span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <div class="mock-card-foot">
+                  <span class="mock-card-amount">4,1 k€</span>
+                  <span class="mock-card-day">J+3</span>
+                </div>
+              </div>
             </div>
-            <div class="mock-card" style="border-left-color:var(--c-rdv)">
-              <div class="mock-card-name">Santé+</div>
-              <div class="mock-card-co">Bordeaux</div>
-              <div class="mock-card-foot"><span>4,5k€</span><span>J+7</span></div>
+
+            <div class="mock-col" data-stage="rdv">
+              <div class="mock-col-head">RDV<span class="mock-col-count">2</span></div>
+              <div class="mock-card" style="border-left-color:var(--stage-rdv)">
+                <div class="mock-card-name">Martin IT</div>
+                <span class="mock-card-tag">Conseil informatique</span>
+                <div class="mock-card-co">Paris</div>
+                <div class="mock-progress" aria-label="Étape RDV">
+                  <span data-on="prospects"></span>
+                  <span data-on="linkedin"></span>
+                  <span data-on="mailing"></span>
+                  <span data-on="phoning"></span>
+                  <span data-on="visio"></span>
+                  <span data-on="rdv" data-current="rdv"></span>
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="mock-card-foot">
+                  <span class="mock-card-amount">8 k€</span>
+                  <span class="mock-card-day">J+5</span>
+                </div>
+              </div>
+              <div class="mock-card" style="border-left-color:var(--stage-rdv)">
+                <div class="mock-card-name">Santé+</div>
+                <span class="mock-card-tag">Activités de santé</span>
+                <div class="mock-card-co">Bordeaux</div>
+                <div class="mock-progress" aria-label="Étape RDV">
+                  <span data-on="prospects"></span>
+                  <span data-on="linkedin"></span>
+                  <span data-on="mailing"></span>
+                  <span data-on="phoning"></span>
+                  <span data-on="visio"></span>
+                  <span data-on="rdv" data-current="rdv"></span>
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="mock-card-foot">
+                  <span class="mock-card-amount">4,5 k€</span>
+                  <span class="mock-card-day">J+7</span>
+                </div>
+              </div>
             </div>
+
           </div>
         </div>
       </div>

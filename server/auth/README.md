@@ -40,8 +40,8 @@ bloquante et inscription par SIRET (pré-remplissage INSEE + géocodage BAN).
 | `server/auth/routes.js` | Routes Express `/api/auth/*` |
 | `server/auth/surreal-adapter.js` | CRUD user/session/verification_token + audit + migration |
 | `server/middleware/requireAuth.js` | Middleware Express bloquant 401 |
-| `server/services/insee.js` | `lookupSiret(siret)` |
-| `server/services/ban.js` | `geocode({ adresse, code_postal, ville })` |
+| `server/services/insee.js` | `lookupSiret(siret)` — utilisé à l'onboarding entreprise (pas au signup) |
+| `server/services/ban.js` | `geocode({ adresse, code_postal, ville })` — idem |
 | `server/services/email.js` | `sendWelcomeVerify`, `sendPasswordReset`, `sendRelanceJ12` |
 | `server/templates/*.html` | Templates email transactionnels |
 | `migrations/001_auth_tables.surql` | Schéma SurrealDB (idempotent, joué au boot) |
@@ -52,8 +52,7 @@ Toutes publiques (pas de `requireAuth`). `/me` et `/logout` exigent un cookie se
 
 | Méthode | Chemin | Body / Query | Réponse |
 |---|---|---|---|
-| POST | `/api/auth/lookup-siret` | `{ siret }` | `{ raison_sociale, adresse, code_postal, ville, code_naf, lat, lng }` |
-| POST | `/api/auth/signup` | `{ email, password, siret }` | `201 { ok, user }` |
+| POST | `/api/auth/signup` | `{ prenom, nom, email, telephone, password }` | `201 { ok, user }` |
 | POST | `/api/auth/login` | `{ email, password }` | `200 { ok, user }` + cookie session |
 | GET | `/api/auth/verify` | `?token=…` | redirect `/login?verified=1` ou `/verify?status=error` |
 | POST | `/api/auth/forgot-password` | `{ email }` | `200 { ok, message }` (réponse identique si compte inexistant) |
@@ -61,18 +60,36 @@ Toutes publiques (pas de `requireAuth`). `/me` et `/logout` exigent un cookie se
 | POST | `/api/auth/logout` | (cookie) | `200 { ok }` + cookie effacé |
 | GET | `/api/auth/me` | (cookie) | `{ user }` ou `401` |
 
+Erreurs de validation : `400 { error, field }` où `field ∈ { prenom, nom, email, telephone, password }`.
+Conflit email pris : `409 { error, field: 'email' }`.
+
 ## Flux
 
-### Inscription
+### Inscription (Phase 1)
 
-1. Client `POST /api/auth/lookup-siret { siret }` (optionnel — preview UX)
-2. Client `POST /api/auth/signup { email, password, siret }`
-3. Serveur : check email/SIRET non utilisés → INSEE lookup → BAN geocode → argon2 hash
-   → `CREATE user` → `CREATE verification_token (email_verify, 24h)` → Resend `sendWelcomeVerify`
-4. Audit `signup`
-5. User reçoit email, clique → `GET /api/auth/verify?token=…` → `email_verified=true`
+1. Client `POST /api/auth/signup { prenom, nom, email, telephone, password }`
+2. Serveur : valide chaque champ → check email non utilisé → argon2 hash → `CREATE user`
+   (champs : `email, prenom, nom, name, telephone, password_hash, email_verified=false, plan='gratuit'`)
+   → `CREATE verification_token (email_verify, 24h)` → Resend `sendWelcomeVerify`
+3. Audit `signup` avec metadata `{ prenom, nom, telephone }`
+4. User reçoit email, clique → `GET /api/auth/verify?token=…` → `email_verified=true`
    → redirect `/login?verified=1`
-6. Audit `email_verified`
+5. Audit `email_verified`
+
+### Onboarding entreprise (Phase 1.5 — à venir)
+
+Le SIRET n'est plus demandé au signup. Après vérification email, l'utilisateur
+est dirigé vers `/onboarding/entreprise` (à implémenter) qui :
+
+1. Demande le SIRET via un formulaire dédié
+2. Appelle `lookupSiret(siret)` (services/insee.js) pour pré-remplir raison
+   sociale, adresse, code NAF
+3. Géocode l'adresse via `geocode(...)` (services/ban.js) → `lat, lng`
+4. `UPDATE user` avec `{ siret, raison_sociale, adresse, code_postal, ville, code_naf, lat, lng }`
+5. Audit `onboarding_company_completed`
+
+Tous ces champs sont déclarés `option<...>` dans le schéma SurrealDB et donc
+nullables tant que cette étape n'est pas franchie.
 
 ### Connexion
 

@@ -3,25 +3,25 @@
 // qui acceptent un cookie session valide.
 //
 // Endpoints :
-//   POST /api/auth/lookup-siret    body { siret } → { raison_sociale, adresse, code_postal, ville, code_naf, lat, lng }
-//   POST /api/auth/signup          body { email, password, siret }
+//   POST /api/auth/signup          body { prenom, nom, email, telephone, password }
 //   POST /api/auth/login           body { email, password }
 //   GET  /api/auth/verify          query token=xxx → redirect /login?verified=1 ou /verify?error=xxx
 //   POST /api/auth/forgot-password body { email }
 //   POST /api/auth/reset-password  body { token, new_password }
 //   POST /api/auth/logout          (cookie)
 //   GET  /api/auth/me              (cookie) → { user }
+//
+// Le SIRET et l'enrichissement INSEE/BAN sont déplacés à l'onboarding entreprise
+// (/onboarding/entreprise — étape 2, après vérification email).
 
 import express from 'express'
 import argon2 from 'argon2'
 import {
-  createUser, getUserByEmail, getUserBySiret, getUserById,
+  createUser, getUserByEmail, getUserById,
   createSession, deleteSessionByToken, deleteAllSessionsForUser,
   createVerificationToken, getVerificationToken, markTokenUsed,
   setEmailVerified, updatePassword, logAuditEvent
 } from './surreal-adapter.js'
-import { lookupSiret } from '../services/insee.js'
-import { geocode } from '../services/ban.js'
 import { sendWelcomeVerify, sendPasswordReset } from '../services/email.js'
 import { readSessionToken, SESSION_COOKIE } from '../middleware/requireAuth.js'
 
@@ -88,8 +88,19 @@ function isStrongPassword(pw) {
   return typeof pw === 'string' && pw.length >= 10 && pw.length <= 256
 }
 
-function isValidSiret(siret) {
-  return typeof siret === 'string' && /^\d{14}$/.test(siret.replace(/\s+/g, ''))
+// Téléphone FR : +33 suivi de 9 chiffres OU 0 suivi de 9 chiffres.
+// Espaces, points, tirets, parenthèses tolérés et nettoyés. Retourne la
+// version normalisée (sans séparateurs) ou null si invalide.
+function normalizePhoneFR(raw) {
+  if (typeof raw !== 'string') return null
+  const cleaned = raw.replace(/[\s.\-()]/g, '')
+  if (/^\+33[1-9]\d{8}$/.test(cleaned)) return cleaned
+  if (/^0[1-9]\d{8}$/.test(cleaned)) return cleaned
+  return null
+}
+
+function trimToMax(s, max) {
+  return String(s == null ? '' : s).trim().slice(0, max)
 }
 
 function setSessionCookie(res, token, expiresAt) {
@@ -124,12 +135,18 @@ function publicUser(u) {
   return {
     id,
     email: u.email,
-    raison_sociale: u.raison_sociale,
-    siret: u.siret,
+    prenom: u.prenom || null,
+    nom: u.nom || null,
+    name: u.name || null,
+    telephone: u.telephone || null,
+    // Champs renseignés à l'onboarding entreprise (Phase 1.5) — null tant
+    // que l'utilisateur n'a pas complété l'étape 2.
+    siret: u.siret || null,
+    raison_sociale: u.raison_sociale || null,
     code_naf: u.code_naf || null,
-    adresse: u.adresse,
-    code_postal: u.code_postal,
-    ville: u.ville,
+    adresse: u.adresse || null,
+    code_postal: u.code_postal || null,
+    ville: u.ville || null,
     lat: u.lat ?? null,
     lng: u.lng ?? null,
     plan: u.plan || 'gratuit',
@@ -137,84 +154,44 @@ function publicUser(u) {
   }
 }
 
-// ── POST /api/auth/lookup-siret ──
-router.post('/lookup-siret', async (req, res) => {
-  const siret = String(req.body?.siret || '').replace(/\s+/g, '')
-  if (!isValidSiret(siret)) return res.status(400).json({ error: 'SIRET invalide (14 chiffres requis)' })
-  try {
-    const data = await lookupSiret(siret)
-    if (!data) return res.status(404).json({ error: 'SIRET introuvable dans la base SIRENE' })
-    let geo = null
-    try {
-      geo = await geocode({
-        adresse: data.adresse_complete,
-        code_postal: data.code_postal,
-        ville: data.ville
-      })
-    } catch (e) { /* géocodage best-effort */ }
-    res.json({
-      raison_sociale: data.raison_sociale,
-      adresse: data.adresse_complete,
-      code_postal: data.code_postal,
-      ville: data.ville,
-      code_naf: data.code_naf || null,
-      lat: geo?.lat ?? null,
-      lng: geo?.lng ?? null
-    })
-  } catch (e) {
-    console.error('[auth:lookup-siret]', e.message)
-    res.status(502).json({ error: 'Service SIRENE indisponible' })
-  }
-})
-
 // ── POST /api/auth/signup ──
+// Body : { prenom, nom, email, telephone, password }
+// SIRET et enrichissement INSEE/BAN sont déplacés à /onboarding/entreprise (Phase 1.5).
 router.post('/signup', async (req, res) => {
   if (!checkRate(req, res, 'signup')) return
   const meta = clientMeta(req)
-  const email = String(req.body?.email || '').toLowerCase().trim()
-  const password = req.body?.password
-  const siret = String(req.body?.siret || '').replace(/\s+/g, '')
 
-  if (!isValidEmail(email)) return res.status(400).json({ error: 'Email invalide' })
-  if (!isStrongPassword(password)) return res.status(400).json({ error: 'Mot de passe trop court (10 caractères minimum)' })
-  if (!isValidSiret(siret)) return res.status(400).json({ error: 'SIRET invalide (14 chiffres requis)' })
+  const prenom = trimToMax(req.body?.prenom, 80)
+  const nom = trimToMax(req.body?.nom, 80)
+  const email = String(req.body?.email || '').toLowerCase().trim()
+  const telephoneRaw = String(req.body?.telephone || '').trim()
+  const password = req.body?.password
+
+  if (!prenom) return res.status(400).json({ error: 'Prénom requis', field: 'prenom' })
+  if (!nom) return res.status(400).json({ error: 'Nom requis', field: 'nom' })
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Email invalide', field: 'email' })
+  const telephone = normalizePhoneFR(telephoneRaw)
+  if (!telephone) return res.status(400).json({ error: 'Téléphone invalide', field: 'telephone' })
+  if (!isStrongPassword(password)) return res.status(400).json({ error: 'Mot de passe trop court (10 caractères minimum)', field: 'password' })
 
   try {
     if (await getUserByEmail(email)) {
-      return res.status(409).json({ error: 'Cet email est déjà utilisé' })
+      return res.status(409).json({ error: 'Cet email est déjà utilisé', field: 'email' })
     }
-    if (await getUserBySiret(siret)) {
-      return res.status(409).json({ error: 'Ce SIRET est déjà associé à un compte' })
-    }
-
-    const insee = await lookupSiret(siret)
-    if (!insee) return res.status(400).json({ error: 'SIRET introuvable dans la base SIRENE' })
-
-    let geo = null
-    try {
-      geo = await geocode({
-        adresse: insee.adresse_complete,
-        code_postal: insee.code_postal,
-        ville: insee.ville
-      })
-    } catch (e) { /* best-effort */ }
 
     const passwordHash = await argon2.hash(password, ARGON_OPTS)
+    const name = `${prenom} ${nom}`.trim()
 
     const userBody = {
       email,
+      prenom,
+      nom,
+      name,
+      telephone,
       password_hash: passwordHash,
       email_verified: false,
-      siret,
-      raison_sociale: insee.raison_sociale,
-      adresse: insee.adresse_complete || '',
-      code_postal: insee.code_postal || '',
-      ville: insee.ville || '',
       plan: 'gratuit'
     }
-    if (insee.code_naf) userBody.code_naf = insee.code_naf
-    if (geo?.lat != null) userBody.lat = geo.lat
-    if (geo?.lng != null) userBody.lng = geo.lng
 
     const user = await createUser(userBody)
     if (!user) return res.status(500).json({ error: 'Création du compte impossible' })
@@ -223,12 +200,15 @@ router.post('/signup', async (req, res) => {
     const { token } = await createVerificationToken(userIdStr, 'email_verify')
 
     try {
-      await sendWelcomeVerify({ email, raison_sociale: insee.raison_sociale }, token)
+      await sendWelcomeVerify({ email, name }, token)
     } catch (e) {
       console.error('[signup] envoi email vérification échoué', e.message)
     }
 
-    await logAuditEvent({ userId: userIdStr, event: 'signup', ip: meta.ip, userAgent: meta.userAgent, metadata: { siret } })
+    await logAuditEvent({
+      userId: userIdStr, event: 'signup', ip: meta.ip, userAgent: meta.userAgent,
+      metadata: { prenom, nom, telephone }
+    })
 
     res.status(201).json({
       ok: true,

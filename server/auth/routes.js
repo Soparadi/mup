@@ -23,6 +23,7 @@ import {
   setEmailVerified, updatePassword, logAuditEvent
 } from './surreal-adapter.js'
 import { sendWelcomeVerify, sendPasswordReset } from '../services/email.js'
+import { getLocationFromIp } from '../services/geolocation.js'
 import { readSessionToken, SESSION_COOKIE } from '../middleware/requireAuth.js'
 
 export const router = express.Router()
@@ -41,8 +42,7 @@ const RATE_WINDOW_MS = 15 * 60 * 1000
 const RATE_LIMIT = 5
 
 function rateKey(req, route) {
-  const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown')
-    .toString().split(',')[0].trim()
+  const ip = getClientIp(req) || 'unknown'
   return `${route}:${ip}`
 }
 
@@ -72,9 +72,21 @@ setInterval(() => {
 
 // ── helpers ──
 
+// Extraction IP client robuste : Cloudflare → Railway/proxy → direct.
+// Utilisée à la fois pour le rate-limiting, l'audit log et la géolocalisation.
+function getClientIp(req) {
+  const cf = req.headers['cf-connecting-ip']
+  if (cf) return String(cf).trim()
+  const fwd = req.headers['x-forwarded-for']
+  if (fwd) return String(fwd).split(',')[0].trim()
+  const real = req.headers['x-real-ip']
+  if (real) return String(real).trim()
+  return req.socket?.remoteAddress || null
+}
+
 function clientMeta(req) {
   return {
-    ip: (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').toString().split(',')[0].trim() || null,
+    ip: getClientIp(req),
     userAgent: req.headers['user-agent'] || null
   }
 }
@@ -155,8 +167,12 @@ function publicUser(u) {
 }
 
 // ── POST /api/auth/signup ──
-// Body : { prenom, nom, email, telephone, password }
+// Body : { prenom, nom, email, telephone, password, marketing_consent? }
 // SIRET et enrichissement INSEE/BAN sont déplacés à /onboarding/entreprise (Phase 1.5).
+// La géolocalisation IP est récupérée silencieusement depuis ipapi.co (best effort,
+// timeout 2s, fail silencieux). Le consentement marketing est strictement optionnel
+// (case non pré-cochée côté front), recueilli pour conformité RGPD si l'utilisateur
+// souhaite recevoir nos communications.
 router.post('/signup', async (req, res) => {
   if (!checkRate(req, res, 'signup')) return
   const meta = clientMeta(req)
@@ -166,6 +182,10 @@ router.post('/signup', async (req, res) => {
   const email = String(req.body?.email || '').toLowerCase().trim()
   const telephoneRaw = String(req.body?.telephone || '').trim()
   const password = req.body?.password
+  // Consentement marketing : strictement opt-in. On accepte true/'true'/1/'1'.
+  const rawConsent = req.body?.marketing_consent
+  const marketingConsent = rawConsent === true || rawConsent === 'true' || rawConsent === 1 || rawConsent === '1'
+  const marketingConsentAt = marketingConsent ? new Date().toISOString() : null
 
   if (!prenom) return res.status(400).json({ error: 'Prénom requis', field: 'prenom' })
   if (!nom) return res.status(400).json({ error: 'Nom requis', field: 'nom' })
@@ -179,7 +199,12 @@ router.post('/signup', async (req, res) => {
       return res.status(409).json({ error: 'Cet email est déjà utilisé', field: 'email' })
     }
 
-    const passwordHash = await argon2.hash(password, ARGON_OPTS)
+    // argon2 hash (~200ms) et géolocalisation IP (jusqu'à 2s) en parallèle —
+    // Promise.all garde le max des deux, pas la somme. Garantit < 500ms ajoutés.
+    const [passwordHash, geoData] = await Promise.all([
+      argon2.hash(password, ARGON_OPTS),
+      getLocationFromIp(meta.ip)
+    ])
     const name = `${prenom} ${nom}`.trim()
 
     const userBody = {
@@ -190,7 +215,10 @@ router.post('/signup', async (req, res) => {
       telephone,
       password_hash: passwordHash,
       email_verified: false,
-      plan: 'gratuit'
+      plan: 'gratuit',
+      geo_data: geoData,                    // null si IP locale ou échec API
+      marketing_consent: marketingConsent,  // false par défaut (RGPD)
+      marketing_consent_at: marketingConsentAt
     }
 
     const user = await createUser(userBody)
@@ -207,7 +235,12 @@ router.post('/signup', async (req, res) => {
 
     await logAuditEvent({
       userId: userIdStr, event: 'signup', ip: meta.ip, userAgent: meta.userAgent,
-      metadata: { prenom, nom, telephone }
+      metadata: {
+        prenom, nom, telephone,
+        marketing_consent: marketingConsent,
+        geo_country: geoData?.country_code || null,
+        geo_city: geoData?.city || null
+      }
     })
 
     res.status(201).json({

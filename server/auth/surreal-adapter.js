@@ -257,6 +257,11 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS lat ON user TYPE option<float>',
     'DEFINE FIELD IF NOT EXISTS lng ON user TYPE option<float>',
     'DEFINE FIELD IF NOT EXISTS plan ON user TYPE string DEFAULT "gratuit"',
+    // Géolocalisation IP captée au signup (best effort, peut être null).
+    'DEFINE FIELD IF NOT EXISTS geo_data ON user TYPE option<object>',
+    // Consentement marketing (case opt-in non pré-cochée au signup, RGPD).
+    'DEFINE FIELD IF NOT EXISTS marketing_consent ON user TYPE bool DEFAULT false',
+    'DEFINE FIELD IF NOT EXISTS marketing_consent_at ON user TYPE option<datetime>',
     'DEFINE INDEX IF NOT EXISTS user_email_unique ON user FIELDS email UNIQUE',
     // SIRET unique mais maintenant optionnel : plusieurs users peuvent rester sans siret
     // tant qu'ils n'ont pas franchi l'étape onboarding.

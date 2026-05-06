@@ -77,6 +77,12 @@
   .legal a{color:var(--text);text-decoration:underline;text-underline-offset:2px}
   .legal a:hover{color:#000}
 
+  /* Case opt-in marketing — RGPD : non pré-cochée, label complet visible */
+  .field-checkbox{margin:6px 0 14px}
+  .checkbox-label{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:12.5px;line-height:1.5;color:var(--muted)}
+  .checkbox-label input[type="checkbox"]{margin-top:2px;width:16px;height:16px;cursor:pointer;accent-color:#F97316;flex-shrink:0}
+  .checkbox-text{flex:1}
+
   .auth-foot{text-align:center;margin-top:20px;font-size:13px;color:var(--muted)}
   .auth-foot a{color:var(--text);font-weight:600;text-decoration:none}
   .auth-foot a:hover{text-decoration:underline}
@@ -157,13 +163,20 @@
           <div class="field-err" id="err-password2"></div>
         </div>
 
-        <button type="submit" id="btn-submit" class="btn btn-dark" disabled>Créer mon compte</button>
-
         <p class="legal">
           En créant votre compte, vous acceptez les
           <a href="https://movup.io/cgu">CGU</a> et la
           <a href="https://movup.io/confidentialite">politique de confidentialité</a>.
         </p>
+
+        <div class="field-checkbox">
+          <label class="checkbox-label" for="marketing_consent">
+            <input type="checkbox" id="marketing_consent" name="marketing_consent" value="1">
+            <span class="checkbox-text">Je souhaite recevoir des conseils de prospection et offres MovUP par email. 1 à 2 emails par mois maximum, désinscription en 1 clic à tout moment.</span>
+          </label>
+        </div>
+
+        <button type="submit" id="btn-submit" class="btn btn-dark" disabled>Créer mon compte</button>
       </form>
     </div>
   </div>
@@ -339,7 +352,8 @@
         nom: v.values.nom,
         email: v.values.email,
         telephone: v.values.telephone,
-        password: v.values.password
+        password: v.values.password,
+        marketing_consent: !!document.getElementById('marketing_consent').checked
       })
     }).then(function(r){
       return r.json().then(function(data){ return { ok:r.ok, status:r.status, data:data } })

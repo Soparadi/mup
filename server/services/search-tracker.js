@@ -72,6 +72,9 @@ export async function trackLeadSearch({
   try {
     const db = await getDb()
     const cleanUserId = normalizeId('user', userId)
+    // Normalisation au format compact (sans point) — cohérence des requêtes
+    // analytics : "47.78A" et "4778A" deviennent tous les deux "4778A" en base.
+    const normalizedNafCode = String(nafCode).replace('.', '')
     // searched_at calculé côté SurrealQL (time::now()) pour rester en datetime
     // natif (cf. fix b219bf7 sur les coercions).
     await db.query(
@@ -89,7 +92,7 @@ export async function trackLeadSearch({
         searched_at = time::now()`,
       {
         uid: cleanUserId,
-        nafCode: String(nafCode),
+        nafCode: normalizedNafCode,
         nafLabel: nafLabel || null,
         regionCode: regionCode || null,
         regionName: regionName || null,

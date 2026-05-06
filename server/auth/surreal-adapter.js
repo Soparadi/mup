@@ -93,8 +93,8 @@ export async function createSession(userId, { ip, userAgent } = {}) {
   const cleanUserId = normalizeId('user', userId)
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
   await db.query(
-    'CREATE session CONTENT { user_id: type::record("user", $uid), token: $token, expires_at: $exp }',
-    { uid: cleanUserId, token: tokenHash, exp: expiresAt }
+    'CREATE session CONTENT { user_id: type::record("user", $uid), token: $tok, expires_at: $exp }',
+    { uid: cleanUserId, tok: tokenHash, exp: expiresAt }
   )
   return { token, expiresAt }
 }
@@ -104,8 +104,8 @@ export async function getSession(token) {
   const db = await getDb()
   const tokenHash = hashToken(token)
   const result = await db.query(
-    'SELECT *, user_id.* AS user FROM session WHERE token = $token LIMIT 1',
-    { token: tokenHash }
+    'SELECT *, user_id.* AS user FROM session WHERE token = $tok LIMIT 1',
+    { tok: tokenHash }
   )
   const row = result[0]?.[0]
   if (!row) return null
@@ -125,7 +125,7 @@ export async function deleteSessionByToken(token) {
   if (!token) return
   const db = await getDb()
   const tokenHash = hashToken(token)
-  await db.query('DELETE session WHERE token = $token', { token: tokenHash })
+  await db.query('DELETE session WHERE token = $tok', { tok: tokenHash })
 }
 
 export async function deleteAllSessionsForUser(userId) {
@@ -150,8 +150,8 @@ export async function createVerificationToken(userId, type) {
   const ttl = type === 'email_verify' ? VERIFY_TTL_MS : RESET_TTL_MS
   const expiresAt = new Date(Date.now() + ttl).toISOString()
   await db.query(
-    'CREATE verification_token CONTENT { user_id: type::record("user", $uid), token: $token, type: $type, expires_at: $exp }',
-    { uid: cleanUserId, token: tokenHash, type, exp: expiresAt }
+    'CREATE verification_token CONTENT { user_id: type::record("user", $uid), token: $tok, type: $type, expires_at: $exp }',
+    { uid: cleanUserId, tok: tokenHash, type, exp: expiresAt }
   )
   return { token, expiresAt }
 }
@@ -161,8 +161,8 @@ export async function getVerificationToken(token, type) {
   const db = await getDb()
   const tokenHash = hashToken(token)
   const result = await db.query(
-    'SELECT * FROM verification_token WHERE token = $token AND type = $type LIMIT 1',
-    { token: tokenHash, type }
+    'SELECT * FROM verification_token WHERE token = $tok AND type = $type LIMIT 1',
+    { tok: tokenHash, type }
   )
   const row = result[0]?.[0]
   if (!row) return null

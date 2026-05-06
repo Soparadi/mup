@@ -919,38 +919,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
-.leads-results-count .lc-visible { color: var(--text); font-weight: 600; }
-.leads-results-count .lc-sep { color: var(--text-soft); padding: 0 6px; }
 .leads-results-count .lc-total { color: var(--c-generer); font-weight: 700; }
-
-/* Légende sous la carte (mode dual markers) */
-.leads-legend {
-  position: absolute;
-  bottom: 10px; left: 12px; right: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, .92);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 10px;
-  z-index: 400;
-  font-family: var(--font-sans);
-  pointer-events: none;
-  width: fit-content;
-}
-.leads-legend .lg-item { display: inline-flex; align-items: center; gap: 5px; }
-.leads-legend .lg-sep { color: var(--text-soft); }
-.leads-legend .lg-dot {
-  display: inline-block;
-  width: 8px; height: 8px; border-radius: 50%;
-  flex-shrink: 0;
-}
-.leads-legend .lg-dot--solid { background: #1D1D1F; border: 2px solid #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
-.leads-legend .lg-dot--locked { background: #BCBCC0; opacity: .7; border: 1.5px solid #fff; }
 
 /* Tooltip Leaflet style discret pour markers verrouillés */
 .lead-marker-locked-tip {
@@ -2703,11 +2672,6 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
         <div class="leads-canvas">
           <div class="leads-map-wrap">
             <div id="leads-map"></div>
-            <div class="leads-legend" id="leads-legend" hidden>
-              <span class="lg-item"><span class="lg-dot lg-dot--solid"></span><span id="lg-visible-count">5 visibles</span></span>
-              <span class="lg-sep">·</span>
-              <span class="lg-item"><span class="lg-dot lg-dot--locked"></span><span id="lg-locked-count">0 verrouillés</span> — connectez-vous pour voir</span>
-            </div>
             <div class="leads-map-overlay" id="leads-overlay">
               <div class="leads-map-overlay-icon">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -3366,10 +3330,6 @@ launchBtn.addEventListener('click', async () => {
   const zoom = parseInt(opt.dataset.zoom, 10) || 7;
   if (!isNaN(lat) && !isNaN(lng)) leadsMap.setView([lat, lng], zoom, { animate: true });
 
-  const legendEl = document.getElementById('leads-legend');
-  const lgVisible = document.getElementById('lg-visible-count');
-  const lgLocked = document.getElementById('lg-locked-count');
-
   let data;
   try {
     const url = '/api/public/search-demo?naf=' + encodeURIComponent(secteur) + '&region=' + encodeURIComponent(regionCode);
@@ -3379,7 +3339,6 @@ launchBtn.addEventListener('click', async () => {
   } catch (e) {
     leadsCount.textContent = '0 résultat';
     leadsList.innerHTML = '<div class="leads-empty"><div class="leads-empty-title">Recherche indisponible</div><div class="leads-empty-sub">Réessayez dans un instant</div></div>';
-    if (legendEl) legendEl.hidden = true;
     return;
   }
 
@@ -3390,7 +3349,6 @@ launchBtn.addEventListener('click', async () => {
   if (preview.length === 0) {
     leadsCount.textContent = '0 résultat';
     leadsList.innerHTML = '<div class="leads-empty"><div class="leads-empty-title">Aucun résultat</div><div class="leads-empty-sub">Essayez un autre secteur ou une autre région</div></div>';
-    if (legendEl) legendEl.hidden = true;
     return;
   }
 
@@ -3436,30 +3394,13 @@ launchBtn.addEventListener('click', async () => {
     leadsMap.setView(allCoords[0], 11, { animate: true });
   }
 
-  // ── 4. Header compteur dual (visibles · disponibles)
+  // ── 4. Header compteur — total disponible uniquement, en accent
   const visible = preview.length;
   const totalLabel = data.totalCapped ? '10 000+' : String(total);
   if (total > visible) {
-    leadsCount.innerHTML = ''
-      + '<span class="lc-visible">' + visible + ' visible' + (visible > 1 ? 's' : '') + '</span>'
-      + '<span class="lc-sep">·</span>'
-      + '<span class="lc-total">' + totalLabel + ' disponible' + (total > 1 ? 's' : '') + '</span>';
+    leadsCount.innerHTML = '<span class="lc-total">' + totalLabel + ' disponible' + (total > 1 ? 's' : '') + '</span>';
   } else {
     leadsCount.textContent = visible + ' résultat' + (visible > 1 ? 's' : '');
-  }
-
-  // ── 5. Légende sous la carte
-  if (legendEl) {
-    const lockedRaw = total - visible;
-    const lockedCount = Math.max(lockedRaw, lockedMarkers.length);
-    if (lockedCount > 0) {
-      const lockedLabel = data.totalCapped ? '10 000+' : String(lockedCount);
-      lgVisible.textContent = visible + ' visible' + (visible > 1 ? 's' : '');
-      lgLocked.textContent = lockedLabel + ' verrouillé' + (lockedCount > 1 ? 's' : '');
-      legendEl.hidden = false;
-    } else {
-      legendEl.hidden = true;
-    }
   }
 
   // ── 6. Cards anonymisées (preview uniquement)

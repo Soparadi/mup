@@ -1679,6 +1679,69 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   .reveal { opacity: 1; transform: none; }
 }
+
+/* ── Sector autocomplete (porté de leads.html) ── */
+.sip { position: relative; }
+.sip .loup {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); pointer-events: none;
+  transition: color .2s, transform .25s cubic-bezier(.34,1.56,.64,1); z-index: 2;
+}
+.sip:focus-within .loup { color: var(--text); transform: translateY(-50%) scale(1.1); }
+.sip input {
+  width: 100%; height: 44px; padding: 0 38px 0 44px;
+  font-family: 'Geist', -apple-system, sans-serif; font-size: 13px; font-weight: 500;
+  color: var(--text); background: var(--card);
+  border: 1.5px solid var(--border); border-radius: 10px;
+  outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.sip input::placeholder { color: var(--text-muted); font-weight: 400; }
+.sip input:focus {
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px rgba(29,29,31,.06);
+}
+.sip input.locked { border-color: var(--border-2); background: var(--surface); }
+.sip .clr {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--surface-2); border: none;
+  display: none; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-muted); transition: all .12s;
+  padding: 0;
+}
+.sip .clr:hover { background: var(--border-2); color: var(--text); }
+.sip .clr.show { display: flex; }
+.acd {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+  background: var(--card); border: 1.5px solid var(--border);
+  border-radius: 14px; box-shadow: 0 16px 48px rgba(0,0,0,.15);
+  z-index: 500; max-height: 300px; overflow-y: auto; display: none;
+}
+.acd.open { display: block; }
+.acd::-webkit-scrollbar { width: 4px; }
+.acd::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+.acd-sec {
+  padding: 8px 12px 4px; font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-soft);
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.acd-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; cursor: pointer;
+  border-bottom: 1px solid var(--border); transition: background .1s;
+}
+.acd-item:last-child { border-bottom: none; }
+.acd-item:hover, .acd-item.focus { background: var(--surface); }
+.acd-code {
+  font-size: 10px; font-weight: 700; font-family: 'Geist Mono', 'SF Mono', Menlo, monospace;
+  color: var(--text-muted); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 2px 6px; flex-shrink: 0;
+}
+.acd-label { font-size: 13px; font-weight: 500; flex: 1; line-height: 1.3; }
+.acd-hl { background: #FEF08A; border-radius: 2px; padding: 0 1px; }
+.acd-empty { padding: 20px; text-align: center; font-size: 13px; color: var(--text-soft); }
+
 </style>
 </head>
 <body>
@@ -1756,10 +1819,26 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
       <div class="hero-leads-tool">
 
         <div class="leads-config">
-          <div class="leads-field">
-            <label for="lead-secteur" class="leads-field-label">Secteur</label>
-            <select class="leads-select" id="lead-secteur">
-              <option value="">Tous les secteurs</option>
+          <div class="leads-field" style="position:relative">
+            <label for="sa-input" class="leads-field-label">Secteur</label>
+            <div class="sip" id="sa-sip">
+              <svg class="loup" width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M12 12l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+              <input type="text" id="sa-input"
+                     placeholder="opticien, traiteur, 9602A…"
+                     autocomplete="off" spellcheck="false">
+              <button type="button" class="clr" id="sa-clear" aria-label="Effacer">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="acd" id="sa-dropdown"></div>
+            <!-- Source de vérité catalogue NAF — caché, lu par SectorAutocomplete -->
+            <select id="lead-secteur-source" style="display:none" aria-hidden="true">
+              <option value=""></option>
             <!-- A — AGRICULTURE, SYLVICULTURE ET PÊCHE -->
             <optgroup label="A — Agriculture, sylviculture et pêche">
               <option value="0111Z">Culture de céréales (0111Z)</option>
@@ -2618,7 +2697,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
         </div>
         <div class="hero-trust-item">
           <span class="hero-trust-dot" style="background:#4285F4"></span>
-          <span><strong>936 codes NAF</strong> — secteurs activité</span>
+          <span><strong>701 codes NAF</strong> — secteurs activité</span>
         </div>
       </div>
 
@@ -3036,6 +3115,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 <!-- ──────────────────────────────────────────────────────────
      SCRIPTS
      ────────────────────────────────────────────────────────── -->
+<script src="/js/sector-autocomplete.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 /* ───────────────── REVEAL ON SCROLL ───────────────── */
@@ -3180,8 +3260,39 @@ function escapeHtml(s) {
 }
 
 // Handler launch — démo live API INSEE (5 résultats anonymisés)
+
+// DOM refs (re-déclarés ici car le scope hérité de l'ancien mock a été retiré)
+const regionEl = document.getElementById('lead-region');
+const launchBtn = document.getElementById('leads-launch-btn');
+const leadsList = document.getElementById('leads-list');
+const leadsCount = document.getElementById('leads-count');
+const leadsOverlay = document.getElementById('leads-overlay');
+
+// Autocomplete secteur — instance partagée avec leads.html (composant réutilisable)
+let sectorAC = null;
+function checkLaunchBtn() {
+  const ok = !!(sectorAC && sectorAC.value && regionEl.value);
+  launchBtn.disabled = !ok;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.SectorAutocomplete) {
+    sectorAC = window.SectorAutocomplete.init({
+      sourceSelectId: 'lead-secteur-source',
+      inputId: 'sa-input',
+      dropdownId: 'sa-dropdown',
+      clearBtnId: 'sa-clear',
+      onPick: checkLaunchBtn,
+      onClear: checkLaunchBtn
+    });
+  }
+  checkLaunchBtn();
+});
+
+regionEl.addEventListener('change', checkLaunchBtn);
+
 launchBtn.addEventListener('click', async () => {
-  const secteur = secteurEl.value;
+  const secteur = (sectorAC && sectorAC.value) ? sectorAC.value : '';
   const regionSlug = regionEl.value;
   if (!secteur || !regionSlug) return;
   const regionCode = REGION_CODES[regionSlug];

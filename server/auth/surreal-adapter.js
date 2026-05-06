@@ -231,7 +231,7 @@ export async function runAuthMigration() {
   const db = await getDb()
   const queries = [
     'DEFINE TABLE IF NOT EXISTS user SCHEMAFULL',
-    'DEFINE FIELD IF NOT EXISTS email ON user TYPE string ASSERT string::is::email($value)',
+    'DEFINE FIELD IF NOT EXISTS email ON user TYPE string ASSERT string::is_email($value)',
     'DEFINE FIELD IF NOT EXISTS password_hash ON user TYPE string',
     'DEFINE FIELD IF NOT EXISTS email_verified ON user TYPE bool DEFAULT false',
     'DEFINE FIELD IF NOT EXISTS created_at ON user TYPE datetime DEFAULT time::now()',

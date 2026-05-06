@@ -91,10 +91,13 @@ export async function createSession(userId, { ip, userAgent } = {}) {
   const token = generateToken(32)
   const tokenHash = hashToken(token)
   const cleanUserId = normalizeId('user', userId)
+  // expires_at calculé côté SurrealQL pour rester en datetime natif (SurrealDB v2
+  // ne coerce pas une string ISO via $binding). On retourne la version JS pour
+  // que le caller puisse poser le cookie avec la bonne date d'expiration.
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
   await db.query(
-    'CREATE session CONTENT { user_id: type::record("user", $uid), token: $tok, expires_at: $exp }',
-    { uid: cleanUserId, tok: tokenHash, exp: expiresAt }
+    'CREATE session SET user_id = type::record("user", $uid), token = $tok, expires_at = time::now() + 30d',
+    { uid: cleanUserId, tok: tokenHash }
   )
   return { token, expiresAt }
 }
@@ -147,11 +150,13 @@ export async function createVerificationToken(userId, type) {
   const token = generateToken(32)
   const tokenHash = hashToken(token)
   const cleanUserId = normalizeId('user', userId)
+  // Durée fixe par type — inlinée côté SurrealQL pour rester en datetime natif.
   const ttl = type === 'email_verify' ? VERIFY_TTL_MS : RESET_TTL_MS
+  const durationLit = type === 'email_verify' ? '24h' : '1h'
   const expiresAt = new Date(Date.now() + ttl).toISOString()
   await db.query(
-    'CREATE verification_token CONTENT { user_id: type::record("user", $uid), token: $tok, type: $type, expires_at: $exp }',
-    { uid: cleanUserId, tok: tokenHash, type, exp: expiresAt }
+    `CREATE verification_token SET user_id = type::record("user", $uid), token = $tok, type = $type, expires_at = time::now() + ${durationLit}`,
+    { uid: cleanUserId, tok: tokenHash, type }
   )
   return { token, expiresAt }
 }

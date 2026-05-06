@@ -15,6 +15,15 @@ function normalizeId(prefix, raw) {
   return s.replace(/^⟨+|⟩+$/g, '')
 }
 
+// Format INSEE strict : 4 chiffres + 1 lettre majuscule (ex. "4778A", "1071C").
+// Le format pointé "47.78A" est aussi accepté (le serveur /api/search le génère
+// pour l'API gouv et le passe tel quel au tracker).
+function isValidNafCode(code) {
+  if (typeof code !== 'string') return false
+  const c = code.trim()
+  return /^\d{4}[A-Z]$/.test(c) || /^\d{2}\.\d{2}[A-Z]$/.test(c)
+}
+
 // ── migration idempotente ──
 export async function runLeadSearchMigration() {
   const db = await getDb()
@@ -55,7 +64,11 @@ export async function trackLeadSearch({
   resultsCount,
   fichesCompletesFilter
 }) {
-  if (!userId || !nafCode) return  // garde-fou : on ne track pas sans données minimales
+  // Garde-fou strict : seules les recherches avec un code NAF au format INSEE
+  // sont enregistrées. Les recherches en texte libre (?q=…) sont ignorées —
+  // évite de polluer la table avec des requêtes inexploitables pour les
+  // relances commerciales et l'analytics.
+  if (!userId || !isValidNafCode(nafCode)) return
   try {
     const db = await getDb()
     const cleanUserId = normalizeId('user', userId)

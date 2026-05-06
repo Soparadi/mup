@@ -1951,9 +1951,20 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   try {
     var deptFb = (document.getElementById('sel-dept')?.value || '').trim();
     var villeFb = (document.getElementById('sel-ville')?.value || '').trim();
+    // Labels lisibles pour le tracking serveur (table lead_search) — params
+    // non utilisés par l'API recherche-entreprises, juste lus côté serveur
+    // dans /api/search pour enrichir l'historique des recherches.
+    var regionEl = document.getElementById('sel-region');
+    var regionName = (regionEl && regionEl.options[regionEl.selectedIndex]) ? regionEl.options[regionEl.selectedIndex].text.trim() : '';
+    var deptName = deptFb ? (DEPT_NAMES[deptFb] || '') : '';
     var url = '/api/search'
       + '?activite_principale=' + encodeURIComponent(nafDotted)
       + (regionCode ? '&region=' + regionCode : '')
+      + (nafLabel ? '&naf_label=' + encodeURIComponent(nafLabel) : '')
+      + (regionName ? '&region_name=' + encodeURIComponent(regionName) : '')
+      + (deptFb ? '&code_departement=' + encodeURIComponent(deptFb) : '')
+      + (deptName ? '&department_name=' + encodeURIComponent(deptName) : '')
+      + (villeFb ? '&city_name=' + encodeURIComponent(villeFb) : '')
       + '&per_page=25&page=' + page;
 
     var resp = await fetch(url);

@@ -9,12 +9,20 @@ DEFINE FIELD IF NOT EXISTS email ON user TYPE string ASSERT string::is::email($v
 DEFINE FIELD IF NOT EXISTS password_hash ON user TYPE string;
 DEFINE FIELD IF NOT EXISTS email_verified ON user TYPE bool DEFAULT false;
 DEFINE FIELD IF NOT EXISTS created_at ON user TYPE datetime DEFAULT time::now();
-DEFINE FIELD IF NOT EXISTS siret ON user TYPE string ASSERT string::len($value) = 14;
-DEFINE FIELD IF NOT EXISTS raison_sociale ON user TYPE string;
+DEFINE FIELD IF NOT EXISTS updated_at ON user TYPE option<datetime>;
+-- Identité personne — captée au signup (Phase 1).
+DEFINE FIELD IF NOT EXISTS prenom ON user TYPE string;
+DEFINE FIELD IF NOT EXISTS nom ON user TYPE string;
+DEFINE FIELD IF NOT EXISTS name ON user TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS telephone ON user TYPE string;
+-- Champs entreprise — captés à l'onboarding (Phase 1.5). Optionnels au signup.
+-- OVERWRITE pour rétrograder les définitions précédentes (string requis → option<string>).
+DEFINE FIELD OVERWRITE siret ON user TYPE option<string> ASSERT $value = NONE OR string::len($value) = 14;
+DEFINE FIELD OVERWRITE raison_sociale ON user TYPE option<string>;
+DEFINE FIELD OVERWRITE adresse ON user TYPE option<string>;
+DEFINE FIELD OVERWRITE code_postal ON user TYPE option<string>;
+DEFINE FIELD OVERWRITE ville ON user TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS code_naf ON user TYPE option<string>;
-DEFINE FIELD IF NOT EXISTS adresse ON user TYPE string;
-DEFINE FIELD IF NOT EXISTS code_postal ON user TYPE string;
-DEFINE FIELD IF NOT EXISTS ville ON user TYPE string;
 DEFINE FIELD IF NOT EXISTS lat ON user TYPE option<float>;
 DEFINE FIELD IF NOT EXISTS lng ON user TYPE option<float>;
 DEFINE FIELD IF NOT EXISTS plan ON user TYPE string DEFAULT "gratuit";

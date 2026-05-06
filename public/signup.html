@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Créer un compte — Movup</title>
-<meta name="description" content="Créez votre compte Movup. SIRET requis. Vérification email.">
+<title>Créer un compte — MovUP</title>
+<meta name="description" content="Créez votre compte MovUP. Vous serez opérationnel en quelques minutes.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="/favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -18,95 +18,154 @@
     --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
   }
   body{background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:48px 20px}
-  .auth{width:100%;max-width:460px}
-  .auth-brand{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:24px;text-decoration:none;color:var(--text);font-weight:800;font-size:18px;letter-spacing:-.4px}
-  .auth-brand-dot{display:flex;gap:4px}
-  .auth-brand-dot span{width:7px;height:7px;border-radius:50%}
+  .auth{width:100%;max-width:520px}
+
+  /* Logo MovUP — version canonique (cf. public/components/logo.html) */
+  .auth-brand{display:inline-flex;align-items:center;gap:10px;margin:0 auto 14px;justify-content:center;width:100%;text-decoration:none;color:var(--text);font-family:var(--font)}
+  .auth-brand-icon{background:var(--text);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex-shrink:0}
+  .auth-brand-icon svg{width:18px;height:18px}
+  .auth-brand-name{font-size:17px;font-weight:700;letter-spacing:-.3px}
+
+  .auth-head{text-align:center;margin-bottom:22px}
+  .auth-head h1{font-size:26px;font-weight:800;letter-spacing:-.6px;color:var(--text);margin-bottom:8px;line-height:1.2}
+  .auth-head p{font-size:14px;color:var(--muted);max-width:420px;margin:0 auto;line-height:1.55}
+
   .card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
-  .card-head{background:#1D1D1F;color:#fff;padding:18px 24px}
-  .card-head h1{font-size:18px;font-weight:800;letter-spacing:-.3px;margin:0}
-  .card-head p{font-size:12px;color:rgba(255,255,255,.6);margin-top:3px}
-  .card-body{padding:22px 24px}
+  .card-head{background:#1D1D1F;color:#fff;padding:16px 24px}
+  .card-head h2{font-size:14px;font-weight:700;letter-spacing:-.2px;margin:0}
+  .card-body{padding:22px 24px 24px}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:640px){ .grid-2{grid-template-columns:1fr} }
+
   .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
   .field label{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
-  .field input{font-family:var(--font);font-size:14px;padding:10px 12px;border:1px solid var(--border2);border-radius:9px;background:#fff;color:var(--text);outline:none;transition:border-color .12s,box-shadow .12s}
+  .field input{font-family:var(--font);font-size:14px;padding:10px 12px;border:1px solid var(--border2);border-radius:9px;background:#fff;color:var(--text);outline:none;transition:border-color .12s,box-shadow .12s;width:100%}
   .field input:focus{border-color:var(--text);box-shadow:0 0 0 3px rgba(29,29,31,.08)}
-  .field input[disabled]{background:var(--surface);color:var(--muted)}
-  .field .hint{font-size:11.5px;color:var(--muted)}
-  .field .preview{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 12px;font-size:12.5px;color:var(--text);line-height:1.5}
-  .field .preview-label{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
-  .row{display:flex;gap:10px}
-  .row .field{flex:1}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:13.5px;font-weight:700;padding:11px 18px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:all .15s;text-decoration:none;width:100%}
-  .btn-dark{background:var(--text);color:#fff;border-color:var(--text)}
+  .field input.error{border-color:var(--red);box-shadow:0 0 0 3px rgba(204,0,0,.08)}
+  .field-err{font-size:11.5px;color:var(--red);min-height:14px;line-height:1.3}
+
+  /* Champs avec bouton œil */
+  .password-wrap{position:relative}
+  .password-wrap input{padding-right:40px}
+  .pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:0;padding:6px;cursor:pointer;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;border-radius:6px}
+  .pw-toggle:hover{color:var(--text);background:var(--surface)}
+  .pw-toggle svg{width:18px;height:18px}
+
+  /* Indicateur de force discret */
+  .pw-strength{display:flex;gap:4px;margin-top:4px}
+  .pw-strength span{flex:1;height:3px;border-radius:2px;background:var(--surface2);transition:background .15s}
+  .pw-strength.s1 span:nth-child(1){background:var(--red)}
+  .pw-strength.s2 span:nth-child(-n+2){background:var(--orange)}
+  .pw-strength.s3 span{background:var(--green)}
+  .pw-label{font-size:11px;color:var(--muted);margin-top:4px;font-weight:500;letter-spacing:.2px}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:14px;font-weight:700;padding:12px 18px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:all .15s;text-decoration:none;width:100%}
+  .btn-dark{background:var(--text);color:#fff;border-color:var(--text);margin-top:6px}
   .btn-dark:hover:not(:disabled){background:#000}
-  .btn-dark:disabled{opacity:.5;cursor:not-allowed}
-  .btn-ghost{background:transparent;color:var(--text);border-color:var(--border2)}
-  .btn-ghost:hover{border-color:var(--text)}
-  .alert{padding:10px 12px;border-radius:9px;font-size:12.5px;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px}
+  .btn-dark:disabled{opacity:.45;cursor:not-allowed}
+
+  .alert{padding:10px 12px;border-radius:9px;font-size:12.5px;margin-bottom:14px;line-height:1.5}
   .alert-error{background:rgba(204,0,0,.08);color:var(--red);border:1px solid rgba(204,0,0,.2)}
   .alert-success{background:rgba(29,131,72,.08);color:var(--green);border:1px solid rgba(29,131,72,.2)}
-  .alert-info{background:var(--surface);color:var(--text);border:1px solid var(--border)}
-  .alert svg{flex-shrink:0;margin-top:1px}
-  .auth-foot{text-align:center;margin-top:18px;font-size:12.5px;color:var(--muted)}
+
+  .legal{font-size:11.5px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.55}
+  .legal a{color:var(--text);text-decoration:underline;text-underline-offset:2px}
+  .legal a:hover{color:#000}
+
+  .auth-foot{text-align:center;margin-top:20px;font-size:13px;color:var(--muted)}
   .auth-foot a{color:var(--text);font-weight:600;text-decoration:none}
   .auth-foot a:hover{text-decoration:underline}
-  .lookup-row{display:flex;gap:8px}
-  .lookup-row input{flex:1}
-  .lookup-row button{flex-shrink:0;width:auto;padding:10px 16px;font-size:12.5px}
+
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
-  .spinner-dark{border-color:rgba(29,29,31,.3);border-top-color:var(--text)}
   @keyframes spin{to{transform:rotate(360deg)}}
   .hidden{display:none!important}
 </style>
 </head>
 <body>
 <main class="auth">
-  <a href="/" class="auth-brand">
-    <span class="auth-brand-dot"><span style="background:#1D8348"></span><span style="background:#4338CA"></span><span style="background:#0BBCD4"></span></span>
-    Movup
+  <a href="/" class="auth-brand" aria-label="Accueil MovUP">
+    <span class="auth-brand-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+      </svg>
+    </span>
+    <span class="auth-brand-name">MovUP</span>
   </a>
+
+  <div class="auth-head">
+    <h1>Créer votre compte</h1>
+    <p>Créez votre compte MovUP, vous serez opérationnel en quelques minutes.</p>
+  </div>
+
   <div class="card">
-    <div class="card-head">
-      <h1>Créer votre compte</h1>
-      <p>Renseignez votre SIRET pour commencer.</p>
-    </div>
+    <div class="card-head"><h2>Vos informations</h2></div>
     <div class="card-body">
-      <div id="alert" class="alert hidden"></div>
+      <div id="alert" class="alert hidden" role="alert"></div>
 
-      <form id="form-signup" autocomplete="off" novalidate>
-        <div class="field">
-          <label for="siret">SIRET (14 chiffres)</label>
-          <div class="lookup-row">
-            <input id="siret" name="siret" type="text" inputmode="numeric" maxlength="14" required placeholder="12345678900012" autocomplete="off">
-            <button type="button" id="btn-lookup" class="btn btn-ghost">Vérifier</button>
+      <form id="form-signup" autocomplete="on" novalidate>
+        <div class="grid-2">
+          <div class="field">
+            <label for="prenom">Prénom</label>
+            <input id="prenom" name="prenom" type="text" required autocomplete="given-name" maxlength="80">
+            <div class="field-err" id="err-prenom"></div>
           </div>
-          <div class="hint">Nous récupérons votre raison sociale et votre adresse via la base SIRENE.</div>
-        </div>
-
-        <div id="company-preview" class="field hidden">
-          <span class="preview-label">Entreprise détectée</span>
-          <div class="preview">
-            <div id="prev-raison" style="font-weight:700"></div>
-            <div id="prev-adresse" style="color:var(--muted);margin-top:2px"></div>
-            <div id="prev-naf" style="color:var(--muted);font-size:11px;margin-top:2px"></div>
+          <div class="field">
+            <label for="nom">Nom</label>
+            <input id="nom" name="nom" type="text" required autocomplete="family-name" maxlength="80">
+            <div class="field-err" id="err-nom"></div>
           </div>
         </div>
 
         <div class="field">
           <label for="email">Email professionnel</label>
-          <input id="email" name="email" type="email" required autocomplete="email" placeholder="vous@entreprise.fr">
+          <input id="email" name="email" type="email" required autocomplete="email" maxlength="160">
+          <div class="field-err" id="err-email"></div>
         </div>
 
         <div class="field">
-          <label for="password">Mot de passe (10 caractères minimum)</label>
-          <input id="password" name="password" type="password" required minlength="10" autocomplete="new-password">
+          <label for="telephone">Téléphone</label>
+          <input id="telephone" name="telephone" type="tel" required autocomplete="tel" maxlength="20" placeholder="06 12 34 56 78">
+          <div class="field-err" id="err-telephone"></div>
         </div>
 
-        <button type="submit" id="btn-submit" class="btn btn-dark">Créer mon compte</button>
+        <div class="grid-2">
+          <div class="field">
+            <label for="password">Mot de passe (10 caractères min)</label>
+            <div class="password-wrap">
+              <input id="password" name="password" type="password" required autocomplete="new-password" minlength="10">
+              <button type="button" class="pw-toggle" data-target="password" aria-label="Afficher le mot de passe">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-eye><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <div class="pw-strength" id="pw-strength" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="pw-label" id="pw-label"></div>
+            <div class="field-err" id="err-password"></div>
+          </div>
+          <div class="field">
+            <label for="password2">Confirmer le mot de passe</label>
+            <div class="password-wrap">
+              <input id="password2" name="password2" type="password" required autocomplete="new-password" minlength="10">
+              <button type="button" class="pw-toggle" data-target="password2" aria-label="Afficher le mot de passe">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-eye><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <div class="field-err" id="err-password2"></div>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-submit" class="btn btn-dark" disabled>Créer mon compte</button>
+
+        <p class="legal">
+          En créant votre compte, vous acceptez les
+          <a href="https://movup.io/cgu">CGU</a> et la
+          <a href="https://movup.io/confidentialite">politique de confidentialité</a>.
+        </p>
       </form>
     </div>
   </div>
+
   <div class="auth-foot">
     Déjà inscrit ? <a href="/login">Se connecter</a>
   </div>
@@ -115,91 +174,183 @@
 <script>
 (function(){
   var alertBox = document.getElementById('alert')
-  var preview = document.getElementById('company-preview')
   var form = document.getElementById('form-signup')
   var btnSubmit = document.getElementById('btn-submit')
-  var btnLookup = document.getElementById('btn-lookup')
-  var siretInput = document.getElementById('siret')
-  var lookupCache = null
+  var inputs = {
+    prenom: document.getElementById('prenom'),
+    nom: document.getElementById('nom'),
+    email: document.getElementById('email'),
+    telephone: document.getElementById('telephone'),
+    password: document.getElementById('password'),
+    password2: document.getElementById('password2')
+  }
+  var errs = {
+    prenom: document.getElementById('err-prenom'),
+    nom: document.getElementById('err-nom'),
+    email: document.getElementById('err-email'),
+    telephone: document.getElementById('err-telephone'),
+    password: document.getElementById('err-password'),
+    password2: document.getElementById('err-password2')
+  }
+  var pwStrength = document.getElementById('pw-strength')
+  var pwLabel = document.getElementById('pw-label')
+
+  // SVG œil ouvert / fermé
+  var EYE_OPEN = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'
+  var EYE_OFF = '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a19.66 19.66 0 0 1 5.06-5.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a19.69 19.69 0 0 1-3.17 4.36"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+
+  // ── Validators ──
+  function vRequired(s){ return typeof s==='string' && s.trim().length > 0 }
+  function vEmail(s){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s||'').trim()) }
+  // FR : +33 suivi de 9 chiffres OU 0 suivi de 9 chiffres ; espaces/tirets/points tolérés
+  function vTelFR(s){
+    var raw = String(s||'').replace(/[\s.\-()]/g,'')
+    return /^(?:\+33[1-9]\d{8}|0[1-9]\d{8})$/.test(raw)
+  }
+  function pwScore(s){
+    if(!s) return 0
+    var hasLetter = /[A-Za-zÀ-ÿ]/.test(s)
+    var hasDigit = /\d/.test(s)
+    if(s.length < 10 || !hasLetter || !hasDigit) return 0
+    var score = 1
+    if(s.length >= 12) score++
+    if(/[^A-Za-z0-9]/.test(s) || (/[A-Z]/.test(s) && /[a-z]/.test(s) && s.length >= 14)) score++
+    return Math.min(score, 3)
+  }
+
+  function setErr(name, msg){
+    errs[name].textContent = msg || ''
+    inputs[name].classList.toggle('error', !!msg)
+  }
+
+  function validate(showErrors){
+    var ok = true
+    var v = {
+      prenom: inputs.prenom.value.trim(),
+      nom: inputs.nom.value.trim(),
+      email: inputs.email.value.trim(),
+      telephone: inputs.telephone.value.trim(),
+      password: inputs.password.value,
+      password2: inputs.password2.value
+    }
+    if(!vRequired(v.prenom)){ ok=false; if(showErrors) setErr('prenom','Prénom requis.') } else setErr('prenom','')
+    if(!vRequired(v.nom)){ ok=false; if(showErrors) setErr('nom','Nom requis.') } else setErr('nom','')
+    if(!vEmail(v.email)){ ok=false; if(showErrors) setErr('email','Email invalide.') } else setErr('email','')
+    if(!vTelFR(v.telephone)){ ok=false; if(showErrors) setErr('telephone','Numéro français invalide (10 chiffres ou +33).') } else setErr('telephone','')
+    var s = pwScore(v.password)
+    if(s === 0){
+      ok=false
+      if(showErrors) setErr('password','10 caractères minimum, dont au moins 1 lettre et 1 chiffre.')
+    } else setErr('password','')
+    if(v.password2 !== v.password || !v.password2){
+      ok=false
+      if(showErrors) setErr('password2','Les mots de passe ne correspondent pas.')
+    } else setErr('password2','')
+    return { ok: ok, values: v, score: s }
+  }
+
+  function refreshSubmit(){
+    btnSubmit.disabled = !validate(false).ok
+  }
+
+  function refreshStrength(){
+    var s = pwScore(inputs.password.value)
+    pwStrength.className = 'pw-strength' + (s>0 ? ' s'+s : '')
+    var labels = ['', 'Faible', 'Moyen', 'Fort']
+    pwLabel.textContent = inputs.password.value ? labels[s] : ''
+  }
+
+  // ── Toggle œil ──
+  document.querySelectorAll('.pw-toggle').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var target = document.getElementById(btn.dataset.target)
+      var svg = btn.querySelector('svg')
+      if(target.type === 'password'){
+        target.type = 'text'
+        svg.innerHTML = EYE_OFF
+        btn.setAttribute('aria-label','Masquer le mot de passe')
+      } else {
+        target.type = 'password'
+        svg.innerHTML = EYE_OPEN
+        btn.setAttribute('aria-label','Afficher le mot de passe')
+      }
+    })
+  })
+
+  // ── Live validation : fait sauter l'erreur dès que l'utilisateur corrige ──
+  Object.keys(inputs).forEach(function(name){
+    inputs[name].addEventListener('input', function(){
+      if(name === 'password') refreshStrength()
+      // n'affiche pas d'erreur tant que l'utilisateur tape, mais retire celles déjà affichées si OK
+      if(errs[name].textContent){
+        var v = validate(false)
+        if(name === 'password' && v.score > 0) setErr('password','')
+        if(name === 'password2' && inputs.password2.value === inputs.password.value && inputs.password2.value) setErr('password2','')
+        if(name === 'prenom' && vRequired(inputs.prenom.value)) setErr('prenom','')
+        if(name === 'nom' && vRequired(inputs.nom.value)) setErr('nom','')
+        if(name === 'email' && vEmail(inputs.email.value)) setErr('email','')
+        if(name === 'telephone' && vTelFR(inputs.telephone.value)) setErr('telephone','')
+      }
+      refreshSubmit()
+    })
+    inputs[name].addEventListener('blur', function(){
+      // À la sortie d'un champ touché, on affiche l'erreur si invalide
+      if(inputs[name].value) validate(true)
+      refreshSubmit()
+    })
+  })
 
   function setAlert(type, msg){
     alertBox.className = 'alert alert-' + type
     alertBox.textContent = msg
     alertBox.classList.remove('hidden')
   }
-  function clearAlert(){ alertBox.classList.add('hidden'); alertBox.textContent = '' }
+  function clearAlert(){ alertBox.classList.add('hidden'); alertBox.textContent='' }
 
-  siretInput.addEventListener('input', function(){
-    siretInput.value = siretInput.value.replace(/\D/g, '').slice(0,14)
-    preview.classList.add('hidden')
-    lookupCache = null
-  })
-
-  function doLookup(){
-    var siret = siretInput.value.trim()
-    if(!/^\d{14}$/.test(siret)){
-      setAlert('error', 'Le SIRET doit comporter 14 chiffres.')
-      return Promise.reject()
-    }
-    clearAlert()
-    btnLookup.disabled = true
-    btnLookup.textContent = 'Recherche...'
-    return fetch('/api/auth/lookup-siret', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ siret: siret })
-    }).then(function(r){
-      return r.json().then(function(data){ return { ok:r.ok, data:data } })
-    }).then(function(res){
-      btnLookup.disabled = false
-      btnLookup.textContent = 'Vérifier'
-      if(!res.ok){
-        setAlert('error', res.data.error || 'SIRET introuvable.')
-        return Promise.reject()
-      }
-      lookupCache = res.data
-      document.getElementById('prev-raison').textContent = res.data.raison_sociale || ''
-      document.getElementById('prev-adresse').textContent = [res.data.adresse, res.data.code_postal, res.data.ville].filter(Boolean).join(' · ')
-      document.getElementById('prev-naf').textContent = res.data.code_naf ? ('NAF ' + res.data.code_naf) : ''
-      preview.classList.remove('hidden')
-      return res.data
-    }).catch(function(err){
-      btnLookup.disabled = false
-      btnLookup.textContent = 'Vérifier'
-      if(err) console.error(err)
-      throw err
-    })
-  }
-
-  btnLookup.addEventListener('click', function(){ doLookup().catch(function(){}) })
-
+  // ── Submit ──
   form.addEventListener('submit', function(ev){
     ev.preventDefault()
     clearAlert()
-    var siret = siretInput.value.trim()
-    var email = document.getElementById('email').value.trim()
-    var password = document.getElementById('password').value
-    if(!/^\d{14}$/.test(siret)){ setAlert('error', 'SIRET invalide (14 chiffres).'); return }
-    if(!email){ setAlert('error', 'Email requis.'); return }
-    if(password.length < 10){ setAlert('error', 'Mot de passe trop court (10 caractères minimum).'); return }
+    var v = validate(true)
+    refreshSubmit()
+    if(!v.ok){ return }
+
     btnSubmit.disabled = true
-    btnSubmit.innerHTML = '<span class="spinner"></span> Création...'
+    btnSubmit.innerHTML = '<span class="spinner"></span> Création en cours…'
+
     fetch('/api/auth/signup', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ email: email, password: password, siret: siret })
+      credentials:'same-origin',
+      body: JSON.stringify({
+        prenom: v.values.prenom,
+        nom: v.values.nom,
+        email: v.values.email,
+        telephone: v.values.telephone,
+        password: v.values.password
+      })
     }).then(function(r){
       return r.json().then(function(data){ return { ok:r.ok, status:r.status, data:data } })
+                     .catch(function(){ return { ok:r.ok, status:r.status, data:{} } })
     }).then(function(res){
-      btnSubmit.disabled = false
-      btnSubmit.textContent = 'Créer mon compte'
-      if(!res.ok){
-        setAlert('error', res.data.error || 'Erreur lors de la création du compte.')
+      if(res.status === 201 || (res.ok && res.status === 200)){
+        // Étape suivante : SIRET via /onboarding/entreprise
+        window.location.href = '/onboarding/entreprise'
         return
       }
-      setAlert('success', 'Compte créé. Consultez votre boîte mail pour activer votre accès.')
-      form.reset()
-      preview.classList.add('hidden')
+      btnSubmit.disabled = false
+      btnSubmit.textContent = 'Créer mon compte'
+      if(res.status === 409){
+        setErr('email', res.data.error || 'Cet email est déjà utilisé.')
+        return
+      }
+      if(res.status === 422 && res.data && res.data.errors && typeof res.data.errors === 'object'){
+        Object.keys(res.data.errors).forEach(function(k){
+          if(errs[k]) setErr(k, String(res.data.errors[k]))
+        })
+        return
+      }
+      setAlert('error', (res.data && res.data.error) || 'Création impossible. Réessayez.')
     }).catch(function(err){
       btnSubmit.disabled = false
       btnSubmit.textContent = 'Créer mon compte'
@@ -207,6 +358,9 @@
       console.error(err)
     })
   })
+
+  // Init
+  refreshSubmit()
 })()
 </script>
 </body>

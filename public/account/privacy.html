@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vos données personnelles — MovUP</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#FFFFFF;--surface:#F5F5F7;
+    --card:#FFFFFF;--border:#E8E8ED;--border-2:#C7C7CC;
+    --text:#1D1D1F;--muted:#6E6E73;
+    --green:#1D8348;
+    --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+    --font-serif:'Instrument Serif',Georgia,serif;
+  }
+  body{background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:48px 20px}
+  .page{width:100%;max-width:720px}
+  .brand{display:inline-flex;align-items:center;gap:10px;margin:0 auto 20px;text-decoration:none;color:var(--text);font-weight:800;font-size:18px;letter-spacing:-.4px;justify-content:center;width:100%}
+  .brand-icon{background:var(--text);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex-shrink:0}
+  .brand-icon svg{width:18px;height:18px}
+  h1{font-size:28px;font-weight:800;letter-spacing:-.6px;color:var(--text);margin-bottom:8px;line-height:1.2;text-align:center}
+  h1 em{font-family:var(--font-serif);font-style:italic;font-weight:400}
+  .lead{font-size:15px;color:var(--muted);text-align:center;margin-bottom:32px;line-height:1.55}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px}
+  .card h2{font-size:17px;font-weight:700;letter-spacing:-.2px;margin-bottom:8px}
+  .card p{font-size:14px;color:var(--muted);margin-bottom:18px;line-height:1.6}
+  .card p:last-child{margin-bottom:0}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:14px;font-weight:700;padding:12px 22px;border-radius:10px;border:1px solid var(--text);background:var(--text);color:#fff;cursor:pointer;text-decoration:none;transition:background .15s}
+  .btn:hover{background:#000}
+  .btn-rate{font-size:12px;color:var(--muted);margin-top:10px;display:block;text-align:left}
+  .divider{height:1px;background:var(--border);margin:24px 0}
+  .delete-block{padding:18px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:13.5px;color:var(--muted)}
+  .delete-block strong{color:var(--text)}
+  .delete-block a{color:var(--text);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+  .footer{text-align:center;margin-top:24px;font-size:12.5px;color:var(--muted)}
+  .footer a{color:var(--text);font-weight:600;text-decoration:none}
+  .footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<main class="page">
+  <a href="/dashboard" class="brand" aria-label="Accueil MovUP">
+    <span class="brand-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+      </svg>
+    </span>
+    <span>MovUP</span>
+  </a>
+
+  <h1>Vos données <em>personnelles.</em></h1>
+  <p class="lead">Article 20 du RGPD : vous avez le droit de récupérer toutes les données que vous avez fournies à MovUP, à tout moment, dans un format structuré et lisible par machine.</p>
+
+  <section class="card">
+    <h2>Téléchargement de vos données</h2>
+    <p>Le fichier généré contient : votre profil, vos contacts, votre pipeline, votre agenda, vos devis, vos factures, vos frais, votre historique de recherches Leads, vos paramètres et la liste de vos boîtes mail connectées (sans les jetons OAuth chiffrés). Format JSON, environ quelques Ko à plusieurs Mo selon votre activité.</p>
+    <a href="/api/account/privacy/export" class="btn" download>
+      Télécharger mes données (JSON)
+    </a>
+    <span class="btn-rate">Limite : 5 téléchargements par 24 heures.</span>
+
+    <div class="divider"></div>
+
+    <div class="delete-block">
+      <strong>Suppression définitive du compte.</strong>
+      <p style="margin:8px 0 0">Pour supprimer votre compte et toutes vos données de manière irréversible, écrivez-nous à <a href="mailto:dpo@movup.io">dpo@movup.io</a>. Le délai de traitement est de 7 jours ouvrés conformément à l'article 17 du RGPD.</p>
+    </div>
+  </section>
+
+  <p class="footer">
+    <a href="/confidentialite">Politique de confidentialité complète</a> ·
+    <a href="/dashboard">Retour à l'application</a>
+  </p>
+</main>
+</body>
+</html>

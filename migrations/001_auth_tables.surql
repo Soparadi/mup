@@ -38,6 +38,21 @@ DEFINE FIELD IF NOT EXISTS marketing_consent_at ON user TYPE option<datetime>;
 DEFINE FIELD IF NOT EXISTS intended_plan ON user TYPE option<string>
   ASSERT $value = NONE OR $value INSIDE ["demarrage", "activite", "croisiere"];
 DEFINE FIELD IF NOT EXISTS intended_plan_at ON user TYPE option<datetime>;
+-- Essai 14 jours — captés au signup, pilotent l'accès en mode lecture seule
+-- + popup bloquant via le middleware requireActiveSubscription.
+DEFINE FIELD IF NOT EXISTS trial_started_at ON user TYPE option<datetime>;
+DEFINE FIELD IF NOT EXISTS trial_ends_at ON user TYPE option<datetime>;
+DEFINE FIELD IF NOT EXISTS trial_status ON user TYPE option<string>
+  ASSERT $value = NONE OR $value INSIDE ["active", "expired", "converted"];
+
+-- ── privacy_export_log ──
+-- Trace des téléchargements RGPD article 20. Sert au rate limit (5 / 24h / user).
+DEFINE TABLE IF NOT EXISTS privacy_export_log SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS user_id ON privacy_export_log TYPE record<user>;
+DEFINE FIELD IF NOT EXISTS exported_at ON privacy_export_log TYPE datetime DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS bytes_size ON privacy_export_log TYPE option<number>;
+DEFINE INDEX IF NOT EXISTS idx_privacy_export_user ON privacy_export_log FIELDS user_id;
+DEFINE INDEX IF NOT EXISTS idx_privacy_export_user_date ON privacy_export_log FIELDS user_id, exported_at;
 DEFINE INDEX IF NOT EXISTS user_email_unique ON user FIELDS email UNIQUE;
 DEFINE INDEX IF NOT EXISTS user_siret_unique ON user FIELDS siret UNIQUE;
 

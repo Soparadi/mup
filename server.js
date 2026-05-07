@@ -14,6 +14,7 @@ import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
 import { router as authRouter } from './server/auth/routes.js'
 import { requireAuth } from './server/middleware/requireAuth.js'
+import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
 import {
@@ -327,6 +328,22 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/v2/webhooks/')) return next()
   if (req.path.startsWith('/public/')) return next()
   return requireAuth(req, res, next)
+})
+
+// ── Gate subscription : essai 14j expiré → 402 sur les écritures ──
+// Tourne APRÈS requireAuth (req.authUser disponible). Routes exemptées :
+//   - /api/stripe/*               : paiement (passe 2)
+//   - /api/user/me                : état trial pour le popup
+//   - /api/account/privacy/export : RGPD à vie
+// Les méthodes GET passent toujours (lecture seule autorisée même expiré).
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/auth/') || req.path === '/auth' || req.path === '/health') return next()
+  if (req.path.startsWith('/v2/webhooks/')) return next()
+  if (req.path.startsWith('/public/')) return next()
+  if (req.path.startsWith('/stripe/')) return next()
+  if (req.path === '/user/me') return next()
+  if (req.path === '/account/privacy/export') return next()
+  return requireActiveSubscription(req, res, next)
 })
 
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }))
@@ -644,6 +661,133 @@ app.get('/api/user/search-history', async (req, res) => {
   } catch (err) {
     console.error('[search-history]', err.message)
     res.status(500).json({ error: 'Impossible de lire l\'historique' })
+  }
+})
+
+// ── État courant utilisateur — utilisé par le popup trial-expired-modal.js ──
+// Exempté de la gate subscription (le popup l'appelle à chaque page load,
+// même expiré, pour décider d'afficher l'overlay).
+app.get('/api/user/me', async (req, res) => {
+  try {
+    const u = req.authUser
+    if (!u) return res.status(401).json({ error: 'unauthorized' })
+    res.json({
+      id: String(u.id || '').replace(/^user:/, '').replace(/^⟨+|⟩+$/g, ''),
+      email: u.email || null,
+      prenom: u.prenom || null,
+      nom: u.nom || null,
+      name: u.name || null,
+      plan: u.plan || 'gratuit',
+      trial_status: u.trial_status || null,
+      trial_started_at: u.trial_started_at || null,
+      trial_ends_at: u.trial_ends_at || null
+    })
+  } catch (err) {
+    console.error('[user:me]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ── Export RGPD article 20 — JSON dump de toutes les données du user ──
+// Exempté de la gate subscription (accessible à vie, même après résiliation).
+// Rate limit 5 / 24h via la table privacy_export_log.
+app.get('/api/account/privacy/export', async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: 'unauthorized' })
+    const db = await getDb()
+    const cleanUserId = String(req.userId).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+
+    // Rate limit 5 exports / 24h
+    try {
+      const recent = await db.query(
+        `SELECT count() AS total FROM privacy_export_log
+         WHERE user_id = type::record('user', $uid)
+         AND exported_at > time::now() - 24h
+         GROUP ALL`,
+        { uid: cleanUserId }
+      )
+      const total = recent?.[0]?.[0]?.total || 0
+      if (total >= 5) {
+        return res.status(429).json({
+          error: 'rate_limit_exceeded',
+          message: 'Limite de 5 exports par 24h atteinte. Réessayez plus tard.'
+        })
+      }
+    } catch (e) { /* rate limit best-effort, on ne bloque pas */ }
+
+    // Récupération scopée userId — toutes les tables data du user.
+    // Tokens OAuth (mailbox_credentials.accessToken/refreshToken) chiffrés
+    // sont retirés du dump pour ne pas exposer même chiffrés.
+    async function dump(table) {
+      try {
+        const r = await db.query(`SELECT * FROM ${table} WHERE userId = $uid`, { uid: cleanUserId })
+        return r?.[0] || []
+      } catch (e) { return [] }
+    }
+    async function dumpUserDirect() {
+      try {
+        const r = await db.query(`SELECT * FROM type::record('user', $id)`, { id: cleanUserId })
+        const u = r?.[0]?.[0] || {}
+        const { password_hash, ...safe } = u
+        return safe
+      } catch (e) { return null }
+    }
+    async function dumpMailboxCreds() {
+      try {
+        const r = await db.query(
+          `SELECT id, ownerId, provider, email, scope, tokenExpiresAt, createdAt, updatedAt
+           FROM mailbox_credentials WHERE ownerId = $uid`,
+          { uid: cleanUserId }
+        )
+        return r?.[0] || []
+      } catch (e) { return [] }
+    }
+    async function dumpSearchHistory() {
+      try {
+        const r = await db.query(
+          `SELECT * FROM lead_search WHERE user_id = type::record('user', $uid)`,
+          { uid: cleanUserId }
+        )
+        return r?.[0] || []
+      } catch (e) { return [] }
+    }
+
+    const payload = {
+      exported_at: new Date().toISOString(),
+      export_version: 1,
+      user: await dumpUserDirect(),
+      contacts: await dump('contacts'),
+      pipeline: await dump('pipeline'),
+      agenda: await dump('agenda'),
+      devis: await dump('devis'),
+      facture: await dump('facture'),
+      frais: await dump('frais'),
+      frais_recurrents: await dump('frais_recurrents'),
+      user_settings: await dump('user_settings'),
+      mailbox_credentials: await dumpMailboxCreds(),
+      search_history: await dumpSearchHistory(),
+      // Note : exclus volontairement — leads INSEE (données publiques),
+      // mailbox tokens en clair, password_hash, sessions, verification_token.
+    }
+
+    const json = JSON.stringify(payload, null, 2)
+    const dateSlug = new Date().toISOString().slice(0, 10)
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="movup-export-${cleanUserId}-${dateSlug}.json"`)
+
+    // Log l'export pour le rate limit + traçabilité (best-effort, pas bloquant).
+    db.query(
+      `CREATE privacy_export_log SET
+        user_id = type::record('user', $uid),
+        exported_at = time::now(),
+        bytes_size = $size`,
+      { uid: cleanUserId, size: Buffer.byteLength(json, 'utf8') }
+    ).catch(e => console.warn('[privacy:export] log échec :', e.message))
+
+    res.send(json)
+  } catch (err) {
+    console.error('[privacy:export]', err.message)
+    res.status(500).json({ error: 'Export impossible' })
   }
 })
 

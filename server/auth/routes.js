@@ -231,13 +231,33 @@ router.post('/signup', async (req, res) => {
       marketing_consent: marketingConsent,      // false par défaut (RGPD)
       marketing_consent_at: marketingConsentAt,
       intended_plan: intendedPlan,              // SIGNAL marketing uniquement
-      intended_plan_at: intendedPlanAt
+      intended_plan_at: intendedPlanAt,
+      trial_status: 'active'                    // datetimes posées en 2ème temps (cf. ci-dessous)
     }
 
     const user = await createUser(userBody)
     if (!user) return res.status(500).json({ error: 'Création du compte impossible' })
 
     const userIdStr = String(user.id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+
+    // Datetimes trial calculées côté SurrealQL pour rester en datetime natif
+    // (cf. fix b219bf7 — l'API binding ne coerce pas les strings ISO).
+    // Échec silencieux : si l'UPDATE plante, l'utilisateur est créé sans dates
+    // trial mais peut quand même utiliser l'app (le middleware traite trial_status
+    // === undefined comme passant).
+    try {
+      const { getDb } = await import('../../lib/surreal.js')
+      const dbInst = await getDb()
+      await dbInst.query(
+        `UPDATE type::record('user', $id) SET
+          trial_started_at = time::now(),
+          trial_ends_at = time::now() + 14d`,
+        { id: userIdStr }
+      )
+    } catch (e) {
+      console.warn('[signup] trial dates UPDATE échoué :', e.message)
+    }
+
     const { token } = await createVerificationToken(userIdStr, 'email_verify')
 
     try {

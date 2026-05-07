@@ -268,6 +268,12 @@ export async function runAuthMigration() {
     // c'est user.plan qui pilote le comportement business.
     'DEFINE FIELD IF NOT EXISTS intended_plan ON user TYPE option<string> ASSERT $value = NONE OR $value INSIDE ["demarrage", "activite", "croisiere"]',
     'DEFINE FIELD IF NOT EXISTS intended_plan_at ON user TYPE option<datetime>',
+    // Essai 14 jours — captés au signup, pilotent l'accès en mode lecture
+    // seule + popup bloquant via le middleware requireActiveSubscription.
+    // Valeurs : 'active' (J0-J14) | 'expired' (J+15+) | 'converted' (Stripe paid).
+    'DEFINE FIELD IF NOT EXISTS trial_started_at ON user TYPE option<datetime>',
+    'DEFINE FIELD IF NOT EXISTS trial_ends_at ON user TYPE option<datetime>',
+    'DEFINE FIELD IF NOT EXISTS trial_status ON user TYPE option<string> ASSERT $value = NONE OR $value INSIDE ["active", "expired", "converted"]',
     'DEFINE INDEX IF NOT EXISTS user_email_unique ON user FIELDS email UNIQUE',
     // SIRET unique mais maintenant optionnel : plusieurs users peuvent rester sans siret
     // tant qu'ils n'ont pas franchi l'étape onboarding.
@@ -291,7 +297,16 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS ip ON audit_log TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS user_agent ON audit_log TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS metadata ON audit_log TYPE option<object>',
-    'DEFINE FIELD IF NOT EXISTS created_at ON audit_log TYPE datetime DEFAULT time::now()'
+    'DEFINE FIELD IF NOT EXISTS created_at ON audit_log TYPE datetime DEFAULT time::now()',
+    // ── privacy_export_log ──
+    // Trace des téléchargements RGPD article 20 (export à vie). Sert au rate
+    // limit (max 5 / 24h / user) qui survit aux redémarrages serveur.
+    'DEFINE TABLE IF NOT EXISTS privacy_export_log SCHEMAFULL',
+    'DEFINE FIELD IF NOT EXISTS user_id ON privacy_export_log TYPE record<user>',
+    'DEFINE FIELD IF NOT EXISTS exported_at ON privacy_export_log TYPE datetime DEFAULT time::now()',
+    'DEFINE FIELD IF NOT EXISTS bytes_size ON privacy_export_log TYPE option<number>',
+    'DEFINE INDEX IF NOT EXISTS idx_privacy_export_user ON privacy_export_log FIELDS user_id',
+    'DEFINE INDEX IF NOT EXISTS idx_privacy_export_user_date ON privacy_export_log FIELDS user_id, exported_at'
   ]
   for (const q of queries) {
     try { await db.query(q) } catch (e) { console.warn('[auth-migration]', q.slice(0, 80), '→', e.message) }

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activation de votre abonnement — MovUP</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#FFFFFF;--surface:#F5F5F7;
+    --card:#FFFFFF;--border:#E8E8ED;--border-2:#C7C7CC;
+    --text:#1D1D1F;--muted:#6E6E73;--soft:#AEAEB2;
+    --rdv:#0BBCD4;--gagne:#1D8348;
+    --bg-rdv:rgba(11,188,212,.12);
+    --bg-gagne:rgba(29,131,72,.12);
+    --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+    --font-serif:'Instrument Serif',Georgia,serif;
+  }
+  body{background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:48px 20px}
+  .page{width:100%;max-width:560px}
+  .brand{display:inline-flex;align-items:center;gap:10px;margin:0 auto 20px;text-decoration:none;color:var(--text);font-weight:800;font-size:18px;letter-spacing:-.4px;justify-content:center;width:100%}
+  .brand-icon{background:var(--text);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex-shrink:0}
+  .brand-icon svg{width:18px;height:18px}
+  h1{font-size:28px;font-weight:800;letter-spacing:-.6px;color:var(--text);margin-bottom:8px;line-height:1.2;text-align:center}
+  h1 em{font-family:var(--font-serif);font-style:italic;font-weight:400}
+  .lead{font-size:15px;color:var(--muted);text-align:center;margin-bottom:28px;line-height:1.55}
+  .recap{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px 26px;margin-bottom:18px;text-align:center;border-left:5px solid var(--rdv)}
+  .recap[data-plan="activite"]{border-left-color:var(--gagne)}
+  .recap[data-plan="croisiere"]{border-left-color:var(--gagne)}
+  .recap-label{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .recap-name{font-size:22px;font-weight:700;letter-spacing:-.3px;margin-bottom:4px}
+  .recap-price{font-size:36px;font-weight:600;letter-spacing:-.04em;line-height:1;color:var(--rdv)}
+  .recap[data-plan="activite"] .recap-price{color:var(--gagne)}
+  .recap[data-plan="croisiere"] .recap-price{color:var(--text)}
+  .recap-period{font-size:14px;color:var(--muted);margin-left:4px}
+  .info{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px 26px;margin-bottom:18px}
+  .info-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;background:var(--bg-rdv);color:var(--rdv);padding:5px 12px;border-radius:999px;margin-bottom:12px}
+  .info p{font-size:14px;color:var(--text);margin-bottom:14px;line-height:1.6}
+  .info p:last-child{margin-bottom:0}
+  .info strong{font-weight:700}
+  .actions{display:flex;flex-direction:column;gap:10px;margin-top:20px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:14px;font-weight:700;padding:13px 22px;border-radius:10px;border:1px solid var(--text);background:var(--text);color:#fff;cursor:pointer;text-decoration:none;transition:background .15s;width:100%}
+  .btn:hover{background:#000}
+  .btn-ghost{background:transparent;color:var(--text);border-color:var(--border-2)}
+  .btn-ghost:hover{background:transparent;color:#000;border-color:var(--text)}
+  .footer{text-align:center;margin-top:18px;font-size:12.5px;color:var(--muted)}
+  .footer a{color:var(--text);font-weight:600;text-decoration:none}
+  .footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<main class="page">
+  <a href="/dashboard" class="brand" aria-label="Accueil MovUP">
+    <span class="brand-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+      </svg>
+    </span>
+    <span>MovUP</span>
+  </a>
+
+  <h1>Activation de <em>votre abonnement.</em></h1>
+  <p class="lead">Vous êtes à un email de débloquer l'application complète.</p>
+
+  <div class="recap" id="plan-recap" data-plan="">
+    <div class="recap-label">Plan choisi</div>
+    <div class="recap-name" id="plan-name">—</div>
+    <div><span class="recap-price" id="plan-price">—</span><span class="recap-period">/mois</span></div>
+  </div>
+
+  <div class="info">
+    <span class="info-tag">Phase de lancement</span>
+    <p><strong>Stripe est en cours d'intégration finale.</strong> Pour activer votre abonnement immédiatement, contactez-nous par email en mentionnant le plan choisi.</p>
+    <p>Votre abonnement sera activé manuellement <strong>sous 24 heures</strong>. Délai exceptionnel pendant la phase de lancement, levé dès la mise en service de Stripe (sous 48h).</p>
+    <div class="actions">
+      <a id="mailto-btn" class="btn" href="#">Envoyer un email à bonjour@movup.io</a>
+      <a class="btn btn-ghost" href="/tarifs">Revenir aux tarifs</a>
+    </div>
+  </div>
+
+  <p class="footer">
+    <a href="/dashboard">Retour à l'application</a> ·
+    <a href="/account/privacy">Mes données</a>
+  </p>
+</main>
+
+<script>
+(function(){
+  var PLANS = {
+    demarrage: { name: 'Démarrage', price: '19 €', color: 'demarrage' },
+    activite:  { name: 'Activité',  price: '29 €', color: 'activite' },
+    croisiere: { name: 'Croisière', price: '39 €', color: 'croisiere' }
+  }
+  var params = new URLSearchParams(window.location.search)
+  var planKey = params.get('plan')
+  var p = PLANS[planKey]
+  if (!p) {
+    // Pas de plan reconnu → afficher Activité par défaut + petit avertissement
+    p = PLANS.activite
+    document.getElementById('plan-name').textContent = p.name + ' (par défaut)'
+  } else {
+    document.getElementById('plan-name').textContent = p.name
+  }
+  document.getElementById('plan-price').textContent = p.price
+  document.getElementById('plan-recap').setAttribute('data-plan', p.color)
+  var subject = 'Activation MovUP — Plan ' + p.name
+  var body = 'Bonjour,\n\nJe souhaite activer mon abonnement MovUP au plan ' + p.name + ' (' + p.price + '/mois).\n\nMon email de compte : [votre email]\n\nMerci.'
+  document.getElementById('mailto-btn').setAttribute(
+    'href',
+    'mailto:bonjour@movup.io?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body)
+  )
+})()
+</script>
+</body>
+</html>

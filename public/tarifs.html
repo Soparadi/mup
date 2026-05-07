@@ -2,266 +2,541 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tarifs · MovUP</title>
-<meta name="description" content="4 plans MovUP sans engagement : Gratuit, Starter 29€, Pro 49€, Business 79€. Franchise de TVA art. 293 B. 14 jours d'essai sans carte bancaire.">
-<meta property="og:title" content="Tarifs · MovUP">
-<meta property="og:description" content="4 plans sans engagement, 14 jours d'essai gratuits, sans carte bancaire. Franchise de TVA art. 293 B du CGI.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarifs — MovUP</title>
+<meta name="description" content="3 formules pour l'auto-entrepreneur français. Démarrage 14 €, Activité 24 €, Croisière 39 €. 14 jours gratuits sans carte bancaire.">
+<meta name="keywords" content="tarifs MovUP, prix CRM auto-entrepreneur, démarrage activité croisière, prospection française">
+<link rel="canonical" href="https://movup.io/tarifs">
 <meta property="og:type" content="website">
+<meta property="og:title" content="Tarifs MovUP — 3 formules pour l'auto-entrepreneur">
+<meta property="og:description" content="Démarrage 14 €, Activité 24 €, Croisière 39 €. 14 jours gratuits, sans carte bancaire, sans engagement.">
 <meta property="og:url" content="https://movup.io/tarifs">
 <meta property="og:image" content="https://movup.io/favicon.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tarifs MovUP — 3 formules pour l'auto-entrepreneur">
+<meta name="twitter:description" content="Démarrage 14 €, Activité 24 €, Croisière 39 €. 14 jours gratuits, sans carte bancaire.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+
 <link rel="stylesheet" href="/styles/marketing-layout.css">
-<link rel="stylesheet" href="/styles/marketing-pages.css">
 <link rel="stylesheet" href="/styles/cookies-banner.css">
+
+<style>
+/* Variables landing partagées (sous-ensemble nécessaire à .movup-pricing
+   pour résoudre var(--section-pad-y) et fonts globales). Aligné sur
+   public/index.html — toute modif doit être propagée aux deux fichiers
+   (TODO Phase 1.5 : extraire vers /styles/movup-pricing.css partagé). */
+:root {
+  --section-pad-y: 80px;
+  --font-sans: 'Geist', -apple-system, 'Helvetica Neue', sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-mono: 'Geist Mono', 'SF Mono', Menlo, monospace;
+}
+@media (max-width: 880px) {
+  :root { --section-pad-y: 56px; }
+}
+
+/* La marketing-layout.css applique body{font-family:'Geist',…} ; on garantit
+   ici la même base au cas où l'ordre de chargement diffère. */
+body.marketing-page {
+  font-family: var(--font-sans);
+}
+
+/* ──────────────────────────────────────────────────────────────
+   MOVUP-PRICING — nouvelle grille tarifaire 3 plans, scopée
+   Toutes les règles sont préfixées .movup-pricing pour éviter
+   toute collision avec le CSS landing existant.
+   ────────────────────────────────────────────────────────────── */
+.movup-pricing {
+  --bg-page: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-soft: #F6F6F4;
+  --text-primary: #0A0A0A;
+  --text-secondary: #5A5A5A;
+  --text-muted: #9A9A9A;
+  --text-light: #C4C4C4;
+  --border: #E8E8E8;
+  /* Couleurs métiers — alignées sur les --stage-* déjà définies dans :root */
+  --color-mailing: #B84C00;
+  --color-phoning: #4338CA;
+  --color-visio: #7C3AED;
+  --color-rdv: #0BBCD4;
+  --color-devis: #F59E0B;
+  --color-gagne: #1D8348;
+  --color-linkedin: #1D4ED8;
+  --bg-mailing: rgba(184,76,0,0.12);
+  --bg-phoning: rgba(67,56,202,0.12);
+  --bg-visio: rgba(124,58,237,0.12);
+  --bg-rdv: rgba(11,188,212,0.12);
+  --bg-devis: rgba(245,158,11,0.12);
+  --bg-gagne: rgba(29,131,72,0.12);
+  --bg-linkedin: rgba(29,78,216,0.12);
+
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--section-pad-y) 32px;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.55;
+  display: block;
+}
+
+.movup-pricing .page-header { text-align: center; margin-bottom: 40px; }
+.movup-pricing .page-title {
+  font-size: 56px; font-weight: 600; letter-spacing: -0.03em;
+  margin-bottom: 18px; line-height: 1.05;
+}
+.movup-pricing .page-title em {
+  font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400; letter-spacing: -0.005em;
+}
+.movup-pricing .page-subtitle {
+  font-size: 17px; color: var(--text-secondary);
+  max-width: 580px; margin: 0 auto; line-height: 1.55;
+}
+
+.movup-pricing .trial-kpi-bar {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px 24px; max-width: 880px; margin: 48px auto 32px;
+  display: flex; align-items: center; gap: 8px;
+}
+.movup-pricing .kpi-block {
+  flex: 1; display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; border-left: 3px solid; border-radius: 4px;
+}
+.movup-pricing .kpi-block-gagne { border-left-color: var(--color-gagne); }
+.movup-pricing .kpi-block-rdv { border-left-color: var(--color-rdv); }
+.movup-pricing .kpi-block-visio { border-left-color: var(--color-visio); }
+.movup-pricing .kpi-block-devis { border-left-color: var(--color-devis); }
+.movup-pricing .kpi-icon {
+  flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.movup-pricing .kpi-icon-gagne { background: var(--bg-gagne); }
+.movup-pricing .kpi-icon-rdv { background: var(--bg-rdv); }
+.movup-pricing .kpi-icon-visio { background: var(--bg-visio); }
+.movup-pricing .kpi-icon-devis { background: var(--bg-devis); }
+.movup-pricing .kpi-content { display: flex; flex-direction: column; gap: 2px; }
+.movup-pricing .kpi-value {
+  font-size: 22px; font-weight: 700; line-height: 1; letter-spacing: -0.015em;
+}
+.movup-pricing .kpi-value-gagne { color: var(--color-gagne); }
+.movup-pricing .kpi-value-rdv { color: var(--color-rdv); }
+.movup-pricing .kpi-value-visio { color: var(--color-visio); }
+.movup-pricing .kpi-value-devis { color: var(--color-devis); }
+.movup-pricing .kpi-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.movup-pricing .kpi-divider { width: 1px; height: 32px; background: var(--border); flex-shrink: 0; }
+
+.movup-pricing .billing-toggle { display: flex; justify-content: center; margin-bottom: 56px; }
+.movup-pricing .toggle-wrapper {
+  display: inline-flex; align-items: center; background: var(--bg-soft);
+  border-radius: 999px; padding: 6px; gap: 4px;
+}
+.movup-pricing .toggle-btn {
+  padding: 11px 26px; border: none; background: transparent; border-radius: 999px;
+  font-family: inherit; font-size: 14px; font-weight: 500; color: var(--text-secondary);
+  cursor: pointer; transition: all 0.15s ease;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.movup-pricing .toggle-btn.active { background: var(--text-primary); color: #FFFFFF; }
+.movup-pricing .toggle-discount { color: var(--color-gagne); font-weight: 600; font-size: 13px; }
+.movup-pricing .toggle-btn.active .toggle-discount { color: #FFFFFF; }
+
+.movup-pricing .plans-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch;
+}
+.movup-pricing .plan {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 36px 32px; display: flex; flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative;
+  border-left: 5px solid var(--plan-color, var(--text-primary));
+}
+.movup-pricing .plan[data-plan="demarrage"] { --plan-color: var(--color-rdv); }
+.movup-pricing .plan[data-plan="activite"]  { --plan-color: var(--color-visio); }
+.movup-pricing .plan[data-plan="croisiere"] { --plan-color: var(--color-gagne); }
+.movup-pricing .plan:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+
+.movup-pricing .plan-popular {
+  background: var(--bg-soft); color: var(--text-primary);
+  border: 1px solid var(--border); border-left: 5px solid var(--color-gagne);
+  transform: scale(1.025); box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+}
+.movup-pricing .plan-popular:hover {
+  transform: scale(1.025) translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+.movup-pricing .plan-popular::before {
+  content: "Le plus choisi";
+  position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+  background: var(--color-gagne); color: #FFFFFF;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 5px 14px; border-radius: 999px; white-space: nowrap;
+}
+.movup-pricing .plan-popular .plan-divider { background: var(--border); }
+
+.movup-pricing .plan-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 28px; align-self: flex-start;
+}
+.movup-pricing .plan[data-plan="demarrage"] .plan-label { background: var(--bg-rdv); color: var(--color-rdv); }
+.movup-pricing .plan[data-plan="activite"] .plan-label { background: var(--bg-gagne); color: var(--color-gagne); }
+.movup-pricing .plan[data-plan="croisiere"] .plan-label { background: var(--bg-gagne); color: var(--color-gagne); }
+.movup-pricing .plan-label-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.movup-pricing .plan-price-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; }
+.movup-pricing .plan-price { font-size: 64px; font-weight: 600; letter-spacing: -0.045em; line-height: 1; }
+.movup-pricing .plan[data-plan="demarrage"] .plan-price { color: var(--color-rdv); }
+.movup-pricing .plan[data-plan="activite"] .plan-price { color: var(--color-gagne); }
+.movup-pricing .plan[data-plan="croisiere"] .plan-price { color: var(--text-primary); }
+.movup-pricing .plan-period { font-size: 14px; color: var(--text-muted); }
+.movup-pricing .plan-billing { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+.movup-pricing .plan-tagline {
+  font-size: 15px; color: var(--text-secondary); line-height: 1.55;
+  min-height: 90px; margin-bottom: 28px;
+}
+.movup-pricing .plan-divider { height: 1px; background: var(--border); margin: 0 0 24px; }
+.movup-pricing .plan-features { list-style: none; margin-bottom: 32px; flex-grow: 1; padding: 0; }
+.movup-pricing .plan-features li {
+  display: flex; align-items: flex-start; gap: 12px;
+  font-size: 15px; color: var(--text-primary); padding: 9px 0; line-height: 1.45;
+}
+.movup-pricing .check-icon {
+  flex-shrink: 0; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.movup-pricing .plan[data-plan="demarrage"] .check-icon { background: var(--bg-rdv); }
+.movup-pricing .plan[data-plan="activite"] .check-icon { background: var(--bg-gagne); }
+.movup-pricing .plan[data-plan="croisiere"] .check-icon { background: var(--bg-gagne); }
+
+.movup-pricing .mini-pipeline {
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 16px; padding: 14px 0 18px; border-top: 1px solid var(--border);
+}
+.movup-pricing .pipeline-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+.movup-pricing .pipeline-line { flex-grow: 1; height: 2px; border-radius: 1px; }
+.movup-pricing .plan:hover .pipeline-dot { transform: scale(1.15); }
+
+.movup-pricing .plan-cta {
+  width: 100%; padding: 15px 20px; border: 1px solid var(--text-primary);
+  background: var(--text-primary); color: #FFFFFF;
+  font-family: inherit; font-size: 14px; font-weight: 500;
+  border-radius: 10px; cursor: pointer; transition: background 0.15s ease;
+  text-decoration: none; text-align: center; display: block; margin-top: 8px;
+}
+.movup-pricing .plan-cta:hover { background: #2A2A2A; }
+
+.movup-pricing .footnote {
+  text-align: center; margin-top: 56px; font-size: 13px; color: var(--text-muted);
+  max-width: 720px; margin-left: auto; margin-right: auto;
+}
+
+.movup-pricing .why-section { margin: 96px auto 0; max-width: 1100px; }
+.movup-pricing .why-title {
+  text-align: center; font-size: 36px; font-weight: 600;
+  letter-spacing: -0.025em; margin-bottom: 12px; line-height: 1.15;
+}
+.movup-pricing .why-title em { font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400; }
+.movup-pricing .why-subtitle {
+  text-align: center; font-size: 16px; color: var(--text-secondary);
+  max-width: 540px; margin: 0 auto 56px;
+}
+.movup-pricing .why-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.movup-pricing .why-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 32px 28px; transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.movup-pricing .why-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+.movup-pricing .why-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 20px;
+}
+.movup-pricing .why-icon-rdv { background: var(--bg-rdv); }
+.movup-pricing .why-icon-visio { background: var(--bg-visio); }
+.movup-pricing .why-icon-gagne { background: var(--bg-gagne); }
+.movup-pricing .why-card-title { font-size: 17px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.005em; }
+.movup-pricing .why-card-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.55; }
+
+@media (max-width: 980px) {
+  .movup-pricing .plans-grid, .movup-pricing .why-grid {
+    grid-template-columns: 1fr; max-width: 480px; margin-left: auto; margin-right: auto;
+  }
+  .movup-pricing .page-title { font-size: 40px; }
+  .movup-pricing .trial-kpi-bar { flex-direction: column; gap: 16px; }
+  .movup-pricing .kpi-divider { display: none; }
+}
+@media (max-width: 640px) {
+  .movup-pricing { padding: 48px 18px 80px; }
+  .movup-pricing .page-title { font-size: 32px; }
+}
+</style>
 </head>
 <body class="marketing-page">
 
+<!-- Header marketing (injecté par marketing-layout.js) -->
 <div id="mup-mk-header-slot"></div>
 
 <main>
+  <section id="tarifs" class="movup-pricing">
 
-  <!-- ── HERO ── -->
-  <section class="mk-hero">
-    <div class="mk-container">
-      <h1>Un prix juste pour chaque besoin.</h1>
-      <p class="mk-hero__sub">Pas de frais cachés, pas d'engagement, pas de palier surprise. Choisissez le plan adapté à votre activité, changez quand vous voulez.</p>
+  <header class="page-header">
+    <h1 class="page-title">Trouvez vos clients. <em>Signez plus vite.</em></h1>
+    <p class="page-subtitle">Trois formules pensées pour l'auto-entrepreneur français, du premier prospect au pilotage serein de votre activité.</p>
+  </header>
 
-      <div class="mk-toggle" id="mk-toggle" role="group" aria-label="Périodicité de facturation">
-        <button type="button" data-period="monthly" aria-pressed="true" class="active">Mensuel</button>
-        <button type="button" data-period="yearly" aria-pressed="false">Annuel <span class="mk-toggle__save">– 15 %</span></button>
+  <!-- KPI BAR essai gratuit -->
+  <section class="trial-kpi-bar" aria-label="Garanties essai gratuit">
+    <div class="kpi-block kpi-block-gagne">
+      <div class="kpi-icon kpi-icon-gagne">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 13L9 17L19 7" stroke="#1D8348" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <div class="mk-tva-mention">Tarifs en franchise de TVA — art. 293 B du CGI</div>
-    </div>
-  </section>
-
-  <!-- ── PRICING GRID ── -->
-  <section class="mk-section" style="padding-top:0;border-top:none;">
-    <div class="mk-container">
-
-      <div class="mk-pricing">
-
-        <!-- Carte Gratuit -->
-        <article class="mk-plan">
-          <div class="mk-plan__name">Gratuit</div>
-          <div class="mk-plan__price">
-            <span class="mk-plan__price-amount" data-price data-monthly="0 €" data-yearly="0 €">0 €</span>
-            <span class="mk-plan__price-suffix">/mois</span>
-          </div>
-          <div class="mk-plan__period-note" data-period-note data-note-monthly="Sans engagement" data-note-yearly="Sans engagement">Sans engagement</div>
-          <p class="mk-plan__sub">Pour tester MovUP sereinement.</p>
-          <ul class="mk-plan__features">
-            <li>1 utilisateur</li>
-            <li>50 contacts maximum</li>
-            <li>20 deals dans le pipeline</li>
-            <li>5 devis par mois</li>
-            <li>1 boîte mail connectée</li>
-            <li>Statistiques de base</li>
-          </ul>
-          <a href="/signup" class="mk-btn mk-btn--ghost mk-plan__cta">Démarrer gratuitement</a>
-        </article>
-
-        <!-- Carte Starter (featured) -->
-        <article class="mk-plan mk-plan--featured">
-          <span class="mk-plan__badge">Le plus choisi</span>
-          <div class="mk-plan__name">Starter</div>
-          <div class="mk-plan__price">
-            <span class="mk-plan__price-amount" data-price data-monthly="29 €" data-yearly="24,65 €">29 €</span>
-            <span class="mk-plan__price-suffix">/mois</span>
-          </div>
-          <div class="mk-plan__period-note" data-period-note data-note-monthly="Facturé mensuellement" data-note-yearly="Facturé annuellement (295,80 €)">Facturé mensuellement</div>
-          <p class="mk-plan__sub">Pour les indépendants qui prospectent activement.</p>
-          <ul class="mk-plan__features">
-            <li>1 utilisateur</li>
-            <li>Contacts illimités</li>
-            <li>Pipeline illimité</li>
-            <li>Devis et factures illimités</li>
-            <li>1 boîte mail OAuth + IMAP</li>
-            <li>500 emails de campagne/mois via Resend</li>
-            <li>Carte et tournées</li>
-            <li>Frais et OCR</li>
-            <li>Support email sous 24 h</li>
-          </ul>
-          <a href="/signup?plan=starter" class="mk-btn mk-btn--primary mk-plan__cta">Essayer 14 jours</a>
-        </article>
-
-        <!-- Carte Pro -->
-        <article class="mk-plan">
-          <div class="mk-plan__name">Pro</div>
-          <div class="mk-plan__price">
-            <span class="mk-plan__price-amount" data-price data-monthly="49 €" data-yearly="41,65 €">49 €</span>
-            <span class="mk-plan__price-suffix">/mois</span>
-          </div>
-          <div class="mk-plan__period-note" data-period-note data-note-monthly="Facturé mensuellement" data-note-yearly="Facturé annuellement (499,80 €)">Facturé mensuellement</div>
-          <p class="mk-plan__sub">Pour les indépendants au volume soutenu et petites équipes.</p>
-          <ul class="mk-plan__features">
-            <li class="is-strong">Tout le plan Starter, plus :</li>
-            <li>Jusqu'à 3 utilisateurs</li>
-            <li>2 boîtes mail connectées par utilisateur</li>
-            <li>2 000 emails de campagne/mois</li>
-            <li>Visio intégrée illimitée</li>
-            <li>Pipelines multiples (jusqu'à 5)</li>
-            <li>Statistiques avancées et prévisionnel pondéré</li>
-            <li>Support email sous 8 h</li>
-          </ul>
-          <a href="/signup?plan=pro" class="mk-btn mk-btn--ghost mk-plan__cta">Essayer 14 jours</a>
-        </article>
-
-        <!-- Carte Business -->
-        <article class="mk-plan">
-          <div class="mk-plan__name">Business</div>
-          <div class="mk-plan__price">
-            <span class="mk-plan__price-amount" data-price data-monthly="79 €" data-yearly="67,15 €">79 €</span>
-            <span class="mk-plan__price-suffix">/mois</span>
-          </div>
-          <div class="mk-plan__period-note" data-period-note data-note-monthly="Facturé mensuellement" data-note-yearly="Facturé annuellement (805,80 €)">Facturé mensuellement</div>
-          <p class="mk-plan__sub">Pour les PME structurées et équipes commerciales.</p>
-          <ul class="mk-plan__features">
-            <li class="is-strong">Tout le plan Pro, plus :</li>
-            <li>Jusqu'à 10 utilisateurs</li>
-            <li>5 boîtes mail par utilisateur</li>
-            <li>10 000 emails de campagne/mois</li>
-            <li>Pipelines illimités</li>
-            <li>Permissions par utilisateur et rôle</li>
-            <li>API publique en lecture/écriture</li>
-            <li>DPA signé, registre de traitement personnalisé</li>
-            <li>Onboarding dédié 1 h en visio</li>
-            <li>Support prioritaire sous 4 h, ligne directe</li>
-          </ul>
-          <a href="/signup?plan=business" class="mk-btn mk-btn--ghost mk-plan__cta">Essayer 14 jours</a>
-        </article>
-
+      <div class="kpi-content">
+        <span class="kpi-value kpi-value-gagne">14 jours</span>
+        <span class="kpi-label">Essai offert</span>
       </div>
-
-      <p class="mk-pricing-footnote">Tarifs en franchise de TVA, art. 293 B du CGI. Sans engagement. Annulation à tout moment depuis votre espace.</p>
-
     </div>
-  </section>
-
-  <!-- ── COMPARAISON ── -->
-  <section class="mk-section">
-    <div class="mk-container">
-      <h2>Comparaison détaillée</h2>
-      <p class="mk-section__sub">Tout ce qui distingue chaque plan, ligne par ligne.</p>
-      <div class="mk-compare-wrap">
-        <table class="mk-compare">
-          <thead>
-            <tr>
-              <th scope="col">Fonctionnalité</th>
-              <th scope="col">Gratuit</th>
-              <th scope="col">Starter</th>
-              <th scope="col">Pro</th>
-              <th scope="col">Business</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>Utilisateurs</td><td class="has">1</td><td class="has">1</td><td class="has">Jusqu'à 3</td><td class="has">Jusqu'à 10</td></tr>
-            <tr><td>Contacts</td><td class="has">50 max</td><td class="has">Illimités</td><td class="has">Illimités</td><td class="has">Illimités</td></tr>
-            <tr><td>Deals dans le pipeline</td><td class="has">20 max</td><td class="has">Illimités</td><td class="has">Illimités</td><td class="has">Illimités</td></tr>
-            <tr><td>Devis et factures</td><td class="has">5 / mois</td><td class="has">Illimités</td><td class="has">Illimités</td><td class="has">Illimités</td></tr>
-            <tr><td>Boîtes mail connectées</td><td class="has">1</td><td class="has">1 (OAuth + IMAP)</td><td class="has">2 / utilisateur</td><td class="has">5 / utilisateur</td></tr>
-            <tr><td>Emails de campagne / mois</td><td class="no">—</td><td class="has">500</td><td class="has">2 000</td><td class="has">10 000</td></tr>
-            <tr><td>Carte et tournées</td><td class="no">—</td><td class="has">✓</td><td class="has">✓</td><td class="has">✓</td></tr>
-            <tr><td>Frais et OCR</td><td class="no">—</td><td class="has">✓</td><td class="has">✓</td><td class="has">✓</td></tr>
-            <tr><td>Visio intégrée</td><td class="no">—</td><td class="no">—</td><td class="has">Illimitée</td><td class="has">Illimitée</td></tr>
-            <tr><td>Pipelines multiples</td><td class="no">—</td><td class="no">—</td><td class="has">Jusqu'à 5</td><td class="has">Illimités</td></tr>
-            <tr><td>Statistiques de base</td><td class="has">✓</td><td class="has">✓</td><td class="has">✓</td><td class="has">✓</td></tr>
-            <tr><td>Statistiques avancées et prévisionnel</td><td class="no">—</td><td class="no">—</td><td class="has">✓</td><td class="has">✓</td></tr>
-            <tr><td>Permissions par rôle</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="has">✓</td></tr>
-            <tr><td>API publique</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="has">Lecture / écriture</td></tr>
-            <tr><td>DPA signé, registre personnalisé</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="has">✓</td></tr>
-            <tr><td>Onboarding dédié</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="has">1 h en visio</td></tr>
-            <tr><td>Support email</td><td class="no">—</td><td class="has">Sous 24 h</td><td class="has">Sous 8 h</td><td class="has">Sous 4 h, ligne directe</td></tr>
-            <tr><td>Engagement</td><td class="has">Sans</td><td class="has">Sans</td><td class="has">Sans</td><td class="has">Sans</td></tr>
-          </tbody>
-        </table>
+    <div class="kpi-divider"></div>
+    <div class="kpi-block kpi-block-rdv">
+      <div class="kpi-icon kpi-icon-rdv">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="14" rx="2" stroke="#0BBCD4" stroke-width="2"/><path d="M8 3V8M16 3V8M4 11H20" stroke="#0BBCD4" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div class="kpi-content">
+        <span class="kpi-value kpi-value-rdv">0 €</span>
+        <span class="kpi-label">Carte bancaire</span>
+      </div>
+    </div>
+    <div class="kpi-divider"></div>
+    <div class="kpi-block kpi-block-visio">
+      <div class="kpi-icon kpi-icon-visio">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7V12C4 16.5 7.5 20.5 12 22C16.5 20.5 20 16.5 20 12V7L12 2Z" stroke="#7C3AED" stroke-width="2" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="kpi-content">
+        <span class="kpi-value kpi-value-visio">RGPD</span>
+        <span class="kpi-label">Données en Europe</span>
+      </div>
+    </div>
+    <div class="kpi-divider"></div>
+    <div class="kpi-block kpi-block-devis">
+      <div class="kpi-icon kpi-icon-devis">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 5L19 19M5 19L19 5" stroke="#F59E0B" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div class="kpi-content">
+        <span class="kpi-value kpi-value-devis">0</span>
+        <span class="kpi-label">Engagement</span>
       </div>
     </div>
   </section>
 
-  <!-- ── FAQ ── -->
-  <section class="mk-section">
-    <div class="mk-container">
-      <h2>Questions fréquentes</h2>
-      <p class="mk-section__sub">Tout ce qu'il faut savoir avant de commencer.</p>
-      <div class="mk-faq">
-        <details>
-          <summary>Puis-je changer de plan à tout moment ?</summary>
-          <p>Oui. Vous pouvez monter ou descendre de plan à n'importe quel moment depuis votre espace facturation. Le changement est proratisé sur le mois en cours.</p>
-        </details>
-        <details>
-          <summary>L'engagement est-il obligatoire ?</summary>
-          <p>Non. Tous les plans sont sans engagement. Vous pouvez résilier à tout moment, sans justification, depuis votre espace. Vos données restent récupérables 30 jours après résiliation.</p>
-        </details>
-        <details>
-          <summary>Que se passe-t-il à la fin des 14 jours d'essai ?</summary>
-          <p>Sans action de votre part, votre compte bascule automatiquement sur le plan Gratuit. Aucun prélèvement n'a lieu sans votre consentement explicite. Vos données sont conservées.</p>
-        </details>
-        <details>
-          <summary>MovUP applique-t-il la TVA ?</summary>
-          <p>Non. MovUP est édité par EI So Paradi, en franchise en base de TVA (article 293 B du Code général des impôts). Aucune TVA n'est facturée sur vos abonnements. La mention « TVA non applicable, art. 293 B du CGI » figure sur toutes nos factures.</p>
-        </details>
-        <details>
-          <summary>Puis-je payer par virement plutôt que par carte ?</summary>
-          <p>Oui pour les plans Pro et Business avec facturation annuelle. Contactez <a href="mailto:facturation@movup.io">facturation@movup.io</a> pour activer ce mode de paiement.</p>
-        </details>
-        <details>
-          <summary>Que comprend l'onboarding dédié du plan Business ?</summary>
-          <p>Une session d'1 heure en visio avec un membre de notre équipe pour configurer vos pipelines, importer vos contacts, paramétrer vos campagnes, et former votre équipe aux bonnes pratiques. Inclus, sans frais supplémentaire.</p>
-        </details>
-        <details>
-          <summary>Mes données m'appartiennent-elles ?</summary>
-          <p>Toujours. À tout moment, vous pouvez exporter l'intégralité de vos données (contacts, deals, devis, mails, statistiques) au format CSV ou JSON. Si vous résiliez, vous récupérez vos données pendant 30 jours, après quoi elles sont supprimées définitivement de nos serveurs.</p>
-        </details>
-      </div>
+  <!-- Toggle Mensuel / Annuel -->
+  <section class="billing-toggle" aria-label="Choix de facturation">
+    <div class="toggle-wrapper" role="group">
+      <button class="toggle-btn active" data-billing="monthly" type="button">Mensuel</button>
+      <button class="toggle-btn" data-billing="annual" type="button">Annuel <span class="toggle-discount">−15&nbsp;%</span></button>
     </div>
   </section>
 
-  <!-- ── CONFIANCE ── -->
-  <section class="mk-section">
-    <div class="mk-container">
-      <h2>MovUP, c'est aussi…</h2>
-      <div class="mk-trust">
+  <!-- Grille 3 plans -->
+  <section class="plans-grid" aria-label="Formules tarifaires">
 
-        <div class="mk-trust__card">
-          <span class="mk-trust__icon" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          </span>
-          <h3>Conforme RGPD.</h3>
-          <p><a href="/confidentialite">Politique de confidentialité</a> claire, DPA disponible, registre de traitement, droit à l'effacement effectif sous 30 jours.</p>
+    <article class="plan" data-plan="demarrage">
+      <span class="plan-label"><span class="plan-label-dot"></span>Démarrage</span>
+      <div class="plan-price-row">
+        <span class="plan-price" data-monthly="14" data-annual="12">14&nbsp;€</span>
+        <span class="plan-period">/mois</span>
+      </div>
+      <p class="plan-billing" data-billing-text>Sans engagement</p>
+      <p class="plan-tagline">Vous lancez votre activité. Vous voulez sortir du bouche-à-oreille et trouver vos premiers clients.</p>
+      <div class="plan-divider"></div>
+      <ul class="plan-features">
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Trouvez vos prospects par métier et région</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Suivez chaque échange dans un tableau clair</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>N'oubliez plus aucune relance</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Visualisez vos rendez-vous sur une carte</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Devis et factures sans limite</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Gardez vos notes de frais en photo</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Une boîte mail connectée à votre compte</li>
+      </ul>
+      <div class="mini-pipeline" aria-hidden="true">
+        <span class="pipeline-dot" style="background: var(--color-mailing)"></span>
+        <span class="pipeline-line" style="background: var(--color-phoning)"></span>
+        <span class="pipeline-dot" style="background: var(--color-phoning)"></span>
+        <span class="pipeline-line" style="background: var(--color-rdv)"></span>
+        <span class="pipeline-dot" style="background: var(--color-rdv)"></span>
+        <span class="pipeline-line" style="background: var(--border)"></span>
+        <span class="pipeline-dot" style="background: var(--text-light)"></span>
+        <span class="pipeline-line" style="background: var(--border)"></span>
+        <span class="pipeline-dot" style="background: var(--text-light)"></span>
+      </div>
+      <a href="/signup?plan=demarrage" class="plan-cta">Essayer 14 jours</a>
+    </article>
+
+    <article class="plan plan-popular" data-plan="activite">
+      <span class="plan-label"><span class="plan-label-dot"></span>Activité</span>
+      <div class="plan-price-row">
+        <span class="plan-price" data-monthly="24" data-annual="20">24&nbsp;€</span>
+        <span class="plan-period">/mois</span>
+      </div>
+      <p class="plan-billing" data-billing-text>Sans engagement</p>
+      <p class="plan-tagline">Vous prospectez chaque semaine. Vous signez régulièrement. Vous voulez gagner du temps et professionnaliser vos échanges.</p>
+      <div class="plan-divider"></div>
+      <ul class="plan-features">
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Exportez vos données quand vous voulez</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Mettez vos relances en pilote automatique</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Lancez une visio en un clic depuis MovUP</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Envoyez vos campagnes de prospection par email</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Personnalisez vos modèles de devis</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Voyez où vous perdez vos prospects</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Importez et fusionnez vos contacts existants</li>
+      </ul>
+      <div class="mini-pipeline" aria-hidden="true">
+        <span class="pipeline-dot" style="background: var(--color-mailing)"></span>
+        <span class="pipeline-line" style="background: var(--color-phoning)"></span>
+        <span class="pipeline-dot" style="background: var(--color-phoning)"></span>
+        <span class="pipeline-line" style="background: var(--color-visio)"></span>
+        <span class="pipeline-dot" style="background: var(--color-visio)"></span>
+        <span class="pipeline-line" style="background: var(--color-rdv)"></span>
+        <span class="pipeline-dot" style="background: var(--color-rdv)"></span>
+        <span class="pipeline-line" style="background: var(--color-devis)"></span>
+        <span class="pipeline-dot" style="background: var(--color-devis)"></span>
+      </div>
+      <a href="/signup?plan=activite" class="plan-cta">Essayer 14 jours</a>
+    </article>
+
+    <article class="plan" data-plan="croisiere">
+      <span class="plan-label"><span class="plan-label-dot"></span>Croisière</span>
+      <div class="plan-price-row">
+        <span class="plan-price" data-monthly="39" data-annual="33">39&nbsp;€</span>
+        <span class="plan-period">/mois</span>
+      </div>
+      <p class="plan-billing" data-billing-text>Sans engagement</p>
+      <p class="plan-tagline">Vous avez une activité installée. Vous gérez des clients réguliers et vous voulez piloter votre chiffre d'affaires sereinement.</p>
+      <div class="plan-divider"></div>
+      <ul class="plan-features">
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Facturez vos clients récurrents automatiquement</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Relancez les impayés sans y penser</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Suivez votre chiffre d'affaires en temps réel</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Anticipez votre chiffre d'affaires des 3 mois à venir</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Transmettez à votre comptable en un fichier mensuel</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Imprimez vos devis à votre logo et vos couleurs</li>
+        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Une session d'accompagnement de 30 minutes offerte</li>
+      </ul>
+      <div class="mini-pipeline" aria-hidden="true">
+        <span class="pipeline-dot" style="background: var(--color-mailing)"></span>
+        <span class="pipeline-line" style="background: var(--color-phoning)"></span>
+        <span class="pipeline-dot" style="background: var(--color-phoning)"></span>
+        <span class="pipeline-line" style="background: var(--color-visio)"></span>
+        <span class="pipeline-dot" style="background: var(--color-visio)"></span>
+        <span class="pipeline-line" style="background: var(--color-devis)"></span>
+        <span class="pipeline-dot" style="background: var(--color-devis)"></span>
+        <span class="pipeline-line" style="background: var(--color-gagne)"></span>
+        <span class="pipeline-dot" style="background: var(--color-gagne); box-shadow: 0 0 0 3px var(--bg-gagne)"></span>
+      </div>
+      <a href="/signup?plan=croisiere" class="plan-cta">Essayer 14 jours</a>
+    </article>
+
+  </section>
+
+  <p class="footnote">TVA non applicable, art. 293&nbsp;B du CGI. Sans engagement. Annulation à tout moment depuis votre espace. La formule annuelle est facturée en une fois et représente 15&nbsp;% d'économie.</p>
+
+  <!-- Pourquoi MovUP -->
+  <section class="why-section" aria-label="Pourquoi MovUP">
+    <h2 class="why-title">Trois bonnes raisons <em>de nous faire confiance.</em></h2>
+    <p class="why-subtitle">MovUP n'est pas un CRM générique. C'est un outil de prospection français, pensé pour la réalité de l'auto-entrepreneur.</p>
+    <div class="why-grid">
+      <article class="why-card">
+        <div class="why-icon why-icon-rdv">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7V12C2 17.5 6 22 12 22C18 22 22 17.5 22 12V7L12 2Z" stroke="#0BBCD4" stroke-width="2" stroke-linejoin="round"/><path d="M9 12L11 14L15 10" stroke="#0BBCD4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
-
-        <div class="mk-trust__card">
-          <span class="mk-trust__icon" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-          </span>
-          <h3>Paiement sécurisé.</h3>
-          <p>Tous les paiements sont traités par Stripe Payments Europe Ltd (Irlande). Aucune donnée bancaire n'est stockée sur nos serveurs. PCI-DSS niveau 1.</p>
+        <h3 class="why-card-title">Données hébergées en Europe</h3>
+        <p class="why-card-desc">Vos données restent en Europe, conformes au RGPD. Aucun transfert hors UE. Sauvegardes quotidiennes chiffrées.</p>
+      </article>
+      <article class="why-card">
+        <div class="why-icon why-icon-visio">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2V8M12 16V22M2 12H8M16 12H22" stroke="#7C3AED" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="#7C3AED" stroke-width="2"/></svg>
         </div>
-
-      </div>
+        <h3 class="why-card-title">Pensé pour vous, pas pour des équipes</h3>
+        <p class="why-card-desc">Aucune feature inutile. Pas de hiérarchie d'utilisateurs, pas de permissions complexes. Vous prospectez, vous signez.</p>
+      </article>
+      <article class="why-card">
+        <div class="why-icon why-icon-gagne">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 12L8 17L21 4" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3 class="why-card-title">Pas d'IA, juste votre savoir-faire</h3>
+        <p class="why-card-desc">MovUP ne rédige pas vos messages à votre place. Vous restez authentique, vous restez vous-même. C'est ça qui signe.</p>
+      </article>
     </div>
   </section>
 
-  <!-- ── CTA FINAL ── -->
-  <section class="mk-cta-final">
-    <div class="mk-container">
-      <h2>Commencez à structurer vos ventes aujourd'hui.</h2>
-      <p class="mk-cta-final__sub">14 jours gratuits, sans carte bancaire. Sans engagement.</p>
-      <div class="mk-cta-final__buttons">
-        <a href="/signup" class="mk-btn mk-btn--primary">Essayer MovUP gratuitement</a>
-        <a href="/fonctionnalites" class="mk-btn mk-btn--ghost">Voir les fonctionnalités</a>
-      </div>
+  <!-- BLOC EARLY ADOPTER — À ACTIVER APRÈS :
+       1. Système de comptage des places restantes (cron job + endpoint /api/early-adopter/remaining)
+       2. CGV mises à jour avec clause "prix bloqué 24 mois pour les 100 premiers abonnés payants"
+       3. Stripe : créer 3 produits supplémentaires (demarrage_founder 9€, activite_founder 15€, croisiere_founder 25€) avec règle de blocage tarifaire 24 mois en base de données (user.early_adopter_locked_until)
+  <section class="early-adopter" aria-label="Programme Early Adopter">
+    <span class="early-adopter-tag">Founder #001-100</span>
+    <h2 class="early-adopter-title">100 places à prix réduit, <em>prix bloqué 24 mois</em></h2>
+    <p class="early-adopter-desc">Réservé aux 100 premiers abonnés. Badge Founder dans votre profil. Vous nous aidez à grandir, on vous le rend.</p>
+    <div class="early-adopter-prices">
+      <span class="ea-price-item"><span class="ea-price-name">Démarrage</span><span class="ea-price-value">9 €</span></span>
+      <span class="ea-separator">·</span>
+      <span class="ea-price-item"><span class="ea-price-name">Activité</span><span class="ea-price-value">15 €</span></span>
+      <span class="ea-separator">·</span>
+      <span class="ea-price-item"><span class="ea-price-name">Croisière</span><span class="ea-price-value">25 €</span></span>
     </div>
   </section>
+  -->
 
+</section>
 </main>
 
+<!-- Footer (injecté par footer-loader.js) -->
 <div id="mup-footer-slot"></div>
+
 <script src="/scripts/footer-loader.js" defer></script>
 <script defer src="/scripts/marketing-layout.js"></script>
-<script defer src="/scripts/tarifs.js"></script>
 <script defer src="/scripts/cookies-banner.js"></script>
+
+<script>
+// Toggle Mensuel / Annuel — scopé à .movup-pricing pour ne pas interférer
+// avec d'autres toggles éventuels de la page.
+(function () {
+  var root = document.querySelector('.movup-pricing')
+  if (!root) return
+  var toggleBtns = root.querySelectorAll('.toggle-btn')
+  var priceElements = root.querySelectorAll('.plan-price')
+  var billingTexts = root.querySelectorAll('[data-billing-text]')
+  toggleBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var mode = btn.dataset.billing
+      toggleBtns.forEach(function (b) { b.classList.remove('active') })
+      btn.classList.add('active')
+      priceElements.forEach(function (price) {
+        var newValue = mode === 'annual' ? price.dataset.annual : price.dataset.monthly
+        price.innerHTML = newValue + '\u00a0\u20ac'
+      })
+      billingTexts.forEach(function (text) {
+        if (mode === 'annual') {
+          var planEl = text.closest('.plan')
+          var annualMonthly = planEl.querySelector('.plan-price').dataset.annual
+          var yearTotal = parseInt(annualMonthly, 10) * 12
+          text.textContent = 'Soit ' + yearTotal + ' \u20ac par an, sans engagement'
+        } else {
+          text.textContent = 'Sans engagement'
+        }
+      })
+    })
+  })
+})()
+</script>
 
 </body>
 </html>

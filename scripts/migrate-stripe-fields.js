@@ -61,10 +61,11 @@ try {
 }
 
 // 3. Échantillon users avec leurs champs Stripe
+// Note SurrealDB v2 : le champ ORDER BY doit figurer dans le SELECT.
 console.log('\nÉchantillon users (5 plus récents) :')
 const sample = await db.query(
   `SELECT email, plan, plan_billing_cycle, subscription_status,
-          stripe_customer_id, current_period_end
+          stripe_customer_id, current_period_end, created_at
    FROM user ORDER BY created_at DESC LIMIT 5`
 )
 const rows = sample?.[0] || []

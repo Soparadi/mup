@@ -31,6 +31,13 @@ DEFINE FIELD IF NOT EXISTS geo_data ON user TYPE option<object>;
 -- Consentement marketing (case opt-in non pré-cochée au signup, RGPD).
 DEFINE FIELD IF NOT EXISTS marketing_consent ON user TYPE bool DEFAULT false;
 DEFINE FIELD IF NOT EXISTS marketing_consent_at ON user TYPE option<datetime>;
+-- Intention de plan captée au signup via ?plan=… sur l'URL.
+-- SIGNAL MARKETING — utilisé uniquement pour analytics et relances commerciales.
+-- NE PAS UTILISER pour gérer les droits d'accès, les quotas ou le paywall :
+-- c'est user.plan qui pilote le comportement business.
+DEFINE FIELD IF NOT EXISTS intended_plan ON user TYPE option<string>
+  ASSERT $value = NONE OR $value INSIDE ["demarrage", "activite", "croisiere"];
+DEFINE FIELD IF NOT EXISTS intended_plan_at ON user TYPE option<datetime>;
 DEFINE INDEX IF NOT EXISTS user_email_unique ON user FIELDS email UNIQUE;
 DEFINE INDEX IF NOT EXISTS user_siret_unique ON user FIELDS siret UNIQUE;
 

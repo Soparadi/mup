@@ -187,6 +187,17 @@ router.post('/signup', async (req, res) => {
   const marketingConsent = rawConsent === true || rawConsent === 'true' || rawConsent === 1 || rawConsent === '1'
   const marketingConsentAt = marketingConsent ? new Date().toISOString() : null
 
+  // Intention de plan captée au signup (?plan=… sur l'URL, transmis via input
+  // caché). SIGNAL MARKETING uniquement — ne contrôle ni quotas ni accès.
+  // Validation stricte case-sensitive : seules les 3 valeurs autorisées passent,
+  // tout le reste devient null sans bloquer le signup.
+  const VALID_INTENDED_PLANS = ['demarrage', 'activite', 'croisiere']
+  const rawIntendedPlan = req.body?.intended_plan
+  const intendedPlan = (typeof rawIntendedPlan === 'string' && VALID_INTENDED_PLANS.includes(rawIntendedPlan))
+    ? rawIntendedPlan
+    : null
+  const intendedPlanAt = intendedPlan ? new Date().toISOString() : null
+
   if (!prenom) return res.status(400).json({ error: 'Prénom requis', field: 'prenom' })
   if (!nom) return res.status(400).json({ error: 'Nom requis', field: 'nom' })
   if (!isValidEmail(email)) return res.status(400).json({ error: 'Email invalide', field: 'email' })
@@ -215,10 +226,12 @@ router.post('/signup', async (req, res) => {
       telephone,
       password_hash: passwordHash,
       email_verified: false,
-      plan: 'gratuit',
-      geo_data: geoData,                    // null si IP locale ou échec API
-      marketing_consent: marketingConsent,  // false par défaut (RGPD)
-      marketing_consent_at: marketingConsentAt
+      plan: 'gratuit',                          // ÉTAT actif — pas touché par intended_plan
+      geo_data: geoData,                        // null si IP locale ou échec API
+      marketing_consent: marketingConsent,      // false par défaut (RGPD)
+      marketing_consent_at: marketingConsentAt,
+      intended_plan: intendedPlan,              // SIGNAL marketing uniquement
+      intended_plan_at: intendedPlanAt
     }
 
     const user = await createUser(userBody)
@@ -238,10 +251,16 @@ router.post('/signup', async (req, res) => {
       metadata: {
         prenom, nom, telephone,
         marketing_consent: marketingConsent,
+        intended_plan: intendedPlan,
         geo_country: geoData?.country_code || null,
         geo_city: geoData?.city || null
       }
     })
+
+    if (intendedPlan) {
+      // Trace debug — pas de PII, juste le signal d'intention.
+      console.log('[signup] intended_plan capté :', intendedPlan)
+    }
 
     res.status(201).json({
       ok: true,

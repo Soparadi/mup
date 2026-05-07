@@ -77,6 +77,17 @@
   .legal a{color:var(--text);text-decoration:underline;text-underline-offset:2px}
   .legal a:hover{color:#000}
 
+  /* Badge "Plan choisi" — affiché si ?plan=… valide sur l'URL */
+  .plan-badge{display:none;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-size:12px;font-weight:600;letter-spacing:.02em;margin-bottom:18px;border:1px solid transparent;width:fit-content;margin-left:auto;margin-right:auto}
+  .plan-badge.is-on{display:inline-flex}
+  .plan-badge .pb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .plan-badge.plan-demarrage{background:rgba(11,188,212,.12);color:#0BBCD4;border-color:rgba(11,188,212,.2)}
+  .plan-badge.plan-demarrage .pb-dot{background:#0BBCD4}
+  .plan-badge.plan-activite{background:rgba(29,131,72,.12);color:#1D8348;border-color:rgba(29,131,72,.2)}
+  .plan-badge.plan-activite .pb-dot{background:#1D8348}
+  .plan-badge.plan-croisiere{background:rgba(29,131,72,.12);color:#1D8348;border-color:rgba(29,131,72,.2)}
+  .plan-badge.plan-croisiere .pb-dot{background:#1D8348}
+
   /* Case opt-in marketing — RGPD : non pré-cochée, label complet visible */
   .field-checkbox{margin:6px 0 14px}
   .checkbox-label{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:12.5px;line-height:1.5;color:var(--muted)}
@@ -114,6 +125,13 @@
       <div id="alert" class="alert hidden" role="alert"></div>
 
       <form id="form-signup" autocomplete="on" novalidate>
+        <!-- Badge plan choisi — visible uniquement si ?plan=… valide -->
+        <div id="plan-badge" class="plan-badge" role="status" aria-live="polite">
+          <span class="pb-dot" aria-hidden="true"></span>
+          <span>Plan choisi : <strong id="plan-badge-name"></strong></span>
+        </div>
+        <input type="hidden" name="intended_plan" id="intended-plan-input" value="">
+
         <div class="grid-2">
           <div class="field">
             <label for="prenom">Prénom</label>
@@ -191,6 +209,38 @@
   var alertBox = document.getElementById('alert')
   var form = document.getElementById('form-signup')
   var btnSubmit = document.getElementById('btn-submit')
+
+  // ── Intention de plan : ?plan=… sur l'URL OU récupérée de sessionStorage ──
+  // Validation stricte case-sensitive : les 3 valeurs autorisées uniquement,
+  // tout le reste devient null (le badge ne s'affiche pas et le hidden reste vide).
+  var VALID_PLANS = ['demarrage', 'activite', 'croisiere']
+  var PLAN_LABELS = { demarrage: 'Démarrage', activite: 'Activité', croisiere: 'Croisière' }
+  var planInput = document.getElementById('intended-plan-input')
+  var planBadge = document.getElementById('plan-badge')
+  var planBadgeName = document.getElementById('plan-badge-name')
+  function applyIntendedPlan(plan) {
+    if (!planInput || !planBadge) return
+    if (!plan || VALID_PLANS.indexOf(plan) === -1) {
+      planInput.value = ''
+      planBadge.classList.remove('is-on', 'plan-demarrage', 'plan-activite', 'plan-croisiere')
+      return
+    }
+    planInput.value = plan
+    planBadge.classList.remove('plan-demarrage', 'plan-activite', 'plan-croisiere')
+    planBadge.classList.add('is-on', 'plan-' + plan)
+    if (planBadgeName) planBadgeName.textContent = PLAN_LABELS[plan]
+  }
+  try {
+    var urlPlan = new URLSearchParams(window.location.search).get('plan')
+    if (urlPlan && VALID_PLANS.indexOf(urlPlan) !== -1) {
+      applyIntendedPlan(urlPlan)
+      sessionStorage.setItem('intended_plan', urlPlan)
+    } else {
+      var stored = sessionStorage.getItem('intended_plan')
+      if (stored && VALID_PLANS.indexOf(stored) !== -1) applyIntendedPlan(stored)
+    }
+  } catch (e) { /* sessionStorage indisponible (mode privé strict) — fail silencieux */ }
+
   var inputs = {
     prenom: document.getElementById('prenom'),
     nom: document.getElementById('nom'),
@@ -353,13 +403,16 @@
         email: v.values.email,
         telephone: v.values.telephone,
         password: v.values.password,
-        marketing_consent: !!document.getElementById('marketing_consent').checked
+        marketing_consent: !!document.getElementById('marketing_consent').checked,
+        intended_plan: planInput && planInput.value ? planInput.value : null
       })
     }).then(function(r){
       return r.json().then(function(data){ return { ok:r.ok, status:r.status, data:data } })
                      .catch(function(){ return { ok:r.ok, status:r.status, data:{} } })
     }).then(function(res){
       if(res.status === 201 || (res.ok && res.status === 200)){
+        // Compte créé : on nettoie l'intention en sessionStorage (déjà persistée en base)
+        try { sessionStorage.removeItem('intended_plan') } catch (e) { /* ignore */ }
         // Étape suivante : SIRET via /onboarding/entreprise
         window.location.href = '/onboarding/entreprise'
         return

@@ -13,6 +13,7 @@ import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
 import { router as authRouter } from './server/auth/routes.js'
+import { router as stripeRouter, webhookHandler as stripeWebhookHandler } from './server/routes/stripe.js'
 import { requireAuth } from './server/middleware/requireAuth.js'
 import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
@@ -32,6 +33,13 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
+
+// ── Webhook Stripe — DOIT être enregistré AVANT express.json() global ──
+// Stripe envoie le payload brut, la signature est calculée sur ce buffer.
+// Si express.json() avait déjà tourné, le body serait parsé et la signature
+// invalidée. Cette route consomme uniquement le raw body.
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler)
+
 // `verify` capture le rawBody pour la validation HMAC des webhooks Resend (Svix).
 // Ne change rien à `req.body` parsé — ajoute juste `req.rawBody` (string).
 app.use(express.json({
@@ -147,6 +155,11 @@ app.get('/api/health', async (req, res) => {
 
 // ── Auth Phase 1 — routes publiques /api/auth/* ──
 app.use('/api/auth', authRouter)
+
+// ── Stripe (Checkout + Portal) — exempté de la gate auth + subscription ──
+// Le webhook est déjà mounté avant express.json (raw body). Ces 2 routes
+// utilisent JSON normal et exigent l'auth via requireAuth en route-level.
+app.use('/api/stripe', stripeRouter)
 
 // ── Démo publique landing — proxy /api/search anonymisé ──
 // Mounté AVANT la gate auth. Retourne :

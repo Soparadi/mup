@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon abonnement — MovUP</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#FFFFFF;--surface:#F5F5F7;--surface-2:#EBEBF0;
+    --card:#FFFFFF;--border:#E8E8ED;--border-2:#C7C7CC;
+    --text:#1D1D1F;--muted:#6E6E73;--soft:#AEAEB2;
+    --rdv:#0BBCD4;--gagne:#1D8348;--orange:#F59E0B;--red:#CC0000;
+    --bg-rdv:rgba(11,188,212,.12);
+    --bg-gagne:rgba(29,131,72,.12);
+    --bg-orange:rgba(245,158,11,.12);
+    --bg-red:rgba(204,0,0,.08);
+    --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+    --font-serif:'Instrument Serif',Georgia,serif;
+  }
+  body{background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;padding:48px 20px}
+  .page{width:100%;max-width:720px;margin:0 auto}
+  .brand{display:inline-flex;align-items:center;gap:10px;margin:0 auto 22px;text-decoration:none;color:var(--text);font-weight:800;font-size:18px;letter-spacing:-.4px;justify-content:center;width:100%}
+  .brand-icon{background:var(--text);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex-shrink:0}
+  .brand-icon svg{width:18px;height:18px}
+  h1{font-size:30px;font-weight:800;letter-spacing:-.6px;color:var(--text);margin-bottom:8px;line-height:1.15;text-align:center}
+  h1 em{font-family:var(--font-serif);font-style:italic;font-weight:400}
+  .lead{font-size:15px;color:var(--muted);text-align:center;margin:0 auto 28px;max-width:520px;line-height:1.55}
+
+  .alert{padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+  .alert-success{background:var(--bg-gagne);color:var(--gagne);border:1px solid rgba(29,131,72,.2)}
+  .alert-info{background:var(--bg-rdv);color:var(--rdv);border:1px solid rgba(11,188,212,.2)}
+  .alert-warn{background:var(--bg-orange);color:var(--orange);border:1px solid rgba(245,158,11,.25)}
+  .alert-error{background:var(--bg-red);color:var(--red);border:1px solid rgba(204,0,0,.2)}
+  .alert.hidden{display:none}
+
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px 30px;margin-bottom:18px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid var(--border);font-size:13.5px}
+  .row:first-of-type{border-top:none;padding-top:0}
+  .row .lbl{color:var(--muted)}
+  .row .val{font-weight:600;color:var(--text);text-align:right}
+  .status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+  .status-active{background:var(--bg-gagne);color:var(--gagne)}
+  .status-trialing{background:var(--bg-rdv);color:var(--rdv)}
+  .status-past_due{background:var(--bg-orange);color:var(--orange)}
+  .status-canceled{background:var(--surface-2);color:var(--muted)}
+  .status-unpaid{background:var(--bg-red);color:var(--red)}
+
+  .actions{display:flex;flex-direction:column;gap:10px;margin-top:22px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:14px;font-weight:700;padding:12px 22px;border-radius:10px;border:1px solid transparent;cursor:pointer;text-decoration:none;transition:background .15s;width:100%}
+  .btn-dark{background:var(--text);color:#fff;border-color:var(--text)}
+  .btn-dark:hover:not(:disabled){background:#000}
+  .btn-dark:disabled{opacity:.5;cursor:not-allowed}
+  .btn-ghost{background:transparent;color:var(--text);border-color:var(--border-2)}
+  .btn-ghost:hover{border-color:var(--text)}
+
+  .footer{text-align:center;margin-top:24px;font-size:12.5px;color:var(--muted)}
+  .footer a{color:var(--text);font-weight:600;text-decoration:none}
+  .footer a:hover{text-decoration:underline}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .skeleton{height:13px;background:var(--surface-2);border-radius:4px;width:60%;display:inline-block}
+</style>
+</head>
+<body>
+<main class="page">
+  <a href="/dashboard" class="brand" aria-label="Accueil MovUP">
+    <span class="brand-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+      </svg>
+    </span>
+    <span>MovUP</span>
+  </a>
+
+  <h1>Mon <em>abonnement.</em></h1>
+  <p class="lead">Gérez votre plan, votre moyen de paiement et accédez à vos factures.</p>
+
+  <div id="banner" class="alert hidden" role="status"></div>
+
+  <section class="card">
+    <div class="row">
+      <span class="lbl">Plan actuel</span>
+      <span class="val" id="plan-label"><span class="skeleton"></span></span>
+    </div>
+    <div class="row">
+      <span class="lbl">Facturation</span>
+      <span class="val" id="cycle-label"><span class="skeleton"></span></span>
+    </div>
+    <div class="row">
+      <span class="lbl">Statut</span>
+      <span class="val" id="status-label"><span class="skeleton"></span></span>
+    </div>
+    <div class="row">
+      <span class="lbl">Prochaine échéance</span>
+      <span class="val" id="period-end-label"><span class="skeleton"></span></span>
+    </div>
+
+    <div class="actions">
+      <button type="button" id="btn-portal" class="btn btn-dark">Gérer mon abonnement</button>
+      <a href="/account/upgrade" class="btn btn-ghost">Modifier mon plan</a>
+    </div>
+  </section>
+
+  <p class="footer">
+    <a href="/account/privacy">Télécharger mes données (RGPD)</a> ·
+    <a href="/dashboard">Retour à l'application</a>
+  </p>
+</main>
+
+<script>
+(function(){
+  var PLAN_LABELS = { demarrage: 'Démarrage', activite: 'Activité', croisiere: 'Croisière' }
+  var CYCLE_LABELS = { monthly: 'Mensuel', annual: 'Annuel (−15 %)' }
+  var STATUS_LABELS = {
+    active: 'Actif',
+    trialing: 'Période d\'essai',
+    past_due: 'Paiement en attente',
+    canceled: 'Résilié',
+    unpaid: 'Impayé',
+    incomplete: 'Incomplet'
+  }
+  var banner = document.getElementById('banner')
+  function setBanner(type, msg) {
+    banner.className = 'alert alert-' + type
+    banner.textContent = msg
+    banner.classList.remove('hidden')
+  }
+
+  // Bandeau succès si ?success=true
+  var params = new URLSearchParams(window.location.search)
+  if (params.get('success')) {
+    setBanner('success', 'Votre abonnement est actif. Bienvenue.')
+    setTimeout(function(){ banner.classList.add('hidden') }, 5000)
+  }
+
+  function formatDateFR(iso) {
+    if (!iso) return '—'
+    try {
+      var d = new Date(iso)
+      if (isNaN(d.getTime())) return '—'
+      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+    } catch (e) { return '—' }
+  }
+
+  fetch('/api/user/me', { credentials: 'same-origin' })
+    .then(function(r){ return r.ok ? r.json() : null })
+    .then(function(u){
+      if (!u) {
+        setBanner('error', 'Session expirée. Veuillez vous reconnecter.')
+        return
+      }
+      // Pas d'abonnement payant et pas de stripe_customer_id : rediriger
+      // vers l'upgrade pour souscrire.
+      var hasStripe = !!u.stripe_customer_id || !!u.subscription_status
+      if (!hasStripe && u.trial_status !== 'converted') {
+        window.location.replace('/account/upgrade')
+        return
+      }
+
+      var planLabel = PLAN_LABELS[u.plan] || (u.plan || '—')
+      var cycleLabel = CYCLE_LABELS[u.plan_billing_cycle] || (u.plan_billing_cycle || '—')
+      var statusKey = u.subscription_status || 'canceled'
+      var statusLabel = STATUS_LABELS[statusKey] || statusKey
+      document.getElementById('plan-label').textContent = planLabel
+      document.getElementById('cycle-label').textContent = cycleLabel
+      document.getElementById('status-label').innerHTML =
+        '<span class="status-pill status-' + statusKey + '">' + statusLabel + '</span>'
+      document.getElementById('period-end-label').textContent = formatDateFR(u.current_period_end)
+
+      if (statusKey === 'past_due') {
+        setBanner('warn', 'Paiement en attente. Mettez à jour votre carte depuis « Gérer mon abonnement » pour éviter une interruption.')
+      } else if (statusKey === 'canceled') {
+        setBanner('info', 'Abonnement résilié. Réactivable à tout moment depuis « Modifier mon plan ».')
+      }
+    })
+    .catch(function(){ setBanner('error', 'Erreur réseau, réessayez.') })
+
+  document.getElementById('btn-portal').addEventListener('click', function(){
+    var btn = this
+    btn.disabled = true
+    btn.innerHTML = '<span class="spinner"></span> Ouverture du portail…'
+    fetch('/api/stripe/create-portal-session', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d } }) })
+      .then(function(res){
+        if (res.ok && res.data && res.data.url) {
+          window.location.href = res.data.url
+          return
+        }
+        btn.disabled = false
+        btn.textContent = 'Gérer mon abonnement'
+        setBanner('error', (res.data && res.data.message) || 'Ouverture du portail impossible.')
+      })
+      .catch(function(){
+        btn.disabled = false
+        btn.textContent = 'Gérer mon abonnement'
+        setBanner('error', 'Erreur réseau. Réessayez.')
+      })
+  })
+})()
+</script>
+</body>
+</html>

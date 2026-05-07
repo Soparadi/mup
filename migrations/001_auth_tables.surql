@@ -45,6 +45,16 @@ DEFINE FIELD IF NOT EXISTS trial_ends_at ON user TYPE option<datetime>;
 DEFINE FIELD IF NOT EXISTS trial_status ON user TYPE option<string>
   ASSERT $value = NONE OR $value INSIDE ["active", "expired", "converted"];
 
+-- Stripe — souscription payante.
+DEFINE FIELD IF NOT EXISTS stripe_customer_id ON user TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS stripe_subscription_id ON user TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS subscription_status ON user TYPE option<string>
+  ASSERT $value = NONE OR $value INSIDE ["trialing", "active", "past_due", "canceled", "unpaid", "incomplete"];
+DEFINE FIELD IF NOT EXISTS current_period_end ON user TYPE option<datetime>;
+DEFINE FIELD IF NOT EXISTS plan_billing_cycle ON user TYPE option<string>
+  ASSERT $value = NONE OR $value INSIDE ["monthly", "annual"];
+DEFINE FIELD IF NOT EXISTS billing_address ON user TYPE option<object>;
+
 -- ── privacy_export_log ──
 -- Trace des téléchargements RGPD article 20. Sert au rate limit (5 / 24h / user).
 DEFINE TABLE IF NOT EXISTS privacy_export_log SCHEMAFULL;
@@ -53,6 +63,14 @@ DEFINE FIELD IF NOT EXISTS exported_at ON privacy_export_log TYPE datetime DEFAU
 DEFINE FIELD IF NOT EXISTS bytes_size ON privacy_export_log TYPE option<number>;
 DEFINE INDEX IF NOT EXISTS idx_privacy_export_user ON privacy_export_log FIELDS user_id;
 DEFINE INDEX IF NOT EXISTS idx_privacy_export_user_date ON privacy_export_log FIELDS user_id, exported_at;
+
+-- ── stripe_events_processed ──
+-- Idempotence webhooks Stripe (event_id unique).
+DEFINE TABLE IF NOT EXISTS stripe_events_processed SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS event_id ON stripe_events_processed TYPE string;
+DEFINE FIELD IF NOT EXISTS event_type ON stripe_events_processed TYPE string;
+DEFINE FIELD IF NOT EXISTS processed_at ON stripe_events_processed TYPE datetime DEFAULT time::now();
+DEFINE INDEX IF NOT EXISTS stripe_events_event_id_unique ON stripe_events_processed FIELDS event_id UNIQUE;
 DEFINE INDEX IF NOT EXISTS user_email_unique ON user FIELDS email UNIQUE;
 DEFINE INDEX IF NOT EXISTS user_siret_unique ON user FIELDS siret UNIQUE;
 

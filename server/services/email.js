@@ -119,6 +119,93 @@ export async function sendPasswordReset(user, token) {
   return { id: result.data?.id || null }
 }
 
+// ── Emails Stripe (souscription) ──
+// Tous suivent le même pattern : load template, applyVars, r.emails.send.
+
+function formatDateFR(input) {
+  if (!input) return '—'
+  try {
+    const d = new Date(input)
+    if (isNaN(d.getTime())) return '—'
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+  } catch (e) { return '—' }
+}
+
+const CYCLE_LABELS = { monthly: 'mensuel', annual: 'annuel' }
+
+async function sendStripeTransactional(template, vars, { to, subject, kind }) {
+  if (!to) throw new Error('to requis')
+  const tpl = await loadTemplate(template)
+  const html = applyVars(tpl, vars)
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: [to],
+    replyTo: FROM,
+    subject,
+    html,
+    tags: [{ name: 'kind', value: kind }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}
+
+export async function sendSubscriptionActivated({ email, prenom, plan_label, cycle, price_display, current_period_end }) {
+  return sendStripeTransactional('subscription-activated.html', {
+    prenom: prenom || '',
+    plan_label,
+    cycle_label: CYCLE_LABELS[cycle] || cycle,
+    price_display,
+    next_billing_date: formatDateFR(current_period_end),
+    billing_url: appUrl() + '/account/billing'
+  }, {
+    to: email,
+    subject: `Votre abonnement MovUP ${plan_label} est actif`,
+    kind: 'subscription_activated'
+  })
+}
+
+export async function sendSubscriptionChanged({ email, prenom, old_plan_label, new_plan_label, cycle, price_display }) {
+  return sendStripeTransactional('subscription-changed.html', {
+    prenom: prenom || '',
+    old_plan_label,
+    new_plan_label,
+    cycle_label: CYCLE_LABELS[cycle] || cycle,
+    price_display,
+    billing_url: appUrl() + '/account/billing'
+  }, {
+    to: email,
+    subject: `Votre plan MovUP a été mis à jour : ${new_plan_label}`,
+    kind: 'subscription_changed'
+  })
+}
+
+export async function sendSubscriptionCanceled({ email, prenom, plan_label, period_end }) {
+  return sendStripeTransactional('subscription-canceled.html', {
+    prenom: prenom || '',
+    plan_label,
+    period_end: formatDateFR(period_end),
+    billing_url: appUrl() + '/account/billing',
+    privacy_url: appUrl() + '/account/privacy'
+  }, {
+    to: email,
+    subject: 'Confirmation de résiliation MovUP',
+    kind: 'subscription_canceled'
+  })
+}
+
+export async function sendPaymentFailed({ email, prenom, plan_label, portal_url }) {
+  return sendStripeTransactional('payment-failed.html', {
+    prenom: prenom || '',
+    plan_label,
+    portal_url: portal_url || (appUrl() + '/account/billing')
+  }, {
+    to: email,
+    subject: 'Action requise — paiement MovUP en échec',
+    kind: 'payment_failed'
+  })
+}
+
 // ── sendRelanceJ12 ──
 // Email de relance 12 jours après inscription. Idempotence à gérer côté caller.
 export async function sendRelanceJ12(user) {

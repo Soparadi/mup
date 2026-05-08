@@ -107,3 +107,24 @@ DEFINE FIELD IF NOT EXISTS user_agent ON audit_log TYPE option<string>;
 -- pas une à une. Évite "Found field metadata.geo_city" en SCHEMAFULL.
 DEFINE FIELD OVERWRITE metadata ON audit_log TYPE option<object> FLEXIBLE;
 DEFINE FIELD IF NOT EXISTS created_at ON audit_log TYPE datetime DEFAULT time::now();
+
+-- ─────────────────────────────────────────────────────────────────────
+-- CORRECTIFS SCHÉMA — OVERWRITE consolidé (idempotent, dernière DEFINE
+-- l'emporte). Patches des bugs SCHEMAFULL successifs :
+--   - sous-objets dynamiques (geo_data, billing_address, metadata) →
+--     FLEXIBLE pour autoriser les sous-clés sans les déclarer
+--   - bool / string posés à NONE → option<...> pour accepter NONE
+-- Chaque OVERWRITE est sûr même si déjà appliqué.
+-- ─────────────────────────────────────────────────────────────────────
+DEFINE FIELD OVERWRITE billing_address ON user TYPE option<object> FLEXIBLE;
+DEFINE FIELD OVERWRITE geo_data ON user TYPE option<object> FLEXIBLE;
+DEFINE FIELD OVERWRITE metadata ON audit_log TYPE option<object> FLEXIBLE;
+DEFINE FIELD OVERWRITE marketing_consent ON user TYPE option<bool>;
+DEFINE FIELD OVERWRITE intended_plan ON user TYPE option<string>;
+DEFINE FIELD OVERWRITE stripe_customer_id ON user TYPE option<string>;
+DEFINE FIELD OVERWRITE stripe_subscription_id ON user TYPE option<string>;
+DEFINE FIELD OVERWRITE subscription_status ON user TYPE option<string>;
+DEFINE FIELD OVERWRITE current_period_end ON user TYPE option<datetime>;
+DEFINE FIELD OVERWRITE plan_billing_cycle ON user TYPE option<string>;
+DEFINE FIELD OVERWRITE siret ON user TYPE option<string>;
+DEFINE FIELD OVERWRITE raison_sociale ON user TYPE option<string>;

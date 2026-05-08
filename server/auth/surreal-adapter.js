@@ -332,7 +332,27 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS event_id ON stripe_events_processed TYPE string',
     'DEFINE FIELD IF NOT EXISTS event_type ON stripe_events_processed TYPE string',
     'DEFINE FIELD IF NOT EXISTS processed_at ON stripe_events_processed TYPE datetime DEFAULT time::now()',
-    'DEFINE INDEX IF NOT EXISTS stripe_events_event_id_unique ON stripe_events_processed FIELDS event_id UNIQUE'
+    'DEFINE INDEX IF NOT EXISTS stripe_events_event_id_unique ON stripe_events_processed FIELDS event_id UNIQUE',
+    // ──────────────────────────────────────────────────────────────────
+    // CORRECTIFS SCHÉMA — OVERWRITE consolidé (idempotent, dernière
+    // DEFINE l'emporte). Patches des bugs SCHEMAFULL successifs :
+    //   - sous-objets dynamiques (geo_data, billing_address, metadata) →
+    //     FLEXIBLE pour autoriser les sous-clés sans les déclarer
+    //   - bool / string posés à NONE → option<...> pour accepter NONE
+    // Chaque OVERWRITE est sûr même si déjà appliqué.
+    // ──────────────────────────────────────────────────────────────────
+    'DEFINE FIELD OVERWRITE billing_address ON user TYPE option<object> FLEXIBLE',
+    'DEFINE FIELD OVERWRITE geo_data ON user TYPE option<object> FLEXIBLE',
+    'DEFINE FIELD OVERWRITE metadata ON audit_log TYPE option<object> FLEXIBLE',
+    'DEFINE FIELD OVERWRITE marketing_consent ON user TYPE option<bool>',
+    'DEFINE FIELD OVERWRITE intended_plan ON user TYPE option<string>',
+    'DEFINE FIELD OVERWRITE stripe_customer_id ON user TYPE option<string>',
+    'DEFINE FIELD OVERWRITE stripe_subscription_id ON user TYPE option<string>',
+    'DEFINE FIELD OVERWRITE subscription_status ON user TYPE option<string>',
+    'DEFINE FIELD OVERWRITE current_period_end ON user TYPE option<datetime>',
+    'DEFINE FIELD OVERWRITE plan_billing_cycle ON user TYPE option<string>',
+    'DEFINE FIELD OVERWRITE siret ON user TYPE option<string>',
+    'DEFINE FIELD OVERWRITE raison_sociale ON user TYPE option<string>'
   ]
   for (const q of queries) {
     try { await db.query(q) } catch (e) { console.warn('[auth-migration]', q.slice(0, 80), '→', e.message) }

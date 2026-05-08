@@ -263,7 +263,7 @@ export async function runAuthMigration() {
     // avoir à les déclarer un par un. Évite l'erreur "Found field geo_data.X
     // but no such field exists" en SCHEMAFULL strict.
     // OVERWRITE car le champ avait déjà été défini sans FLEXIBLE en prod.
-    'DEFINE FIELD OVERWRITE geo_data ON user FLEXIBLE TYPE option<object>',
+    'DEFINE FIELD OVERWRITE geo_data ON user TYPE option<object> FLEXIBLE',
     // Consentement marketing (case opt-in non pré-cochée au signup, RGPD).
     'DEFINE FIELD IF NOT EXISTS marketing_consent ON user TYPE bool DEFAULT false',
     'DEFINE FIELD IF NOT EXISTS marketing_consent_at ON user TYPE option<datetime>',

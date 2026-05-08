@@ -218,6 +218,9 @@ router.post('/signup', async (req, res) => {
     ])
     const name = `${prenom} ${nom}`.trim()
 
+    // SurrealDB SCHEMAFULL avec option<...> traite `null` JS comme un VALUE
+    // explicite qui ne match pas `none | string`. On OMET les champs absents
+    // au lieu de poser null. Les option<...> deviendront NONE par défaut.
     const userBody = {
       email,
       prenom,
@@ -227,13 +230,13 @@ router.post('/signup', async (req, res) => {
       password_hash: passwordHash,
       email_verified: false,
       plan: 'gratuit',                          // ÉTAT actif — pas touché par intended_plan
-      geo_data: geoData,                        // null si IP locale ou échec API
       marketing_consent: marketingConsent,      // false par défaut (RGPD)
-      marketing_consent_at: marketingConsentAt,
-      intended_plan: intendedPlan,              // SIGNAL marketing uniquement
-      intended_plan_at: intendedPlanAt,
       trial_status: 'active'                    // datetimes posées en 2ème temps (cf. ci-dessous)
     }
+    if (geoData && typeof geoData === 'object') userBody.geo_data = geoData
+    if (marketingConsentAt) userBody.marketing_consent_at = marketingConsentAt
+    if (intendedPlan) userBody.intended_plan = intendedPlan
+    if (intendedPlanAt) userBody.intended_plan_at = intendedPlanAt
 
     const user = await createUser(userBody)
     if (!user) return res.status(500).json({ error: 'Création du compte impossible' })

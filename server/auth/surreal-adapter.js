@@ -265,7 +265,9 @@ export async function runAuthMigration() {
     // OVERWRITE car le champ avait déjà été défini sans FLEXIBLE en prod.
     'DEFINE FIELD OVERWRITE geo_data ON user TYPE option<object> FLEXIBLE',
     // Consentement marketing (case opt-in non pré-cochée au signup, RGPD).
-    'DEFINE FIELD IF NOT EXISTS marketing_consent ON user TYPE bool DEFAULT false',
+    // OVERWRITE option<bool> : autorise NONE (cas signup où la case n'est
+    // pas envoyée). Évite "Expected bool but found NONE" au prochain UPDATE.
+    'DEFINE FIELD OVERWRITE marketing_consent ON user TYPE option<bool>',
     'DEFINE FIELD IF NOT EXISTS marketing_consent_at ON user TYPE option<datetime>',
     // Intention de plan captée au signup via ?plan=… sur l'URL.
     // SIGNAL MARKETING — utilisé uniquement pour analytics et relances commerciales.
@@ -309,7 +311,10 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS event ON audit_log TYPE string',
     'DEFINE FIELD IF NOT EXISTS ip ON audit_log TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS user_agent ON audit_log TYPE option<string>',
-    'DEFINE FIELD IF NOT EXISTS metadata ON audit_log TYPE option<object>',
+    // OVERWRITE FLEXIBLE : metadata contient des sous-clés dynamiques
+    // (geo_city, geo_country, intended_plan, prenom, etc.) qu'on ne déclare
+    // pas une à une. Évite "Found field metadata.geo_city" en SCHEMAFULL.
+    'DEFINE FIELD OVERWRITE metadata ON audit_log TYPE option<object> FLEXIBLE',
     'DEFINE FIELD IF NOT EXISTS created_at ON audit_log TYPE datetime DEFAULT time::now()',
     // ── privacy_export_log ──
     // Trace des téléchargements RGPD article 20 (export à vie). Sert au rate

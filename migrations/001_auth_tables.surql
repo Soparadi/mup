@@ -27,7 +27,10 @@ DEFINE FIELD IF NOT EXISTS lat ON user TYPE option<float>;
 DEFINE FIELD IF NOT EXISTS lng ON user TYPE option<float>;
 DEFINE FIELD IF NOT EXISTS plan ON user TYPE string DEFAULT "gratuit";
 -- Géolocalisation IP captée au signup (best effort, peut être null).
-DEFINE FIELD IF NOT EXISTS geo_data ON user TYPE option<object>;
+-- FLEXIBLE pour autoriser des sous-champs libres (city, region, country,
+-- country_code, postal_code, latitude, longitude, ip_used, provider,
+-- detected_at) sans avoir à les déclarer un par un en SCHEMAFULL strict.
+DEFINE FIELD OVERWRITE geo_data ON user FLEXIBLE TYPE option<object>;
 -- Consentement marketing (case opt-in non pré-cochée au signup, RGPD).
 DEFINE FIELD IF NOT EXISTS marketing_consent ON user TYPE bool DEFAULT false;
 DEFINE FIELD IF NOT EXISTS marketing_consent_at ON user TYPE option<datetime>;

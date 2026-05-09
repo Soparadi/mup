@@ -14,7 +14,7 @@ import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
 import { router as authRouter } from './server/auth/routes.js'
 import { router as stripeRouter, webhookHandler as stripeWebhookHandler } from './server/routes/stripe.js'
-import { requireAuth } from './server/middleware/requireAuth.js'
+import { requireAuth, requireAuthHtml } from './server/middleware/requireAuth.js'
 import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
@@ -357,6 +357,33 @@ app.use('/api', (req, res, next) => {
   if (req.path === '/user/me') return next()
   if (req.path === '/account/privacy/export') return next()
   return requireActiveSubscription(req, res, next)
+})
+
+// ── Gate HTML pages app — protège les 14 routes app par requireAuthHtml ──
+// Insérée AVANT express.static pour empêcher le service direct des pages
+// HTML protégées sans cookie session valide. Toute autre URL (landing,
+// login, légales, assets) tombe en next() vers express.static.
+const APP_HTML_ROUTES = new Set([
+  '/dashboard', '/leads', '/pipeline', '/agenda', '/mail', '/visio',
+  '/carte', '/contacts', '/devis', '/factures', '/frais', '/statistiques'
+])
+const APP_HTML_PREFIXES = ['/account', '/onboarding']
+
+function isProtectedHtmlRoute(rawPath) {
+  let p = String(rawPath || '/').replace(/\/+$/, '') || '/'
+  p = p.replace(/\.html$/i, '')
+  if (APP_HTML_ROUTES.has(p)) return true
+  for (const prefix of APP_HTML_PREFIXES) {
+    if (p === prefix || p.startsWith(prefix + '/')) return true
+  }
+  return false
+}
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+  if (req.path.startsWith('/api/')) return next()
+  if (!isProtectedHtmlRoute(req.path)) return next()
+  return requireAuthHtml(req, res, next)
 })
 
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }))
@@ -2871,15 +2898,18 @@ app.post('/api/v2/webhooks/resend', async (req, res) => {
   })()
 })
 
-app.get('/', (req, res) => {
-  res.sendFile(join(__dirname, 'public', 'dashboard.html'))
-})
-
-app.get('/:page', (req, res) => {
-  const file = join(__dirname, 'public', req.params.page + '.html')
-  res.sendFile(file, err => {
-    if(err) res.sendFile(join(__dirname, 'public', 'dashboard.html'))
-  })
+// Handler 404 final — toute route GET non matchée par express.static, l'API
+// ou les middlewares ci-dessus tombe ici. Plus de fallback silencieux sur
+// dashboard.html (qui exposait le HTML protégé sans auth).
+// Note : `/` est servie par express.static qui sert public/index.html via
+// l'option default index — pas besoin de handler explicite.
+app.use((req, res) => {
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    return res.status(404).sendFile(join(__dirname, 'public', '404.html'), err => {
+      if (err) res.status(404).type('text/plain').send('404 — Page introuvable')
+    })
+  }
+  res.status(404).json({ error: 'not_found' })
 })
 
 // Initialise tables on boot (idempotent: IF NOT EXISTS keeps redeploys quiet)

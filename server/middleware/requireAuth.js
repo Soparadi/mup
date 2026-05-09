@@ -46,6 +46,31 @@ export async function requireAuth(req, res, next) {
   }
 }
 
+// Variante HTML : même check session que requireAuth, mais en cas d'absence
+// de session redirect 302 vers /login?redirect=<url_courante> au lieu de
+// répondre 401 JSON. Utilisée pour protéger les pages HTML app (ne sert
+// jamais le HTML protégé sans cookie session valide).
+export async function requireAuthHtml(req, res, next) {
+  try {
+    const token = readSessionToken(req)
+    let session = null
+    if (token) session = await getSession(token)
+    if (!token || !session) {
+      const dest = '/login?redirect=' + encodeURIComponent(req.originalUrl || req.url || '/')
+      return res.redirect(302, dest)
+    }
+    const userIdStr = String(session.user_id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+    req.userId = userIdStr
+    req.session = { userId: userIdStr }
+    req.authUser = session.user || null
+    next()
+  } catch (e) {
+    console.error('[requireAuthHtml]', e.message)
+    // En cas d'erreur serveur on redirige aussi vers /login (fail-closed côté HTML).
+    return res.redirect(302, '/login')
+  }
+}
+
 // Variante non bloquante : injecte req.userId si session valide, ne renvoie jamais 401.
 // Utile pour des endpoints lus en mode public + privé.
 export async function attachAuth(req, _res, next) {

@@ -177,14 +177,48 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <script>
 function isUpcoming(dateStr){if(!dateStr)return false;var today=new Date();today.setHours(0,0,0,0);return new Date(dateStr+'T00:00:00')>=today;}
 
-// Retourne la prochaine action à venir parmi c.rdvs[]
+// Index agenda events par ficheId — alimenté par loadAllAgenda() au boot.
+// Source unique de vérité : table agenda en SurrealDB.
+var agendaByFiche = {};
+
+async function loadAllAgenda(){
+  try {
+    var r = await fetch('/api/agenda');
+    if(!r.ok) return;
+    var data = await r.json();
+    if(!Array.isArray(data)) return;
+    agendaByFiche = {};
+    data.forEach(function(ev){
+      if(!ev || !ev.ficheId) return;
+      var k = String(ev.ficheId);
+      if(!agendaByFiche[k]) agendaByFiche[k] = [];
+      agendaByFiche[k].push(ev);
+    });
+  } catch(e) {}
+}
+
+// Retourne le prochain event agenda à venir pour la fiche c.
+// Format de retour aligné avec l'ancien c.rdvs[] : { date: ISO-like, hour, type }
 function nextActionOf(c){
-  if(!c || !Array.isArray(c.rdvs) || !c.rdvs.length) return null;
-  const now = Date.now();
-  const upcoming = c.rdvs
-    .filter(r => r && r.date && new Date(r.date).getTime() >= now - 24*3600*1000)
-    .sort((a,b) => new Date(a.date) - new Date(b.date));
-  return upcoming[0] || null;
+  if(!c) return null;
+  var list = agendaByFiche[String(c.id)] || [];
+  if(!list.length) return null;
+  var todayKey = (function(){ var t = new Date(); t.setHours(0,0,0,0); return t.getTime(); })();
+  var upcoming = list
+    .filter(function(ev){
+      if(!ev || !ev.date) return false;
+      var t = new Date(ev.date + 'T00:00:00').getTime();
+      return !isNaN(t) && t >= todayKey - 24*3600*1000;
+    })
+    .sort(function(a,b){
+      var da = a.date + 'T' + (a.start || '00:00');
+      var db = b.date + 'T' + (b.start || '00:00');
+      return da < db ? -1 : (da > db ? 1 : 0);
+    });
+  if(!upcoming.length) return null;
+  var ev = upcoming[0];
+  // Reshape pour compat avec popup ligne 340 (nextAct.date.slice(0,10), nextAct.hour)
+  return { date: ev.date, hour: ev.start || '14:00', type: ev.type || 'rdv' };
 }
 
 // Retourne {label, color} pour un type d'action
@@ -281,12 +315,16 @@ map.on('click',function(){
   resetOverlays();
 });
 
-// Geocode & place all cards (lecture pipeline via API SurrealDB)
+// Geocode & place all cards (lecture pipeline + agenda via API SurrealDB).
+// Agenda chargé en parallèle pour alimenter agendaByFiche → nextActionOf.
 (async function(){
   var cards = [];
   try {
-    var resp = await fetch('/api/pipeline');
-    if(resp.ok) cards = (await resp.json()).map(migrateCard);
+    var [pipelineResp] = await Promise.all([
+      fetch('/api/pipeline'),
+      loadAllAgenda()
+    ]);
+    if(pipelineResp.ok) cards = (await pipelineResp.json()).map(migrateCard);
   } catch(e) {}
 
   var withAddr=cards.filter(function(c){return c.address;});
@@ -576,11 +614,14 @@ function calcTour(){
       });
       startMarker=L.marker(startLatLng,{icon:icon,zIndexOffset:2000}).addTo(map);
 
-      // 2. Find RDV anchor
+      // 2. Find RDV anchor — refresh pipeline + agenda en parallèle pour avoir l'index à jour
       anchorCard=null;
       var allCards=[];
       try {
-        var pipelineResp = await fetch('/api/pipeline');
+        var [pipelineResp] = await Promise.all([
+          fetch('/api/pipeline'),
+          loadAllAgenda()
+        ]);
         if(pipelineResp.ok) allCards = await pipelineResp.json();
       } catch(e) {}
       for(var i=0;i<allCards.length;i++){

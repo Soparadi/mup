@@ -1288,74 +1288,41 @@ $('launchMeet').addEventListener('click', ()=>launchExternal('meet'));
    COLLECTE RDV
    ———————————————————————————————————————————————— */
 async function collectVisioRdvs(){
+  // Source unique de vérité : table agenda en SurrealDB.
+  // Les fiches pipeline sont chargées en parallèle pour enrichir contact/societe/visio_link via ficheId.
   const [pipeline, agenda] = await Promise.all([api.getPipeline(), api.getAgenda()]);
+  const fichesById = {};
+  pipeline.forEach(p => { if(p && p.id) fichesById[String(p.id)] = p; });
+
   const rdvs = [];
-
-  pipeline.forEach(p=>{
-    const stage = (p.col || p.stage || p.colonne || '').toLowerCase();
-    const type = (p.type || '').toLowerCase();
-    if(stage !== 'visio' && type !== 'visio') return;
-
-    // Reconstituer la date du RDV depuis les champs disponibles
-    // Ordre de priorité :
-    //  1. p.rdvs[] (array, format Pipeline récent) → on prend le dernier
-    //  2. p.rdvDate + p.rdvTime (champs séparés legacy)
-    //  3. p.rdv_date / p.date (très ancien)
-    let rdvDateIso = null;
-
-    if(Array.isArray(p.rdvs) && p.rdvs.length){
-      const lastRdv = p.rdvs[p.rdvs.length - 1];
-      if(lastRdv && lastRdv.date) rdvDateIso = lastRdv.date;
-    }
-    if(!rdvDateIso && p.rdvDate){
-      const dateStr = p.rdvDate;
-      const timeStr = p.rdvTime || '14:00';
-      try {
-        rdvDateIso = new Date(dateStr + 'T' + timeStr + ':00').toISOString();
-      } catch(e){}
-    }
-    if(!rdvDateIso) rdvDateIso = p.rdv_date || p.date;
-
-    // Pas de date valide → ne pas afficher (évite NaN:NaN)
-    if(!rdvDateIso) return;
-
+  agenda.forEach(e => {
+    if((e.type || '').toLowerCase() !== 'visio') return;
+    if(!e.date) return;
+    // Compose ISO depuis date YYYY-MM-DD + start HH:MM (format unifié post-refactor)
+    const dateIso = new Date(e.date + 'T' + (e.start || '14:00') + ':00').toISOString();
+    if(isNaN(new Date(dateIso).getTime())) return;
+    // Enrichissement depuis la fiche pipeline parente si ficheId présent
+    const p = e.ficheId ? fichesById[String(e.ficheId)] : null;
     rdvs.push({
-      id: p.id || 'p_'+uid(),
-      prospectId: p.id,
-      prospectName: p.co || p.nom || p.name || 'Sans nom',
-      societe: p.societe || p.co || '',
-      email: p.email || '',
-      tel: p.tel || p.telephone || '',
-      adresse: p.address || p.adresse || '',
-      date: rdvDateIso,
-      duree: p.duree || 30,
-      provider: p.visio_provider || detectProvider(p.visio_link || '') || 'jitsi',
-      link: p.visio_link || '',
-      status: p.visio_status || 'planned',
-      sujet: p.sujet || ''
+      id: e.id || 'a_' + uid(),
+      prospectId: e.ficheId || null,
+      prospectName: (p && (p.co || p.nom || p.name)) || e.title || e.contact || 'Sans nom',
+      societe: (p && (p.societe || p.co)) || '',
+      email: (p && p.email) || '',
+      tel: (p && (p.tel || p.telephone)) || '',
+      adresse: (p && (p.address || p.adresse)) || '',
+      date: dateIso,
+      duree: 30,
+      provider: (p && p.visio_provider) || detectProvider((p && p.visio_link) || ''),
+      link: (p && p.visio_link) || '',
+      status: (p && p.visio_status) || 'planned',
+      sujet: e.notes || (p && p.sujet) || ''
     });
   });
 
-  agenda.forEach(e=>{
-    if((e.type||'').toLowerCase() !== 'visio') return;
-    rdvs.push({
-      id: e.id || 'a_'+uid(),
-      prospectId: e.prospectId || null,
-      prospectName: e.title || e.prospectName || 'Sans nom',
-      societe: e.societe || '',
-      email: e.email || '',
-      tel: e.tel || '',
-      adresse: e.adresse || '',
-      date: e.start || e.date || new Date().toISOString(),
-      duree: e.duree || 30,
-      provider: e.provider || detectProvider(e.link || ''),
-      link: e.link || '',
-      status: e.status || 'planned',
-      sujet: e.sujet || ''
-    });
-  });
-
-  rdvs.sort((a,b)=> new Date(a.date) - new Date(b.date));
+  // Tri date croissante (résout le bug rdvs[length-1] qui prenait le dernier ajouté
+  // au lieu du prochain à venir).
+  rdvs.sort((a, b) => new Date(a.date) - new Date(b.date));
   return rdvs;
 }
 

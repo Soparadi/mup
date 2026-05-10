@@ -692,6 +692,29 @@ async function _loadPipeline(){
   _pipelineCacheTime = Date.now();
   return _pipelineCache;
 }
+
+// Single source of truth post-refactor PHASE 3 : table agenda en SurrealDB.
+// Indexée par ficheId pour relier aux cards pipeline (KPI, calendrier, Today).
+var _agendaCache = null;
+var _agendaCacheTime = 0;
+async function _loadAgenda(){
+  if(_agendaCache && (Date.now() - _agendaCacheTime < 30000)){
+    return _agendaCache;
+  }
+  var events = [];
+  try {
+    var resp = await fetch('/api/agenda');
+    if(resp.ok){
+      var data = await resp.json();
+      if(Array.isArray(data)) events = data;
+    }
+  } catch(e) {
+    console.warn('[Dashboard] _loadAgenda API failed', e);
+  }
+  _agendaCache = events || [];
+  _agendaCacheTime = Date.now();
+  return _agendaCache;
+}
 function createMupMarker(lat, lng, color){
   return L.divIcon({
     className: 'mup-marker',
@@ -905,59 +928,20 @@ function isUpcoming(dateStr){if(!dateStr)return false;var today=new Date();today
 const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const TODAY = new Date();
 
-// Events data keyed by YYYY-MM-DD — loaded from agenda localStorage
+// Events data keyed by YYYY-MM-DD — single source of truth : table agenda en DB.
 const CAL_EVENTS = {};
 (function(){
-  try {
-    var raw = localStorage.getItem('mup_agenda');
-    if(!raw) return;
-    var events = JSON.parse(raw).filter(function(e){
-      // Skip events reconstruits depuis le pipeline (on les relit directement de c.rdvs[])
-      if(e && e.key && String(e.key).indexOf('pipe_') === 0) return false;
-      return true;
-    });
-    var deduped = {};
-    events.forEach(function(e){ if(e.id) deduped[e.id]=e; else deduped['_'+Math.random()]=e; });
-    Object.keys(deduped).forEach(function(k){
-      var e=deduped[k];
-      if(!e.date) return;
+  _loadAgenda().then(function(events){
+    if(!events || !events.length) return;
+    events.forEach(function(e){
+      if(!e || !e.date) return;
       if(!CAL_EVENTS[e.date]) CAL_EVENTS[e.date] = [];
-      CAL_EVENTS[e.date].push({ id: e.id||'', title: e.title || '', sub: e.contact || '', time: e.start || '', type: String(e.type||'rdv').toLowerCase() });
-    });
-  } catch(e){}
-})();
-(function(){
-  _loadPipeline().then(function(cards){
-    if(!cards || !cards.length) return;
-    cards = cards.map(function(c){
-      if(c.co && !c.company) c.company = c.co;
-      if(c.name && !c.contact) c.contact = c.name;
-      c.co = c.company || '';
-      c.name = c.contact || '';
-      return c;
-    });
-    cards.forEach(function(c){
-      if(!Array.isArray(c.rdvs) || !c.rdvs.length) return;
-      c.rdvs.forEach(function(rdv){
-        if(!rdv || !rdv.date) return;
-        var d = new Date(rdv.date);
-        if(isNaN(d.getTime())) return;
-        var ds = d.getFullYear() + '-' +
-                 String(d.getMonth()+1).padStart(2,'0') + '-' +
-                 String(d.getDate()).padStart(2,'0');
-        if(!isUpcoming(ds)) return;
-        if(!CAL_EVENTS[ds]) CAL_EVENTS[ds] = [];
-        var key = String(rdv.id || (c.id + '_' + (rdv.type||'rdv').toLowerCase() + '_' + ds));
-        var exists = CAL_EVENTS[ds].find(function(ev){ return String(ev.id) === key; });
-        if(!exists) {
-          CAL_EVENTS[ds].push({
-            id: key,
-            title: (c.co || c.name || 'Action'),
-            sub: c.name || '',
-            time: rdv.hour || '',
-            type: String(rdv.type || 'rdv').toLowerCase()
-          });
-        }
+      CAL_EVENTS[e.date].push({
+        id: e.id || '',
+        title: e.title || '',
+        sub: e.contact || '',
+        time: e.start || '',
+        type: String(e.type || 'rdv').toLowerCase()
       });
     });
     if(typeof renderCalendar === 'function') renderCalendar();
@@ -1101,6 +1085,13 @@ function closeSidebar(){
   var cards=[];
   try{cards=(await _loadPipeline()).map(migrateCard);}catch(e){}
 
+  // Load agenda events (single source of truth post-refactor PHASE 3)
+  var events=[];
+  try{events=await _loadAgenda();}catch(e){}
+  // Index card par id pour enrichir Today section (name/meta)
+  var cardById={};
+  cards.forEach(function(c){ if(c && c.id) cardById[String(c.id)]=c; });
+
   var COLS=[
     {id:'prospects',name:'Prospects',color:'#CC0000'},
     {id:'linkedin',name:'LinkedIn',color:'#0A66C2'},
@@ -1127,18 +1118,15 @@ function closeSidebar(){
 
   var kpiCounts = { mailing: 0, phoning: 0, visio: 0, rdv: 0, devis: 0 };
 
-  cards.forEach(function(c){
-    if(!Array.isArray(c.rdvs)) return;
-    c.rdvs.forEach(function(rdv){
-      if(!rdv || !rdv.date) return;
-      var d = new Date(rdv.date);
-      if(isNaN(d.getTime())) return;
-      if(d.getTime() < todayMidnight.getTime()) return; // exclure passé
-      var t = String(rdv.type || 'rdv').toLowerCase();
-      // Mapping : type 'mail' (action) → KPI 'mailing' (label)
-      if(t === 'mail') t = 'mailing';
-      if(kpiCounts[t] !== undefined) kpiCounts[t]++;
-    });
+  // Lecture depuis events (table agenda) — source unique post-refactor PHASE 3
+  events.forEach(function(ev){
+    if(!ev || !ev.date) return;
+    var d = new Date(ev.date + 'T00:00:00');
+    if(isNaN(d.getTime())) return;
+    if(d.getTime() < todayMidnight.getTime()) return;
+    var t = String(ev.type || 'rdv').toLowerCase();
+    if(t === 'mail') t = 'mailing';
+    if(kpiCounts[t] !== undefined) kpiCounts[t]++;
   });
 
   Object.keys(kpiMap).forEach(function(k){
@@ -1162,20 +1150,14 @@ function closeSidebar(){
     {id:'devis',label:'Devis',color:'#0A66C2'},
   ];
 
-  // Compter les actions du jour depuis c.rdvs[] par type
+  // Compter les actions du jour depuis events (table agenda) par type
   var todayStr = new Date().toISOString().slice(0,10);
   var todayActions = {};
-  cards.forEach(function(c){
-    (c.rdvs||[]).forEach(function(rdv){
-      if(!rdv || !rdv.date) return;
-      var d = new Date(rdv.date);
-      if(isNaN(d.getTime())) return;
-      var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      if(ds !== todayStr) return;
-      var t = String(rdv.type || 'rdv').toLowerCase();
-      if(!todayActions[t]) todayActions[t] = [];
-      todayActions[t].push({ card: c, rdv: rdv });
-    });
+  events.forEach(function(ev){
+    if(!ev || !ev.date || ev.date !== todayStr) return;
+    var t = String(ev.type || 'rdv').toLowerCase();
+    if(!todayActions[t]) todayActions[t] = [];
+    todayActions[t].push({ event: ev, card: ev.ficheId ? cardById[String(ev.ficheId)] : null });
   });
 
   var todayGrid=document.getElementById('today-grid');
@@ -1184,7 +1166,7 @@ function closeSidebar(){
       var border=i<todayCols.length-1?'border-right:1px solid var(--border);':'';
       var items='';
       var count=0;
-      // Mapping label colonne → clé du type d'action dans c.rdvs[]
+      // Mapping label colonne → clé du type d'event en table agenda
       var typeKey = (tc.id === 'mailing') ? 'mail'
                   : (tc.id === 'rdv')     ? 'rdv'
                   : (tc.id === 'visio')   ? 'visio'
@@ -1195,14 +1177,15 @@ function closeSidebar(){
         count = list.length;
         items = list.length
           ? list.slice(0,3).map(function(item){
-              var card = item.card, rdv = item.rdv;
-              var name = card.co || card.name || 'Action';
-              var meta = (card.name || '') + (rdv.hour ? ' · ' + rdv.hour : '');
+              var ev = item.event, card = item.card;
+              var name = (card && (card.co || card.name)) || ev.title || 'Action';
+              var contact = (card && card.name) || ev.contact || '';
+              var meta = contact + (ev.start ? ' · ' + ev.start : '');
               return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(name)+'</div><div class="today-meta">'+esc(meta)+'</div></div></div>';
             }).join('')
           : '<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
       } else {
-        // Phoning : pas de type équivalent dans c.rdvs[] → fallback sur la colonne kanban
+        // Phoning : pas de type équivalent en agenda → fallback sur la colonne kanban
         var colCards=cards.filter(function(c){return c.col===tc.id;}).slice(0,3);
         count=cards.filter(function(c){return c.col===tc.id;}).length;
         items=colCards.length?colCards.map(function(c){return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(c.co||c.name)+'</div><div class="today-meta">'+esc(c.name||'')+'</div></div></div>';}).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';

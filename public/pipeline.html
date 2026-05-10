@@ -836,6 +836,24 @@ const MOCK = [];
 let cards = [];
 let currentId = null;
 let dragId = null;
+// Cache events agenda de la fiche en cours d'affichage (alimenté à openDetail).
+// Source unique de vérité pour les RDV / actions calendrier — table agenda en DB.
+let _agendaForCurrentFiche = [];
+
+async function loadAgendaForFiche(ficheId) {
+  if (!ficheId) { _agendaForCurrentFiche = []; return; }
+  try {
+    const resp = await fetch('/api/agenda?ficheId=' + encodeURIComponent(ficheId));
+    if (resp.ok) {
+      const data = await resp.json();
+      _agendaForCurrentFiche = Array.isArray(data) ? data : [];
+    } else {
+      _agendaForCurrentFiche = [];
+    }
+  } catch (e) {
+    _agendaForCurrentFiche = [];
+  }
+}
 
 async function load() {
   try {
@@ -1200,8 +1218,7 @@ function saveCard() {
       src: 'Manuel',
       entity_origine: 'mup',
       activity: [],
-      noteEntries: [],
-      rdvs: []
+      noteEntries: []
     });
   }
   save(); closeModal(); renderKanban();
@@ -1223,10 +1240,12 @@ async function deleteCard(id) {
 let detailMap = null;
 let detailMarker = null;
 
-function openDetail(id) {
+async function openDetail(id) {
   currentId = id;
   const c = cards.find(x=>String(x.id)===String(id));
   if(!c) return;
+  // Charge les events agenda liés à cette fiche AVANT le render (calendrier + focus mode).
+  await loadAgendaForFiche(id);
   const col = COLS.find(x=>x.id===c.col);
   const val = c.val>=1000?Math.round(c.val/1000)+'k€':(c.val?c.val+'€':'—');
 
@@ -1496,31 +1515,15 @@ function buildDotsByDate() {
     if(!dotsByDate[dateStr]) dotsByDate[dateStr] = new Set();
     dotsByDate[dateStr].add(type);
   };
-  // 1) Actions depuis c.rdvs[] (source primaire)
+  // 1) Actions depuis la table agenda (source unique de vérité), filtrées par ficheId.
+  // _agendaForCurrentFiche est alimenté par loadAgendaForFiche() dans openDetail().
+  (_agendaForCurrentFiche || []).forEach(function(ev){
+    if(!ev || !ev.date) return;
+    addDot(String(ev.date), String(ev.type || 'rdv').toLowerCase());
+  });
+
+  // 2) c.noteEntries → notes (gris)
   const c = cards.find(x => String(x.id) === String(currentId));
-  if(c && Array.isArray(c.rdvs)){
-    c.rdvs.forEach(function(rdv){
-      if(!rdv || !rdv.date) return;
-      var d = new Date(rdv.date);
-      if(isNaN(d.getTime())) return;
-      var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      var t = String(rdv.type || 'rdv').toLowerCase();
-      addDot(ds, t);
-    });
-  }
-
-  // 2) Fallback : mup_agenda (events natifs ou anciens) sur cette fiche
-  try {
-    const agenda = JSON.parse(localStorage.getItem('mup_agenda') || '[]');
-    agenda.forEach(ev => {
-      var matchFiche = String(ev.ficheId || ev.id) === String(currentId);
-      if(matchFiche && ev.date && ev.type){
-        addDot(ev.date, String(ev.type).toLowerCase());
-      }
-    });
-  } catch(e) {}
-
-  // 3) c.noteEntries → notes (gris)
   if(c) {
     (c.noteEntries||[]).forEach(n => {
       if(!n.createdAt) return;
@@ -1528,8 +1531,6 @@ function buildDotsByDate() {
       const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
       addDot(ds, 'note');
     });
-    // c.activity n'est plus parsé pour les dots de type :
-    // c.rdvs[] est désormais la source de vérité (évite les doublons mailing/phoning/visio/rdv).
   }
   return dotsByDate;
 }
@@ -1636,15 +1637,13 @@ function onRdvTypeChange() {
   lbl.textContent = labels[sel.value] || labels.rdv;
 }
 
-function saveRdv() {
+async function saveRdv() {
   if(!rdvSelectedDate) { alert('Sélectionnez une date dans le calendrier'); return; }
   if(!currentId) return;
   const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
   const typeSel = document.getElementById('rdv-type-select');
   const actionType = (typeSel && typeSel.value) || (c.col === 'visio' ? 'visio' : 'rdv');
-  const recordType = actionType.toUpperCase();           // 'RDV' | 'VISIO' | 'MAIL' | 'DEVIS'
-  const agendaType = actionType;                          // 'rdv'  | 'visio' | 'mail' | 'devis'
   const advanceTarget = (actionType === 'rdv' || actionType === 'visio') ? actionType : null;
   const labelVerbeMap = {
     rdv: 'RDV planifié',
@@ -1664,64 +1663,64 @@ function saveRdv() {
   const time = timeInput ? timeInput.value : '14:00';
   if(!time) { alert('Sélectionnez une heure'); return; }
 
-  // Date format YYYY-MM-DD pour compat avec mup_agenda
   const yyyy = rdvSelectedDate.getFullYear();
   const mm = String(rdvSelectedDate.getMonth() + 1).padStart(2, '0');
   const dd = String(rdvSelectedDate.getDate()).padStart(2, '0');
   const dateStr = yyyy + '-' + mm + '-' + dd;
 
-  // Date ISO pour card.rdvs
   const [hh, mn] = time.split(':');
-  const rdvIso = new Date(rdvSelectedDate);
-  rdvIso.setHours(parseInt(hh, 10), parseInt(mn, 10), 0, 0);
+  const endHh = String(Math.min(23, parseInt(hh, 10) + 1)).padStart(2, '0');
+  const endStr = endHh + ':' + (mn || '00');
 
-  // Push dans card.rdvs (array structuré)
-  const rdv = {
-    id: 'rdv_' + Date.now(),
-    contactId: String(c.id),
-    contactName: c.co || c.name || '',
-    address: c.address || '',
-    lat: c.lat || null,
-    lng: c.lng || null,
-    date: rdvIso.toISOString(),
-    hour: time,
-    type: recordType,
-    colonne: c.col || '',
-    createdAt: new Date().toISOString()
+  // POST /api/agenda — single source of truth. Le ficheId relie l'event à la fiche.
+  const evtBody = {
+    date: dateStr,
+    start: time,
+    end: endStr,
+    title: c.co || c.name || '',
+    contact: c.name || '',
+    type: actionType,
+    notes: '',
+    ficheId: String(c.id)
   };
-  if(!Array.isArray(c.rdvs)) c.rdvs = [];
-  c.rdvs.push(rdv);
+  try {
+    const resp = await fetch('/api/agenda', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(evtBody)
+    });
+    if (!resp.ok) {
+      alert('Impossible d\'enregistrer le RDV (HTTP ' + resp.status + ')');
+      return;
+    }
+  } catch (e) {
+    alert('Erreur réseau lors de l\'enregistrement du RDV');
+    return;
+  }
 
-  // Backcompat : c.rdvDate / c.rdvTime (lus par /agenda)
-  c.rdvDate = dateStr;
-  c.rdvTime = time;
-  save();
+  // Refresh cache local fiche pour render immédiat (calendrier dots + focus mode)
+  await loadAgendaForFiche(currentId);
 
-  // mup_agenda est reconstruit par /agenda lui-même depuis c.rdvs[] (source de vérité).
-  // Pas d'écriture directe ici → évite les doublons.
-
-  // Note synthétique horodatée dans timeline
+  // Note synthétique horodatée dans timeline (gris)
   if(!Array.isArray(c.noteEntries)) c.noteEntries = [];
   const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
   c.noteEntries.push({
     id: 'tl_' + Date.now(),
     text: labelVerbe + ' le ' + rdvSelectedDate.getDate() + ' ' + monthsShort[rdvSelectedDate.getMonth()] + ' à ' + time,
-    createdAt: new Date().toISOString(),
-    rdvId: rdv.id
+    createdAt: new Date().toISOString()
   });
   save();
 
-  // Auto-advance colonne pipeline (uniquement RDV et Visio — Mail et Devis laissent la fiche en place)
+  // Auto-advance colonne pipeline (RDV et Visio uniquement)
   if(advanceTarget && advanceCardColumn(c, advanceTarget)) {
     save();
     renderKanban();
   }
 
-  // Notifie autres onglets
+  // Notif cross-onglet (agenda écoutera côté V1.2)
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(e) {}
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(e) {}
 
-  // Re-render le panneau détail pour refléter le nouveau RDV (timeline, pill colonne, calendrier reset)
   if(typeof openDetail === 'function' && currentId) {
     openDetail(currentId);
   }
@@ -2024,14 +2023,27 @@ function importFromProspects() {
       if(counts[t.type] !== undefined) counts[t.type]++;
     });
     
-    // Prochaine action : on cherche dans rdv (planifié)
-    const rdv = c.rdv || null;
+    // Prochaine action : premier event upcoming dans la table agenda pour cette fiche.
+    // _agendaForCurrentFiche est déjà chargé par openDetail() en amont.
+    const todayKey = (function(){ const t = new Date(); t.setHours(0,0,0,0); return t.getTime(); })();
+    const upcoming = (_agendaForCurrentFiche || [])
+      .filter(function(ev){
+        if(!ev || !ev.date) return false;
+        const t = new Date(ev.date + 'T00:00:00').getTime();
+        return !isNaN(t) && t >= todayKey;
+      })
+      .sort(function(a,b){
+        const da = a.date + 'T' + (a.start || '00:00');
+        const db = b.date + 'T' + (b.start || '00:00');
+        return da < db ? -1 : (da > db ? 1 : 0);
+      });
+    const rdv = upcoming[0] || null;
     const nextContent = document.getElementById('focus-next-action-content');
     if(nextContent){
       if(rdv && rdv.date){
-        const rdvDate = new Date(rdv.date);
+        const rdvDate = new Date(rdv.date + 'T' + (rdv.start || '00:00'));
         const dateStr = rdvDate.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
-        const timeStr = rdvDate.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+        const timeStr = rdv.start || rdvDate.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
         nextContent.innerHTML = `
           <div class="next-action-card">
             <div class="next-action-icon">
@@ -2283,8 +2295,7 @@ function importFromProspects() {
         days: 0,
         src: ct.source || 'contacts',
         activity: ct.activity || [],
-        noteEntries: ct.noteEntries || [],
-        rdvs: ct.rdvs || []
+        noteEntries: ct.noteEntries || []
       };
       window.cards.push(newCard);
       try { localStorage.setItem('mup_pipeline', JSON.stringify(window.cards)); } catch(e){}
@@ -2747,42 +2758,50 @@ function openActionConfirmPopup(detected){
   };
 }
 
-function createActionFromDetection(type, dateStr, time){
+async function createActionFromDetection(type, dateStr, time){
   const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
   const [yyyy, mm, dd] = dateStr.split('-').map(Number);
   const [hh, mn] = time.split(':').map(Number);
   const iso = new Date(yyyy, mm-1, dd, hh, mn, 0, 0);
+  const endHh = String(Math.min(23, (hh|0) + 1)).padStart(2, '0');
 
-  const rdv = {
-    id: 'rdv_' + Date.now(),
-    contactId: String(c.id),
-    contactName: c.co || c.name || '',
-    address: c.address || '',
-    lat: c.lat || null,
-    lng: c.lng || null,
-    date: iso.toISOString(),
-    hour: time,
-    type: type.toUpperCase(),
-    colonne: c.col || '',
-    createdAt: new Date().toISOString(),
-    source: 'note_voice'
+  // POST /api/agenda — détection vocale crée un event lié à la fiche.
+  const evtBody = {
+    date: dateStr,
+    start: time,
+    end: endHh + ':' + String(mn|0).padStart(2,'0'),
+    title: c.co || c.name || '',
+    contact: c.name || '',
+    type: String(type).toLowerCase(),
+    notes: '',
+    ficheId: String(c.id)
   };
-  if(!Array.isArray(c.rdvs)) c.rdvs = [];
-  c.rdvs.push(rdv);
+  try {
+    const resp = await fetch('/api/agenda', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(evtBody)
+    });
+    if (!resp.ok) {
+      console.warn('[createActionFromDetection] POST agenda failed', resp.status);
+    }
+  } catch (e) {
+    console.warn('[createActionFromDetection] network error', e && e.message);
+  }
+  await loadAgendaForFiche(currentId);
 
-  // Trace timeline
   if(!Array.isArray(c.noteEntries)) c.noteEntries = [];
   const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
   const verbe = {rdv:'RDV planifié', visio:'Visio planifiée', mail:'Mail programmé', devis:'Devis planifié'}[type] || 'Action planifiée';
   c.noteEntries.push({
     id: 'tl_' + Date.now(),
     text: verbe + ' (auto) le ' + iso.getDate() + ' ' + monthsShort[iso.getMonth()] + ' à ' + time,
-    createdAt: new Date().toISOString(),
-    rdvId: rdv.id
+    createdAt: new Date().toISOString()
   });
 
   save();
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(_){}
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
 
   // Préserver le texte de la note en cours de saisie avant le re-render

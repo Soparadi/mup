@@ -548,7 +548,13 @@ app.get('/api/agenda', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM agenda WHERE userId = $userId', { userId })
+    const ficheId = typeof req.query?.ficheId === 'string' ? req.query.ficheId.trim() : ''
+    const result = ficheId
+      ? await db.query(
+          'SELECT * FROM agenda WHERE userId = $userId AND ficheId = $ficheId',
+          { userId, ficheId }
+        )
+      : await db.query('SELECT * FROM agenda WHERE userId = $userId', { userId })
     res.json(result[0] || [])
   } catch (err) {
     console.error('[agenda]', err)

@@ -140,12 +140,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 /* Action destructive — rouge sobre, hover plus appuyé */
 .btn-delete{background:#fff;color:var(--mup-danger);border:1.5px solid var(--mup-danger);border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .15s}
 .btn-delete:hover{background:var(--mup-danger);color:#fff}
-/* Bandeau info pour les événements provenant d'une fiche pipeline */
-.modal-pipeline-info{background:rgba(67,56,202,.08);border:1px solid rgba(67,56,202,.2);border-radius:9px;padding:11px 13px;font-size:12.5px;color:#4338CA;line-height:1.5;display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
-.modal-pipeline-info svg{flex-shrink:0;margin-top:1px}
-/* Mode read-only sur les inputs en mode pipeline */
-.finput[readonly],.finput:disabled{background:var(--surface);color:var(--muted);cursor:not-allowed;border-color:var(--border)}
-.type-pill.is-locked{opacity:.55;cursor:not-allowed;pointer-events:none}
+/* Mention discrète : événement lié à une fiche pipeline (édition normale) */
+.modal-pipeline-info{background:rgba(67,56,202,.08);border:1px solid rgba(67,56,202,.2);border-radius:9px;padding:9px 12px;font-size:12px;color:#4338CA;line-height:1.4;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.modal-pipeline-info svg{flex-shrink:0}
+.modal-pipeline-info strong{font-weight:700}
 
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 </style>
@@ -226,10 +224,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       <button class="modal-x" onclick="closeModal()">×</button>
     </div>
     <div class="modal-body">
-      <!-- Bandeau info — visible uniquement pour les events provenant d'une fiche pipeline -->
+      <!-- Mention discrète : visible si l'event est lié à une fiche pipeline -->
       <div class="modal-pipeline-info" id="modal-pipeline-info" hidden>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-        <span>Cet événement provient d'une fiche pipeline. Pour le modifier ou le supprimer, ouvrez la fiche.</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <span>Lié à la fiche <strong id="modal-pipeline-info-name"></strong></span>
       </div>
       <div class="frow">
         <div class="flabel">Titre</div>
@@ -394,67 +392,10 @@ const MOCK_EVENTS = [];
 let events = [];
 
 async function loadEvents() {
+  // Single source of truth : table agenda en SurrealDB.
+  // Les events liés à une fiche pipeline portent un champ ficheId (populé au save).
   try { events = await _loadAgenda(); } catch(e) { events = []; }
   if(!Array.isArray(events)) events = [];
-
-  // Source de vérité : c.rdvs[] dans mup_pipeline.
-  // On purge les events Agenda issus du pipeline (key préfixée 'pipe_' OU
-  // ancien format sans key dont l'id correspond à une fiche), puis reconstruction.
-  try {
-    var cards = (await _loadPipeline()).map(function(c){
-      if(c.co && !c.company) c.company = c.co;
-      if(c.name && !c.contact) c.contact = c.name;
-      c.co = c.company || '';
-      c.name = c.contact || '';
-      return c;
-    });
-    if(cards.length) {
-      var fichesIds = {};
-      cards.forEach(function(c){ fichesIds[String(c.id)] = true; });
-
-      events = events.filter(function(ev){
-        if(!ev) return false;
-        // Purge events issus du pipeline (toutes formes possibles)
-        if(ev.key && String(ev.key).indexOf('pipe_') === 0) return false;
-        if(ev.ficheId && fichesIds[String(ev.ficheId)]) return false;
-        if(!ev.key && fichesIds[String(ev.id)]) return false;
-        return true;
-      });
-
-      cards.forEach(function(c){
-        if(!Array.isArray(c.rdvs) || !c.rdvs.length) return;
-        c.rdvs.forEach(function(rdv){
-          if(!rdv || !rdv.date) return;
-          var d = new Date(rdv.date);
-          if(isNaN(d.getTime())) return;
-          var dateStr = d.getFullYear() + '-' +
-                        String(d.getMonth()+1).padStart(2,'0') + '-' +
-                        String(d.getDate()).padStart(2,'0');
-          var hour = rdv.hour || (String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'));
-          var type = String(rdv.type || 'rdv').toLowerCase();
-          var evtKey = 'pipe_' + String(c.id) + '_' + (rdv.id || (type + '_' + dateStr));
-          if(events.some(function(ev){ return ev.key === evtKey; })) return;
-          events.push({
-            id: String(rdv.id || (c.id + '_' + type + '_' + dateStr)),
-            key: evtKey,
-            ficheId: String(c.id),
-            title: c.co || c.name || '',
-            contact: c.name || '',
-            date: dateStr,
-            start: hour,
-            end: '',
-            type: type,
-            col: c.col || '',
-            notes: '',
-            // Flag : event synthétisé depuis une fiche pipeline → modale read-only
-            // (pas dans la table SurrealDB agenda, modif via la fiche uniquement).
-            isFromPipeline: true
-          });
-        });
-      });
-    }
-  } catch(e) {}
-
   if(!events.length) events = MOCK_EVENTS;
 }
 
@@ -625,63 +566,51 @@ function renderDay() {
 // ── MODAL ──
 let editingId = null;
 let modalType = 'rdv';
-// 'create' | 'edit' | 'pipeline' (read-only) — pilote l'UI de la modale
+// 'create' | 'edit' — tous les events sont éditables (single source of truth = table agenda)
 let modalMode = 'create';
-// Référence à la fiche pipeline parente quand modalMode === 'pipeline'
+// ficheId de la fiche pipeline parente (null si event sans fiche)
 let modalFicheId = null;
 
 // Bascule l'UI de la modale selon le mode courant.
-//   create    : titre "Nouvel événement", bouton "Enregistrer", pas de Supprimer/Ouvrir fiche
-//   edit      : titre "Modifier l'événement", bouton "Enregistrer les modifications",
-//               bouton "Supprimer" rouge à gauche
-//   pipeline  : tous les inputs read-only, bandeau info visible, bouton "Ouvrir la fiche
-//               pipeline" à gauche, "Fermer" à droite (Annuler caché, Enregistrer caché)
+//   create : titre "Nouvel événement", bouton "Enregistrer", pas de Supprimer
+//   edit   : titre "Modifier l'événement", bouton "Enregistrer les modifications",
+//            bouton "Supprimer" rouge à gauche, "Ouvrir la fiche" si ficheId présent
 function applyModalMode(mode) {
   modalMode = mode;
   var title = document.getElementById('modal-title');
-  var info = document.getElementById('modal-pipeline-info');
   var btnDelete = document.getElementById('btn-delete');
   var btnOpenFiche = document.getElementById('btn-open-fiche');
-  var btnCancel = document.getElementById('btn-cancel');
   var btnSave = document.getElementById('btn-save');
 
-  // Inputs touchables (excl. select pipeline qui est toujours actif en create/edit)
-  var inputs = ['m-title', 'm-contact', 'm-date', 'm-start', 'm-end', 'm-notes'];
-  var selPipe = document.getElementById('m-pipeline-card');
-
-  if (mode === 'pipeline') {
-    title.textContent = 'Détails de l\'événement';
-    if (info) info.hidden = false;
-    inputs.forEach(function(id){ var el = document.getElementById(id); if (el) el.setAttribute('readonly', 'readonly'); });
-    if (selPipe) selPipe.disabled = true;
-    document.querySelectorAll('.type-pill').forEach(function(p){ p.classList.add('is-locked'); });
-    btnDelete.hidden = true;
-    btnOpenFiche.hidden = false;
-    btnCancel.textContent = 'Fermer';
-    btnSave.hidden = true;
-  } else if (mode === 'edit') {
+  if (mode === 'edit') {
     title.textContent = 'Modifier l\'événement';
-    if (info) info.hidden = true;
-    inputs.forEach(function(id){ var el = document.getElementById(id); if (el) el.removeAttribute('readonly'); });
-    if (selPipe) selPipe.disabled = false;
-    document.querySelectorAll('.type-pill').forEach(function(p){ p.classList.remove('is-locked'); });
     btnDelete.hidden = false;
-    btnOpenFiche.hidden = true;
-    btnCancel.textContent = 'Annuler';
-    btnSave.hidden = false;
+    btnOpenFiche.hidden = !modalFicheId;
     btnSave.textContent = 'Enregistrer les modifications';
   } else { // 'create'
     title.textContent = 'Nouvel événement';
-    if (info) info.hidden = true;
-    inputs.forEach(function(id){ var el = document.getElementById(id); if (el) el.removeAttribute('readonly'); });
-    if (selPipe) selPipe.disabled = false;
-    document.querySelectorAll('.type-pill').forEach(function(p){ p.classList.remove('is-locked'); });
     btnDelete.hidden = true;
     btnOpenFiche.hidden = true;
-    btnCancel.textContent = 'Annuler';
-    btnSave.hidden = false;
     btnSave.textContent = 'Enregistrer';
   }
+}
+
+// Affiche la mention "Lié à la fiche X" en mode edit si ficheId présent.
+function refreshPipelineInfo() {
+  var info = document.getElementById('modal-pipeline-info');
+  var nameEl = document.getElementById('modal-pipeline-info-name');
+  if (!info || !nameEl) return;
+  if (!modalFicheId) { info.hidden = true; nameEl.textContent = ''; return; }
+  // Lookup nom de la fiche depuis le select déjà peuplé
+  var sel = document.getElementById('m-pipeline-card');
+  var label = '';
+  if (sel) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (String(sel.options[i].value) === String(modalFicheId)) { label = sel.options[i].textContent; break; }
+    }
+  }
+  nameEl.textContent = label || ('#' + modalFicheId);
+  info.hidden = false;
 }
 
 async function openModal(hour) {
@@ -718,7 +647,11 @@ async function openModal(hour) {
 
 async function fillFromPipeline() {
   var sel = document.getElementById('m-pipeline-card');
-  if(!sel || !sel.value) return;
+  if(!sel) return;
+  // Met à jour la référence ficheId à chaque changement du select (incluant "vide").
+  modalFicheId = sel.value || null;
+  refreshPipelineInfo();
+  if(!sel.value) return;
   try {
     var pipe = await _loadPipeline();
     var c = pipe.find(function(x) { return String(x.id) === String(sel.value); });
@@ -742,12 +675,11 @@ function editEvent(id) {
   document.getElementById('m-notes').value = e.notes || '';
   var typePill = document.querySelector('.type-pill[data-type="' + (e.type || 'rdv') + '"]');
   if (typePill) selType(typePill);
-  // Mode pipeline : event synthétisé depuis une fiche pipeline → read-only.
-  if (e.isFromPipeline) {
-    applyModalMode('pipeline');
-  } else {
-    applyModalMode('edit');
-  }
+  applyModalMode('edit');
+  // Sync select fiche + bandeau d'info
+  var sel = document.getElementById('m-pipeline-card');
+  if (sel) sel.value = modalFicheId || '';
+  refreshPipelineInfo();
   document.getElementById('modal-overlay').classList.add('open');
 }
 
@@ -756,45 +688,42 @@ function closeModal() {
   // Reset pour la prochaine ouverture (par sécurité)
   editingId = null;
   modalFicheId = null;
+  var info = document.getElementById('modal-pipeline-info');
+  if (info) info.hidden = true;
 }
 
 function selType(el) {
   if (!el) return;
-  // En mode pipeline les pills sont locked — selType ne doit rien faire.
-  if (modalMode === 'pipeline') return;
   document.querySelectorAll('.type-pill').forEach(p => p.classList.remove('sel'));
   el.classList.add('sel');
   modalType = el.dataset.type;
 }
 
-// Bouton "Ouvrir la fiche pipeline" du mode read-only.
+// Bouton "Ouvrir la fiche pipeline" — visible en mode edit si ficheId présent.
 function openFicheFromModal() {
   var fid = modalFicheId;
   closeModal();
   if (fid && window.MUPFiche && typeof window.MUPFiche.open === 'function') {
     window.MUPFiche.open(fid);
   } else if (fid) {
-    // Fallback : navigation classique vers la page Pipeline avec le param fiche.
     window.location.href = '/pipeline?fiche=' + encodeURIComponent(fid);
   }
 }
 
 async function saveEvent() {
-  // Mode pipeline read-only : pas d'écriture possible.
-  if (modalMode === 'pipeline') { closeModal(); return; }
-
   const title = document.getElementById('m-title').value.trim();
   if(!title) { document.getElementById('m-title').focus(); return; }
-  // Lit explicitement le champ Date (au lieu d'utiliser dateKey(selectedDay) figé).
   const dateVal = document.getElementById('m-date').value || dateKey(selectedDay);
   const startVal = document.getElementById('m-start').value;
   const endVal = document.getElementById('m-end').value;
   const contactVal = document.getElementById('m-contact').value.trim();
   const notesVal = document.getElementById('m-notes').value.trim();
+  // ficheId : depuis modalFicheId (édition) OU select (création)
+  const sel = document.getElementById('m-pipeline-card');
+  const ficheId = modalFicheId || (sel && sel.value) || null;
 
   let target;
   if (editingId) {
-    // Mutation ciblée d'un event existant — pas de re-PUT en boucle.
     target = events.find(x => x.id === editingId);
     if (!target) { closeModal(); return; }
     target.title = title;
@@ -804,6 +733,7 @@ async function saveEvent() {
     target.end = endVal;
     target.type = modalType;
     target.notes = notesVal;
+    target.ficheId = ficheId;
   } else {
     target = {
       id: 'e' + Date.now(),
@@ -813,22 +743,17 @@ async function saveEvent() {
       title: title,
       contact: contactVal,
       type: modalType,
-      notes: notesVal
+      notes: notesVal,
+      ficheId: ficheId
     };
     events.push(target);
   }
 
-  // Persist localStorage immédiatement (cache front).
   try { localStorage.setItem('mup_agenda', JSON.stringify(events)); } catch(e) {}
 
-  // Sauvegarde ciblée (un seul event) — récupère l'id SurrealDB en POST pour
-  // éviter la duplication au prochain reload.
   try {
     const saved = await _saveAgendaEvent(target);
     if (saved && saved.id && !editingId) {
-      // Le serveur peut renvoyer l'id sous forme "agenda:xxx" ou "xxx" — on
-      // normalise en strippant le préfixe pour cohérence avec ce qui est
-      // utilisé en PUT/DELETE.
       var serverId = String(saved.id).replace(/^agenda:/, '');
       target.id = serverId;
       try { localStorage.setItem('mup_agenda', JSON.stringify(events)); } catch(e) {}
@@ -837,41 +762,27 @@ async function saveEvent() {
     console.warn('[agenda] _saveAgendaEvent fail :', e && e.message);
   }
 
+  // Invalider cache agenda local pour forcer reload aux prochaines pages
+  if (typeof _agendaCache !== 'undefined') { _agendaCache = null; _agendaCacheTime = 0; }
+
   closeModal();
   renderCal();
   renderDay();
 
-  // Sync optionnel vers la fiche pipeline associée (logique pré-existante,
-  // s'applique en mode create/edit, jamais en pipeline read-only).
-  var pipeId = document.getElementById('m-pipeline-card')?.value;
-  var evtId = editingId || null;
-  try {
-    var pipe = await _loadPipeline();
-    var card = null;
-    if(pipeId) card = pipe.find(function(x){ return String(x.id) === String(pipeId); });
-    if(!card && evtId) card = pipe.find(function(x){ return String(x.id) === String(evtId); });
-    if(card) {
-      card.rdvDate = dateVal;
-      card.rdvTime = startVal || '';
-      localStorage.setItem('mup_pipeline', JSON.stringify(pipe));
-      if(card.id){ await _savePipelineCard(card); }
-    }
-  } catch(e) {}
+  // Notif cross-onglet (pipeline / carte / visio écoutent storage event)
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(_){}
 }
 
 // ── DELETE ──
 // Suppression ciblée d'un event de la table agenda + retrait local + re-render.
 // Confirmation native (confirm) — UX simple, conforme au brief.
 async function deleteEvent() {
-  if (modalMode === 'pipeline') return; // protection : pas de suppression sur event pipeline
   if (!editingId) return;
   if (!window.confirm('Supprimer cet événement ?')) return;
   var localId = editingId;
   var cleanId = String(localId).replace(/^agenda:/, '');
   try {
     var resp = await fetch('/api/agenda/' + encodeURIComponent(cleanId), { method: 'DELETE' });
-    // 404 acceptable : l'event n'a peut-être jamais été POSTé en base (créé puis supprimé
-    // sans rafraîchissement entre-temps). On purge local quand même.
     if (!resp.ok && resp.status !== 404) {
       window.alert('Suppression impossible (HTTP ' + resp.status + '). Réessayez.');
       return;
@@ -880,13 +791,13 @@ async function deleteEvent() {
     window.alert('Erreur réseau lors de la suppression. Réessayez.');
     return;
   }
-  // Retire localement + invalide cache + re-render.
   events = events.filter(function(x){ return x.id !== localId; });
   try { localStorage.setItem('mup_agenda', JSON.stringify(events)); } catch(e) {}
   if (typeof _agendaCache !== 'undefined') { _agendaCache = null; _agendaCacheTime = 0; }
   closeModal();
   renderCal();
   renderDay();
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(_){}
 }
 
 // Fermer modal en cliquant outside

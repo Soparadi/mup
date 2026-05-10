@@ -299,8 +299,13 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
   pointer-events: auto;
 }
 .kpi-value {
-  font-family: var(--mono); font-size: 22px; font-weight: 600;
+  /* Geist sans-serif (pas Geist Mono) : Geist Mono livre le 0 barré
+     comme glyphe principal, non désactivable via OpenType. tabular-nums
+     préserve l'alignement chiffres comme une mono. */
+  font-family: var(--font); font-size: 22px; font-weight: 600;
   color: var(--text); line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 .kpi-label {
   font-family: var(--font); font-size: 10px; color: var(--muted);

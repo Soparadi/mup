@@ -772,7 +772,9 @@ app.get('/api/search', async (req, res) => {
   if(req.query.departement) params.set('departement', req.query.departement)
   if(req.query.code_postal) params.set('code_postal', req.query.code_postal)
   if(req.query.code_commune) params.set('code_commune', req.query.code_commune)
-  if(req.query.per_page) params.set('per_page', Math.min(parseInt(req.query.per_page)||10, 25))
+  // per_page hardcoded à 10 = PAGE_SIZE client. Élimine la pagination fantôme
+  // (mismatch client 10 / upstream 25 → pages vides au-delà du dataset).
+  params.set('per_page', '10')
   if(req.query.page) params.set('page', req.query.page)
   try {
     const r = await fetch('https://recherche-entreprises.api.gouv.fr/search?' + params.toString())

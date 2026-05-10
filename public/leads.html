@@ -2389,9 +2389,16 @@ async function _runGeoQueue() {
     b.style.transition = 'opacity .6s'; b.style.opacity = '0';
     setTimeout(function(){ b.style.width='0%'; b.style.opacity='1'; b.style.transition='width .4s ease'; }, 700);
   }, 1200);
+  // Sous-titre aligné sur le scope filtré le plus précis : ville > dept > région.
+  var villeS = (document.getElementById('sel-ville')?.value || '').trim();
+  var deptS = (document.getElementById('sel-dept')?.value || '').trim();
   var rd = REGIONS[S.region];
+  var scopeLabel = '';
+  if (villeS) scopeLabel = ' à ' + villeS;
+  else if (deptS) scopeLabel = ' en ' + (DEPT_NAMES[deptS] || deptS);
+  else if (rd) scopeLabel = ' en ' + rd.label;
   document.getElementById('map-sub').textContent =
-    S.nGeoOk+' leads localisés'+(rd?' en '+rd.label:'')+(S.nGeoFail?' · '+S.nGeoFail+' non localisés':'');
+    S.nGeoOk+' leads localisés'+scopeLabel+(S.nGeoFail?' · '+S.nGeoFail+' non localisés':'');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2623,6 +2630,13 @@ function nextPage() {
 }
 function updatePagination() {
   var totalPages = Math.max(1, Math.ceil(S.total / PAGE_SIZE));
+  console.info('[Leads] pagination', {
+    sTotal: S.total,
+    sLoaded: S.loaded,
+    pageSize: PAGE_SIZE,
+    page: S.page,
+    totalPages: totalPages
+  });
   document.getElementById('page-info').textContent = 'Page ' + S.page + ' / ' + totalPages;
   document.getElementById('btn-prev').disabled = S.page <= 1;
   document.getElementById('btn-next').disabled = S.page >= totalPages;

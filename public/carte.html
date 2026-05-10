@@ -286,8 +286,10 @@ function progressHtml(col){
 
 // State
 var map=L.map('map',{center:[46.5,2.5],zoom:5,zoomControl:true,attributionControl:false});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,opacity:0.85}).addTo(map);
-L.control.attribution({prefix:'© OpenStreetMap'}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains:'abcd', maxZoom:19, opacity:0.85
+}).addTo(map);
 
 function migrateCard(c){
   if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;

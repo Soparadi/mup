@@ -1823,11 +1823,24 @@ function onVilleChange() {
 // ── Cache bounding boxes geo (dept + commune) ─────────────────────────
 // Évite les refetch geo.api.gouv.fr à chaque changement de filtre.
 // Persistant via localStorage (les contours géo ne changent jamais).
+// Versioning : si un déploiement antérieur a pollué le cache avec des
+// `null` (échecs mémorisés à tort), bumper GEO_CACHE_VERSION purge tous
+// les utilisateurs au prochain load — pas de demande utilisateur.
 var GEO_BOUNDS_CACHE = null;
+var GEO_CACHE_VERSION = 2;
 function _geoBoundsLoad() {
   if (GEO_BOUNDS_CACHE !== null) return;
-  try { GEO_BOUNDS_CACHE = JSON.parse(localStorage.getItem('mup_geo_bounds') || '{}'); }
-  catch(e) { GEO_BOUNDS_CACHE = {}; }
+  try {
+    var v = parseInt(localStorage.getItem('mup_geo_bounds_v') || '0', 10);
+    if (v !== GEO_CACHE_VERSION) {
+      localStorage.removeItem('mup_geo_bounds');
+      localStorage.setItem('mup_geo_bounds_v', String(GEO_CACHE_VERSION));
+      GEO_BOUNDS_CACHE = {};
+      console.info('[Leads] mup_geo_bounds purged (version bump → ' + GEO_CACHE_VERSION + ')');
+      return;
+    }
+    GEO_BOUNDS_CACHE = JSON.parse(localStorage.getItem('mup_geo_bounds') || '{}');
+  } catch(e) { GEO_BOUNDS_CACHE = {}; }
 }
 function _geoBoundsPersist() {
   try { localStorage.setItem('mup_geo_bounds', JSON.stringify(GEO_BOUNDS_CACHE)); } catch(e){}
@@ -1836,43 +1849,57 @@ function _geoBoundsGet(key) { _geoBoundsLoad(); return GEO_BOUNDS_CACHE[key]; }
 function _geoBoundsSet(key, val) { _geoBoundsLoad(); GEO_BOUNDS_CACHE[key] = val; _geoBoundsPersist(); }
 
 // ── Fetch bbox département via geo.api.gouv.fr ────────────────────────
+// Important : on ne mémorise QUE les succès. Les échecs (réseau, timeout,
+// contour absent) ne pollut pas le cache → retry naturel au prochain appel.
 async function fetchDeptBounds(code) {
   if (!code) return null;
   var key = 'dept:' + code;
   var cached = _geoBoundsGet(key);
-  if (cached !== undefined) return cached;
+  if (cached) {
+    console.info('[Leads] fetchDeptBounds cache hit:', code);
+    return cached;
+  }
   try {
     var url = 'https://geo.api.gouv.fr/departements/' + encodeURIComponent(code) + '?fields=contour&format=geojson';
-    var r = await fetch(url, { signal: AbortSignal.timeout(3000) });
-    if (!r.ok) { _geoBoundsSet(key, null); return null; }
+    console.info('[Leads] fetchDeptBounds GET', url);
+    var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) { console.warn('[Leads] fetchDeptBounds HTTP', r.status); return null; }
     var json = await r.json();
-    if (!json || !json.contour) { _geoBoundsSet(key, null); return null; }
+    if (!json || !json.contour) { console.warn('[Leads] fetchDeptBounds no contour for', code); return null; }
     var b = L.geoJSON(json.contour).getBounds();
-    if (!b || !b.isValid()) { _geoBoundsSet(key, null); return null; }
+    if (!b || !b.isValid()) { console.warn('[Leads] fetchDeptBounds invalid bounds for', code); return null; }
     var bbox = { sw: [b.getSouth(), b.getWest()], ne: [b.getNorth(), b.getEast()] };
     _geoBoundsSet(key, bbox);
     return bbox;
-  } catch(e) { return null; }
+  } catch(e) {
+    console.warn('[Leads] fetchDeptBounds error:', code, e && e.message);
+    return null;
+  }
 }
 
 // ── Fetch bbox commune (contour) ou centre fallback ───────────────────
+// Pas de mémorisation des échecs (cf fetchDeptBounds).
 async function fetchCommuneBounds(codeINSEE) {
   if (!codeINSEE) return null;
   var keyB = 'commune:' + codeINSEE;
   var keyC = 'commune:' + codeINSEE + ':c';
   var cachedB = _geoBoundsGet(keyB);
-  if (cachedB !== undefined) {
-    if (cachedB) return { type: 'bounds', bounds: cachedB };
-    var cachedC = _geoBoundsGet(keyC);
-    if (cachedC) return { type: 'center', center: cachedC };
-    return null;
+  if (cachedB) {
+    console.info('[Leads] fetchCommuneBounds cache hit (bounds):', codeINSEE);
+    return { type: 'bounds', bounds: cachedB };
+  }
+  var cachedC = _geoBoundsGet(keyC);
+  if (cachedC) {
+    console.info('[Leads] fetchCommuneBounds cache hit (center):', codeINSEE);
+    return { type: 'center', center: cachedC };
   }
   try {
     var url = 'https://geo.api.gouv.fr/communes/' + encodeURIComponent(codeINSEE) + '?fields=centre,contour&format=geojson';
-    var r = await fetch(url, { signal: AbortSignal.timeout(3000) });
-    if (!r.ok) { _geoBoundsSet(keyB, null); return null; }
+    console.info('[Leads] fetchCommuneBounds GET', url);
+    var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) { console.warn('[Leads] fetchCommuneBounds HTTP', r.status); return null; }
     var json = await r.json();
-    if (!json) { _geoBoundsSet(keyB, null); return null; }
+    if (!json) { console.warn('[Leads] fetchCommuneBounds empty body'); return null; }
     if (json.contour) {
       var b = L.geoJSON(json.contour).getBounds();
       if (b && b.isValid()) {
@@ -1883,13 +1910,15 @@ async function fetchCommuneBounds(codeINSEE) {
     }
     if (json.centre && Array.isArray(json.centre.coordinates)) {
       var c = { lat: json.centre.coordinates[1], lng: json.centre.coordinates[0], zoom: 14 };
-      _geoBoundsSet(keyB, null);
       _geoBoundsSet(keyC, c);
       return { type: 'center', center: c };
     }
-    _geoBoundsSet(keyB, null);
+    console.warn('[Leads] fetchCommuneBounds no contour/centre for', codeINSEE);
     return null;
-  } catch(e) { return null; }
+  } catch(e) {
+    console.warn('[Leads] fetchCommuneBounds error:', codeINSEE, e && e.message);
+    return null;
+  }
 }
 
 // ── Orchestrateur zoom carte selon le filtre actif ────────────────────
@@ -1967,10 +1996,20 @@ async function applyMapZoom() {
 // API publique gratuite, sans auth, sans rate-limit officiel. CORS OK.
 // Cache local par session, persistant via localStorage pour éviter refetch.
 var COMMUNE_CODE_CACHE = null;
+var COMM_CACHE_VERSION = 2;
 function _commCacheLoad() {
   if (COMMUNE_CODE_CACHE !== null) return;
-  try { COMMUNE_CODE_CACHE = JSON.parse(localStorage.getItem('mup_commune_codes') || '{}'); }
-  catch(e) { COMMUNE_CODE_CACHE = {}; }
+  try {
+    var v = parseInt(localStorage.getItem('mup_commune_codes_v') || '0', 10);
+    if (v !== COMM_CACHE_VERSION) {
+      localStorage.removeItem('mup_commune_codes');
+      localStorage.setItem('mup_commune_codes_v', String(COMM_CACHE_VERSION));
+      COMMUNE_CODE_CACHE = {};
+      console.info('[Leads] mup_commune_codes purged (version bump → ' + COMM_CACHE_VERSION + ')');
+      return;
+    }
+    COMMUNE_CODE_CACHE = JSON.parse(localStorage.getItem('mup_commune_codes') || '{}');
+  } catch(e) { COMMUNE_CODE_CACHE = {}; }
 }
 function _commCachePersist() {
   try { localStorage.setItem('mup_commune_codes', JSON.stringify(COMMUNE_CODE_CACHE)); } catch(e){}
@@ -1979,24 +2018,30 @@ async function resolveCommuneCode(name, deptCode) {
   if (!name) return null;
   _commCacheLoad();
   var key = (deptCode || '') + ':' + String(name).toLowerCase();
-  if (COMMUNE_CODE_CACHE[key] !== undefined) return COMMUNE_CODE_CACHE[key];
+  if (COMMUNE_CODE_CACHE[key]) {
+    console.info('[Leads] resolveCommuneCode cache hit:', key, '→', COMMUNE_CODE_CACHE[key]);
+    return COMMUNE_CODE_CACHE[key];
+  }
   try {
     var url = 'https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(name);
     if (deptCode) url += '&codeDepartement=' + encodeURIComponent(deptCode);
     url += '&fields=code,nom&limit=10';
-    var r = await fetch(url, { signal: AbortSignal.timeout(3000) });
-    if (!r.ok) { COMMUNE_CODE_CACHE[key] = null; _commCachePersist(); return null; }
+    console.info('[Leads] resolveCommuneCode GET', url);
+    var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) { console.warn('[Leads] resolveCommuneCode HTTP', r.status); return null; }
     var arr = await r.json();
-    if (!Array.isArray(arr) || !arr.length) { COMMUNE_CODE_CACHE[key] = null; _commCachePersist(); return null; }
+    if (!Array.isArray(arr) || !arr.length) { console.warn('[Leads] resolveCommuneCode no result for', name); return null; }
     // Match exact case-insensitive sur le nom officiel, sinon premier résultat
     var lower = String(name).toLowerCase();
     var match = arr.find(function(c){ return c.nom && c.nom.toLowerCase() === lower; }) || arr[0];
     var code = (match && match.code) || null;
-    COMMUNE_CODE_CACHE[key] = code;
-    _commCachePersist();
+    if (code) {
+      COMMUNE_CODE_CACHE[key] = code;
+      _commCachePersist();
+    }
     return code;
   } catch(e) {
-    COMMUNE_CODE_CACHE[key] = null;
+    console.warn('[Leads] resolveCommuneCode error:', name, e && e.message);
     return null;
   }
 }

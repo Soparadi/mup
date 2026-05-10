@@ -2405,10 +2405,11 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       });
     });
 
+    // total : on fait confiance à data.total_results ré-estimé serveur après
+    // isProstectable. NE PAS écraser par items.length : un filtre serveur qui
+    // garde 12/25 ne signifie pas "last page" mais juste filtrage par ratio.
     var apiTotal = data.total_results || data.total || items.length;
-    // If dept/ville filter active, use items.length as total estimate
-    var total = (deptFb || filterVille) ? Math.max(items.length, apiTotal) : apiTotal;
-    if((deptFb || filterVille) && items.length < 25) total = items.length; // last page
+    var total = apiTotal;
     return {
       total: total, totalComplete: Math.round(total * 0.3),
       hotCount: Math.round(total * 0.15), items: items

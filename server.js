@@ -192,7 +192,12 @@ app.use('/api/stripe', stripeRouter)
 // etat_administratif === 'A' capture seulement les liquidations CLÔTURÉES,
 // pas les redressements en cours. Pour ces derniers il faudrait enrichir
 // via Pappers ou BODACC en Phase 2.5.
-const EXCLUDED_NATURE_JURIDIQUE_PREFIXES = ['54', '71', '72', '73', '74']
+// Préfixes nature juridique exclus de la prospection :
+//   71 = administration publique · 72 = collectivités territoriales
+//   73 = établissements administratifs · 74 = entreprises étrangères
+// Les SARL/EURL (préfixe 54) sont la majorité des PME/TPE françaises,
+// cible commerciale légitime → NE PAS exclure.
+const EXCLUDED_NATURE_JURIDIQUE_PREFIXES = ['71', '72', '73', '74']
 
 function hasNamedDirigeant(item) {
   const dirs = item && item.dirigeants

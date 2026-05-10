@@ -1519,13 +1519,13 @@ var S = {
 // MAP INIT
 // ════════════════════════════════════════════════════════════════
 var map = L.map('map', { center:[46.5,2.5], zoom:6, zoomControl:true, scrollWheelZoom:false });
-// Stadia Alidade Smooth (lang=fr) : style premium gris/blanc minimaliste avec
-// labels en français. Free tier 200k req/mois.
-// PRÉ-REQUIS PROD : créer un compte gratuit sur stadiamaps.com et whitelister
-// le domaine movup.io (ou injecter ?api_key=XXX dans l'URL ci-dessous).
-// Sans whitelist, les tiles répondront 401 et la carte sera vide.
-L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png?lang=fr', {
-  attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+// CartoDB Positron : style gris/blanc minimaliste, gratuit, illimité, sans
+// clé API. Compromis : certains labels pays/régions restent en anglais
+// (Stadia Alidade Smooth lang=fr exige une clé, OSM France est trop saturé).
+// Labels FR à zoom utile (villes/communes) restent corrects. Backlog V1.1.
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains: 'abcd',
   maxZoom: 20
 }).addTo(map);
 

@@ -1519,12 +1519,13 @@ var S = {
 // MAP INIT
 // ════════════════════════════════════════════════════════════════
 var map = L.map('map', { center:[46.5,2.5], zoom:6, zoomControl:true, scrollWheelZoom:false });
-// OSM France (osmfr) : tuiles avec labels FR natifs (BRETAGNE, ÎLE-DE-FRANCE…),
-// sans clé API. Carto Positron ignore lang=fr (testé), Stadia Alidade Smooth
-// exige une clé API depuis 2024. OSM France est l'option gratuite + immédiate.
-L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', {
-  attribution: '&copy; <a href="https://www.openstreetmap.fr/">OSM France</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  subdomains: 'abc',
+// Stadia Alidade Smooth (lang=fr) : style premium gris/blanc minimaliste avec
+// labels en français. Free tier 200k req/mois.
+// PRÉ-REQUIS PROD : créer un compte gratuit sur stadiamaps.com et whitelister
+// le domaine movup.io (ou injecter ?api_key=XXX dans l'URL ci-dessous).
+// Sans whitelist, les tiles répondront 401 et la carte sera vide.
+L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png?lang=fr', {
+  attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   maxZoom: 20
 }).addTo(map);
 

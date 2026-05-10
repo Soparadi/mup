@@ -1504,6 +1504,8 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 </select>
 </div>
 
+<!-- Composant fiche unifiée (sprint fiche unifiée — Phase 1) -->
+<script src="/_mup-card.js"></script>
 <script>
 'use strict';
 /*
@@ -2438,18 +2440,16 @@ function addMarker(lead) {
   var color = '#94a3b8';
   var r     = 7;
 
-  var popup = '<div style="font-family:var(--font);min-width:210px">'
-    +'<strong style="font-family:var(--font);font-size:13px">'+esc(lead.name)+'</strong>'
-    +'<br><span style="font-size:11px;color:#888">'+esc(lead.sector)+'</span>'
-    +'<hr style="border:none;border-top:1px solid #eee;margin:8px 0">'
-    +'<div style="font-size:12px;line-height:1.8">'
-    +'👤 '+esc(lead.director||'—')+'<br>'
-    +'📞 '+(lead.phone||'<i style="color:#aaa">Non renseigné</i>')+'<br>'
-    +'✉️ <span style="color:#1a7a4a">'+(lead.email||'<i style="color:#aaa">—</i>')+'</span><br>'
-    +'📍 <span style="font-size:11px;color:#666">'+esc(lead.address)+'</span>'
-    +'</div>'
-    +'<div style="margin-top:6px;font-size:10px;color:#aaa">Source: '+esc(lead.geoSrc||'—')+' · '+esc(lead.source||'SIRENE')+'</div>'
-    +'</div>';
+  // Popup Leaflet : utilise MUPCard (sprint fiche unifiée). Variante popup
+  // (compact, sans bordure ni ombre — le Leaflet wrapper fournit déjà ces décor).
+  var popup = window.MUPCard ? window.MUPCard.render({
+    siret: lead.siret,
+    id: lead.id,
+    nafLabel: lead.nafLabel || lead.sector || '',
+    title: lead.director || lead.name || '',
+    subtitle: lead.name || '',
+    address: lead.address || ''
+  }, { state: 'lead', popup: true }) : '<div>'+esc(lead.name)+'</div>';
 
   if(S.useCluster) {
     _ensureCluster();
@@ -2536,56 +2536,22 @@ var SOCIALS_LIST = ['facebook','instagram','linkedin','youtube','tiktok'];
 
 function createCard(lead, idx) {
   if(idx===0) console.log('[Lead data]', lead);
-  var div = document.createElement('div');
-  div.className = 'card';
-  div.id = 'card-'+lead.id;
-  div.style.animationDelay = Math.min(idx, 8) * 0.05 + 's';
-
-  var completeBadge = lead.complete
-    ? '<span class="badge b-complete" style="font-size:9px">Complète</span>'
-    : '<span class="badge b-incomplete" style="font-size:9px">Partielle</span>';
-
-  // Extract city and postal code from address
-  var addrParts = (lead.address||'').match(/(\d{5})\s+(.+?)$/);
-  var cp = addrParts ? addrParts[1] : '';
-  var ville = addrParts ? addrParts[2] : lead.address || '';
-  var dept = cp ? cp.substring(0,2) : '';
-
-  var siretFmt = lead.siret ? lead.siret.replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4') : '';
-  var EMPTY = '<span class="lc-empty">—</span>';
-
-  var svgBuilding = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/></svg>';
-  var svgPhone = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#CC0000" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>';
-  var svgMail = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
-  var svgPin = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
-  var svgPlus = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-
-  div.innerHTML =
-    '<div class="lc-header">'
-      +'<div class="lc-naf">'+svgBuilding+'<span>'+esc(lead.nafLabel || lead.sector || 'Activité')+'</span></div>'
-      +'<div class="lc-name">'+esc(lead.name)+'</div>'
-      +'<div class="lc-director">'+(lead.director?esc(lead.director):EMPTY)+'</div>'
-    +'</div>'
-    +'<div class="lc-body">'
-      +'<div class="lc-section">'
-        +'<div class="lc-section-label"><span>Contact</span></div>'
-        +'<div class="lc-row">'+svgPhone+(lead.phone?'<a href="tel:'+esc(lead.phone.replace(/\s/g,''))+'">'+esc(lead.phone)+'</a>':EMPTY)+'</div>'
-        +'<div class="lc-row">'+svgMail+(lead.email?'<a href="mailto:'+esc(lead.email)+'">'+esc(lead.email)+'</a>':EMPTY)+'</div>'
-        +'<div class="lc-row">'+svgPin+(lead.address?'<span>'+esc(lead.address)+'</span>':EMPTY)+'</div>'
-      +'</div>'
-      +'<div class="lc-section">'
-        +'<div class="lc-section-label"><span>Identité légale</span><span>INSEE</span></div>'
-        +'<dl class="lc-id">'
-          +'<dt>SIRET</dt><dd>'+(siretFmt?esc(siretFmt):EMPTY)+'</dd>'
-          +'<dt>Forme</dt><dd>'+(lead.forme?esc(lead.forme):EMPTY)+'</dd>'
-          +'<dt>Code NAF</dt><dd>'+(lead.naf?esc(lead.naf):EMPTY)+'</dd>'
-          +'<dt>Effectif</dt><dd>'+EMPTY+'</dd>'
-        +'</dl>'
-      +'</div>'
-    +'</div>'
-    +'<button class="lc-add" onclick="addToPipeline(\''+lead.id+'\')">'+svgPlus+'Ajouter aux contacts</button>';
-
-  return div;
+  var wrap = document.createElement('div');
+  wrap.id = 'card-'+lead.id;
+  wrap.style.animationDelay = Math.min(idx, 8) * 0.05 + 's';
+  wrap.style.animation = 'fadeUp .3s ease both';
+  // Sprint fiche unifiée : MUPCard format minimaliste partagé /leads + popup
+  // carte (et /pipeline en sprint séparé). Format : badge secteur + nom
+  // dirigeant + raison sociale + adresse + bouton "Ajouter aux contacts".
+  wrap.innerHTML = window.MUPCard ? window.MUPCard.render({
+    siret: lead.siret,
+    id: lead.id,
+    nafLabel: lead.nafLabel || lead.sector || '',
+    title: lead.director || lead.name || '',
+    subtitle: lead.name || '',
+    address: lead.address || ''
+  }, { state: 'lead' }) : '';
+  return wrap;
 }
 
 // ════════════════════════════════════════════════════════════════

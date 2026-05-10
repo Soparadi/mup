@@ -732,6 +732,11 @@ app.get('/api/search', async (req, res) => {
   if(req.query.region) params.set('region', req.query.region)
   if(req.query.code_naf) params.set('activite_principale', req.query.code_naf)
   if(req.query.activite_principale) params.set('activite_principale', req.query.activite_principale)
+  // Filtres geo natifs recherche-entreprises — pousse en upstream pour réduire
+  // le drop client-side (avant : 96% des résultats jetés par pickLocalEtab).
+  if(req.query.departement) params.set('departement', req.query.departement)
+  if(req.query.code_postal) params.set('code_postal', req.query.code_postal)
+  if(req.query.code_commune) params.set('code_commune', req.query.code_commune)
   if(req.query.per_page) params.set('per_page', Math.min(parseInt(req.query.per_page)||10, 25))
   if(req.query.page) params.set('page', req.query.page)
   try {

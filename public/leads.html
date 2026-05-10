@@ -1519,10 +1519,13 @@ var S = {
 // MAP INIT
 // ════════════════════════════════════════════════════════════════
 var map = L.map('map', { center:[46.5,2.5], zoom:6, zoomControl:true, scrollWheelZoom:false });
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  subdomains: 'abcd',
-  maxZoom: 19
+// OSM France (osmfr) : tuiles avec labels FR natifs (BRETAGNE, ÎLE-DE-FRANCE…),
+// sans clé API. Carto Positron ignore lang=fr (testé), Stadia Alidade Smooth
+// exige une clé API depuis 2024. OSM France est l'option gratuite + immédiate.
+L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.fr/">OSM France</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  subdomains: 'abc',
+  maxZoom: 20
 }).addTo(map);
 
 var mcGroup = null;   // MarkerClusterGroup (lazy init)

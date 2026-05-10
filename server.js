@@ -4,6 +4,7 @@ if(process.env.NODE_ENV !== 'production'){
 import express from 'express'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { readFile } from 'fs/promises'
 import { createHash } from 'crypto'
 import nodemailer from 'nodemailer'
 import { ImapFlow } from 'imapflow'
@@ -359,7 +360,10 @@ app.use('/api', (req, res, next) => {
   return requireActiveSubscription(req, res, next)
 })
 
-// ── Gate HTML pages app — protège les 14 routes app par requireAuthHtml ──
+// ── Gate HTML pages app — protège les 15 routes app par requireAuthHtml ──
+// 12 routes principales (APP_HTML_ROUTES) + 3 sous /account/ (billing, privacy,
+// upgrade) couvertes par le préfixe APP_HTML_PREFIXES. Le préfixe /onboarding/
+// est conservé pour compat future (dossier inexistant aujourd'hui).
 // Insérée AVANT express.static pour empêcher le service direct des pages
 // HTML protégées sans cookie session valide. Toute autre URL (landing,
 // login, légales, assets) tombe en next() vers express.static.
@@ -384,6 +388,81 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) return next()
   if (!isProtectedHtmlRoute(req.path)) return next()
   return requireAuthHtml(req, res, next)
+})
+
+// ── Injection serveur-side window.__USER__ sur les routes app HTML ──
+// Pattern Stripe/Linear : sidebar.js + scripts UI lisent window.__USER__ au load,
+// zéro fetch supplémentaire au boot. Sécurité : sérialisation JSON + escape de
+// </ en <\/ pour éviter une rupture de balise <script> via prenom/nom hostiles.
+function escapeForScriptTag(json) {
+  // Empêche `</script>`, `<!--`, `<![CDATA[` injectés via les champs user de
+  // casser la balise <script> qui contient le JSON inline.
+  return String(json)
+    .replace(/<\/(script)/gi, '<\\/$1')
+    .replace(/<!--/g, '<\\!--')
+}
+
+async function resolveAppHtmlFile(rawPath) {
+  // Map URL → fichier disque, gérant extensions:['html'] et sous-dossiers.
+  let p = String(rawPath || '/').replace(/\/+$/, '') || '/'
+  // Pour /dashboard → public/dashboard.html
+  // Pour /account/billing → public/account/billing.html
+  // Pour /agenda.html → public/agenda.html (URL directe avec .html)
+  const cleanPath = p.replace(/^\/+/, '')
+  const candidates = cleanPath.endsWith('.html')
+    ? [cleanPath]
+    : [cleanPath + '.html']
+  for (const rel of candidates) {
+    try {
+      const full = join(__dirname, 'public', rel)
+      const html = await readFile(full, 'utf8')
+      return html
+    } catch (e) { /* try next */ }
+  }
+  return null
+}
+
+app.use(async (req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+  if (req.path.startsWith('/api/')) return next()
+  if (!isProtectedHtmlRoute(req.path)) return next()
+  // Si pas d'authUser, requireAuthHtml a déjà 302'd → ce middleware ne s'exécute pas
+  if (!req.authUser) return next()
+  try {
+    const html = await resolveAppHtmlFile(req.path)
+    if (html === null) return next()
+    const u = req.authUser
+    const userIdStr = String(u.id || '').replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+    const payload = {
+      id: userIdStr,
+      email: u.email || null,
+      prenom: u.prenom || null,
+      nom: u.nom || null,
+      name: u.name || null,
+      plan: u.plan || 'gratuit',
+      trial_status: u.trial_status || null,
+      trial_started_at: u.trial_started_at || null,
+      trial_ends_at: u.trial_ends_at || null,
+      subscription_status: u.subscription_status || null,
+      current_period_end: u.current_period_end || null
+    }
+    const json = escapeForScriptTag(JSON.stringify(payload))
+    const tag = '<script>window.__USER__=' + json + ';</script>'
+    let injected
+    if (html.indexOf('</head>') !== -1) {
+      injected = html.replace('</head>', tag + '</head>')
+    } else if (html.indexOf('<body') !== -1) {
+      injected = html.replace('<body', tag + '<body')
+    } else {
+      injected = tag + html
+    }
+    res.set('Content-Type', 'text/html; charset=utf-8')
+    res.set('Cache-Control', 'no-store')
+    return res.send(injected)
+  } catch (e) {
+    console.error('[user-inject]', e.message)
+    return next()
+  }
 })
 
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }))
@@ -726,7 +805,9 @@ app.get('/api/user/me', async (req, res) => {
       plan: u.plan || 'gratuit',
       trial_status: u.trial_status || null,
       trial_started_at: u.trial_started_at || null,
-      trial_ends_at: u.trial_ends_at || null
+      trial_ends_at: u.trial_ends_at || null,
+      subscription_status: u.subscription_status || null,
+      current_period_end: u.current_period_end || null
     })
   } catch (err) {
     console.error('[user:me]', err.message)

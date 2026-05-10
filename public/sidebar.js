@@ -83,7 +83,98 @@
     + '<button id="reset-mup-btn" style="width:100%;padding:8px 12px;background:transparent;border:0.5px solid rgba(220,50,50,0.3);border-radius:6px;color:#A32D2D;font-family:inherit;font-size:12px;cursor:pointer;transition:all .12s;">Réinitialiser MovUP</button>'
     + '</div>';
 
+  // ── Bloc utilisateur — sous le footer Légal+Reset, séparé par trait fin gris.
+  // Lit window.__USER__ injecté serveur-side. Avatar carré 36×36 noir + nom + email
+  // tronqué + chevron. Au clic : menu vers le haut avec "Mon compte" + "Déconnexion".
+  html += '<div id="sb-user-wrap" style="border-top:0.5px solid rgba(0,0,0,0.08);padding:10px;position:relative;">'
+    + '<button id="sb-user-btn" type="button" aria-haspopup="true" aria-expanded="false" style="width:100%;display:flex;align-items:center;gap:10px;padding:6px 8px;background:transparent;border:1px solid transparent;border-radius:9px;cursor:pointer;font-family:inherit;text-align:left;transition:background .12s,border-color .12s;">'
+    +   '<span id="sb-user-avatar" aria-hidden="true" style="flex-shrink:0;width:36px;height:36px;background:#1D1D1F;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:Geist,-apple-system,sans-serif;font-weight:700;font-size:13px;letter-spacing:.2px;"></span>'
+    +   '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">'
+    +     '<span id="sb-user-name" style="font-family:Geist,-apple-system,sans-serif;font-weight:500;font-size:12.5px;color:#1D1D1F;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>'
+    +     '<span id="sb-user-email" style="font-family:Geist,-apple-system,sans-serif;font-weight:400;font-size:10.5px;color:#6E6E73;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>'
+    +   '</span>'
+    +   '<svg id="sb-user-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform .15s;"><polyline points="6 9 12 15 18 9"/></svg>'
+    + '</button>'
+    + '<div id="sb-user-menu" role="menu" hidden style="position:absolute;left:10px;right:10px;bottom:calc(100% - 6px);background:#fff;border:1px solid #E8E8ED;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.10);padding:4px;z-index:1000;display:flex;flex-direction:column;gap:2px;">'
+    +   '<a href="/account/billing" role="menuitem" class="sb-user-menu-item" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;text-decoration:none;color:#1D1D1F;font-family:inherit;font-size:12.5px;font-weight:500;transition:background .12s;">'
+    +     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+    +     'Mon compte'
+    +   '</a>'
+    +   '<button id="sb-logout-btn" type="button" role="menuitem" class="sb-user-menu-item" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;background:transparent;border:none;color:#1D1D1F;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;text-align:left;transition:background .12s;">'
+    +     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>'
+    +     'Déconnexion'
+    +   '</button>'
+    + '</div>'
+    + '</div>';
+
   el.innerHTML = html;
+
+  // Hover styles pour items menu user (cohérent sidebar : fond gris clair)
+  var userStyle = document.createElement('style');
+  userStyle.textContent = ''
+    + '#sb-user-btn:hover{background:#EBEBF0!important;}'
+    + '#sb-user-btn[aria-expanded="true"]{background:#EBEBF0!important;border-color:#E8E8ED!important;}'
+    + '.sb-user-menu-item:hover{background:#F5F5F7!important;}';
+  document.head.appendChild(userStyle);
+
+  // ── Hydratation depuis window.__USER__ (injecté serveur-side, pas de fetch) ──
+  function userInitials(u) {
+    if (!u) return '?';
+    var src = (u.prenom && u.nom) ? (u.prenom + ' ' + u.nom)
+            : (u.name || u.prenom || u.nom || u.email || '?');
+    var parts = String(src).trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  function userDisplayName(u) {
+    if (!u) return '';
+    if (u.prenom && u.nom) return u.prenom + ' ' + u.nom;
+    return u.name || u.prenom || u.nom || (u.email ? u.email.split('@')[0] : '');
+  }
+  var u = window.__USER__ || null;
+  var avatarEl = document.getElementById('sb-user-avatar');
+  var nameEl = document.getElementById('sb-user-name');
+  var emailEl = document.getElementById('sb-user-email');
+  if (avatarEl) avatarEl.textContent = userInitials(u);
+  if (nameEl) nameEl.textContent = userDisplayName(u) || '—';
+  if (emailEl) emailEl.textContent = (u && u.email) || '';
+
+  // ── Menu déroulant : ouvre vers le haut, ferme au clic outside / Escape ──
+  var btn = document.getElementById('sb-user-btn');
+  var menu = document.getElementById('sb-user-menu');
+  var chev = document.getElementById('sb-user-chev');
+  function setMenuOpen(open) {
+    if (!btn || !menu) return;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    menu.hidden = !open;
+    if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+  }
+  if (btn) {
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      setMenuOpen(menu.hidden);
+    });
+  }
+  document.addEventListener('click', function(e){
+    if (!menu || menu.hidden) return;
+    if (e.target && (e.target === btn || (btn && btn.contains(e.target)))) return;
+    if (e.target && menu.contains(e.target)) return;
+    setMenuOpen(false);
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && menu && !menu.hidden) setMenuOpen(false);
+  });
+
+  // ── Logout : POST /api/auth/logout puis redirect /login ──
+  var logoutBtn = document.getElementById('sb-logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', function(){
+      logoutBtn.disabled = true;
+      fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
+        .finally(function(){ window.location.href = '/login'; });
+    });
+  }
 
   // ── PURGE LOGIC ──
   // 1. DELETE /api/reset-all → purge SurrealDB scopé userId (pipeline, agenda, contacts, devis,

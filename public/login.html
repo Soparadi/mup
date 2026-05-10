@@ -94,11 +94,36 @@
     alertBox.classList.remove('hidden')
   }
 
-  // ?verified=1 affiche un message après email validé
+  // Validation stricte d'une URL de redirection post-login.
+  // Règles : commence par /, sans // (open redirect protocol-relative),
+  // sans \ (Edge legacy quirk), pas /login (boucle), pas d'URL absolue.
+  function safeRedirect(raw){
+    if(!raw) return null
+    var s = String(raw)
+    if(s.length === 0 || s.length > 2000) return null
+    if(s.charAt(0) !== '/') return null
+    if(s.indexOf('//') !== -1) return null
+    if(s.indexOf('\\') !== -1) return null
+    if(s.indexOf('/login') === 0) return null
+    return s
+  }
+
   var params = new URLSearchParams(window.location.search)
+  var redirectParam = safeRedirect(params.get('redirect'))
+
+  // ?verified=1 affiche un message après email validé
   if(params.get('verified') === '1'){
     setAlert('success', 'Email confirmé. Vous pouvez maintenant vous connecter.')
   }
+
+  // Auto-redirect si déjà connecté (cookie session valide).
+  // Comportement Stripe/Linear : un user authentifié arrivant sur /login est
+  // redirigé immédiatement, jamais le formulaire visible.
+  fetch('/api/auth/me', { method:'GET', credentials:'same-origin' })
+    .then(function(r){
+      if(r.ok){ window.location.replace(redirectParam || '/dashboard') }
+    })
+    .catch(function(){ /* pas de réseau → laisse le formulaire */ })
 
   form.addEventListener('submit', function(ev){
     ev.preventDefault()
@@ -121,7 +146,7 @@
         setAlert('error', res.data.error || 'Connexion impossible.')
         return
       }
-      window.location.href = '/dashboard'
+      window.location.href = redirectParam || '/dashboard'
     }).catch(function(err){
       btnSubmit.disabled = false
       btnSubmit.textContent = 'Se connecter'

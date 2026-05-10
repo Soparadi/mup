@@ -2572,6 +2572,10 @@ function createCard(lead, idx) {
 // ════════════════════════════════════════════════════════════════
 // LOAD PAGE — core pagination unit
 // ════════════════════════════════════════════════════════════════
+// Cap sécurité : 10 pages upstream × 10 items = 100 items max aggrégés.
+// Au-delà, on pagine en interne sans refetch.
+var FETCH_MAX_PAGES = 10;
+
 async function loadPage(page) {
   if(S.loading) return;
 
@@ -2604,33 +2608,42 @@ async function loadPage(page) {
   hideError();
 
   try {
-    var data = await fetchLeads(loadNaf, loadNafLabel, loadRegion, page, PAGE_SIZE, S.onlyComplete);
-
-    // ── STALE GUARD: NAF or region changed while fetching → discard ──
-    if(loadNaf !== selectedNAFCode || loadRegion !== S.region) {
-      console.warn('[Prospect] Stale page discarded. Loaded for "'+loadNaf+'" but current is "'+selectedNAFCode+'"');
-      S.loading = false;
-      return;
-    }
-
+    // ── À page=1 : fetch toutes les pages upstream une fois pour toutes,
+    //    aggrège dans S.buffer. À page>1 : pas de fetch, juste slice + render.
     if(isFirstPage) {
-      S.total          = data.total;
-      S.totalEstimated = data.totalEstimated || false;
-      S.totalComplete  = data.totalComplete;
-      S.hotCount       = data.hotCount;
+      var allItems = [];
+      var firstResp = null;
+      for(var p = 1; p <= FETCH_MAX_PAGES; p++) {
+        var dp = await fetchLeads(loadNaf, loadNafLabel, loadRegion, p, PAGE_SIZE, S.onlyComplete);
+        // ── STALE GUARD: NAF or region changed mid-aggregation → discard
+        if(loadNaf !== selectedNAFCode || loadRegion !== S.region) {
+          console.warn('[Prospect] Stale aggregation discarded. Loaded for "'+loadNaf+'" but current is "'+selectedNAFCode+'"');
+          S.loading = false;
+          return;
+        }
+        if(!firstResp) firstResp = dp;
+        var pageItems = (dp && dp.items) ? dp.items : [];
+        // ── BARRIER 2 sur chaque page upstream
+        var keptItems = pageItems.filter(function(it) {
+          return !(it.naf && loadNaf && it.naf.replace(/\./g,'') !== loadNaf.replace(/\./g,''));
+        });
+        allItems = allItems.concat(keptItems);
+        if(pageItems.length < PAGE_SIZE) break; // dernière page upstream
+      }
+
+      // S.total = nombre RÉEL d'items disponibles (pas estimation upstream).
+      S.total          = allItems.length;
+      S.totalEstimated = false;
+      S.totalComplete  = (firstResp && firstResp.totalComplete) || 0;
+      S.hotCount       = (firstResp && firstResp.hotCount) || 0;
       S.nGeoOk        = 0;
       S.nGeoFail      = 0;
-      S.buffer        = [];
+      S.buffer        = allItems;
       S.loaded        = 0;
-      _geoQ           = [];   // flush any pending geo from previous search
-      _geoRunning     = false; // allow geo queue to restart
+      _geoQ           = [];
+      _geoRunning     = false;
       _resetMapLayers();
-      // Respecte le filtre le plus précis (ville > dept > région) au lieu
-      // d'écraser systématiquement par REGIONS[S.region].
       applyMapZoom();
-      // KPI overlay : reset compteur "Contacts ajoutés" + invalide cache engagés
-      // pour recalcul scope nouveau, puis applique KPI 1+3 (KPI 3 attendra que
-      // S.buffer soit rempli — re-appel après push items ci-dessous).
       resetKpiContacts();
       _invalidateEngagedCache();
       updateStats();
@@ -2645,55 +2658,41 @@ async function loadPage(page) {
       document.getElementById('res-context').classList.add('show');
     }
 
-    var rawItems = data.items || [];
+    // ── Render slice de la page demandée depuis S.buffer pré-rempli
+    var start = (page - 1) * PAGE_SIZE;
+    var end = start + PAGE_SIZE;
+    var pageItems = S.buffer.slice(start, end);
 
-    // ── BARRIER 2: strict front-end NAF filter (second line of defence) ──
-    // Even if mock or API sends wrong items, they are silently dropped here.
-    var rejected = 0;
-    var items = rawItems.filter(function(it) {
-      if(it.naf && loadNaf && it.naf.replace(/\./g,'') !== loadNaf.replace(/\./g,'')) {
-        rejected++;
-        return false;
-      }
-      return true;
-    });
-    if(rejected > 0) {
-      console.warn('[Prospect] BARRIER-2 dropped ' + rejected + ' items with naf ≠ "' + loadNaf + '"');
+    if(!isFirstPage) {
+      document.getElementById('cards').innerHTML = '';
     }
 
-    // hasMore based purely on counts, NOT items.length (correct for onlyComplete)
-    S.hasMore = (S.loaded + items.length) < S.total;
-    S.page = page;
-    console.log('[Leads] page='+page+' rawItems='+rawItems.length+' afterBarrier='+items.length+' loaded='+(S.loaded+items.length)+' total='+S.total+' hasMore='+S.hasMore);
-
-    // Render cards — BARRIER 3: last-chance NAF check before DOM insertion
-    // Pagination mode: clear cards for each page
-    if(!isFirstPage) { document.getElementById('cards').innerHTML = ''; S.buffer = []; S.loaded = 0; }
     var frag = document.createDocumentFragment();
-    var cardOffset = S.loaded;
-    items.forEach(function(lead, i) {
-      // BARRIER 3: final guard — should never trigger if B1+B2 work, but guarantees UI purity
+    pageItems.forEach(function(lead, i) {
+      // BARRIER 3 : last-chance NAF check before DOM insertion
       if(lead.naf !== loadNaf) {
         console.error('[Prospect] BARRIER-3 blocked render for naf="'+lead.naf+'"');
         return;
       }
-      S.buffer.push(lead);
-      frag.appendChild(createCard(lead, cardOffset + i));
+      frag.appendChild(createCard(lead, start + i));
       enqueueGeo(lead);
     });
     document.getElementById('cards').appendChild(frag);
-    S.loaded += items.length;
+
+    S.loaded = Math.min(end, S.total);
+    S.hasMore = end < S.total;
+    S.page = page;
+    console.log('[Leads] page='+page+' renderedFromBuffer='+pageItems.length+' total='+S.total+' totalPages='+Math.ceil(S.total/PAGE_SIZE));
 
     updateCountDisplay();
     updatePagination();
     updateExportBar();
-    // KPI overlay : S.buffer désormais à jour pour cette page → calcul KPI 1+3
     applyMapKpis();
 
     if(isFirstPage) {
       document.getElementById('stats-bar').classList.add('show');
       document.getElementById('skel').classList.remove('show');
-      if(items.length === 0) {
+      if(S.total === 0) {
         document.getElementById('empty').classList.add('show');
         document.getElementById('empty').querySelector('.empty-title').textContent = 'Aucun résultat';
         document.getElementById('empty').querySelector('.empty-sub').textContent =

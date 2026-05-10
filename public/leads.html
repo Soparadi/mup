@@ -1827,7 +1827,7 @@ function onVilleChange() {
 // `null` (échecs mémorisés à tort), bumper GEO_CACHE_VERSION purge tous
 // les utilisateurs au prochain load — pas de demande utilisateur.
 var GEO_BOUNDS_CACHE = null;
-var GEO_CACHE_VERSION = 2;
+var GEO_CACHE_VERSION = 3;
 function _geoBoundsLoad() {
   if (GEO_BOUNDS_CACHE !== null) return;
   try {
@@ -1848,29 +1848,39 @@ function _geoBoundsPersist() {
 function _geoBoundsGet(key) { _geoBoundsLoad(); return GEO_BOUNDS_CACHE[key]; }
 function _geoBoundsSet(key, val) { _geoBoundsLoad(); GEO_BOUNDS_CACHE[key] = val; _geoBoundsPersist(); }
 
-// ── Fetch bbox département via geo.api.gouv.fr ────────────────────────
-// Important : on ne mémorise QUE les succès. Les échecs (réseau, timeout,
-// contour absent) ne pollut pas le cache → retry naturel au prochain appel.
+// ── Fetch zoom département via geo.api.gouv.fr ────────────────────────
+// Note : geo.api.gouv ne fournit PAS le contour des départements (testé,
+// l'endpoint /departements/{code} ignore fields=contour). Stratégie :
+// récupérer le chefLieu du dept puis le centre de cette commune, et zoom
+// fixe 9 (vue dépt approximative). Retour uniformisé { type:'center', ... }
+// pour cohérence avec fetchCommuneBounds.
 async function fetchDeptBounds(code) {
   if (!code) return null;
-  var key = 'dept:' + code;
-  var cached = _geoBoundsGet(key);
-  if (cached) {
+  var keyC = 'dept:' + code + ':c';
+  var cachedC = _geoBoundsGet(keyC);
+  if (cachedC) {
     console.info('[Leads] fetchDeptBounds cache hit:', code);
-    return cached;
+    return { type: 'center', center: cachedC };
   }
   try {
-    var url = 'https://geo.api.gouv.fr/departements/' + encodeURIComponent(code) + '?fields=contour&format=geojson';
-    console.info('[Leads] fetchDeptBounds GET', url);
-    var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!r.ok) { console.warn('[Leads] fetchDeptBounds HTTP', r.status); return null; }
-    var json = await r.json();
-    if (!json || !json.contour) { console.warn('[Leads] fetchDeptBounds no contour for', code); return null; }
-    var b = L.geoJSON(json.contour).getBounds();
-    if (!b || !b.isValid()) { console.warn('[Leads] fetchDeptBounds invalid bounds for', code); return null; }
-    var bbox = { sw: [b.getSouth(), b.getWest()], ne: [b.getNorth(), b.getEast()] };
-    _geoBoundsSet(key, bbox);
-    return bbox;
+    var url1 = 'https://geo.api.gouv.fr/departements/' + encodeURIComponent(code) + '?fields=chefLieu';
+    console.info('[Leads] fetchDeptBounds GET', url1);
+    var r1 = await fetch(url1, { signal: AbortSignal.timeout(5000) });
+    if (!r1.ok) { console.warn('[Leads] fetchDeptBounds dept HTTP', r1.status); return null; }
+    var d = await r1.json();
+    if (!d || !d.chefLieu) { console.warn('[Leads] fetchDeptBounds no chefLieu for', code); return null; }
+    var url2 = 'https://geo.api.gouv.fr/communes/' + encodeURIComponent(d.chefLieu) + '?fields=centre';
+    console.info('[Leads] fetchDeptBounds GET', url2);
+    var r2 = await fetch(url2, { signal: AbortSignal.timeout(5000) });
+    if (!r2.ok) { console.warn('[Leads] fetchDeptBounds chefLieu HTTP', r2.status); return null; }
+    var c = await r2.json();
+    if (!c || !c.centre || !Array.isArray(c.centre.coordinates)) {
+      console.warn('[Leads] fetchDeptBounds no centre for chefLieu', d.chefLieu);
+      return null;
+    }
+    var center = { lat: c.centre.coordinates[1], lng: c.centre.coordinates[0], zoom: 9 };
+    _geoBoundsSet(keyC, center);
+    return { type: 'center', center: center };
   } catch(e) {
     console.warn('[Leads] fetchDeptBounds error:', code, e && e.message);
     return null;
@@ -1894,7 +1904,7 @@ async function fetchCommuneBounds(codeINSEE) {
     return { type: 'center', center: cachedC };
   }
   try {
-    var url = 'https://geo.api.gouv.fr/communes/' + encodeURIComponent(codeINSEE) + '?fields=centre,contour&format=geojson';
+    var url = 'https://geo.api.gouv.fr/communes/' + encodeURIComponent(codeINSEE) + '?fields=centre,contour';
     console.info('[Leads] fetchCommuneBounds GET', url);
     var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!r.ok) { console.warn('[Leads] fetchCommuneBounds HTTP', r.status); return null; }
@@ -1948,9 +1958,13 @@ async function applyMapZoom() {
   }
 
   if (dept) {
-    var dBounds = await fetchDeptBounds(dept);
-    if (dBounds) {
-      map.fitBounds([dBounds.sw, dBounds.ne], { padding: [40,40], animate: false });
+    var resD = await fetchDeptBounds(dept);
+    if (resD && resD.type === 'bounds') {
+      map.fitBounds([resD.bounds.sw, resD.bounds.ne], { padding: [40,40], animate: false });
+      return;
+    }
+    if (resD && resD.type === 'center') {
+      map.setView([resD.center.lat, resD.center.lng], resD.center.zoom || 9, { animate: false });
       return;
     }
   }

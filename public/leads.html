@@ -1764,6 +1764,7 @@ function onDeptChange() {
     });
   }
   populateVilleSelect(dept);
+  applyMapZoom();
 }
 
 // Cities by department
@@ -1816,7 +1817,123 @@ function populateVilleSelect(dept) {
 }
 
 function onVilleChange() {
-  // Nothing special — the value is read in fetchLeads
+  applyMapZoom();
+}
+
+// ── Cache bounding boxes geo (dept + commune) ─────────────────────────
+// Évite les refetch geo.api.gouv.fr à chaque changement de filtre.
+// Persistant via localStorage (les contours géo ne changent jamais).
+var GEO_BOUNDS_CACHE = null;
+function _geoBoundsLoad() {
+  if (GEO_BOUNDS_CACHE !== null) return;
+  try { GEO_BOUNDS_CACHE = JSON.parse(localStorage.getItem('mup_geo_bounds') || '{}'); }
+  catch(e) { GEO_BOUNDS_CACHE = {}; }
+}
+function _geoBoundsPersist() {
+  try { localStorage.setItem('mup_geo_bounds', JSON.stringify(GEO_BOUNDS_CACHE)); } catch(e){}
+}
+function _geoBoundsGet(key) { _geoBoundsLoad(); return GEO_BOUNDS_CACHE[key]; }
+function _geoBoundsSet(key, val) { _geoBoundsLoad(); GEO_BOUNDS_CACHE[key] = val; _geoBoundsPersist(); }
+
+// ── Fetch bbox département via geo.api.gouv.fr ────────────────────────
+async function fetchDeptBounds(code) {
+  if (!code) return null;
+  var key = 'dept:' + code;
+  var cached = _geoBoundsGet(key);
+  if (cached !== undefined) return cached;
+  try {
+    var url = 'https://geo.api.gouv.fr/departements/' + encodeURIComponent(code) + '?fields=contour&format=geojson';
+    var r = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (!r.ok) { _geoBoundsSet(key, null); return null; }
+    var json = await r.json();
+    if (!json || !json.contour) { _geoBoundsSet(key, null); return null; }
+    var b = L.geoJSON(json.contour).getBounds();
+    if (!b || !b.isValid()) { _geoBoundsSet(key, null); return null; }
+    var bbox = { sw: [b.getSouth(), b.getWest()], ne: [b.getNorth(), b.getEast()] };
+    _geoBoundsSet(key, bbox);
+    return bbox;
+  } catch(e) { return null; }
+}
+
+// ── Fetch bbox commune (contour) ou centre fallback ───────────────────
+async function fetchCommuneBounds(codeINSEE) {
+  if (!codeINSEE) return null;
+  var keyB = 'commune:' + codeINSEE;
+  var keyC = 'commune:' + codeINSEE + ':c';
+  var cachedB = _geoBoundsGet(keyB);
+  if (cachedB !== undefined) {
+    if (cachedB) return { type: 'bounds', bounds: cachedB };
+    var cachedC = _geoBoundsGet(keyC);
+    if (cachedC) return { type: 'center', center: cachedC };
+    return null;
+  }
+  try {
+    var url = 'https://geo.api.gouv.fr/communes/' + encodeURIComponent(codeINSEE) + '?fields=centre,contour&format=geojson';
+    var r = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (!r.ok) { _geoBoundsSet(keyB, null); return null; }
+    var json = await r.json();
+    if (!json) { _geoBoundsSet(keyB, null); return null; }
+    if (json.contour) {
+      var b = L.geoJSON(json.contour).getBounds();
+      if (b && b.isValid()) {
+        var bbox = { sw: [b.getSouth(), b.getWest()], ne: [b.getNorth(), b.getEast()] };
+        _geoBoundsSet(keyB, bbox);
+        return { type: 'bounds', bounds: bbox };
+      }
+    }
+    if (json.centre && Array.isArray(json.centre.coordinates)) {
+      var c = { lat: json.centre.coordinates[1], lng: json.centre.coordinates[0], zoom: 14 };
+      _geoBoundsSet(keyB, null);
+      _geoBoundsSet(keyC, c);
+      return { type: 'center', center: c };
+    }
+    _geoBoundsSet(keyB, null);
+    return null;
+  } catch(e) { return null; }
+}
+
+// ── Orchestrateur zoom carte selon le filtre actif ────────────────────
+// Priorité descendante : ville > dept > région > France.
+// Tout fallback est silencieux : si geo.api timeout/down, on garde le
+// zoom courant (pas de saut visuel ni d'erreur affichée).
+async function applyMapZoom() {
+  var ville = (document.getElementById('sel-ville')?.value || '').trim();
+  var dept = (document.getElementById('sel-dept')?.value || '').trim();
+  var region = (document.getElementById('sel-region')?.value || '').trim();
+
+  if (ville) {
+    var villeCode = await resolveCommuneCode(ville, dept);
+    if (villeCode) {
+      var res = await fetchCommuneBounds(villeCode);
+      if (res && res.type === 'bounds') {
+        map.fitBounds([res.bounds.sw, res.bounds.ne], { padding: [40,40], maxZoom: 14, animate: false });
+        return;
+      }
+      if (res && res.type === 'center') {
+        map.setView([res.center.lat, res.center.lng], res.center.zoom || 14, { animate: false });
+        return;
+      }
+    }
+    // fallback échec ville → tente dept ou région ci-dessous
+  }
+
+  if (dept) {
+    var dBounds = await fetchDeptBounds(dept);
+    if (dBounds) {
+      map.fitBounds([dBounds.sw, dBounds.ne], { padding: [40,40], animate: false });
+      return;
+    }
+  }
+
+  if (region) {
+    var rd = REGIONS[region];
+    if (rd) {
+      map.setView(rd.center, rd.zoom, { animate: false });
+      return;
+    }
+  }
+
+  map.setView([46.5, 2.5], 6, { animate: false });
 }
 
 // ── Résolution code INSEE commune via geo.api.gouv.fr ─────────────────
@@ -2548,6 +2665,7 @@ function onRegionChange() {
   S.region = document.getElementById('sel-region').value;
   populateDeptSelect(S.region);
   updateHint();
+  applyMapZoom();
 }
 
 function onToggleComplete(checked) {

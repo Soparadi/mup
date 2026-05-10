@@ -2543,8 +2543,9 @@ async function loadPage(page) {
       _geoQ           = [];   // flush any pending geo from previous search
       _geoRunning     = false; // allow geo queue to restart
       _resetMapLayers();
-      var rd = REGIONS[S.region];
-      if(rd) map.setView(rd.center, rd.zoom);
+      // Respecte le filtre le plus précis (ville > dept > région) au lieu
+      // d'écraser systématiquement par REGIONS[S.region].
+      applyMapZoom();
       updateStats();
 
       // Update context banner

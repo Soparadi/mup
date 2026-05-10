@@ -2191,8 +2191,22 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   var existing = await _getExistingSirets();
   var depts = REGION_DEPTS[regionCode] || [];
 
-  // ── TRY INSEE SIRENE V3 FIRST ──
-  try {
+  // Bypass INSEE quand un filtre dept ou ville est actif : INSEE Sirene v3.11
+  // sous-compte massivement (DSL wildcard codePostalEtablissement:22* mal
+  // interprété → 18 résultats vs 1376 réels). Recherche-entreprises supporte
+  // nativement departement/code_postal/code_commune, devient primary dans ce cas.
+  var _selectedDept = (document.getElementById('sel-dept')?.value || '').trim();
+  var _selectedVille = (document.getElementById('sel-ville')?.value || '').trim();
+  var _hasGeoFilter = !!(_selectedDept || _selectedVille);
+
+  if (_hasGeoFilter) {
+    console.info('[Leads] using recherche-entreprises (geo filter active)');
+  } else {
+    console.info('[Leads] trying INSEE (no geo filter)');
+  }
+
+  // ── TRY INSEE SIRENE V3 FIRST (sauf si filtre geo, voir bypass ci-dessus) ──
+  if (!_hasGeoFilter) try {
     var q = 'activitePrincipaleEtablissement:' + nafDotted + ' AND etatAdministratifEtablissement:A AND uniteLegale.etatAdministratifUniteLegale:A';
     // Department + ville filter from selects
     var selectedDept = (document.getElementById('sel-dept')?.value || '').trim();

@@ -2947,6 +2947,26 @@ var SYNONYMS = {
 function _norm(s) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
 }
+// Variantes pluriel/singulier basique : ajoute la version inverse du 's' final.
+function _wordVariants(w) {
+  var v = [w];
+  if (w.length > 4 && w.charAt(w.length-1) === 's') v.push(w.slice(0, -1));
+  if (w.length > 3 && w.charAt(w.length-1) !== 's') v.push(w + 's');
+  return v;
+}
+// Match tol\u00e9rant : startsWith bidirectionnel + variantes plural + pr\u00e9fixe
+// commun \u2265 5 chars (radical m\u00e9tier : platrier\u2194platrerie, coiffeur\u2194coiffure).
+function _wordsMatch(qWord, lWord) {
+  var qV = _wordVariants(qWord), lV = _wordVariants(lWord);
+  for (var i = 0; i < qV.length; i++) {
+    for (var j = 0; j < lV.length; j++) {
+      if (lV[j].startsWith(qV[i])) return true;
+      if (qV[i].startsWith(lV[j])) return true;
+    }
+  }
+  if (qWord.length >= 5 && lWord.length >= 5 && qWord.slice(0,5) === lWord.slice(0,5)) return true;
+  return false;
+}
 function _score(q, item) {
   var qn=_norm(q), code=item.code.toLowerCase(), lb=item.ln;
   if(code===qn || code.replace(/[^a-z0-9]/g,'')=== qn.replace(/[^a-z0-9]/g,'')) return 100;
@@ -2955,9 +2975,9 @@ function _score(q, item) {
   if(syns.indexOf(item.code)>=0) return 90;
   for(var k in SYNONYMS){ if(SYNONYMS[k].indexOf(item.code)>=0 && k.indexOf(qn)>=0 && qn.length>=3) return 75; }
   var words=lb.split(' '), qw=qn.split(' ').filter(function(w){return w.length>=2;});
-  if(qw.length>0 && qw.every(function(w){return words.some(function(x){return x.startsWith(w);});})) return 80;
+  if(qw.length>0 && qw.every(function(w){return words.some(function(x){return _wordsMatch(w, x);});})) return 80;
   if(lb.indexOf(qn)>=0 && qn.length>=3) return 70;
-  var pc=qw.filter(function(w){return lb.indexOf(w)>=0&&w.length>=3;}).length;
+  var pc=qw.filter(function(w){return words.some(function(x){return _wordsMatch(w,x);})&&w.length>=3;}).length;
   if(pc>0) return 40+pc*10;
   return 0;
 }

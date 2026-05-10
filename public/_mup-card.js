@@ -37,7 +37,7 @@
       + '.mup-card-cta{margin-top:4px;padding:10px 14px;background:var(--text);color:#fff;'
       + 'border:0;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:600;'
       + 'cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;'
-      + 'transition:background .15s;width:100%}'
+      + 'transition:background .15s;width:100%;white-space:nowrap}'
       + '.mup-card-cta:hover:not(:disabled){background:#000}'
       + '.mup-card-cta:disabled{background:var(--surface2,#EBEBF0);color:var(--muted);cursor:default}'
       + '.mup-card[data-state="engaged"] .mup-card-cta{background:var(--surface2,#EBEBF0);'

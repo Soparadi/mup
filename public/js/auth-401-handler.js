@@ -17,22 +17,58 @@
   if (window.__AUTH_401_PATCHED) return
   window.__AUTH_401_PATCHED = true
 
-  // Routes API exclues du redirect 401 (logout idempotent : 401 attendu si
-  // session déjà invalide → on ne redirige pas en boucle).
-  var EXCLUDED_PATHS = ['/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/user/me']
+  // ── Whitelist des endpoints qui sont vrais indicateurs de session MUP ──
+  // Refonte post-incident /leads : avant on déclenchait sur tout 401 d'une URL
+  // contenant "/api/", ce qui faisait remonter à tort les 401 propagés par les
+  // proxies upstream (INSEE Sirene OAuth expiré, recherche-entreprises rate
+  // limit, etc.) comme "session expirée".
+  // Désormais, le toast + redirect ne se déclenchent QUE si le 401 vient d'un
+  // endpoint MUP qui requiert effectivement une session (CRUD core + auth).
+  // Les proxies upstream et endpoints externes leak leurs 401 sans déclencher.
+  var TRUSTED_AUTH_PATHS = [
+    '/api/pipeline',
+    '/api/contacts',
+    '/api/agenda',
+    '/api/devis',
+    '/api/factures',
+    '/api/frais',
+    '/api/mail',
+    '/api/visio',
+    '/api/leads',          // store leads custom (à distinguer de /api/sirene)
+    '/api/account/',
+    '/api/user-plan',
+    '/api/auth/me',        // 401 ici = session vraiment expirée
+    '/api/auth/forgot-password',
+    '/api/auth/reset-password'
+    // Exclus volontairement : /api/auth/login (401 = mauvais mdp, pas session expirée),
+    //                         /api/auth/logout (401 attendu, idempotent),
+    //                         /api/user/me (consommé par trial-expired-modal),
+    //                         /api/sirene/*, /api/geocode, /api/search, /api/public/*,
+    //                         /api/stripe/*, /api/v2/webhooks/* (proxies / webhooks),
+    //                         /api/route, /api/ban/*, /api/nominatim/*.
+  ]
 
-  function isExcludedUrl(url) {
-    if (!url) return false
+  function urlPath(url) {
     var s = String(url)
-    // Normalise URLs absolues vers path relatif
     try {
       if (s.indexOf('http') === 0) {
         var u = new URL(s)
         s = u.pathname
       }
     } catch (e) { /* ignore */ }
-    for (var i = 0; i < EXCLUDED_PATHS.length; i++) {
-      if (s.indexOf(EXCLUDED_PATHS[i]) === 0) return true
+    return s
+  }
+
+  function isTrustedAuthEndpoint(url) {
+    if (!url) return false
+    var s = urlPath(url)
+    for (var i = 0; i < TRUSTED_AUTH_PATHS.length; i++) {
+      var p = TRUSTED_AUTH_PATHS[i]
+      // startsWith(p) avec terminator strict pour éviter /api/leadsXXX
+      if (s.indexOf(p) === 0) {
+        var c = s.charAt(p.length)
+        if (c === '' || c === '/' || c === '?' || c === '&') return true
+      }
     }
     return false
   }
@@ -95,9 +131,12 @@ transform:translateX(120%);transition:transform .22s ease}\
     var url = (args[0] && typeof args[0] === 'object' && args[0].url) ? args[0].url : args[0]
     return originalFetch.apply(null, args).then(function (response) {
       if (response && response.status === 401 && url) {
-        var s = String(url)
-        if (s.indexOf('/api/') !== -1 && !isExcludedUrl(url)) {
+        if (isTrustedAuthEndpoint(url)) {
           triggerSessionExpired()
+        } else {
+          // 401 sur endpoint non-trusted (proxy upstream qui leak, etc.) →
+          // ne PAS déclencher le toast. Logger pour debug.
+          try { console.warn('[auth-401] ignored 401 on non-trusted endpoint:', urlPath(url)) } catch (e) {}
         }
       }
       return response

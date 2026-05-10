@@ -938,7 +938,7 @@ app.get('/api/sirene/search', async (req, res) => {
     if(process.env.INSEE_API_KEY) hdrs['X-Gravitee-Api-Key'] = process.env.INSEE_API_KEY
     const r = await fetch(inseeUrl, { headers: hdrs })
     console.log('[INSEE] Response:', r.status, r.headers.get('content-type'))
-    if(!r.ok) { const body = await r.text(); console.error('[INSEE] Search error:', r.status, body.substring(0,300)); return res.status(r.status).json({ error: 'Recherche INSEE échouée' }) }
+    if(!r.ok) { const body = await r.text(); console.error('[INSEE] Search error:', r.status, body.substring(0,300)); return res.status(502).json({ error: 'Recherche INSEE échouée', upstream_status: r.status }) }
     const data = await r.json()
     console.log('[INSEE] Success: total=', data.header?.total, 'etablissements=', data.etablissements?.length)
     res.json(data)
@@ -956,7 +956,7 @@ app.get('/api/sirene/:siret', async (req, res) => {
     const hdrs2 = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
     if(process.env.INSEE_API_KEY) hdrs2['X-Gravitee-Api-Key'] = process.env.INSEE_API_KEY
     const r = await fetch('https://api.insee.fr/api-sirene/3.11/siret/' + encodeURIComponent(req.params.siret), { headers: hdrs2 })
-    if(!r.ok) return res.status(r.status).json({ error: 'SIRET non trouvé' })
+    if(!r.ok) return res.status(502).json({ error: 'Lookup INSEE échoué', upstream_status: r.status })
     const data = await r.json()
     res.json(data)
   } catch(e) {

@@ -9,6 +9,54 @@ const SESSION_TTL_MS = 30 * 24 * 3600 * 1000      // 30 jours
 const VERIFY_TTL_MS = 24 * 3600 * 1000            // 24h pour email_verify
 const RESET_TTL_MS = 60 * 60 * 1000               // 1h pour password_reset
 
+// ── Cache mémoire LRU pour getSession ─────────────────────────────────
+// Évite les rafales 100+ queries SurrealDB lors d'une recherche /leads.
+// Cache process-local (Map JS) → isolé par instance Railway. Si scale
+// horizontal >1 replica un jour, chaque réplique aura son cache propre,
+// divergence acceptable car TTL court (30s).
+// Trade-off acceptable MVP : si user.plan ou user.subscription_status
+// change pendant la fenêtre 30s (ex: webhook Stripe upgrade), l'utilisateur
+// continuera à voir l'ancien plan jusqu'à expiration cache.
+const SESSION_CACHE = new Map()       // token → { session, expiresAt }
+const SESSION_CACHE_TTL = 30_000      // 30s
+const SESSION_CACHE_MAX = 1000        // garde-fou mémoire
+
+function cacheGet(token) {
+  const entry = SESSION_CACHE.get(token)
+  if (!entry) return null
+  if (Date.now() > entry.expiresAt) {
+    SESSION_CACHE.delete(token)
+    return null
+  }
+  return entry.session
+}
+
+function cacheSet(token, session) {
+  if (SESSION_CACHE.size >= SESSION_CACHE_MAX) {
+    // Éviction simple : drop la plus ancienne (Map JS préserve l'ordre d'insertion)
+    const firstKey = SESSION_CACHE.keys().next().value
+    SESSION_CACHE.delete(firstKey)
+  }
+  SESSION_CACHE.set(token, { session, expiresAt: Date.now() + SESSION_CACHE_TTL })
+}
+
+export function invalidateSessionCache(token) {
+  if (token) SESSION_CACHE.delete(token)
+}
+
+// Invalidation par user_id : itère le cache et supprime les entries du user.
+// Appelée par deleteAllSessionsForUser pour préserver la cohérence post-logout
+// global / password reset (sinon attaquant garde 30s de validité avec ancien token).
+function invalidateSessionCacheByUserId(userId) {
+  if (!userId) return
+  const target = String(userId).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+  for (const [token, entry] of SESSION_CACHE) {
+    const sessUid = String(entry?.session?.user_id || '')
+      .replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+    if (sessUid === target) SESSION_CACHE.delete(token)
+  }
+}
+
 // ── helpers ──
 function normalizeId(prefix, raw) {
   if (!raw) return null
@@ -104,6 +152,9 @@ export async function createSession(userId, { ip, userAgent } = {}) {
 
 export async function getSession(token) {
   if (!token) return null
+  const cached = cacheGet(token)
+  if (cached) return cached
+
   const db = await getDb()
   const tokenHash = hashToken(token)
   const result = await db.query(
@@ -116,22 +167,26 @@ export async function getSession(token) {
     await deleteSessionByToken(token).catch(() => {})
     return null
   }
-  return {
+  const session = {
     id: row.id,
     user_id: typeof row.user_id === 'object' ? String(row.user_id) : row.user_id,
     user: row.user,
     expires_at: row.expires_at
   }
+  cacheSet(token, session)
+  return session
 }
 
 export async function deleteSessionByToken(token) {
   if (!token) return
+  invalidateSessionCache(token)
   const db = await getDb()
   const tokenHash = hashToken(token)
   await db.query('DELETE session WHERE token = $tok', { tok: tokenHash })
 }
 
 export async function deleteAllSessionsForUser(userId) {
+  invalidateSessionCacheByUserId(userId)
   const db = await getDb()
   const cleanId = normalizeId('user', userId)
   await db.query(

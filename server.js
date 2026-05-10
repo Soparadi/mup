@@ -467,6 +467,36 @@ app.use(async (req, res, next) => {
 
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }))
 
+// ── /api/leads/engaged ──
+// Retourne l'union des SIRET et SIREN déjà engagés (Pipeline ∪ Contacts) pour
+// le userId courant. Sert au KPI "Déjà engagés" sur /leads pour signaler les
+// fiches déjà prospectées et éviter le doublon.
+app.get('/api/leads/engaged', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const [pip, ctx] = await Promise.all([
+      db.query('SELECT siret, siren FROM pipeline WHERE userId = $userId', { userId }),
+      db.query('SELECT siret, siren FROM contacts WHERE userId = $userId', { userId })
+    ])
+    const sirets = new Set()
+    const sirens = new Set()
+    const collect = (rows) => {
+      (rows?.[0] || []).forEach(r => {
+        if (r?.siret) sirets.add(String(r.siret))
+        if (r?.siren) sirens.add(String(r.siren))
+      })
+    }
+    collect(pip)
+    collect(ctx)
+    res.json({ sirets: Array.from(sirets), sirens: Array.from(sirens) })
+  } catch (err) {
+    console.error('[leads/engaged]', err.message)
+    res.status(500).json({ error: 'Lecture engagés impossible' })
+  }
+})
+
 app.get('/api/pipeline', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return

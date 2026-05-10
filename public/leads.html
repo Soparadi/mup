@@ -285,8 +285,28 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
   background: var(--card); flex-shrink: 0;
 }
 .map-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
-.map-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 #map { flex: 1; height: 100%; min-height: 0; }
+/* KPI overlay sur la carte — haut-droite, charte cards .card existantes */
+.map-kpis {
+  position: absolute; top: 12px; right: 12px; z-index: 1000;
+  display: flex; gap: 8px; pointer-events: none;
+}
+.kpi-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 4px; min-width: 110px;
+  pointer-events: auto;
+}
+.kpi-value {
+  font-family: var(--mono); font-size: 22px; font-weight: 600;
+  color: var(--text); line-height: 1;
+}
+.kpi-label {
+  font-family: var(--font); font-size: 10px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.4px; line-height: 1.3;
+}
+.kpi-label strong, .kpi-label #kpi-scope { color: var(--text); font-weight: 600; }
 .geo-bar {
   position: absolute; bottom: 0; left: 0; height: 3px;
   background: var(--text); transition: width .4s ease;
@@ -298,10 +318,27 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 .res-hdr {
   padding: 12px 16px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
-  background: var(--card); flex-shrink: 0;
+  background: var(--card); flex-shrink: 0; gap: 12px; flex-wrap: wrap;
 }
+.res-hdr-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .res-title { font-size: 13px; font-weight: 700; color: var(--text); }
 .res-count { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+/* Pagination en ligne (haut panneau résultats) */
+.pagination-inline {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.pg-btn {
+  padding: 5px 12px; border-radius: 7px; border: 1px solid var(--border);
+  background: var(--card); color: var(--text);
+  font-family: var(--font); font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.pg-btn:hover:not(:disabled) { border-color: var(--text); }
+.pg-btn:disabled { opacity: .4; cursor: not-allowed; }
+.pg-info {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  color: var(--muted); white-space: nowrap;
+}
 .res-panel { overflow-y: auto; flex: 1; position: relative; min-height: 0; }
 .res-panel::-webkit-scrollbar { width: 4px; }
 .res-panel::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
@@ -590,18 +627,41 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
       <div class="map-hdr">
         <div>
           <div class="map-title">Carte de prospection</div>
-          <div class="map-sub" id="map-sub">Sélectionnez un secteur et une région</div>
         </div>
       </div>
-      <div id="map" style="position:relative"></div>
+      <div id="map" style="position:relative">
+        <!-- KPI overlay haut-droite : marché, contacts ajoutés, déjà engagés -->
+        <div class="map-kpis" aria-label="Indicateurs de prospection">
+          <div class="kpi-card">
+            <span class="kpi-value" id="kpi-leads">0</span>
+            <span class="kpi-label">Leads à <span id="kpi-scope">—</span></span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-value" id="kpi-contacts">0</span>
+            <span class="kpi-label">Contacts ajoutés</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-value" id="kpi-engaged">0</span>
+            <span class="kpi-label">Déjà engagés</span>
+          </div>
+        </div>
+      </div>
       <div class="geo-bar" id="geo-bar" style="width:0%"></div>
     </div>
 
     <!-- résultats -->
     <div class="res-col">
       <div class="res-hdr">
-        <div class="res-title" id="res-title">Leads générés</div>
-        <div class="res-count" id="res-count">0 résultats</div>
+        <div class="res-hdr-left">
+          <div class="res-title" id="res-title">Leads générés</div>
+          <div class="res-count" id="res-count">0 résultats</div>
+        </div>
+        <!-- Pagination en ligne (déplacée du bas) -->
+        <div id="pagination" class="pagination-inline" style="display:none">
+          <button onclick="prevPage()" id="btn-prev" class="pg-btn" disabled>←</button>
+          <span id="page-info" class="pg-info">Page 1 / 1</span>
+          <button onclick="nextPage()" id="btn-next" class="pg-btn">→</button>
+        </div>
       </div>
       <!-- contexte de recherche strict -->
       <div class="res-context" id="res-context">
@@ -629,12 +689,6 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
         <div class="page-loader" id="page-loader" style="display:none">
           <span>Chargement…</span>
         </div>
-      </div>
-      <!-- pagination fixed at bottom of res-col -->
-      <div id="pagination" style="display:none;padding:10px 16px;align-items:center;justify-content:center;gap:12px;border-top:1px solid var(--border);background:var(--card);flex-shrink:0">
-        <button onclick="prevPage()" id="btn-prev" style="padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--text)" disabled>←</button>
-        <span id="page-info" style="font-size:11px;font-weight:700;font-family:var(--mono);color:var(--muted)">Page 1 / 1</span>
-        <button onclick="nextPage()" id="btn-next" style="padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--text)">→</button>
       </div>
     </div>
 
@@ -1950,6 +2004,81 @@ async function applyMapZoom() {
   map.setView([46.5, 2.5], 6, { animate: false });
 }
 
+// ── Helpers + logique KPI overlay carte ────────────────────────────────
+// 3 KPI sans overlap : marché filtré, contacts ajoutés (session courante),
+// déjà engagés (intersection SIRET recherche ∩ Contacts/Pipeline).
+function _toTitleCase(s) {
+  return String(s || '').toLowerCase().replace(/(^|[\s\-'])(\p{L})/gu, function(_, sep, ch) {
+    return sep + ch.toUpperCase();
+  });
+}
+
+function _scopeLabel() {
+  var ville = (document.getElementById('sel-ville')?.value || '').trim();
+  var dept = (document.getElementById('sel-dept')?.value || '').trim();
+  var region = (document.getElementById('sel-region')?.value || '').trim();
+  if (ville) return _toTitleCase(ville);
+  if (dept) return DEPT_NAMES[dept] || dept;
+  if (region) {
+    var rd = REGIONS[region];
+    return (rd && rd.label) || region;
+  }
+  return 'France';
+}
+
+// Cache engagés (clé = userId implicite via cookie session)
+var _engagedCache = null;
+async function _loadEngaged() {
+  if (_engagedCache) return _engagedCache;
+  try {
+    var r = await fetch('/api/leads/engaged');
+    if (!r.ok) return { sirets: new Set(), sirens: new Set() };
+    var d = await r.json();
+    _engagedCache = {
+      sirets: new Set(d.sirets || []),
+      sirens: new Set(d.sirens || [])
+    };
+    return _engagedCache;
+  } catch (e) {
+    return { sirets: new Set(), sirens: new Set() };
+  }
+}
+function _invalidateEngagedCache() { _engagedCache = null; }
+
+// Compteur "Contacts ajoutés" : reset à chaque nouvelle recherche.
+window.__kpiContactsCount = 0;
+function resetKpiContacts() {
+  window.__kpiContactsCount = 0;
+  var el = document.getElementById('kpi-contacts');
+  if (el) el.textContent = '0';
+}
+function incrementKpiContacts() {
+  window.__kpiContactsCount = (window.__kpiContactsCount || 0) + 1;
+  var el = document.getElementById('kpi-contacts');
+  if (el) el.textContent = String(window.__kpiContactsCount);
+  // L'ajout invalide le cache engagés : un futur reset KPI 3 reflètera cet ajout.
+  _invalidateEngagedCache();
+}
+
+// Calcule KPI 1 (marché) + KPI 3 (déjà engagés) après chaque chargement.
+async function applyMapKpis() {
+  // KPI 1
+  var leadsEl = document.getElementById('kpi-leads');
+  var scopeEl = document.getElementById('kpi-scope');
+  if (leadsEl) leadsEl.textContent = (S.total || 0).toLocaleString('fr-FR');
+  if (scopeEl) scopeEl.textContent = _scopeLabel();
+  // KPI 3 : intersection SIRET courants (S.buffer) ∩ engagés
+  var engagedEl = document.getElementById('kpi-engaged');
+  if (!engagedEl) return;
+  var eng = await _loadEngaged();
+  var n = 0;
+  (S.buffer || []).forEach(function(lead) {
+    if (lead.siret && eng.sirets.has(String(lead.siret))) { n++; return; }
+    if (lead.siren && eng.sirens.has(String(lead.siren))) { n++; }
+  });
+  engagedEl.textContent = String(n);
+}
+
 // ── Câblage défensif ceinture-bretelles : event listeners JS en plus des
 // attributs onchange="..." HTML. Couvre le cas où l'attribut HTML serait
 // stale (cache navigateur servant l'ancien markup) ou écrasé par un script
@@ -2383,8 +2512,6 @@ async function _runGeoQueue() {
     var total = S.nGeoOk + S.nGeoFail;
     if(S.total > 0) {
       document.getElementById('geo-bar').style.width = Math.min(100,Math.round(total/Math.min(S.loaded,200)*100))+'%';
-      document.getElementById('map-sub').textContent =
-        'Géocodage '+total+'/'+Math.min(S.loaded,200)+' · '+S.nGeoOk+' localisés';
     }
     await sleep(150);
   }
@@ -2395,16 +2522,6 @@ async function _runGeoQueue() {
     b.style.transition = 'opacity .6s'; b.style.opacity = '0';
     setTimeout(function(){ b.style.width='0%'; b.style.opacity='1'; b.style.transition='width .4s ease'; }, 700);
   }, 1200);
-  // Sous-titre aligné sur le scope filtré le plus précis : ville > dept > région.
-  var villeS = (document.getElementById('sel-ville')?.value || '').trim();
-  var deptS = (document.getElementById('sel-dept')?.value || '').trim();
-  var rd = REGIONS[S.region];
-  var scopeLabel = '';
-  if (villeS) scopeLabel = ' à ' + villeS;
-  else if (deptS) scopeLabel = ' en ' + (DEPT_NAMES[deptS] || deptS);
-  else if (rd) scopeLabel = ' en ' + rd.label;
-  document.getElementById('map-sub').textContent =
-    S.nGeoOk+' leads localisés'+scopeLabel+(S.nGeoFail?' · '+S.nGeoFail+' non localisés':'');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2525,6 +2642,11 @@ async function loadPage(page) {
       // Respecte le filtre le plus précis (ville > dept > région) au lieu
       // d'écraser systématiquement par REGIONS[S.region].
       applyMapZoom();
+      // KPI overlay : reset compteur "Contacts ajoutés" + invalide cache engagés
+      // pour recalcul scope nouveau, puis applique KPI 1+3 (KPI 3 attendra que
+      // S.buffer soit rempli — re-appel après push items ci-dessous).
+      resetKpiContacts();
+      _invalidateEngagedCache();
       updateStats();
 
       // Update context banner
@@ -2579,6 +2701,8 @@ async function loadPage(page) {
     updateCountDisplay();
     updatePagination();
     updateExportBar();
+    // KPI overlay : S.buffer désormais à jour pour cette page → calcul KPI 1+3
+    applyMapKpis();
 
     if(isFirstPage) {
       document.getElementById('stats-bar').classList.add('show');
@@ -2812,6 +2936,8 @@ async function addToPipeline(leadId) {
     }
     _siretsCache = null;
     _siretsCacheTime = 0;
+    // KPI overlay "Contacts ajoutés" : +1 sur succès POST pipeline
+    incrementKpiContacts();
     showToast(lead.name + ' ajouté au pipeline');
     var card = document.getElementById('card-' + leadId);
     if(card) {

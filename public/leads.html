@@ -199,25 +199,6 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 .shint { font-size: 13px; color: var(--muted); flex: 1; min-width: 0; }
 .sfooter-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 
-/* toggle */
-.toggle-wrap {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13px; font-weight: 500; color: var(--muted);
-  cursor: pointer; user-select: none;
-}
-.toggle-wrap input[type=checkbox] { display: none; }
-.tog {
-  width: 36px; height: 20px; background: var(--surface2);
-  border-radius: 10px; position: relative; transition: background .2s; flex-shrink: 0;
-}
-.tog::after {
-  content: ''; position: absolute; width: 14px; height: 14px;
-  background: #fff; border-radius: 50%; top: 3px; left: 3px;
-  transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.25);
-}
-.toggle-wrap input:checked + .tog { background: var(--text); }
-.toggle-wrap input:checked + .tog::after { transform: translateX(16px); }
-
 /* generate button */
 .btn-go {
   display: inline-flex; align-items: center; gap: 8px;
@@ -305,12 +286,6 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 }
 .map-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
 .map-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
-.map-leg { display: flex; gap: 12px; }
-.leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); font-weight: 500; }
-.leg-dot { width: 8px; height: 8px; border-radius: 50%; }
-.dot-h { background: #CC0000; }
-.dot-w { background: #F59E0B; }
-.dot-c { background: var(--muted2); }
 #map { flex: 1; height: 100%; min-height: 0; }
 .geo-bar {
   position: absolute; bottom: 0; left: 0; height: 3px;
@@ -564,12 +539,6 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
     <div class="sfooter">
       <div class="shint" id="hint">Tapez un métier ou un code APE, puis choisissez une région</div>
       <div class="sfooter-right">
-        <!-- toggle fiches complètes -->
-        <label class="toggle-wrap" title="N'afficher que les fiches avec email + site + téléphone">
-          <input type="checkbox" id="chk-complete" onchange="onToggleComplete(this.checked)">
-          <span class="tog"></span>
-          <span>Fiches complètes</span>
-        </label>
         <!-- bouton générer -->
         <button class="btn-go" id="btn-go" onclick="startSearch()">
           <svg id="ico-search" width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -622,11 +591,6 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
         <div>
           <div class="map-title">Carte de prospection</div>
           <div class="map-sub" id="map-sub">Sélectionnez un secteur et une région</div>
-        </div>
-        <div class="map-leg">
-          <div class="leg-item"><span class="leg-dot dot-h"></span>Prioritaire</div>
-          <div class="leg-item"><span class="leg-dot dot-w"></span>Tiède</div>
-          <div class="leg-item"><span class="leg-dot dot-c"></span>Normal</div>
         </div>
       </div>
       <div id="map" style="position:relative"></div>
@@ -2329,8 +2293,10 @@ function _ensureCluster() {
 
 function addMarker(lead) {
   if(!lead.lat || !lead.lng) return;
-  var color = lead.priority==='hot' ? '#e8341c' : lead.priority==='warm' ? '#f59e0b' : '#94a3b8';
-  var r     = lead.priority==='hot' ? 9 : 7;
+  // Sourcing : tous les pins uniformes. La qualification (priorité) se fait
+  // en aval dans Pipeline, pas ici.
+  var color = '#94a3b8';
+  var r     = 7;
 
   var popup = '<div style="font-family:var(--font);min-width:210px">'
     +'<strong style="font-family:var(--font);font-size:13px">'+esc(lead.name)+'</strong>'
@@ -2752,14 +2718,6 @@ function onRegionChange() {
   applyMapZoom();
 }
 
-function onToggleComplete(checked) {
-  S.onlyComplete = checked;
-  // Re-run only if a valid locked search is already active
-  if(S.nafLocked && S.naf && S.region && S.loaded > 0) {
-    setBtnLoading();
-    loadPage(1);
-  }
-}
 
 function showToast(msg) {
   var t = document.createElement('div');

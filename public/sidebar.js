@@ -74,18 +74,24 @@
     html += '</a>';
   }
 
-  html += '<div style="margin-top:auto;padding:8px 10px 12px;border-top:0.5px solid rgba(0,0,0,0.08);display:flex;flex-direction:column;gap:8px;">'
-    + '<a href="/mentions-legales.html" class="sb-item sb-item--muted" style="opacity:.6;font-size:11.5px;padding:6px 10px;">'
-    +   '<div class="sb-icon" style="background:transparent;width:20px;height:20px;color:var(--muted,#6E6E73);">'
-    +   '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
-    +   '</div>Légal'
-    + '</a>'
-    + '<button id="reset-mup-btn" style="width:100%;padding:8px 12px;background:transparent;border:0.5px solid rgba(220,50,50,0.3);border-radius:6px;color:#A32D2D;font-family:inherit;font-size:12px;cursor:pointer;transition:all .12s;">Réinitialiser MovUP</button>'
+  // Stack en bas de sidebar : footer Légal+Reset PUIS bloc utilisateur (tout en bas absolu).
+  // Wrapper avec margin-top:auto pour garantir position bottom indépendamment du
+  // contenu. Pattern Stripe/Linear/Notion : user identity = dernier élément vertical.
+  html += '<div id="sb-bottom-stack" style="margin-top:auto;display:flex;flex-direction:column;">'
+    + '<div style="padding:8px 10px 12px;border-top:0.5px solid rgba(0,0,0,0.08);display:flex;flex-direction:column;gap:8px;">'
+    +   '<a href="/mentions-legales.html" class="sb-item sb-item--muted" style="opacity:.6;font-size:11.5px;padding:6px 10px;">'
+    +     '<div class="sb-icon" style="background:transparent;width:20px;height:20px;color:var(--muted,#6E6E73);">'
+    +     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+    +     '</div>Légal'
+    +   '</a>'
+    +   '<button id="reset-mup-btn" style="width:100%;padding:8px 12px;background:transparent;border:0.5px solid rgba(220,50,50,0.3);border-radius:6px;color:#A32D2D;font-family:inherit;font-size:12px;cursor:pointer;transition:all .12s;">Réinitialiser MovUP</button>'
     + '</div>';
 
-  // ── Bloc utilisateur — sous le footer Légal+Reset, séparé par trait fin gris.
-  // Lit window.__USER__ injecté serveur-side. Avatar carré 36×36 noir + nom + email
+  // ── Bloc utilisateur — DERNIER élément de la sidebar, collé en bas absolu.
+  // Lit window.__USER__ injecté serveur-side. Avatar 36×36 noir + nom + email
   // tronqué + chevron. Au clic : menu vers le haut avec "Mon compte" + "Déconnexion".
+  // Le menu déroulant chevauche volontairement le footer Légal au-dessus (l'action
+  // en cours prime visuellement, pattern standard SaaS B2B).
   html += '<div id="sb-user-wrap" style="border-top:0.5px solid rgba(0,0,0,0.08);padding:10px;position:relative;">'
     + '<button id="sb-user-btn" type="button" aria-haspopup="true" aria-expanded="false" style="width:100%;display:flex;align-items:center;gap:10px;padding:6px 8px;background:transparent;border:1px solid transparent;border-radius:9px;cursor:pointer;font-family:inherit;text-align:left;transition:background .12s,border-color .12s;">'
     +   '<span id="sb-user-avatar" aria-hidden="true" style="flex-shrink:0;width:36px;height:36px;background:#1D1D1F;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:Geist,-apple-system,sans-serif;font-weight:700;font-size:13px;letter-spacing:.2px;"></span>'
@@ -105,7 +111,8 @@
     +     'Déconnexion'
     +   '</button>'
     + '</div>'
-    + '</div>';
+    + '</div>'
+    + '</div>'; // close sb-bottom-stack
 
   el.innerHTML = html;
 

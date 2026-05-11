@@ -190,7 +190,9 @@ async function loadAllAgenda(){
     agendaByFiche = {};
     data.forEach(function(ev){
       if(!ev || !ev.ficheId) return;
-      var k = String(ev.ficheId);
+      // Normalisation symétrique avec nextActionOf : strip "pipeline:" pour
+      // matcher c.id côté markers (qui contient le préfixe table SurrealDB v2).
+      var k = String(ev.ficheId).replace(/^pipeline:/, '');
       if(!agendaByFiche[k]) agendaByFiche[k] = [];
       agendaByFiche[k].push(ev);
     });
@@ -201,7 +203,9 @@ async function loadAllAgenda(){
 // Format de retour aligné avec l'ancien c.rdvs[] : { date: ISO-like, hour, type }
 function nextActionOf(c){
   if(!c) return null;
-  var list = agendaByFiche[String(c.id)] || [];
+  // Normalisation symétrique avec loadAllAgenda : strip "pipeline:" du c.id
+  // pour matcher la clé indexée à partir de ev.ficheId.
+  var list = agendaByFiche[String(c.id).replace(/^pipeline:/, '')] || [];
   if(!list.length) return null;
   var todayKey = (function(){ var t = new Date(); t.setHours(0,0,0,0); return t.getTime(); })();
   var upcoming = list

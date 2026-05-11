@@ -85,15 +85,15 @@
 
   // ── Bloc utilisateur — DERNIER élément de la sidebar, collé en bas absolu.
   // Lit window.__USER__ injecté serveur-side. Avatar 36×36 noir + nom + email
-  // tronqué + chevron. Au clic : menu vers le haut avec "Mon compte" + "Déconnexion".
+  // tronqué. TOUT le bouton est cliquable (avatar/nom/email/zone vide), feedback
+  // hover visible. Au clic : menu vers le haut avec "Mon compte" + "Déconnexion".
   html += '<div id="sb-user-wrap" style="border-top:0.5px solid rgba(0,0,0,0.08);padding:10px;position:relative;">'
-    + '<button id="sb-user-btn" type="button" aria-haspopup="true" aria-expanded="false" style="width:100%;display:flex;align-items:center;gap:10px;padding:6px 8px;background:transparent;border:1px solid transparent;border-radius:9px;cursor:pointer;font-family:inherit;text-align:left;transition:background .12s,border-color .12s;">'
+    + '<button id="sb-user-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Compte utilisateur" style="width:100%;display:flex;align-items:center;gap:10px;padding:8px 10px;background:transparent;border:1px solid transparent;border-radius:9px;cursor:pointer;font-family:inherit;text-align:left;transition:background .15s,border-color .15s;">'
     +   '<span id="sb-user-avatar" aria-hidden="true" style="flex-shrink:0;width:36px;height:36px;background:#1D1D1F;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:Geist,-apple-system,sans-serif;font-weight:700;font-size:13px;letter-spacing:.2px;"></span>'
     +   '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">'
     +     '<span id="sb-user-name" style="font-family:Geist,-apple-system,sans-serif;font-weight:500;font-size:12.5px;color:#1D1D1F;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>'
     +     '<span id="sb-user-email" style="font-family:Geist,-apple-system,sans-serif;font-weight:400;font-size:10.5px;color:#6E6E73;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>'
     +   '</span>'
-    +   '<svg id="sb-user-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform .15s;"><polyline points="6 9 12 15 18 9"/></svg>'
     + '</button>'
     + '<div id="sb-user-menu" role="menu" hidden style="position:absolute;left:10px;right:10px;bottom:calc(100% - 6px);background-color:#FFFFFF;opacity:1;border:1px solid #E8E8ED;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.10);padding:4px;z-index:99999;display:flex;flex-direction:column;gap:2px;">'
     +   '<a href="/account/billing" role="menuitem" class="sb-user-menu-item" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;text-decoration:none;color:#1D1D1F;font-family:inherit;font-size:12.5px;font-weight:500;transition:background .12s;">'
@@ -110,11 +110,13 @@
 
   el.innerHTML = html;
 
-  // Hover styles pour items menu user (cohérent sidebar : fond gris clair)
+  // Hover bloc user : visible (fond gris + bordure) pour signaler interactivité.
+  // État ouvert : même style. Items menu : hover gris très clair.
   var userStyle = document.createElement('style');
   userStyle.textContent = ''
-    + '#sb-user-btn:hover{background:#EBEBF0!important;}'
-    + '#sb-user-btn[aria-expanded="true"]{background:#EBEBF0!important;border-color:#E8E8ED!important;}'
+    + '#sb-user-btn:hover{background:#E8E8ED!important;border-color:#D1D1D6!important;}'
+    + '#sb-user-btn:focus-visible{outline:none;background:#E8E8ED!important;border-color:#1D1D1F!important;box-shadow:0 0 0 2px rgba(29,29,31,.12);}'
+    + '#sb-user-btn[aria-expanded="true"]{background:#E8E8ED!important;border-color:#D1D1D6!important;}'
     + '.sb-user-menu-item:hover{background:#F5F5F7!important;}';
   document.head.appendChild(userStyle);
 
@@ -144,12 +146,10 @@
   // ── Menu déroulant : ouvre vers le haut, ferme au clic outside / Escape ──
   var btn = document.getElementById('sb-user-btn');
   var menu = document.getElementById('sb-user-menu');
-  var chev = document.getElementById('sb-user-chev');
   function setMenuOpen(open) {
     if (!btn || !menu) return;
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     menu.hidden = !open;
-    if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
   }
   if (btn) {
     btn.addEventListener('click', function(e){

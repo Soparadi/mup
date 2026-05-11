@@ -63,6 +63,11 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .cal-date{font-size:12.5px;font-weight:600;color:var(--text);width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;margin-bottom:3px}
 .cal-events{display:flex;flex-direction:column;gap:2px}
 .cal-evt{padding:2px 5px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.cal-evt[draggable="true"]{cursor:grab}
+.cal-evt[draggable="true"]:active{cursor:grabbing}
+.evt-block[draggable="true"]{cursor:grab}
+.evt-block[draggable="true"]:active{cursor:grabbing}
+.cal-cell--drop-target{background:rgba(0,0,0,0.04)!important;outline:2px dashed var(--text);outline-offset:-2px}
 .cal-evt.type-rdv{background:rgba(29,131,72,.10);color:#1D8348}
 .cal-evt.type-visio{background:rgba(124,58,237,.10);color:#7C3AED}
 .cal-evt.type-mail{background:rgba(184,76,0,.10);color:#B84C00}
@@ -462,15 +467,16 @@ function renderCal() {
     visible.forEach(e => {
       const lbl = TYPE_LABELS[e.type] || '';
       const prefix = lbl ? lbl + ' · ' : '';
-      evtHtml += `<div class="cal-evt type-${e.type}" title="${lbl} — ${e.start} — ${e.title}">${prefix}${e.start} ${e.title}</div>`;
+      evtHtml += `<div class="cal-evt type-${e.type}" data-event-id="${e.id}" draggable="true" title="${lbl} — ${e.start} — ${e.title}">${prefix}${e.start} ${e.title}</div>`;
     });
     if(dayEvts.length > 2) evtHtml += `<div class="cal-more">+${dayEvts.length-2}</div>`;
 
-    return `<div class="${cls}" onclick="selectDay(${cell.date.getTime()})">
+    return `<div class="${cls}" data-date="${dk}" onclick="selectDay(${cell.date.getTime()})">
       <div class="cal-date">${cell.date.getDate()}</div>
       <div class="cal-events">${evtHtml}</div>
     </div>`;
   }).join('');
+  setupAgendaDnD();
 }
 
 function selectDay(ts) {
@@ -523,7 +529,7 @@ function renderDay() {
       const typeLabel = TYPE_LABELS[e.type] || '';
       const labelHtml = typeLabel ? '<span style="font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;opacity:.7;margin-right:6px">'+typeLabel+'</span>' : '';
       evtsHtml += `
-        <div class="evt-block type-${e.type}" onclick="editEvent('${e.id}')">
+        <div class="evt-block type-${e.type}" data-event-id="${e.id}" draggable="true" onclick="editEvent('${e.id}')">
           <div class="evt-time-tag">${e.start}–${e.end||''}</div>
           <div class="evt-title">${typeEmoji} ${labelHtml}${e.title}</div>
           ${e.contact?`<div class="evt-contact"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${e.contact}</div>`:''}
@@ -553,6 +559,7 @@ function renderDay() {
   }
 
   timeline.innerHTML = html;
+  setupAgendaDnD();
 
   // Scroll vers l'heure courante si aujourd'hui
   if(isToday) {
@@ -872,6 +879,184 @@ window.addEventListener('storage', function(e){
   }
 });
 
+// ── Drag & drop RDV (vue mensuelle : changement de date · vue jour :
+//    changement d'heure avec snap 15 min). Détection conflits + propagation
+//    via storage event mup_agenda. ────────────────────────────────────────
+
+function _timeToMin(hhmm) {
+  if (!hhmm) return 0;
+  var p = String(hhmm).split(':');
+  return (parseInt(p[0],10)||0) * 60 + (parseInt(p[1],10)||0);
+}
+function _minToTime(m) {
+  m = Math.max(0, Math.min(24*60-1, m|0));
+  var h = (m/60)|0, mm = m % 60;
+  return String(h).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+}
+function _isAgendaConflict(evts, candidateId, candidateDate, candidateStart, candidateEnd) {
+  var cs = _timeToMin(candidateStart);
+  var ce = _timeToMin(candidateEnd || candidateStart);
+  if (ce <= cs) ce = cs + 30;
+  return (evts || []).some(function(e) {
+    if (e.id === candidateId) return false;
+    if (e.date !== candidateDate) return false;
+    var es = _timeToMin(e.start);
+    var ee = _timeToMin(e.end || e.start);
+    if (ee <= es) ee = es + 30;
+    return !(ce <= es || cs >= ee);
+  });
+}
+
+function showAgendaToast(msg) {
+  var t = document.getElementById('agenda-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'agenda-toast';
+    t.style.cssText = 'position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#1D1D1F;color:#fff;padding:10px 18px;border-radius:8px;font-family:Geist,-apple-system,sans-serif;font-size:13px;font-weight:500;z-index:100000;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.18)';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t.__hideTimer);
+  t.__hideTimer = setTimeout(function(){ t.style.opacity='0'; }, 2200);
+}
+
+async function _updateAgendaEvent(eventId, patch) {
+  var ev = events.find(function(e){ return e.id === eventId; });
+  if (!ev) return false;
+  var body = Object.assign({}, ev, patch);
+  delete body.id;
+  var cleanId = String(eventId).replace(/^agenda:/, '');
+  try {
+    var resp = await fetch('/api/agenda/' + encodeURIComponent(cleanId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) return false;
+  } catch (e) { return false; }
+  Object.assign(ev, patch);
+  if (typeof _agendaCache !== 'undefined') { _agendaCache = null; _agendaCacheTime = 0; }
+  try { localStorage.setItem('mup_agenda', JSON.stringify(events)); } catch(_){}
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(_){}
+  return true;
+}
+
+async function updateEventDate(eventId, newDate) {
+  var ev = events.find(function(e){ return e.id === eventId; });
+  if (!ev || ev.date === newDate) return;
+  if (_isAgendaConflict(events, eventId, newDate, ev.start, ev.end)) {
+    showAgendaToast('Créneau déjà occupé à cette heure');
+    return;
+  }
+  var ok = await _updateAgendaEvent(eventId, { date: newDate });
+  if (ok) { renderCal(); renderDay(); }
+  else showAgendaToast('Erreur réseau, réessayez');
+}
+
+async function updateEventTime(eventId, newStart, newEnd) {
+  var ev = events.find(function(e){ return e.id === eventId; });
+  if (!ev) return;
+  if (ev.start === newStart && ev.end === newEnd) return;
+  if (_isAgendaConflict(events, eventId, ev.date, newStart, newEnd)) {
+    showAgendaToast('Créneau déjà occupé');
+    return;
+  }
+  var ok = await _updateAgendaEvent(eventId, { start: newStart, end: newEnd });
+  if (ok) { renderCal(); renderDay(); }
+  else showAgendaToast('Erreur réseau, réessayez');
+}
+
+// Listeners délégués sur cal-grid + timeline (re-binding idempotent via flag).
+function setupAgendaDnD() {
+  var grid = document.getElementById('cal-grid');
+  if (grid && !grid.__dndBound) {
+    grid.__dndBound = true;
+    grid.addEventListener('dragstart', function(e) {
+      var pill = e.target.closest('.cal-evt[data-event-id]');
+      if (!pill) return;
+      e.stopPropagation();
+      e.dataTransfer.setData('text/plain', pill.dataset.eventId);
+      e.dataTransfer.effectAllowed = 'move';
+      pill.style.opacity = '0.5';
+    });
+    grid.addEventListener('dragend', function(e) {
+      var pill = e.target.closest('.cal-evt[data-event-id]');
+      if (pill) pill.style.opacity = '';
+      document.querySelectorAll('.cal-cell--drop-target').forEach(function(c){
+        c.classList.remove('cal-cell--drop-target');
+      });
+    });
+    grid.addEventListener('dragover', function(e) {
+      var cell = e.target.closest('.cal-cell[data-date]');
+      if (!cell) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (!cell.classList.contains('cal-cell--drop-target')) {
+        document.querySelectorAll('.cal-cell--drop-target').forEach(function(c){
+          c.classList.remove('cal-cell--drop-target');
+        });
+        cell.classList.add('cal-cell--drop-target');
+      }
+    });
+    grid.addEventListener('drop', function(e) {
+      var cell = e.target.closest('.cal-cell[data-date]');
+      if (!cell) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var eventId = e.dataTransfer.getData('text/plain');
+      if (eventId && cell.dataset.date) updateEventDate(eventId, cell.dataset.date);
+    });
+  }
+
+  var timeline = document.getElementById('timeline');
+  if (timeline && !timeline.__dndBound) {
+    timeline.__dndBound = true;
+    timeline.addEventListener('dragstart', function(e) {
+      var block = e.target.closest('.evt-block[data-event-id]');
+      if (!block) return;
+      e.stopPropagation();
+      e.dataTransfer.setData('text/plain', block.dataset.eventId);
+      e.dataTransfer.effectAllowed = 'move';
+      block.style.opacity = '0.5';
+    });
+    timeline.addEventListener('dragend', function(e) {
+      var block = e.target.closest('.evt-block[data-event-id]');
+      if (block) block.style.opacity = '';
+    });
+    timeline.addEventListener('dragover', function(e) {
+      var slot = e.target.closest('.time-slot');
+      if (!slot) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+    timeline.addEventListener('drop', function(e) {
+      var slot = e.target.closest('.time-slot');
+      if (!slot) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var eventId = e.dataTransfer.getData('text/plain');
+      if (!eventId) return;
+      var label = slot.querySelector('.time-label');
+      var hourMatch = label && label.textContent.match(/(\d{2}):00/);
+      if (!hourMatch) return;
+      var slotHour = parseInt(hourMatch[1], 10);
+      var line = slot.querySelector('.time-line');
+      var rect = line.getBoundingClientRect();
+      var ratio = Math.max(0, Math.min(0.999, (e.clientY - rect.top) / Math.max(1, rect.height)));
+      var minuteOffset = Math.round(ratio * 4) * 15;
+      if (minuteOffset >= 60) minuteOffset = 45;
+      var ev = events.find(function(x){ return x.id === eventId; });
+      if (!ev) return;
+      var startMin = _timeToMin(ev.start);
+      var endMin = _timeToMin(ev.end || ev.start);
+      var durationMin = Math.max(15, endMin - startMin);
+      var newStartMin = slotHour * 60 + minuteOffset;
+      var newEndMin = Math.min(24*60 - 1, newStartMin + durationMin);
+      updateEventTime(eventId, _minToTime(newStartMin), _minToTime(newEndMin));
+    });
+  }
+}
 
 </script>
 <script src="/sidebar.js"></script>

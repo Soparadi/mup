@@ -933,23 +933,8 @@ const TODAY = new Date();
 
 // Events data keyed by YYYY-MM-DD — single source of truth : table agenda en DB.
 const CAL_EVENTS = {};
-(function(){
-  _loadAgenda().then(function(events){
-    if(!events || !events.length) return;
-    events.forEach(function(e){
-      if(!e || !e.date) return;
-      if(!CAL_EVENTS[e.date]) CAL_EVENTS[e.date] = [];
-      CAL_EVENTS[e.date].push({
-        id: e.id || '',
-        title: e.title || '',
-        sub: e.contact || '',
-        time: e.start || '',
-        type: String(e.type || 'rdv').toLowerCase()
-      });
-    });
-    if(typeof renderCalendar === 'function') renderCalendar();
-  });
-})();
+// L'alimentation de CAL_EVENTS est centralisée dans renderDashboardAgenda()
+// (cf. bloc final) — permet le re-render au storage event mup_agenda.
 
 let calYear = TODAY.getFullYear();
 let calMonth = TODAY.getMonth();
@@ -1074,134 +1059,7 @@ function closeSidebar(){
 </script>
 
 <script>
-// ── DASHBOARD DATA FROM LOCALSTORAGE ──
-(async function(){
-  function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-
-  // Load pipeline
-  function migrateCard(c){
-    if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
-    if(!c.company&&c.contact)c.company=c.contact;if(c.tel&&!c.phone)c.phone=c.tel;
-    if(c.location&&!c.address)c.address=c.location;if(c.director&&!c.contact)c.contact=c.director;
-    c.co=c.company||'';c.name=c.contact||'';c.tel=c.phone||'';return c;
-  }
-  var cards=[];
-  try{cards=(await _loadPipeline()).map(migrateCard);}catch(e){}
-
-  // Load agenda events (single source of truth post-refactor PHASE 3)
-  var events=[];
-  try{events=await _loadAgenda();}catch(e){}
-  // Index card par id pour enrichir Today section (name/meta)
-  var cardById={};
-  cards.forEach(function(c){ if(c && c.id) cardById[String(c.id)]=c; });
-
-  var COLS=[
-    {id:'prospects',name:'Prospects',color:'#CC0000'},
-    {id:'linkedin',name:'LinkedIn',color:'#0A66C2'},
-    {id:'mailing',name:'Mailing',color:'#B84C00'},
-    {id:'phoning',name:'Phoning',color:'#4338CA'},
-    {id:'visio',name:'Visio',color:'#7C3AED'},
-    {id:'rdv',name:'RDV',color:'#0BBCD4'},
-    {id:'devis',name:'Devis',color:'#F59E0B'},
-    {id:'nego',name:'Négociation',color:'#EA580C'},
-    {id:'won',name:'Gagné',color:'#1D8348'},
-    {id:'lost',name:'Disqualifié',color:'#AEAEB2'},
-  ];
-
-  // KPIs : actions à venir (à partir d'aujourd'hui), par type, agrégées sur toutes les fiches
-  var kpiMap = {
-    mailing: 'kpi-mailing',
-    phoning: 'kpi-phoning',
-    visio:   'kpi-visio',
-    rdv:     'kpi-rdv',
-    devis:   'kpi-devis'
-  };
-  var todayMidnight = new Date();
-  todayMidnight.setHours(0, 0, 0, 0);
-
-  var kpiCounts = { mailing: 0, phoning: 0, visio: 0, rdv: 0, devis: 0 };
-
-  // Lecture depuis events (table agenda) — source unique post-refactor PHASE 3
-  events.forEach(function(ev){
-    if(!ev || !ev.date) return;
-    var d = new Date(ev.date + 'T00:00:00');
-    if(isNaN(d.getTime())) return;
-    if(d.getTime() < todayMidnight.getTime()) return;
-    var t = String(ev.type || 'rdv').toLowerCase();
-    if(t === 'mail') t = 'mailing';
-    if(kpiCounts[t] !== undefined) kpiCounts[t]++;
-  });
-
-  Object.keys(kpiMap).forEach(function(k){
-    var el = document.getElementById(kpiMap[k]);
-    if(el) el.textContent = kpiCounts[k] || 0;
-  });
-
-  // Pipeline total
-  var activeStages=['prospects','linkedin','mailing','phoning','visio','rdv','devis','nego'];
-  var pipeTotal=cards.filter(function(c){return activeStages.indexOf(c.col)!==-1;}).reduce(function(s,c){return s+(c.val||0);},0);
-  var pipeFmt=pipeTotal>=1000?Math.round(pipeTotal/1000)+'k€':pipeTotal+'€';
-  var kpPipe=document.getElementById('kpi-pipeline');if(kpPipe)kpPipe.textContent=pipeFmt;
-  var pipeSub=document.getElementById('dash-pipeline-sub');if(pipeSub)pipeSub.textContent=pipeFmt+' en cours';
-
-  // Today section
-  var todayCols=[
-    {id:'mailing',label:'Mailing',color:'#B84C00'},
-    {id:'phoning',label:'Phoning',color:'#CC0000'},
-    {id:'visio',label:'Visio',color:'#7C3AED'},
-    {id:'rdv',label:'RDV',color:'#1D8348'},
-    {id:'devis',label:'Devis',color:'#0A66C2'},
-  ];
-
-  // Compter les actions du jour depuis events (table agenda) par type
-  var todayStr = new Date().toISOString().slice(0,10);
-  var todayActions = {};
-  events.forEach(function(ev){
-    if(!ev || !ev.date || ev.date !== todayStr) return;
-    var t = String(ev.type || 'rdv').toLowerCase();
-    if(!todayActions[t]) todayActions[t] = [];
-    todayActions[t].push({ event: ev, card: ev.ficheId ? cardById[String(ev.ficheId)] : null });
-  });
-
-  var todayGrid=document.getElementById('today-grid');
-  if(todayGrid){
-    todayGrid.innerHTML=todayCols.map(function(tc,i){
-      var border=i<todayCols.length-1?'border-right:1px solid var(--border);':'';
-      var items='';
-      var count=0;
-      // Mapping label colonne → clé du type d'event en table agenda
-      var typeKey = (tc.id === 'mailing') ? 'mail'
-                  : (tc.id === 'rdv')     ? 'rdv'
-                  : (tc.id === 'visio')   ? 'visio'
-                  : (tc.id === 'devis')   ? 'devis'
-                  : null;
-      if(typeKey){
-        var list = todayActions[typeKey] || [];
-        count = list.length;
-        items = list.length
-          ? list.slice(0,3).map(function(item){
-              var ev = item.event, card = item.card;
-              var name = (card && (card.co || card.name)) || ev.title || 'Action';
-              var contact = (card && card.name) || ev.contact || '';
-              var meta = contact + (ev.start ? ' · ' + ev.start : '');
-              return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(name)+'</div><div class="today-meta">'+esc(meta)+'</div></div></div>';
-            }).join('')
-          : '<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
-      } else {
-        // Phoning : pas de type équivalent en agenda → fallback sur la colonne kanban
-        var colCards=cards.filter(function(c){return c.col===tc.id;}).slice(0,3);
-        count=cards.filter(function(c){return c.col===tc.id;}).length;
-        items=colCards.length?colCards.map(function(c){return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(c.co||c.name)+'</div><div class="today-meta">'+esc(c.name||'')+'</div></div></div>';}).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
-      }
-      return '<div style="padding:14px 18px;'+border+'"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted2);">'+tc.label+'</div><span style="font-size:16px;font-weight:900;color:'+tc.color+';">'+count+'</span></div>'+items+'</div>';
-    }).join('');
-  }
-
-  // (prospects list removed)
-
-  // Pipeline funnel + conversion (remplace l'ancien board kanban)
-  await renderDashFunnel(cards);
-})();
+// IIFE supprimée — corps déplacé dans renderDashboardAgenda() (cf. bloc final).
 
 async function renderDashFunnel(cards){
   if(!Array.isArray(cards)){
@@ -1339,6 +1197,165 @@ document.addEventListener('click', function(e) {
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
+<script src="/js/agenda-sync.js"></script>
+<script>
+// renderDashboardAgenda() — refacto Sprint A : extraction des 2 IIFE
+// (ex-936 CAL_EVENTS + ex-1078 KPIs/Today/funnel) dans une fonction nommée
+// idempotente, ré-appelable au storage event mup_agenda.
+//
+// Comportement boot strictement préservé : Promise.all lance les 2 sous-blocs
+// en parallèle, comme les 2 IIFE originales (déclenchées au parse-order).
+async function renderDashboardAgenda() {
+  // Reset accumulatifs : CAL_EVENTS est déclaré global const à la ligne 935
+  // et accumulé via .push(). Reset via delete keys préserve const + permet
+  // ré-entrance idempotente. No-op au premier appel (CAL_EVENTS déjà vide).
+  Object.keys(CAL_EVENTS).forEach(function(k){ delete CAL_EVENTS[k]; });
+
+  // Bloc ex-IIFE 936 — alimente CAL_EVENTS + renderCalendar
+  var pCal = _loadAgenda().then(function(events){
+    if(!events || !events.length) return;
+    events.forEach(function(e){
+      if(!e || !e.date) return;
+      if(!CAL_EVENTS[e.date]) CAL_EVENTS[e.date] = [];
+      CAL_EVENTS[e.date].push({
+        id: e.id || '',
+        title: e.title || '',
+        sub: e.contact || '',
+        time: e.start || '',
+        type: String(e.type || 'rdv').toLowerCase()
+      });
+    });
+    if(typeof renderCalendar === 'function') renderCalendar();
+  });
+
+  // Bloc ex-IIFE 1078 — KPIs + Today section + pipeline total + funnel
+  var pKpi = (async function(){
+    function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+    function migrateCard(c){
+      if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
+      if(!c.company&&c.contact)c.company=c.contact;if(c.tel&&!c.phone)c.phone=c.tel;
+      if(c.location&&!c.address)c.address=c.location;if(c.director&&!c.contact)c.contact=c.director;
+      c.co=c.company||'';c.name=c.contact||'';c.tel=c.phone||'';return c;
+    }
+    var cards=[];
+    try{cards=(await _loadPipeline()).map(migrateCard);}catch(e){}
+
+    var events=[];
+    try{events=await _loadAgenda();}catch(e){}
+    var cardById={};
+    cards.forEach(function(c){ if(c && c.id) cardById[String(c.id)]=c; });
+
+    var COLS=[
+      {id:'prospects',name:'Prospects',color:'#CC0000'},
+      {id:'linkedin',name:'LinkedIn',color:'#0A66C2'},
+      {id:'mailing',name:'Mailing',color:'#B84C00'},
+      {id:'phoning',name:'Phoning',color:'#4338CA'},
+      {id:'visio',name:'Visio',color:'#7C3AED'},
+      {id:'rdv',name:'RDV',color:'#0BBCD4'},
+      {id:'devis',name:'Devis',color:'#F59E0B'},
+      {id:'nego',name:'Négociation',color:'#EA580C'},
+      {id:'won',name:'Gagné',color:'#1D8348'},
+      {id:'lost',name:'Disqualifié',color:'#AEAEB2'},
+    ];
+
+    var kpiMap = {
+      mailing: 'kpi-mailing',
+      phoning: 'kpi-phoning',
+      visio:   'kpi-visio',
+      rdv:     'kpi-rdv',
+      devis:   'kpi-devis'
+    };
+    var todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+
+    var kpiCounts = { mailing: 0, phoning: 0, visio: 0, rdv: 0, devis: 0 };
+
+    events.forEach(function(ev){
+      if(!ev || !ev.date) return;
+      var d = new Date(ev.date + 'T00:00:00');
+      if(isNaN(d.getTime())) return;
+      if(d.getTime() < todayMidnight.getTime()) return;
+      var t = String(ev.type || 'rdv').toLowerCase();
+      if(t === 'mail') t = 'mailing';
+      if(kpiCounts[t] !== undefined) kpiCounts[t]++;
+    });
+
+    Object.keys(kpiMap).forEach(function(k){
+      var el = document.getElementById(kpiMap[k]);
+      if(el) el.textContent = kpiCounts[k] || 0;
+    });
+
+    var activeStages=['prospects','linkedin','mailing','phoning','visio','rdv','devis','nego'];
+    var pipeTotal=cards.filter(function(c){return activeStages.indexOf(c.col)!==-1;}).reduce(function(s,c){return s+(c.val||0);},0);
+    var pipeFmt=pipeTotal>=1000?Math.round(pipeTotal/1000)+'k€':pipeTotal+'€';
+    var kpPipe=document.getElementById('kpi-pipeline');if(kpPipe)kpPipe.textContent=pipeFmt;
+    var pipeSub=document.getElementById('dash-pipeline-sub');if(pipeSub)pipeSub.textContent=pipeFmt+' en cours';
+
+    var todayCols=[
+      {id:'mailing',label:'Mailing',color:'#B84C00'},
+      {id:'phoning',label:'Phoning',color:'#CC0000'},
+      {id:'visio',label:'Visio',color:'#7C3AED'},
+      {id:'rdv',label:'RDV',color:'#1D8348'},
+      {id:'devis',label:'Devis',color:'#0A66C2'},
+    ];
+
+    var todayStr = new Date().toISOString().slice(0,10);
+    var todayActions = {};
+    events.forEach(function(ev){
+      if(!ev || !ev.date || ev.date !== todayStr) return;
+      var t = String(ev.type || 'rdv').toLowerCase();
+      if(!todayActions[t]) todayActions[t] = [];
+      todayActions[t].push({ event: ev, card: ev.ficheId ? cardById[String(ev.ficheId)] : null });
+    });
+
+    var todayGrid=document.getElementById('today-grid');
+    if(todayGrid){
+      todayGrid.innerHTML=todayCols.map(function(tc,i){
+        var border=i<todayCols.length-1?'border-right:1px solid var(--border);':'';
+        var items='';
+        var count=0;
+        var typeKey = (tc.id === 'mailing') ? 'mail'
+                    : (tc.id === 'rdv')     ? 'rdv'
+                    : (tc.id === 'visio')   ? 'visio'
+                    : (tc.id === 'devis')   ? 'devis'
+                    : null;
+        if(typeKey){
+          var list = todayActions[typeKey] || [];
+          count = list.length;
+          items = list.length
+            ? list.slice(0,3).map(function(item){
+                var ev = item.event, card = item.card;
+                var name = (card && (card.co || card.name)) || ev.title || 'Action';
+                var contact = (card && card.name) || ev.contact || '';
+                var meta = contact + (ev.start ? ' · ' + ev.start : '');
+                return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(name)+'</div><div class="today-meta">'+esc(meta)+'</div></div></div>';
+              }).join('')
+            : '<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
+        } else {
+          var colCards=cards.filter(function(c){return c.col===tc.id;}).slice(0,3);
+          count=cards.filter(function(c){return c.col===tc.id;}).length;
+          items=colCards.length?colCards.map(function(c){return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(c.co||c.name)+'</div><div class="today-meta">'+esc(c.name||'')+'</div></div></div>';}).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
+        }
+        return '<div style="padding:14px 18px;'+border+'"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted2);">'+tc.label+'</div><span style="font-size:16px;font-weight:900;color:'+tc.color+';">'+count+'</span></div>'+items+'</div>';
+      }).join('');
+    }
+
+    await renderDashFunnel(cards);
+  })();
+
+  await Promise.all([pCal, pKpi]);
+}
+
+// Boot — déclenche le rendu agenda+KPI+funnel comme les 2 IIFE originales
+// (fire-and-forget, exactement comme avant).
+renderDashboardAgenda();
+
+// Cross-tab sync : invalide _agendaCache puis re-déclenche renderDashboardAgenda
+attachAgendaSync({
+  invalidateCacheFn: function () { _agendaCache = null; _agendaCacheTime = 0; },
+  reloadFn: async function () { await renderDashboardAgenda(); }
+});
+</script>
 <footer class="mup-app-footer">
   <div class="mup-app-footer__inner">
     <span>© 2026 <strong>MovUP</strong></span>

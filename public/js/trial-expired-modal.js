@@ -20,9 +20,20 @@
 
   var PLANS = [
     { key: 'demarrage', name: 'Démarrage', monthly: 19, annual: 16, color: '#0BBCD4', soft: 'rgba(11,188,212,.12)' },
-    { key: 'activite',  name: 'Activité',  monthly: 29, annual: 25, color: '#1D8348', soft: 'rgba(29,131,72,.12)', popular: true },
+    { key: 'activite',  name: 'Activité',  monthly: 29, annual: 25, color: '#1D8348', soft: 'rgba(29,131,72,.12)' },
     { key: 'croisiere', name: 'Croisière', monthly: 39, annual: 33, color: '#1D8348', soft: 'rgba(29,131,72,.12)' }
   ]
+  var VALID_PLANS = ['demarrage', 'activite', 'croisiere']
+
+  // Plan présélectionné (badge "Le plus choisi" + scale 1.02) :
+  //   - intended_plan du user (lu via window.__USER__ injecté serveur-side)
+  //     si présent et valide
+  //   - fallback 'activite' (plan central, le plus représentatif)
+  var preferredPlan = (function () {
+    var u = window.__USER__
+    var ip = u && u.intended_plan
+    return (ip && VALID_PLANS.indexOf(ip) !== -1) ? ip : 'activite'
+  })()
 
   var STYLE_ID = 'tem-modal-style'
   var OVERLAY_ID = 'tem-modal-overlay'
@@ -66,7 +77,7 @@
   }
 
   function buildPlanCard(p) {
-    var isPopular = p.popular
+    var isPopular = (p.key === preferredPlan)
     var price = billingCycle === 'annual' ? p.annual : p.monthly
     var billing = billingCycle === 'annual'
       ? 'Soit ' + (p.annual * 12) + ' € par an'
@@ -78,7 +89,7 @@
       +   '</span>'
       +   '<div><span class="tem-price" style="color:' + (p.key === 'croisiere' ? '#0A0A0A' : p.color) + '">' + price + ' €</span><span class="tem-period">/mois</span></div>'
       +   '<div class="tem-billing">' + billing + '</div>'
-      +   '<a class="tem-cta" href="/account/upgrade?plan=' + p.key + '">Choisir ' + p.name + '</a>'
+      +   '<a class="tem-cta" href="/account/upgrade?plan=' + p.key + '&cycle=' + billingCycle + '">Choisir ' + p.name + '</a>'
       + '</article>'
   }
 

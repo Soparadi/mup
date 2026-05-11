@@ -225,10 +225,13 @@
   }
 
   // ── URL params + initial plan ───────────────────────────────────
+  var VALID_CYCLES = ['monthly', 'annual']
   var params = new URLSearchParams(window.location.search)
   if (params.get('canceled')) setBanner('info', 'Paiement annulé. Vous pouvez réessayer quand vous voulez.')
   var urlPlan = params.get('plan')
   if (urlPlan && VALID_PLANS.indexOf(urlPlan) !== -1) state.plan = urlPlan
+  var urlCycle = params.get('cycle')
+  if (urlCycle && VALID_CYCLES.indexOf(urlCycle) !== -1) state.cycle = urlCycle
 
   // ── Pré-remplir depuis /api/user/me ─────────────────────────────
   fetch('/api/user/me', { credentials: 'same-origin' })
@@ -297,6 +300,13 @@
     if (radio) radio.checked = true
     refreshPrices()
   }
+  // Sync UI toggle Mensuel/Annuel sur state.cycle (couvre cas urlCycle au load).
+  function applyCycle() {
+    document.querySelectorAll('.tbtn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-cycle') === state.cycle)
+    })
+  }
+  applyCycle()
   applyPlan()
 
   // ── SIRET lookup ────────────────────────────────────────────────

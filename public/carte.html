@@ -953,6 +953,17 @@ function renderSchedule(){
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
+<script src="/js/agenda-sync.js"></script>
+<script>
+  // Cross-tab agenda sync : recharge l'index agendaByFiche + re-trigger
+  // panneau RDV quand un event agenda est créé/modifié/supprimé ailleurs.
+  attachAgendaSync({
+    reloadFn: async function () {
+      if (typeof loadAllAgenda === 'function') await loadAllAgenda();
+      if (typeof autoShowRdv === 'function') autoShowRdv();
+    }
+  });
+</script>
 <footer class="mup-app-footer">
   <div class="mup-app-footer__inner">
     <span>© 2026 <strong>MovUP</strong></span>

@@ -1226,14 +1226,29 @@ function saveCard() {
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
 }
 async function deleteCard(id) {
+  // Suppression globale : pipeline + contacts. Une fiche peut exister dans
+  // l'une, l'autre ou les deux (créée manuellement /contacts vs via /leads
+  // → addToPipeline). 404 acceptable sur la table où la fiche n'existe pas.
+  let pipelineOk = false, contactsOk = false, networkError = false;
   try {
-    const res = await fetch(`/api/pipeline/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch (err) {
-    console.error('[deleteCard] Erreur suppression:', err);
+    const r1 = await fetch(`/api/pipeline/${id}`, { method: 'DELETE' });
+    pipelineOk = r1.ok;
+  } catch (e) { networkError = true; }
+  try {
+    const r2 = await fetch(`/api/contacts/${id}`, { method: 'DELETE' });
+    contactsOk = r2.ok;
+  } catch (e) { networkError = true; }
+  if (networkError && !pipelineOk && !contactsOk) {
+    alert('Erreur réseau lors de la suppression. Réessayer.');
+    return;
   }
   cards = cards.filter(c=>String(c.id)!==String(id));
   save(); renderKanban(); closeDetail();
+  // Notifie la page parente (MUPFiche overlay iframe depuis /contacts) pour
+  // qu'elle rafraîchisse sa liste. No-op si pas en iframe.
+  if (window.parent && window.parent !== window) {
+    try { window.parent.postMessage({ type: 'mupfiche:deleted', id: id }, '*'); } catch (e) {}
+  }
 }
 
 // ── DÉTAIL ──

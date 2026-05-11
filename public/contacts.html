@@ -1412,6 +1412,13 @@ window.addEventListener('storage', function(e){
   }
 });
 
+// Notif MUPFiche iframe : suppression depuis l'overlay → rafraîchir la liste.
+window.addEventListener('message', function(e) {
+  if (e && e.data && e.data.type === 'mupfiche:deleted') {
+    init();
+  }
+});
+
 // ── DENSITY TOGGLE ──
 (function() {
   var grid = document.getElementById('prospects-grid');

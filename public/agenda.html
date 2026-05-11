@@ -704,6 +704,23 @@ function selType(el) {
   document.querySelectorAll('.type-pill').forEach(p => p.classList.remove('sel'));
   el.classList.add('sel');
   modalType = el.dataset.type;
+  applyPersoVisibility();
+}
+
+// Type "perso" : masque le select fiche (sémantique, un event perso n'a pas
+// de fiche pipeline). Reset modalFicheId et bandeau info dans ce cas.
+function applyPersoVisibility() {
+  var sel = document.getElementById('m-pipeline-card');
+  var info = document.getElementById('modal-pipeline-info');
+  var isPerso = (modalType === 'perso');
+  if (sel) {
+    sel.style.display = isPerso ? 'none' : '';
+    if (isPerso) {
+      sel.value = '';
+      modalFicheId = null;
+      if (info) info.hidden = true;
+    }
+  }
 }
 
 // Bouton "Ouvrir la fiche pipeline" — visible en mode edit si ficheId présent.
@@ -719,7 +736,11 @@ function openFicheFromModal() {
 
 async function saveEvent() {
   const title = document.getElementById('m-title').value.trim();
-  if(!title) { document.getElementById('m-title').focus(); return; }
+  if(!title) {
+    if (typeof showAgendaToast === 'function') showAgendaToast('Renseignez un titre ou liez une fiche');
+    document.getElementById('m-title').focus();
+    return;
+  }
   const dateVal = document.getElementById('m-date').value || dateKey(selectedDay);
   const startVal = document.getElementById('m-start').value;
   const endVal = document.getElementById('m-end').value;

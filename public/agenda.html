@@ -327,8 +327,10 @@ async function _loadAgenda(){
       throw new Error('Agenda API unavailable');
     }
   } catch(e) {
-    console.warn('[Agenda] _loadAgenda API failed, fallback localStorage', e);
-    try { var r = localStorage.getItem('mup_agenda'); if(r) events = JSON.parse(r); } catch(e2){}
+    // SurrealDB est source unique de vérité : pas de fallback localStorage
+    // (qui produisait des events fantômes persistants après échec API).
+    console.warn('[Agenda] _loadAgenda API failed', e);
+    events = [];
   }
   _agendaCache = events || [];
   _agendaCacheTime = Date.now();
@@ -409,14 +411,6 @@ async function loadEvents() {
   try { events = await _loadAgenda(); } catch(e) { events = []; }
   if(!Array.isArray(events)) events = [];
   if(!events.length) events = MOCK_EVENTS;
-}
-
-async function saveEvents() {
-  // Dual-write: API + localStorage (transitoire)
-  localStorage.setItem('mup_agenda', JSON.stringify(events));
-  for(const ev of events){
-    if(ev && ev.id) await _saveAgendaEvent(ev);
-  }
 }
 
 function dateKey(d) {
@@ -772,8 +766,10 @@ async function saveEvent() {
     target.notes = notesVal;
     target.ficheId = ficheId;
   } else {
+    // Création : on construit l'objet SANS id local (le serveur l'attribue).
+    // PAS de push dans events[] avant succès POST — sinon en cas d'échec
+    // l'event devient un fantôme inexistant en DB qu'aucun DELETE ne peut purger.
     target = {
-      id: 'e' + Date.now(),
       date: dateVal,
       start: startVal,
       end: endVal,
@@ -783,20 +779,19 @@ async function saveEvent() {
       notes: notesVal,
       ficheId: ficheId
     };
-    events.push(target);
   }
 
-  try { localStorage.setItem('mup_agenda', JSON.stringify(events)); } catch(e) {}
-
-  try {
-    const saved = await _saveAgendaEvent(target);
-    if (saved && saved.id && !editingId) {
-      var serverId = String(saved.id).replace(/^agenda:/, '');
-      target.id = serverId;
-      try { localStorage.setItem('mup_agenda', JSON.stringify(events)); } catch(e) {}
+  const saved = await _saveAgendaEvent(target);
+  if (!saved || !saved.id) {
+    if (typeof showAgendaToast === 'function') {
+      showAgendaToast(editingId ? 'Échec mise à jour, réessayez' : 'Création échouée, réessayez');
     }
-  } catch (e) {
-    console.warn('[agenda] _saveAgendaEvent fail :', e && e.message);
+    return;
+  }
+
+  if (!editingId) {
+    target.id = String(saved.id).replace(/^agenda:/, '');
+    events.push(target);
   }
 
   // Invalider cache agenda local pour forcer reload aux prochaines pages
@@ -829,7 +824,6 @@ async function deleteEvent() {
     return;
   }
   events = events.filter(function(x){ return _normAgendaId(x.id) !== cleanId; });
-  try { localStorage.setItem('mup_agenda', JSON.stringify(events)); } catch(e) {}
   if (typeof _agendaCache !== 'undefined') { _agendaCache = null; _agendaCacheTime = 0; }
   closeModal();
   renderCal();
@@ -892,6 +886,12 @@ function weatherCode(c) {
   if(c <= 99)           return { ico:SVG_WEATHER, desc:'Orages' };
   return { ico:SVG_WEATHER, desc:'—' };
 }
+
+// Cleanup one-shot : purge les vestiges localStorage "mup_agenda" laissés par
+// l'ancienne dual-write API + LS. La SurrealDB est source unique de vérité
+// désormais — un event présent dans le LS mais absent de la DB devenait un
+// fantôme côté UI qu'aucun DELETE ne pouvait purger (404 server-side).
+try { localStorage.removeItem('mup_agenda'); } catch(_) {}
 
 loadEvents().then(function(){
   renderCal();
@@ -969,7 +969,6 @@ async function _updateAgendaEvent(eventId, patch) {
   } catch (e) { return false; }
   Object.assign(ev, patch);
   if (typeof _agendaCache !== 'undefined') { _agendaCache = null; _agendaCacheTime = 0; }
-  try { localStorage.setItem('mup_agenda', JSON.stringify(events)); } catch(_){}
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(_){}
   return true;
 }

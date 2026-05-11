@@ -396,6 +396,13 @@ const MOCK_EVENTS = [];
 
 let events = [];
 
+// Normalise un id event pour comparaison robuste : retire le préfixe
+// "agenda:" si présent. Évite que events.filter/find ratent le match
+// quand l'id local ("eXXX") diffère de l'id serveur ("agenda:eXXX").
+function _normAgendaId(id) {
+  return String(id == null ? '' : id).replace(/^agenda:/, '');
+}
+
 async function loadEvents() {
   // Single source of truth : table agenda en SurrealDB.
   // Les events liés à une fiche pipeline portent un champ ficheId (populé au save).
@@ -670,7 +677,8 @@ async function fillFromPipeline() {
 }
 
 function editEvent(id) {
-  const e = events.find(x => x.id === id);
+  var nid = _normAgendaId(id);
+  const e = events.find(x => _normAgendaId(x.id) === nid);
   if(!e) return;
   editingId = id;
   modalFicheId = e.ficheId || null;
@@ -752,7 +760,8 @@ async function saveEvent() {
 
   let target;
   if (editingId) {
-    target = events.find(x => x.id === editingId);
+    var nid = _normAgendaId(editingId);
+    target = events.find(x => _normAgendaId(x.id) === nid);
     if (!target) { closeModal(); return; }
     target.title = title;
     target.contact = contactVal;
@@ -819,7 +828,7 @@ async function deleteEvent() {
     window.alert('Erreur réseau lors de la suppression. Réessayez.');
     return;
   }
-  events = events.filter(function(x){ return x.id !== localId; });
+  events = events.filter(function(x){ return _normAgendaId(x.id) !== cleanId; });
   try { localStorage.setItem('mup_agenda', JSON.stringify(events)); } catch(e) {}
   if (typeof _agendaCache !== 'undefined') { _agendaCache = null; _agendaCacheTime = 0; }
   closeModal();
@@ -918,8 +927,9 @@ function _isAgendaConflict(evts, candidateId, candidateDate, candidateStart, can
   var cs = _timeToMin(candidateStart);
   var ce = _timeToMin(candidateEnd || candidateStart);
   if (ce <= cs) ce = cs + 30;
+  var ncid = _normAgendaId(candidateId);
   return (evts || []).some(function(e) {
-    if (e.id === candidateId) return false;
+    if (_normAgendaId(e.id) === ncid) return false;
     if (e.date !== candidateDate) return false;
     var es = _timeToMin(e.start);
     var ee = _timeToMin(e.end || e.start);
@@ -943,11 +953,12 @@ function showAgendaToast(msg) {
 }
 
 async function _updateAgendaEvent(eventId, patch) {
-  var ev = events.find(function(e){ return e.id === eventId; });
+  var nid = _normAgendaId(eventId);
+  var ev = events.find(function(e){ return _normAgendaId(e.id) === nid; });
   if (!ev) return false;
   var body = Object.assign({}, ev, patch);
   delete body.id;
-  var cleanId = String(eventId).replace(/^agenda:/, '');
+  var cleanId = nid;
   try {
     var resp = await fetch('/api/agenda/' + encodeURIComponent(cleanId), {
       method: 'PUT',
@@ -964,7 +975,8 @@ async function _updateAgendaEvent(eventId, patch) {
 }
 
 async function updateEventDate(eventId, newDate) {
-  var ev = events.find(function(e){ return e.id === eventId; });
+  var nid = _normAgendaId(eventId);
+  var ev = events.find(function(e){ return _normAgendaId(e.id) === nid; });
   if (!ev || ev.date === newDate) return;
   if (_isAgendaConflict(events, eventId, newDate, ev.start, ev.end)) {
     showAgendaToast('Créneau déjà occupé à cette heure');
@@ -976,7 +988,8 @@ async function updateEventDate(eventId, newDate) {
 }
 
 async function updateEventTime(eventId, newStart, newEnd) {
-  var ev = events.find(function(e){ return e.id === eventId; });
+  var nid = _normAgendaId(eventId);
+  var ev = events.find(function(e){ return _normAgendaId(e.id) === nid; });
   if (!ev) return;
   if (ev.start === newStart && ev.end === newEnd) return;
   if (_isAgendaConflict(events, eventId, ev.date, newStart, newEnd)) {
@@ -1067,7 +1080,8 @@ function setupAgendaDnD() {
       var ratio = Math.max(0, Math.min(0.999, (e.clientY - rect.top) / Math.max(1, rect.height)));
       var minuteOffset = Math.round(ratio * 4) * 15;
       if (minuteOffset >= 60) minuteOffset = 45;
-      var ev = events.find(function(x){ return x.id === eventId; });
+      var nid = _normAgendaId(eventId);
+      var ev = events.find(function(x){ return _normAgendaId(x.id) === nid; });
       if (!ev) return;
       var startMin = _timeToMin(ev.start);
       var endMin = _timeToMin(ev.end || ev.start);

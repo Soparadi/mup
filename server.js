@@ -566,7 +566,9 @@ app.delete('/api/pipeline/:id', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const { id } = req.params
+    // Tolère les 2 formes : "abc123" (id nu) ou "pipeline:abc123" (forme SurrealDB
+    // complète). Tolère aussi "contacts:abc123" → strip le préfixe table.
+    const id = cleanRecordId('pipeline', req.params.id) || String(req.params.id || '').replace(/^[a-z_]+:/i, '')
     const existing = await db.query('SELECT * FROM type::record("pipeline", $id)', { id })
     const rec = existing[0]?.[0]
     if (!rec || rec.userId !== userId) {
@@ -643,7 +645,9 @@ app.delete('/api/contacts/:id', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const { id } = req.params
+    // Tolère "abc123" (id nu) ou "contacts:abc123" / "pipeline:abc123"
+    // (forme préfixée transmise verbatim par le client).
+    const id = cleanRecordId('contacts', req.params.id) || String(req.params.id || '').replace(/^[a-z_]+:/i, '')
     const existing = await db.query('SELECT * FROM type::record("contacts", $id)', { id })
     const rec = existing[0]?.[0]
     if (!rec || rec.userId !== userId) {

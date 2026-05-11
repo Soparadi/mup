@@ -393,6 +393,16 @@ map.on('click',function(){
         if(bounds.length) map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
         // Auto-show RDV cards with proximity
         autoShowRdv();
+        // [DEBUG TEMPORAIRE] diagnostic panneau Actions vide — à revert
+        console.log('[carte-diag]', {
+          rdvPanelIds: rdvPanelIds.length,
+          agendaByFicheKeys: Object.keys(agendaByFiche).length,
+          markersKeys: Object.keys(markers).length,
+          cards: cards.length,
+          firstAgendaEntry: Object.entries(agendaByFiche)[0],
+          firstMarker: Object.entries(markers)[0] && Object.entries(markers)[0][1].card,
+          autoShowRdvCalled: typeof autoShowRdv === 'function' ? 'function exists' : 'missing'
+        });
       }
     })
     .catch(function(){

@@ -336,6 +336,12 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS trial_started_at ON user TYPE option<datetime>',
     'DEFINE FIELD IF NOT EXISTS trial_ends_at ON user TYPE option<datetime>',
     'DEFINE FIELD IF NOT EXISTS trial_status ON user TYPE option<string> ASSERT $value = NONE OR $value INSIDE ["active", "expired", "converted"]',
+    // Flags d'idempotence pour le cron trial — set par les emails sent successfully.
+    // J+12 (post-trial) déclaré pour préparer le terrain mais NON câblé dans le cron actuel
+    // (stratégie commerciale du template relance-j12 à valider avant câblage).
+    'DEFINE FIELD IF NOT EXISTS trial_email_j2_sent_at ON user TYPE option<datetime>',
+    'DEFINE FIELD IF NOT EXISTS trial_email_j0_sent_at ON user TYPE option<datetime>',
+    'DEFINE FIELD IF NOT EXISTS trial_email_j12_sent_at ON user TYPE option<datetime>',
     // Stripe — souscription payante (passe 2). billing_address est un objet
     // { line1, line2?, postal_code, city, country } persisté avant le Checkout.
     'DEFINE FIELD IF NOT EXISTS stripe_customer_id ON user TYPE option<string>',

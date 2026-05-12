@@ -19,6 +19,7 @@ import { requireAuth, requireAuthHtml } from './server/middleware/requireAuth.js
 import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
+import { startCronJobs } from './server/services/cron.js'
 import {
   sendOne as mailServiceSendOne,
   getMailStatus as mailServiceStatus,
@@ -3139,6 +3140,18 @@ app.use((req, res) => {
     console.log('[boot] lead_search table ready (+ 3 indexes)')
   } catch (e) {
     console.error('[boot] lead_search migration failed:', e.message)
+  }
+  // Cron trial — node-cron in-process déclenché à 8h Europe/Paris.
+  // Skip si NODE_ENV !== 'production' (évite spam emails en dev) ou
+  // si CRON_ENABLED === 'false' (override Railway).
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      startCronJobs()
+    } catch (e) {
+      console.error('[boot] cron startup failed:', e.message)
+    }
+  } else {
+    console.log('[boot] cron skipped (NODE_ENV !== production)')
   }
 })()
 

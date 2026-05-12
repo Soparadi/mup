@@ -69,13 +69,19 @@ function htmlTemplate({ subject, intro, ctaLabel, ctaUrl, body }) {
 </html>`
 }
 
-// Sélection des users dont trial_ends_at tombe dans une fenêtre [from, to].
-async function findUsersInWindow(from, to) {
+// Sélection des users dont trial_ends_at tombe dans une fenêtre [from, to]
+// ET qui n'ont pas déjà reçu l'email de la fenêtre concernée (flag DB).
+// La fenêtre temporelle reste un filtre primaire ; le flag DB garantit
+// l'idempotence stricte (cron qui retourne 2× le même jour, redémarrage
+// Railway dans la fenêtre, etc.).
+async function findUsersInWindow(from, to, sentFlag) {
   const db = await getDb()
   try {
     const r = await db.query(
       `SELECT id, email, prenom, nom, trial_ends_at FROM user
-       WHERE trial_status = 'active' AND trial_ends_at >= $from AND trial_ends_at < $to`,
+       WHERE trial_status = 'active'
+         AND trial_ends_at >= $from AND trial_ends_at < $to
+         AND ${sentFlag} IS NONE`,
       { from: from.toISOString(), to: to.toISOString() }
     )
     return r?.[0] || []
@@ -85,15 +91,30 @@ async function findUsersInWindow(from, to) {
   }
 }
 
+// Marque un user comme ayant reçu l'email <sentFlag>. Idempotent : si l'envoi
+// est ré-tenté plus tard pour ce même user, le SELECT préalable filtre déjà.
+async function markEmailSent(userId, sentFlag) {
+  const db = await getDb()
+  try {
+    await db.query(
+      `UPDATE $id SET ${sentFlag} = time::now()`,
+      { id: userId }
+    )
+  } catch (e) {
+    console.warn(`[trial-emails] markEmailSent ${sentFlag} échoué pour`, String(userId), ':', e.message)
+  }
+}
+
 // Envoi unique J-2 (fenêtre 24h autour de NOW + 2j).
 export async function sendTrialEndingSoonEmails() {
   const now = new Date()
   const from = new Date(now.getTime() + 47 * 3600 * 1000)
   const to = new Date(now.getTime() + 49 * 3600 * 1000)
-  const users = await findUsersInWindow(from, to)
-  if (!users.length) return { sent: 0 }
+  const users = await findUsersInWindow(from, to, 'trial_email_j2_sent_at')
+  if (!users.length) return { sent: 0, total: 0 }
   const r = getResendClient()
   let sent = 0
+  const errors = []
   for (const u of users) {
     try {
       const subject = 'Votre essai MovUP expire dans 2 jours'
@@ -112,10 +133,14 @@ export async function sendTrialEndingSoonEmails() {
         html,
         tags: [{ name: 'kind', value: 'trial_j_minus_2' }]
       })
+      await markEmailSent(u.id, 'trial_email_j2_sent_at')
       sent++
-    } catch (e) { console.warn('[trial-emails] J-2 envoi échec :', u.email, e.message) }
+    } catch (e) {
+      console.warn('[trial-emails] J-2 envoi échec :', u.email, e.message)
+      errors.push({ email: u.email, error: e.message })
+    }
   }
-  return { sent, total: users.length }
+  return { sent, total: users.length, errors }
 }
 
 // Envoi unique J-0 (fenêtre 24h autour de NOW).
@@ -123,10 +148,11 @@ export async function sendTrialEndingTodayEmails() {
   const now = new Date()
   const from = new Date(now.getTime() - 1 * 3600 * 1000)
   const to = new Date(now.getTime() + 1 * 3600 * 1000)
-  const users = await findUsersInWindow(from, to)
-  if (!users.length) return { sent: 0 }
+  const users = await findUsersInWindow(from, to, 'trial_email_j0_sent_at')
+  if (!users.length) return { sent: 0, total: 0 }
   const r = getResendClient()
   let sent = 0
+  const errors = []
   for (const u of users) {
     try {
       const subject = 'Votre essai MovUP expire aujourd\'hui'
@@ -145,10 +171,14 @@ export async function sendTrialEndingTodayEmails() {
         html,
         tags: [{ name: 'kind', value: 'trial_j_zero' }]
       })
+      await markEmailSent(u.id, 'trial_email_j0_sent_at')
       sent++
-    } catch (e) { console.warn('[trial-emails] J-0 envoi échec :', u.email, e.message) }
+    } catch (e) {
+      console.warn('[trial-emails] J-0 envoi échec :', u.email, e.message)
+      errors.push({ email: u.email, error: e.message })
+    }
   }
-  return { sent, total: users.length }
+  return { sent, total: users.length, errors }
 }
 
 // Bascule active → expired pour les utilisateurs inactifs (qui ne se

@@ -67,6 +67,33 @@ function stripSettingsSecrets(rec) {
   }
 }
 
+// Strip secrets from a mailbox_credentials / mail_settings record before
+// returning to client. Couvre les champs des 2 tables :
+//   - imap_password_encrypted, smtp_pass_encrypted (mail_settings v2)
+//   - imap_pass_encrypted (mail_settings v1)
+//   - accessToken, refreshToken (mailbox_credentials OAuth Google/Microsoft)
+//   - password (paranoïa : ne devrait jamais être en clair en DB)
+// Renvoie flags booléens utiles à l'UI.
+function stripMailboxSecrets(rec) {
+  if (!rec) return rec
+  const {
+    smtp_pass_encrypted,
+    imap_pass_encrypted,
+    imap_password_encrypted,
+    accessToken,
+    refreshToken,
+    password,
+    ...safe
+  } = rec
+  return {
+    ...safe,
+    configured: Boolean(smtp_pass_encrypted || imap_password_encrypted || accessToken),
+    has_imap: Boolean(imap_password_encrypted || imap_pass_encrypted),
+    has_smtp: Boolean(smtp_pass_encrypted),
+    has_oauth: Boolean(accessToken || refreshToken)
+  }
+}
+
 function requireCrypto(res) {
   if (!isCryptoReady()) {
     res.status(503).json({ error: 'Mail non configuré sur le serveur — SECRET_KEY absente' })
@@ -2417,11 +2444,11 @@ app.post('/api/v2/mail/imap/connect', async (req, res) => {
     const sel = await db.query('SELECT * FROM type::record("mail_settings", $id)', { id: userId })
     if (sel[0]?.[0]) {
       const r = await db.query('UPDATE type::record("mail_settings", $id) MERGE $body', { id: userId, body: payload })
-      return res.status(200).json({ ok: true, provider: 'imap', email, record: r[0]?.[0] || null })
+      return res.status(200).json({ ok: true, provider: 'imap', email, record: stripMailboxSecrets(r[0]?.[0] || null) })
     }
     payload.created_at = new Date().toISOString()
     const r = await db.query('CREATE type::record("mail_settings", $id) CONTENT $body', { id: userId, body: payload })
-    res.status(201).json({ ok: true, provider: 'imap', email, record: r[0]?.[0] || null })
+    res.status(201).json({ ok: true, provider: 'imap', email, record: stripMailboxSecrets(r[0]?.[0] || null) })
   } catch (err) {
     console.error('[v2/mail:imap-connect]', err.message)
     res.status(500).json({ error: 'Sauvegarde config IMAP impossible' })

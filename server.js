@@ -1037,8 +1037,9 @@ app.get('/api/geocode', async (req, res) => {
 app.get('/api/mail/settings/:userId', async (req, res) => {
   if (!requireCrypto(res)) return
   try {
+    const userId = String(req.userId)
+    if (String(req.params.userId) !== userId) return res.status(403).json({ error: 'forbidden' })
     const db = await getDb()
-    const userId = String(req.params.userId || DEFAULT_USER_ID)
     const result = await db.query('SELECT * FROM type::record("mail_settings", $id)', { id: userId })
     const rec = result[0]?.[0]
     if (!rec) return res.status(404).json({ error: 'Configuration mail introuvable' })
@@ -1053,7 +1054,7 @@ app.post('/api/mail/settings', async (req, res) => {
   if (!requireCrypto(res)) return
   try {
     const body = req.body || {}
-    const userId = String(body.userId || DEFAULT_USER_ID)
+    const userId = String(req.userId)
     const db = await getDb()
     const payload = {
       userId,
@@ -1088,8 +1089,9 @@ app.post('/api/mail/settings', async (req, res) => {
 app.delete('/api/mail/settings/:userId', async (req, res) => {
   if (!requireCrypto(res)) return
   try {
+    const userId = String(req.userId)
+    if (String(req.params.userId) !== userId) return res.status(403).json({ error: 'forbidden' })
     const db = await getDb()
-    const userId = String(req.params.userId || DEFAULT_USER_ID)
     await db.query('DELETE type::record("mail_settings", $id)', { id: userId })
     res.json({ ok: true })
   } catch (err) {
@@ -1146,8 +1148,8 @@ app.post('/api/mail/test-imap', async (req, res) => {
 
 app.get('/api/mail', async (req, res) => {
   try {
+    const userId = String(req.userId)
     const db = await getDb()
-    const userId = String(req.query.userId || DEFAULT_USER_ID)
     const prospectId = req.query.prospectId ? String(req.query.prospectId) : null
     let result
     if (prospectId) {
@@ -1167,10 +1169,11 @@ app.get('/api/mail', async (req, res) => {
 
 app.get('/api/mail/:id', async (req, res) => {
   try {
+    const userId = String(req.userId)
     const db = await getDb()
     const result = await db.query('SELECT * FROM type::record("mail", $id)', { id: req.params.id })
     const rec = result[0]?.[0]
-    if (!rec) return res.status(404).json({ error: 'Mail introuvable' })
+    if (!rec || String(rec.userId) !== userId) return res.status(404).json({ error: 'Mail introuvable' })
     res.json(rec)
   } catch (err) {
     console.error('[mail:get]', err.message)
@@ -1180,7 +1183,11 @@ app.get('/api/mail/:id', async (req, res) => {
 
 app.delete('/api/mail/:id', async (req, res) => {
   try {
+    const userId = String(req.userId)
     const db = await getDb()
+    const existing = await db.query('SELECT userId FROM type::record("mail", $id)', { id: req.params.id })
+    const rec = existing[0]?.[0]
+    if (!rec || String(rec.userId) !== userId) return res.status(404).json({ error: 'Mail introuvable' })
     await db.query('DELETE type::record("mail", $id)', { id: req.params.id })
     res.json({ ok: true })
   } catch (err) {
@@ -1193,7 +1200,7 @@ app.post('/api/mail/send', async (req, res) => {
   if (!requireCrypto(res)) return
   try {
     const body = req.body || {}
-    const userId = String(body.userId || DEFAULT_USER_ID)
+    const userId = String(req.userId)
     if (!body.to || !body.subject) {
       return res.status(400).json({ error: 'Destinataire et objet requis' })
     }
@@ -1282,7 +1289,7 @@ app.post('/api/mail/send', async (req, res) => {
 app.post('/api/mail/sync', async (req, res) => {
   if (!requireCrypto(res)) return
   const body = req.body || {}
-  const userId = String(body.userId || DEFAULT_USER_ID)
+  const userId = String(req.userId)
   const onlyProspectId = body.prospectId ? String(body.prospectId) : null
   try {
     const db = await getDb()
@@ -1446,7 +1453,11 @@ app.post('/api/visio/logs', async (req, res) => {
 
 app.delete('/api/visio/logs/:id', async (req, res) => {
   try {
+    const userId = String(req.userId)
     const db = await getDb()
+    const existing = await db.query('SELECT userId FROM type::record("visio_log", $id)', { id: req.params.id })
+    const rec = existing[0]?.[0]
+    if (!rec || String(rec.userId) !== userId) return res.status(404).json({ error: 'Log visio introuvable' })
     await db.query('DELETE type::record("visio_log", $id)', { id: req.params.id })
     res.json({ ok: true })
   } catch (err) {
@@ -1591,12 +1602,15 @@ app.post('/api/visio/docs', async (req, res) => {
 
 app.put('/api/visio/docs/:id', async (req, res) => {
   try {
+    const userId = String(req.userId)
     const db = await getDb()
     const id = req.params.id
     const existing = await db.query('SELECT * FROM type::record("visio_doc", $id)', { id })
-    if (!existing[0] || existing[0].length === 0) return res.status(404).json({ error: 'Document introuvable' })
+    const rec = existing[0]?.[0]
+    if (!rec || String(rec.userId) !== userId) return res.status(404).json({ error: 'Document introuvable' })
     const cleanBody = { ...(req.body || {}) }
     delete cleanBody.id
+    cleanBody.userId = userId
     const result = await db.query('UPDATE type::record("visio_doc", $id) CONTENT $body', { id, body: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
@@ -1607,7 +1621,11 @@ app.put('/api/visio/docs/:id', async (req, res) => {
 
 app.delete('/api/visio/docs/:id', async (req, res) => {
   try {
+    const userId = String(req.userId)
     const db = await getDb()
+    const existing = await db.query('SELECT userId FROM type::record("visio_doc", $id)', { id: req.params.id })
+    const rec = existing[0]?.[0]
+    if (!rec || String(rec.userId) !== userId) return res.status(404).json({ error: 'Document introuvable' })
     await db.query('DELETE type::record("visio_doc", $id)', { id: req.params.id })
     res.json({ ok: true })
   } catch (err) {

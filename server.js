@@ -2,6 +2,8 @@ if(process.env.NODE_ENV !== 'production'){
   await import('dotenv/config')
 }
 import express from 'express'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { readFile } from 'fs/promises'
@@ -36,6 +38,12 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
 
+// Indispensable derrière le proxy Railway : sans ça, req.ip = IP du proxy
+// pour TOUTES les requêtes → rate-limit global inutilisable + getClientIp()
+// remonte mauvaise IP dans audit_log. trust proxy = 1 = un seul niveau de
+// proxy (Railway/Cloudflare).
+app.set('trust proxy', 1)
+
 // ── Webhook Stripe — DOIT être enregistré AVANT express.json() global ──
 // Stripe envoie le payload brut, la signature est calculée sur ce buffer.
 // Si express.json() avait déjà tourné, le body serait parsé et la signature
@@ -48,6 +56,63 @@ app.use(express.json({
   limit: '10mb',
   verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8') }
 }))
+
+// ─── DURCISSEMENT INFRA — helmet + rate-limit + origin check ───
+// Posés APRÈS express.json et AVANT toute route /api/*. Le webhook Stripe
+// (ligne 47, raw body) répond et termine sans next() — il n'atteint jamais
+// ces middlewares (vérifié grep stripeWebhookHandler).
+
+// Helmet — headers sécurité standards. CSP désactivé en V1 (à activer V1.1
+// après audit complet des inline scripts/styles du frontend).
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}))
+
+// Rate-limit global sur /api/* — 60 req/min/IP par défaut. Skips :
+//   - /health (liveness probe)
+//   - /stripe/webhook (signature HMAC, peut burst sur événements Stripe)
+//   - /v2/webhooks/* (Resend, Svix HMAC vérifié)
+// Note : req.path est relatif au mount '/api' → skip avec paths sans préfixe.
+// Rate-limit existant sur /api/auth/* (5/15min, plus strict, custom in-memory)
+// reste actif et empile au-dessus de celui-ci.
+const RATE_LIMIT_GLOBAL_MAX = parseInt(process.env.RATE_LIMIT_GLOBAL_MAX || '60', 10)
+const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10)
+
+const globalApiLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_GLOBAL_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    return req.path === '/health'
+        || req.path === '/stripe/webhook'
+        || req.path.startsWith('/v2/webhooks/')
+  }
+})
+app.use('/api', globalApiLimiter)
+
+// Origin/Referer check sur méthodes mutantes /api/* — 403 si l'origine
+// n'est pas dans la whitelist. SameSite=Lax couvre déjà la plupart des CSRF,
+// c'est une 2e couche défensive. Skip webhooks externes (Stripe, Resend)
+// qui n'envoient pas d'Origin.
+const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS
+  || 'https://movup.io,https://www.movup.io,https://mup-production.up.railway.app,http://localhost:8080')
+  .split(',').map(s => s.trim()).filter(Boolean)
+
+app.use('/api', (req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next()
+  if (req.path === '/stripe/webhook') return next()
+  if (req.path.startsWith('/v2/webhooks/')) return next()
+
+  const origin = req.get('Origin') || req.get('Referer') || ''
+  const isAllowed = ALLOWED_ORIGINS.some(a => origin.startsWith(a))
+  if (!isAllowed) {
+    return res.status(403).json({ error: 'Origin not allowed' })
+  }
+  next()
+})
 
 const DEFAULT_USER_ID = process.env.MUP_DEFAULT_USER_ID || 'default'
 

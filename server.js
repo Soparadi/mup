@@ -716,27 +716,65 @@ app.post('/api/contacts', async (req, res) => {
   }
 })
 
+// ── Helpers /api/contacts/:id polymorphes (Sprint 3.5) ──
+// La liste /contacts fusionne côté client /api/contacts (table contacts)
+// et /api/pipeline (table pipeline). Les ids transmis au serveur portent
+// le préfixe de leur table d'origine. Ces routes routent dynamiquement
+// vers la bonne table en fonction du préfixe.
+function detectContactTable(rawId) {
+  return String(rawId || '').startsWith('pipeline:') ? 'pipeline' : 'contacts'
+}
+function stripContactPrefix(rawId) {
+  return String(rawId || '').replace(/^(contacts|pipeline):/, '')
+}
+async function selectContactRecord(db, tb, id) {
+  // Table jamais en variable Surreal — on switch sur 2 SQL hardcoded.
+  const sql = tb === 'pipeline'
+    ? 'SELECT * FROM type::record("pipeline", $id)'
+    : 'SELECT * FROM type::record("contacts", $id)'
+  const r = await db.query(sql, { id })
+  return r[0]?.[0] || null
+}
+
+app.get('/api/contacts/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const tb = detectContactTable(req.params.id)
+    const id = stripContactPrefix(req.params.id)
+    const db = await getDb()
+    const rec = await selectContactRecord(db, tb, id)
+    if (!rec || rec.userId !== userId) {
+      return res.status(404).json({ error: 'Contact introuvable' })
+    }
+    res.json(rec)
+  } catch (err) {
+    console.error('[contacts:get]', err)
+    res.status(500).json({ error: 'Lecture contact impossible' })
+  }
+})
+
 app.put('/api/contacts/:id', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   try {
-    const { id } = req.params
+    const tb = detectContactTable(req.params.id)
+    const id = stripContactPrefix(req.params.id)
     const db = await getDb()
-
-    // Ownership check
-    const existing = await db.query('SELECT * FROM type::record("contacts", $id)', { id })
-    const rec = existing[0]?.[0]
+    const rec = await selectContactRecord(db, tb, id)
     if (!rec || rec.userId !== userId) {
       return res.status(404).json({ error: 'Contact introuvable' })
     }
-
     const cleanBody = { ...(req.body || {}) }
     delete cleanBody.id
     cleanBody.userId = userId
-    const result = await db.query('UPDATE type::record("contacts", $id) CONTENT $body', { id, body: cleanBody })
+    const sql = tb === 'pipeline'
+      ? 'UPDATE type::record("pipeline", $id) CONTENT $body'
+      : 'UPDATE type::record("contacts", $id) CONTENT $body'
+    const result = await db.query(sql, { id, body: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
-    console.error('[contacts]', err)
+    console.error('[contacts:put]', err)
     res.status(500).json({ error: 'Impossible de mettre à jour le contact' })
   }
 })
@@ -745,19 +783,20 @@ app.delete('/api/contacts/:id', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   try {
+    const tb = detectContactTable(req.params.id)
+    const id = stripContactPrefix(req.params.id)
     const db = await getDb()
-    // Tolère "abc123" (id nu) ou "contacts:abc123" / "pipeline:abc123"
-    // (forme préfixée transmise verbatim par le client).
-    const id = cleanRecordId('contacts', req.params.id) || String(req.params.id || '').replace(/^[a-z_]+:/i, '')
-    const existing = await db.query('SELECT * FROM type::record("contacts", $id)', { id })
-    const rec = existing[0]?.[0]
+    const rec = await selectContactRecord(db, tb, id)
     if (!rec || rec.userId !== userId) {
       return res.status(404).json({ error: 'Contact introuvable' })
     }
-    await db.query('DELETE type::record("contacts", $id)', { id })
+    const sql = tb === 'pipeline'
+      ? 'DELETE type::record("pipeline", $id)'
+      : 'DELETE type::record("contacts", $id)'
+    await db.query(sql, { id })
     res.json({ ok: true })
   } catch (err) {
-    console.error('[contacts]', err)
+    console.error('[contacts:delete]', err)
     res.status(500).json({ error: 'Impossible de supprimer le contact' })
   }
 })

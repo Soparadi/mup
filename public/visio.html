@@ -2682,7 +2682,7 @@ document.querySelectorAll('.overlay').forEach(ov=>{
 $('searchInput').addEventListener('input', renderRdvList);
 
 window.addEventListener('storage', e=>{
-  if([LS.PIPELINE, LS.AGENDA, LS.CONTACTS, LS.DEVIS].includes(e.key)){
+  if([LS.PIPELINE, LS.AGENDA, LS.CONTACTS, LS.DEVIS].includes(e.key) || e.key === 'mup_contact_sync' || e.key === 'mup_contact_deleted'){
     renderRdvList();
     if(activeRdv) renderBriefing(activeRdv);
   }

@@ -631,19 +631,15 @@ async function loadContact(){
     return;
   }
   try {
-    const resp = await fetch('/api/contacts');
-    if (!resp.ok) throw new Error('Lecture API impossible');
-    const all = await resp.json();
-    if (!Array.isArray(all)) throw new Error('Réponse invalide');
-    // L'id côté DB peut être 'contacts:abc123' ou 'abc123' selon le format Surreal.
-    // On normalise des deux côtés pour matcher.
-    const normalize = (s) => String(s||'').replace(/^contacts:/, '');
-    contact = all.find(c => normalize(c.id) === normalize(contactId));
-    if (!contact) {
+    const resp = await fetch('/api/contacts/' + encodeURIComponent(contactId));
+    if (resp.status === 404) {
       document.getElementById('fiche-name').textContent = 'Contact introuvable';
       document.title = 'Contact introuvable — MovUP';
       return;
     }
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    contact = await resp.json();
+    if (!contact || typeof contact !== 'object') throw new Error('Réponse invalide');
     populate();
   } catch (e) {
     document.getElementById('fiche-name').textContent = 'Erreur de chargement';
@@ -898,6 +894,11 @@ async function autoSave(){
     });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     setAutosaveState('saved');
+    try {
+      const stamp = String(Date.now()) + ':' + contactId;
+      localStorage.setItem('mup_contact_sync', stamp);
+      window.dispatchEvent(new StorageEvent('storage', { key: 'mup_contact_sync', newValue: stamp }));
+    } catch(_) {}
   } catch (e) {
     console.error('[contact-societe] autoSave', e);
     setAutosaveState('error');
@@ -1003,6 +1004,11 @@ function wireDelete(){
     try {
       const resp = await fetch('/api/contacts/' + encodeURIComponent(contactId), { method: 'DELETE' });
       if (!resp.ok && resp.status !== 404) throw new Error('HTTP ' + resp.status);
+      try {
+        const stamp = String(Date.now()) + ':' + contactId;
+        localStorage.setItem('mup_contact_deleted', stamp);
+        window.dispatchEvent(new StorageEvent('storage', { key: 'mup_contact_deleted', newValue: stamp }));
+      } catch(_) {}
       window.location.href = '/contacts';
     } catch (e) {
       console.error('[contact-societe] delete', e);

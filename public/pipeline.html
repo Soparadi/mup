@@ -2885,6 +2885,13 @@ async function createActionFromDetection(type, dateStr, time){
       if (currentId && typeof openDetail === 'function') await openDetail(currentId);
     }
   });
+
+  // Sync temps réel quand un contact est modifié/supprimé depuis sa fiche pleine page.
+  window.addEventListener('storage', function(e){
+    if (e.key === 'mup_contact_sync' || e.key === 'mup_contact_deleted') {
+      window.location.reload();
+    }
+  });
 </script>
 <footer class="mup-app-footer">
   <div class="mup-app-footer__inner">

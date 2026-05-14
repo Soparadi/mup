@@ -967,6 +967,13 @@ function renderSchedule(){
       if (typeof autoShowRdv === 'function') autoShowRdv();
     }
   });
+
+  // Sync temps réel quand un contact est modifié/supprimé depuis sa fiche pleine page.
+  window.addEventListener('storage', function(e){
+    if (e.key === 'mup_contact_sync' || e.key === 'mup_contact_deleted') {
+      window.location.reload();
+    }
+  });
 </script>
 <footer class="mup-app-footer">
   <div class="mup-app-footer__inner">

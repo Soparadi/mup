@@ -332,55 +332,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:16px;
 }
 
-/* ── DETAIL PANEL ── */
-.detail-panel{
-  width:0;background:var(--surface);border-left:1px solid var(--border);
-  display:flex;flex-direction:column;overflow:hidden;
-  transition:width .2s ease;flex-shrink:0;
-}
-.detail-panel.open{width:320px}
-.dp-header{
-  padding:16px 18px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;
-  flex-shrink:0;
-}
-.dp-name{font-size:15px;font-weight:800;letter-spacing:-.3px}
-.dp-co{font-size:12px;color:var(--muted);margin-top:1px}
-.dp-close{
-  width:26px;height:26px;border-radius:6px;background:var(--bg);border:1px solid var(--border);
-  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;
-  transition:all .12s;flex-shrink:0;
-}
-.dp-close:hover{background:var(--border)}
-.dp-body{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:14px}
-.dp-section{}
-.dp-section-title{font-size:9px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);margin-bottom:8px}
-.dp-social-input{width:100%;border:none;border-bottom:1px solid var(--border);background:none;font-family:var(--font);font-size:12px;color:var(--text);padding:3px 0;outline:none;transition:border-color .15s}
-.dp-social-input:focus{border-color:var(--text)}
-.dp-social-input::placeholder{color:var(--muted2);font-size:11px}
-.dp-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
-.dp-act{
-  flex:1;height:32px;border-radius:7px;
-  font-family:var(--font);font-size:12px;font-weight:600;
-  cursor:pointer;transition:all .12s;border:none;
-  display:flex;align-items:center;justify-content:center;gap:5px;
-}
-.dp-act-outline{background:var(--bg);border:1px solid var(--border);color:var(--muted)}
-.dp-act-outline:hover{border-color:var(--border2);color:var(--text)}
-.dp-act-dark{background:var(--text);color:#fff}
-.dp-act-dark:hover{background:#000}
-.dp-notes textarea{
-  width:100%;height:72px;padding:8px 10px;
-  background:var(--bg);border:1px solid var(--border);border-radius:7px;
-  font-family:var(--font);font-size:12px;color:var(--text);resize:vertical;outline:none;
-  transition:border-color .15s;
-}
-.dp-notes textarea:focus{border-color:var(--border2)}
-.dp-status-select{
-  width:100%;height:30px;padding:0 8px;
-  background:var(--bg);border:1px solid var(--border);border-radius:7px;
-  font-family:var(--font);font-size:12px;color:var(--text);cursor:pointer;outline:none;
-}
 
 /* ── TOAST ── */
 .toast{
@@ -516,60 +467,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
           <div class="mup-table-footer" id="table-footer">
             <span id="table-footer-info">Affichage 0-0 sur 0</span>
             <div class="pagination" id="pagination"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- DETAIL PANEL -->
-      <div class="detail-panel" id="detail-panel">
-        <div class="dp-header">
-          <div>
-            <div class="dp-name" id="dp-name">—</div>
-            <div class="dp-co" id="dp-co">—</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px" id="dp-director-sub"></div>
-          </div>
-          <div class="dp-close" onclick="closeDetail()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
-        </div>
-        <div class="dp-body">
-          <div class="dp-section">
-            <div class="dp-section-title">Identité</div>
-            <input id="dp-company" class="dp-social-input" placeholder="Raison sociale" style="margin-bottom:6px">
-            <input id="dp-sector" class="dp-social-input" placeholder="Secteur">
-            <input id="dp-website" class="dp-social-input" placeholder="Site web" style="margin-top:6px">
-          </div>
-          <div class="dp-section">
-            <div class="dp-section-title">Contact</div>
-            <input id="dp-contact" class="dp-social-input" placeholder="Nom du contact" style="margin-bottom:6px">
-            <input id="dp-phone" class="dp-social-input" placeholder="Téléphone" style="margin-bottom:6px">
-            <input id="dp-email" class="dp-social-input" placeholder="Email">
-          </div>
-          <div class="dp-section">
-            <div class="dp-section-title">Localisation</div>
-            <input id="dp-address" class="dp-social-input" placeholder="Adresse" style="margin-bottom:6px">
-            <input id="dp-zip" class="dp-social-input" placeholder="Code postal">
-          </div>
-          <div class="dp-section">
-            <div class="dp-section-title">Réseaux sociaux</div>
-            <input id="dp-linkedin" class="dp-social-input" placeholder="LinkedIn URL" style="margin-bottom:6px">
-            <input id="dp-facebook" class="dp-social-input" placeholder="Facebook URL" style="margin-bottom:6px">
-            <input id="dp-instagram" class="dp-social-input" placeholder="Instagram URL" style="margin-bottom:6px">
-            <input id="dp-whatsapp" class="dp-social-input" placeholder="WhatsApp (numéro sans espace)">
-          </div>
-          <div class="dp-section">
-            <div class="dp-section-title">Campagne email</div>
-            <select id="dp-emailStatus" class="dp-social-input" style="margin-bottom:6px;padding:4px 0">
-              <option value="new">Nouveau</option>
-              <option value="contacted">Contacté</option>
-              <option value="unsubscribed">Désinscrit</option>
-            </select>
-            <input id="dp-lastContact" class="dp-social-input" type="date" placeholder="Dernier contact">
-          </div>
-          <div class="dp-section dp-notes">
-            <div class="dp-section-title">Notes</div>
-            <textarea id="dp-notes" placeholder="Ajouter une note…"></textarea>
-          </div>
-          <div class="dp-section">
-            <button class="dp-act dp-act-dark" onclick="saveAllFields()" style="width:100%;text-align:center;padding:10px;border-radius:9px;font-size:13px;font-weight:700">Enregistrer</button>
           </div>
         </div>
       </div>
@@ -711,7 +608,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 // ── STATE ──
 let prospects = [];
 let filteredProspects = [];
-let selectedId = null;
 let sortField = 'lastContact';
 let sortDir = -1;
 let csvParsed = [];
@@ -1099,7 +995,7 @@ function renderTable(){
     const originLabel = ORIGIN_LABEL[p.source] || 'Direct';
     const originHtml = '<div class="cell-origin"><div class="cell-origin-dot" style="background:' + dotColor + '"></div>' + esc(originLabel) + '</div>';
 
-    return '<tr onclick="openDetail(\'' + id + '\')">'
+    return '<tr onclick="window.location.href=\'/contacts/\' + encodeURIComponent(\'' + id + '\')">'
       + '<td><div class="cell-soc-name">' + nom + '</div><div class="cell-soc-meta">' + esc(meta) + '</div></td>'
       + '<td>' + nextActHtml + '</td>'
       + '<td>' + lastActHtml + '</td>'
@@ -1145,96 +1041,8 @@ function sortBy(field){
   renderAll();
 }
 
-// ── DETAIL PANEL ──
-function openDetail(id){
-  selectedId=String(id);
-  const p=prospects.find(x=>String(x.id)===String(id));
-  if(!p)return;
-  document.getElementById('dp-name').textContent=p.nom||'';
-  document.getElementById('dp-co').textContent=p.siret?siretFormat(p.siret):'';
-  document.getElementById('dp-director-sub').textContent=p.contact_nom||p.contact||'';
-  document.getElementById('dp-company').value=p.nom||'';
-  document.getElementById('dp-sector').value=p.sector||'';
-  document.getElementById('dp-website').value=p.website||'';
-  document.getElementById('dp-contact').value=p.contact_nom||p.contact||'';
-  document.getElementById('dp-phone').value=p.phone||'';
-  document.getElementById('dp-email').value=p.email||'';
-  document.getElementById('dp-address').value=p.adresse||'';
-  document.getElementById('dp-zip').value=p.zip||'';
-  document.getElementById('dp-linkedin').value=p.linkedin||'';
-  document.getElementById('dp-facebook').value=p.facebook||'';
-  document.getElementById('dp-instagram').value=p.instagram||'';
-  document.getElementById('dp-whatsapp').value=p.whatsapp||'';
-  document.getElementById('dp-emailStatus').value=p.emailStatus||'new';
-  document.getElementById('dp-lastContact').value=p.lastContact||'';
-  document.getElementById('dp-notes').value=p.notes||'';
-  document.getElementById('detail-panel').classList.add('open');
-  renderAll();
-}
 
-function saveAllFields(){
-  if(!selectedId)return;
-  const p=prospects.find(x=>String(x.id)===String(selectedId));
-  if(!p)return;
-  p.nom=document.getElementById('dp-company').value.trim()||p.nom;
-  p.sector=document.getElementById('dp-sector').value.trim();
-  p.website=document.getElementById('dp-website').value.trim();
-  p.contact_nom=document.getElementById('dp-contact').value.trim();
-  p.contact=p.contact_nom;
-  p.phone=document.getElementById('dp-phone').value.trim();
-  p.email=document.getElementById('dp-email').value.trim();
-  p.adresse=document.getElementById('dp-address').value.trim();
-  p.address=p.adresse; p.location=p.adresse;
-  p.zip=document.getElementById('dp-zip').value.trim();
-  p.linkedin=document.getElementById('dp-linkedin').value.trim();
-  p.facebook=document.getElementById('dp-facebook').value.trim();
-  p.instagram=document.getElementById('dp-instagram').value.trim();
-  p.whatsapp=document.getElementById('dp-whatsapp').value.trim();
-  p.emailStatus=document.getElementById('dp-emailStatus').value;
-  p.lastContact=document.getElementById('dp-lastContact').value;
-  p.notes=document.getElementById('dp-notes').value;
-  // Maintien des aliases pour compat
-  p.name=p.nom; p.company=p.nom;
-  save();
-  document.getElementById('dp-name').textContent=p.nom||'';
-  document.getElementById('dp-director-sub').textContent=p.contact_nom||'';
-  renderAll();
-  toast('Contact enregistré');
-}
-function closeDetail(){
-  selectedId=null;
-  document.getElementById('detail-panel').classList.remove('open');
-  renderAll();
-}
-function updateStatus(){
-  if(!selectedId)return;
-  const p=prospects.find(x=>String(x.id)===String(selectedId));
-  if(p){save();}
-  renderAll();
-}
-function saveNote(){
-  if(!selectedId)return;
-  const p=prospects.find(x=>String(x.id)===String(selectedId));
-  if(p){p.notes=document.getElementById('dp-notes').value;save();}
-}
-function saveSocial(){
-  if(!selectedId)return;
-  const p=prospects.find(x=>String(x.id)===String(selectedId));
-  if(!p)return;
-  p.linkedin=document.getElementById('dp-linkedin').value.trim();
-  p.facebook=document.getElementById('dp-facebook').value.trim();
-  p.instagram=document.getElementById('dp-instagram').value.trim();
-  save();renderAll();
-}
 
-function copyEmail(){
-  const p=prospects.find(x=>String(x.id)===String(selectedId));
-  if(p&&p.email)copyText(p.email,'Email');
-}
-function copyPhone(){
-  const p=prospects.find(x=>String(x.id)===String(selectedId));
-  if(p&&p.phone)copyText(p.phone,'Tél.');
-}
 
 // ── IMPORT MODAL ──
 function openImport(tab){
@@ -1447,7 +1255,6 @@ function deletePros(id){
     fetch(`/api/contacts/${id}`, { method: 'DELETE' }).catch(e => console.error('Erreur suppression API', e));
   }
   save();
-  if(selectedId===id)closeDetail();
   renderAll();
   toast('Prospect supprimé');
 }

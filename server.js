@@ -488,6 +488,14 @@ app.use((req, res, next) => {
   return requireAuthHtml(req, res, next)
 })
 
+// ── Route fiche société pleine page (Sprint 3) ──
+// /contacts/:id sert public/contact-societe.html. Frontend lit l'id depuis
+// window.location.pathname puis fetch /api/contacts pour charger le record.
+// requireAuthHtml en route-level car isProtectedHtmlRoute ne matche que /contacts (sans /:id).
+app.get('/contacts/:id', requireAuthHtml, (req, res) => {
+  res.sendFile(join(__dirname, 'public', 'contact-societe.html'))
+})
+
 // ── Injection serveur-side window.__USER__ sur les routes app HTML ──
 // Pattern Stripe/Linear : sidebar.js + scripts UI lisent window.__USER__ au load,
 // zéro fetch supplémentaire au boot. Sécurité : sérialisation JSON + escape de

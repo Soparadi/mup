@@ -133,50 +133,91 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .search-wrap input:focus{border-color:var(--border2)}
 .search-wrap input::placeholder{color:var(--muted2)}
 .search-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted2);font-size:13px;pointer-events:none}
-.count-label{font-size:12px;color:var(--muted);margin-left:auto;font-family:var(--mono)}
+.kbd-shortcut{margin-left:auto;display:inline-flex;align-items:center;padding:3px 8px;background:#F4F4F4;border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.3px}
+
+/* ── KPI STRIP ── */
+.kpi-strip{display:flex;gap:10px;padding:14px 24px 0;flex-shrink:0}
+.kpi-card{
+  flex:1;background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:14px 18px;display:flex;align-items:center;gap:14px;
+}
+.kpi-card-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.kpi-card-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi-card-value{font-size:22px;font-weight:700;line-height:1;color:var(--text);font-family:var(--font);letter-spacing:-.4px}
+.kpi-card-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+
+/* ── ORIGIN FILTERS ── */
+.origin-filters{display:flex;align-items:center;gap:8px;padding:12px 24px 0;flex-shrink:0;flex-wrap:wrap}
+.origin-filters-label{font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:1.5px;margin-right:4px}
+.origin-filter{
+  display:inline-flex;align-items:center;gap:5px;padding:5px 10px;
+  background:var(--bg);border:1px solid transparent;border-radius:6px;
+  font-family:var(--font);font-size:12px;font-weight:600;color:var(--muted);
+  cursor:pointer;transition:all .12s;
+}
+.origin-filter:hover{color:var(--text);background:var(--surface2)}
+.origin-filter.active{background:var(--text);color:#fff}
+.origin-filter.empty{opacity:.5}
+.origin-filter-count{font-size:10px;opacity:.7;font-family:var(--mono)}
 
 /* ── TABLE ── */
-.table-wrap{
-  flex:1;overflow:auto;margin:12px 24px 20px;
-  padding:4px;
+.table-wrap{flex:1;overflow:auto;padding:12px 24px 20px;display:flex;flex-direction:column}
+.mup-table-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  overflow:hidden;display:flex;flex-direction:column;flex:1;min-height:0;
 }
-.cards-grid{
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;padding:10px;
+.mup-table-header{
+  background:#1D1D1F;color:#fff;padding:14px 24px;
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
 }
-.cards-grid.density-large{grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:16px}
-.p-card{
-  border-radius:12px;border:1px solid var(--border);
-  background:#FFFFFF;overflow:hidden;max-width:100%;
-  display:flex;flex-direction:column;height:100%;
-  cursor:pointer;transition:box-shadow .15s,border-color .15s;
+.mup-table-header-title{font-size:12.5px;font-weight:600;letter-spacing:-.1px}
+.mup-table-header-action{font-size:11.5px;color:#9CA3AF;text-decoration:none;font-weight:600;letter-spacing:.2px;cursor:default;opacity:.7}
+.mup-table-scroll{flex:1;overflow:auto;min-height:0}
+.mup-table{width:100%;border-collapse:collapse;font-size:13px}
+.mup-table thead th{
+  position:sticky;top:0;background:var(--surface);z-index:1;
+  text-align:left;padding:10px 16px;
+  font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:1.2px;
+  border-bottom:1px solid var(--border);white-space:nowrap;
 }
-.p-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08);border-color:var(--border2)}
-.cc-header{background:#1D1D1F;color:#fff;padding:12px 14px}
-.cards-grid.density-large .cc-header{padding:16px}
-.cc-naf{display:flex;align-items:center;gap:6px;font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:6px}
-.cards-grid.density-large .cc-naf{font-size:10px;letter-spacing:2px;margin-bottom:8px}
-.cc-name{font-size:14px;font-weight:800;text-transform:uppercase;line-height:1.2;margin-bottom:3px;word-break:break-word}
-.cards-grid.density-large .cc-name{font-size:16px;margin-bottom:4px}
-.cc-director{font-size:11px;color:rgba(255,255,255,.7);line-height:1.3}
-.cards-grid.density-large .cc-director{font-size:12px}
-.cc-body{padding:12px 14px;display:flex;flex-direction:column;gap:12px}
-.cards-grid.density-large .cc-body{padding:16px;gap:16px}
-.cc-section-label{display:flex;justify-content:space-between;align-items:center;font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#999;padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:8px}
-.cards-grid.density-large .cc-section-label{font-size:10px;letter-spacing:2px;padding-bottom:8px;margin-bottom:10px}
-.cc-section-label > span{font-weight:700;color:var(--muted2)}
-.cc-row{display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:var(--text);line-height:1.4;padding:3px 0}
-.cards-grid.density-large .cc-row{gap:10px;font-size:12px;padding:4px 0}
-.cc-row svg{flex-shrink:0;margin-top:1px;width:12px;height:12px}
-.cards-grid.density-large .cc-row svg{width:14px;height:14px}
-.cc-row a{color:var(--text);text-decoration:none;word-break:break-word}
-.cc-row a:hover{text-decoration:underline}
-.cc-empty{font-style:italic;color:#AEAEB2}
-.cc-edit-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;background:#1D1D1F;color:#fff;border:0;border-radius:8px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;margin:auto 10px 10px;width:calc(100% - 20px);transition:background .15s}
-.cards-grid.density-large .cc-edit-btn{padding:14px;border-radius:10px;font-size:13px;margin:auto 12px 12px;width:calc(100% - 24px)}
-.cc-edit-btn:hover{background:#000}
-.density-toggle{display:inline-flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:2px;margin-left:10px}
-.density-toggle button{width:30px;height:26px;border:none;background:transparent;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .12s}
-.density-toggle button.active{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.mup-table tbody tr{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.mup-table tbody tr:hover{background:var(--bg)}
+.mup-table tbody tr:last-child{border-bottom:none}
+.mup-table tbody td{padding:14px 16px;vertical-align:top;line-height:1.4}
+.cell-soc-name{font-weight:600;color:var(--text);font-size:13px;margin-bottom:2px}
+.cell-soc-meta{font-size:11.5px;color:var(--muted);font-weight:500}
+.cell-empty{color:var(--muted2);font-size:12px}
+.cell-action{
+  display:inline-block;padding:6px 10px;border-left:2px solid #F59E0B;
+  background:#FEF7E6;border-radius:0 6px 6px 0;font-size:12px;color:var(--text);
+}
+.cell-action-date{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px}
+.cell-activity{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text)}
+.cell-activity-icon{width:16px;height:16px;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cell-activity-meta{font-size:11.5px;color:var(--muted)}
+.cell-tag{
+  display:inline-flex;align-items:center;padding:2px 7px;background:#F4F4F4;
+  border:1px solid #E5E5E5;border-radius:5px;font-size:10px;font-weight:600;
+  color:var(--muted);margin-right:4px;
+}
+.cell-tag-more{font-size:10px;color:var(--muted2);font-weight:600}
+.cell-origin{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--text)}
+.cell-origin-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+/* ── PAGINATION ── */
+.mup-table-footer{
+  padding:10px 24px;border-top:1px solid var(--border);background:var(--surface);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;font-size:12px;color:var(--muted);
+}
+.pagination{display:flex;align-items:center;gap:4px}
+.pagination button{
+  min-width:28px;height:28px;padding:0 8px;border:1px solid var(--border);
+  background:var(--surface);border-radius:6px;color:var(--muted);cursor:pointer;
+  font-family:var(--font);font-size:12px;font-weight:600;transition:all .1s;
+}
+.pagination button:hover:not(:disabled){border-color:var(--border2);color:var(--text)}
+.pagination button.active{background:var(--text);color:#fff;border-color:var(--text)}
+.pagination button:disabled{opacity:.4;cursor:not-allowed}
 
 /* ── EMPTY STATE ── */
 .empty-state{
@@ -374,13 +415,13 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     <div class="page-header">
       <div class="page-title-block">
         <div class="page-title">Contacts</div>
+        <div class="page-subtitle" id="page-subtitle">— sociétés · — personnes</div>
       </div>
       <div class="header-actions">
         <button class="btn btn-import" onclick="openImport('csv')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Importer des contacts
         </button>
-        <!-- export removed -->
         <button class="btn btn-dark" onclick="openImport('manual')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Nouveau
@@ -388,17 +429,58 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       </div>
     </div>
 
+    <!-- KPI STRIP -->
+    <div class="kpi-strip" id="kpi-strip">
+      <div class="kpi-card">
+        <div class="kpi-card-icon" style="background:#F4F4F4;color:#1D1D1F">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="kpi-card-text">
+          <div class="kpi-card-value" id="kpi-total">0</div>
+          <div class="kpi-card-label">Total contacts</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-icon" style="background:#FFF4EC;color:#B84C00">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <div class="kpi-card-text">
+          <div class="kpi-card-value" id="kpi-pipeline">0</div>
+          <div class="kpi-card-label">Générés par MovUP</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-icon" style="background:#EDF7F2;color:#1D8348">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </div>
+        <div class="kpi-card-text">
+          <div class="kpi-card-value" id="kpi-relations">0</div>
+          <div class="kpi-card-label">Relations</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-icon" style="background:#FEF3CD;color:#F59E0B">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <div class="kpi-card-text">
+          <div class="kpi-card-value" id="kpi-actions-today">0</div>
+          <div class="kpi-card-label">Actions à faire aujourd'hui</div>
+        </div>
+      </div>
+    </div>
+
     <!-- TOOLBAR -->
     <div class="toolbar">
       <div class="search-wrap">
         <span class="search-ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#AEAEB2" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-        <input type="text" id="search-input" placeholder="Chercher un contact, une société…" oninput="filterProspects()">
+        <input type="text" id="search-input" placeholder="Rechercher une société, personne, email, SIREN, contenu de note…" oninput="filterProspects()">
       </div>
-      <span class="count-label" id="count-label">0 contact(s)</span>
-      <div class="density-toggle" id="density-toggle">
-        <button data-density="dense" title="Vue compacte" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
-        <button data-density="large" title="Vue détaillée" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="7"/><rect x="3" y="14" width="18" height="7"/></svg></button>
-      </div>
+      <span class="kbd-shortcut">⌘K</span>
+    </div>
+
+    <!-- ORIGIN FILTERS -->
+    <div class="origin-filters" id="origin-filters">
+      <span class="origin-filters-label">Origine</span>
     </div>
 
     <!-- CONTENT AREA -->
@@ -406,13 +488,36 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
       <!-- TABLE WRAP -->
       <div class="table-wrap" id="table-wrap">
-        <div class="empty-state" id="empty-state">
+        <div class="empty-state" id="empty-state" style="display:none">
           <div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#AEAEB2" stroke-width="1.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
           <div class="empty-title">Aucun contact pour l'instant</div>
           <div class="empty-sub">Importez un fichier CSV ou ajoutez des contacts manuellement pour démarrer votre prospection.</div>
           <button class="btn btn-import" style="margin-top:8px" onclick="openImport('csv')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Importer des contacts</button>
         </div>
-        <div id="prospects-grid" class="cards-grid" style="display:none"></div>
+        <div class="mup-table-card" id="contacts-table-card">
+          <div class="mup-table-header">
+            <span class="mup-table-header-title" id="table-header-title">— contacts · triés par dernière activité</span>
+            <a class="mup-table-header-action" title="Disponible en V2">Exporter CSV</a>
+          </div>
+          <div class="mup-table-scroll">
+            <table class="mup-table">
+              <thead>
+                <tr>
+                  <th>Société</th>
+                  <th>Prochaine action</th>
+                  <th>Dernière activité</th>
+                  <th>Tags</th>
+                  <th>Origine</th>
+                </tr>
+              </thead>
+              <tbody id="contacts-tbody"></tbody>
+            </table>
+          </div>
+          <div class="mup-table-footer" id="table-footer">
+            <span id="table-footer-info">Affichage 0-0 sur 0</span>
+            <div class="pagination" id="pagination"></div>
+          </div>
+        </div>
       </div>
 
       <!-- DETAIL PANEL -->
@@ -607,14 +712,46 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 let prospects = [];
 let filteredProspects = [];
 let selectedId = null;
-let sortField = 'nom';
-let sortDir = 1;
+let sortField = 'lastContact';
+let sortDir = -1;
 let csvParsed = [];
 let activeModalTab = 'csv';
+let currentOriginFilter = 'all';
+let currentPage = 1;
+const PAGE_SIZE = 10;
 
+// Définition statique des filtres "Origine" — étiquettes UI + matcher fonction.
+// Compteurs dynamiques calculés dans renderOriginFilters().
+const ORIGIN_FILTERS = [
+  { key: 'all',      label: 'Tous',                match: () => true },
+  { key: 'pipeline', label: 'Générés par MovUP',   match: p => p.source === 'pipeline' },
+  { key: 'relations',label: 'Relations',           match: p => p.source === 'relations' },
+  { key: 'linkedin', label: 'LinkedIn',            match: p => p.source === 'linkedin' },
+  { key: 'phone',    label: 'Téléphone',           match: p => p.source === 'phone' },
+  { key: 'direct',   label: 'Direct',              match: p => ['manual','csv_import','paste','facture_import'].includes(p.source) }
+];
 
-const ENTITY_LABEL = { ei:'EI', mup:'MovUP', graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues' };
-const ENTITY_COLOR = { ei:'#A32D2D', mup:'#EF9F27', graphic_factor:'#1D9E75', nouvellevagues:'#5B6FED' };
+// Pastilles couleur Origine (cellule + KPI éventuel).
+const ORIGIN_DOT = {
+  pipeline: '#B84C00',
+  relations: '#1D8348',
+  linkedin: '#0A66C2',
+  phone: '#525252',
+  manual: '#6B6B6B',
+  csv_import: '#6B6B6B',
+  paste: '#6B6B6B',
+  facture_import: '#6B6B6B'
+};
+const ORIGIN_LABEL = {
+  pipeline: 'Générés par MovUP',
+  relations: 'Relations',
+  linkedin: 'LinkedIn',
+  phone: 'Téléphone',
+  manual: 'Direct',
+  csv_import: 'Direct',
+  paste: 'Direct',
+  facture_import: 'Direct'
+};
 
 function save(){
   // mup_contacts est la source de vérité pour cette page
@@ -809,104 +946,199 @@ async function init(){
   renderAll();
 }
 
-function fmtMontantContacts(n){
-  return (Number(n)||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + '\u00A0€';
-}
+
+
+
+
+
 function siretFormat(s){
   return s ? String(s).replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4') : '';
 }
-function entityBadgeHtml(entity){
-  var lab = ENTITY_LABEL[entity] || (entity ? entity.toUpperCase() : 'MUP');
-  var col = ENTITY_COLOR[entity] || '#1D1D1F';
-  return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:'+col+';color:#fff;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase">'+esc(lab)+'</span>';
-}
-function sourceBadgeHtml(source){
-  if(source === 'facture_import') return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:#EDF7F2;color:#1D8348;font-size:10px;font-weight:700;letter-spacing:.5px">Import facture</span>';
-  if(source === 'csv_import') return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:#EEF3FD;color:#0A66C2;font-size:10px;font-weight:700;letter-spacing:.5px">Import CSV</span>';
-  if(source === 'pipeline') return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:#FFF4EC;color:#B84C00;font-size:10px;font-weight:700;letter-spacing:.5px">Pipeline</span>';
-  return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:#F5F5F7;color:#6E6E73;font-size:10px;font-weight:700;letter-spacing:.5px">Manuel</span>';
+
+// Date relative type "il y a 3 j" / "aujourd'hui" / "demain". '—' si invalide.
+function fmtRelative(dateStr){
+  if(!dateStr) return '—';
+  const d = new Date(dateStr);
+  if(isNaN(d.getTime())) return '—';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(d); target.setHours(0,0,0,0);
+  const diff = Math.round((target - today) / 86400000);
+  if(diff === 0) return "aujourd'hui";
+  if(diff === 1) return 'demain';
+  if(diff === -1) return 'hier';
+  if(diff > 0) return 'dans ' + diff + ' j';
+  return 'il y a ' + (-diff) + ' j';
 }
 
-function renderAll(){
+// Compte les actions à faire aujourd'hui (champs prochaine_action* placeholder
+// Sprint 2 — toujours 0 jusqu'à création des champs DB en sprint dédié).
+function countActionsToday(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  return prospects.filter(p => {
+    if(!p.prochaine_action || !p.prochaine_action_date) return false;
+    const d = new Date(p.prochaine_action_date);
+    if(isNaN(d.getTime())) return false;
+    d.setHours(0,0,0,0);
+    return d.getTime() <= today.getTime();
+  }).length;
+}
+
+function renderKpis(){
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  set('kpi-total', prospects.length);
+  set('kpi-pipeline', prospects.filter(p => p.source === 'pipeline').length);
+  set('kpi-relations', prospects.filter(p => p.source === 'relations').length);
+  set('kpi-actions-today', countActionsToday());
+}
+
+function renderSubtitle(){
+  const n = prospects.length;
+  // Sprint 2 : champ personnes[] inexistant → m = n par défaut.
+  const m = prospects.reduce((sum, p) => sum + Math.max(1, (p.personnes || []).length), 0);
+  const el = document.getElementById('page-subtitle');
+  if(el) el.textContent = n + ' société' + (n>1?'s':'') + ' · ' + m + ' personne' + (m>1?'s':'');
+}
+
+function renderOriginFilters(){
+  const container = document.getElementById('origin-filters');
+  if(!container) return;
+  const label = container.querySelector('.origin-filters-label');
+  container.innerHTML = '';
+  if(label) container.appendChild(label);
+  ORIGIN_FILTERS.forEach(f => {
+    const count = prospects.filter(f.match).length;
+    const btn = document.createElement('button');
+    btn.className = 'origin-filter';
+    if(currentOriginFilter === f.key) btn.classList.add('active');
+    if(count === 0 && f.key !== 'all') btn.classList.add('empty');
+    btn.innerHTML = '<span>' + esc(f.label) + '</span><span class="origin-filter-count">(' + count + ')</span>';
+    btn.onclick = () => { currentOriginFilter = f.key; currentPage = 1; renderAll(); };
+    container.appendChild(btn);
+  });
+}
+
+function renderTable(){
+  const tbody = document.getElementById('contacts-tbody');
+  const tableCard = document.getElementById('contacts-table-card');
+  const empty = document.getElementById('empty-state');
+  if(!tbody) return;
+
   let list = [...prospects];
+  const filter = ORIGIN_FILTERS.find(f => f.key === currentOriginFilter);
+  if(filter) list = list.filter(filter.match);
   const qInput = document.getElementById('search-input');
   const q = qInput ? qInput.value.toLowerCase() : '';
-  if(q) list = list.filter(p=>
+  if(q) list = list.filter(p =>
     (p.nom||'').toLowerCase().includes(q) ||
-    (p.adresse||'').toLowerCase().includes(q)
+    (p.adresse||'').toLowerCase().includes(q) ||
+    (p.email||'').toLowerCase().includes(q) ||
+    (p.contact_nom||p.contact||'').toLowerCase().includes(q) ||
+    (p.siren||'').toLowerCase().includes(q) ||
+    (p.notes||'').toLowerCase().includes(q)
   );
-  list.sort((a,b)=>{
-    const va=(a.nom||'').toString().toLowerCase();
-    const vb=(b.nom||'').toString().toLowerCase();
-    return va<vb?-sortDir:va>vb?sortDir:0;
+
+  // Tri figé : lastContact DESC (fallback updated_at).
+  list.sort((a, b) => {
+    const da = new Date(a.lastContact || a.updated_at || 0).getTime();
+    const db = new Date(b.lastContact || b.updated_at || 0).getTime();
+    return db - da;
   });
-  filteredProspects=list;
-  const countEl = document.getElementById('count-label');
-  if(countEl) countEl.textContent = list.length + ' contact' + (list.length>1?'s':'');
-  const grid=document.getElementById('prospects-grid');
-  const empty=document.getElementById('empty-state');
-  if(!list.length){
-    if(grid) grid.style.display='none';
-    if(empty) empty.style.display='flex';
+  filteredProspects = list;
+
+  const headerTitle = document.getElementById('table-header-title');
+  if(headerTitle) headerTitle.textContent = list.length + ' contact' + (list.length>1?'s':'') + ' · triés par dernière activité';
+
+  // Empty state si AUCUN contact en base ; sinon table même si filtre vide.
+  if(!prospects.length){
+    if(tableCard) tableCard.style.display = 'none';
+    if(empty) empty.style.display = 'flex';
     return;
   }
-  if(grid) grid.style.display='grid';
-  if(empty) empty.style.display='none';
-  const svgBuilding='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/></svg>';
-  const svgPin='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
-  const svgPhone='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#CC0000" stroke-width="2.5" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>';
-  const svgMail='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
-  const svgEuro='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round"><path d="M14.7 6.3A8 8 0 1 0 4 12c0 4.4 3.6 8 8 8a8 8 0 0 0 6.7-3.7"/><path d="M5 11h10"/><path d="M5 14h8"/></svg>';
-  const svgMap='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>';
-  const svgInvoice='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
-  const EMPTY='<span class="cc-empty">—</span>';
-  grid.innerHTML=list.map(p=>{
-    const nbFact = (p.factures_ids||[]).length;
-    const ca = p.ca_total||0;
-    const siretF = siretFormat(p.siret);
-    const hasSiret = !!p.siret;
-    const showActivity = (p.source === 'facture_import') || nbFact > 0 || ca > 0;
-    return `<div class="p-card" onclick="MUPFiche.open('${esc(String(p.id))}')">
-      <div class="cc-header">
-        <div class="cc-naf" style="display:flex;align-items:center;gap:6px;justify-content:space-between">
-          <div style="display:flex;align-items:center;gap:6px">${svgBuilding}<span>${esc(p.sector||'Contact')}</span></div>
-          ${entityBadgeHtml(p.entity_origine)}
-        </div>
-        <div class="cc-name">${esc(p.nom||'—')}</div>
-        <div class="cc-director" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          ${sourceBadgeHtml(p.source)}
-          ${siretF?'<span style="font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.7)">'+esc(siretF)+'</span>':''}
-        </div>
-      </div>
-      <div class="cc-body">
-        <div class="cc-section">
-          <div class="cc-section-label"><span>Localisation</span></div>
-          <div class="cc-row">${svgPin}${p.adresse?'<span>'+esc(p.adresse)+'</span>':EMPTY}</div>
-        </div>
-        ${showActivity ? `<div class="cc-section">
-          <div class="cc-section-label"><span>Activité</span><span>${nbFact} facture${nbFact>1?'s':''}</span></div>
-          <div class="cc-row">${svgEuro}<span style="font-weight:700;color:#1D8348">${fmtMontantContacts(ca)}</span><span style="color:var(--muted);margin-left:6px">de CA</span></div>
-        </div>` : ''}
-        ${(p.phone||p.email) ? `<div class="cc-section">
-          <div class="cc-section-label"><span>Contact</span></div>
-          ${p.phone?'<div class="cc-row">'+svgPhone+'<a href="tel:'+esc(p.phone.replace(/\\s/g,''))+'" onclick="event.stopPropagation()">'+esc(p.phone)+'</a></div>':''}
-          ${p.email?'<div class="cc-row">'+svgMail+'<a href="mailto:'+esc(p.email)+'" onclick="event.stopPropagation()">'+esc(p.email)+'</a></div>':''}
-        </div>` : ''}
-      </div>
-      <div style="display:flex;gap:6px;padding:0 10px 10px">
-        ${hasSiret?`<a class="cc-edit-btn" style="flex:1;text-decoration:none;background:#F5F5F7;color:#1D1D1F;border:1px solid var(--border);margin:0" href="carte.html?contact_siret=${encodeURIComponent(p.siret)}" onclick="event.stopPropagation()">${svgMap}<span style="margin-left:4px">Carte</span></a>`:''}
-        ${hasSiret?`<a class="cc-edit-btn" style="flex:1;text-decoration:none;background:#F5F5F7;color:#1D1D1F;border:1px solid var(--border);margin:0" href="factures.html?client_siret=${encodeURIComponent(p.siret)}" onclick="event.stopPropagation()">${svgInvoice}<span style="margin-left:4px">Factures</span></a>`:''}
-        <button class="cc-edit-btn" style="flex:1;margin:0" onclick="event.stopPropagation();MUPFiche.open('${esc(String(p.id))}')">Modifier</button>
-      </div>
-    </div>`;
+  if(tableCard) tableCard.style.display = 'flex';
+  if(empty) empty.style.display = 'none';
+
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if(currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const slice = list.slice(start, start + PAGE_SIZE);
+
+  const svgNote = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+
+  tbody.innerHTML = slice.map(p => {
+    const id = esc(String(p.id));
+    const nom = esc(p.nom || '—');
+    const ville = esc(p.adresse || '');
+    const nbPers = Math.max(1, (p.personnes || []).length);
+    const subParts = [];
+    if(ville) subParts.push(ville);
+    subParts.push(nbPers + ' personne' + (nbPers>1?'s':''));
+    const meta = subParts.join(' · ');
+
+    const nextActHtml = p.prochaine_action
+      ? '<div class="cell-action">' + esc(p.prochaine_action) + '</div><div class="cell-action-date">' + fmtRelative(p.prochaine_action_date) + '</div>'
+      : '<span class="cell-empty">—</span>';
+
+    let lastActHtml = '<span class="cell-empty">—</span>';
+    if(p.lastContact){
+      lastActHtml = '<div class="cell-activity">'
+        + '<div class="cell-activity-icon" style="background:#F4F4F4;color:#525252">' + svgNote + '</div>'
+        + '<div><div>Dernier contact</div><div class="cell-activity-meta">' + fmtRelative(p.lastContact) + '</div></div>'
+        + '</div>';
+    }
+
+    const tags = p.tags || [];
+    let tagsHtml = '<span class="cell-empty">—</span>';
+    if(tags.length > 0){
+      const visible = tags.slice(0, 2);
+      const remaining = tags.length - 2;
+      tagsHtml = visible.map(t => '<span class="cell-tag">' + esc(t) + '</span>').join('');
+      if(remaining > 0) tagsHtml += '<span class="cell-tag-more">+' + remaining + '</span>';
+    }
+
+    const dotColor = ORIGIN_DOT[p.source] || '#6B6B6B';
+    const originLabel = ORIGIN_LABEL[p.source] || 'Direct';
+    const originHtml = '<div class="cell-origin"><div class="cell-origin-dot" style="background:' + dotColor + '"></div>' + esc(originLabel) + '</div>';
+
+    return '<tr onclick="openDetail(\'' + id + '\')">'
+      + '<td><div class="cell-soc-name">' + nom + '</div><div class="cell-soc-meta">' + esc(meta) + '</div></td>'
+      + '<td>' + nextActHtml + '</td>'
+      + '<td>' + lastActHtml + '</td>'
+      + '<td>' + tagsHtml + '</td>'
+      + '<td>' + originHtml + '</td>'
+      + '</tr>';
   }).join('');
+
+  const info = document.getElementById('table-footer-info');
+  if(info){
+    if(list.length === 0) info.textContent = 'Aucun contact ne correspond aux filtres';
+    else info.textContent = 'Affichage ' + (start + 1) + '-' + Math.min(start + PAGE_SIZE, list.length) + ' sur ' + list.length;
+  }
+  renderPagination(totalPages);
 }
 
+function renderPagination(totalPages){
+  const container = document.getElementById('pagination');
+  if(!container) return;
+  if(totalPages <= 1){ container.innerHTML = ''; return; }
+  let html = '';
+  html += '<button ' + (currentPage === 1 ? 'disabled' : '') + ' onclick="goToPage(' + (currentPage - 1) + ')">‹</button>';
+  for(let i = 1; i <= totalPages; i++){
+    html += '<button class="' + (i === currentPage ? 'active' : '') + '" onclick="goToPage(' + i + ')">' + i + '</button>';
+  }
+  html += '<button ' + (currentPage === totalPages ? 'disabled' : '') + ' onclick="goToPage(' + (currentPage + 1) + ')">›</button>';
+  container.innerHTML = html;
+}
 
+function goToPage(n){ currentPage = n; renderTable(); }
 
-
+function renderAll(){
+  renderSubtitle();
+  renderKpis();
+  renderOriginFilters();
+  renderTable();
+}
 // ── FILTERS ──
-function filterProspects(){renderAll()}
+function filterProspects(){ currentPage = 1; renderTable(); }
 function sortBy(field){
   if(sortField===field)sortDir*=-1;
   else{sortField=field;sortDir=1;}
@@ -1252,25 +1484,14 @@ window.addEventListener('message', function(e) {
   }
 });
 
-// ── DENSITY TOGGLE ──
-(function() {
-  var grid = document.getElementById('prospects-grid');
-  var toggle = document.getElementById('density-toggle');
-  if(!grid || !toggle) return;
-  var current = localStorage.getItem('mup_contacts_density') || 'dense';
-  function apply(d) {
-    grid.classList.toggle('density-large', d === 'large');
-    toggle.querySelectorAll('button').forEach(function(b) {
-      b.classList.toggle('active', b.dataset.density === d);
-    });
-    localStorage.setItem('mup_contacts_density', d);
+// ── KEYBOARD SHORTCUT ⌘K / Ctrl+K — focus search ──
+window.addEventListener('keydown', function(e) {
+  if((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    var input = document.getElementById('search-input');
+    if(input) { input.focus(); input.select(); }
   }
-  apply(current);
-  toggle.addEventListener('click', function(e) {
-    var btn = e.target.closest('button[data-density]');
-    if(btn) apply(btn.dataset.density);
-  });
-})();
+});
 </script>
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>

@@ -37,21 +37,6 @@
 html,body{height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoothing:antialiased;display:flex}
 
-/* ── TOPBAR ── */
-.topbar{
-  height:52px;background:var(--surface);border-bottom:1px solid var(--border);
-  display:flex;align-items:center;padding:0 20px;gap:10px;flex-shrink:0;z-index:50;
-}
-.topbar-title{font-size:13px;font-weight:700;color:var(--muted);flex:1}
-.pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--green);position:relative;flex-shrink:0}
-.pulse-dot::before{content:'';position:absolute;inset:-3px;border-radius:50%;background:var(--green);animation:ping 2s ease-out infinite;opacity:.3}
-@keyframes ping{0%{transform:scale(1);opacity:.3}70%{transform:scale(1.8);opacity:0}100%{transform:scale(2);opacity:0}}
-.topbar-avatar{
-  width:30px;height:30px;background:var(--bg);border:1px solid var(--border);
-  border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:10px;font-weight:800;color:var(--muted);cursor:pointer;
-}
-
 /* ── SHELL ── */
 .shell{display:flex;flex:1;overflow:hidden;height:100vh}
 
@@ -133,19 +118,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 }
 .btn-import:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
 
-/* ── KPI ROW ── */
-.kpi-row{
-  display:flex;gap:10px;padding:16px 24px 0;flex-shrink:0;
-}
-.kpi{
-  flex:1;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow-sm);
-}
-.kpi-label{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted2);margin-bottom:4px}
-.kpi-val{font-size:20px;font-weight:800;font-family:var(--mono);letter-spacing:-.5px;color:var(--text)}
-.kpi-sub{font-size:11px;color:var(--muted);margin-top:2px}
-.kpi-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}
-
 /* ── TOOLBAR ── */
 .toolbar{
   display:flex;align-items:center;gap:8px;
@@ -161,15 +133,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .search-wrap input:focus{border-color:var(--border2)}
 .search-wrap input::placeholder{color:var(--muted2)}
 .search-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted2);font-size:13px;pointer-events:none}
-.filter-btn{
-  height:34px;padding:0 12px;
-  background:var(--surface);border:1px solid var(--border);border-radius:8px;
-  font-family:var(--font);font-size:12px;font-weight:500;color:var(--muted);
-  cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:5px;
-}
-.filter-btn:hover{border-color:var(--border2);color:var(--text)}
-.filter-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
-.filter-sep{width:1px;height:20px;background:var(--border);margin:0 2px}
 .count-label{font-size:12px;color:var(--muted);margin-left:auto;font-family:var(--mono)}
 
 /* ── TABLE ── */
@@ -208,57 +171,12 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .cc-row a{color:var(--text);text-decoration:none;word-break:break-word}
 .cc-row a:hover{text-decoration:underline}
 .cc-empty{font-style:italic;color:#AEAEB2}
-.cc-id{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:0;font-size:11px}
-.cards-grid.density-large .cc-id{gap:6px 14px;font-size:12px}
-.cc-id dt{color:var(--muted);font-weight:500}
-.cc-id dd{margin:0;color:var(--text);font-weight:600;font-family:var(--mono)}
-.cc-socials{display:flex;gap:6px;align-items:center}
-.cards-grid.density-large .cc-socials{gap:10px}
-.cc-social-tile{width:24px;height:24px;border-radius:6px;background:#F5F5F7;display:flex;align-items:center;justify-content:center;color:#AEAEB2;text-decoration:none;transition:background .12s}
-.cards-grid.density-large .cc-social-tile{width:32px;height:32px;border-radius:8px}
-.cc-social-tile svg{width:14px;height:14px}
-.cards-grid.density-large .cc-social-tile svg{width:16px;height:16px}
-.cc-social-tile.active{cursor:pointer}
-.cc-social-tile.active.linkedin{color:#0A66C2}
-.cc-social-tile.active.facebook{color:#1877F2}
-.cc-social-tile.active.instagram{color:#E4405F}
-.cc-social-tile.active.whatsapp{color:#25D366}
-.cc-social-tile.active:hover{background:#EBEBF0}
 .cc-edit-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;background:#1D1D1F;color:#fff;border:0;border-radius:8px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;margin:auto 10px 10px;width:calc(100% - 20px);transition:background .15s}
 .cards-grid.density-large .cc-edit-btn{padding:14px;border-radius:10px;font-size:13px;margin:auto 12px 12px;width:calc(100% - 24px)}
 .cc-edit-btn:hover{background:#000}
 .density-toggle{display:inline-flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:2px;margin-left:10px}
 .density-toggle button{width:30px;height:26px;border:none;background:transparent;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .12s}
 .density-toggle button.active{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.06)}
-
-/* SECTOR PILL (badges removed) */
-
-/* SECTOR PILL */
-.sector{
-  display:inline-block;padding:4px 10px;
-  background:var(--bg);border:1px solid var(--border);
-  border-radius:6px;font-size:11px;font-weight:500;color:var(--muted);
-  white-space:nowrap;
-}
-
-/* SOURCE TAG */
-.source-tag{
-  display:inline-block;padding:4px 10px;
-  background:var(--bg);border:1px solid var(--border);
-  border-radius:20px;font-size:11px;font-weight:500;color:var(--muted);
-  white-space:nowrap;
-}
-
-/* ACTIONS COL */
-.td-actions{display:flex;align-items:center;gap:4px;opacity:0;transition:opacity .12s}
-tbody tr:hover .td-actions{opacity:1}
-.act-btn{
-  width:26px;height:26px;border-radius:6px;
-  background:var(--bg);border:1px solid var(--border);
-  display:flex;align-items:center;justify-content:center;
-  font-size:12px;cursor:pointer;transition:all .12s;
-}
-.act-btn:hover{border-color:var(--border2);background:var(--surface)}
 
 /* ── EMPTY STATE ── */
 .empty-state{
@@ -396,11 +314,6 @@ tbody tr:hover .td-actions{opacity:1}
 .dp-body{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:14px}
 .dp-section{}
 .dp-section-title{font-size:9px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);margin-bottom:8px}
-.dp-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
-.dp-ico{width:16px;font-size:12px;flex-shrink:0;margin-top:1px;color:var(--muted2)}
-.dp-val{font-size:12.5px;color:var(--text);line-height:1.4}
-.dp-val a{color:var(--blue);text-decoration:none}
-.dp-val a:hover{text-decoration:underline}
 .dp-social-input{width:100%;border:none;border-bottom:1px solid var(--border);background:none;font-family:var(--font);font-size:12px;color:var(--text);padding:3px 0;outline:none;transition:border-color .15s}
 .dp-social-input:focus{border-color:var(--text)}
 .dp-social-input::placeholder{color:var(--muted2);font-size:11px}
@@ -694,14 +607,11 @@ tbody tr:hover .td-actions{opacity:1}
 let prospects = [];
 let filteredProspects = [];
 let selectedId = null;
-let currentStatusFilter = 'all';
 let sortField = 'nom';
 let sortDir = 1;
 let csvParsed = [];
 let activeModalTab = 'csv';
 
-// ── SAMPLE DATA ──
-const SAMPLE = [];
 
 const ENTITY_LABEL = { ei:'EI', mup:'MovUP', graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues' };
 const ENTITY_COLOR = { ei:'#A32D2D', mup:'#EF9F27', graphic_factor:'#1D9E75', nouvellevagues:'#5B6FED' };
@@ -741,6 +651,7 @@ function migrateProspect(p){
   if(!p.entity_origine) p.entity_origine = 'mup';
   if(!Array.isArray(p.factures_ids)) p.factures_ids = [];
   if(typeof p.ca_total !== 'number') p.ca_total = 0;
+  // LEGACY ALIAS — review V2
   // Aliases pour compat ancienne UI (modal/import)
   p.name = p.nom;
   p.company = p.company || p.nom;
@@ -896,8 +807,6 @@ async function init(){
   }
 
   renderAll();
-  updateKPIs();
-  updateBadges();
 }
 
 function fmtMontantContacts(n){
@@ -993,66 +902,11 @@ function renderAll(){
   }).join('');
 }
 
-function exportSingleOdoo(id){
-  const p=prospects.find(x=>String(x.id)===String(id));
-  if(!p)return;
-  const pri=p.status==='hot'?'2':p.status==='warm'?'1':'0';
-  const lines=['id,name,partner_name,email_from,phone,city,description,priority'];
-  lines.push(['','Agence Event - '+(p.company||p.name),p.company||p.name,p.email||'',p.phone||'',p.location||'',(p.notes||'').replace(/,/g,';'),pri].map(v=>'"'+v+'"').join(','));
-  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='prospect_odoo_'+id+'.csv';a.click();
-  URL.revokeObjectURL(url);
-  toast('Export téléchargé');
-}
 
-function statusBadge(s){ return ''; }
-function sourceIco(s){ return ''; }
 
-// ── KPIS ──
-function updateKPIs(){
-  const set=(id,v)=>{ var el=document.getElementById(id); if(el) el.textContent = v; };
-  const total=prospects.length;
-  const facImport=prospects.filter(p=>p.source==='facture_import').length;
-  const ca=prospects.reduce((s,p)=>s+(Number(p.ca_total)||0),0);
-  set('kpi-total', total);
-  set('kpi-hot', facImport);
-  set('kpi-warm', prospects.filter(p=>p.source==='manual').length);
-  set('kpi-emails', prospects.filter(p=>p.email).length);
-  set('kpi-value', ca ? (Math.round(ca).toLocaleString('fr-FR')+'\u00A0€') : '—');
-}
-function updateBadges(){
-  // badges are in filter toolbar, updated via count-label
-  // also update filter button labels dynamically
-  const counts={
-    all:prospects.length,
-    hot:prospects.filter(p=>p.status==='hot').length,
-    warm:prospects.filter(p=>p.status==='warm').length,
-    cold:prospects.filter(p=>p.status==='cold').length,
-    new:prospects.filter(p=>p.status==='new').length,
-  };
-  document.querySelectorAll('.filter-btn[data-status]').forEach(btn=>{
-    const s=btn.dataset.status;
-    const n=counts[s];
-    if(s!=='all')btn.style.position='relative';
-  });
-}
 
 // ── FILTERS ──
-function filterByStatus(el,status){
-  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-  el.classList.add('active');
-  currentStatusFilter=status;
-  renderAll();
-}
 function filterProspects(){renderAll()}
-function setView(v){
-  currentStatusFilter=v;
-  document.querySelectorAll('.filter-btn').forEach(b=>{
-    b.classList.toggle('active',b.dataset.status===v);
-  });
-  renderAll();
-}
 function sortBy(field){
   if(sortField===field)sortDir*=-1;
   else{sortField=field;sortDir=1;}
@@ -1124,7 +978,7 @@ function updateStatus(){
   if(!selectedId)return;
   const p=prospects.find(x=>String(x.id)===String(selectedId));
   if(p){save();}
-  renderAll();updateKPIs();updateBadges();
+  renderAll();
 }
 function saveNote(){
   if(!selectedId)return;
@@ -1141,7 +995,6 @@ function saveSocial(){
   save();renderAll();
 }
 
-function syncToPipeline(p){ /* now same store */ }
 function copyEmail(){
   const p=prospects.find(x=>String(x.id)===String(selectedId));
   if(p&&p.email)copyText(p.email,'Email');
@@ -1150,7 +1003,6 @@ function copyPhone(){
   const p=prospects.find(x=>String(x.id)===String(selectedId));
   if(p&&p.phone)copyText(p.phone,'Tél.');
 }
-function moveToOdoo(){toast('Prospect exporté');}
 
 // ── IMPORT MODAL ──
 function openImport(tab){
@@ -1351,28 +1203,9 @@ function confirmImport(){
     toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}`);
   }
   closeModal();
-  renderAll();updateKPIs();updateBadges();
+  renderAll();
 }
 
-// ── EXPORT ODOO ──
-function exportOdoo(){
-  const lines=['id,name,partner_name,email_from,phone,city,description,priority'];
-  prospects.forEach(p=>{
-    const pri=p.status==='hot'?'2':p.status==='warm'?'1':'0';
-    lines.push([
-      '','Agence Event - '+(p.company||p.name),
-      p.company||p.name,
-      p.email||'',p.phone||'',p.location||'',
-      (p.notes||'').replace(/,/g,';'),pri
-    ].map(v=>'"'+v+'"').join(','));
-  });
-  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.download='prospects_odoo.csv';a.click();
-  URL.revokeObjectURL(url);
-  toast('Export téléchargé');
-}
 
 // ── DELETE ──
 function deletePros(id){
@@ -1383,7 +1216,7 @@ function deletePros(id){
   }
   save();
   if(selectedId===id)closeDetail();
-  renderAll();updateKPIs();updateBadges();
+  renderAll();
   toast('Prospect supprimé');
 }
 

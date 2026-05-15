@@ -413,8 +413,7 @@
       if(res.status === 201 || (res.ok && res.status === 200)){
         // Compte créé : on nettoie l'intention en sessionStorage (déjà persistée en base)
         try { sessionStorage.removeItem('intended_plan') } catch (e) { /* ignore */ }
-        // Étape suivante : SIRET via /onboarding/entreprise
-        window.location.href = '/onboarding/entreprise'
+        window.location.href = '/dashboard'
         return
       }
       btnSubmit.disabled = false

@@ -279,6 +279,78 @@ body.marketing-page {
   .movup-pricing { padding: 48px 18px 80px; }
   .movup-pricing .page-title { font-size: 32px; }
 }
+
+.quizz-block{
+  max-width:920px;
+  margin:0 auto 48px;
+  padding:32px;
+  background:#F6F6F4;
+  border-radius:16px;
+}
+.quizz-question{
+  font-size:22px;
+  font-weight:700;
+  color:#0A0A0A;
+  margin-bottom:8px;
+}
+.quizz-sub{
+  font-size:14px;
+  color:#6E6E73;
+  margin-bottom:24px;
+}
+.quizz-options{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+}
+.quizz-btn{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  padding:20px 12px;
+  background:#FFFFFF;
+  border:1px solid #E5E5E7;
+  border-radius:12px;
+  cursor:pointer;
+  transition:all .2s ease;
+  font-family:inherit;
+}
+.quizz-btn:hover{
+  border-color:#1D8348;
+  transform:translateY(-2px);
+}
+.quizz-btn.active{
+  border-color:#1D8348;
+  background:#F0F9F4;
+}
+.quizz-btn-time{
+  font-size:16px;
+  font-weight:700;
+  color:#0A0A0A;
+}
+.quizz-btn-label{
+  font-size:12px;
+  color:#6E6E73;
+}
+.quizz-result{
+  margin-top:20px;
+  font-size:14px;
+  color:#1D8348;
+  font-weight:600;
+  text-align:center;
+  min-height:20px;
+}
+.plan-recommended{
+  outline:2px solid #1D8348;
+  outline-offset:4px;
+  transition:outline .3s ease;
+}
+@media(max-width:768px){
+  .quizz-options{
+    grid-template-columns:repeat(2,1fr);
+  }
+}
 </style>
 </head>
 <body class="marketing-page">
@@ -291,51 +363,31 @@ body.marketing-page {
 
   <header class="page-header">
     <h1 class="page-title">Trouvez vos clients. <em>Signez plus vite.</em></h1>
-    <p class="page-subtitle">Trois formules pensées pour l'auto-entrepreneur français, du premier prospect au pilotage serein de votre activité.</p>
+    <p class="page-subtitle">Trois formules pour trois rythmes de prospection.</p>
   </header>
 
-  <!-- KPI BAR essai gratuit -->
-  <section class="trial-kpi-bar" aria-label="Garanties essai gratuit">
-    <div class="kpi-block kpi-block-gagne">
-      <div class="kpi-icon kpi-icon-gagne">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 13L9 17L19 7" stroke="#1D8348" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="kpi-content">
-        <span class="kpi-value kpi-value-gagne">14 jours</span>
-        <span class="kpi-label">Essai offert</span>
-      </div>
+  <!-- ═══════════════════════════════════════════
+       QUIZZ — Aide à la sélection du plan
+     ═══════════════════════════════════════════ -->
+  <div id="quizz-plan" class="quizz-block reveal">
+    <div class="quizz-question">Combien de temps consacrez-vous à la prospection commerciale chaque semaine ?</div>
+    <div class="quizz-sub">Une seule question. Une recommandation claire.</div>
+    <div class="quizz-options" role="radiogroup" aria-label="Temps de prospection hebdomadaire">
+      <button type="button" class="quizz-btn" data-plan="demarrage" role="radio" aria-checked="false">
+        <span class="quizz-btn-time">Moins de 2h</span>
+        <span class="quizz-btn-label">par semaine</span>
+      </button>
+      <button type="button" class="quizz-btn" data-plan="activite" role="radio" aria-checked="false">
+        <span class="quizz-btn-time">2 à 5h</span>
+        <span class="quizz-btn-label">par semaine</span>
+      </button>
+      <button type="button" class="quizz-btn" data-plan="croisiere" role="radio" aria-checked="false">
+        <span class="quizz-btn-time">Plus de 5h</span>
+        <span class="quizz-btn-label">par semaine</span>
+      </button>
     </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-block kpi-block-rdv">
-      <div class="kpi-icon kpi-icon-rdv">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="14" rx="2" stroke="#0BBCD4" stroke-width="2"/><path d="M8 3V8M16 3V8M4 11H20" stroke="#0BBCD4" stroke-width="2" stroke-linecap="round"/></svg>
-      </div>
-      <div class="kpi-content">
-        <span class="kpi-value kpi-value-rdv">0 €</span>
-        <span class="kpi-label">Carte bancaire</span>
-      </div>
-    </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-block kpi-block-visio">
-      <div class="kpi-icon kpi-icon-visio">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7V12C4 16.5 7.5 20.5 12 22C16.5 20.5 20 16.5 20 12V7L12 2Z" stroke="#7C3AED" stroke-width="2" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="kpi-content">
-        <span class="kpi-value kpi-value-visio">RGPD</span>
-        <span class="kpi-label">Données en Europe</span>
-      </div>
-    </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-block kpi-block-devis">
-      <div class="kpi-icon kpi-icon-devis">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 5L19 19M5 19L19 5" stroke="#F59E0B" stroke-width="2" stroke-linecap="round"/></svg>
-      </div>
-      <div class="kpi-content">
-        <span class="kpi-value kpi-value-devis">0</span>
-        <span class="kpi-label">Engagement</span>
-      </div>
-    </div>
-  </section>
+    <div id="quizz-result" class="quizz-result" aria-live="polite"></div>
+  </div>
 
   <!-- Toggle Mensuel / Annuel -->
   <section class="billing-toggle" aria-label="Choix de facturation">
@@ -536,6 +588,37 @@ body.marketing-page {
     })
   })
 })()
+</script>
+
+<script>
+(function(){
+  const buttons = document.querySelectorAll('#quizz-plan .quizz-btn');
+  const result = document.getElementById('quizz-result');
+  if(!buttons.length || !result) return;
+  const planMessages = {
+    demarrage: 'Démarrage 19 €/mois recommandé. Faites défiler pour découvrir.',
+    activite: 'Activité 29 €/mois recommandé. Faites défiler pour découvrir.',
+    croisiere: 'Croisière 39 €/mois recommandé. Faites défiler pour découvrir.'
+  };
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-checked','false');
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-checked','true');
+      const plan = btn.dataset.plan;
+      result.textContent = planMessages[plan];
+      const targetCard = document.querySelector('.plan[data-plan="' + plan + '"]');
+      if(targetCard){
+        targetCard.scrollIntoView({behavior:'smooth', block:'center'});
+        targetCard.classList.add('plan-recommended');
+        setTimeout(() => targetCard.classList.remove('plan-recommended'), 4000);
+      }
+    });
+  });
+})();
 </script>
 
 </body>

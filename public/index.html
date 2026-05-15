@@ -30,12 +30,18 @@
   "applicationCategory": "BusinessApplication",
   "description": "Pipeline commercial pour indépendants et PME : pipeline, contacts, devis, mail et visio dans une seule interface.",
   "url": "https://movup.io/",
-  "offers": [
-    {"@type": "Offer", "name": "Gratuit", "price": "0", "priceCurrency": "EUR"},
-    {"@type": "Offer", "name": "Starter", "price": "29", "priceCurrency": "EUR"},
-    {"@type": "Offer", "name": "Pro", "price": "49", "priceCurrency": "EUR"},
-    {"@type": "Offer", "name": "Business", "price": "79", "priceCurrency": "EUR"}
-  ],
+  "offers": {
+    "@type": "AggregateOffer",
+    "priceCurrency": "EUR",
+    "lowPrice": "19",
+    "highPrice": "39",
+    "offerCount": "3",
+    "offers": [
+      {"@type": "Offer", "name": "Démarrage", "price": "19", "priceCurrency": "EUR", "billingIncrement": "P1M"},
+      {"@type": "Offer", "name": "Activité", "price": "29", "priceCurrency": "EUR", "billingIncrement": "P1M"},
+      {"@type": "Offer", "name": "Croisière", "price": "39", "priceCurrency": "EUR", "billingIncrement": "P1M"}
+    ]
+  },
   "publisher": {
     "@type": "Organization",
     "name": "EI So Paradi",
@@ -1490,7 +1496,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 
 .quizz-options {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -1516,9 +1522,9 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   color: #fff;
 }
 
-.quizz-opt.selected[data-plan="starter"] { background: var(--c-generer); border-color: var(--c-generer); }
-.quizz-opt.selected[data-plan="pro"] { background: var(--c-pipeline); border-color: var(--c-pipeline); }
-.quizz-opt.selected[data-plan="business"] { background: var(--text); border-color: var(--text); }
+.quizz-opt.selected[data-plan="demarrage"] { background: var(--color-rdv); border-color: var(--color-rdv); color: #fff; }
+.quizz-opt.selected[data-plan="activite"] { background: var(--color-gagne); border-color: var(--color-gagne); color: #fff; }
+.quizz-opt.selected[data-plan="croisiere"] { background: var(--text); border-color: var(--text); color: #fff; }
 
 .quizz-reset {
   margin-top: 16px;
@@ -1533,7 +1539,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 }
 
 @media (max-width: 768px) {
-  .quizz-options { grid-template-columns: 1fr 1fr; }
+  .quizz-options { grid-template-columns: 1fr; gap: 6px; }
 }
 
 /* Plans grid */
@@ -2248,6 +2254,12 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 @media (max-width: 640px) {
   .movup-pricing { padding: 48px 18px 80px; }
   .movup-pricing .page-title { font-size: 32px; }
+}
+
+.plan.plan-recommended {
+  outline: 2px solid #1D8348;
+  outline-offset: 4px;
+  transition: outline .3s ease;
 }
 </style>
 </head>
@@ -3513,49 +3525,21 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 
   <header class="page-header">
     <h1 class="page-title">Trouvez vos clients. <em>Signez plus vite.</em></h1>
-    <p class="page-subtitle">Trois formules pensées pour l'auto-entrepreneur français, du premier prospect au pilotage serein de votre activité.</p>
+    <p class="page-subtitle">Trois formules pour trois rythmes de prospection.</p>
   </header>
 
-  <!-- KPI BAR essai gratuit -->
-  <section class="trial-kpi-bar" aria-label="Garanties essai gratuit">
-    <div class="kpi-block kpi-block-gagne">
-      <div class="kpi-icon kpi-icon-gagne">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 13L9 17L19 7" stroke="#1D8348" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="kpi-content">
-        <span class="kpi-value kpi-value-gagne">14 jours</span>
-        <span class="kpi-label">Essai offert</span>
-      </div>
+  <!-- ═══════════════════════════════════════════
+       QUIZZ — Aide à la sélection du plan
+     ═══════════════════════════════════════════ -->
+  <section class="quizz reveal" id="quizz-plan" aria-label="Quizz de recommandation de plan">
+    <div class="quizz-q">Combien de temps consacrez-vous à la prospection commerciale chaque semaine ?</div>
+    <div class="quizz-options" role="radiogroup" aria-label="Temps de prospection hebdomadaire">
+      <button type="button" class="quizz-opt" data-plan="demarrage" role="radio" aria-checked="false">Moins de 2h</button>
+      <button type="button" class="quizz-opt" data-plan="activite" role="radio" aria-checked="false">2 à 5h</button>
+      <button type="button" class="quizz-opt" data-plan="croisiere" role="radio" aria-checked="false">Plus de 5h</button>
     </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-block kpi-block-rdv">
-      <div class="kpi-icon kpi-icon-rdv">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="14" rx="2" stroke="#0BBCD4" stroke-width="2"/><path d="M8 3V8M16 3V8M4 11H20" stroke="#0BBCD4" stroke-width="2" stroke-linecap="round"/></svg>
-      </div>
-      <div class="kpi-content">
-        <span class="kpi-value kpi-value-rdv">0 €</span>
-        <span class="kpi-label">Carte bancaire</span>
-      </div>
-    </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-block kpi-block-visio">
-      <div class="kpi-icon kpi-icon-visio">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7V12C4 16.5 7.5 20.5 12 22C16.5 20.5 20 16.5 20 12V7L12 2Z" stroke="#7C3AED" stroke-width="2" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="kpi-content">
-        <span class="kpi-value kpi-value-visio">RGPD</span>
-        <span class="kpi-label">Données en Europe</span>
-      </div>
-    </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-block kpi-block-devis">
-      <div class="kpi-icon kpi-icon-devis">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 5L19 19M5 19L19 5" stroke="#F59E0B" stroke-width="2" stroke-linecap="round"/></svg>
-      </div>
-      <div class="kpi-content">
-        <span class="kpi-value kpi-value-devis">0</span>
-        <span class="kpi-label">Engagement</span>
-      </div>
+    <div class="quizz-reset" id="quizz-reset" style="display:none;">
+      <button type="button" onclick="resetQuizz()">Effacer la sélection</button>
     </div>
   </section>
 
@@ -3921,41 +3905,24 @@ document.querySelectorAll('.billing-toggle button').forEach(btn => {
 const quizzOpts = document.querySelectorAll('.quizz-opt');
 const quizzReset = document.getElementById('quizz-reset');
 const plans = document.querySelectorAll('.plan');
-
 quizzOpts.forEach(opt => {
   opt.addEventListener('click', () => {
     const recommended = opt.dataset.plan;
     quizzOpts.forEach(o => o.classList.remove('selected'));
     opt.classList.add('selected');
-
-    plans.forEach(p => {
-      if (p.dataset.plan === recommended) {
-        p.classList.add('recommended');
-        p.classList.remove('dimmed');
-      } else {
-        p.classList.add('dimmed');
-        p.classList.remove('recommended');
-      }
-    });
-
-    quizzReset.style.display = 'block';
-
-    setTimeout(() => {
-      const target = document.querySelector(`.plan[data-plan="${recommended}"]`);
-      if (target) {
-        const top = target.getBoundingClientRect().top + window.pageYOffset - 120;
-        window.scrollTo({ top, behavior: 'smooth' });
-      }
-    }, 200);
+    plans.forEach(p => p.classList.remove('plan-recommended'));
+    const target = document.querySelector('.plan[data-plan="' + recommended + '"]');
+    if (target) {
+      target.classList.add('plan-recommended');
+      setTimeout(() => target.classList.remove('plan-recommended'), 4000);
+    }
+    if (quizzReset) quizzReset.style.display = 'block';
   });
 });
-
 function resetQuizz() {
   quizzOpts.forEach(o => o.classList.remove('selected'));
-  plans.forEach(p => {
-    p.classList.remove('recommended', 'dimmed');
-  });
-  quizzReset.style.display = 'none';
+  plans.forEach(p => p.classList.remove('plan-recommended'));
+  if (quizzReset) quizzReset.style.display = 'none';
 }
 
 /* ───────────────── LEAFLET MAP + LEADS ───────────────── */

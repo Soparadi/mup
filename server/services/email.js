@@ -20,7 +20,23 @@ function getResendClient() {
 }
 
 const FROM = process.env.RESEND_FROM_EMAIL || 'bonjour@movup.io'
-const FROM_HEADER = `Movup <${FROM}>`
+const FROM_HEADER = `MovUP <${FROM}>`
+
+// Salutation "Bonjour {prenom} {nom}" avec fallback :
+// - prenom+nom → "Bonjour Jean Dupont"
+// - prenom seul → "Bonjour Jean" ; nom seul → "Bonjour Dupont"
+// - aucun mais name renseigné → "Bonjour {name}"
+// - rien → "Bonjour" (sans nom). Jamais "undefined" ni espace vide.
+function buildSalutation(user) {
+  const p = (user?.prenom || '').trim()
+  const n = (user?.nom || '').trim()
+  if (p && n) return `Bonjour ${p} ${n}`
+  if (p) return `Bonjour ${p}`
+  if (n) return `Bonjour ${n}`
+  const name = (user?.name || '').trim()
+  if (name) return `Bonjour ${name}`
+  return 'Bonjour'
+}
 
 function escapeHtml(s) {
   return String(s == null ? '' : s)
@@ -53,23 +69,28 @@ function appUrl() {
 }
 
 // ── sendWelcomeVerify ──
-// user : { email, raison_sociale }
+// user : { email, prenom, nom, name }
 // token : verification token brut (URL safe)
 export async function sendWelcomeVerify(user, token) {
   if (!user?.email) throw new Error('user.email requis')
   if (!token) throw new Error('token requis')
   const verifyUrl = `${appUrl()}/api/auth/verify?token=${encodeURIComponent(token)}`
+  const salutation = buildSalutation(user)
   const tpl = await loadTemplate('email-verify.html')
-  const html = applyVars(tpl, { email: user.email, verify_url: verifyUrl })
+  const html = applyVars(tpl, { salutation, verify_url: verifyUrl })
   const text = [
-    'Bienvenue sur Movup.',
+    `${salutation},`,
     '',
-    `Confirmez votre adresse email (${user.email}) en ouvrant ce lien :`,
-    verifyUrl,
+    'MovUP est heureux de vous offrir, pendant 14 jours, dans la limite de 30 fiches qualifiées, l’expérience qui va transformer votre façon de prospecter.',
+    '',
+    'Confirmez votre adresse email pour activer votre compte et commencer à trouver vos clients.',
+    '',
+    `Activer mon compte et commencer : ${verifyUrl}`,
     '',
     'Ce lien est valable 24 heures.',
     '',
-    '— Movup'
+    'Bien à vous,',
+    'L’équipe MovUP'
   ].join('\n')
 
   const r = getResendClient()
@@ -77,7 +98,7 @@ export async function sendWelcomeVerify(user, token) {
     from: FROM_HEADER,
     to: [user.email],
     replyTo: FROM,
-    subject: 'Confirmez votre adresse email — Movup',
+    subject: 'Bienvenue chez MovUP — activez votre accès',
     html,
     text,
     tags: [{ name: 'kind', value: 'email_verify' }]
@@ -94,7 +115,7 @@ export async function sendPasswordReset(user, token) {
   const tpl = await loadTemplate('password-reset.html')
   const html = applyVars(tpl, { email: user.email, reset_url: resetUrl })
   const text = [
-    'Réinitialisation de votre mot de passe Movup.',
+    'Réinitialisation de votre mot de passe MovUP.',
     '',
     `Une demande a été reçue pour le compte ${user.email}.`,
     'Ouvrez ce lien pour choisir un nouveau mot de passe :',
@@ -102,7 +123,7 @@ export async function sendPasswordReset(user, token) {
     '',
     'Ce lien est valable 1 heure. Si vous n\'êtes pas à l\'origine de cette demande, ignorez ce message.',
     '',
-    '— Movup'
+    '— MovUP'
   ].join('\n')
 
   const r = getResendClient()
@@ -110,7 +131,7 @@ export async function sendPasswordReset(user, token) {
     from: FROM_HEADER,
     to: [user.email],
     replyTo: FROM,
-    subject: 'Réinitialisation de votre mot de passe — Movup',
+    subject: 'Réinitialisation de votre mot de passe — MovUP',
     html,
     text,
     tags: [{ name: 'kind', value: 'password_reset' }]
@@ -218,12 +239,12 @@ export async function sendRelanceJ12(user) {
   const text = [
     `${user.raison_sociale || 'Bonjour'}, on reprend ?`,
     '',
-    'Cela fait douze jours que vous avez créé votre compte Movup.',
+    'Cela fait douze jours que vous avez créé votre compte MovUP.',
     'Si quelque chose vous a bloqué, répondez à cet email — on lit tout.',
     '',
-    `Reprendre dans Movup : ${appUrl()}`,
+    `Reprendre dans MovUP : ${appUrl()}`,
     '',
-    '— Movup'
+    '— MovUP'
   ].join('\n')
 
   const r = getResendClient()

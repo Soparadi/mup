@@ -264,7 +264,7 @@ router.post('/signup', async (req, res) => {
     const { token } = await createVerificationToken(userIdStr, 'email_verify')
 
     try {
-      await sendWelcomeVerify({ email, name }, token)
+      await sendWelcomeVerify({ email, prenom, nom, name }, token)
     } catch (e) {
       console.error('[signup] envoi email vérification échoué', e.message)
     }

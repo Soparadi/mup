@@ -413,7 +413,10 @@
       if(res.status === 201 || (res.ok && res.status === 200)){
         // Compte créé : on nettoie l'intention en sessionStorage (déjà persistée en base)
         try { sessionStorage.removeItem('intended_plan') } catch (e) { /* ignore */ }
-        window.location.href = '/dashboard'
+        // Doctrine A : pas de session posée au signup. L'utilisateur doit
+        // vérifier son email avant tout accès. Redirection vers la page
+        // d'attente sobre /verify-pending.
+        window.location.href = '/verify-pending'
         return
       }
       btnSubmit.disabled = false

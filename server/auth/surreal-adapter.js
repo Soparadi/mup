@@ -47,7 +47,10 @@ export function invalidateSessionCache(token) {
 // Invalidation par user_id : itère le cache et supprime les entries du user.
 // Appelée par deleteAllSessionsForUser pour préserver la cohérence post-logout
 // global / password reset (sinon attaquant garde 30s de validité avec ancien token).
-function invalidateSessionCacheByUserId(userId) {
+// Exportée pour permettre l'invalidation depuis les routes Stripe après UPDATE
+// user (fraîcheur immédiate de stripe_customer_id, subscription_status, plan,
+// plan_billing_cycle, billing_address, etc. lus par billing.html/upgrade.html).
+export function invalidateSessionCacheByUserId(userId) {
   if (!userId) return
   const target = String(userId).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
   for (const [token, entry] of SESSION_CACHE) {

@@ -19,6 +19,7 @@ import Stripe from 'stripe'
 import { getDb } from '../../lib/surreal.js'
 import { getPriceId, isValidPlan, isValidBillingCycle, PLAN_LABELS, PLAN_PRICES_DISPLAY, PRICE_TO_PLAN } from '../../lib/stripe-config.js'
 import { requireAuth } from '../middleware/requireAuth.js'
+import { invalidateSessionCacheByUserId } from '../auth/surreal-adapter.js'
 import {
   sendSubscriptionActivated, sendSubscriptionChanged,
   sendSubscriptionCanceled, sendPaymentFailed
@@ -157,6 +158,11 @@ router.post('/create-checkout-session', requireAuth, async (req, res) => {
       await updateUserFields(userId, { stripe_customer_id: customerId })
     }
 
+    // Invalidation cache session : un seul appel après les 2 UPDATE potentiels
+    // de ce bloc (billingFields + stripe_customer_id). Le prochain getSession
+    // du user re-fetch l'objet user à jour (sinon désynchro 30s avec billing.html).
+    invalidateSessionCacheByUserId(userId)
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -272,6 +278,12 @@ export async function webhookHandler(req, res) {
             trial_status: 'converted'
           }, subscription.current_period_end)
 
+          // Invalidation cache session : webhook hors session HTTP, mais le
+          // userId vient de session.metadata.user_id. Sans ça, le user revient
+          // sur /account/billing post-checkout et voit l'ancien snapshot (sans
+          // stripe_customer_id) → redirect vers /account/upgrade en boucle.
+          invalidateSessionCacheByUserId(userId)
+
           // Email confirmation
           try {
             const r = await db.query(`SELECT * FROM type::record('user', $id)`, { id: cleanUserId(userId) })
@@ -311,6 +323,11 @@ export async function webhookHandler(req, res) {
             plan_billing_cycle: newCycle
           }, subscription.current_period_end)
 
+          // Invalidation cache session : plan / cycle peuvent changer via
+          // Customer Portal Stripe — la lecture suivante de window.__USER__
+          // ou /api/user/me doit refléter le nouveau plan immédiatement.
+          invalidateSessionCacheByUserId(userId)
+
           // Email si changement de plan
           if (mapped && oldPlan && oldPlan !== newPlan && user.email) {
             try {
@@ -340,6 +357,12 @@ export async function webhookHandler(req, res) {
             stripe_subscription_id: null,
             trial_status: 'expired'
           })
+
+          // Invalidation cache session : la bascule subscription_status →
+          // 'canceled' doit être vue immédiatement par billing.html et la
+          // modale trial-expired (qui s'affiche sur trial_status='expired').
+          invalidateSessionCacheByUserId(userId)
+
           if (user.email) {
             try {
               await sendSubscriptionCanceled({
@@ -362,6 +385,11 @@ export async function webhookHandler(req, res) {
           }
           const userId = cleanUserId(user.id)
           await updateUserFields(userId, { subscription_status: 'past_due' })
+
+          // Invalidation cache session : billing.html doit voir l'état
+          // 'past_due' immédiatement pour afficher le bandeau "Action requise".
+          invalidateSessionCacheByUserId(userId)
+
           if (user.email) {
             try {
               const stripe = getStripe()

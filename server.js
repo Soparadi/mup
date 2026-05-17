@@ -1447,8 +1447,9 @@ app.post('/api/mail/send', async (req, res) => {
 
 app.post('/api/mail/sync', async (req, res) => {
   if (!requireCrypto(res)) return
+  const userId = requireUserId(req, res)
+  if (!userId) return
   const body = req.body || {}
-  const userId = String(req.userId)
   const onlyProspectId = body.prospectId ? String(body.prospectId) : null
   try {
     const db = await getDb()
@@ -1458,7 +1459,7 @@ app.post('/api/mail/sync', async (req, res) => {
       return res.status(503).json({ error: 'Configuration IMAP absente' })
     }
 
-    const pipelineResult = await db.query('SELECT id, email, co, name FROM pipeline')
+    const pipelineResult = await db.query('SELECT id, email, co, name FROM pipeline WHERE userId = $userId', { userId })
     let cards = pipelineResult[0] || []
     if (onlyProspectId) cards = cards.filter(c => String(c.id) === onlyProspectId)
     const targets = cards.filter(c => c.email && /@/.test(c.email))

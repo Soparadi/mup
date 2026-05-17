@@ -162,7 +162,13 @@ function publicUser(u) {
     lat: u.lat ?? null,
     lng: u.lng ?? null,
     plan: u.plan || 'gratuit',
-    email_verified: Boolean(u.email_verified)
+    email_verified: Boolean(u.email_verified),
+    // Alignement sur le payload /api/user/me + window.__USER__ (server.js).
+    // Consommateurs : login.html (auth/me), réponses signup/login.
+    intended_plan: u.intended_plan || null,
+    billing_address: u.billing_address || null,
+    stripe_customer_id: u.stripe_customer_id || null,
+    plan_billing_cycle: u.plan_billing_cycle || null
   }
 }
 

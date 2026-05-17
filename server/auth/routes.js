@@ -19,10 +19,10 @@ import argon2 from 'argon2'
 import {
   createUser, getUserByEmail, getUserById,
   createSession, deleteSessionByToken, deleteAllSessionsForUser,
-  createVerificationToken, getVerificationToken, markTokenUsed,
+  createVerificationToken, getVerificationToken, getVerificationTokenAny, markTokenUsed,
   setEmailVerified, updatePassword, logAuditEvent
 } from './surreal-adapter.js'
-import { sendWelcomeVerify, sendPasswordReset } from '../services/email.js'
+import { sendWelcomeVerify, sendWelcome, sendPasswordReset } from '../services/email.js'
 import { getLocationFromIp } from '../services/geolocation.js'
 import { readSessionToken, SESSION_COOKIE } from '../middleware/requireAuth.js'
 
@@ -351,14 +351,60 @@ router.get('/verify', async (req, res) => {
     return res.redirect('/verify?status=error&reason=missing_token')
   }
   try {
-    const vt = await getVerificationToken(token, 'email_verify')
+    // Helper "Any" : retourne le token même si used=true, pour distinguer
+    // "premier clic" (used=false) du "re-clic après vérification déjà faite"
+    // (used=true → on laisse entrer la session sans rejouer l'email bienvenue).
+    // Filtre toujours sur expiration physique.
+    const vt = await getVerificationTokenAny(token, 'email_verify')
     if (!vt) {
       return res.redirect('/verify?status=error&reason=invalid_or_expired')
     }
+
+    // Cas re-clic : token déjà consommé → on récupère le user, on pose la
+    // session (l'email est prouvé depuis la première fois), et on redirige.
+    // L'email de bienvenue n'est PAS rejoué (idempotence garantie en plus
+    // par le flag welcome_email_sent_at, mais on évite l'aller-retour DB).
+    if (vt.used === true) {
+      const user = await getUserById(vt.user_id)
+      if (!user) return res.redirect('/verify?status=error&reason=server_error')
+      const userIdStr = String(user.id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+      await deleteAllSessionsForUser(userIdStr)
+      const { token: sessionToken, expiresAt } = await createSession(userIdStr, meta)
+      setSessionCookie(res, sessionToken, expiresAt)
+      return res.redirect('/dashboard')
+    }
+
+    // Premier clic — séquence nominale.
     await markTokenUsed(vt.id)
     await setEmailVerified(vt.user_id)
-    await logAuditEvent({ userId: vt.user_id, event: 'email_verified', ip: meta.ip, userAgent: meta.userAgent })
-    res.redirect('/login?verified=1')
+    const user = await getUserById(vt.user_id)
+    if (!user) return res.redirect('/verify?status=error&reason=server_error')
+    const userIdStr = String(user.id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+
+    // Email 2 (bienvenue narratif 3 récits) — idempotent via flag DB.
+    // Si l'envoi ou le UPDATE plante : log et continuer (l'accès n'est pas bloqué
+    // par un échec d'email).
+    if (!user.welcome_email_sent_at) {
+      try {
+        await sendWelcome(user)
+        const { getDb } = await import('../../lib/surreal.js')
+        const dbInst = await getDb()
+        await dbInst.query(
+          'UPDATE type::record("user", $id) SET welcome_email_sent_at = time::now()',
+          { id: userIdStr }
+        )
+      } catch (e) {
+        console.error('[verify] email bienvenue échoué', e.message)
+      }
+    }
+
+    // Session immédiate — email vérifié = identité prouvée.
+    await deleteAllSessionsForUser(userIdStr)
+    const { token: sessionToken, expiresAt } = await createSession(userIdStr, meta)
+    setSessionCookie(res, sessionToken, expiresAt)
+
+    await logAuditEvent({ userId: userIdStr, event: 'email_verified', ip: meta.ip, userAgent: meta.userAgent })
+    res.redirect('/dashboard')
   } catch (e) {
     console.error('[auth:verify]', e.message)
     res.redirect('/verify?status=error&reason=server_error')

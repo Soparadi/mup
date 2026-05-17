@@ -107,6 +107,72 @@ export async function sendWelcomeVerify(user, token) {
   return { id: result.data?.id || null }
 }
 
+// ── sendWelcome ──
+// Email 2 (post-vérification email). 3 récits A/B/C selon user.intended_plan :
+//   - 'activite'  → récit B (rythme régulier, plan Activité envisagé)
+//   - 'croisiere' → récit C (rythme intensif, plan Croisière envisagé)
+//   - tout autre cas (null, undefined, 'demarrage', valeur inconnue) → récit A (cas nominal)
+// Subject identique aux 3 : 'Votre accès MovUP est ouvert'. CTA → /leads.
+// Le conditionnel "porterait" (B) et "ouvrirait" (C) est intentionnel : ne pas
+// passer au présent (engagement commercial implicite à éviter avant abonnement).
+// Idempotence (anti-double-envoi) gérée par le caller via user.welcome_email_sent_at.
+const WELCOME_RECITS = {
+  A: {
+    intro: 'Votre compte est activé. Vous disposez de 14 jours, dans la limite de 30 fiches qualifiées, pour découvrir MovUP : recherche d’entreprises, pipeline, carte, visio, devis et factures — le cycle commercial complet.',
+    body: 'Première étape : lancez une recherche sur votre secteur et votre zone. Vous ne cherchez plus, vous appelez.\n\nAu terme des 14 jours ou des 30 fiches qualifiées — selon la première limite atteinte — vous choisirez librement de continuer avec l’abonnement qui vous convient.'
+  },
+  B: {
+    intro: 'Votre compte est activé. Votre essai se déroule sur le plan Démarrage : 14 jours, dans la limite de 30 fiches qualifiées, pour valider l’outil sur un premier portefeuille.',
+    body: 'Vu votre rythme de prospection, le plan Activité que vous envisagez porterait ce débit à 120 fiches qualifiées par mois. Commençons par l’essentiel : faire tourner le cycle complet sur vos 30 premières.\n\nAu terme des 14 jours ou des 30 fiches qualifiées — selon la première limite atteinte — vous choisirez librement l’abonnement qui vous convient.'
+  },
+  C: {
+    intro: 'Votre compte est activé. Votre essai se déroule sur le plan Démarrage : 14 jours, dans la limite de 30 fiches qualifiées. C’est l’étape de prise en main — le temps de valider que l’outil tient ses promesses.',
+    body: 'Vu l’intensité de prospection que vous avez indiquée, le plan Croisière que vous envisagez ouvrirait 300 fiches qualifiées par mois. Vous atteindrez sans doute vite la limite des 30 — c’est attendu.\n\nAu terme des 14 jours ou des 30 fiches qualifiées — selon la première limite atteinte — vous choisirez librement l’abonnement qui vous convient.'
+  }
+}
+
+export async function sendWelcome(user) {
+  if (!user?.email) throw new Error('user.email requis')
+  const recitKey = user?.intended_plan === 'activite' ? 'B'
+                 : user?.intended_plan === 'croisiere' ? 'C'
+                 : 'A'
+  const recit = WELCOME_RECITS[recitKey]
+  const salutation = buildSalutation(user)
+  const ctaUrl = `${appUrl()}/leads`
+  const tpl = await loadTemplate('email-welcome.html')
+  const html = applyVars(tpl, {
+    salutation,
+    intro: recit.intro,
+    body: recit.body,
+    cta_url: ctaUrl
+  })
+  const text = [
+    `${salutation},`,
+    '',
+    recit.intro,
+    '',
+    recit.body,
+    '',
+    `Commencer ma première recherche : ${ctaUrl}`,
+    '',
+    'Bien à vous,',
+    'L’équipe MovUP'
+  ].join('\n')
+
+  const client = getResendClient()
+  const result = await client.emails.send({
+    from: FROM_HEADER,
+    to: [user.email],
+    replyTo: FROM,
+    subject: 'Votre accès MovUP est ouvert',
+    html,
+    text,
+    tags: [{ name: 'kind', value: 'welcome' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}
+
 // ── sendPasswordReset ──
 export async function sendPasswordReset(user, token) {
   if (!user?.email) throw new Error('user.email requis')

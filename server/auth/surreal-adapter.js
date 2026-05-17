@@ -236,6 +236,34 @@ export async function getVerificationToken(token, type) {
   }
 }
 
+// Variante de getVerificationToken qui n'écarte PAS les tokens utilisés.
+// Retourne le row complet (avec .used et .expires_at) ou null si physiquement
+// introuvable OU expiré. Utilisée par /verify pour distinguer "premier clic"
+// (used=false → marquer used + envoyer email bienvenue) du "re-clic après
+// vérification déjà faite" (used=true → laisser entrer sans rejouer l'email).
+// L'helper original getVerificationToken garde son contrat (filtre used) pour
+// les autres usages — notamment /forgot-password qui doit refuser un token reset
+// déjà consommé.
+export async function getVerificationTokenAny(token, type) {
+  if (!token) return null
+  const db = await getDb()
+  const tokenHash = hashToken(token)
+  const result = await db.query(
+    'SELECT * FROM verification_token WHERE token = $tok AND type = $type LIMIT 1',
+    { tok: tokenHash, type }
+  )
+  const row = result[0]?.[0]
+  if (!row) return null
+  if (new Date(row.expires_at).getTime() < Date.now()) return null
+  return {
+    id: row.id,
+    user_id: typeof row.user_id === 'object' ? String(row.user_id) : row.user_id,
+    type: row.type,
+    used: row.used === true,
+    expires_at: row.expires_at
+  }
+}
+
 export async function markTokenUsed(tokenRecordId) {
   const db = await getDb()
   const cleanId = normalizeId('verification_token', tokenRecordId)
@@ -342,6 +370,10 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS trial_email_j2_sent_at ON user TYPE option<datetime>',
     'DEFINE FIELD IF NOT EXISTS trial_email_j0_sent_at ON user TYPE option<datetime>',
     'DEFINE FIELD IF NOT EXISTS trial_email_j12_sent_at ON user TYPE option<datetime>',
+    // Flag idempotence email bienvenue (post-vérification email). Posé une seule fois
+    // à l'envoi réussi de sendWelcome, lu en amont pour bloquer tout double-envoi
+    // (cas re-clic du lien verify : on laisse entrer la session mais on ne rejoue pas l'email).
+    'DEFINE FIELD IF NOT EXISTS welcome_email_sent_at ON user TYPE option<datetime>',
     // Stripe — souscription payante (passe 2). billing_address est un objet
     // { line1, line2?, postal_code, city, country } persisté avant le Checkout.
     'DEFINE FIELD IF NOT EXISTS stripe_customer_id ON user TYPE option<string>',

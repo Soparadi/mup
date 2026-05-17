@@ -550,7 +550,17 @@ app.use(async (req, res, next) => {
       trial_started_at: u.trial_started_at || null,
       trial_ends_at: u.trial_ends_at || null,
       subscription_status: u.subscription_status || null,
-      current_period_end: u.current_period_end || null
+      current_period_end: u.current_period_end || null,
+      // Champs lus par trial-expired-modal (intended_plan), upgrade.html
+      // (siret/raison_sociale/billing_address/intended_plan) et billing.html
+      // (stripe_customer_id/plan_billing_cycle). Doit rester strictement
+      // identique au payload /api/user/me — modifier les deux en parallèle.
+      intended_plan: u.intended_plan || null,
+      siret: u.siret || null,
+      raison_sociale: u.raison_sociale || null,
+      billing_address: u.billing_address || null,
+      stripe_customer_id: u.stripe_customer_id || null,
+      plan_billing_cycle: u.plan_billing_cycle || null
     }
     const json = escapeForScriptTag(JSON.stringify(payload))
     const tag = '<script>window.__USER__=' + json + ';</script>'
@@ -993,7 +1003,16 @@ app.get('/api/user/me', async (req, res) => {
       trial_started_at: u.trial_started_at || null,
       trial_ends_at: u.trial_ends_at || null,
       subscription_status: u.subscription_status || null,
-      current_period_end: u.current_period_end || null
+      current_period_end: u.current_period_end || null,
+      // Mêmes 6 champs que l'injection window.__USER__ (server.js:~552-562) —
+      // doit rester strictement identique : trial-expired-modal lit intended_plan
+      // via les deux sources (window au load, /api/user/me au refresh + sur 402).
+      intended_plan: u.intended_plan || null,
+      siret: u.siret || null,
+      raison_sociale: u.raison_sociale || null,
+      billing_address: u.billing_address || null,
+      stripe_customer_id: u.stripe_customer_id || null,
+      plan_billing_cycle: u.plan_billing_cycle || null
     })
   } catch (err) {
     console.error('[user:me]', err.message)

@@ -410,7 +410,10 @@ router.get('/verify', async (req, res) => {
     setSessionCookie(res, sessionToken, expiresAt)
 
     await logAuditEvent({ userId: userIdStr, event: 'email_verified', ip: meta.ip, userAgent: meta.userAgent })
-    res.redirect('/dashboard')
+    // Premier clic : entrée directe dans l'action (recherche). Le dashboard
+    // est vide pour un nouveau compte — la doctrine 'valeur perçue d'abord'
+    // impose l'écran d'action. Le re-clic (l.380), profil retour, garde /dashboard.
+    res.redirect('/leads')
   } catch (e) {
     console.error('[auth:verify]', e.message)
     res.redirect('/verify?status=error&reason=server_error')

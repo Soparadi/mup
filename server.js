@@ -19,6 +19,7 @@ import { router as authRouter } from './server/auth/routes.js'
 import { router as stripeRouter, webhookHandler as stripeWebhookHandler } from './server/routes/stripe.js'
 import { requireAuth, requireAuthHtml } from './server/middleware/requireAuth.js'
 import { requireActiveSubscription } from './server/middleware/subscription.js'
+import { deriveAppState } from './lib/derive-app-state.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
 import { startCronJobs } from './server/services/cron.js'
@@ -550,6 +551,7 @@ app.use(async (req, res, next) => {
       trial_ends_at: u.trial_ends_at || null,
       subscription_status: u.subscription_status || null,
       current_period_end: u.current_period_end || null,
+      app_state: deriveAppState(u),
       // Champs lus par trial-expired-modal (intended_plan), upgrade.html
       // (siret/raison_sociale/billing_address/intended_plan) et billing.html
       // (stripe_customer_id/plan_billing_cycle). Doit rester strictement
@@ -1003,6 +1005,7 @@ app.get('/api/user/me', async (req, res) => {
       trial_ends_at: u.trial_ends_at || null,
       subscription_status: u.subscription_status || null,
       current_period_end: u.current_period_end || null,
+      app_state: deriveAppState(u),
       // Mêmes 6 champs que l'injection window.__USER__ (server.js:~552-562) —
       // doit rester strictement identique : trial-expired-modal lit intended_plan
       // via les deux sources (window au load, /api/user/me au refresh + sur 402).

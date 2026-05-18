@@ -297,6 +297,24 @@ export async function sendSubscriptionGraceStart({ email, prenom, plan_label, gr
   })
 }
 
+// Email 3 du cycle de résiliation — relance J-1 grâce, déclenchée par le cron
+// (H4b) la veille de la fermeture définitive du compte. Calque strict de
+// sendSubscriptionGraceStart : mêmes args, même wrapper, même mécanisme
+// formatDateFR/fallback privacy_url. Seuls diffèrent template, subject, kind.
+// H4a expose juste le helper et le template ; aucun caller à ce stade.
+export async function sendSubscriptionGraceEndingTomorrow({ email, prenom, plan_label, grace_until_date, privacy_url }) {
+  return sendStripeTransactional('subscription-grace-ending-tomorrow.html', {
+    prenom: prenom || '',
+    plan_label,
+    grace_until_date: formatDateFR(grace_until_date),
+    privacy_url: privacy_url || (appUrl() + '/account/privacy')
+  }, {
+    to: email,
+    subject: 'Dernier rappel : votre compte MovUP sera fermé demain',
+    kind: 'subscription_grace_ending_tomorrow'
+  })
+}
+
 export async function sendPaymentFailed({ email, prenom, plan_label, portal_url }) {
   return sendStripeTransactional('payment-failed.html', {
     prenom: prenom || '',

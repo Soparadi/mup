@@ -394,6 +394,7 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS trial_email_j2_sent_at ON user TYPE option<datetime>',
     'DEFINE FIELD IF NOT EXISTS trial_email_j0_sent_at ON user TYPE option<datetime>',
     'DEFINE FIELD IF NOT EXISTS trial_email_j12_sent_at ON user TYPE option<datetime>',
+    'DEFINE FIELD IF NOT EXISTS grace_j_minus_1_sent_at ON user TYPE option<datetime>',
     // Flag idempotence email bienvenue (post-vérification email). Posé une seule fois
     // à l'envoi réussi de sendWelcome, lu en amont pour bloquer tout double-envoi
     // (cas re-clic du lien verify : on laisse entrer la session mais on ne rejoue pas l'email).
@@ -404,6 +405,7 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS stripe_subscription_id ON user TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS subscription_status ON user TYPE option<string> ASSERT $value = NONE OR $value INSIDE ["trialing", "active", "past_due", "canceled", "unpaid", "incomplete"]',
     'DEFINE FIELD IF NOT EXISTS current_period_end ON user TYPE option<datetime>',
+    'DEFINE FIELD IF NOT EXISTS cancel_at_period_end ON user TYPE option<bool>',
     'DEFINE FIELD IF NOT EXISTS plan_billing_cycle ON user TYPE option<string> ASSERT $value = NONE OR $value INSIDE ["monthly", "annual"]',
     'DEFINE FIELD IF NOT EXISTS billing_address ON user TYPE option<object>',
     'DEFINE INDEX IF NOT EXISTS user_email_unique ON user FIELDS email UNIQUE',

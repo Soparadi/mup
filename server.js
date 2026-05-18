@@ -2405,6 +2405,19 @@ app.get('/api/user-plan', async (req, res) => {
 app.put('/api/user-plan', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
+  // Garde F : rejet 422 si le body tente de poser un champ 'plan'.
+  // user.plan est gouverné par Stripe (webhook checkout/subscription) et le
+  // signup uniquement, JAMAIS par cette route. Test de PRÉSENCE de clé
+  // (hasOwnProperty) — un plan:null ou plan:'' est aussi une tentative
+  // d'écriture, à rejeter. Cette route ne porte plus que les compteurs
+  // leadsConsumed/leadsConsumedThisMonth (cf. C1 leads.html 747d7f1).
+  if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'plan')) {
+    console.warn('[user-plan] rejet body avec champ plan — userId:', userId)
+    return res.status(422).json({
+      error: 'plan_not_accepted',
+      message: 'Le plan ne se modifie pas par cette route. Il est géré par Stripe Checkout / le signup.'
+    })
+  }
   try {
     const db = await getDb()
     const cleanBody = { ...(req.body || {}) }

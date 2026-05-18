@@ -3225,25 +3225,47 @@ else buildIndex();
 <script>
 // ─── QUOTA PLAN UTILISATEUR ───
 (function(){
-  var PLAN_QUOTAS = { gratuit:10, starter:30, pro:100, business:null };
-  var PLAN_LABELS = { gratuit:'Gratuit', starter:'Starter', pro:'Pro', business:'Business' };
-  var PLAN_NEXT = { gratuit:'Starter à 29€/mois (30 leads/mois)', starter:'Pro à 49€/mois (100 leads/mois)', pro:'Business à 79€/mois (illimité)' };
-  // Source de vérité unique : SurrealDB via /api/user-plan (reset mensuel auto côté serveur).
-  // Fallback localStorage transparent si l'API est indisponible.
+  // Quotas null en attente de chiffres validés doctrine (Phase 3 repricing).
+  // L'UI traite null comme "quota non défini" — pas de blocage actif.
+  var PLAN_QUOTAS = { demarrage:null, activite:null, croisiere:null };
+  var PLAN_LABELS = { demarrage:'Démarrage', activite:'Activité', croisiere:'Croisière' };
+  // Progression sans tarif chiffré (repricing Phase 3) ; croisiere = plan max, pas de next.
+  var PLAN_NEXT = { demarrage:'Activité', activite:'Croisière' };
+  // Le PLAN vient de window.__USER__.plan (injecté server.js:540 sur pages app —
+  // source de vérité unique user.plan). Les COMPTEURS leadsConsumed* viennent
+  // de /api/user-plan (table user_plan, seul usage légitime restant).
   async function loadPlan(){
+    var planFromUser = (window.__USER__ && window.__USER__.plan) ? window.__USER__.plan : 'demarrage';
     try {
       var r = await fetch('/api/user-plan');
-      if(r.ok) return await r.json();
+      if(r.ok) {
+        var counters = await r.json();
+        return {
+          plan: planFromUser,
+          leadsConsumed: counters.leadsConsumed || 0,
+          leadsConsumedThisMonth: counters.leadsConsumedThisMonth || 0,
+          lastResetDate: counters.lastResetDate || null
+        };
+      }
     } catch(e){}
-    return { plan:'gratuit', leadsConsumed:0, leadsConsumedThisMonth:0, lastResetDate: null };
+    return { plan: planFromUser, leadsConsumed:0, leadsConsumedThisMonth:0, lastResetDate: null };
   }
+  // Le PUT n'envoie PLUS le plan (source = user.plan via webhook Stripe).
+  // Body strict : { leadsConsumed, leadsConsumedThisMonth } — préserve le compteur
+  // sans réintroduire la divergence avec user.plan.
   async function savePlan(p){
     try {
-      await fetch('/api/user-plan', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(p) });
+      var body = {
+        leadsConsumed: p.leadsConsumed || 0,
+        leadsConsumedThisMonth: p.leadsConsumedThisMonth || 0
+      };
+      await fetch('/api/user-plan', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     } catch(e){}
   }
+  // Tous les plans payants (demarrage/activite/croisiere) comptent au mois.
+  // Plus de distinction starter/pro vs gratuit/business (nomenclature legacy retirée).
   function quotaConsumed(p){
-    return (p.plan === 'starter' || p.plan === 'pro') ? (p.leadsConsumedThisMonth || 0) : (p.leadsConsumed || 0);
+    return p.leadsConsumedThisMonth || 0;
   }
   function showPlafondModal(currentPlan){
     var existing = document.getElementById('plafond-modal-overlay');

@@ -46,6 +46,13 @@
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   .hidden{display:none!important}
+  .verify-recovery{margin-top:18px;padding-top:16px;border-top:1px solid var(--border);font-size:12.5px;line-height:1.6}
+  .verify-recovery-text{color:var(--muted);margin-bottom:10px}
+  .btn-secondary{background:#fff;color:var(--text);border-color:var(--text)}
+  .btn-secondary:hover:not(:disabled){background:var(--surface)}
+  .verify-recovery-msg{font-size:12px;margin-top:8px;min-height:16px}
+  .verify-recovery-msg.success{color:var(--green)}
+  .verify-recovery-msg.error{color:var(--red)}
 </style>
 </head>
 <body>
@@ -75,6 +82,11 @@
           <a href="/forgot-password">Mot de passe oublié ?</a>
         </div>
       </form>
+      <div id="verify-recovery" class="verify-recovery hidden">
+        <p class="verify-recovery-text">Votre adresse email n’est pas encore vérifiée. Vérifiez votre boîte mail ou demandez un nouveau lien.</p>
+        <button type="button" id="btn-resend-verif" class="btn btn-secondary">Renvoyer l’email de vérification</button>
+        <p class="verify-recovery-msg" id="verify-recovery-msg" aria-live="polite"></p>
+      </div>
     </div>
   </div>
   <div class="auth-foot">
@@ -143,6 +155,15 @@
       btnSubmit.disabled = false
       btnSubmit.textContent = 'Se connecter'
       if(!res.ok){
+        // Cas spécifique email non vérifié (back renvoie code='email_not_verified'
+        // routes.js:327) : on AJOUTE la zone CTA renvoi, en plus de l'alerte
+        // d'erreur. La logique login standard est inchangée — c'est uniquement
+        // une branche d'affichage supplémentaire.
+        if (res.data && res.data.code === 'email_not_verified') {
+          setAlert('error', res.data.error || 'Email non vérifié. Consultez votre boîte mail.')
+          document.getElementById('verify-recovery').classList.remove('hidden')
+          return
+        }
         setAlert('error', res.data.error || 'Connexion impossible.')
         return
       }
@@ -154,6 +175,53 @@
       console.error(err)
     })
   })
+
+  // Bouton CTA renvoi vérification — révélé sur réponse code='email_not_verified'.
+  // Réutilise la valeur de #email DÉJÀ saisie par l'utilisateur (ne pas
+  // redemander). Affiche STRICTEMENT data.message / data.error de l'API
+  // (anti-énumération côté client : pas de succès inventé en dur).
+  var btnResend = document.getElementById('btn-resend-verif')
+  var recoveryMsg = document.getElementById('verify-recovery-msg')
+  if (btnResend && recoveryMsg) {
+    btnResend.addEventListener('click', function(){
+      var email = (document.getElementById('email').value || '').trim()
+      recoveryMsg.textContent = ''
+      recoveryMsg.className = 'verify-recovery-msg'
+      if (!email) {
+        recoveryMsg.textContent = 'Saisissez votre adresse email.'
+        recoveryMsg.className = 'verify-recovery-msg error'
+        return
+      }
+      btnResend.disabled = true
+      fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email: email })
+      }).then(function(r){
+        return r.json().then(function(data){ return { ok: r.ok, status: r.status, data: data || {} } })
+                       .catch(function(){ return { ok: r.ok, status: r.status, data: {} } })
+      }).then(function(res){
+        if (res.ok && res.data.message) {
+          recoveryMsg.textContent = res.data.message
+          recoveryMsg.className = 'verify-recovery-msg success'
+          // bouton reste disabled : anti double-clic
+        } else if (res.data.error) {
+          recoveryMsg.textContent = res.data.error
+          recoveryMsg.className = 'verify-recovery-msg error'
+          btnResend.disabled = false
+        } else {
+          recoveryMsg.textContent = 'Une erreur est survenue. Réessayez plus tard.'
+          recoveryMsg.className = 'verify-recovery-msg error'
+          btnResend.disabled = false
+        }
+      }).catch(function(){
+        recoveryMsg.textContent = 'Erreur réseau. Réessayez plus tard.'
+        recoveryMsg.className = 'verify-recovery-msg error'
+        btnResend.disabled = false
+      })
+    })
+  }
 })()
 </script>
 </body>

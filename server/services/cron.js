@@ -16,7 +16,8 @@ import { getDb } from '../../lib/surreal.js'
 import {
   sendTrialEndingSoonEmails,
   sendTrialEndingTodayEmails,
-  expireTrialAutomatically
+  expireTrialAutomatically,
+  sendGraceEndingTomorrowEmails
 } from './trial-emails.js'
 
 const SCHEDULE = process.env.CRON_TRIAL_SCHEDULE || '0 8 * * *'
@@ -62,6 +63,7 @@ async function runTrialJobs() {
   await runStep('j2', sendTrialEndingSoonEmails)
   await runStep('j0', sendTrialEndingTodayEmails)
   await runStep('expire', expireTrialAutomatically)
+  await runStep('grace_j1', sendGraceEndingTomorrowEmails)
 }
 
 let started = false

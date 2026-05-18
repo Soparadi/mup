@@ -267,6 +267,24 @@ export async function getVerificationTokenAny(token, type) {
   }
 }
 
+// Purge tous les verification_token d'un user pour un type donné.
+// Réutilisable : appelée par /api/auth/resend-verification AVANT de créer un
+// nouveau token (sinon createVerificationToken empile, plusieurs liens
+// valides simultanément, n'importe lequel active le compte).
+// Garde même contrat de validation que createVerificationToken.
+export async function deleteVerificationTokens(userId, type) {
+  if (!['email_verify', 'password_reset'].includes(type)) {
+    throw new Error('verification token type invalide')
+  }
+  if (!userId) return
+  const db = await getDb()
+  const cleanUserId = normalizeId('user', userId)
+  await db.query(
+    'DELETE verification_token WHERE user_id = type::record("user", $uid) AND type = $type',
+    { uid: cleanUserId, type }
+  )
+}
+
 export async function markTokenUsed(tokenRecordId) {
   const db = await getDb()
   const cleanId = normalizeId('verification_token', tokenRecordId)

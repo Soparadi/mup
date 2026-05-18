@@ -22,7 +22,7 @@ import { requireAuth } from '../middleware/requireAuth.js'
 import { invalidateSessionCacheByUserId } from '../auth/surreal-adapter.js'
 import {
   sendSubscriptionActivated, sendSubscriptionChanged,
-  sendSubscriptionCanceled, sendPaymentFailed
+  sendSubscriptionCanceled, sendSubscriptionGraceStart, sendPaymentFailed
 } from '../services/email.js'
 
 let stripeClient = null
@@ -316,11 +316,15 @@ export async function webhookHandler(req, res) {
           const oldPlan = user.plan
           const newPlan = mapped?.plan || user.plan
           const newCycle = mapped?.billing_cycle || user.plan_billing_cycle
+          // Détection transition cancel_at_period_end (cf. bloc email H2b après l.343).
+          const prevCancel = user.cancel_at_period_end === true
+          const newCancel = subscription.cancel_at_period_end === true
 
           await updateUserFields(userId, {
             subscription_status: subscription.status || 'active',
             plan: newPlan,
-            plan_billing_cycle: newCycle
+            plan_billing_cycle: newCycle,
+            cancel_at_period_end: newCancel
           }, subscription.current_period_end)
 
           // Invalidation cache session : plan / cycle peuvent changer via
@@ -341,6 +345,26 @@ export async function webhookHandler(req, res) {
               })
             } catch (e) { console.warn('[stripe:webhook] email changed échoué :', e.message) }
           }
+
+          // Email 1 cycle résiliation (H2b) : transition cancel_at_period_end
+          // false→true = demande de résiliation utilisateur. EXCLUSION : un
+          // changement de plan simultané est une CONTINUITÉ d'abonnement
+          // (artefact Stripe proration/scheduling), pas une résiliation —
+          // l'email cancel ne part pas dans ce cas. Transition true→false
+          // (réactivation Portal "Don't cancel") : aucun email, l'UPDATE
+          // ci-dessus a déjà reset cancel_at_period_end=false (silencieux
+          // volontaire).
+          const planChanged = mapped && oldPlan && oldPlan !== newPlan
+          if (prevCancel !== newCancel && newCancel === true && !planChanged && user.email) {
+            try {
+              await sendSubscriptionCanceled({
+                email: user.email,
+                prenom: user.prenom,
+                plan_label: PLAN_LABELS[user.plan] || user.plan || 'Démarrage',
+                period_end: toIsoDate(subscription.current_period_end)
+              })
+            } catch (e) { console.warn('[stripe:webhook] email cancel échoué :', e.message) }
+          }
           break
         }
 
@@ -352,26 +376,35 @@ export async function webhookHandler(req, res) {
             return
           }
           const userId = cleanUserId(user.id)
+          // H2b : trial_status n'est plus mis à 'expired' ici (la doctrine
+          // grâce 7j sera gouvernée par subscription_status='canceled' +
+          // current_period_end+7d via le middleware H3). cancel_at_period_end
+          // non reset volontairement — son résiduel à true post-deleted est
+          // sans effet, H3 se basera sur subscription_status.
           await updateUserFields(userId, {
             subscription_status: 'canceled',
-            stripe_subscription_id: null,
-            trial_status: 'expired'
+            stripe_subscription_id: null
           })
 
           // Invalidation cache session : la bascule subscription_status →
-          // 'canceled' doit être vue immédiatement par billing.html et la
-          // modale trial-expired (qui s'affiche sur trial_status='expired').
+          // 'canceled' doit être vue immédiatement par billing.html et le
+          // middleware grâce 7j (H3) qui lit subscription_status depuis user.
           invalidateSessionCacheByUserId(userId)
 
           if (user.email) {
             try {
-              await sendSubscriptionCanceled({
+              // Email 2 cycle résiliation (H2b) : entrée en grâce 7j, CTA
+              // export RGPD. grace_until_date = current_period_end + 7d
+              // (non formaté — le helper applique formatDateFR).
+              const gracePlus7d = new Date(new Date(user.current_period_end).getTime() + 7 * 24 * 3600 * 1000).toISOString()
+              await sendSubscriptionGraceStart({
                 email: user.email,
                 prenom: user.prenom,
                 plan_label: PLAN_LABELS[user.plan] || user.plan || 'Démarrage',
-                period_end: user.current_period_end
+                grace_until_date: gracePlus7d,
+                privacy_url: appUrl() + '/account/privacy'
               })
-            } catch (e) { console.warn('[stripe:webhook] email canceled échoué :', e.message) }
+            } catch (e) { console.warn('[stripe:webhook] email grace-start échoué :', e.message) }
           }
           break
         }

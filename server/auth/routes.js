@@ -19,7 +19,8 @@ import argon2 from 'argon2'
 import {
   createUser, getUserByEmail, getUserById,
   createSession, deleteSessionByToken, deleteAllSessionsForUser,
-  createVerificationToken, getVerificationToken, getVerificationTokenAny, markTokenUsed,
+  createVerificationToken, getVerificationToken, getVerificationTokenAny,
+  deleteVerificationTokens, markTokenUsed,
   setEmailVerified, updatePassword, logAuditEvent
 } from './surreal-adapter.js'
 import { sendWelcomeVerify, sendWelcome, sendPasswordReset } from '../services/email.js'
@@ -444,6 +445,44 @@ router.post('/forgot-password', async (req, res) => {
     res.json(genericResponse)
   } catch (e) {
     console.error('[auth:forgot-password]', e.message)
+    res.json(genericResponse)
+  }
+})
+
+// ── POST /api/auth/resend-verification ──
+// Renvoie l'email de vérification pour un compte non vérifié. Structure
+// calquée LITTÉRALEMENT sur /forgot-password (anti-énumération stricte) :
+// réponse générique unique dans les 3 cas (inexistant / déjà vérifié /
+// envoyé). Seul cas non-générique : email format invalide → 400.
+// logAuditEvent UNIQUEMENT dans la branche envoi réel — sinon les logs
+// serveur leak l'existence de comptes par observation différentielle.
+router.post('/resend-verification', async (req, res) => {
+  if (!checkRate(req, res, 'resend-verification')) return
+  const meta = clientMeta(req)
+  const email = String(req.body?.email || '').toLowerCase().trim()
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Email invalide' })
+
+  const genericResponse = { ok: true, message: 'Si un compte non vérifié existe pour cette adresse, un email vient d\'être renvoyé.' }
+
+  try {
+    const user = await getUserByEmail(email)
+    if (!user) return res.json(genericResponse)                       // inexistant : générique, AUCUN envoi, AUCUN log
+    if (user.email_verified === true) return res.json(genericResponse) // déjà vérifié : générique, AUCUN envoi, AUCUN log
+    const userIdStr = String(user.id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+    // Purge anciens tokens email_verify de ce user AVANT de créer un nouveau
+    // (createVerificationToken empile sinon, plusieurs liens valides simultanément
+    // — un seul lien actif à la fois respecte la sécurité).
+    await deleteVerificationTokens(userIdStr, 'email_verify')
+    const { token } = await createVerificationToken(userIdStr, 'email_verify')
+    try {
+      await sendWelcomeVerify({ email: user.email, prenom: user.prenom, nom: user.nom, name: user.name }, token)
+    } catch (e) {
+      console.error('[resend-verification] envoi échec', e.message)
+    }
+    await logAuditEvent({ userId: userIdStr, event: 'verification_resent', ip: meta.ip, userAgent: meta.userAgent })
+    res.json(genericResponse)
+  } catch (e) {
+    console.error('[auth:resend-verification]', e.message)
     res.json(genericResponse)
   }
 })

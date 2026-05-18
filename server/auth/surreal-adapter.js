@@ -363,7 +363,7 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS code_naf ON user TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS lat ON user TYPE option<float>',
     'DEFINE FIELD IF NOT EXISTS lng ON user TYPE option<float>',
-    'DEFINE FIELD IF NOT EXISTS plan ON user TYPE string DEFAULT "gratuit"',
+    'DEFINE FIELD OVERWRITE plan ON user TYPE string DEFAULT "demarrage" ASSERT $value = NONE OR $value INSIDE ["demarrage", "activite", "croisiere"]',
     // Géolocalisation IP captée au signup (best effort, peut être null).
     // FLEXIBLE : sous-champs libres (city, region, country, country_code,
     // postal_code, latitude, longitude, ip_used, provider, detected_at) sans

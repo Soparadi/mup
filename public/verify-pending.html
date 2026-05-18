@@ -22,6 +22,17 @@
   p.hint{font-size:12.5px;color:var(--muted);margin-top:20px;line-height:1.6}
   .back{display:inline-block;margin-top:24px;font-size:12.5px;color:var(--muted);text-decoration:none}
   .back:hover{color:var(--text)}
+  .resend-trigger{margin-top:14px;font-size:12.5px;line-height:1.6}
+  .resend-trigger a{color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+  .resend-trigger a:hover{color:var(--text)}
+  .resend-form{margin-top:14px;display:flex;flex-direction:column;gap:10px;text-align:left}
+  .resend-form input{font-family:var(--font);font-size:13.5px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#FFFFFF;color:var(--text);width:100%}
+  .resend-form input:focus{outline:none;border-color:var(--text)}
+  .resend-form button{font-family:var(--font);font-size:13px;font-weight:600;padding:10px 16px;border:1px solid var(--text);background:var(--text);color:#FFFFFF;border-radius:8px;cursor:pointer}
+  .resend-form button:disabled{opacity:.55;cursor:not-allowed}
+  .resend-msg{font-size:12.5px;line-height:1.55;margin:0;min-height:18px}
+  .resend-msg.success{color:#1D8348}
+  .resend-msg.error{color:#CC0000}
 </style>
 </head>
 <body>
@@ -38,8 +49,69 @@
     <p class="lead">Votre compte est créé. Un email vient de vous être envoyé à l’adresse indiquée.</p>
     <p class="lead">Cliquez sur le lien qu’il contient pour activer votre accès et commencer.</p>
     <p class="hint">Vous n’avez pas reçu l’email ? Vérifiez vos spams, il peut prendre quelques minutes à arriver.</p>
+    <p class="resend-trigger"><a href="#" id="show-resend">Vous n’avez pas reçu l’email ? Renvoyer</a></p>
+    <form class="resend-form" id="resend-form" hidden novalidate>
+      <input type="email" id="resend-email" placeholder="Votre adresse email" autocomplete="email" required>
+      <button type="submit" id="resend-btn">Renvoyer l’email</button>
+      <p class="resend-msg" id="resend-msg" aria-live="polite"></p>
+    </form>
   </div>
   <a href="/" class="back">Retour à l’accueil</a>
 </main>
+<script>
+(function(){
+  var trigger = document.getElementById('show-resend')
+  var form = document.getElementById('resend-form')
+  var input = document.getElementById('resend-email')
+  var btn = document.getElementById('resend-btn')
+  var msg = document.getElementById('resend-msg')
+  if (!trigger || !form) return
+
+  trigger.addEventListener('click', function(e){
+    e.preventDefault()
+    trigger.style.display = 'none'
+    form.hidden = false
+    input.focus()
+  })
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault()
+    var email = (input.value || '').trim()
+    if (!email) return
+    btn.disabled = true
+    msg.textContent = ''
+    msg.className = 'resend-msg'
+    fetch('/api/auth/resend-verification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    }).then(function(r){
+      return r.json().then(function(data){ return { ok: r.ok, status: r.status, data: data || {} } })
+                     .catch(function(){ return { ok: r.ok, status: r.status, data: {} } })
+    }).then(function(res){
+      // On affiche EXACTEMENT le message renvoyé par l'API, jamais un succès
+      // inventé côté front : l'API répond générique anti-énumération, recréer
+      // un faux "envoyé" en dur leak l'existence du compte.
+      if (res.ok && res.data.message) {
+        msg.textContent = res.data.message
+        msg.className = 'resend-msg success'
+        // bouton reste disabled : anti double-clic
+      } else if (res.data.error) {
+        msg.textContent = res.data.error
+        msg.className = 'resend-msg error'
+        btn.disabled = false
+      } else {
+        msg.textContent = 'Une erreur est survenue. Réessayez plus tard.'
+        msg.className = 'resend-msg error'
+        btn.disabled = false
+      }
+    }).catch(function(){
+      msg.textContent = 'Erreur réseau. Réessayez plus tard.'
+      msg.className = 'resend-msg error'
+      btn.disabled = false
+    })
+  })
+})()
+</script>
 </body>
 </html>

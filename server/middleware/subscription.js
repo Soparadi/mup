@@ -36,6 +36,40 @@ export async function requireActiveSubscription(req, res, next) {
   const user = req.authUser
   if (!user) return res.status(401).json({ error: 'unauthorized' })
 
+  // GRÂCE 7j post-résiliation — DOIT être évalué AVANT la branche
+  // 'converted' ci-dessous : un user résilié garde trial_status=
+  // 'converted' résiduel (H2b a retiré le swap vers 'expired' du
+  // handler customer.subscription.deleted), donc le return next()
+  // de converted lui rendrait un accès complet. Condition
+  // d'activation : subscription_status === 'canceled' UNIQUEMENT
+  // (jamais trial_status, résiduel et trompeur sur les résiliés).
+  // La l.32 a déjà court-circuité GET/HEAD : seules les mutations
+  // arrivent ici, donc grace_active comme grace_expired ne bloquent
+  // de fait que les mutations (option A — calque trial_expired).
+  if (user.subscription_status === 'canceled') {
+    const periodEndMs = new Date(user.current_period_end).getTime()
+    const graceEndMs = periodEndMs + 7 * 24 * 3600 * 1000
+    const graceEndIso = Number.isFinite(graceEndMs)
+      ? new Date(graceEndMs).toISOString() : null
+    // Option β : fenêtre non calculable (current_period_end absent
+    // ou non-parsable) → grace_active. Ne jamais couper sur une
+    // incertitude — protège le droit d'export RGPD à vie.
+    const isGraceActive = !Number.isFinite(graceEndMs) || Date.now() < graceEndMs
+    if (isGraceActive) {
+      return res.status(402).json({
+        error: 'grace_active',
+        message: 'Votre abonnement a pris fin. Vous pouvez exporter vos données jusqu\'au terme de la période de récupération.',
+        period_end: user.current_period_end || null,
+        grace_until: graceEndIso
+      })
+    }
+    return res.status(402).json({
+      error: 'grace_expired',
+      message: 'Votre période de récupération est terminée. Réabonnez-vous pour retrouver l\'accès à votre compte.',
+      period_end: user.current_period_end || null
+    })
+  }
+
   // Abonné Stripe (passe 2) — tout passe sans contrôle.
   if (user.trial_status === 'converted') return next()
 

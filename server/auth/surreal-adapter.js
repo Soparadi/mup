@@ -78,11 +78,12 @@ function generateToken(bytes = 32) {
 
 // ── user ──
 
-// Phase 1 (signup) accepte :
+// Signup accepte :
 //   { email, prenom, nom, name, telephone, password_hash, email_verified, plan }
-// Phase 1.5 (onboarding entreprise) viendra ajouter via UPDATE :
-//   siret, raison_sociale, adresse, code_postal, ville, code_naf, lat, lng
-// Le SCHEMAFULL côté SurrealDB autorise désormais ces champs en option<...>.
+// siret + raison_sociale + billing_address sont peuplés plus tard à
+// /account/upgrade (pré-Stripe Checkout). Les champs adresse/code_postal/
+// ville/code_naf/lat/lng restent déclarés option<...> mais non peuplés
+// par le parcours actuel (réservés enrichissement INSEE/BAN futur éventuel).
 export async function createUser(fields) {
   const db = await getDb()
   const result = await db.query('CREATE user CONTENT $body', { body: fields })
@@ -350,8 +351,10 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS nom ON user TYPE string',
     'DEFINE FIELD IF NOT EXISTS name ON user TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS telephone ON user TYPE string',
-    // Champs entreprise — capturés à l'onboarding (Phase 1.5). Optionnels au signup.
-    // OVERWRITE pour rétrograder les définitions précédentes (string requis → option<string>).
+    // Champs entreprise — siret + raison_sociale peuplés à /account/upgrade
+    // (pré-Stripe Checkout) ; les autres restent option<...> réservés
+    // enrichissement futur. OVERWRITE pour rétrograder les définitions
+    // précédentes (string requis → option<string>).
     'DEFINE FIELD OVERWRITE siret ON user TYPE option<string> ASSERT $value = NONE OR string::len($value) = 14',
     'DEFINE FIELD OVERWRITE raison_sociale ON user TYPE option<string>',
     'DEFINE FIELD OVERWRITE adresse ON user TYPE option<string>',
@@ -404,8 +407,8 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS plan_billing_cycle ON user TYPE option<string> ASSERT $value = NONE OR $value INSIDE ["monthly", "annual"]',
     'DEFINE FIELD IF NOT EXISTS billing_address ON user TYPE option<object>',
     'DEFINE INDEX IF NOT EXISTS user_email_unique ON user FIELDS email UNIQUE',
-    // SIRET unique mais maintenant optionnel : plusieurs users peuvent rester sans siret
-    // tant qu'ils n'ont pas franchi l'étape onboarding.
+    // SIRET unique mais optionnel : plusieurs users peuvent rester sans siret
+    // tant qu'ils n'ont pas franchi /account/upgrade (pré-Stripe Checkout).
     'DEFINE INDEX IF NOT EXISTS user_siret_unique ON user FIELDS siret UNIQUE',
     'DEFINE TABLE IF NOT EXISTS session SCHEMAFULL',
     'DEFINE FIELD IF NOT EXISTS user_id ON session TYPE record<user>',

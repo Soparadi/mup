@@ -40,8 +40,8 @@ bloquante et inscription par SIRET (pré-remplissage INSEE + géocodage BAN).
 | `server/auth/routes.js` | Routes Express `/api/auth/*` |
 | `server/auth/surreal-adapter.js` | CRUD user/session/verification_token + audit + migration |
 | `server/middleware/requireAuth.js` | Middleware Express bloquant 401 |
-| `server/services/insee.js` | `lookupSiret(siret)` — utilisé à l'onboarding entreprise (pas au signup) |
-| `server/services/ban.js` | `geocode({ adresse, code_postal, ville })` — idem |
+| `server/services/insee.js` | `lookupSiret(siret)` — utilisé à `/account/upgrade` pré-Stripe Checkout (pas au signup) |
+| `server/services/ban.js` | `geocode({ adresse, code_postal, ville })` — réservé enrichissement futur, non câblé dans le parcours actuel |
 | `server/services/email.js` | `sendWelcomeVerify`, `sendPasswordReset`, `sendRelanceJ12` |
 | `server/templates/*.html` | Templates email transactionnels |
 | `migrations/001_auth_tables.surql` | Schéma SurrealDB (idempotent, joué au boot) |
@@ -76,20 +76,29 @@ Conflit email pris : `409 { error, field: 'email' }`.
    → redirect `/login?verified=1`
 5. Audit `email_verified`
 
-### Onboarding entreprise (Phase 1.5 — à venir)
+### Collecte des informations entreprise (juste-à-temps, pré-Stripe Checkout)
 
-Le SIRET n'est plus demandé au signup. Après vérification email, l'utilisateur
-est dirigé vers `/onboarding/entreprise` (à implémenter) qui :
+Le SIRET n'est pas demandé au signup. Il est collecté à `/account/upgrade`
+juste avant la création de la Session Stripe Checkout (parcours d'abonnement) :
 
-1. Demande le SIRET via un formulaire dédié
-2. Appelle `lookupSiret(siret)` (services/insee.js) pour pré-remplir raison
-   sociale, adresse, code NAF
-3. Géocode l'adresse via `geocode(...)` (services/ban.js) → `lat, lng`
-4. `UPDATE user` avec `{ siret, raison_sociale, adresse, code_postal, ville, code_naf, lat, lng }`
-5. Audit `onboarding_company_completed`
+1. Formulaire `public/account/upgrade.html` : SIRET (14 chiffres), raison
+   sociale, adresse de facturation (line1, line2, code postal, ville)
+2. Bouton "Vérifier" appelle `GET /api/sirene/:siret` (lookupSiret) pour
+   pré-remplir raison sociale + adresse depuis la base SIRENE
+3. `POST /api/stripe/create-checkout-session` (server/routes/stripe.js) :
+   - UPDATE user `{ siret, raison_sociale, billing_address }` avant Stripe
+   - Crée le Customer Stripe avec email + name + address
+   - Renvoie l'URL de Session Checkout
+4. Webhook `checkout.session.completed` : marque `trial_status='converted'`
+   et persiste `stripe_customer_id`, `stripe_subscription_id`, `plan`,
+   `plan_billing_cycle`, `current_period_end`
 
-Tous ces champs sont déclarés `option<...>` dans le schéma SurrealDB et donc
-nullables tant que cette étape n'est pas franchie.
+Note : les champs `code_naf`, `adresse`, `code_postal`, `ville`, `lat`,
+`lng` restent déclarés `option<...>` dans le schéma SurrealDB mais ne sont
+pas peuplés par le parcours actuel (réservés à un enrichissement INSEE/BAN
+futur éventuel, hors périmètre). Le projet `/onboarding/entreprise` initial
+a été abandonné : le besoin est absorbé par la collecte juste-à-temps
+ci-dessus.
 
 ### Connexion
 

@@ -11,8 +11,8 @@
 //   POST /api/auth/logout          (cookie)
 //   GET  /api/auth/me              (cookie) → { user }
 //
-// Le SIRET et l'enrichissement INSEE/BAN sont déplacés à l'onboarding entreprise
-// (/onboarding/entreprise — étape 2, après vérification email).
+// Le SIRET et la raison sociale sont collectés à /account/upgrade
+// (juste-à-temps, avant Stripe Checkout — voir server/routes/stripe.js).
 
 import express from 'express'
 import argon2 from 'argon2'
@@ -152,8 +152,9 @@ function publicUser(u) {
     nom: u.nom || null,
     name: u.name || null,
     telephone: u.telephone || null,
-    // Champs renseignés à l'onboarding entreprise (Phase 1.5) — null tant
-    // que l'utilisateur n'a pas complété l'étape 2.
+    // siret + raison_sociale : remplis à /account/upgrade pré-Stripe Checkout.
+    // code_naf / adresse / code_postal / ville / lat / lng : déclarés en base
+    // mais non peuplés par le parcours actuel (réservés enrichissement futur).
     siret: u.siret || null,
     raison_sociale: u.raison_sociale || null,
     code_naf: u.code_naf || null,
@@ -175,7 +176,7 @@ function publicUser(u) {
 
 // ── POST /api/auth/signup ──
 // Body : { prenom, nom, email, telephone, password, marketing_consent? }
-// SIRET et enrichissement INSEE/BAN sont déplacés à /onboarding/entreprise (Phase 1.5).
+// SIRET et raison sociale collectés à /account/upgrade (pré-Stripe Checkout).
 // La géolocalisation IP est récupérée silencieusement depuis ipapi.co (best effort,
 // timeout 2s, fail silencieux). Le consentement marketing est strictement optionnel
 // (case non pré-cochée côté front), recueilli pour conformité RGPD si l'utilisateur

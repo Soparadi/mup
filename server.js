@@ -460,8 +460,7 @@ app.use('/api', (req, res, next) => {
 
 // ── Gate HTML pages app — protège les 15 routes app par requireAuthHtml ──
 // 12 routes principales (APP_HTML_ROUTES) + 3 sous /account/ (billing, privacy,
-// upgrade) couvertes par le préfixe APP_HTML_PREFIXES. Le préfixe /onboarding/
-// est conservé pour compat future (dossier inexistant aujourd'hui).
+// upgrade) couvertes par le préfixe APP_HTML_PREFIXES.
 // Insérée AVANT express.static pour empêcher le service direct des pages
 // HTML protégées sans cookie session valide. Toute autre URL (landing,
 // login, légales, assets) tombe en next() vers express.static.
@@ -469,7 +468,7 @@ const APP_HTML_ROUTES = new Set([
   '/dashboard', '/leads', '/pipeline', '/agenda', '/mail', '/visio',
   '/carte', '/contacts', '/devis', '/factures', '/frais', '/statistiques'
 ])
-const APP_HTML_PREFIXES = ['/account', '/onboarding']
+const APP_HTML_PREFIXES = ['/account']
 
 function isProtectedHtmlRoute(rawPath) {
   let p = String(rawPath || '/').replace(/\/+$/, '') || '/'

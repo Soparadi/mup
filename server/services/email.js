@@ -281,6 +281,22 @@ export async function sendSubscriptionCanceled({ email, prenom, plan_label, peri
   })
 }
 
+// Email 2 du cycle de résiliation — déclenché à customer.subscription.deleted
+// (entrée en grâce 7j) par le webhook stripe.js (H2b). H2a expose juste le
+// helper et le template ; aucun caller dans le code à ce stade.
+export async function sendSubscriptionGraceStart({ email, prenom, plan_label, grace_until_date, privacy_url }) {
+  return sendStripeTransactional('subscription-grace-start.html', {
+    prenom: prenom || '',
+    plan_label,
+    grace_until_date: formatDateFR(grace_until_date),
+    privacy_url: privacy_url || (appUrl() + '/account/privacy')
+  }, {
+    to: email,
+    subject: 'Votre abonnement MovUP a pris fin — 7 jours pour exporter vos données',
+    kind: 'subscription_grace_start'
+  })
+}
+
 export async function sendPaymentFailed({ email, prenom, plan_label, portal_url }) {
   return sendStripeTransactional('payment-failed.html', {
     prenom: prenom || '',

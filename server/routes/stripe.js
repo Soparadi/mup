@@ -75,11 +75,22 @@ async function findUserByStripeCustomerId(customerId) {
 async function updateUserFields(userId, fields, currentPeriodEndUnix) {
   const db = await getDb()
   const id = cleanUserId(userId)
-  // Premier UPDATE : champs simples (string, bool)
+  // Premier UPDATE : champs simples (string, bool, etc.).
+  // SurrealDB v3 : les champs option<...> rejettent NULL littéral
+  // (« Expected none | string but found NULL »). Pour vider un champ
+  // option, il faut SET k = NONE inline (pas de binding $vX null).
+  // Pattern de référence : scripts/reset-stripe-customer-ids.js l.53
+  // (SET stripe_customer_id = NONE). Conséquence pour les callers :
+  // passer `null` ou `undefined` pour un champ option déclenche un
+  // UNSET propre via NONE ; toute autre valeur reste bindée comme avant.
   if (Object.keys(fields).length > 0) {
-    const sets = Object.keys(fields).map((k, i) => `${k} = $v${i}`).join(', ')
     const params = { id }
-    Object.keys(fields).forEach((k, i) => { params['v' + i] = fields[k] })
+    const sets = Object.keys(fields).map((k, i) => {
+      const v = fields[k]
+      if (v === null || v === undefined) return `${k} = NONE`
+      params['v' + i] = v
+      return `${k} = $v${i}`
+    }).join(', ')
     await db.query(`UPDATE type::record('user', $id) SET ${sets}`, params)
   }
   // Second UPDATE : current_period_end via SurrealQL si fourni

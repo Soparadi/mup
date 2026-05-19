@@ -86,10 +86,10 @@ async function updateUserFields(userId, fields, currentPeriodEndUnix) {
   if (currentPeriodEndUnix) {
     const seconds = Number(currentPeriodEndUnix)
     if (Number.isFinite(seconds)) {
-      // SurrealDB v2 : time::from::secs(int) → datetime
+      // SurrealDB v3 : time::from_secs(int) → datetime (underscore obligatoire — la forme avec scope :: n'existe pas, rejetée par le parser avec « did you maybe mean time::from_secs »)
       try {
         await db.query(
-          `UPDATE type::record('user', $id) SET current_period_end = time::from::secs($s)`,
+          `UPDATE type::record('user', $id) SET current_period_end = time::from_secs($s)`,
           { id, s: seconds }
         )
       } catch (e) {

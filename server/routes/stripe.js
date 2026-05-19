@@ -48,6 +48,17 @@ function toIsoDate(unixSeconds) {
   return new Date(unixSeconds * 1000).toISOString()
 }
 
+// Stripe API 2026-04-22.dahlia : current_period_end migré du niveau racine
+// Subscription vers Subscription.items.data[].current_period_end. Fallback
+// racine pour rétro-compat avec les events sérialisés en 2024-06-20
+// (client SDK figé 2024-06-20, webhook endpoint en 2026-04-22.dahlia —
+// incohérence connue, neutralisée fonctionnellement par ce fallback).
+function extractCurrentPeriodEnd(subscription) {
+  return subscription?.items?.data?.[0]?.current_period_end
+      ?? subscription?.current_period_end
+      ?? null
+}
+
 // Cherche un user par stripe_customer_id (utilisé par les webhooks).
 async function findUserByStripeCustomerId(customerId) {
   if (!customerId) return null
@@ -276,7 +287,7 @@ export async function webhookHandler(req, res) {
             plan,
             plan_billing_cycle: billing_cycle,
             trial_status: 'converted'
-          }, subscription.current_period_end)
+          }, extractCurrentPeriodEnd(subscription))
 
           // Invalidation cache session : webhook hors session HTTP, mais le
           // userId vient de session.metadata.user_id. Sans ça, le user revient
@@ -295,7 +306,7 @@ export async function webhookHandler(req, res) {
                 plan_label: PLAN_LABELS[plan] || plan,
                 cycle: billing_cycle,
                 price_display: PLAN_PRICES_DISPLAY[plan]?.[billing_cycle] || '',
-                current_period_end: toIsoDate(subscription.current_period_end)
+                current_period_end: toIsoDate(extractCurrentPeriodEnd(subscription))
               })
             }
           } catch (e) { console.warn('[stripe:webhook] email activated échoué :', e.message) }
@@ -325,7 +336,7 @@ export async function webhookHandler(req, res) {
             plan: newPlan,
             plan_billing_cycle: newCycle,
             cancel_at_period_end: newCancel
-          }, subscription.current_period_end)
+          }, extractCurrentPeriodEnd(subscription))
 
           // Invalidation cache session : plan / cycle peuvent changer via
           // Customer Portal Stripe — la lecture suivante de window.__USER__
@@ -361,7 +372,7 @@ export async function webhookHandler(req, res) {
                 email: user.email,
                 prenom: user.prenom,
                 plan_label: PLAN_LABELS[user.plan] || user.plan || 'Démarrage',
-                period_end: toIsoDate(subscription.current_period_end)
+                period_end: toIsoDate(extractCurrentPeriodEnd(subscription))
               })
             } catch (e) { console.warn('[stripe:webhook] email cancel échoué :', e.message) }
           }

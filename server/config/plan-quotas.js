@@ -65,3 +65,77 @@ export function hasFeature(user, feature) {
   if (!quotas) return false
   return quotas[feature] === true
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Lead quotas (Phase 2 roadmap, commit 1 — autorité serveur)
+// ──────────────────────────────────────────────────────────────────────────
+// PLAN_QUOTAS ci-dessus = matrice feature flags (export_csv, mailing_sequencer,
+// etc.). PLAN_LEAD_LIMITS ci-dessous = plafond NUMÉRIQUE d'ajouts au pipeline
+// depuis la page Leads (body.source === 'SIRENE'). Deux préoccupations
+// distinctes, voisinage volontaire sans collision de nom.
+
+// Plafond d'ajouts au pipeline depuis Leads, par plan effectif.
+// Essai = 30 SEC (aucun reset pendant les 14 jours, compteur cumulatif).
+// Payant = mensuel calendaire (reset 1er du mois UTC, lazy).
+// croisiere = Infinity (pas de limite numérique côté décompte).
+export const PLAN_LEAD_LIMITS = {
+  essai: 30,
+  demarrage: 30,
+  activite: 120,
+  croisiere: Infinity
+}
+
+// ISO date-only "YYYY-MM-DD" du 1er du mois courant en UTC.
+// Déplacé depuis server.js pour cohabitation avec applyMonthlyReset.
+export function firstOfMonthIsoUTC() {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
+}
+
+// Reset lazy du compteur mensuel sur user_plan : si lastResetDate < 1er du
+// mois courant UTC, remet leadsConsumedThisMonth à 0 et persiste. Idempotent
+// (no-op si déjà reset). Helper générique — NE contient PAS la logique
+// essai vs payant ; cf getLeadsConsumed qui conditionne l'appel. Déplacé
+// depuis server.js pour rester dans le module dédié aux quotas.
+export async function applyMonthlyReset(db, userId, rec) {
+  const firstIso = firstOfMonthIsoUTC()
+  if (rec.lastResetDate && new Date(rec.lastResetDate) >= new Date(firstIso)) return rec
+  const updatedAt = new Date().toISOString()
+  await db.query(
+    'UPDATE type::record("user_plan", $id) MERGE $body',
+    { id: userId, body: { leadsConsumedThisMonth: 0, lastResetDate: firstIso, updatedAt } }
+  )
+  return { ...rec, leadsConsumedThisMonth: 0, lastResetDate: firstIso, updatedAt }
+}
+
+// Résolution du plan effectif d'un utilisateur. Factorise la règle déjà
+// présente dans hasFeature() ci-dessus (et autres sites). Source unique.
+// - trial_status === 'converted' → user.plan (demarrage/activite/croisiere)
+// - sinon (essai actif / expiré / null pre-migration) → 'essai'
+// Note grâce 7j : un user en grace_active garde trial_status='converted'
+// résiduel → considéré payant ici, mais le middleware grâce bloque déjà
+// les mutations en 402 en amont, donc pas de doublon nécessaire.
+export function getEffectivePlan(user) {
+  if (!user) return 'essai'
+  return user.trial_status === 'converted' ? (user.plan || 'demarrage') : 'essai'
+}
+
+// Plafond d'ajouts au pipeline pour ce user (selon plan effectif).
+export function getLeadLimit(user) {
+  const plan = getEffectivePlan(user)
+  return PLAN_LEAD_LIMITS[plan] ?? PLAN_LEAD_LIMITS.demarrage
+}
+
+// Lecture du compteur leadsConsumedThisMonth pour ce user, AVEC ou SANS
+// reset selon le statut :
+// - Essai : lecture SÈCHE, aucun reset (doctrine non négociable — compteur
+//   cumulatif sur les 14j d'essai, jamais remis à 0).
+// - Payant : applique le reset lazy (1er du mois UTC) avant lecture.
+// Retourne un entier (≥ 0).
+export async function getLeadsConsumed(db, userId, rec, user) {
+  if (!rec) return 0
+  const plan = getEffectivePlan(user)
+  if (plan === 'essai') return rec.leadsConsumedThisMonth || 0
+  const fresh = await applyMonthlyReset(db, userId, rec)
+  return fresh.leadsConsumedThisMonth || 0
+}

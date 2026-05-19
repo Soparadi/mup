@@ -24,6 +24,12 @@ import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
+  getEffectivePlan,
+  getLeadLimit,
+  getLeadsConsumed,
+  applyMonthlyReset
+} from './server/config/plan-quotas.js'
+import {
   sendOne as mailServiceSendOne,
   getMailStatus as mailServiceStatus,
   isResendReady,
@@ -633,14 +639,74 @@ app.post('/api/pipeline', async (req, res) => {
   try {
     const body = { ...(req.body || {}), userId } // userId forcé, body.userId écrasé
     const db = await getDb()
+
+    // Quota leads (Phase 2 roadmap, commit 1) — ne s'applique QU'AUX ajouts
+    // depuis la page Leads, marqués par body.source === 'SIRENE' (posé par
+    // leads.html addToPipeline). Les autres flux (visio/contacts/csv_import/
+    // manual/paste/facture_import/pipeline) passent sans lookup, sans
+    // décompte, sans blocage : comportement strictement inchangé.
+    //
+    // Dette consignée (HORS scope ce commit) : body.source est hardcodé
+    // côté client, donc contournable par requête forgée (POST direct avec
+    // source='visio'). Correctif durable = autorité serveur sur la provenance
+    // (ex. route POST /api/pipeline/from-leads dédiée + middleware d'ajout
+    // de source). À traiter dans une passe de durcissement future.
+    const isLeadsAddition = body.source === 'SIRENE'
+    let consumedNow = 0
+    if (isLeadsAddition) {
+      const user = req.authUser
+      if (!user) return res.status(401).json({ error: 'unauthorized' })
+      const recResult = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
+      const rec = recResult[0]?.[0] || { userId, plan: 'gratuit', leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null }
+      consumedNow = await getLeadsConsumed(db, userId, rec, user)
+      const limit = getLeadLimit(user)
+      if (consumedNow >= limit) {
+        const plan = getEffectivePlan(user)
+        return res.status(402).json({
+          error: 'pipeline_quota',
+          plan,
+          quotaUsed: consumedNow,
+          quotaLimit: limit === Infinity ? null : limit,
+          period: plan === 'essai' ? 'essai' : 'monthly'
+        })
+      }
+    }
+
     const cleanId = cleanRecordId('pipeline', body?.id)
+    let createdOk = false
+    let payload = null
+    let payloadStatus = 201
     if (cleanId) {
       const { record, status, action } = await upsertRecord(db, 'pipeline', cleanId, body)
       if (action === 'updated') console.log(`[pipeline] upsert pipeline:${cleanId}`)
-      return res.status(status).json(record)
+      createdOk = action === 'created'
+      payload = record
+      payloadStatus = status
+    } else {
+      const result = await db.query('CREATE pipeline CONTENT $body', { body })
+      payload = result[0]?.[0] || result[0] || null
+      payloadStatus = 201
+      createdOk = !!payload
     }
-    const result = await db.query('CREATE pipeline CONTENT $body', { body })
-    res.status(201).json(result[0]?.[0] || result[0] || null)
+
+    // Incrément +1 leadsConsumedThisMonth UNIQUEMENT si ajout Leads ET création
+    // effective réussie (atomicité stricte : un upsert qui update ne décompte
+    // pas, un CREATE qui retourne null ne décompte pas non plus). Échec
+    // d'incrément non bloquant : la card est rendue au client, log warn —
+    // pas de rollback pour ne pas dégrader l'UX (1 lead "gratuit" est moins
+    // grave qu'une card promise puis supprimée).
+    if (isLeadsAddition && createdOk) {
+      try {
+        await db.query(
+          'UPDATE type::record("user_plan", $id) MERGE $body',
+          { id: userId, body: { leadsConsumedThisMonth: consumedNow + 1, updatedAt: new Date().toISOString() } }
+        )
+      } catch (e) {
+        console.warn('[pipeline] incrément quota leads échoué :', e.message)
+      }
+    }
+
+    return res.status(payloadStatus).json(payload)
   } catch (err) {
     console.error('[pipeline]', err)
     res.status(500).json({ error: 'Impossible de créer la carte pipeline' })
@@ -2370,24 +2436,10 @@ app.put('/api/user-settings', async (req, res) => {
 // PUT en MERGE pour cohabitation Stripe (payment_method écrit séparément du plan choisi)
 // et cohérence cross-pages (Statistiques + leads.html).
 
-// ISO date-only "YYYY-MM-DD" du 1er du mois courant en UTC.
-function firstOfMonthIsoUTC() {
-  const now = new Date()
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
-}
-
-// Reset lazy : si lastResetDate < 1er du mois courant, on remet à zéro le compteur mensuel
-// et on persiste. Idempotent (no-op si déjà reset).
-async function applyMonthlyReset(db, userId, rec) {
-  const firstIso = firstOfMonthIsoUTC()
-  if (rec.lastResetDate && new Date(rec.lastResetDate) >= new Date(firstIso)) return rec
-  const updatedAt = new Date().toISOString()
-  await db.query(
-    'UPDATE type::record("user_plan", $id) MERGE $body',
-    { id: userId, body: { leadsConsumedThisMonth: 0, lastResetDate: firstIso, updatedAt } }
-  )
-  return { ...rec, leadsConsumedThisMonth: 0, lastResetDate: firstIso, updatedAt }
-}
+// applyMonthlyReset + firstOfMonthIsoUTC déplacés dans
+// server/config/plan-quotas.js (source unique des quotas leads). Importés
+// en tête de fichier. Les callers ci-dessous restent inchangés (même
+// signature, même comportement).
 
 app.get('/api/user-plan', async (req, res) => {
   const userId = requireUserId(req, res)
@@ -2460,20 +2512,20 @@ app.post('/api/user-plan/check-quota', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   try {
+    const user = req.authUser
+    if (!user) return res.status(401).json({ error: 'unauthorized' })
     const db = await getDb()
     const result = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
-    let rec = result[0]?.[0]
-    if (!rec) {
-      rec = { userId, plan: 'gratuit', leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null }
-    } else {
-      rec = await applyMonthlyReset(db, userId, rec)
-    }
+    const rec = result[0]?.[0] || { userId, plan: 'gratuit', leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null }
+    const consumed = await getLeadsConsumed(db, userId, rec, user)
+    const limit = getLeadLimit(user)
+    const plan = getEffectivePlan(user)
     res.json({
-      allowed: true,
-      plan: rec.plan || 'gratuit',
-      quotaUsed: rec.leadsConsumedThisMonth || 0,
-      quotaLimit: null,
-      quotaPeriod: 'monthly',
+      allowed: consumed < limit,
+      plan,
+      quotaUsed: consumed,
+      quotaLimit: limit === Infinity ? null : limit,
+      quotaPeriod: plan === 'essai' ? 'essai' : 'monthly',
       upgradeUrl: '/statistiques.html#plan'
     })
   } catch (err) {

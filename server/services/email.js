@@ -292,7 +292,7 @@ export async function sendSubscriptionGraceStart({ email, prenom, plan_label, gr
     privacy_url: privacy_url || (appUrl() + '/account/privacy')
   }, {
     to: email,
-    subject: 'Votre abonnement MovUP a pris fin — 7 jours pour exporter vos données',
+    subject: 'Votre abonnement MovUP a pris fin',
     kind: 'subscription_grace_start'
   })
 }

@@ -1,15 +1,30 @@
-// Popup bloquant essai expiré — injecté sur toutes les pages app.
-// Comportement :
-//   1. Au load, fetch GET /api/user/me. Si trial_status === 'expired', affiche
-//      l'overlay full-screen non fermable.
-//   2. Intercepte toutes les réponses fetch : si 402 trial_expired, affiche
-//      également l'overlay (couvre le cas où l'essai expire pendant la session).
+// Composant front du cycle de résiliation — injecté sur toutes les pages app.
+// Discrimine sur le champ app_state (server-side via deriveAppState, H5a) :
+//   - trial_expired / grace_expired → popup bloquant plein écran non
+//     fermable (cards plans + lien export RGPD + déconnexion).
+//   - grace_active → bandeau β non-bloquant (état dégradé voulu, lecture
+//     seule 7j post-résiliation). L'utilisateur continue à consulter.
+//   - active / trial_active → rien.
 //
-// Style : reprend les codes visuels de .movup-pricing (couleurs métiers,
-// pastilles, prix colorés) avec préfixe .tem- pour éviter toute collision
-// avec les CSS des pages app.
+// VERROU DOCTRINAIRE (D4 H5b) : dans le popup grace_expired, le lien
+// « Télécharger mes données » du footer reste cliquable. Le mur bloque
+// le réabonnement, jamais l'accès à l'export RGPD (article 20).
 //
-// Auteur : passe trial 14j (commit à venir)
+// 2 sources de signal :
+//   1. Bootcheck au load : fetch /api/user/me → data.app_state.
+//   2. Intercepteur fetch global : sur 402, discrimine sur body.error
+//      (trial_expired / grace_expired / grace_active). Pour grace_active
+//      sur mutation : toast court fermable, l'utilisateur reste sur sa
+//      page en lecture.
+//
+// Coexistence avec auth-401-handler.js : trial-modal patche fetch EN
+// PREMIER (ordre du document, deux scripts defer), auth-401 capture le
+// fetch déjà patché → chaînage propre, pas d'écrasement.
+//
+// Style : préfixes .tem- (modal) + .tem-banner-* + .tem-mut-* (collision
+// nulle avec les CSS des pages app). Palette pipeline figée — ambre
+// #F59E0B pour le bandeau β (état dégradé voulu, distinct du toast
+// auth-401 sombre #1D1D1F qui signale une erreur).
 
 (function () {
   'use strict'
@@ -37,6 +52,8 @@
 
   var STYLE_ID = 'tem-modal-style'
   var OVERLAY_ID = 'tem-modal-overlay'
+  var BANNER_ID = 'tem-banner'
+  var MUT_TOAST_ID = 'tem-mut-toast'
   var billingCycle = 'monthly'
 
   function injectStyles() {
@@ -72,6 +89,22 @@
 .tem-foot a,.tem-foot button{color:#6E6E73;background:none;border:none;text-decoration:underline;text-underline-offset:2px;cursor:pointer;font-family:inherit;font-size:inherit;padding:0}\
 .tem-foot a:hover,.tem-foot button:hover{color:#0A0A0A}\
 @media (max-width:480px){.tem-foot{flex-direction:column;gap:10px;text-align:center}}\
+#tem-banner{position:fixed;top:0;left:0;right:0;z-index:99998;background:#FFF7E6;border-bottom:2px solid #F59E0B;font-family:Geist,-apple-system,sans-serif;color:#1D1D1F}\
+.tem-banner-inner{max-width:1200px;margin:0 auto;padding:11px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px;font-size:13.5px;line-height:1.45}\
+.tem-banner-msg strong{font-weight:700}\
+.tem-banner-msg .tem-banner-sep{margin:0 8px;color:#9A6500}\
+.tem-banner-actions{display:flex;align-items:center;gap:14px;flex-shrink:0}\
+.tem-banner-actions a{color:#1D1D1F;text-decoration:underline;text-underline-offset:2px;font-size:13px;font-weight:500}\
+.tem-banner-actions a.tem-banner-cta{background:#1D1D1F;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px;font-weight:600}\
+.tem-banner-actions a.tem-banner-cta:hover{background:#2A2A2A}\
+@media (max-width:760px){.tem-banner-inner{flex-direction:column;align-items:flex-start;gap:10px;padding:12px 16px}.tem-banner-actions{width:100%;flex-wrap:wrap}}\
+#tem-mut-toast{position:fixed;bottom:24px;right:24px;background:#FFF;border:1px solid #E8E8ED;border-left:4px solid #F59E0B;border-radius:12px;padding:14px 38px 14px 18px;font-family:Geist,-apple-system,sans-serif;color:#1D1D1F;box-shadow:0 12px 32px rgba(0,0,0,.12);z-index:100001;max-width:380px;transform:translateY(120%);transition:transform .22s ease}\
+#tem-mut-toast.show{transform:translateY(0)}\
+.tem-mut-title{display:block;font-size:13px;font-weight:700;margin-bottom:4px}\
+.tem-mut-text{display:block;font-size:13px;line-height:1.5;color:#3A3A3C}\
+#tem-mut-close{position:absolute;top:8px;right:10px;background:none;border:none;color:#6E6E73;font-size:18px;line-height:1;cursor:pointer;font-family:inherit;padding:4px;border-radius:4px}\
+#tem-mut-close:hover{color:#1D1D1F;background:#F5F5F7}\
+@media (max-width:480px){#tem-mut-toast{left:16px;right:16px;bottom:16px;max-width:none}}\
 '
     document.head.appendChild(s)
   }
@@ -99,9 +132,29 @@
     grid.innerHTML = PLANS.map(buildPlanCard).join('')
   }
 
-  function buildOverlay() {
+  // Wordings du modal bloquant par état. trial_expired = wording historique
+  // préservé tel quel (zéro régression pré-H5b). grace_expired = nouveau,
+  // valide pour D4 (popup bloquant non fermable). Tout autre état tombe
+  // sur le fallback trial_expired (défensif, ne devrait jamais arriver
+  // car buildOverlay n'est appelé que depuis show(state) avec state ∈
+  // {trial_expired, grace_expired}).
+  function getOverlayContent(state) {
+    if (state === 'grace_expired') {
+      return {
+        h1: 'L’accès à votre compte est clôturé',
+        sub: 'Pour retrouver votre espace MovUP, choisissez votre abonnement.'
+      }
+    }
+    return {
+      h1: 'Votre essai gratuit est terminé',
+      sub: 'Choisissez votre abonnement pour continuer à utiliser MovUP.'
+    }
+  }
+
+  function buildOverlay(state) {
     if (document.getElementById(OVERLAY_ID)) return
     injectStyles()
+    var content = getOverlayContent(state)
     var div = document.createElement('div')
     div.id = OVERLAY_ID
     div.setAttribute('role', 'dialog')
@@ -109,8 +162,8 @@
     div.setAttribute('aria-labelledby', 'tem-h1')
     div.innerHTML = ''
       + '<div class="tem-card">'
-      +   '<h1 class="tem-h1" id="tem-h1">Votre essai gratuit est terminé</h1>'
-      +   '<p class="tem-sub">Choisissez votre abonnement pour continuer à utiliser MovUP.</p>'
+      +   '<h1 class="tem-h1" id="tem-h1">' + content.h1 + '</h1>'
+      +   '<p class="tem-sub">' + content.sub + '</p>'
       +   '<div class="tem-toggle-wrap"><div class="tem-toggle" role="group">'
       +     '<button type="button" class="tem-tbtn active" data-billing="monthly">Mensuel</button>'
       +     '<button type="button" class="tem-tbtn" data-billing="annual">Annuel<span class="tem-disc">−15 %</span></button>'
@@ -152,12 +205,75 @@
     }, { capture: true })
   }
 
-  function show() {
-    if (document.body) buildOverlay()
-    else document.addEventListener('DOMContentLoaded', buildOverlay, { once: true })
+  function show(state) {
+    var run = function () { buildOverlay(state) }
+    if (document.body) run()
+    else document.addEventListener('DOMContentLoaded', run, { once: true })
   }
 
-  // Check au load
+  // ── Bandeau β (D2 H5b) — grace_active non-bloquant ─────────────────────
+  // Persistant en haut de page, l'utilisateur continue à consulter en
+  // lecture seule. Aucune durée d'export chiffrée (la rétention vit
+  // uniquement dans les CGV, décision 9.16). CTA réabonnement utilise
+  // preferredPlan (calque buildPlanCard).
+  function buildBanner() {
+    if (document.getElementById(BANNER_ID)) return
+    injectStyles()
+    var upgradeUrl = '/account/upgrade?plan=' + encodeURIComponent(preferredPlan)
+    var div = document.createElement('div')
+    div.id = BANNER_ID
+    div.setAttribute('role', 'status')
+    div.innerHTML = ''
+      + '<div class="tem-banner-inner">'
+      +   '<span class="tem-banner-msg">'
+      +     '<strong>Votre abonnement a pris fin</strong>'
+      +     '<span class="tem-banner-sep">·</span>'
+      +     'votre compte est en lecture seule'
+      +   '</span>'
+      +   '<span class="tem-banner-actions">'
+      +     '<a href="/account/privacy">Télécharger mes données</a>'
+      +     '<a class="tem-banner-cta" href="' + upgradeUrl + '">Reprendre un abonnement</a>'
+      +   '</span>'
+      + '</div>'
+    document.body.insertBefore(div, document.body.firstChild)
+  }
+
+  function showBanner() {
+    if (document.body) buildBanner()
+    else document.addEventListener('DOMContentLoaded', buildBanner, { once: true })
+  }
+
+  // ── Toast mutation bloquée (D3 H5b) — grace_active sur 402 ─────────────
+  // Petit, fermable, auto-dismiss 6s (calque pattern auth-401 toast).
+  // Re-affiché à chaque mutation tentée (remove + ré-ajout pour reset du
+  // timer). Pas de cards plans : c'est un signal d'échec, pas un mur.
+  function buildMutToast() {
+    injectStyles()
+    var existing = document.getElementById(MUT_TOAST_ID)
+    if (existing) existing.remove()
+    var upgradeUrl = '/account/upgrade?plan=' + encodeURIComponent(preferredPlan)
+    var t = document.createElement('div')
+    t.id = MUT_TOAST_ID
+    t.setAttribute('role', 'alertdialog')
+    t.innerHTML = ''
+      + '<span class="tem-mut-title">Action impossible</span>'
+      + '<span class="tem-mut-text">Votre compte MovUP est en lecture seule. <a href="' + upgradeUrl + '" style="color:#1D1D1F;text-decoration:underline;text-underline-offset:2px;font-weight:600">Reprenez un abonnement</a> pour réactiver l’écriture.</span>'
+      + '<button type="button" id="tem-mut-close" aria-label="Fermer">×</button>'
+    document.body.appendChild(t)
+    void t.offsetWidth
+    t.classList.add('show')
+    var dismiss = function () { try { t.remove() } catch (e) {} }
+    var btn = t.querySelector('#tem-mut-close')
+    if (btn) btn.addEventListener('click', dismiss)
+    setTimeout(dismiss, 6000)
+  }
+
+  function showMutationBlocked() {
+    if (document.body) buildMutToast()
+    else document.addEventListener('DOMContentLoaded', buildMutToast, { once: true })
+  }
+
+  // ── Bootcheck (H5b) — discrimine sur data.app_state, source unique H5a ─
   function checkStatus() {
     fetch('/api/user/me', { credentials: 'same-origin' })
       .then(function (r) {
@@ -165,19 +281,32 @@
         return r.json()
       })
       .then(function (data) {
-        if (data && data.trial_status === 'expired') show()
+        if (!data || !data.app_state) return
+        if (data.app_state === 'trial_expired' || data.app_state === 'grace_expired') {
+          show(data.app_state)
+        } else if (data.app_state === 'grace_active') {
+          showBanner()
+        }
+        // 'active' et 'trial_active' : aucune UI.
       })
-      .catch(function () { /* silencieux : pas de réseau, pas de popup */ })
+      .catch(function () { /* silencieux : pas de réseau, pas d'UI */ })
   }
 
-  // Intercepteur fetch global : toute réponse 402 trial_expired déclenche le popup
+  // ── Intercepteur fetch (H5b) — discrimine sur body.error ───────────────
+  // Patche window.fetch en PREMIER (auth-401-handler.js capturera ensuite
+  // le fetch déjà patché — chaînage propre via captures successives).
   if (typeof window.fetch === 'function' && !window.__TEM_FETCH_PATCHED) {
     var originalFetch = window.fetch.bind(window)
     window.fetch = function () {
       return originalFetch.apply(null, arguments).then(function (response) {
         if (response && response.status === 402) {
           response.clone().json().then(function (body) {
-            if (body && body.error === 'trial_expired') show()
+            if (!body || !body.error) return
+            if (body.error === 'trial_expired' || body.error === 'grace_expired') {
+              show(body.error)
+            } else if (body.error === 'grace_active') {
+              showMutationBlocked()
+            }
           }).catch(function () { /* ignore */ })
         }
         return response

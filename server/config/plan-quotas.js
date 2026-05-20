@@ -94,10 +94,17 @@ export function firstOfMonthIsoUTC() {
 
 // Reset lazy du compteur mensuel sur user_plan : si lastResetDate < 1er du
 // mois courant UTC, remet leadsConsumedThisMonth à 0 et persiste. Idempotent
-// (no-op si déjà reset). Helper générique — NE contient PAS la logique
-// essai vs payant ; cf getLeadsConsumed qui conditionne l'appel. Déplacé
-// depuis server.js pour rester dans le module dédié aux quotas.
-export async function applyMonthlyReset(db, userId, rec) {
+// (no-op si déjà reset). Reçoit user pour bail-out essai (doctrine non
+// négociable : essai = 30 sec sans reset sur les 14j). Source de vérité du
+// plan = getEffectivePlan(user), pas rec.plan (qui peut être stale en cas
+// de divergence webhook Stripe / record user_plan). Déplacé depuis server.js
+// pour rester dans le module dédié aux quotas.
+export async function applyMonthlyReset(db, userId, rec, user) {
+  // Bail-out essai : doctrine non négociable, le compteur essai est cumulatif
+  // sur les 14j et ne doit JAMAIS être reset. Garde-fou contre les callers
+  // qui appelleraient applyMonthlyReset sans condition amont (cf régression
+  // GET /api/user-plan post-9f6460c).
+  if (getEffectivePlan(user) === 'essai') return rec
   const firstIso = firstOfMonthIsoUTC()
   if (rec.lastResetDate && new Date(rec.lastResetDate) >= new Date(firstIso)) return rec
   const updatedAt = new Date().toISOString()
@@ -136,6 +143,6 @@ export async function getLeadsConsumed(db, userId, rec, user) {
   if (!rec) return 0
   const plan = getEffectivePlan(user)
   if (plan === 'essai') return rec.leadsConsumedThisMonth || 0
-  const fresh = await applyMonthlyReset(db, userId, rec)
+  const fresh = await applyMonthlyReset(db, userId, rec, user)
   return fresh.leadsConsumedThisMonth || 0
 }

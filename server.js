@@ -2474,11 +2474,13 @@ app.get('/api/user-plan', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   try {
+    const user = req.authUser
+    if (!user) return res.status(401).json({ error: 'unauthorized' })
     const db = await getDb()
     const result = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
     const rec = result[0]?.[0]
     if (!rec) return res.json({ userId, plan: 'gratuit', leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null })
-    const fresh = await applyMonthlyReset(db, userId, rec)
+    const fresh = await applyMonthlyReset(db, userId, rec, user)
     res.json(fresh)
   } catch (err) {
     console.error('[user-plan:get]', err.message)

@@ -2907,6 +2907,24 @@ async function addToPipeline(leadId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newCard)
     });
+    // Phase 2 commit 2 : 402 pipeline_quota = plafond serveur atteint
+    // (autorité b4bf430). Déclenche la modale upgrade sans toast d'erreur
+    // générique. body.error === 'grace_active' laissé au comportement
+    // existant (trial-expired-modal H5b déjà branché là-dessus, ne pas
+    // interférer).
+    if (apiResp.status === 402) {
+      try {
+        var errBody = await apiResp.json();
+        if (errBody && errBody.error === 'pipeline_quota') {
+          if (typeof window.showPlafondModal === 'function') {
+            window.showPlafondModal(errBody.plan || 'demarrage');
+          } else {
+            showToast('Plafond de leads atteint — passez à un plan supérieur');
+          }
+          return;
+        }
+      } catch(e) { /* body non-JSON ou lecture impossible : tombe sur le throw ci-dessous */ }
+    }
     if(!apiResp.ok) throw new Error('HTTP ' + apiResp.status);
     var apiResult = await apiResp.json();
     // Dual-write localStorage
@@ -3250,23 +3268,15 @@ else buildIndex();
     } catch(e){}
     return { plan: planFromUser, leadsConsumed:0, leadsConsumedThisMonth:0, lastResetDate: null };
   }
-  // Le PUT n'envoie PLUS le plan (source = user.plan via webhook Stripe).
-  // Body strict : { leadsConsumed, leadsConsumedThisMonth } — préserve le compteur
-  // sans réintroduire la divergence avec user.plan.
-  async function savePlan(p){
-    try {
-      var body = {
-        leadsConsumed: p.leadsConsumed || 0,
-        leadsConsumedThisMonth: p.leadsConsumedThisMonth || 0
-      };
-      await fetch('/api/user-plan', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    } catch(e){}
-  }
-  // Tous les plans payants (demarrage/activite/croisiere) comptent au mois.
-  // Plus de distinction starter/pro vs gratuit/business (nomenclature legacy retirée).
-  function quotaConsumed(p){
-    return p.leadsConsumedThisMonth || 0;
-  }
+  // Phase 2 commit 2 : autorité serveur sur le compteur leadsConsumedThisMonth
+  // (b4bf430). Le PUT client autoritaire savePlan() et son monkey-patch
+  // window.addToPipeline qui calculait le delta côté client puis écrasait la
+  // valeur serveur via MERGE ont été retirés — ils trouaient le levier de
+  // conversion. Le décompte se fait désormais exclusivement dans POST
+  // /api/pipeline serveur (incrément +1 atomique si création réussie sur
+  // body.source === 'SIRENE'). La modale upgrade ci-dessous est déclenchée
+  // par addToPipeline (l.2905+) sur 402 pipeline_quota — première invocation
+  // réelle de showPlafondModal depuis sa définition.
   function showPlafondModal(currentPlan){
     var existing = document.getElementById('plafond-modal-overlay');
     if(existing) existing.remove();
@@ -3274,7 +3284,7 @@ else buildIndex();
     var html = '<div id="plafond-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;">';
     html += '<div style="background:#fff;border-radius:14px;padding:28px;width:440px;max-width:92vw;font-family:Geist,-apple-system,sans-serif;">';
     html += '<div style="font-size:18px;font-weight:800;letter-spacing:-.3px;margin-bottom:10px;">Plafond atteint</div>';
-    html += '<div style="font-size:13px;color:#6E6E73;line-height:1.5;margin-bottom:16px;">Tu as atteint le plafond de leads de ton plan <strong>' + (PLAN_LABELS[currentPlan]||currentPlan) + '</strong>. Pour continuer à ajouter des contacts depuis Leads, passe à <strong>' + nextLabel + '</strong>.</div>';
+    html += '<div style="font-size:13px;color:#6E6E73;line-height:1.5;margin-bottom:16px;">Vous avez atteint le plafond de leads de votre plan <strong>' + (PLAN_LABELS[currentPlan]||currentPlan) + '</strong>. Pour continuer à ajouter des contacts depuis Leads, passez à <strong>' + nextLabel + '</strong>.</div>';
     html += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
     html += '<button id="plafond-modal-close" style="padding:9px 16px;border:1px solid #E8E8ED;background:#fff;border-radius:8px;font-family:Geist;font-weight:600;font-size:12px;cursor:pointer;">Fermer</button>';
     html += '<button id="plafond-modal-stats" style="padding:9px 16px;border:none;background:#1D1D1F;color:#fff;border-radius:8px;font-family:Geist;font-weight:700;font-size:12px;cursor:pointer;">Choisir un plan</button>';
@@ -3284,40 +3294,9 @@ else buildIndex();
     document.getElementById('plafond-modal-stats').onclick = function(){ window.location.href = '/statistiques'; };
     document.getElementById('plafond-modal-overlay').onclick = function(e){ if(e.target.id === 'plafond-modal-overlay') this.remove(); };
   }
-  var originalAddToPipeline = window.addToPipeline;
-  window.addToPipeline = async function(leadId){
-    // Mode test : on incrémente toujours, jamais de blocage. Hard cap reviendra avec le backend.
-    var pipelineBefore = [];
-    try {
-      var resp = await fetch('/api/pipeline');
-      if(resp.ok){
-        pipelineBefore = await resp.json();
-      } else {
-        throw new Error('Pipeline API unavailable');
-      }
-    } catch(e) {
-      try { pipelineBefore = JSON.parse(localStorage.getItem('mup_pipeline') || '[]'); } catch(e2){ pipelineBefore = []; }
-    }
-    var beforeLen = pipelineBefore.length;
-    if(originalAddToPipeline) await originalAddToPipeline(leadId);
-    var pipelineAfter = [];
-    try {
-      var resp2 = await fetch('/api/pipeline');
-      if(resp2.ok){
-        pipelineAfter = await resp2.json();
-      } else {
-        throw new Error('Pipeline API unavailable');
-      }
-    } catch(e) {
-      try { pipelineAfter = JSON.parse(localStorage.getItem('mup_pipeline') || '[]'); } catch(e2){ pipelineAfter = []; }
-    }
-    if(pipelineAfter.length > beforeLen){
-      var p = await loadPlan();
-      p.leadsConsumed = (p.leadsConsumed || 0) + 1;
-      p.leadsConsumedThisMonth = (p.leadsConsumedThisMonth || 0) + 1;
-      await savePlan(p);
-    }
-  };
+  // Exposition globale : addToPipeline (hors IIFE) appelle window.showPlafondModal
+  // sur 402 pipeline_quota renvoyé par le serveur.
+  window.showPlafondModal = showPlafondModal;
 })();
 </script>
 <script src="/sidebar.js"></script>

@@ -697,10 +697,39 @@ app.post('/api/pipeline', async (req, res) => {
     // grave qu'une card promise puis supprimée).
     if (isLeadsAddition && createdOk) {
       try {
-        await db.query(
-          'UPDATE type::record("user_plan", $id) MERGE $body',
-          { id: userId, body: { leadsConsumedThisMonth: consumedNow + 1, updatedAt: new Date().toISOString() } }
-        )
+        // Hotfix régression e0ccd39 : UPDATE MERGE sur record inexistant
+        // est no-op silencieux en SurrealDB v3. Le retrait du PUT client
+        // (savePlan) au commit 2 a supprimé le mécanisme implicite de
+        // création du record user_plan. Sans upsert ici, le quota serveur
+        // ne s'incrémente jamais pour les users sans record préexistant
+        // → levier de conversion neutralisé. Pattern upsert identique à
+        // PUT /api/user-plan (l.2482-2501).
+        // req.authUser re-récupéré localement : la variable `user` du
+        // bloc check quota plus haut (l.657) est const dans son propre
+        // scope, pas accessible ici. Garanti non-null à ce stade : le
+        // bloc check quota a déjà fait if(!user) return 401 en amont.
+        const userForPlan = req.authUser
+        const sel = await db.query('SELECT id FROM type::record("user_plan", $id)', { id: userId })
+        const exists = sel[0]?.[0]
+        const updatedAt = new Date().toISOString()
+        if (exists) {
+          await db.query(
+            'UPDATE type::record("user_plan", $id) MERGE $body',
+            { id: userId, body: { leadsConsumedThisMonth: consumedNow + 1, updatedAt } }
+          )
+        } else {
+          await db.query(
+            'CREATE type::record("user_plan", $id) CONTENT $body',
+            { id: userId, body: {
+              userId,
+              plan: getEffectivePlan(userForPlan),
+              leadsConsumed: consumedNow + 1,
+              leadsConsumedThisMonth: consumedNow + 1,
+              lastResetDate: null,
+              updatedAt
+            }}
+          )
+        }
       } catch (e) {
         console.warn('[pipeline] incrément quota leads échoué :', e.message)
       }

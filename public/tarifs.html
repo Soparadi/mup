@@ -609,6 +609,7 @@ body.marketing-page {
       btn.classList.add('active');
       btn.setAttribute('aria-checked','true');
       const plan = btn.dataset.plan;
+      try { sessionStorage.setItem('intended_plan', plan); } catch (e) { /* mode privé strict — fail silencieux */ }
       result.textContent = planMessages[plan];
       const targetCard = document.querySelector('.plan[data-plan="' + plan + '"]');
       if(targetCard){

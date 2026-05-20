@@ -3900,6 +3900,9 @@ quizzOpts.forEach(opt => {
     const recommended = opt.dataset.plan;
     quizzOpts.forEach(o => o.classList.remove('selected'));
     opt.classList.add('selected');
+    quizzOpts.forEach(o => o.setAttribute('aria-checked', 'false'));
+    opt.setAttribute('aria-checked', 'true');
+    try { sessionStorage.setItem('intended_plan', recommended); } catch (e) { /* mode privé strict — fail silencieux */ }
     plans.forEach(p => p.classList.remove('plan-recommended'));
     const target = document.querySelector('.plan[data-plan="' + recommended + '"]');
     if (target) {
@@ -3911,6 +3914,8 @@ quizzOpts.forEach(opt => {
 });
 function resetQuizz() {
   quizzOpts.forEach(o => o.classList.remove('selected'));
+  quizzOpts.forEach(o => o.setAttribute('aria-checked', 'false'));
+  try { sessionStorage.removeItem('intended_plan'); } catch (e) { /* ignore */ }
   plans.forEach(p => p.classList.remove('plan-recommended'));
   if (quizzReset) quizzReset.style.display = 'none';
 }

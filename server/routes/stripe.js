@@ -258,26 +258,68 @@ export async function webhookHandler(req, res) {
             return
           }
           const subscription = await stripe.subscriptions.retrieve(session.subscription)
+
+          // SELECT user pré-update : sert à la fois (1) au garde-fou
+          // « ne pas écraser raison_sociale/billing_address déjà saisis
+          // manuellement » lors de l'extraction Customer Stripe ci-dessous,
+          // et (2) à l'email confirmation plus bas (factorisation — un seul
+          // SELECT au lieu de deux).
+          const r = await db.query(`SELECT * FROM type::record('user', $id)`, { id: cleanUserId(userId) })
+          const u = r?.[0]?.[0]
+          if (!u) {
+            console.warn('[stripe:webhook] user introuvable pour checkout.completed', userId)
+            return
+          }
+
+          // Extraction Customer Stripe (raison_sociale + billing_address) en
+          // try/catch SÉPARÉ du updateUserFields : si stripe.customers.retrieve
+          // plante (rate limit, network, Customer supprimé via Dashboard), le
+          // webhook continue et l'abonnement reste actif. raison_sociale +
+          // billing_address restent vides, captés au 1er devis ultérieurement.
+          // Garde priorité au manuel : on n'écrase pas un champ déjà rempli
+          // côté user.
+          const fieldsFromStripe = {}
+          try {
+            const customer = await stripe.customers.retrieve(session.customer)
+            if (customer.name && customer.name.trim() && !u.raison_sociale) {
+              fieldsFromStripe.raison_sociale = customer.name.trim().slice(0, 200)
+            }
+            if (customer.address && customer.address.line1 && !u.billing_address) {
+              const addr = customer.address
+              fieldsFromStripe.billing_address = {
+                line1: addr.line1 || '',
+                line2: addr.line2 || undefined,
+                postal_code: addr.postal_code || '',
+                city: addr.city || '',
+                country: (addr.country || 'FR').toUpperCase()
+              }
+            }
+            if (Object.keys(fieldsFromStripe).length > 0) {
+              console.log('[stripe:webhook] checkout.completed Customer fields extracted:', Object.keys(fieldsFromStripe).join(', '))
+            }
+          } catch (e) {
+            console.warn('[stripe:webhook] extraction Customer échouée :', e.message)
+          }
+
           await updateUserFields(userId, {
             stripe_subscription_id: subscription.id,
             stripe_customer_id: session.customer,
             subscription_status: subscription.status || 'active',
             plan,
             plan_billing_cycle: billing_cycle,
-            trial_status: 'converted'
+            trial_status: 'converted',
+            ...fieldsFromStripe
           }, extractCurrentPeriodEnd(subscription))
 
           // Invalidation cache session : webhook hors session HTTP, mais le
           // userId vient de session.metadata.user_id. Sans ça, le user revient
           // sur /account/billing post-checkout et voit l'ancien snapshot (sans
-          // stripe_customer_id) → redirect vers /account/upgrade en boucle.
+          // stripe_customer_id) → redirect vers /account/billing en boucle.
           invalidateSessionCacheByUserId(userId)
 
-          // Email confirmation
+          // Email confirmation (utilise u déjà chargé plus haut — factorisé).
           try {
-            const r = await db.query(`SELECT * FROM type::record('user', $id)`, { id: cleanUserId(userId) })
-            const u = r?.[0]?.[0]
-            if (u?.email) {
+            if (u.email) {
               await sendSubscriptionActivated({
                 email: u.email,
                 prenom: u.prenom,

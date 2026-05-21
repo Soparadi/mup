@@ -4,17 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MovUP — Tarifs</title>
-<meta name="description" content="3 formules pour l'auto-entrepreneur français. Démarrage 14 €, Activité 24 €, Croisière 39 €. 14 jours gratuits sans carte bancaire.">
+<meta name="description" content="3 formules pour l'auto-entrepreneur français. Démarrage 24 €, Activité 34 €, Croisière 44 €. 14 jours gratuits sans carte bancaire.">
 <meta name="keywords" content="tarifs MovUP, prix CRM auto-entrepreneur, démarrage activité croisière, prospection française">
 <link rel="canonical" href="https://movup.io/tarifs">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Tarifs MovUP — 3 formules pour l'auto-entrepreneur">
-<meta property="og:description" content="Démarrage 14 €, Activité 24 €, Croisière 39 €. 14 jours gratuits, sans carte bancaire, sans engagement.">
+<meta property="og:description" content="Démarrage 24 €, Activité 34 €, Croisière 44 €. 14 jours gratuits, sans carte bancaire, sans engagement.">
 <meta property="og:url" content="https://movup.io/tarifs">
 <meta property="og:image" content="https://movup.io/favicon.svg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Tarifs MovUP — 3 formules pour l'auto-entrepreneur">
-<meta name="twitter:description" content="Démarrage 14 €, Activité 24 €, Croisière 39 €. 14 jours gratuits, sans carte bancaire.">
+<meta name="twitter:description" content="Démarrage 24 €, Activité 34 €, Croisière 44 €. 14 jours gratuits, sans carte bancaire.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -403,7 +403,7 @@ body.marketing-page {
     <article class="plan" data-plan="demarrage">
       <span class="plan-label"><span class="plan-label-dot"></span>Démarrage</span>
       <div class="plan-price-row">
-        <span class="plan-price" data-monthly="19" data-annual="16">19&nbsp;€</span>
+        <span class="plan-price" data-monthly="24" data-annual="20" data-annual-total="240">24&nbsp;€</span>
         <span class="plan-period">/mois</span>
       </div>
       <p class="plan-billing" data-billing-text>Sans engagement</p>
@@ -435,7 +435,7 @@ body.marketing-page {
     <article class="plan plan-popular" data-plan="activite">
       <span class="plan-label"><span class="plan-label-dot"></span>Activité</span>
       <div class="plan-price-row">
-        <span class="plan-price" data-monthly="29" data-annual="25">29&nbsp;€</span>
+        <span class="plan-price" data-monthly="34" data-annual="28" data-annual-total="340">34&nbsp;€</span>
         <span class="plan-period">/mois</span>
       </div>
       <p class="plan-billing" data-billing-text>Sans engagement</p>
@@ -467,7 +467,7 @@ body.marketing-page {
     <article class="plan" data-plan="croisiere">
       <span class="plan-label"><span class="plan-label-dot"></span>Croisière</span>
       <div class="plan-price-row">
-        <span class="plan-price" data-monthly="39" data-annual="33">39&nbsp;€</span>
+        <span class="plan-price" data-monthly="44" data-annual="37" data-annual-total="440">44&nbsp;€</span>
         <span class="plan-period">/mois</span>
       </div>
       <p class="plan-billing" data-billing-text>Sans engagement</p>
@@ -578,9 +578,8 @@ body.marketing-page {
       billingTexts.forEach(function (text) {
         if (mode === 'annual') {
           var planEl = text.closest('.plan')
-          var annualMonthly = planEl.querySelector('.plan-price').dataset.annual
-          var yearTotal = parseInt(annualMonthly, 10) * 12
-          text.textContent = 'Soit ' + yearTotal + ' \u20ac par an, sans engagement'
+          var yearTotal = planEl.querySelector('.plan-price').dataset.annualTotal
+          text.textContent = 'Soit ' + yearTotal + ' \u20ac factur\u00e9s en une fois, sans engagement'
         } else {
           text.textContent = 'Sans engagement'
         }
@@ -596,9 +595,9 @@ body.marketing-page {
   const result = document.getElementById('quizz-result');
   if(!buttons.length || !result) return;
   const planMessages = {
-    demarrage: 'Démarrage 19 €/mois recommandé. Faites défiler pour découvrir.',
-    activite: 'Activité 29 €/mois recommandé. Faites défiler pour découvrir.',
-    croisiere: 'Croisière 39 €/mois recommandé. Faites défiler pour découvrir.'
+    demarrage: 'Démarrage 24 €/mois recommandé. Faites défiler pour découvrir.',
+    activite: 'Activité 34 €/mois recommandé. Faites défiler pour découvrir.',
+    croisiere: 'Croisière 44 €/mois recommandé. Faites défiler pour découvrir.'
   };
   buttons.forEach(btn => {
     btn.addEventListener('click', () => {

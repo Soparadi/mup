@@ -112,104 +112,6 @@ async function updateUserFields(userId, fields, currentPeriodEndUnix) {
 
 export const router = express.Router()
 
-// ── POST /api/stripe/create-checkout-session ──
-router.post('/create-checkout-session', requireAuth, async (req, res) => {
-  try {
-    const user = req.authUser
-    if (!user) return res.status(401).json({ error: 'unauthorized' })
-
-    const { plan, billing_cycle, siret, raison_sociale, billing_address } = req.body || {}
-    if (!isValidPlan(plan)) return res.status(400).json({ error: 'invalid_plan', message: 'Plan invalide' })
-    if (!isValidBillingCycle(billing_cycle)) return res.status(400).json({ error: 'invalid_billing_cycle', message: 'Cycle invalide' })
-
-    // Empêche un user déjà abonné de relancer un Checkout (il doit passer par
-    // le Customer Portal pour changer de plan).
-    if (user.subscription_status === 'active' || user.subscription_status === 'trialing') {
-      return res.status(400).json({
-        error: 'already_subscribed',
-        message: 'Abonnement déjà actif. Utilisez la gestion de l\'abonnement pour changer de plan.'
-      })
-    }
-
-    const priceId = getPriceId(plan, billing_cycle)
-    if (!priceId) {
-      return res.status(503).json({
-        error: 'stripe_not_configured',
-        message: 'Tarif Stripe indisponible — vérifier les variables STRIPE_PRICE_*.'
-      })
-    }
-
-    const stripe = getStripe()
-    const userId = cleanUserId(user.id)
-
-    // Persiste les infos de facturation envoyées par le front avant Checkout
-    // (siret + raison_sociale + billing_address). Si non fournies, on garde
-    // ce qu'il y a déjà en base.
-    const billingFieldsToSave = {}
-    if (typeof siret === 'string' && /^\d{14}$/.test(siret.replace(/\s+/g, ''))) {
-      billingFieldsToSave.siret = siret.replace(/\s+/g, '')
-    }
-    if (typeof raison_sociale === 'string' && raison_sociale.trim()) {
-      billingFieldsToSave.raison_sociale = raison_sociale.trim().slice(0, 200)
-    }
-    if (billing_address && typeof billing_address === 'object') {
-      billingFieldsToSave.billing_address = billing_address
-    }
-    if (Object.keys(billingFieldsToSave).length > 0) {
-      await updateUserFields(userId, billingFieldsToSave)
-    }
-
-    // Crée le Customer Stripe si absent.
-    let customerId = user.stripe_customer_id
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: (raison_sociale || user.raison_sociale || user.name || '').trim() || undefined,
-        metadata: { user_id: userId },
-        ...(billing_address ? {
-          address: {
-            line1: billing_address.line1 || '',
-            line2: billing_address.line2 || undefined,
-            postal_code: billing_address.postal_code || '',
-            city: billing_address.city || '',
-            country: (billing_address.country || 'FR').toUpperCase()
-          }
-        } : {})
-      })
-      customerId = customer.id
-      await updateUserFields(userId, { stripe_customer_id: customerId })
-    }
-
-    // Invalidation cache session : un seul appel après les 2 UPDATE potentiels
-    // de ce bloc (billingFields + stripe_customer_id). Le prochain getSession
-    // du user re-fetch l'objet user à jour (sinon désynchro 30s avec billing.html).
-    invalidateSessionCacheByUserId(userId)
-
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: appUrl() + '/account/billing?success=true&session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: appUrl() + '/account/upgrade?canceled=true&plan=' + encodeURIComponent(plan),
-      metadata: { user_id: userId, plan, billing_cycle },
-      subscription_data: { metadata: { user_id: userId, plan, billing_cycle } },
-      locale: 'fr',
-      billing_address_collection: 'required',
-      customer_update: { address: 'auto', name: 'auto' },
-      tax_id_collection: { enabled: true },
-      allow_promotion_codes: true,
-      custom_text: {
-        submit: { message: 'TVA non applicable, art. 293 B du CGI.' }
-      }
-    })
-
-    res.json({ url: session.url })
-  } catch (err) {
-    console.error('[stripe:create-checkout-session]', err.message)
-    res.status(500).json({ error: 'checkout_failed', message: 'Création de la session Stripe impossible.' })
-  }
-})
-
 // ── POST /api/stripe/create-portal-session ──
 router.post('/create-portal-session', requireAuth, async (req, res) => {
   try {
@@ -231,6 +133,71 @@ router.post('/create-portal-session', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[stripe:create-portal-session]', err.message)
     res.status(500).json({ error: 'portal_failed', message: 'Ouverture du portail impossible.' })
+  }
+})
+
+// ── GET /api/stripe/quick-checkout ──
+// Route GET pour redirect direct vers Stripe Checkout depuis les modales
+// (trial-expired-modal, leads plafond, etc.). Pas de form intermédiaire —
+// raison sociale + adresse facturation collectées par Stripe Checkout en
+// natif via billing_address_collection:'required' + customer_update:'auto'.
+// SIRET capté plus tard au 1er devis (tax_id_collection désactivé).
+router.get('/quick-checkout', requireAuth, async (req, res) => {
+  try {
+    const user = req.authUser
+    if (!user) return res.redirect(302, '/login')
+
+    const userId = cleanUserId(user.id)
+    const plan = String(req.query.plan || '').toLowerCase()
+    const cycle = String(req.query.cycle || '').toLowerCase()
+
+    const VALID_PLANS = ['demarrage', 'activite', 'croisiere']
+    const VALID_CYCLES = ['monthly', 'annual']
+    if (!VALID_PLANS.includes(plan) || !VALID_CYCLES.includes(cycle)) {
+      return res.redirect(302, '/account/billing?error=invalid_plan')
+    }
+
+    if (user.subscription_status === 'active' || user.subscription_status === 'trialing') {
+      return res.redirect(302, '/account/billing')
+    }
+
+    const priceId = getPriceId(plan, cycle)
+    if (!priceId) {
+      return res.redirect(302, '/account/billing?error=stripe_not_configured')
+    }
+
+    const stripe = getStripe()
+
+    let customerId = user.stripe_customer_id
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: { user_id: userId }
+      })
+      customerId = customer.id
+      await updateUserFields(userId, { stripe_customer_id: customerId })
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: customerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: appUrl() + '/account/billing?success=true&session_id={CHECKOUT_SESSION_ID}',
+      cancel_url:  appUrl() + '/account/billing?canceled=true&plan=' + encodeURIComponent(plan),
+      metadata: { user_id: userId, plan, billing_cycle: cycle },
+      subscription_data: { metadata: { user_id: userId, plan, billing_cycle: cycle } },
+      locale: 'fr',
+      billing_address_collection: 'required',
+      customer_update: { address: 'auto', name: 'auto' },
+      tax_id_collection: { enabled: false },
+      allow_promotion_codes: true,
+      custom_text: { submit: { message: 'TVA non applicable, art. 293 B du CGI.' } }
+    })
+
+    return res.redirect(303, session.url)
+  } catch (err) {
+    console.error('[quick-checkout]', err)
+    return res.redirect(302, '/account/billing?error=checkout_failed')
   }
 })
 

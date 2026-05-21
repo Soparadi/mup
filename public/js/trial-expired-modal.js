@@ -34,9 +34,9 @@
   window.__TEM_INITED = true
 
   var PLANS = [
-    { key: 'demarrage', name: 'Démarrage', monthly: 19, annual: 16, color: '#0BBCD4', soft: 'rgba(11,188,212,.12)' },
-    { key: 'activite',  name: 'Activité',  monthly: 29, annual: 25, color: '#1D8348', soft: 'rgba(29,131,72,.12)' },
-    { key: 'croisiere', name: 'Croisière', monthly: 39, annual: 33, color: '#1D8348', soft: 'rgba(29,131,72,.12)' }
+    { key: 'demarrage', name: 'Démarrage', monthly: 24, annual: 20, annualTotal: 240, color: '#0BBCD4', soft: 'rgba(11,188,212,.12)' },
+    { key: 'activite',  name: 'Activité',  monthly: 34, annual: 28, annualTotal: 340, color: '#1D8348', soft: 'rgba(29,131,72,.12)' },
+    { key: 'croisiere', name: 'Croisière', monthly: 44, annual: 37, annualTotal: 440, color: '#1D8348', soft: 'rgba(29,131,72,.12)' }
   ]
   var VALID_PLANS = ['demarrage', 'activite', 'croisiere']
 
@@ -113,7 +113,7 @@
     var isPopular = (p.key === preferredPlan)
     var price = billingCycle === 'annual' ? p.annual : p.monthly
     var billing = billingCycle === 'annual'
-      ? 'Soit ' + (p.annual * 12) + ' € par an'
+      ? 'Soit ' + p.annualTotal + ' € facturés en une fois, sans engagement'
       : 'Sans engagement'
     return ''
       + '<article class="tem-plan' + (isPopular ? ' tem-popular' : '') + '" style="border-left-color:' + p.color + '">'

@@ -122,7 +122,7 @@
       +   '</span>'
       +   '<div><span class="tem-price" style="color:' + (p.key === 'croisiere' ? '#0A0A0A' : p.color) + '">' + price + ' €</span><span class="tem-period">/mois</span></div>'
       +   '<div class="tem-billing">' + billing + '</div>'
-      +   '<a class="tem-cta" href="/account/upgrade?plan=' + p.key + '&cycle=' + billingCycle + '">Choisir ' + p.name + '</a>'
+      +   '<a class="tem-cta" href="/api/stripe/quick-checkout?plan=' + p.key + '&cycle=' + billingCycle + '">Choisir ' + p.name + '</a>'
       + '</article>'
   }
 
@@ -219,7 +219,7 @@
   function buildBanner() {
     if (document.getElementById(BANNER_ID)) return
     injectStyles()
-    var upgradeUrl = '/account/upgrade?plan=' + encodeURIComponent(preferredPlan)
+    var upgradeUrl = '/api/stripe/quick-checkout?plan=' + encodeURIComponent(preferredPlan) + '&cycle=monthly'
     var div = document.createElement('div')
     div.id = BANNER_ID
     div.setAttribute('role', 'status')
@@ -251,7 +251,7 @@
     injectStyles()
     var existing = document.getElementById(MUT_TOAST_ID)
     if (existing) existing.remove()
-    var upgradeUrl = '/account/upgrade?plan=' + encodeURIComponent(preferredPlan)
+    var upgradeUrl = '/api/stripe/quick-checkout?plan=' + encodeURIComponent(preferredPlan) + '&cycle=monthly'
     var t = document.createElement('div')
     t.id = MUT_TOAST_ID
     t.setAttribute('role', 'alertdialog')

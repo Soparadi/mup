@@ -19,6 +19,7 @@ import {
   expireTrialAutomatically,
   sendGraceEndingTomorrowEmails
 } from './trial-emails.js'
+import { purgeExpiredUsers } from './purge-expired.js'
 
 const SCHEDULE = process.env.CRON_TRIAL_SCHEDULE || '0 8 * * *'
 const TIMEZONE = process.env.CRON_TIMEZONE || 'Europe/Paris'
@@ -64,6 +65,7 @@ async function runTrialJobs() {
   await runStep('j0', sendTrialEndingTodayEmails)
   await runStep('expire', expireTrialAutomatically)
   await runStep('grace_j1', sendGraceEndingTomorrowEmails)
+  await runStep('purge', purgeExpiredUsers)
 }
 
 let started = false

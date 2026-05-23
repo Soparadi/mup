@@ -22,6 +22,7 @@ import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { deriveAppState } from './lib/derive-app-state.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
+import { runOptoutMigration } from './server/services/optout.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
   getEffectivePlan,
@@ -3370,6 +3371,14 @@ app.use((req, res) => {
     console.log('[boot] lead_search table ready (+ 3 indexes)')
   } catch (e) {
     console.error('[boot] lead_search migration failed:', e.message)
+  }
+  // Tables RGPD optout — opt-out tiers via /optout (art. 12 RGPD). Conservées
+  // hors purge utilisateur 9.16 (cf. server/services/purge-expired.js).
+  try {
+    await runOptoutMigration()
+    console.log('[boot] optout tables ready (request + blocklist, 9 indexes)')
+  } catch (e) {
+    console.error('[boot] optout migration failed:', e.message)
   }
   // Cron trial — node-cron in-process déclenché à 8h Europe/Paris.
   // Skip si NODE_ENV !== 'production' (évite spam emails en dev) ou

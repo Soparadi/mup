@@ -32,6 +32,9 @@
   }
   .optout-submit:hover, .optout-submit:focus { background:#262626; }
   .hp-field { position:absolute; left:-9999px; width:1px; height:1px; opacity:0; }
+  .optout-message { margin:0 0 24px; padding:12px 16px; border-radius:8px; font-size:14px; line-height:1.5; max-width:560px; }
+  .optout-message--error { background:#FEF2F2; border:1px solid #FCA5A5; color:#991B1B; }
+  .optout-message--success { background:#F0FDF4; border:1px solid #86EFAC; color:#166534; }
 </style>
 </head>
 <body class="legal-page">
@@ -47,6 +50,8 @@
     <h1>Demande d’opposition au traitement de vos données</h1>
     <p class="legal-meta">Délai de traitement : 1 mois extensible à 3 mois (art. 12.3 RGPD) — Mise à jour : 23 mai 2026</p>
   </header>
+
+  <div id="optout-message" class="optout-message" role="alert" hidden></div>
 
   <section id="introduction">
     <h2>À propos de cette démarche</h2>
@@ -107,5 +112,65 @@
 <script defer src="/scripts/cookies-banner.js"></script>
 
 <script defer src="/scripts/marketing-layout.js"></script>
+<script>
+(function () {
+  var form = document.querySelector(".optout-form");
+  var msg = document.getElementById("optout-message");
+
+  function showMessage(text, kind) {
+    if (!msg) return;
+    msg.textContent = text;
+    msg.className = "optout-message optout-message--" + (kind || "error");
+    msg.hidden = false;
+    try { msg.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (e) {}
+  }
+
+  // Message inline si ?error= en URL (redirection depuis /api/optout/verify).
+  var params = new URLSearchParams(window.location.search);
+  var err = params.get("error");
+  if (err) {
+    var map = {
+      invalid_or_expired: "Le lien de vérification est expiré ou invalide. Veuillez refaire votre demande ci-dessous.",
+      rate_limit_exceeded: "Trop de demandes depuis cette adresse. Veuillez réessayer dans quelques heures, ou contactez dpo@movup.io.",
+      server_error: "Une erreur est survenue. Veuillez réessayer dans quelques instants."
+    };
+    showMessage(map[err] || "Une erreur est survenue. Veuillez réessayer.", "error");
+  }
+
+  if (!form) return;
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var btn = form.querySelector(".optout-submit");
+    if (btn) btn.disabled = true;
+
+    var payload = {
+      email: ((form.email && form.email.value) || "").trim(),
+      siret: ((form.siret && form.siret.value) || "").trim(),
+      website: (form.website && form.website.value) || "",
+      confirm_word: ((form.confirm_word && form.confirm_word.value) || "").trim(),
+      consent: !!(form.consent && form.consent.checked)
+    };
+
+    fetch("/api/optout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(function (r) {
+      return r.json().then(function (data) { return { status: r.status, data: data }; });
+    }).then(function (res) {
+      if (res.status >= 200 && res.status < 300 && res.data && res.data.ok) {
+        window.location.href = res.data.redirect || "/optout-confirmation";
+        return;
+      }
+      if (btn) btn.disabled = false;
+      var detail = (res.data && res.data.detail) || "Une erreur est survenue. Veuillez vérifier le formulaire et réessayer.";
+      showMessage(detail, "error");
+    }).catch(function () {
+      if (btn) btn.disabled = false;
+      showMessage("Une erreur réseau est survenue. Veuillez réessayer.", "error");
+    });
+  });
+})();
+</script>
 </body>
 </html>

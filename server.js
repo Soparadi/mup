@@ -22,7 +22,16 @@ import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { deriveAppState } from './lib/derive-app-state.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
-import { runOptoutMigration, checkBlocklistBatch, checkBlocklistOne } from './server/services/optout.js'
+import {
+  runOptoutMigration,
+  checkBlocklistBatch,
+  checkBlocklistOne,
+  hashIdentifier,
+  findPendingRequest,
+  insertOptoutRequest,
+  verifyOptoutToken
+} from './server/services/optout.js'
+import { sendOptoutVerify } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
   getEffectivePlan,
@@ -100,6 +109,22 @@ const globalApiLimiter = rateLimit({
   }
 })
 app.use('/api', globalApiLimiter)
+
+// Rate-limit dédié opt-out — 3 req/24h/IP. Borne le flood de demandes
+// d'opposition (anti-abus + anti-énumération). keyGenerator par req.ip
+// (trust proxy = 1 → IP fiable). Message orienté tiers avec voie alternative
+// dpo@movup.io pour les IP partagées (coworking, cabinet).
+const optoutLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => req.ip,
+  message: {
+    error: 'rate_limit_exceeded',
+    detail: 'Trop de demandes depuis cette adresse. Veuillez réessayer dans quelques heures, ou contactez dpo@movup.io.'
+  }
+})
 
 // Origin/Referer check sur méthodes mutantes /api/* — 403 si l'origine
 // n'est pas dans la whitelist. SameSite=Lax couvre déjà la plupart des CSRF,
@@ -1330,6 +1355,103 @@ app.get('/api/geocode', async (req, res) => {
     res.json(data)
   } catch(e) {
     res.status(502).json({ error: 'Géocodage indisponible' })
+  }
+})
+
+// ── Opt-out RGPD art. 21 (Phase 6 Étape 8) ──────────────────────────────
+// POST /api/optout : enregistre une demande d'opposition + envoie un magic
+// link de vérification. Rate-limit 3/24h/IP. Réponse anti-énumération
+// (identique quel que soit l'état réel). Honeypot + question logique +
+// consentement = anti-bot. Aucune donnée du tiers renvoyée.
+app.post('/api/optout', optoutLimiter, async (req, res) => {
+  try {
+    const { email, siret, website, confirm_word, consent } = req.body || {}
+
+    // 1. Honeypot — si rempli, 200 silencieux (ne pas révéler le piège).
+    if (website && String(website).trim() !== '') {
+      return res.status(200).json({ ok: true, redirect: '/optout-confirmation' })
+    }
+    // 2. Question logique anti-bot.
+    if (confirm_word !== 'OPTOUT') {
+      return res.status(400).json({ error: 'invalid_confirm', detail: 'Le mot de confirmation est incorrect.' })
+    }
+    // 3. Consentement obligatoire.
+    if (!consent) {
+      return res.status(400).json({ error: 'missing_consent', detail: 'Vous devez confirmer être habilité à formuler la demande.' })
+    }
+    // 4. Email.
+    const emailNorm = String(email || '').toLowerCase().trim()
+    if (!emailNorm || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
+      return res.status(400).json({ error: 'invalid_email', detail: 'Adresse email invalide.' })
+    }
+    // 5. SIRET optionnel (14 chiffres).
+    const siretNorm = siret ? String(siret).replace(/\s/g, '') : null
+    if (siretNorm && !/^\d{14}$/.test(siretNorm)) {
+      return res.status(400).json({ error: 'invalid_siret', detail: 'Le SIRET doit contenir 14 chiffres.' })
+    }
+
+    // 6. Idempotence UX (arbitrage 8b) : on détecte une demande pending < 1h
+    //    pour le même couple, mais on crée tout de même une nouvelle demande
+    //    (impossible de renvoyer l'ancien lien — seul le hash est stocké ; un
+    //    tiers ayant perdu le 1er email doit pouvoir réessayer). Flood borné
+    //    par le rate-limit 3/24h/IP. Réponse identique = aucune énumération.
+    const emailHash = hashIdentifier(emailNorm)
+    const siretHash = siretNorm ? hashIdentifier(siretNorm) : null
+    const existing = await findPendingRequest(emailHash, siretHash)
+    if (existing) console.log('[optout] demande pending <1h déjà présente — nouvelle demande créée (idempotence UX)')
+
+    const { token, shortRef } = await insertOptoutRequest({
+      email: emailNorm,
+      siret: siretNorm,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || null
+    })
+
+    // 7. Envoi email best-effort (le sender lève ; on swallow ici).
+    let emailOk = true
+    try {
+      await sendOptoutVerify({ to: emailNorm, token, shortRef })
+    } catch (e) {
+      emailOk = false
+      console.error('[optout:send-email]', e.message)
+    }
+
+    // 8. Réponse anti-énumération identique : 200 si email parti, 202 Accepted
+    //    si échec Resend (demande enregistrée, jamais d'erreur technique
+    //    exposée au tiers).
+    return res.status(emailOk ? 200 : 202).json({ ok: true, redirect: '/optout-confirmation' })
+  } catch (e) {
+    console.error('[optout:post]', e.message)
+    return res.status(500).json({ error: 'server_error', detail: 'Une erreur est survenue. Veuillez réessayer.' })
+  }
+})
+
+// GET /api/optout/verify/:token : consomme le token, inscrit en blocklist,
+// sert la page verified avec substitution server-side des placeholders (pas
+// de template engine — pattern read+inject). Re-clic post-vérif = succès
+// idempotent. Token invalide/expiré = redirect /optout?error=invalid_or_expired.
+app.get('/api/optout/verify/:token', async (req, res) => {
+  try {
+    const { token } = req.params
+    if (!token || token.length < 20) {
+      return res.redirect(302, '/optout?error=invalid_or_expired')
+    }
+    const result = await verifyOptoutToken(token)
+    if (!result.ok) {
+      return res.redirect(302, '/optout?error=' + encodeURIComponent(result.reason || 'invalid_or_expired'))
+    }
+    const filePath = join(__dirname, 'public', 'optout-verified.html')
+    let html = await readFile(filePath, 'utf8')
+    const deadline = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    html = html
+      .replace(/\{\{REQUEST_ID\}\}/g, String(result.requestId || '').replace(/[<>"'&]/g, ''))
+      .replace(/\{\{PROCESSING_DEADLINE\}\}/g, deadline)
+    res.set('Content-Type', 'text/html; charset=utf-8')
+    return res.status(200).send(html)
+  } catch (e) {
+    console.error('[optout:verify]', e.message)
+    return res.redirect(302, '/optout?error=server_error')
   }
 })
 

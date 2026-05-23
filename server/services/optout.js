@@ -20,7 +20,7 @@
 // Phase 6 (Étapes 5, 7, 8).
 
 import { getDb } from '../../lib/surreal.js'
-import { createHash } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 
 // ── migration idempotente ──
 export async function runOptoutMigration() {
@@ -43,11 +43,13 @@ export async function runOptoutMigration() {
     'DEFINE FIELD IF NOT EXISTS processed_at ON optout_request TYPE option<datetime>',
     'DEFINE FIELD IF NOT EXISTS processed_by ON optout_request TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS notes ON optout_request TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS short_ref ON optout_request TYPE option<string>',
     'DEFINE INDEX IF NOT EXISTS idx_optout_request_email_hash ON optout_request FIELDS email_hash',
     'DEFINE INDEX IF NOT EXISTS idx_optout_request_siret_hash ON optout_request FIELDS siret_hash',
     'DEFINE INDEX IF NOT EXISTS idx_optout_request_verify_token ON optout_request FIELDS verify_token UNIQUE',
     'DEFINE INDEX IF NOT EXISTS idx_optout_request_status ON optout_request FIELDS status',
     'DEFINE INDEX IF NOT EXISTS idx_optout_request_created_at ON optout_request FIELDS created_at',
+    'DEFINE INDEX IF NOT EXISTS idx_optout_request_short_ref ON optout_request FIELDS short_ref',
     // ── optout_blocklist — liste persistante hash SHA-256, consultée scraping ──
     'DEFINE TABLE IF NOT EXISTS optout_blocklist SCHEMAFULL',
     'DEFINE FIELD IF NOT EXISTS email_hash ON optout_blocklist TYPE string',
@@ -126,4 +128,130 @@ export async function checkBlocklistBatch(sirets) {
 export async function checkBlocklistOne(siret) {
   const blocked = await checkBlocklistBatch([siret])
   return blocked.size > 0
+}
+
+// ── helpers métier demande opt-out + verify (Phase 6 Étape 8) ──
+
+// Génère un token de vérification magic-link. Calque surreal-adapter.js :
+// brut = randomBytes(32) base64url (inclus dans le lien email, jamais loggé
+// ni stocké), hash SHA-256 hex (seul stocké en base, lookup par hash).
+export function generateVerifyToken() {
+  const token = randomBytes(32).toString('base64url')
+  const tokenHash = createHash('sha256').update(token).digest('hex')
+  return { token, tokenHash }
+}
+
+// Idempotence anti-double-submit : retourne une demande pending de moins
+// d'1h pour le même couple (email_hash, siret_hash), sinon null. Branche
+// explicitement sur `siret_hash IS NONE` plutôt que via un param NULL — le
+// SDK mappe JS null → NULL, distinct de NONE en SurrealDB, ce qui fausserait
+// la comparaison pour les demandes sans SIRET.
+export async function findPendingRequest(emailHash, siretHash) {
+  const db = await getDb()
+  const base = 'SELECT * FROM optout_request WHERE email_hash = $emailHash'
+    + " AND status = 'pending_verification' AND created_at > time::now() - 1h"
+  const query = siretHash
+    ? base + ' AND siret_hash = $siretHash LIMIT 1'
+    : base + ' AND siret_hash IS NONE LIMIT 1'
+  const params = siretHash ? { emailHash, siretHash } : { emailHash }
+  const result = await db.query(query, params)
+  return result[0]?.[0] || null
+}
+
+// Crée une demande opt-out en statut pending_verification. Stocke le HASH du
+// token (jamais le brut). Les champs optionnels (siret, ip, user_agent) ne
+// sont posés que s'ils sont présents (option<string> = string|NONE — on évite
+// d'assigner NULL). Datetimes via time::now() côté DB. Retourne
+// { request, token } : token BRUT pour le lien email, à ne jamais logger.
+export async function insertOptoutRequest({ email, siret, ip, userAgent }) {
+  const db = await getDb()
+  const emailNorm = String(email || '').toLowerCase().trim()
+  const siretNorm = siret ? String(siret).replace(/\s/g, '') : null
+  const emailHash = hashIdentifier(emailNorm)
+  const siretHash = siretNorm ? hashIdentifier(siretNorm) : null
+  const { token, tokenHash } = generateVerifyToken()
+  // Référence courte lisible (6 hex aléatoires → MUP-OPT-A3F9C1). Stockée +
+  // indexée pour la recherche backend par référence. Collision négligeable
+  // au volume opt-out (16,7M combinaisons).
+  const shortRef = 'MUP-OPT-' + randomBytes(3).toString('hex').toUpperCase()
+
+  const fields = [
+    'email = $email',
+    'email_hash = $emailHash',
+    "status = 'pending_verification'",
+    'verify_token = $tokenHash',
+    'short_ref = $shortRef',
+    'verify_expires_at = time::now() + 24h',
+    'created_at = time::now()'
+  ]
+  const params = { email: emailNorm, emailHash, tokenHash, shortRef }
+  if (siretNorm) {
+    fields.push('siret = $siret', 'siret_hash = $siretHash')
+    params.siret = siretNorm
+    params.siretHash = siretHash
+  }
+  // IP hashée en base (cohérence email_hash/siret_hash, minimisation
+  // art. 5.1.c) ; l'IP claire ne sert qu'au rate-limit middleware en amont,
+  // jamais affichée ni au tiers ni dans l'email.
+  if (ip) { fields.push('ip_address = $ip'); params.ip = hashIdentifier(String(ip)) }
+  if (userAgent) { fields.push('user_agent = $userAgent'); params.userAgent = String(userAgent) }
+
+  const result = await db.query(`CREATE optout_request SET ${fields.join(', ')}`, params)
+  const request = result[0]?.[0] || null
+  return { request, token, shortRef }
+}
+
+// Consomme un token de vérification : passe la demande en 'verified' puis
+// l'inscrit dans optout_blocklist. Lookup par hash du token. source =
+// 'user_request' (valeur imposée par l'ASSERT du schéma Étape 4 :
+// INSIDE ['user_request','admin_manual','legal_order'] — 'optout_request'
+// n'est PAS une valeur acceptée). Liens record via type::record (pattern
+// purge-expired.js). Re-clic = SELECT vide (status déjà 'verified') →
+// invalid_or_expired, ce qui prévient aussi le doublon blocklist.
+export async function verifyOptoutToken(token) {
+  if (!token || typeof token !== 'string') {
+    return { ok: false, reason: 'invalid_or_expired' }
+  }
+  const db = await getDb()
+  const tokenHash = createHash('sha256').update(token).digest('hex')
+  const sel = await db.query(
+    'SELECT * FROM optout_request WHERE verify_token = $tokenHash'
+    + " AND status = 'pending_verification' AND verify_expires_at > time::now() LIMIT 1",
+    { tokenHash }
+  )
+  const request = sel[0]?.[0]
+  if (!request) {
+    // Re-clic idempotent : token déjà consommé (status 'verified'). Succès
+    // silencieux SANS ré-insertion blocklist (art. 12 transparence — l'action
+    // a déjà été faite, on n'affiche pas d'erreur au tiers).
+    const done = await db.query(
+      "SELECT short_ref, id FROM optout_request WHERE verify_token = $tokenHash AND status = 'verified' LIMIT 1",
+      { tokenHash }
+    )
+    const doneReq = done[0]?.[0]
+    if (doneReq) return { ok: true, alreadyVerified: true, requestId: doneReq.short_ref || String(doneReq.id) }
+    return { ok: false, reason: 'invalid_or_expired' }
+  }
+
+  const reqId = String(request.id).replace(/^optout_request:/, '').replace(/^⟨+|⟩+$/g, '')
+
+  await db.query(
+    "UPDATE type::record('optout_request', $reqId) SET status = 'verified', verified_at = time::now()",
+    { reqId }
+  )
+
+  const blockFields = [
+    'email_hash = $emailHash',
+    "source = 'user_request'",
+    "request_id = type::record('optout_request', $reqId)",
+    'blocked_at = time::now()'
+  ]
+  const blockParams = { emailHash: request.email_hash, reqId }
+  if (request.siret_hash) {
+    blockFields.push('siret_hash = $siretHash')
+    blockParams.siretHash = request.siret_hash
+  }
+  await db.query(`CREATE optout_blocklist SET ${blockFields.join(', ')}`, blockParams)
+
+  return { ok: true, alreadyVerified: false, requestId: request.short_ref || String(request.id) }
 }

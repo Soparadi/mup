@@ -360,3 +360,47 @@ export async function sendRelanceJ12(user) {
   if (result.error) throw new Error(result.error.message || 'Resend send failed')
   return { id: result.data?.id || null }
 }
+
+// ── sendOptoutVerify ──
+// Email de confirmation magic-link d'une demande d'opposition RGPD (art. 21).
+// N'affiche NI l'IP, NI l'email, NI le SIRET du demandeur (minimisation —
+// il vient de les saisir, ils ne lui apportent rien). Lien valable 24h.
+//   to : email du tiers ; token : token de vérification BRUT (jamais loggé) ;
+//   shortRef : référence courte MUP-OPT-XXXXXX.
+// Lève sur erreur Resend, comme les autres senders : le caller (route
+// POST /api/optout) gère le best-effort — log + jamais d'exposition au client.
+export async function sendOptoutVerify({ to, token, shortRef }) {
+  if (!to) throw new Error('to requis')
+  if (!token) throw new Error('token requis')
+  const verifyUrl = `${appUrl()}/api/optout/verify/${token}`
+  const tpl = await loadTemplate('optout-verify.html')
+  const html = applyVars(tpl, { verify_url: verifyUrl, short_ref: shortRef || '' })
+  const text = [
+    'Bonjour,',
+    '',
+    'Nous avons bien reçu une demande d\'opposition au traitement de vos données, formulée via la page d\'opposition du service MovUP.',
+    '',
+    'Pour confirmer cette demande, ouvrez ce lien dans les 24 heures :',
+    verifyUrl,
+    '',
+    `Référence de votre demande : ${shortRef || ''}`,
+    '',
+    'Si vous n\'êtes pas à l\'origine de cette demande, ignorez ce message : aucune action ne sera prise sans votre confirmation.',
+    '',
+    'L\'équipe MovUP — bonjour@movup.io',
+    'Délégué à la protection des données : dpo@movup.io · Réclamation CNIL : www.cnil.fr'
+  ].join('\n')
+
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: [to],
+    replyTo: FROM,
+    subject: 'Confirmez votre demande d\'opposition MovUP',
+    html,
+    text,
+    tags: [{ name: 'type', value: 'optout-verify' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}

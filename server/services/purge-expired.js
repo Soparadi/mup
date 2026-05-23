@@ -22,6 +22,20 @@
 //                        purgés (préserve devis_id pointé par les factures)
 //   - stripe_events_processed → NON purgée (anti-replay webhooks Stripe)
 //
+// EXCLUSION RGPD OPT-OUT (Phase 9.16 cron purge + Phase 6 Étape 4 tables) :
+//   - optout_request   → NON purgée. Conservation 5 ans (prescription
+//                        action RGPD art. 12.3, droit de la personne
+//                        concernée à exercer un recours après opt-out).
+//   - optout_blocklist → NON purgée. Persistante par construction
+//                        (anti-réveil : un tiers opt-out le reste même
+//                        après suppression du compte qui l'a inscrit ;
+//                        la blocklist sert TOUS les abonnés MovUP).
+//   Les 2 tables n'ont ni champ userId (SCHEMALESS) ni user_id
+//   record<user> (SCHEMAFULL) → hors périmètre des deux boucles par
+//   construction. Exclusion figée ici, opposable au sens art. 5-2
+//   RGPD (accountability). NE JAMAIS les ajouter à TABLES_SCHEMAFULL
+//   ni à TABLES_SCHEMALESS.
+//
 // ANONYMISATION audit_log (Option β) : avant DELETE user, on SET user_id
 // = NONE sur tous les audit_log de ce user. Le type field est option<
 // record<user>> (cf. migration 001 l.101) qui accepte NONE. Traçabilité

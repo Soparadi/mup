@@ -472,6 +472,7 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/') || req.path === '/auth' || req.path === '/health') return next()
   if (req.path.startsWith('/v2/webhooks/')) return next()
   if (req.path.startsWith('/public/')) return next()
+  if (req.path === '/optout' || req.path.startsWith('/optout/')) return next()  // opt-out public RGPD art. 21
   return requireAuth(req, res, next)
 })
 
@@ -485,6 +486,7 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/') || req.path === '/auth' || req.path === '/health') return next()
   if (req.path.startsWith('/v2/webhooks/')) return next()
   if (req.path.startsWith('/public/')) return next()
+  if (req.path === '/optout' || req.path.startsWith('/optout/')) return next()  // opt-out public RGPD art. 21
   if (req.path.startsWith('/stripe/')) return next()
   if (req.path === '/user/me') return next()
   if (req.path === '/account/privacy/export') return next()

@@ -22,7 +22,7 @@ import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { deriveAppState } from './lib/derive-app-state.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
-import { runOptoutMigration } from './server/services/optout.js'
+import { runOptoutMigration, checkBlocklistBatch, checkBlocklistOne } from './server/services/optout.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
   getEffectivePlan,
@@ -653,6 +653,19 @@ app.post('/api/pipeline', async (req, res) => {
     // (ex. route POST /api/pipeline/from-leads dédiée + middleware d'ajout
     // de source). À traiter dans une passe de durcissement future.
     const isLeadsAddition = body.source === 'SIRENE'
+
+    // ── Rempart 2 opt-out (RGPD art. 12) — refus dur à l'ajout, AVANT le
+    // check quota : une tentative bloquée ne consomme pas de lead
+    // (leadsConsumedThisMonth non décrémenté). Lookup unitaire (1 SELECT).
+    // Ne s'applique qu'aux ajouts Leads (source SIRENE) porteurs d'un
+    // SIRET ; les autres flux passent strictement inchangés.
+    if (isLeadsAddition && body.siret && await checkBlocklistOne(body.siret)) {
+      return res.status(403).json({
+        error: 'opt_out',
+        message: "Cette entreprise n'est pas disponible pour prospection."
+      })
+    }
+
     let consumedNow = 0
     if (isLeadsAddition) {
       const user = req.authUser
@@ -1044,6 +1057,29 @@ app.get('/api/search', async (req, res) => {
         data.total_results = Math.round(data.total_results * ratio)
       }
     }
+    // ── Rempart 1 opt-out (RGPD art. 12) — filtrage silencieux upstream.
+    // recherche-entreprises ne porte pas de SIRET top-level : on collecte
+    // les SIRET candidats par fiche (siège + matching_etablissements) puis
+    // on retire toute fiche dont un SIRET est blocklisté. Sur-filtrage
+    // assumé (doctrine anti-revelation : aucune fiche masquée signalée).
+    if (Array.isArray(data.results) && data.results.length) {
+      const sirets = []
+      for (const r of data.results) {
+        if (r?.siege?.siret) sirets.push(r.siege.siret)
+        if (Array.isArray(r?.matching_etablissements)) {
+          for (const e of r.matching_etablissements) if (e?.siret) sirets.push(e.siret)
+        }
+      }
+      const blocked = await checkBlocklistBatch(sirets)
+      if (blocked.size) {
+        data.results = data.results.filter(r => {
+          if (r?.siege?.siret && blocked.has(r.siege.siret)) return false
+          if (Array.isArray(r?.matching_etablissements) &&
+              r.matching_etablissements.some(e => e?.siret && blocked.has(e.siret))) return false
+          return true
+        })
+      }
+    }
     res.json(data)
     // Fire-and-forget : tracking historique recherches. Lancé APRÈS res.json
     // pour ne jamais bloquer la réponse au front. Échec silencieux côté
@@ -1244,6 +1280,16 @@ app.get('/api/sirene/search', async (req, res) => {
     if(!r.ok) { const body = await r.text(); console.error('[INSEE] Search error:', r.status, body.substring(0,300)); return res.status(502).json({ error: 'Recherche INSEE échouée', upstream_status: r.status }) }
     const data = await r.json()
     console.log('[INSEE] Success: total=', data.header?.total, 'etablissements=', data.etablissements?.length)
+    // ── Rempart 1 opt-out (RGPD art. 12) — filtrage silencieux upstream.
+    // INSEE SIRENE porte le SIRET en top-level (etab.siret). Batch IN
+    // (≤100 SIRET, nombre déjà borné l.1235) puis retrait des fiches
+    // blocklistées. Anti-revelation : aucun message « X masquées ».
+    if (Array.isArray(data.etablissements) && data.etablissements.length) {
+      const blocked = await checkBlocklistBatch(data.etablissements.map(e => e?.siret).filter(Boolean))
+      if (blocked.size) {
+        data.etablissements = data.etablissements.filter(e => !(e?.siret && blocked.has(e.siret)))
+      }
+    }
     res.json(data)
   } catch(e) {
     console.error('[INSEE] Fetch crash:', e.message)

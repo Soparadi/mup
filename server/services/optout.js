@@ -20,6 +20,7 @@
 // Phase 6 (Étapes 5, 7, 8).
 
 import { getDb } from '../../lib/surreal.js'
+import { createHash } from 'crypto'
 
 // ── migration idempotente ──
 export async function runOptoutMigration() {
@@ -63,4 +64,66 @@ export async function runOptoutMigration() {
   for (const q of queries) {
     try { await db.query(q) } catch (e) { console.warn('[optout-migration]', q.slice(0, 80), '→', e.message) }
   }
+}
+
+// ── helpers métier opt-out blocklist (Phase 6 Étape 5b) ──
+
+// SHA-256 hex d'un identifiant (SIRET ou email). Normalisation .trim()
+// AVANT hash (les SIRET sont déjà des strings de 14 chiffres ; .trim()
+// absorbe d'éventuels espaces parasites issus d'un signup futur). Throw
+// si entrée invalide : on ne hash jamais du vide (un hash de '' matcherait
+// par accident une entrée blocklist mal formée).
+export function hashIdentifier(value) {
+  if (!value || typeof value !== 'string') {
+    throw new TypeError('[optout] hashIdentifier: value doit être une string non vide')
+  }
+  return createHash('sha256').update(value.trim()).digest('hex')
+}
+
+// Lookup batch blocklist par SIRET. Retourne le Set des SIRET (valeurs
+// d'origine) présents dans optout_blocklist. Exploite l'index
+// idx_optout_blocklist_siret_hash via clause IN. Chunk par 100 (limite
+// défensive WebSocket). Fail-open : toute erreur DB → Set vide + log warn
+// (tradeoff acté brief 5b — un bug DB ne doit pas bloquer le scraping,
+// mais doit rester visible dans les logs).
+export async function checkBlocklistBatch(sirets) {
+  const blocked = new Set()
+  if (!Array.isArray(sirets) || sirets.length === 0) return blocked
+  // Dédup + filtrage falsy, et map hash→siret pour remonter aux valeurs
+  // d'origine après le SELECT (qui ne renvoie que les hash).
+  const hashToSiret = new Map()
+  for (const s of sirets) {
+    if (!s || typeof s !== 'string') continue
+    const clean = s.trim()
+    if (!clean) continue
+    hashToSiret.set(hashIdentifier(clean), clean)
+  }
+  if (hashToSiret.size === 0) return blocked
+  const hashes = [...hashToSiret.keys()]
+  try {
+    const db = await getDb()
+    for (let i = 0; i < hashes.length; i += 100) {
+      const chunk = hashes.slice(i, i + 100)
+      const result = await db.query(
+        'SELECT siret_hash FROM optout_blocklist WHERE siret_hash IN $hashes',
+        { hashes: chunk }
+      )
+      const rows = result[0] || []
+      for (const row of rows) {
+        const siret = hashToSiret.get(row.siret_hash)
+        if (siret) blocked.add(siret)
+      }
+    }
+  } catch (e) {
+    console.warn('[optout] checkBlocklistBatch fail-open :', e.message)
+    return new Set()
+  }
+  return blocked
+}
+
+// Lookup unitaire — DRY via checkBlocklistBatch([siret]). true si le SIRET
+// est opt-out. Utilisé au refus dur POST /api/pipeline (rempart 2).
+export async function checkBlocklistOne(siret) {
+  const blocked = await checkBlocklistBatch([siret])
+  return blocked.size > 0
 }

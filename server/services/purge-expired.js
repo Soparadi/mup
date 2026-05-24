@@ -94,39 +94,17 @@ const TABLES_SCHEMALESS = [
   'campaigns'
 ]
 
-// Purge d'un seul user — re-vérifie l'état au DELETE pour le cas où un
-// webhook Stripe aurait réactivé l'abonnement entre le SELECT initial
-// et l'exécution effective ici.
-async function purgeOneUser(db, user) {
-  const uid = cleanUserId(user.id)
-
-  // Re-vérification atomique pré-DELETE (anti-race webhook Stripe).
-  let recheck
-  try {
-    const r = await db.query(
-      `SELECT subscription_status, current_period_end FROM type::record('user', $uid)`,
-      { uid }
-    )
-    recheck = r?.[0]?.[0]
-  } catch (e) {
-    return { userId: uid, email: user.email, skipped: true, reason: 'recheck_failed: ' + e.message }
-  }
-  if (!recheck) {
-    return { userId: uid, email: user.email, skipped: true, reason: 'user_not_found_at_recheck' }
-  }
-  if (recheck.subscription_status !== 'canceled') {
-    console.warn('[purge] user', uid, 'réactivé entre SELECT et DELETE (status=' + recheck.subscription_status + '), skip')
-    return { userId: uid, email: user.email, skipped: true, reason: 'subscription_status_changed:' + recheck.subscription_status }
-  }
-  const periodEndMs = new Date(recheck.current_period_end).getTime()
-  if (!Number.isFinite(periodEndMs) || (periodEndMs + 37 * 24 * 3600 * 1000) >= Date.now()) {
-    console.warn('[purge] user', uid, 'current_period_end recalculé hors fenêtre, skip')
-    return { userId: uid, email: user.email, skipped: true, reason: 'period_end_changed' }
-  }
-
-  // Cascade DELETE — comptage via RETURN BEFORE (SurrealDB retourne les
-  // records supprimés, .length = nb réel). Erreur par table loggée mais
-  // n'interrompt pas la cascade : on continue à purger ce qu'on peut.
+// Cascade de suppression d'un user — factorisée (Phase 6 Étape 13) pour être
+// réutilisée par le cron trial purge (purgeOneUser) ET le cron suppression
+// compte art. 17 (deletion_scheduled_at). Préserve facture / counter / frais /
+// frais_recurrents / stripe_events_processed (Code commerce L123-22, art. 17
+// RGPD admet la conservation pour obligation légale) ; anonymise audit_log ;
+// DELETE user en dernier. Le uid est nettoyé en interne (accepte 'user:xxx'
+// brut ou la string nue). Erreur par table loggée mais non bloquante ; échec
+// du DELETE user final retourné dans { userDeleted:false, error }.
+export async function deleteUserCascade(rawUid) {
+  const uid = String(rawUid || '').replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+  const db = await getDb()
   const tablesPurgees = []
   let recordCount = 0
 
@@ -159,9 +137,7 @@ async function purgeOneUser(db, user) {
   }
 
   // devis filtrés — préserve les devis acceptés convertis en facture
-  // (obligation comptable : la facture émise référence devis_id, le
-  // purger rendrait la facture orpheline). Cf. server.js:2200-2234
-  // pour le pattern de conversion devis → facture.
+  // (obligation comptable : la facture émise référence devis_id).
   try {
     const r = await db.query(
       `DELETE devis WHERE userId = $uid AND (facture_id IS NONE OR statut != 'accepte') RETURN BEFORE`,
@@ -173,36 +149,79 @@ async function purgeOneUser(db, user) {
     console.warn(`[purge] devis filtrés échec uid=${uid} :`, e.message)
   }
 
-  // Anonymisation audit_log (Option β). Le type field user_id sur
-  // audit_log est option<record<user>> (migration 001 l.101) — accepte
-  // NONE. UPDATE … SET user_id = NONE plutôt que DELETE pour préserver
-  // event, ip, user_agent, metadata, created_at (analyse incident).
+  // Anonymisation audit_log (Option β) — UPDATE … SET user_id = NONE.
+  let anonymized = 0
   try {
     const r = await db.query(
       `UPDATE audit_log SET user_id = NONE WHERE user_id = type::record('user', $uid) RETURN BEFORE`,
       { uid }
     )
-    const n = (r?.[0] || []).length
-    if (n > 0) tablesPurgees.push(`audit_log_anonymized:${n}`)
+    anonymized = (r?.[0] || []).length
+    if (anonymized > 0) tablesPurgees.push(`audit_log_anonymized:${anonymized}`)
   } catch (e) {
     console.warn(`[purge] audit_log anonymisation échec uid=${uid} :`, e.message)
   }
 
-  // DELETE user record final. Si cette étape plante, on retourne une
-  // erreur structurée (les cascades en amont auront laissé le user
-  // "vidé" mais encore présent — sera retenté au prochain run du cron).
+  // DELETE user record final. Échec → { userDeleted:false } (le user "vidé"
+  // sera retenté au prochain run du cron).
+  let userDeleted = false
+  let error = null
   try {
-    await db.query(
-      `DELETE type::record('user', $uid)`,
-      { uid }
-    )
+    await db.query(`DELETE type::record('user', $uid)`, { uid })
     tablesPurgees.push('user:1')
     recordCount += 1
+    userDeleted = true
   } catch (e) {
-    return { userId: uid, email: user.email, error: 'user_delete_failed: ' + e.message, tablesPurgees, recordCount }
+    error = 'user_delete_failed: ' + e.message
   }
 
-  return { userId: uid, email: user.email, tablesPurgees, recordCount }
+  return {
+    userDeleted,
+    error,
+    tablesPurgees,
+    recordCount,
+    tables_preserved: ['facture', 'counter', 'frais', 'frais_recurrents', 'stripe_events_processed', 'devis(accepté→facture)'],
+    anonymized
+  }
+}
+
+// Purge d'un seul user — re-vérifie l'état au DELETE pour le cas où un
+// webhook Stripe aurait réactivé l'abonnement entre le SELECT initial
+// et l'exécution effective ici. Délègue la cascade à deleteUserCascade.
+async function purgeOneUser(db, user) {
+  const uid = cleanUserId(user.id)
+
+  // Re-vérification atomique pré-DELETE (anti-race webhook Stripe).
+  let recheck
+  try {
+    const r = await db.query(
+      `SELECT subscription_status, current_period_end FROM type::record('user', $uid)`,
+      { uid }
+    )
+    recheck = r?.[0]?.[0]
+  } catch (e) {
+    return { userId: uid, email: user.email, skipped: true, reason: 'recheck_failed: ' + e.message }
+  }
+  if (!recheck) {
+    return { userId: uid, email: user.email, skipped: true, reason: 'user_not_found_at_recheck' }
+  }
+  if (recheck.subscription_status !== 'canceled') {
+    console.warn('[purge] user', uid, 'réactivé entre SELECT et DELETE (status=' + recheck.subscription_status + '), skip')
+    return { userId: uid, email: user.email, skipped: true, reason: 'subscription_status_changed:' + recheck.subscription_status }
+  }
+  const periodEndMs = new Date(recheck.current_period_end).getTime()
+  if (!Number.isFinite(periodEndMs) || (periodEndMs + 37 * 24 * 3600 * 1000) >= Date.now()) {
+    console.warn('[purge] user', uid, 'current_period_end recalculé hors fenêtre, skip')
+    return { userId: uid, email: user.email, skipped: true, reason: 'period_end_changed' }
+  }
+
+  // Cascade factorisée (Phase 6 Étape 13) — réutilisée par le cron suppression
+  // compte art. 17. Préservation comptable + anonymisation audit_log internes.
+  const cascade = await deleteUserCascade(uid)
+  if (!cascade.userDeleted) {
+    return { userId: uid, email: user.email, error: cascade.error, tablesPurgees: cascade.tablesPurgees, recordCount: cascade.recordCount }
+  }
+  return { userId: uid, email: user.email, tablesPurgees: cascade.tablesPurgees, recordCount: cascade.recordCount }
 }
 
 // Job principal — sélectionne tous les candidats puis cascade purgeOneUser

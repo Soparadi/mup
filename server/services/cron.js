@@ -19,7 +19,8 @@ import {
   expireTrialAutomatically,
   sendGraceEndingTomorrowEmails
 } from './trial-emails.js'
-import { purgeExpiredUsers } from './purge-expired.js'
+import { purgeExpiredUsers, deleteUserCascade } from './purge-expired.js'
+import { sendAccountDeletionConfirmed } from './email.js'
 
 const SCHEDULE = process.env.CRON_TRIAL_SCHEDULE || '0 8 * * *'
 const TIMEZONE = process.env.CRON_TIMEZONE || 'Europe/Paris'
@@ -65,7 +66,42 @@ async function runTrialJobs() {
   await runStep('j0', sendTrialEndingTodayEmails)
   await runStep('expire', expireTrialAutomatically)
   await runStep('grace_j1', sendGraceEndingTomorrowEmails)
+  await runStep('account_deletion', runAccountDeletions)
   await runStep('purge', purgeExpiredUsers)
+}
+
+// Suppression compte art. 17 (Phase 6 Étape 13) — exécute la cascade pour
+// tous les users dont deletion_scheduled_at est échue. L'email + le prenom
+// sont récupérés AVANT la cascade (impossible après le DELETE user). Échec
+// d'un user loggé et non bloquant pour les autres.
+async function runAccountDeletions() {
+  const db = await getDb()
+  const overdue = await db.query(
+    'SELECT id, email, prenom, deletion_requested_at FROM user'
+    + ' WHERE deletion_scheduled_at != NONE AND deletion_scheduled_at <= time::now()'
+  )
+  const users = overdue?.[0] || []
+  let processed = 0
+  for (const u of users) {
+    try {
+      await deleteUserCascade(u.id)
+      try {
+        if (u.email) {
+          await sendAccountDeletionConfirmed({
+            to: u.email,
+            prenom: u.prenom || '',
+            requested_at: u.deletion_requested_at ? String(u.deletion_requested_at) : null
+          })
+        }
+      } catch (mailErr) {
+        console.error('[account_deletion] mail confirmé échec', String(u.id), mailErr.message)
+      }
+      processed++
+    } catch (err) {
+      console.error('[account_deletion]', String(u.id), err.message)
+    }
+  }
+  return { processed, total: users.length }
 }
 
 let started = false

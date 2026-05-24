@@ -31,7 +31,7 @@ import {
   insertOptoutRequest,
   verifyOptoutToken
 } from './server/services/optout.js'
-import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification } from './server/services/email.js'
+import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
   getEffectivePlan,
@@ -490,6 +490,7 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/stripe/')) return next()
   if (req.path === '/user/me') return next()
   if (req.path === '/account/privacy/export') return next()
+  if (req.path === '/account/delete') return next()  // suppression compte art. 17 — accessible même abonnement expiré
   return requireActiveSubscription(req, res, next)
 })
 
@@ -1184,6 +1185,99 @@ app.get('/api/user/me', async (req, res) => {
 // ── Export RGPD article 20 — JSON dump de toutes les données du user ──
 // Exempté de la gate subscription (accessible à vie, même après résiliation).
 // Rate limit 5 / 24h via la table privacy_export_log.
+// ── Suppression de compte RGPD art. 17 (Phase 6 Étape 13) ──────────────
+// Effacement avec délai d'annulation 7 jours. Exécution effective par le cron
+// account_deletion (cascade deleteUserCascade, conservation comptable). POST +
+// DELETE whitelistés de la gate subscription (un abonné expiré/résilié doit
+// pouvoir demander la suppression). Auth requise (req.userId).
+app.post('/api/account/delete', async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: 'unauthorized' })
+    const { confirm } = req.body || {}
+    if (confirm !== 'SUPPRIMER') {
+      return res.status(400).json({ error: 'invalid_confirm', message: 'Confirmation invalide. Saisissez SUPPRIMER pour confirmer.' })
+    }
+    const db = await getDb()
+    const uid = String(req.userId).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+    const sel = await db.query("SELECT subscription_status FROM type::record('user', $uid)", { uid })
+    const u = sel?.[0]?.[0]
+    if (!u) return res.status(404).json({ error: 'not_found' })
+    if (u.subscription_status === 'active') {
+      return res.status(409).json({
+        error: 'subscription_active',
+        message: 'Veuillez résilier votre abonnement depuis /account/billing avant de demander la suppression de votre compte.'
+      })
+    }
+    const upd = await db.query(
+      "UPDATE type::record('user', $uid) SET deletion_requested_at = time::now(), deletion_scheduled_at = time::now() + 7d RETURN AFTER",
+      { uid }
+    )
+    const rec = upd?.[0]?.[0] || {}
+    const scheduledAt = rec.deletion_scheduled_at ? String(rec.deletion_scheduled_at) : null
+
+    // Email best-effort (doctrine 8b) : un échec d'envoi ne bloque pas la demande.
+    try {
+      const email = rec.email || req.authUser?.email
+      if (email) await sendAccountDeletionScheduled({ to: email, prenom: rec.prenom || req.authUser?.prenom || '', scheduled_at: scheduledAt })
+    } catch (err) {
+      console.error('[account:delete] sendAccountDeletionScheduled failed:', err.message)
+    }
+    return res.status(200).json({ ok: true, scheduled_at: scheduledAt, delay_days: 7 })
+  } catch (e) {
+    console.error('[account:delete:post]', e.message)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
+// Annulation de la demande de suppression avant l'échéance.
+app.delete('/api/account/delete', async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: 'unauthorized' })
+    const db = await getDb()
+    const uid = String(req.userId).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+    const sel = await db.query("SELECT deletion_requested_at FROM type::record('user', $uid)", { uid })
+    const u = sel?.[0]?.[0]
+    if (!u || !u.deletion_requested_at) {
+      return res.status(404).json({ error: 'no_pending_deletion', message: 'Aucune demande de suppression en cours.' })
+    }
+    await db.query(
+      "UPDATE type::record('user', $uid) SET deletion_requested_at = NONE, deletion_scheduled_at = NONE",
+      { uid }
+    )
+    return res.status(200).json({ ok: true, cancelled: true })
+  } catch (e) {
+    console.error('[account:delete:cancel]', e.message)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
+// État de la demande de suppression (lecture seule).
+app.get('/api/account/deletion-status', async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: 'unauthorized' })
+    const db = await getDb()
+    const uid = String(req.userId).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+    const sel = await db.query("SELECT deletion_requested_at, deletion_scheduled_at FROM type::record('user', $uid)", { uid })
+    const u = sel?.[0]?.[0] || {}
+    const requestedAt = u.deletion_requested_at ? String(u.deletion_requested_at) : null
+    const scheduledAt = u.deletion_scheduled_at ? String(u.deletion_scheduled_at) : null
+    let daysRemaining = null
+    if (scheduledAt) {
+      const ms = new Date(scheduledAt).getTime() - Date.now()
+      daysRemaining = ms > 0 ? Math.ceil(ms / (24 * 60 * 60 * 1000)) : 0
+    }
+    return res.status(200).json({
+      pending: !!requestedAt,
+      requested_at: requestedAt,
+      scheduled_at: scheduledAt,
+      days_remaining: daysRemaining
+    })
+  } catch (e) {
+    console.error('[account:deletion-status]', e.message)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
 app.get('/api/account/privacy/export', async (req, res) => {
   try {
     if (!req.userId) return res.status(401).json({ error: 'unauthorized' })

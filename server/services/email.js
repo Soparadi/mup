@@ -466,3 +466,59 @@ export async function sendOptoutInternalNotification({ shortRef, verifiedAt, pro
   if (result.error) throw new Error(result.error.message || 'Resend send failed')
   return { id: result.data?.id || null }
 }
+
+// Format ISO/datetime → "JJ/MM/AAAA" (heure de Paris), pour les emails compte.
+function formatDateFRNumeric(input) {
+  if (!input) return ''
+  const d = new Date(input)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+// ── sendAccountDeletionScheduled ──
+// Envoyé à la demande de suppression de compte (art. 17) : confirme
+// l'enregistrement + l'échéance J+7 + la possibilité d'annuler. Lève sur
+// erreur Resend (le caller route gère le best-effort).
+export async function sendAccountDeletionScheduled({ to, prenom, scheduled_at }) {
+  if (!to) throw new Error('to requis')
+  const tpl = await loadTemplate('account-deletion-scheduled.html')
+  const html = applyVars(tpl, {
+    prenom: prenom || '',
+    scheduled_at_fr: formatDateFRNumeric(scheduled_at)
+  })
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: [to],
+    replyTo: FROM,
+    subject: 'Votre demande de suppression de compte est enregistrée',
+    html,
+    tags: [{ name: 'type', value: 'account-deletion-scheduled' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}
+
+// ── sendAccountDeletionConfirmed ──
+// Envoyé après suppression effective par le cron (art. 17). Pas de CTA (le
+// compte n'existe plus). Lève sur erreur Resend (le caller cron gère le
+// best-effort).
+export async function sendAccountDeletionConfirmed({ to, prenom, requested_at }) {
+  if (!to) throw new Error('to requis')
+  const tpl = await loadTemplate('account-deletion-confirmed.html')
+  const html = applyVars(tpl, {
+    prenom: prenom || '',
+    requested_at_fr: formatDateFRNumeric(requested_at)
+  })
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: [to],
+    replyTo: FROM,
+    subject: 'Votre compte MovUP a été supprimé',
+    html,
+    tags: [{ name: 'type', value: 'account-deletion-confirmed' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}

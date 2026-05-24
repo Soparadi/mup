@@ -408,6 +408,9 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS cancel_at_period_end ON user TYPE option<bool>',
     'DEFINE FIELD IF NOT EXISTS plan_billing_cycle ON user TYPE option<string> ASSERT $value = NONE OR $value INSIDE ["monthly", "annual"]',
     'DEFINE FIELD IF NOT EXISTS billing_address ON user TYPE option<object>',
+    // Suppression de compte RGPD art. 17 (Phase 6 Étape 13) — demande + échéance J+7.
+    'DEFINE FIELD IF NOT EXISTS deletion_requested_at ON user TYPE option<datetime>',
+    'DEFINE FIELD IF NOT EXISTS deletion_scheduled_at ON user TYPE option<datetime>',
     'DEFINE INDEX IF NOT EXISTS user_email_unique ON user FIELDS email UNIQUE',
     // SIRET unique mais optionnel : plusieurs users peuvent rester sans siret
     // tant qu'ils n'ont pas franchi /account/upgrade (pré-Stripe Checkout).

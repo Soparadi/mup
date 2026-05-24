@@ -404,3 +404,65 @@ export async function sendOptoutVerify({ to, token, shortRef }) {
   if (result.error) throw new Error(result.error.message || 'Resend send failed')
   return { id: result.data?.id || null }
 }
+
+// Format ISO → "JJ/MM/AAAA à HH:mm" en heure de Paris, pour les emails opt-out.
+function formatDateTimeFR(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const opts = { timeZone: 'Europe/Paris' }
+  const date = d.toLocaleDateString('fr-FR', { ...opts, day: '2-digit', month: '2-digit', year: 'numeric' })
+  const time = d.toLocaleTimeString('fr-FR', { ...opts, hour: '2-digit', minute: '2-digit' })
+  return `${date} à ${time}`
+}
+
+// ── sendOptoutAcknowledged ──
+// Accusé de réception RGPD au tiers, post-vérification (art. 12.3 : délai
+// 1 mois extensible à 3 mois). N'affiche ni IP, ni email, ni SIRET du tiers.
+// processingDeadline arrive déjà formaté FR depuis la route ; verifiedAt est
+// un ISO formaté ici. Lève sur erreur Resend (le caller route gère le
+// best-effort).
+export async function sendOptoutAcknowledged({ to, shortRef, verifiedAt, processingDeadline }) {
+  if (!to) throw new Error('to requis')
+  const tpl = await loadTemplate('optout-acknowledged.html')
+  const html = applyVars(tpl, {
+    short_ref: shortRef || '',
+    verified_at: formatDateTimeFR(verifiedAt),
+    processing_deadline: processingDeadline || ''
+  })
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: [to],
+    replyTo: FROM,
+    subject: 'Votre demande d\'opposition est enregistrée — ' + (shortRef || ''),
+    html,
+    tags: [{ name: 'type', value: 'optout-acknowledged' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}
+
+// ── sendOptoutInternalNotification ──
+// Notification interne à bonjour@movup.io : une demande opt-out vérifiée
+// attend un traitement manuel sous J+30. Sobre, sans mentions CNIL (interne).
+// Lève sur erreur Resend (le caller route gère le best-effort).
+export async function sendOptoutInternalNotification({ shortRef, verifiedAt, processingDeadline }) {
+  const tpl = await loadTemplate('optout-internal-notification.html')
+  const html = applyVars(tpl, {
+    short_ref: shortRef || '',
+    verified_at: formatDateTimeFR(verifiedAt),
+    processing_deadline: processingDeadline || ''
+  })
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: ['bonjour@movup.io'],
+    replyTo: FROM,
+    subject: '[MovUP RGPD] Nouvelle demande opposition vérifiée — ' + (shortRef || ''),
+    html,
+    tags: [{ name: 'type', value: 'optout-internal' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}

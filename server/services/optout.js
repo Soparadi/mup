@@ -253,5 +253,11 @@ export async function verifyOptoutToken(token) {
   }
   await db.query(`CREATE optout_blocklist SET ${blockFields.join(', ')}`, blockParams)
 
-  return { ok: true, alreadyVerified: false, requestId: request.short_ref || String(request.id) }
+  return {
+    ok: true,
+    alreadyVerified: false,
+    requestId: request.short_ref || String(request.id),
+    email: request.email,
+    verifiedAt: new Date().toISOString()
+  }
 }

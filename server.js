@@ -31,7 +31,7 @@ import {
   insertOptoutRequest,
   verifyOptoutToken
 } from './server/services/optout.js'
-import { sendOptoutVerify } from './server/services/email.js'
+import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
   getEffectivePlan,
@@ -1446,6 +1446,33 @@ app.get('/api/optout/verify/:token', async (req, res) => {
     let html = await readFile(filePath, 'utf8')
     const deadline = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       .toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+
+    // Phase 6 Étape 9 — sur PREMIÈRE vérification uniquement (pas de re-clic) :
+    // accusé de réception au tiers (art. 12.3 RGPD) + notification interne
+    // bonjour@movup.io. try/catch séparés best-effort : l'échec d'un envoi
+    // n'empêche ni l'autre ni le redirect /optout-verified (doctrine 8b).
+    if (result.ok && !result.alreadyVerified) {
+      try {
+        await sendOptoutAcknowledged({
+          to: result.email,
+          shortRef: result.requestId,
+          verifiedAt: result.verifiedAt,
+          processingDeadline: deadline
+        })
+      } catch (err) {
+        console.error('[optout] sendOptoutAcknowledged failed:', err.message)
+      }
+      try {
+        await sendOptoutInternalNotification({
+          shortRef: result.requestId,
+          verifiedAt: result.verifiedAt,
+          processingDeadline: deadline
+        })
+      } catch (err) {
+        console.error('[optout] sendOptoutInternalNotification failed:', err.message)
+      }
+    }
+
     html = html
       .replace(/\{\{REQUEST_ID\}\}/g, String(result.requestId || '').replace(/[<>"'&]/g, ''))
       .replace(/\{\{PROCESSING_DEADLINE\}\}/g, deadline)

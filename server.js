@@ -1185,6 +1185,35 @@ app.get('/api/user/me', async (req, res) => {
 // ── Export RGPD article 20 — JSON dump de toutes les données du user ──
 // Exempté de la gate subscription (accessible à vie, même après résiliation).
 // Rate limit 5 / 24h via la table privacy_export_log.
+// ── Profil RGPD art. 14 (Phase 6 Étape 14) — raison_sociale + SIRET ─────
+// Persiste l'identité responsable de traitement sur le record user. Utilisée
+// par le popup setup SIRET de mail.html avant le 1er cold mail (le footer
+// art. 14 en a besoin). Validation SIRET 14 chiffres (+ ASSERT schéma).
+app.post('/api/account/profile', async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: 'unauthorized' })
+    const { raison_sociale, siret } = req.body || {}
+    if (!raison_sociale || typeof raison_sociale !== 'string' || raison_sociale.trim().length < 2) {
+      return res.status(400).json({ error: 'invalid_raison_sociale', message: 'Raison sociale requise (2 caractères minimum).' })
+    }
+    const siretNorm = siret ? String(siret).replace(/\s/g, '') : null
+    if (!siretNorm || !/^\d{14}$/.test(siretNorm)) {
+      return res.status(400).json({ error: 'invalid_siret', message: 'Le SIRET doit contenir 14 chiffres.' })
+    }
+    const db = await getDb()
+    const uid = String(req.userId).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+    const upd = await db.query(
+      "UPDATE type::record('user', $uid) SET raison_sociale = $rs, siret = $sr RETURN AFTER",
+      { uid, rs: raison_sociale.trim(), sr: siretNorm }
+    )
+    const rec = upd?.[0]?.[0] || {}
+    return res.status(200).json({ ok: true, raison_sociale: rec.raison_sociale, siret: rec.siret })
+  } catch (e) {
+    console.error('[account:profile]', e.message)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
 // ── Suppression de compte RGPD art. 17 (Phase 6 Étape 13) ──────────────
 // Effacement avec délai d'annulation 7 jours. Exécution effective par le cron
 // account_deletion (cascade deleteUserCascade, conservation comptable). POST +
@@ -3370,6 +3399,21 @@ app.post('/api/v2/campaigns/:id/send', async (req, res) => {
       return res.status(412).json({ error: `Domaine ${fromDomain} non vérifié. Vérifier dans l'onglet Paramètres avant l'envoi.` })
     }
 
+    // Pré-check RGPD art. 14 (Phase 6 Étape 14) : identité responsable de
+    // traitement (raison_sociale + siret) requise AVANT tout envoi. Bloque la
+    // campagne en amont (pas d'interruption en cours de batch, pas de statut
+    // 'sending' prématuré). 400 siret_missing → popup setup côté front.
+    const uidClean = String(userId).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+    const uSel = await db.query("SELECT raison_sociale, siret FROM type::record('user', $uid)", { uid: uidClean })
+    const senderUser = uSel?.[0]?.[0] || {}
+    const senderSiret = senderUser.siret ? String(senderUser.siret).replace(/\s/g, '') : ''
+    if (!senderUser.raison_sociale || !/^\d{14}$/.test(senderSiret)) {
+      return res.status(400).json({
+        error: 'siret_missing',
+        message: 'Identité commerciale incomplète. Veuillez compléter votre raison sociale et SIRET avant le premier envoi.'
+      })
+    }
+
     // Mark as sending immediately for idempotence guard
     await db.query('UPDATE type::record("campaigns", $id) MERGE $body', { id, body: { status: 'sending', send_started_at: new Date().toISOString(), updated_at: new Date().toISOString() } })
 
@@ -3380,7 +3424,8 @@ app.post('/api/v2/campaigns/:id/send', async (req, res) => {
       recipients: campaign.recipients,
       subject: campaign.template_subject,
       html: campaign.template_html,
-      text: campaign.template_text
+      text: campaign.template_text,
+      user: { raison_sociale: senderUser.raison_sociale, siret: senderSiret }
     })
 
     const stats = campaign.stats || { sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0, unsubscribed: 0 }

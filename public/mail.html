@@ -186,6 +186,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
 /* Block links color override */
 .dns-record .btn{padding:5px 10px;font-size:11px;}
+.sirene-autocomplete {
+  position:absolute; top:100%; left:0; right:0;
+  background:#FFFFFF; border:1px solid var(--border);
+  border-radius:0 0 9px 9px; max-height:220px; overflow-y:auto;
+  z-index:300; display:none;
+}
+.sirene-autocomplete.is-open { display:block; }
+.sirene-result-item {
+  padding:10px 14px; cursor:pointer; border-bottom:1px solid #F5F5F7;
+  font-size:13px; color:var(--text);
+}
+.sirene-result-item:hover { background:#FAFAFA; }
+.sirene-result-item:last-child { border-bottom:none; }
+.sirene-result-siret {
+  font-size:11px; color:var(--muted); margin-top:2px;
+}
+.siret-error {
+  background:#FEF2F2; border:1px solid #FCA5A5; color:#991B1B;
+  padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:16px;
+}
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -968,12 +988,213 @@ async function submitCampaign(sendNow){
     if(sendNow){
       var sr = await fetch('/api/v2/campaigns/' + encodeURIComponent(rid) + '/send', { method:'POST' });
       var sd = await sr.json();
-      if(!sr.ok){ toast(sd.error || 'Envoi impossible', 'error'); }
+      if(!sr.ok){
+        if (sr.status === 400 && sd && sd.error === 'siret_missing') { SIRET_MODAL.open(rid); return; }
+        toast(sd.error || 'Envoi impossible', 'error');
+      }
       else { toast(sd.sent_count + ' mail(s) envoyés', 'ok'); }
     } else { toast('Brouillon enregistré', 'ok'); }
     closeCampaignModal(); await loadCampaignsList();
   } catch(e){ toast('Erreur réseau', 'error'); }
 }
+
+// ── Popup setup SIRET (Phase 6 Étape 14) ──
+// Déclenché au retour 400 siret_missing du POST /send. Persiste profil
+// user via /api/account/profile puis retry l'envoi de campagne.
+var SIRET_MODAL = (function() {
+  var modal, inputRs, inputSiret, btnSubmit, errorBox, autocompleteBox;
+  var pendingCampaignId = null;
+  var autocompleteTimer = null;
+
+  function init() {
+    modal = document.getElementById('siret-modal');
+    inputRs = document.getElementById('siret-input-rs');
+    inputSiret = document.getElementById('siret-input-siret');
+    btnSubmit = document.getElementById('siret-modal-submit');
+    errorBox = document.getElementById('siret-modal-error');
+    autocompleteBox = document.getElementById('sirene-autocomplete');
+
+    inputRs.addEventListener('input', onRsInput);
+    inputSiret.addEventListener('input', onSiretInput);
+    btnSubmit.addEventListener('click', onSubmit);
+    document.addEventListener('click', onDocClick);
+  }
+
+  function updateSubmitState() {
+    var rs = inputRs.value.trim();
+    var siret = inputSiret.value.replace(/\D/g, '');
+    btnSubmit.disabled = !(rs.length >= 2 && /^\d{14}$/.test(siret));
+  }
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.hidden = false;
+  }
+
+  function hideError() {
+    errorBox.hidden = true;
+  }
+
+  function onRsInput() {
+    updateSubmitState();
+    hideError();
+    var q = inputRs.value.trim();
+    if (autocompleteTimer) clearTimeout(autocompleteTimer);
+    if (q.length < 3) {
+      autocompleteBox.classList.remove('is-open');
+      return;
+    }
+    autocompleteTimer = setTimeout(function() {
+      fetch('/api/sirene/search?q=' + encodeURIComponent(q) + '&nombre=5',
+            { credentials: 'same-origin' })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (!data || !data.etablissements || !data.etablissements.length) {
+            autocompleteBox.classList.remove('is-open');
+            return;
+          }
+          renderResults(data.etablissements);
+        })
+        .catch(function() {
+          autocompleteBox.classList.remove('is-open');
+        });
+    }, 300);
+  }
+
+  function renderResults(etablissements) {
+    autocompleteBox.innerHTML = '';
+    etablissements.forEach(function(etab) {
+      var item = document.createElement('div');
+      item.className = 'sirene-result-item';
+      var ul = etab.uniteLegale || {};
+      var nom = ul.denominationUniteLegale
+        || ((ul.prenomUsuelUniteLegale || '') + ' ' + (ul.nomUniteLegale || '')).trim()
+        || 'Sans nom';
+      var siretRaw = etab.siret || '';
+      var nomDiv = document.createElement('div');
+      nomDiv.textContent = nom;
+      var siretDiv = document.createElement('div');
+      siretDiv.className = 'sirene-result-siret';
+      siretDiv.textContent = 'SIRET ' + siretRaw;
+      item.appendChild(nomDiv);
+      item.appendChild(siretDiv);
+      item.addEventListener('click', function() {
+        inputRs.value = nom;
+        inputSiret.value = siretRaw;
+        autocompleteBox.classList.remove('is-open');
+        updateSubmitState();
+        hideError();
+      });
+      autocompleteBox.appendChild(item);
+    });
+    autocompleteBox.classList.add('is-open');
+  }
+
+  function onSiretInput() {
+    inputSiret.value = inputSiret.value.replace(/\D/g, '').slice(0, 14);
+    updateSubmitState();
+    hideError();
+  }
+
+  function onDocClick(e) {
+    if (!inputRs.contains(e.target) && !autocompleteBox.contains(e.target)) {
+      autocompleteBox.classList.remove('is-open');
+    }
+  }
+
+  function prefillFromUserMe() {
+    fetch('/api/user/me', { credentials: 'same-origin' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (data) {
+          if (data.raison_sociale) inputRs.value = data.raison_sociale;
+          if (data.siret) inputSiret.value = data.siret;
+          updateSubmitState();
+        }
+      })
+      .catch(function() {});
+  }
+
+  function onSubmit() {
+    var rs = inputRs.value.trim();
+    var siret = inputSiret.value.replace(/\D/g, '');
+    btnSubmit.disabled = true;
+    hideError();
+
+    fetch('/api/account/profile', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raison_sociale: rs, siret: siret })
+    })
+    .then(function(r) {
+      if (r.status === 401) {
+        window.location.href = '/login';
+        return null;
+      }
+      return r.json().then(function(data) {
+        if (!r.ok) throw new Error(data.message || 'Erreur enregistrement.');
+        return data;
+      });
+    })
+    .then(function(data) {
+      if (!data) return;
+      if (pendingCampaignId) {
+        return retryCampaignSend(pendingCampaignId);
+      }
+    })
+    .catch(function(err) {
+      showError(err.message || 'Une erreur est survenue.');
+      btnSubmit.disabled = false;
+    });
+  }
+
+  function retryCampaignSend(campaignId) {
+    return fetch('/api/v2/campaigns/' + encodeURIComponent(campaignId) + '/send', {
+      method: 'POST'
+    })
+    .then(function(sr) {
+      return sr.json().then(function(sd) {
+        if (sr.ok) {
+          toast('Campagne envoyée', 'ok');
+          close();
+        } else {
+          toast(sd.error || 'Envoi impossible après validation profil.', 'error');
+          close();
+        }
+      });
+    })
+    .catch(function() {
+      toast('Erreur réseau.', 'error');
+      close();
+    });
+  }
+
+  function open(campaignId) {
+    pendingCampaignId = campaignId;
+    hideError();
+    inputRs.value = '';
+    inputSiret.value = '';
+    btnSubmit.disabled = true;
+    prefillFromUserMe();
+    modal.classList.add('open');
+    setTimeout(function() { inputRs.focus(); }, 50);
+  }
+
+  function close() {
+    modal.classList.remove('open');
+    pendingCampaignId = null;
+  }
+
+  return { init: init, open: open, close: close };
+})();
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', SIRET_MODAL.init);
+} else {
+  SIRET_MODAL.init();
+}
+
 async function openCampaignDetail(rid){
   document.getElementById('campaign-detail-modal').classList.add('open');
   document.getElementById('cd-body').innerHTML = '<div style="color:var(--muted);font-size:13px;">Chargement…</div>';
@@ -1109,5 +1330,43 @@ loadAccountsAndInbox();
     </nav>
   </div>
 </footer>
+<div class="modal-overlay" id="siret-modal">
+  <div class="modal" role="dialog" aria-labelledby="siret-modal-title">
+    <div class="modal-head">
+      <span class="modal-title" id="siret-modal-title">Avant votre premier envoi de prospection</span>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted);margin:0 0 16px;">
+        Une seule fois, pour toutes vos campagnes.
+      </p>
+      <p style="font-size:14px;line-height:1.55;margin:0 0 20px;color:var(--text);">
+        L’obligation d’information RGPD (article 14) impose d’identifier votre activité dans chaque email de prospection.
+      </p>
+      <div id="siret-modal-error" class="siret-error" hidden></div>
+      <div class="field" style="position:relative;margin-bottom:16px;">
+        <label for="siret-input-rs" style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;">Raison sociale ou nom commercial</label>
+        <input type="text" id="siret-input-rs"
+               placeholder="Ex : Mon Entreprise SARL"
+               autocomplete="off"
+               style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:9px;font-size:14px;font-family:var(--font);">
+        <div class="sirene-autocomplete" id="sirene-autocomplete"></div>
+      </div>
+      <div class="field">
+        <label for="siret-input-siret" style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;">SIRET (14 chiffres)</label>
+        <input type="text" id="siret-input-siret"
+               placeholder="12345678900014"
+               inputmode="numeric"
+               maxlength="14"
+               autocomplete="off"
+               style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:9px;font-size:14px;font-family:var(--font);">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-dark" id="siret-modal-submit" disabled style="width:100%;">
+        Valider et envoyer ma campagne
+      </button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

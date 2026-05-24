@@ -26,20 +26,36 @@
   h1{font-size:28px;font-weight:800;letter-spacing:-.6px;color:var(--text);margin-bottom:8px;line-height:1.2;text-align:center}
   h1 em{font-family:var(--font-serif);font-style:italic;font-weight:400}
   .lead{font-size:15px;color:var(--muted);text-align:center;margin-bottom:32px;line-height:1.55}
+  .lead-serif{font-family:var(--font-serif);font-style:italic;font-size:18px;color:var(--muted);text-align:center;margin-bottom:32px;line-height:1.4}
   .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px}
+  .card + .card{margin-top:20px}
   .card h2{font-size:17px;font-weight:700;letter-spacing:-.2px;margin-bottom:8px}
   .card p{font-size:14px;color:var(--muted);margin-bottom:18px;line-height:1.6}
   .card p:last-child{margin-bottom:0}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:14px;font-weight:700;padding:12px 22px;border-radius:10px;border:1px solid var(--text);background:var(--text);color:#fff;cursor:pointer;text-decoration:none;transition:background .15s}
   .btn:hover{background:#000}
+  .btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:14px;font-weight:600;padding:11px 20px;border-radius:10px;border:1px solid var(--border-2);background:#fff;color:var(--text);cursor:pointer;text-decoration:none;transition:background .15s,border-color .15s}
+  .btn-secondary:hover{background:var(--surface);border-color:var(--text)}
+  .btn-danger{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:14px;font-weight:700;padding:12px 22px;border-radius:10px;border:1px solid #B91C1C;background:#B91C1C;color:#fff;cursor:pointer;text-decoration:none;transition:background .15s}
+  .btn-danger:hover{background:#991B1B}
+  .btn-danger:disabled{background:#E5A5A5;border-color:#E5A5A5;cursor:not-allowed}
   .btn-rate{font-size:12px;color:var(--muted);margin-top:10px;display:block;text-align:left}
-  .divider{height:1px;background:var(--border);margin:24px 0}
-  .delete-block{padding:18px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:13.5px;color:var(--muted)}
-  .delete-block strong{color:var(--text)}
-  .delete-block a{color:var(--text);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+  .delete-pending-card{background:#FEF3C7;border:1px solid #F59E0B;border-radius:10px;padding:16px 18px;font-size:14px;color:#1D1D1F;line-height:1.6;margin-bottom:16px}
+  .delete-warning{background:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:14px 16px;font-size:14px;color:#991B1B;line-height:1.55;margin-top:12px}
+  .legal-card{background:#FAFAFA;border:1px solid var(--border);border-radius:10px;padding:16px 18px;font-size:13px;color:var(--muted);line-height:1.6}
+  .legal-card p{margin:0 0 8px}
+  .legal-card p:last-child{margin:0}
+  .legal-card a{color:var(--text);font-weight:600;text-decoration:underline;text-underline-offset:2px}
   .footer{text-align:center;margin-top:24px;font-size:12.5px;color:var(--muted)}
   .footer a{color:var(--text);font-weight:600;text-decoration:none}
   .footer a:hover{text-decoration:underline}
+  .delete-modal{display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;padding:20px}
+  .delete-modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+  .delete-modal-box{position:relative;background:#fff;border-radius:14px;max-width:480px;width:100%;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  .delete-modal-box h3{font-size:18px;font-weight:800;letter-spacing:-.3px;margin-bottom:12px}
+  .delete-modal-box p{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:16px;white-space:pre-line}
+  .delete-modal-box input{width:100%;padding:11px 13px;border:1px solid var(--border-2);border-radius:9px;font-family:var(--font);font-size:15px;margin-bottom:18px}
+  .delete-modal-actions{display:flex;gap:10px;justify-content:flex-end}
 </style>
 <link rel="stylesheet" href="/styles/app-footer.css">
 </head>
@@ -57,22 +73,45 @@
     <span>MovUP</span>
   </a>
 
-  <h1>Vos données <em>personnelles.</em></h1>
-  <p class="lead">Article 20 du RGPD : vous avez le droit de récupérer toutes les données que vous avez fournies à MovUP, à tout moment, dans un format structuré et lisible par machine.</p>
+  <h1>Vos données et vos droits <em>RGPD.</em></h1>
+  <p class="lead-serif">Conformément au Règlement général sur la protection des données.</p>
 
   <section class="card">
-    <h2>Téléchargement de vos données</h2>
-    <p>Le fichier généré contient : votre profil, vos contacts, votre pipeline, votre agenda, vos devis, vos factures, vos frais, votre historique de recherches Leads, vos paramètres et la liste de vos boîtes mail connectées (sans les jetons OAuth chiffrés). Format JSON, environ quelques Ko à plusieurs Mo selon votre activité.</p>
-    <a href="/api/account/privacy/export" class="btn" download>
-      Télécharger mes données (JSON)
-    </a>
-    <span class="btn-rate">Limite : 5 téléchargements par 24 heures.</span>
+    <h2>Télécharger vos données</h2>
+    <p>Vous pouvez télécharger l'intégralité de vos données au format JSON, à tout moment, même après résiliation de votre abonnement.</p>
+    <a href="/api/account/privacy/export" class="btn" download>Télécharger mes données (JSON)</a>
+    <span class="btn-rate">Limité à 5 téléchargements par tranche de 24 heures.</span>
+  </section>
 
-    <div class="divider"></div>
+  <section class="card">
+    <h2>Modifier vos données</h2>
+    <p>Pour corriger ou modifier vos données personnelles, contactez notre Délégué à la protection des données. Votre demande sera traitée sous un délai maximum d'un mois (article 12.3 du RGPD).</p>
+    <a href="mailto:dpo@movup.io?subject=Demande de rectification — Compte MovUP" class="btn-secondary">Contacter le DPO</a>
+  </section>
 
-    <div class="delete-block">
-      <strong>Suppression définitive du compte.</strong>
-      <p style="margin:8px 0 0">Pour supprimer votre compte et toutes vos données de manière irréversible, écrivez-nous à <a href="mailto:dpo@movup.io">dpo@movup.io</a>. Le délai de traitement est de 7 jours ouvrés conformément à l'article 17 du RGPD.</p>
+  <section class="card">
+    <h2>Supprimer votre compte</h2>
+    <p>La suppression de votre compte est définitive et entraîne l'effacement de l'ensemble de vos données personnelles dans un délai de 7 jours après votre demande. Pendant ce délai, vous pouvez annuler à tout moment. Vos factures émises restent archivées dix ans sous forme anonymisée conformément au Code de commerce (article L123-22).</p>
+    <div id="delete-block">
+      <div id="delete-state-1">
+        <button type="button" class="btn-danger" id="btn-request-deletion">Demander la suppression de mon compte</button>
+      </div>
+      <div id="delete-state-2" style="display:none">
+        <div class="delete-pending-card">
+          Votre compte sera supprimé le <strong id="del-scheduled-at"></strong> (dans <strong id="del-days-remaining"></strong> jours).
+        </div>
+        <button type="button" class="btn-secondary" id="btn-cancel-deletion">Annuler la demande de suppression</button>
+      </div>
+      <div id="delete-warning" class="delete-warning" style="display:none"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Contact et réclamation</h2>
+    <div class="legal-card">
+      <p>Responsable de traitement : EI Benoît Fouquet — nom commercial « So Paradi », 18 place du Marchix, 22100 Dinan, France. SIRET 453 388 456 00031.</p>
+      <p>Délégué à la protection des données : <a href="mailto:dpo@movup.io">dpo@movup.io</a></p>
+      <p>Droit de réclamation : si vous estimez que vos droits RGPD ne sont pas respectés, vous pouvez introduire une réclamation auprès de la Commission Nationale de l'Informatique et des Libertés (CNIL) — <a href="https://www.cnil.fr" target="_blank" rel="noopener">www.cnil.fr</a>.</p>
     </div>
   </section>
 
@@ -82,9 +121,147 @@
   </p>
 </main>
 </div>
+
+<div class="delete-modal" id="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+  <div class="delete-modal-overlay" id="delete-modal-overlay"></div>
+  <div class="delete-modal-box">
+    <h3 id="delete-modal-title">Confirmer la suppression</h3>
+    <p>Cette action déclenchera la suppression définitive de votre compte dans 7 jours. Vous pouvez l'annuler à tout moment pendant ce délai depuis cette page.
+
+Pour confirmer, saisissez SUPPRIMER ci-dessous :</p>
+    <input type="text" id="delete-confirm-input" placeholder="SUPPRIMER" autocomplete="off">
+    <div class="delete-modal-actions">
+      <button type="button" class="btn-secondary" id="btn-cancel-modal">Annuler</button>
+      <button type="button" class="btn-danger" id="btn-confirm-deletion" disabled>Supprimer mon compte</button>
+    </div>
+  </div>
+</div>
+
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
+<script>
+(function() {
+  var STATE_1 = document.getElementById('delete-state-1');
+  var STATE_2 = document.getElementById('delete-state-2');
+  var WARNING = document.getElementById('delete-warning');
+  var SCHED = document.getElementById('del-scheduled-at');
+  var DAYS = document.getElementById('del-days-remaining');
+  var MODAL = document.getElementById('delete-modal');
+  var INPUT = document.getElementById('delete-confirm-input');
+  var BTN_REQ = document.getElementById('btn-request-deletion');
+  var BTN_CANCEL_MODAL = document.getElementById('btn-cancel-modal');
+  var BTN_CONFIRM = document.getElementById('btn-confirm-deletion');
+  var BTN_CANCEL_DEL = document.getElementById('btn-cancel-deletion');
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return d.toLocaleDateString('fr-FR', {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    });
+  }
+
+  function renderState(data) {
+    if (data.pending) {
+      STATE_1.style.display = 'none';
+      STATE_2.style.display = '';
+      WARNING.style.display = 'none';
+      SCHED.textContent = fmtDate(data.scheduled_at);
+      DAYS.textContent = data.days_remaining;
+    } else {
+      STATE_1.style.display = '';
+      STATE_2.style.display = 'none';
+      WARNING.style.display = 'none';
+    }
+  }
+
+  function loadStatus() {
+    fetch('/api/account/deletion-status', { credentials: 'same-origin' })
+      .then(function(r) {
+        if (r.status === 401) { window.location.href = '/login'; return; }
+        return r.json();
+      })
+      .then(function(data) { if (data) renderState(data); })
+      .catch(function(e) { console.error('[privacy] status fetch', e); });
+  }
+
+  function openModal() {
+    INPUT.value = '';
+    BTN_CONFIRM.disabled = true;
+    MODAL.style.display = 'flex';
+    setTimeout(function() { INPUT.focus(); }, 50);
+  }
+
+  function closeModal() { MODAL.style.display = 'none'; }
+
+  INPUT.addEventListener('input', function() {
+    BTN_CONFIRM.disabled = (INPUT.value !== 'SUPPRIMER');
+  });
+
+  BTN_REQ.addEventListener('click', openModal);
+  BTN_CANCEL_MODAL.addEventListener('click', closeModal);
+
+  BTN_CONFIRM.addEventListener('click', function() {
+    BTN_CONFIRM.disabled = true;
+    fetch('/api/account/delete', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'SUPPRIMER' })
+    })
+    .then(function(r) {
+      if (r.status === 409) {
+        return r.json().then(function(d) {
+          WARNING.style.display = '';
+          WARNING.textContent = d.message ||
+            'Vous devez résilier votre abonnement avant la suppression.';
+          STATE_1.style.display = 'none';
+          STATE_2.style.display = 'none';
+          closeModal();
+          return null;
+        });
+      }
+      if (r.status === 401) { window.location.href = '/login'; return null; }
+      if (!r.ok) throw new Error('http_' + r.status);
+      return r.json();
+    })
+    .then(function(d) {
+      if (d && d.ok) {
+        closeModal();
+        loadStatus();
+      }
+    })
+    .catch(function(e) {
+      console.error('[privacy] delete request', e);
+      alert('Une erreur est survenue. Veuillez réessayer.');
+      BTN_CONFIRM.disabled = false;
+    });
+  });
+
+  BTN_CANCEL_DEL.addEventListener('click', function() {
+    if (!confirm('Annuler votre demande de suppression de compte ?')) return;
+    BTN_CANCEL_DEL.disabled = true;
+    fetch('/api/account/delete', {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    })
+    .then(function(r) {
+      if (r.status === 401) { window.location.href = '/login'; return null; }
+      if (!r.ok) throw new Error('http_' + r.status);
+      return r.json();
+    })
+    .then(function(d) { if (d && d.cancelled) loadStatus(); })
+    .catch(function(e) {
+      console.error('[privacy] cancel deletion', e);
+      alert('Une erreur est survenue. Veuillez réessayer.');
+      BTN_CANCEL_DEL.disabled = false;
+    });
+  });
+
+  loadStatus();
+})();
+</script>
 <footer class="mup-app-footer">
   <div class="mup-app-footer__inner">
     <span>© 2026 <strong>MovUP</strong></span>

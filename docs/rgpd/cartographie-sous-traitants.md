@@ -158,14 +158,16 @@ Durée de l'abonnement Railway, renouvelée mensuellement, résiliable à tout m
 
 ## Nature et catégories de données traitées
 
-L'ensemble des données persistées par MovUP est stocké chez SurrealDB Cloud. Les 32 tables incluent notamment :
+L'ensemble des données persistées par MovUP est stocké chez SurrealDB Cloud. À la date d'effet du présent document (1er juin 2026), les tables actives en production incluent notamment :
 
 - Comptes utilisateurs (avec champs Stripe associés)
 - Fiches pipeline, contacts, devis, factures, frais, agenda, mail, visio
 - Tables opt-out (request + blocklist)
-- Cache mutualisé `company_public` et notes privées `company_enrichment_user`
 - Audit log, lead_search history, mailbox_credentials (tokens OAuth chiffrés AES-256-GCM)
-- Idempotence Stripe (stripe_events)
+- Idempotence Stripe (stripe_events_processed)
+- Journal d'export RGPD (privacy_export_log)
+
+**Architecture cible V1.0 (déploiement programmé fin juin 2026)** : ajout du cache mutualisé `company_public` (données publiques d'entreprise partagées entre abonnés) et de la table `company_enrichment_user` (notes commerciales privées par abonné). À la date d'effet du présent document, ces deux tables ne sont **pas présentes** en base de production : aucune fiche d'entreprise n'est stockée par MovUP en architecture proxy pass-through actuelle.
 
 ## Localisation et transferts
 

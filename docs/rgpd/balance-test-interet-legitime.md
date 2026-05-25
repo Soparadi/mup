@@ -51,6 +51,10 @@ Personnes physiques exerçant une activité professionnelle indépendante (auto-
 
 ### 1.4 Activités de traitement couvertes
 
+**Architecture à la date d'effet du présent document (1er juin 2026)** : MovUP fonctionne en architecture proxy pass-through. Les fiches SIRENE sont collectées en temps réel depuis les API publiques et transmises directement au frontend, sans stockage en base de données. Aucune table de fiches d'entreprise n'existe dans la base de données MovUP. Les tables actuellement actives en production sont limitées à l'authentification (`user`, `session`), à la gestion opt-out (`optout_request`, `optout_blocklist`), au journal d'audit (`audit_log`), au journal d'export RGPD (`privacy_export_log`) et à l'idempotence Stripe (`stripe_events_processed`).
+
+**Architecture cible V1.0 (déploiement programmé fin juin 2026)** : mise en service du moteur de recherche interne souverain MovUP avec stockage en base. Les activités de traitement cibles, telles qu'elles seront opérantes à compter de la V1.0, sont les suivantes :
+
 1. **Collecte initiale** depuis SIRENE via deux canaux complémentaires opérés directement par MovUP, sans intermédiaire tiers :
    - API publique recherche-entreprises.api.gouv.fr (service Etalab),
    - API SIRENE INSEE V3 (authentification OAuth2 directe).
@@ -61,6 +65,8 @@ Personnes physiques exerçant une activité professionnelle indépendante (auto-
 4. **Envoi de communications de prospection commerciale** (cold mail) via le prestataire Resend (région eu-west-1 Dublin).
 5. **Suivi des interactions** (ouverture, réponse, opt-out) limité au strict nécessaire à la gestion de la relation et au respect du droit d'opposition.
 6. **Archivage et purge** selon les durées de conservation définies à la Section 5.
+
+**Pour la période transitoire du 1er juin au déploiement V1.0**, seules les étapes 1, 4, 5 et 6 sont actives. L'étape 2 (enrichissement) et l'étape 3 (stockage) ne sont pas opérantes : les destinataires des communications de prospection (étape 4) sont sélectionnés directement depuis les résultats des API SIRENE par l'utilisateur abonné, sans transit par un cache mutualisé.
 
 ---
 
@@ -144,7 +150,7 @@ So Paradi s'engage à **ne pas traiter** dans le cadre de la prospection MovUP :
 
 ### 3.4 Le moteur de recherche interne MovUP
 
-Le moteur de recherche interne MovUP constitue le **seul outil d'enrichissement** mobilisé dans le cadre de la prospection. Ses caractéristiques techniques et doctrinales sont les suivantes :
+Le moteur de recherche interne MovUP constitue, dans l'architecture cible V1.0 (déploiement programmé fin juin 2026), le **seul outil d'enrichissement complémentaire** mobilisé en aval de la collecte initiale SIRENE / Etalab. À la date d'effet du présent document (1er juin 2026), ce moteur n'est pas encore en service : aucun enrichissement automatisé n'a lieu, les destinataires de la prospection commerciale sont sélectionnés directement par l'utilisateur abonné depuis les résultats des API SIRENE et recherche-entreprises Etalab. Les caractéristiques techniques et doctrinales du moteur, telles qu'elles seront opérantes à compter de la V1.0, sont les suivantes :
 
 **Opérateur** : So Paradi (responsable de traitement), exécution sur infrastructure Railway europe-west4, code source maintenu en interne dans le dépôt Soparadi/mup.
 
@@ -257,10 +263,11 @@ So Paradi a mis en œuvre l'ensemble des mesures protectrices détaillées en Se
 - rate-limiting anti-énumération et anti-flood,
 - chiffrement AES-256-GCM des credentials sensibles,
 - principe **fail-open** sur le filtrage opt-out scraping délibérément assumé en faveur des personnes concernées (toute erreur technique aboutit à l'exclusion du contact, jamais à son inclusion erronée),
-- moteur de recherche interne souverain sans recours à un prestataire tiers de scraping,
+- moteur de recherche interne souverain sans recours à un prestataire tiers de scraping (architecture cible V1.0 — déploiement fin juin 2026),
 - filtres défensifs à l'écriture (anti email nominatif, anti réseaux sociaux personnels),
 - expiration automatique 24 mois des données enrichies,
-- séparation stricte entre cache mutualisé public et notes commerciales privées par abonné.
+- séparation stricte entre cache mutualisé public et notes commerciales privées par abonné (architecture cible V1.0 — déploiement fin juin 2026),
+- pour la période transitoire du 1er juin 2026 au déploiement V1.0 : architecture proxy pass-through sans enrichissement ni cache mutualisé, sélection des destinataires de prospection directement par l'utilisateur abonné depuis les résultats des API SIRENE et recherche-entreprises Etalab.
 
 ### 4.8 Critère 7 — Possibilité effective d'exercer les droits
 
@@ -334,7 +341,7 @@ Cette section documente l'ensemble des mesures techniques et organisationnelles 
 - **Upstream silencieux** : filtrage en amont sur `/api/search` et `/api/sirene/search`. Les fiches concernées sont exclues des résultats sans signal visible (anti-revelation).
 - **Refus dur en aval** : `POST /api/pipeline` retourne 403 si l'identifiant cible est en blocklist (verrou de dernier ressort).
 
-**Propagation instantanée sur base partagée** (Ligne rouge n°5) : l'insertion d'un identifiant dans la blocklist est immédiatement effective pour **tous les abonnés** MovUP. La donnée disparaît du cache mutualisé `company_public`, ne peut plus être enrichie par le moteur de recherche interne, et ne peut plus être insérée en pipeline par quelque abonné que ce soit.
+**Propagation instantanée sur base partagée** (Ligne rouge n°5) : l'insertion d'un identifiant dans la blocklist est immédiatement effective pour **tous les abonnés** MovUP. À la date d'effet du présent document (1er juin 2026), la blocklist filtre les requêtes API SIRENE en temps réel : l'identifiant disparaît des résultats de recherche et ne peut plus être inséré en pipeline par quelque abonné que ce soit. À compter du déploiement V1.0 (fin juin 2026), la même blocklist exclura également l'identifiant du cache mutualisé `company_public` et bloquera tout enrichissement par le moteur de recherche interne.
 
 **Fail-open assumé** : une erreur de la base de données blocklist ne bloque jamais le scraping, mais elle est tracée dans les logs et fait l'objet d'une alerte. **Le tradeoff est délibérément en faveur des personnes concernées** : en cas de doute technique, l'enrichissement s'interrompt plutôt que de risquer une inclusion erronée.
 
@@ -367,7 +374,7 @@ Cette section documente l'ensemble des mesures techniques et organisationnelles 
 - **HTTPS obligatoire** sur l'ensemble des routes (HSTS Cloudflare).
 - **Authentification** par middleware `requireAuthHtml` avec whitelist explicite de 14 routes applicatives.
 - **Multi-tenant scoping** par `userId` sur l'ensemble des routes business (12 pages migrées).
-- **Séparation stricte cache mutualisé / notes privées** (Ligne rouge n°3) : table `company_public` partagée entre abonnés ne contient que des données publiques d'entreprise, table `company_enrichment_user` privée par abonné contient les notes commerciales personnelles, aucune fuite possible entre les deux.
+- **Séparation stricte cache mutualisé / notes privées** (Ligne rouge n°3, architecture cible V1.0 — déploiement fin juin 2026) : table `company_public` partagée entre abonnés ne contiendra que des données publiques d'entreprise, table `company_enrichment_user` privée par abonné contiendra les notes commerciales personnelles, aucune fuite possible entre les deux. À la date d'effet du présent document (1er juin 2026), ces deux tables ne sont pas encore présentes en base de production : aucune fiche d'entreprise n'est stockée par MovUP, les notes commerciales des abonnés sont rattachées aux entités existantes (`pipeline`, `contacts`) avec multi-tenant scoping par `userId`.
 - **Respect du robots.txt** par le moteur de recherche interne sur chaque domaine consulté.
 - **Webhook Stripe** vérifié par signature `STRIPE_WEBHOOK_SECRET`.
 - **Idempotence** sur événements Stripe (table dédiée).
@@ -529,13 +536,13 @@ Toute évolution de cette doctrine (introduction d'un prestataire tiers, quel qu
 
 ### Doctrine 10 — Cinq lignes rouges du moteur de recherche interne
 
-Le moteur de recherche interne MovUP fonctionne sous cinq lignes rouges non négociables :
+Le moteur de recherche interne MovUP, dans l'architecture cible V1.0 (déploiement programmé fin juin 2026), fonctionnera sous cinq lignes rouges non négociables. Ces lignes rouges sont posées dès la présente date d'effet (1er juin 2026) comme contrainte de conception, opposable à toute évolution future. À la date d'effet, le moteur n'est pas encore en service.
 
 1. **Rejet de l'email nominatif** : tout email correspondant au motif `[a-z]+\.[a-z]+@` (typiquement `prenom.nom@`) est rejeté silencieusement à l'écriture. Seuls les emails génériques d'entreprise sont admis.
 2. **Refus de LinkedIn et réseaux sociaux personnels** : aucune donnée n'est collectée depuis LinkedIn (CGU 2024) ni depuis un profil personnel sur quelque plateforme que ce soit. Seules les pages entreprises publiques sur sites officiels sont consultées.
-3. **Séparation stricte cache mutualisé / notes privées** : la table `company_public` partagée entre abonnés ne contient que des données publiques d'entreprise. La table `company_enrichment_user` privée par abonné contient les notes commerciales personnelles. Aucune fuite possible entre les deux.
+3. **Séparation stricte cache mutualisé / notes privées** : à compter de la V1.0, la table `company_public` partagée entre abonnés ne contiendra que des données publiques d'entreprise. La table `company_enrichment_user` privée par abonné contiendra les notes commerciales personnelles. Aucune fuite possible entre les deux.
 4. **Expiration automatique 24 mois** : toute donnée enrichie par le moteur de recherche interne expire automatiquement 24 mois après sa dernière mise à jour. Au-delà, soit la donnée est re-vérifiée, soit elle est purgée.
-5. **Propagation instantanée de l'opt-out sur base partagée** : l'insertion d'un identifiant en blocklist est immédiatement effective pour tous les abonnés MovUP. La donnée disparaît du cache mutualisé, ne peut plus être enrichie, et ne peut plus être insérée en pipeline.
+5. **Propagation instantanée de l'opt-out sur base partagée** : l'insertion d'un identifiant en blocklist est immédiatement effective pour tous les abonnés MovUP. À la date d'effet du présent document (1er juin 2026), l'identifiant disparaît des résultats des API SIRENE et ne peut plus être inséré en pipeline. À compter de la V1.0, il disparaîtra également du cache mutualisé et ne pourra plus être enrichi par le moteur de recherche interne.
 
 ---
 

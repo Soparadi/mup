@@ -264,6 +264,8 @@ Les prospects sont par construction :
 
 # Fiche T3 — Enrichissement de fiches prospects par moteur de recherche interne
 
+> **Statut à la date d'effet du présent document (1er juin 2026)** : traitement **projeté en architecture cible V1.0** (déploiement programmé fin juin 2026). À la date d'effet, le moteur de recherche interne MovUP n'est **pas en service** : aucun enrichissement automatisé n'a lieu, aucune table de fiches d'entreprise n'existe en base de production. La présente fiche décrit le traitement tel qu'il sera opérant à compter de la V1.0, en application de la doctrine d'accountability anticipée (art. 5.2 RGPD).
+
 ## Identification
 
 | Champ | Valeur |
@@ -272,7 +274,7 @@ Les prospects sont par construction :
 | Intitulé | Enrichissement de fiches prospects par moteur de recherche interne |
 | Finalité principale | Compléter les fiches issues de SIRENE avec les coordonnées de contact professionnel publiquement publiées par les entreprises elles-mêmes |
 | Finalités secondaires | Maintien à jour de la base partagée mutualisée entre abonnés MovUP |
-| Date de mise en œuvre | 1er juin 2026 |
+| Date de mise en œuvre | Architecture cible V1.0 — déploiement programmé fin juin 2026 |
 
 ## Base légale (art. 6 RGPD)
 
@@ -309,8 +311,8 @@ La collecte n'a lieu que sur des sites web :
 
 **Sous-traitants** :
 
-- SurrealDB Cloud — stockage du cache mutualisé `company_public` (AWS eu-west-1 Dublin)
-- Railway Inc. — exécution du moteur (europe-west4)
+- SurrealDB Cloud — stockage du cache mutualisé `company_public` à compter de la V1.0 (AWS eu-west-1 Dublin)
+- Railway Inc. — exécution du moteur à compter de la V1.0 (europe-west4)
 
 **Aucun prestataire tiers de scraping** (cf. LIA-MOVUP-001 v1.1, Doctrine 9 — Souveraineté technique).
 
@@ -332,16 +334,16 @@ La collecte n'a lieu que sur des sites web :
 - Plafond opérationnel ~500 fiches/jour
 - Délai minimum entre requêtes successives sur un même domaine
 - Filtres défensifs à l'écriture (anti-email nominatif, anti-réseaux sociaux personnels)
-- Architecture à double cache : `company_public` partagé (données publiques uniquement) / `company_enrichment_user` privé par abonné (notes commerciales personnelles)
-- Aucune fuite possible entre cache mutualisé et notes privées
-- Propagation instantanée de l'opt-out : un identifiant en blocklist disparaît du cache mutualisé
+- Architecture à double cache (à compter de la V1.0) : `company_public` partagé (données publiques uniquement) / `company_enrichment_user` privé par abonné (notes commerciales personnelles)
+- Aucune fuite possible entre cache mutualisé et notes privées (à compter de la V1.0)
+- Propagation instantanée de l'opt-out : un identifiant en blocklist sera exclu du cache mutualisé à compter de la V1.0. À la date d'effet, l'opt-out filtre les résultats des API SIRENE en temps réel via la blocklist.
 - Fail-open en faveur des personnes concernées : toute erreur technique interrompt l'enrichissement
 
 ## Exercice des droits
 
 - **Accès (art. 15)** : sur demande à dpo@movup.io, réponse sous 1 mois incluant les métadonnées (source, horodatage).
 - **Rectification (art. 16)** : sur demande à dpo@movup.io.
-- **Effacement (art. 17)** : sur demande à dpo@movup.io ou via `/optout` (équivalent fonctionnel — supprime la donnée du cache mutualisé).
+- **Effacement (art. 17)** : sur demande à dpo@movup.io ou via `/optout` (équivalent fonctionnel — exclut la donnée des résultats des API SIRENE en temps réel à la date d'effet ; suppression effective du cache mutualisé à compter de la V1.0).
 - **Opposition (art. 21)** : tunnel `/optout` (propagation instantanée).
 
 ---

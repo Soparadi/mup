@@ -61,10 +61,10 @@ Les autres traitements (T1 comptes, T4 opt-out, T5 facturation, T6 support, T7 l
 - Consultation de l'API recherche-entreprises Etalab (publique).
 - Consultation de l'API SIRENE INSEE V3 (authentification OAuth2 directe).
 - Géocodage des adresses via API BAN data.gouv.fr.
-- **Filtrage du champ `statut_diffusion`** (à intégrer avant lancement) — exclusion des entrepreneurs ayant exercé leur droit d'opposition à la diffusion auprès de l'INSEE.
+- **Filtrage du champ `statut_diffusion`** (déployé en production le 25 mai 2026, commit `8e5e0df`, tag `v1.0.1-rgpd`) — exclusion des entrepreneurs ayant exercé leur droit d'opposition à la diffusion auprès de l'INSEE. Variante stricte : toute fiche dont au moins un champ `statut_diffusion` (ou variante `statutDiffusionEtablissement` / `statutDiffusionUniteLegale` selon l'API source) n'est pas strictement égal à `'O'` est exclue silencieusement (filtre conservateur couvrant la valeur `'P'` actuelle et la valeur `'N'` résiduelle obsolète depuis le 21 mars 2023, conformément à l'évolution INSEE).
 - Filtrage en amont des fiches en blocklist opt-out (anti-revelation).
 
-**Enrichissement par moteur de recherche interne** (T3) :
+**Enrichissement par moteur de recherche interne** (T3) — *traitement projeté en architecture cible V1.0, déploiement programmé fin juin 2026. À la date d'effet du présent document (1er juin 2026), ce traitement n'est pas en service.* :
 
 - Pour chaque entreprise SIRENE identifiée, consultation de son site web officiel et de ses pages de mentions légales / contact.
 - Extraction par expression régulière de : email professionnel générique (`contact@`, `info@`, `commercial@`, `bonjour@`, `hello@`), téléphone, URL réseaux sociaux entreprise.
@@ -72,7 +72,7 @@ Les autres traitements (T1 comptes, T4 opt-out, T5 facturation, T6 support, T7 l
 - Respect du fichier robots.txt de chaque domaine.
 - Plafond opérationnel ~500 fiches/jour.
 
-**Stockage** :
+**Stockage** — *architecture cible V1.0, déploiement programmé fin juin 2026. À la date d'effet du présent document (1er juin 2026), aucune table de fiches d'entreprise n'existe en base de production : MovUP fonctionne en architecture proxy pass-through pour les requêtes SIRENE.* :
 
 - Cache mutualisé `company_public` partagé entre abonnés MovUP (données publiques entreprise uniquement).
 - Notes privées `company_enrichment_user` par abonné (commentaires commerciaux personnels, jamais partagés).
@@ -254,7 +254,7 @@ Le **niveau de risque résiduel** (après mesures protectrices) est qualifié de
 
 #### Risque R1 — Accès illégitime aux données par un tiers (cyber-attaque)
 
-**Description** : un attaquant externe accède à la base de données MovUP (cache mutualisé `company_public`, comptes utilisateurs, données comptables) par exploitation d'une vulnérabilité.
+**Description** : un attaquant externe accède à la base de données MovUP par exploitation d'une vulnérabilité. À la date d'effet du présent document (1er juin 2026), la base contient principalement les comptes utilisateurs, les données comptables (devis, factures, frais) et les tables d'opt-out. À compter du déploiement V1.0 (fin juin 2026), elle contiendra également le cache mutualisé `company_public` et les notes commerciales `company_enrichment_user`.
 
 **Impact potentiel** :
 - Divulgation des coordonnées professionnelles enrichies (publiquement disponibles par ailleurs, mais agrégées = valeur ajoutée pour spammeurs).
@@ -298,7 +298,7 @@ Le **niveau de risque résiduel** (après mesures protectrices) est qualifié de
 
 **Sources de risque** :
 - Bug du filtre opt-out upstream (`/api/search` et `/api/sirene/search`).
-- Désynchronisation entre blocklist et cache mutualisé.
+- Désynchronisation entre blocklist et cache mutualisé (risque applicable à compter du déploiement V1.0 — le cache n'existe pas à la date d'effet).
 - Erreur de la base de données blocklist non détectée.
 - Insertion forgée par requête malveillante contournant le filtre.
 - Hash SHA-256 collision (probabilité négligeable).
@@ -308,7 +308,7 @@ Le **niveau de risque résiduel** (après mesures protectrices) est qualifié de
 - **Propagation instantanée** sur base partagée (Doctrine 10 Ligne rouge n°5).
 - **Fail-open** assumé en faveur des personnes concernées (Doctrine 2 LIA) : toute erreur DB interrompt l'enrichissement.
 - Hash SHA-256 systématique avec normalisation `.trim()`.
-- Test runtime à valider (Étape 8 Phase 6, pending validation hotspot iPhone).
+- Test runtime validé bout en bout le 25 mai 2026 à 17:52 (6/6 tests PASS : soumission, magic link, page de confirmation, accusé de réception, notification interne, idempotence).
 - Logs d'alerte sur erreurs blocklist.
 
 **Gravité** : 3 (importante — grief direct, exposition CNIL)
@@ -568,14 +568,14 @@ Cette section consolide les **mesures complémentaires** identifiées dans la Se
 
 ### 4.1 Mesures à fermer avant le 1er juin 2026 (lancement commercial)
 
-| Référence | Mesure | Effort | Source |
+| Référence | Mesure | Statut | Source |
 |---|---|---|---|
-| M2.1 | Validation runtime complète Étape 8 tunnel opt-out (hotspot iPhone) | 15 min | R2 |
-| Pre-lancement-1 | Audit champ `statut_diffusion` SIRENE et intégration au filtre amont | ~1h | Audit balance test + AIPD |
-| Pre-lancement-2 | Contre-signature DPA Railway, SurrealDB Cloud, Resend | ~30 min | CST-MOVUP-001 |
-| Pre-lancement-3 | Test runtime Stripe Live carte Ben (24€ + remboursement Customer Portal) | 30-45 min | RAT-MOVUP-001 T5 |
+| M2.1 | Validation runtime complète Étape 8 tunnel opt-out (hotspot iPhone) | ✅ Fermée 25 mai 2026 à 17:52 — 6/6 tests PASS | R2 |
+| Pre-lancement-1 | Audit champ `statut_diffusion` SIRENE et intégration au filtre amont | ✅ Fermée 25 mai 2026 — commit `8e5e0df`, tag `v1.0.1-rgpd` (filtre conservateur variante stricte sur 4 routes : `/api/public/search-demo`, `/api/search`, `/api/sirene/search`, `/api/sirene/:siret`) | Audit balance test + AIPD |
+| Pre-lancement-2 | Contre-signature DPA Railway, SurrealDB Cloud, Resend | ⏳ Pending — démarches programmées | CST-MOVUP-001 |
+| Pre-lancement-3 | Test runtime Stripe Live carte Ben (24€ + remboursement Customer Portal) | ⏳ Pending — session dédiée programmée | RAT-MOVUP-001 T5 |
 
-**Total** : ~2h30 cumulées avant lancement.
+**Solde** : 2 mesures fermées, 2 mesures à fermer avant le 1er juin 2026.
 
 ### 4.2 Mesures à fermer en V1.0.x (semaine 1-2 post-lancement)
 

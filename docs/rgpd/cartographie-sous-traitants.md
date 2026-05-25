@@ -2,7 +2,7 @@
 
 **Responsable de traitement** : Benoît Fouquet — Entrepreneur Individuel So Paradi
 **SIRET** : 453 388 456 00031
-**Adresse** : Combourg, Bretagne, France
+**Adresse** : 18 place du Marchix, 22100 Dinan, France
 **Contact DPO** : dpo@movup.io
 **Activité concernée** : MovUP — Pipeline management SaaS B2B (movup.io)
 
@@ -825,7 +825,7 @@ Le présent document est établi sous la responsabilité de Benoît Fouquet, en 
 
 L'ensemble des 9 sous-traitants documentés est mobilisé effectivement à la date d'effet du présent document, sous réserve des contre-signatures DPA pendantes et de la substitution recommandée du sous-traitant S8.
 
-**Fait à Combourg, le 25 mai 2026**
+**Fait à Dinan, le 25 mai 2026**
 
 **Benoît Fouquet**
 Responsable de traitement — So Paradi (EI)

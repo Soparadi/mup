@@ -346,6 +346,46 @@ function isProspectable(item) {
   return hasNamedDirigeant(item)
 }
 
+// ── Filtre diffusion INSEE (Phase 6 Étape 15 — droit d'opposition SIRENE) ──
+// L'INSEE permet aux entrepreneurs individuels de s'opposer à la diffusion de
+// leurs données SIRENE (loi République numérique 2016 art.1 ; art. L.1 CRPA).
+// Le champ statut_diffusion porte cette opposition :
+//   'O' = diffusion publique autorisée  → fiche conservée (cas nominal)
+//   'P' = diffusion partielle (depuis le 21/03/2023, remplace l'ancien 'N')
+//   'N' = non-diffusible (résiduel obsolète)
+// Règle conservatrice : fiche conservée UNIQUEMENT si TOUS les champs
+// statut_diffusion attendus valent strictement 'O'. Toute autre valeur (P, N,
+// ou future) exclut la fiche silencieusement (anti-revelation : aucun message
+// « X masquées », aucun log de SIRET). Un champ ABSENT exclut la fiche
+// (variante stricte, fail-open en faveur des personnes concernées — cf.
+// Doctrine 2 LIA-MOVUP-001 v1.1, commit 1aaedcb).
+// Deux nominations selon la source :
+//   etalab : statut_diffusion (racine) + statut_diffusion_etablissement
+//            (siege + matching_etablissements[])
+//   insee  : statutDiffusionEtablissement (racine étab.) +
+//            uniteLegale.statutDiffusionUniteLegale
+function isFullyDiffusible(record, source) {
+  if (!record || typeof record !== 'object') return false
+  if (source === 'etalab') {
+    if (record.statut_diffusion !== 'O') return false
+    const s = record.siege
+    if (!s || s.statut_diffusion_etablissement !== 'O') return false
+    if (Array.isArray(record.matching_etablissements)) {
+      for (const e of record.matching_etablissements) {
+        if (!e || e.statut_diffusion_etablissement !== 'O') return false
+      }
+    }
+    return true
+  }
+  if (source === 'insee') {
+    if (record.statutDiffusionEtablissement !== 'O') return false
+    const ul = record.uniteLegale
+    if (!ul || ul.statutDiffusionUniteLegale !== 'O') return false
+    return true
+  }
+  return false
+}
+
 const REGION_DEPTS = {
   '11': ['75','77','78','91','92','93','94','95'],
   '24': ['18','28','36','37','41','45'],
@@ -441,6 +481,12 @@ app.get('/api/public/search-demo', async (req, res) => {
       const more = await Promise.all(promises)
       more.forEach(d => { if (d && Array.isArray(d.results)) raw = raw.concat(d.results) })
     }
+
+    // Filtre diffusion INSEE (droit d'opposition) — exclut toute fiche dont un
+    // statut_diffusion ≠ 'O', AVANT le filtre qualité et l'extrapolation ratio.
+    const rawDiffusible = raw.filter(r => isFullyDiffusible(r, 'etalab'))
+    if (rawDiffusible.length !== raw.length) console.log(`[diffusion] search-demo: ${raw.length - rawDiffusible.length} fiche(s) exclue(s)`)
+    raw = rawDiffusible
 
     // Filtre qualité : on ne garde que les fiches "prospectables" (dirigeant
     // nommé + état actif + nature juridique pertinente). Le ratio observé sur
@@ -1085,6 +1131,13 @@ app.get('/api/search', async (req, res) => {
         data.total_results = Math.round(data.total_results * ratio)
       }
     }
+    // ── Filtre diffusion INSEE (droit d'opposition) — AVANT le Rempart 1
+    // opt-out : réduit le batch SIRET passé ensuite à checkBlocklistBatch.
+    if (Array.isArray(data.results) && data.results.length) {
+      const before = data.results.length
+      data.results = data.results.filter(r => isFullyDiffusible(r, 'etalab'))
+      if (data.results.length !== before) console.log(`[diffusion] /api/search: ${before - data.results.length} fiche(s) exclue(s)`)
+    }
     // ── Rempart 1 opt-out (RGPD art. 12) — filtrage silencieux upstream.
     // recherche-entreprises ne porte pas de SIRET top-level : on collecte
     // les SIRET candidats par fiche (siège + matching_etablissements) puis
@@ -1430,6 +1483,12 @@ app.get('/api/sirene/search', async (req, res) => {
     if(!r.ok) { const body = await r.text(); console.error('[INSEE] Search error:', r.status, body.substring(0,300)); return res.status(502).json({ error: 'Recherche INSEE échouée', upstream_status: r.status }) }
     const data = await r.json()
     console.log('[INSEE] Success: total=', data.header?.total, 'etablissements=', data.etablissements?.length)
+    // ── Filtre diffusion INSEE (droit d'opposition) — AVANT le Rempart 1 opt-out.
+    if (Array.isArray(data.etablissements) && data.etablissements.length) {
+      const before = data.etablissements.length
+      data.etablissements = data.etablissements.filter(e => isFullyDiffusible(e, 'insee'))
+      if (data.etablissements.length !== before) console.log(`[diffusion] /api/sirene/search: ${before - data.etablissements.length} fiche(s) exclue(s)`)
+    }
     // ── Rempart 1 opt-out (RGPD art. 12) — filtrage silencieux upstream.
     // INSEE SIRENE porte le SIRET en top-level (etab.siret). Batch IN
     // (≤100 SIRET, nombre déjà borné l.1235) puis retrait des fiches
@@ -1457,6 +1516,11 @@ app.get('/api/sirene/:siret', async (req, res) => {
     const r = await fetch('https://api.insee.fr/api-sirene/3.11/siret/' + encodeURIComponent(req.params.siret), { headers: hdrs2 })
     if(!r.ok) return res.status(502).json({ error: 'Lookup INSEE échoué', upstream_status: r.status })
     const data = await r.json()
+    // Filtre diffusion INSEE (droit d'opposition) — singleton. Anti-revelation :
+    // 404 not_found (ne jamais révéler le statut d'opposition au client).
+    if (data && data.etablissement && !isFullyDiffusible(data.etablissement, 'insee')) {
+      return res.status(404).json({ error: 'not_found' })
+    }
     res.json(data)
   } catch(e) {
     res.status(502).json({ error: 'INSEE indisponible' })

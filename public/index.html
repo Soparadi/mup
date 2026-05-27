@@ -380,7 +380,18 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .hero-inner {
   position: relative;
   z-index: 1;
-  text-align: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+  text-align: left;
+}
+
+.hero-logo-img {
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  display: block;
 }
 
 .hero-eyebrow {
@@ -413,18 +424,17 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 }
 
 .hero-title {
-  /* Cap font-size un peu plus bas pour que "Chercher. Trouver. Signer." tienne
-     sur une ligne en desktop ; mobile autorise le wrap naturel. */
+  /* Layout V7 2 colonnes : le titre wrappe naturellement dans sa colonne. */
   font-size: clamp(40px, 6vw, 76px);
   font-weight: 800;
   line-height: 1.02;
   letter-spacing: -0.045em;
   color: var(--text);
   max-width: 18ch;
-  margin: 0 auto 28px;
+  margin: 0 0 28px;
 }
 @media (min-width: 768px) {
-  .hero-title { max-width: none; white-space: nowrap; }
+  .hero-title { max-width: none; }
 }
 @media (max-width: 767px) {
   .hero-title { max-width: 18ch; }
@@ -442,14 +452,14 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   line-height: 1.5;
   color: var(--text-muted);
   max-width: 640px;
-  margin: 0 auto 40px;
+  margin: 0 0 40px;
   font-weight: 400;
 }
 
 .hero-cta {
   display: flex;
   gap: 12px;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   margin-bottom: 16px;
 }
@@ -790,6 +800,11 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 
 @media (max-width: 880px) {
   .hero { padding: 64px 0 56px; }
+  .hero-inner { grid-template-columns: 1fr; gap: 40px; text-align: center; }
+  .hero-logo-img { margin-left: auto; margin-right: auto; }
+  .hero-title { margin: 0 auto 28px; }
+  .hero-subtitle { margin: 0 auto 40px; }
+  .hero-cta { justify-content: center; }
   .hero-visual { margin-top: 48px; }
   .mock-sidebar { display: none; }
   .hero-visual-inner { min-height: 380px; }
@@ -2283,30 +2298,36 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 <section class="hero">
   <div class="container">
     <div class="hero-inner">
-      <div class="hero-eyebrow reveal">
-        <span class="hero-eyebrow-dot"></span>
-        <span>Indépendants &middot; PME</span>
+      <div class="hero-logo reveal">
+        <img src="/movup-logo.svg" alt="MovUP" class="hero-logo-img">
       </div>
 
-      <h1 class="hero-title reveal reveal-d1">
-        Chercher. Trouver. <em>Signer.</em>
-      </h1>
+      <div class="hero-text">
+        <div class="hero-eyebrow reveal">
+          <span class="hero-eyebrow-dot"></span>
+          <span>Indépendants &middot; PME</span>
+        </div>
 
-      <p class="hero-subtitle reveal reveal-d2">
-        Recherche de clients, suivi, agenda, mail, visio, devis, factures. <strong>MovUP regroupe votre cycle commercial dans une seule interface.</strong>
-      </p>
+        <h1 class="hero-title reveal reveal-d1">
+          Chercher. Trouver. <em>Signer.</em>
+        </h1>
 
-      <div class="hero-cta reveal reveal-d3">
-        <a href="/signup" class="btn-primary">
-          Commencer l’essai gratuit
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <path d="M5 12h14M12 5l7 7-7 7"/>
-          </svg>
-        </a>
-        <a href="/tarifs" class="btn-outline">Voir les tarifs</a>
+        <p class="hero-subtitle reveal reveal-d2">
+          Recherche de clients, suivi, agenda, mail, visio, devis, factures. <strong>MovUP regroupe votre cycle commercial dans une seule interface.</strong>
+        </p>
+
+        <div class="hero-cta reveal reveal-d3">
+          <a href="/signup" class="btn-primary">
+            Commencer l’essai gratuit
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </a>
+          <a href="/tarifs" class="btn-outline">Voir les tarifs</a>
+        </div>
+
+        <div class="hero-meta reveal reveal-d4">Aperçu en direct &middot; 14 jours gratuits, sans carte bancaire</div>
       </div>
-
-      <div class="hero-meta reveal reveal-d4">Aperçu en direct &middot; 14 jours gratuits, sans carte bancaire</div>
     </div>
 
     <!-- Visuel produit -->

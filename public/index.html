@@ -70,6 +70,17 @@ html, body, * {
 :root {
   /* Colors — alignées exactement sur les pages app et légales */
   --bg: #f4f1ea;
+
+  /* Charte V7 — couleurs bande différenciateurs */
+  --rouge: #CD0100;
+  --bleu: #1166C0;
+  --orange: #B84C01;
+  --indigo: #4239CA;
+  --violet: #7B3AEC;
+  --cyan: #09BCD3;
+  --jaune: #E3A135;
+  --vert: #1E8349;
+
   --surface: #F5F5F7;
   --surface-2: #EBEBF0;
   --card: #FFFFFF;
@@ -796,6 +807,70 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 }
 @media (max-width: 540px) {
   .mock-kpi-bar { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+
+/* ── BANDE DIFFÉRENCIATEURS V7 ── */
+.band {
+  overflow: hidden;
+  white-space: nowrap;
+  border-top: 1px solid #0a0a0a;
+  border-bottom: 1px solid #0a0a0a;
+  position: relative;
+  z-index: 2;
+}
+.band-track {
+  display: inline-flex;
+  align-items: stretch;
+  animation: bandTick 75s linear infinite;
+}
+.band-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 28px;
+  color: #ffffff;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+}
+.band-item .label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  opacity: 0.7;
+  letter-spacing: 0.18em;
+  padding-right: 10px;
+  border-right: 1px solid rgba(255,255,255,0.3);
+}
+.band-item .value {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.band-item .value em {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: -0.005em;
+  font-size: 13px;
+  margin-left: 4px;
+}
+.band-item.c-rouge  { background: var(--rouge); }
+.band-item.c-cyan   { background: var(--cyan); }
+.band-item.c-violet { background: var(--violet); }
+.band-item.c-orange { background: var(--orange); }
+.band-item.c-jaune  { background: var(--jaune); color: #0a0a0a; }
+.band-item.c-jaune .label { opacity: 0.55; border-right-color: rgba(0,0,0,0.25); }
+.band-item.c-vert   { background: var(--vert); }
+.band-item.c-indigo { background: var(--indigo); }
+.band-item.c-bleu   { background: var(--bleu); }
+
+@keyframes bandTick {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
 @media (max-width: 880px) {
@@ -3215,6 +3290,78 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 
   </div>
 </section>
+
+<!-- BANDE DIFFÉRENCIATEURS V7 -->
+<div class="band">
+  <div class="band-track">
+    <!-- Premier cycle -->
+    <div class="band-item c-bleu">
+      <span class="label">Essai</span>
+      <span class="value">14 jours <em>sans carte bancaire</em></span>
+    </div>
+    <div class="band-item c-rouge">
+      <span class="label">Leads</span>
+      <span class="value">30 millions <em>de prospects SIRENE</em></span>
+    </div>
+    <div class="band-item c-indigo">
+      <span class="label">Suivi</span>
+      <span class="value">Pipeline 9 étapes <em>auto-entrepreneur</em></span>
+    </div>
+    <div class="band-item c-cyan">
+      <span class="label">Terrain</span>
+      <span class="value">Carte de prospection <em>corridor 30 km</em></span>
+    </div>
+    <div class="band-item c-orange">
+      <span class="label">Mail</span>
+      <span class="value">Échanges archivés <em>sur chaque fiche</em></span>
+    </div>
+    <div class="band-item c-violet">
+      <span class="label">Visio</span>
+      <span class="value">Jitsi intégrée <em>à la fiche client</em></span>
+    </div>
+    <div class="band-item c-jaune">
+      <span class="label">Devis</span>
+      <span class="value">Devis &amp; factures <em>franchise TVA</em></span>
+    </div>
+    <div class="band-item c-vert">
+      <span class="label">Données</span>
+      <span class="value">Hébergées en Europe <em>RGPD natif</em></span>
+    </div>
+    <!-- Duplication pour boucle infinie -->
+    <div class="band-item c-bleu">
+      <span class="label">Essai</span>
+      <span class="value">14 jours <em>sans carte bancaire</em></span>
+    </div>
+    <div class="band-item c-rouge">
+      <span class="label">Leads</span>
+      <span class="value">30 millions <em>de prospects SIRENE</em></span>
+    </div>
+    <div class="band-item c-indigo">
+      <span class="label">Suivi</span>
+      <span class="value">Pipeline 9 étapes <em>auto-entrepreneur</em></span>
+    </div>
+    <div class="band-item c-cyan">
+      <span class="label">Terrain</span>
+      <span class="value">Carte de prospection <em>corridor 30 km</em></span>
+    </div>
+    <div class="band-item c-orange">
+      <span class="label">Mail</span>
+      <span class="value">Échanges archivés <em>sur chaque fiche</em></span>
+    </div>
+    <div class="band-item c-violet">
+      <span class="label">Visio</span>
+      <span class="value">Jitsi intégrée <em>à la fiche client</em></span>
+    </div>
+    <div class="band-item c-jaune">
+      <span class="label">Devis</span>
+      <span class="value">Devis &amp; factures <em>franchise TVA</em></span>
+    </div>
+    <div class="band-item c-vert">
+      <span class="label">Données</span>
+      <span class="value">Hébergées en Europe <em>RGPD natif</em></span>
+    </div>
+  </div>
+</div>
 
 
 <!-- ──────────────────────────────────────────────────────────

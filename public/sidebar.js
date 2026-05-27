@@ -58,14 +58,11 @@
     html += '</a>';
   }
 
-  // Stack en bas de sidebar : bouton Reset PUIS bloc utilisateur (tout en bas absolu).
+  // Stack en bas de sidebar : bloc utilisateur (tout en bas absolu).
   // Le lien "Légal" a été retiré (redondant avec le footer légal de chaque page app).
   // Wrapper avec margin-top:auto pour garantir position bottom indépendamment du
   // contenu. Pattern Stripe/Linear/Notion : user identity = dernier élément vertical.
-  html += '<div id="sb-bottom-stack" style="margin-top:auto;display:flex;flex-direction:column;">'
-    + '<div style="padding:8px 10px 12px;border-top:0.5px solid rgba(0,0,0,0.08);display:flex;flex-direction:column;gap:8px;">'
-    +   '<button id="reset-mup-btn" style="width:100%;padding:8px 12px;background:transparent;border:0.5px solid rgba(220,50,50,0.3);border-radius:6px;color:#A32D2D;font-family:inherit;font-size:12px;cursor:pointer;transition:all .12s;">Réinitialiser MovUP</button>'
-    + '</div>';
+  html += '<div id="sb-bottom-stack" style="margin-top:auto;display:flex;flex-direction:column;">';
 
   // ── Bloc utilisateur — DERNIER élément de la sidebar, collé en bas absolu.
   // Lit window.__USER__ injecté serveur-side. Avatar 36×36 noir + nom + email
@@ -163,124 +160,4 @@
     });
   }
 
-  // ── PURGE LOGIC ──
-  // 1. DELETE /api/reset-all → purge SurrealDB scopé userId (pipeline, agenda, contacts, devis,
-  //    factures, frais, mail, visio, user_plan, user_settings, counter, etc.)
-  // 2. Purge localStorage (préférences UI, caches obsolètes)
-  // 3. Reload pour repartir d'un état vierge.
-  // Si la route API échoue → alerte utilisateur, localStorage non purgé (état cohérent).
-  async function resetMUP(){
-    try {
-      var res = await fetch('/api/reset-all', {
-        method: 'DELETE',
-        headers: { 'x-user-id': 'default' }
-      });
-      if (!res.ok) {
-        var errBody = null;
-        try { errBody = await res.json(); } catch(e){}
-        alert('Erreur reset backend (HTTP ' + res.status + ')' + (errBody && errBody.error ? ' : ' + errBody.error : '') + '. Annulé.');
-        return;
-      }
-      var data = await res.json();
-      console.log('[reset]', data.deleted);
-      // Purge localStorage (mup_*) après succès API
-      var keysToDelete = [];
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (k && k.indexOf('mup_') === 0) keysToDelete.push(k);
-      }
-      keysToDelete.forEach(function(k){ localStorage.removeItem(k); });
-      // Compte total purgé côté SurrealDB pour feedback utilisateur
-      var totalDb = 0;
-      Object.keys(data.deleted || {}).forEach(function(t){
-        var v = data.deleted[t];
-        if (typeof v === 'number') totalDb += v;
-      });
-      alert('Réinitialisation effectuée. ' + totalDb + ' record(s) supprimé(s) en base · ' + keysToDelete.length + ' clé(s) localStorage purgée(s).');
-      location.reload();
-    } catch (e) {
-      console.error('[reset]', e);
-      alert('Erreur reset : ' + e.message);
-    }
-  }
-  // Exposer globalement pour debug console
-  window.MUP_RESET = function(){
-    if(confirm('Réinitialiser MovUP ? (factures conservées)')) resetMUP();
-  };
-
-  // ── MODALE DOUBLE CONFIRMATION ──
-  function openResetModal(){
-    var existing = document.getElementById('reset-mup-overlay');
-    if(existing) existing.remove();
-    var ov = document.createElement('div');
-    ov.id = 'reset-mup-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:Geist,-apple-system,sans-serif;';
-    ov.innerHTML = '<div id="reset-mup-card" style="background:#fff;border-radius:14px;padding:26px;width:480px;max-width:92vw;">'
-      +'<div id="reset-step-1">'
-      +'<div style="font-size:17px;font-weight:800;letter-spacing:-.3px;margin-bottom:10px;">Réinitialiser MovUP</div>'
-      +'<div style="font-size:13px;color:#6E6E73;line-height:1.5;margin-bottom:18px;">Cette action va supprimer tous les prospects, RDV, leads, contacts, devis, agenda. Les <strong>factures réelles seront conservées</strong>.</div>'
-      +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
-      +'<button id="rmu-cancel-1" style="padding:9px 16px;border:1px solid #E8E8ED;background:#fff;color:#1D1D1F;border-radius:8px;font-family:inherit;font-weight:600;font-size:12.5px;cursor:pointer;">Annuler</button>'
-      +'<button id="rmu-continue" style="padding:9px 16px;border:none;background:#A32D2D;color:#fff;border-radius:8px;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer;">Continuer</button>'
-      +'</div></div>'
-      +'<div id="reset-step-2" style="display:none;">'
-      +'<div style="font-size:17px;font-weight:800;letter-spacing:-.3px;margin-bottom:10px;color:#A32D2D;">Confirmation finale</div>'
-      +'<div style="font-size:13px;color:#6E6E73;line-height:1.5;margin-bottom:14px;">Tape exactement <strong style="font-family:Geist Mono,monospace;background:#F5F5F7;padding:2px 6px;border-radius:4px;">RESET</strong> ci-dessous pour confirmer la réinitialisation.</div>'
-      +'<input id="rmu-input" type="text" placeholder="RESET" style="width:100%;padding:10px 12px;border:1px solid #E8E8ED;border-radius:8px;font-family:Geist Mono,monospace;font-size:14px;font-weight:600;letter-spacing:1px;margin-bottom:14px;text-align:center;text-transform:uppercase;" />'
-      +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
-      +'<button id="rmu-cancel-2" style="padding:9px 16px;border:1px solid #E8E8ED;background:#fff;color:#1D1D1F;border-radius:8px;font-family:inherit;font-weight:600;font-size:12.5px;cursor:pointer;">Annuler</button>'
-      +'<button id="rmu-confirm" disabled style="padding:9px 16px;border:none;background:#A32D2D;color:#fff;border-radius:8px;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer;opacity:.4;">Réinitialiser</button>'
-      +'</div></div>'
-      +'</div>';
-    document.body.appendChild(ov);
-    var close = function(){ ov.remove(); };
-    document.getElementById('rmu-cancel-1').onclick = close;
-    document.getElementById('rmu-cancel-2').onclick = close;
-    ov.addEventListener('click', function(e){ if(e.target === ov) close(); });
-    document.getElementById('rmu-continue').onclick = function(){
-      document.getElementById('reset-step-1').style.display = 'none';
-      document.getElementById('reset-step-2').style.display = 'block';
-      document.getElementById('rmu-input').focus();
-    };
-    var input = document.getElementById('rmu-input');
-    var confirmBtn = document.getElementById('rmu-confirm');
-    input.addEventListener('input', function(){
-      var ok = this.value.trim().toUpperCase() === 'RESET';
-      confirmBtn.disabled = !ok;
-      confirmBtn.style.opacity = ok ? 1 : .4;
-      confirmBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
-    });
-    input.addEventListener('keydown', function(e){
-      if(e.key === 'Enter' && !confirmBtn.disabled) confirmBtn.click();
-    });
-    confirmBtn.onclick = function(){ close(); resetMUP(); };
-  }
-
-  var resetBtn = document.getElementById('reset-mup-btn');
-  if(resetBtn) resetBtn.addEventListener('click', openResetModal);
-
-  // ── DETECTION DONNÉES DE TEST ──
-  function detectTestData(){
-    var pipeline = [];
-    try { pipeline = JSON.parse(localStorage.getItem('mup_pipeline') || '[]'); } catch(e){}
-    var testNames = ['BUFFALO GRILL','CERCLE MIXTE DE LA MARINE','EUREST SPORTS','INGESS INGENIERIE','RESDIDA','FM3G','FNB CONCEPT','NEW COURT','SERARE','SODEXO SPORTS','CASTEL TERRA','BREIZH CAFE','CHRISTIAN CHAVATTE','3 BRASSEURS'];
-    var hasTestData = pipeline.some(function(p){
-      var label = ((p.nom||'') + ' ' + (p.societe||'') + ' ' + (p.co||'') + ' ' + (p.name||'')).toUpperCase();
-      return testNames.some(function(n){ return label.indexOf(n) !== -1; });
-    });
-    if(hasTestData) showResetBanner();
-  }
-  function showResetBanner(){
-    if(document.getElementById('mup-test-banner')) return;
-    var banner = document.createElement('div');
-    banner.id = 'mup-test-banner';
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#A32D2D;color:#fff;padding:12px 20px;text-align:center;z-index:9999;font-size:13px;font-family:Geist,-apple-system,sans-serif;';
-    banner.innerHTML = 'Données de démonstration détectées dans MUP. '
-      +'<button id="mup-banner-reset" style="margin-left:12px;padding:5px 14px;background:#fff;color:#A32D2D;border:none;border-radius:5px;cursor:pointer;font-weight:600;font-family:inherit;font-size:12px;">Vider maintenant (factures préservées)</button>'
-      +'<button id="mup-banner-later" style="margin-left:8px;padding:5px 14px;background:transparent;color:#fff;border:0.5px solid #fff;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px;">Plus tard</button>';
-    document.body.appendChild(banner);
-    document.getElementById('mup-banner-reset').onclick = openResetModal;
-    document.getElementById('mup-banner-later').onclick = function(){ banner.remove(); };
-  }
-  detectTestData();
 })();

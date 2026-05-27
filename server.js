@@ -226,40 +226,6 @@ async function upsertRecord(db, table, cleanId, body) {
   }
 }
 
-// ── Réinitialisation totale du compte utilisateur ──
-// Purge toutes les tables scopées sur le userId courant. Appelé depuis le bouton
-// "Réinitialiser MovUP" en bas de sidebar (double confirmation côté front).
-// NE supprime PAS : mailbox_credentials (OAuth tokens — exige révocation Google séparée),
-// domains_resend (configuration domaine partagée), campaigns, campaign_events.
-app.delete('/api/reset-all', async (req, res) => {
-  const userId = requireUserId(req, res)
-  if (!userId) return
-  const tables = [
-    'pipeline', 'agenda', 'contacts', 'devis', 'facture',
-    'frais', 'frais_recurrents', 'mail', 'mail_settings',
-    'visio_settings', 'visio_log', 'visio_draft',
-    'visio_bg_custom', 'visio_doc', 'visio_doc_open',
-    'user_plan', 'user_plan_history', 'user_settings',
-    'counter'
-  ]
-  const deleted = {}
-  try {
-    const db = await getDb()
-    for (const table of tables) {
-      try {
-        const r = await db.query(`DELETE ${table} WHERE userId = $userId RETURN BEFORE`, { userId })
-        deleted[table] = (r?.[0] || []).length
-      } catch (e) {
-        deleted[table] = `error: ${e.message}`
-      }
-    }
-    res.json({ ok: true, userId, deleted })
-  } catch (err) {
-    console.error('[reset-all]', err.message)
-    res.status(500).json({ error: 'reset_failed', message: err.message })
-  }
-})
-
 app.get('/api/health', async (req, res) => {
   const status = {
     server: 'ok',

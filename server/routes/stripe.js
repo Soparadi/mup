@@ -119,9 +119,10 @@ router.post('/create-portal-session', requireAuth, async (req, res) => {
     if (!user) return res.status(401).json({ error: 'unauthorized' })
     const customerId = user.stripe_customer_id
     if (!customerId) {
-      return res.status(400).json({
-        error: 'no_stripe_customer',
-        message: 'Aucun abonnement Stripe associé. Choisissez d\'abord un plan.'
+      return res.status(410).json({
+        error: 'stale_or_missing',
+        redirect_url: '/tarifs',
+        message: 'Aucun abonnement actif. Choisissez un plan.'
       })
     }
     const stripe = getStripe()
@@ -131,6 +132,33 @@ router.post('/create-portal-session', requireAuth, async (req, res) => {
     })
     res.json({ url: portal.url })
   } catch (err) {
+    const code = err?.code || err?.raw?.code
+    if (code === 'resource_missing') {
+      // Customer Stripe périmé (bascule Test→Live / suppression admin) :
+      // purge best-effort des champs Stripe, puis redirect vers /tarifs.
+      const au = req.authUser
+      if (au && au.id) {
+        try {
+          const uid = cleanUserId(au.id)
+          await updateUserFields(uid, {
+            stripe_customer_id: null,
+            stripe_subscription_id: null,
+            subscription_status: null,
+            current_period_end: null,
+            trial_status: null
+          })
+          invalidateSessionCacheByUserId(uid)
+        } catch (e) {
+          console.warn('[stripe:create-portal-session] purge customer périmé échec:', e.message)
+        }
+      }
+      console.warn('[stripe:create-portal-session] customer périmé purgé:', err.message)
+      return res.status(410).json({
+        error: 'stale_or_missing',
+        redirect_url: '/tarifs',
+        message: 'Abonnement à renouveler.'
+      })
+    }
     console.error('[stripe:create-portal-session]', err.message)
     res.status(500).json({ error: 'portal_failed', message: 'Ouverture du portail impossible.' })
   }
@@ -196,6 +224,29 @@ router.get('/quick-checkout', requireAuth, async (req, res) => {
 
     return res.redirect(303, session.url)
   } catch (err) {
+    const code = err?.code || err?.raw?.code
+    if (code === 'resource_missing') {
+      // Customer Stripe périmé : purge best-effort, puis redirect vers /tarifs
+      // (re-choix de plan → nouveau customer Live créé au prochain Checkout).
+      const au = req.authUser
+      if (au && au.id) {
+        try {
+          const uid = cleanUserId(au.id)
+          await updateUserFields(uid, {
+            stripe_customer_id: null,
+            stripe_subscription_id: null,
+            subscription_status: null,
+            current_period_end: null,
+            trial_status: null
+          })
+          invalidateSessionCacheByUserId(uid)
+        } catch (e) {
+          console.warn('[quick-checkout] purge customer périmé échec:', e.message)
+        }
+      }
+      console.warn('[quick-checkout] customer périmé purgé:', err.message)
+      return res.redirect(302, '/tarifs')
+    }
     console.error('[quick-checkout]', err)
     return res.redirect(302, '/account/billing?error=checkout_failed')
   }

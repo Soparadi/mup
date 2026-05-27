@@ -39,7 +39,7 @@
   if (!el) return;
 
   var html = '<a href="/dashboard" class="sb-logo-link" aria-label="Accueil MovUP">'
-    + '<img src="/movup-mark.svg" alt="MovUP" class="sb-logo-img">'
+    + '<img src="/logo-v7-movup-court.svg" alt="MovUP" class="sb-logo-img">'
     + '</a>'
     + '<div class="sb-label">Navigation</div>';
 

@@ -15,20 +15,7 @@
     });
   } catch(e){}
 
-  // Inject unified sidebar styles with high specificity
-  var ss = document.createElement('style');
-  ss.textContent = ''
-    + 'aside#sidebar.sidebar{width:clamp(200px,16vw,280px)!important;background:var(--surface,#F5F5F7)!important;border-right:1px solid var(--border,#E8E8ED)!important;display:flex!important;flex-direction:column!important;padding:16px 10px!important;flex-shrink:0!important;height:100vh!important;overflow-y:auto!important;box-sizing:border-box!important}'
-    + 'aside#sidebar .sb-logo-link{text-decoration:none!important;display:flex!important;align-items:center!important;gap:10px!important;padding:12px 8px 14px!important;border-bottom:1px solid var(--border,#E8E8ED)!important;margin-bottom:8px!important}'
-    + 'aside#sidebar .sb-logo-icon{width:28px!important;height:28px!important;background:var(--text,#1D1D1F)!important;border-radius:8px!important;display:flex!important;align-items:center!important;justify-content:center!important;flex-shrink:0!important}'
-    + 'aside#sidebar .sb-logo-name{font-size:14px!important;font-weight:800!important;color:var(--text,#1D1D1F)!important;letter-spacing:-.3px!important}'
-    + 'aside#sidebar .sb-label{font-size:9px!important;font-weight:700!important;letter-spacing:2px!important;text-transform:uppercase!important;color:var(--muted2,#AEAEB2)!important;padding:10px 8px 5px!important;margin-top:6px!important}'
-    + 'aside#sidebar a.sb-item{display:flex!important;align-items:center!important;gap:9px!important;padding:8px 10px!important;border-radius:9px!important;font-size:12.5px!important;font-weight:500!important;color:var(--muted,#6E6E73)!important;transition:all .12s!important;text-decoration:none!important;cursor:pointer!important;border:1px solid transparent!important}'
-    + 'aside#sidebar a.sb-item:hover{color:var(--text,#1D1D1F)!important;background:var(--surface2,#EBEBF0)!important}'
-    + 'aside#sidebar a.sb-item.active{color:var(--text,#1D1D1F)!important;background:var(--card,#FFFFFF)!important;font-weight:600!important;border:1px solid var(--border,#E8E8ED)!important}'
-    + 'aside#sidebar .sb-icon{width:22px!important;height:22px!important;border-radius:7px!important;display:flex!important;align-items:center!important;justify-content:center!important;flex-shrink:0!important}'
-    + 'aside#sidebar .sb-badge{margin-left:auto!important;font-size:9px!important;font-weight:800!important;font-family:var(--mono,"Geist Mono",monospace)!important;background:var(--text,#1D1D1F)!important;color:#fff!important;border-radius:6px!important;padding:1px 6px!important}';
-  document.head.appendChild(ss);
+  // Styles sidebar : externalisés dans /styles/sidebar.css (chargé en <head> par chaque page app).
 
   const ITEMS = [
     { label:'Dashboard', href:'/dashboard', bg:'background:var(--text);color:#fff', svg:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>' },
@@ -51,11 +38,8 @@
   var el = document.getElementById('sidebar');
   if (!el) return;
 
-  var html = '<a href="/dashboard" class="sb-logo-link">'
-    + '<div class="sb-logo-icon">'
-    + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>'
-    + '</div>'
-    + '<span class="sb-logo-name">MovUP</span>'
+  var html = '<a href="/dashboard" class="sb-logo-link" aria-label="Accueil MovUP">'
+    + '<img src="/movup-mark.svg" alt="MovUP" class="sb-logo-img">'
     + '</a>'
     + '<div class="sb-label">Navigation</div>';
 

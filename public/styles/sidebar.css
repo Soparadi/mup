@@ -1,0 +1,109 @@
+/* ============================================================================
+   MovUP — SIDEBAR APP (source de vérité unique)
+   ----------------------------------------------------------------------------
+   Ce fichier est LA source unique de styles pour la sidebar des pages app.
+   Chargé en <head> par chaque page app via :
+     <link rel="stylesheet" href="/styles/sidebar.css">
+
+   ⚠️ NE PAS dupliquer ces règles dans les fichiers HTML des pages.
+   Si une règle .sidebar est nécessaire sur une page spécifique, utiliser
+   un sélecteur plus spécifique (ex: .sidebar.sidebar--variant).
+   ============================================================================ */
+
+/* 1. Conteneur — repris de sidebar.js sans !important, + position sticky */
+aside#sidebar.sidebar {
+  width: clamp(200px, 16vw, 280px);
+  background: var(--surface, #F5F5F7);
+  border-right: 1px solid var(--border, #E8E8ED);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 10px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* 2. Lien logo (en-tête) + séparateur horizontal sous le logo */
+aside#sidebar .sb-logo-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 8px 14px;
+  border-bottom: 1px solid var(--border, #E8E8ED);
+  margin-bottom: 8px;
+  text-decoration: none;
+}
+
+/* 3. Logo Mark M seul (remplace .sb-logo-icon + .sb-logo-name) */
+aside#sidebar .sb-logo-img {
+  height: 32px;
+  width: auto;
+  display: block;
+}
+
+/* 4. Libellé de section (« Navigation », etc.) */
+aside#sidebar .sb-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted2, #AEAEB2);
+  padding: 10px 8px 5px;
+  margin-top: 6px;
+}
+
+/* 5. Item de navigation */
+aside#sidebar a.sb-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted, #6E6E73);
+  transition: all .12s;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+/* 6. Item — survol */
+aside#sidebar a.sb-item:hover {
+  color: var(--text, #1D1D1F);
+  background: var(--surface2, #EBEBF0);
+}
+
+/* 7. Item — actif (page courante) */
+aside#sidebar a.sb-item.active {
+  color: var(--text, #1D1D1F);
+  background: var(--card, #FFFFFF);
+  font-weight: 600;
+  border: 1px solid var(--border, #E8E8ED);
+}
+
+/* 8. Pastille d'icône de l'item */
+aside#sidebar .sb-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* 9. Badge (compteur mail/contacts) */
+aside#sidebar .sb-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 800;
+  font-family: var(--mono, "Geist Mono", monospace);
+  background: var(--text, #1D1D1F);
+  color: #fff;
+  border-radius: 6px;
+  padding: 1px 6px;
+}

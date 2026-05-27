@@ -106,7 +106,6 @@
 
     <div class="actions">
       <button type="button" id="btn-portal" class="btn btn-dark">Gérer mon abonnement</button>
-      <a href="/account/upgrade" class="btn btn-ghost">Modifier mon plan</a>
     </div>
   </section>
 
@@ -158,10 +157,10 @@
         return
       }
       // Pas d'abonnement payant et pas de stripe_customer_id : rediriger
-      // vers l'upgrade pour souscrire.
+      // vers /tarifs pour souscrire.
       var hasStripe = !!u.stripe_customer_id || !!u.subscription_status
       if (!hasStripe && u.trial_status !== 'converted') {
-        window.location.replace('/account/upgrade')
+        window.location.replace('/tarifs')
         return
       }
 
@@ -178,7 +177,7 @@
       if (statusKey === 'past_due') {
         setBanner('warn', 'Paiement en attente. Mettez à jour votre carte depuis « Gérer mon abonnement » pour éviter une interruption.')
       } else if (statusKey === 'canceled') {
-        setBanner('info', 'Abonnement résilié. Réactivable à tout moment depuis « Modifier mon plan ».')
+        setBanner('info', 'Abonnement résilié. Réactivable à tout moment depuis « Gérer mon abonnement ».')
       }
     })
     .catch(function(){ setBanner('error', 'Erreur réseau, réessayez.') })

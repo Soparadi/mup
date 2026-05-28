@@ -2227,7 +2227,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     } else if(depts.length) {
       q += ' AND (' + depts.map(function(d){ return 'codePostalEtablissement:' + d + '*'; }).join(' OR ') + ')';
     }
-    var nombre = 100;
+    var nombre = 1000;
     var debut = (page - 1) * nombre;
     var inseeUrl = '/api/sirene/search?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut;
 
@@ -2573,9 +2573,9 @@ function createCard(lead, idx) {
 // ════════════════════════════════════════════════════════════════
 // LOAD PAGE — core pagination unit
 // ════════════════════════════════════════════════════════════════
-// Cap sécurité : 10 pages upstream × 10 items = 100 items max aggrégés.
+// Cap sécurité : 1 page upstream × 1000 items = 1000 items max agrégés.
 // Au-delà, on pagine en interne sans refetch.
-var FETCH_MAX_PAGES = 10;
+var FETCH_MAX_PAGES = 1;
 
 async function loadPage(page) {
   if(S.loading) return;

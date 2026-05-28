@@ -22,6 +22,7 @@ import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { deriveAppState } from './lib/derive-app-state.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
+import { getInseeToken } from './server/services/insee.js'
 import {
   runOptoutMigration,
   checkBlocklistBatch,
@@ -106,9 +107,32 @@ const globalApiLimiter = rateLimit({
     return req.path === '/health'
         || req.path === '/stripe/webhook'
         || req.path.startsWith('/v2/webhooks/')
+        || req.path.startsWith('/geocode')
+        || req.path.startsWith('/sirene')
   }
 })
 app.use('/api', globalApiLimiter)
+
+// Limiters dédiés aux endpoints proxy à fort volume légitime sur /leads.
+// Géocodage : la queue front cadence ~6.6 req/s = ~400/min en pic.
+// SIRENE : pagination upstream + recherches successives.
+// keyGenerator par défaut (ipKeyGenerator v8 = IPv6 /64, IPv4 par adresse).
+const geocodeLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limit_exceeded', detail: 'Trop de requêtes de géocodage, patientez un instant.' }
+})
+const sireneLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limit_exceeded', detail: 'Trop de recherches, patientez un instant.' }
+})
+app.use('/api/geocode', geocodeLimiter)
+app.use('/api/sirene', sireneLimiter)
 
 // Rate-limit dédié opt-out — 3 req/24h/IP. Borne le flood de demandes
 // d'opposition (anti-abus + anti-énumération). keyGenerator par req.ip
@@ -1038,31 +1062,8 @@ app.delete('/api/agenda/:id', async (req, res) => {
   }
 })
 
-// ── INSEE OAuth2 token cache ──
-let inseeToken = null
-let inseeTokenExpires = 0
-
-async function getInseeToken() {
-  if(inseeToken && Date.now() < inseeTokenExpires) return inseeToken
-  const id = process.env.INSEE_CLIENT_ID
-  const secret = process.env.INSEE_CLIENT_SECRET
-  console.log('[INSEE] ID present:', !!id, 'Secret present:', !!secret, 'ID:', id ? id.substring(0,8)+'...' : 'MISSING')
-  if(!id || !secret) { console.error('[INSEE] Missing credentials'); return null }
-  try {
-    const creds = Buffer.from(id + ':' + secret).toString('base64')
-    const r = await fetch('https://auth.insee.net/auth/realms/apim-gravitee/protocol/openid-connect/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + creds },
-      body: 'grant_type=client_credentials'
-    })
-    if(!r.ok) { const body = await r.text(); console.error('[INSEE] Token error:', r.status, body.substring(0,200)); return null }
-    const data = await r.json()
-    inseeToken = data.access_token
-    inseeTokenExpires = Date.now() + (data.expires_in - 60) * 1000
-    console.log('[INSEE] Token obtained, expires in', data.expires_in, 's')
-    return inseeToken
-  } catch(e) { console.error('[INSEE] Token fetch failed:', e.message); return null }
-}
+// ── INSEE OAuth2 token cache ── déplacé dans server/services/insee.js,
+// getInseeToken importé en tête de fichier (seule source de vérité).
 
 // ── API proxies ──
 app.get('/api/search', async (req, res) => {
@@ -1437,7 +1438,7 @@ app.get('/api/sirene/search', async (req, res) => {
   let q = req.query.q || ''
   // Convert NAF codes without dots: 8230Z → 82.30Z in the query
   q = q.replace(/activitePrincipaleEtablissement:(\d{2})(\d{2}[A-Z])/g, 'activitePrincipaleEtablissement:$1.$2')
-  const nombre = Math.min(parseInt(req.query.nombre) || 20, 100)
+  const nombre = Math.min(parseInt(req.query.nombre) || 20, 1000)
   const debut = parseInt(req.query.debut) || 0
   const inseeUrl = 'https://api.insee.fr/api-sirene/3.11/siret?q=' + encodeURIComponent(q) + '&nombre=' + nombre + '&debut=' + debut
   try {

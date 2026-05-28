@@ -6,7 +6,7 @@
 let inseeToken = null
 let inseeTokenExpires = 0
 
-async function getInseeToken() {
+export async function getInseeToken() {
   if (inseeToken && Date.now() < inseeTokenExpires) return inseeToken
   const id = process.env.INSEE_CLIENT_ID
   const secret = process.env.INSEE_CLIENT_SECRET

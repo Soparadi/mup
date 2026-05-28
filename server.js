@@ -1086,9 +1086,11 @@ app.get('/api/search', async (req, res) => {
   if(req.query.departement) params.set('departement', req.query.departement)
   if(req.query.code_postal) params.set('code_postal', req.query.code_postal)
   if(req.query.code_commune) params.set('code_commune', req.query.code_commune)
-  // per_page hardcoded à 10 = PAGE_SIZE client. Élimine la pagination fantôme
-  // (mismatch client 10 / upstream 25 → pages vides au-delà du dataset).
-  params.set('per_page', '10')
+  // per_page respecte la demande du front (= PAGE_SIZE client), borné à 25
+  // = max Etalab. Aligne pagination client/upstream pour éviter les pages
+  // fantômes au-delà du dataset. Lève la régression de volume introduite
+  // par le commit 1828e2d (per_page hardcoded à 10 sur cette branche).
+  params.set('per_page', String(Math.min(parseInt(req.query.per_page) || 25, 25)))
   if(req.query.page) params.set('page', req.query.page)
   try {
     const r = await fetch('https://recherche-entreprises.api.gouv.fr/search?' + params.toString())

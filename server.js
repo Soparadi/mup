@@ -109,6 +109,7 @@ const globalApiLimiter = rateLimit({
         || req.path.startsWith('/v2/webhooks/')
         || req.path.startsWith('/geocode')
         || req.path.startsWith('/sirene')
+        || req.path.startsWith('/search')
   }
 })
 app.use('/api', globalApiLimiter)
@@ -131,8 +132,16 @@ const sireneLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'rate_limit_exceeded', detail: 'Trop de recherches, patientez un instant.' }
 })
+const searchLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limit_exceeded', detail: 'Trop de recherches, patientez un instant.' }
+})
 app.use('/api/geocode', geocodeLimiter)
 app.use('/api/sirene', sireneLimiter)
+app.use('/api/search', searchLimiter)
 
 // Rate-limit dédié opt-out — 3 req/24h/IP. Borne le flood de demandes
 // d'opposition (anti-abus + anti-énumération). keyGenerator par req.ip

@@ -3304,7 +3304,10 @@ else buildIndex();
     html += '</div></div></div>';
     document.body.insertAdjacentHTML('beforeend', html);
     document.getElementById('plafond-modal-close').onclick = function(){ document.getElementById('plafond-modal-overlay').remove(); };
-    document.getElementById('plafond-modal-stats').onclick = function(){ window.location.href = '/statistiques'; };
+    document.getElementById('plafond-modal-stats').onclick = function(){
+      var nextKey = { essai:'demarrage', demarrage:'activite', activite:'croisiere' }[currentPlan] || 'demarrage';
+      window.location.href = '/api/stripe/quick-checkout?plan=' + nextKey + '&cycle=monthly';
+    };
     document.getElementById('plafond-modal-overlay').onclick = function(e){ if(e.target.id === 'plafond-modal-overlay') this.remove(); };
   }
   // Exposition globale : addToPipeline (hors IIFE) appelle window.showPlafondModal

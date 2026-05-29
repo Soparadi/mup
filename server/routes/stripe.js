@@ -493,6 +493,64 @@ export async function webhookHandler(req, res) {
 
         case 'invoice.payment_failed': {
           const invoice = event.data.object
+
+          // GARDE 1 — 3DS/SCA en cours : le PaymentIntent est en attente
+          // d'authentification, ce n'est pas un échec réel.
+          if (invoice.payment_intent) {
+            try {
+              const stripe = getStripe()
+              const pi = await stripe.paymentIntents.retrieve(invoice.payment_intent)
+              if (pi.status === 'requires_action' || pi.status === 'requires_confirmation') {
+                console.log('[stripe:webhook] invoice.payment_failed skipped: 3DS in progress', {
+                  invoice_id: invoice.id,
+                  payment_intent_id: invoice.payment_intent,
+                  pi_status: pi.status
+                })
+                return
+              }
+            } catch (err) {
+              console.warn('[stripe:webhook] invoice.payment_failed: could not retrieve payment_intent', {
+                invoice_id: invoice.id,
+                error: err.message
+              })
+              // On continue les autres gardes
+            }
+          }
+
+          // GARDE 2 — Première tentative avec retry Stripe programmé :
+          // pas un échec définitif, Stripe retentera automatiquement.
+          if (invoice.attempt_count === 1 && invoice.next_payment_attempt !== null) {
+            console.log('[stripe:webhook] invoice.payment_failed skipped: first attempt with retry scheduled', {
+              invoice_id: invoice.id,
+              attempt_count: invoice.attempt_count,
+              next_payment_attempt: invoice.next_payment_attempt
+            })
+            return
+          }
+
+          // GARDE 3 — Subscription parent encore active ou incomplete :
+          // l'échec n'est pas encore confirmé côté Stripe.
+          if (invoice.subscription) {
+            try {
+              const stripe = getStripe()
+              const sub = await stripe.subscriptions.retrieve(invoice.subscription)
+              if (sub.status === 'active' || sub.status === 'incomplete') {
+                console.log('[stripe:webhook] invoice.payment_failed skipped: subscription not yet past_due', {
+                  invoice_id: invoice.id,
+                  subscription_id: invoice.subscription,
+                  sub_status: sub.status
+                })
+                return
+              }
+            } catch (err) {
+              console.warn('[stripe:webhook] invoice.payment_failed: could not retrieve subscription', {
+                invoice_id: invoice.id,
+                error: err.message
+              })
+              // On continue le traitement normal (échec confirmé)
+            }
+          }
+
           const user = await findUserByStripeCustomerId(invoice.customer)
           if (!user) {
             console.warn('[stripe:webhook] payment_failed : user introuvable')

@@ -3,7 +3,7 @@ if(process.env.NODE_ENV !== 'production'){
 }
 import express from 'express'
 import helmet from 'helmet'
-import rateLimit from 'express-rate-limit'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { readFile } from 'fs/promises'
@@ -152,7 +152,7 @@ const optoutLimiter = rateLimit({
   max: 3,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: req => req.ip,
+  keyGenerator: ipKeyGenerator,
   message: {
     error: 'rate_limit_exceeded',
     detail: 'Trop de demandes depuis cette adresse. Veuillez réessayer dans quelques heures, ou contactez dpo@movup.io.'

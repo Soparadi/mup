@@ -643,7 +643,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
             <span class="kpi-label">Leads <span id="kpi-scope">—</span></span>
           </div>
           <div class="kpi-card">
-            <span class="kpi-value" id="kpi-contacts">0</span>
+            <span class="kpi-value" id="kpi-contacts">—</span>
             <span class="kpi-label">Contacts ajoutés</span>
           </div>
           <div class="kpi-card">
@@ -2053,19 +2053,53 @@ async function _loadEngaged() {
 }
 function _invalidateEngagedCache() { _engagedCache = null; }
 
-// Compteur "Contacts ajoutés" : reset à chaque nouvelle recherche.
-window.__kpiContactsCount = 0;
-function resetKpiContacts() {
-  window.__kpiContactsCount = 0;
+// Compteur "Contacts ajoutés" : cumulatif sur le quota du user (essai 30 SEC
+// ou plafond mensuel payant). Source serveur via POST /api/user-plan/check-quota
+// au load + incrément optimiste local après chaque succès POST /api/pipeline.
+// Ne se reset PAS sur changement de recherche (le quota est par compte, pas
+// par recherche). Affichage "X / N" si quota fini, "X" pour croisière,
+// "—" si bootstrap échoué (on ne ment pas au user avec un faux "0").
+window.__kpiContactsCount = null;
+window.__kpiContactsLimit = null; // null = illimité (croisière) ou non connu
+function _renderKpiContacts() {
   var el = document.getElementById('kpi-contacts');
-  if (el) el.textContent = '0';
+  if (!el) return;
+  var count = window.__kpiContactsCount;
+  if (count === null || count === undefined) { el.textContent = '—'; return; }
+  var limit = window.__kpiContactsLimit;
+  el.textContent = (limit && limit > 0) ? (count + ' / ' + limit) : String(count);
+}
+async function bootstrapKpiContacts() {
+  try {
+    var r = await fetch('/api/user-plan/check-quota', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    if (!r.ok) { _renderKpiContacts(); return; } // échec : reste à "—"
+    var d = await r.json();
+    window.__kpiContactsCount = Number(d.quotaUsed) || 0;
+    window.__kpiContactsLimit = (d.quotaLimit === null || d.quotaLimit === undefined)
+      ? null
+      : Number(d.quotaLimit);
+  } catch (e) { /* silencieux : reste à "—" */ }
+  _renderKpiContacts();
 }
 function incrementKpiContacts() {
-  window.__kpiContactsCount = (window.__kpiContactsCount || 0) + 1;
-  var el = document.getElementById('kpi-contacts');
-  if (el) el.textContent = String(window.__kpiContactsCount);
+  // Si bootstrap a échoué (count null), ne pas incrémenter — un "1" mensonger
+  // serait pire que "—" honnête. L'ajout pipeline réussit côté serveur, le
+  // KPI restera juste désynchronisé jusqu'au prochain reload.
+  if (window.__kpiContactsCount !== null && window.__kpiContactsCount !== undefined) {
+    window.__kpiContactsCount = window.__kpiContactsCount + 1;
+    _renderKpiContacts();
+  }
   // L'ajout invalide le cache engagés : un futur reset KPI 3 reflètera cet ajout.
   _invalidateEngagedCache();
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrapKpiContacts);
+} else {
+  bootstrapKpiContacts();
 }
 
 // Calcule KPI 1 (marché) + KPI 3 (déjà engagés) après chaque chargement.
@@ -2657,7 +2691,6 @@ async function loadPage(page) {
       _geoRunning     = false;
       _resetMapLayers();
       applyMapZoom();
-      resetKpiContacts();
       _invalidateEngagedCache();
       updateStats();
 

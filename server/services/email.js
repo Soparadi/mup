@@ -213,9 +213,9 @@ async function sendStripeTransactional(template, vars, { to, subject, kind }) {
   return { id: result.data?.id || null }
 }
 
-export async function sendSubscriptionActivated({ email, prenom, plan_label, cycle, price_display, current_period_end }) {
+export async function sendSubscriptionActivated({ email, prenom, nom, plan_label, cycle, price_display, current_period_end }) {
   return sendStripeTransactional('subscription-activated.html', {
-    salutation: buildSalutation({ prenom }),
+    salutation: buildSalutation({ prenom, nom }),
     plan_label,
     cycle_label: CYCLE_LABELS[cycle] || cycle,
     price_display,
@@ -228,9 +228,9 @@ export async function sendSubscriptionActivated({ email, prenom, plan_label, cyc
   })
 }
 
-export async function sendSubscriptionChanged({ email, prenom, old_plan_label, new_plan_label, cycle, price_display }) {
+export async function sendSubscriptionChanged({ email, prenom, nom, old_plan_label, new_plan_label, cycle, price_display }) {
   return sendStripeTransactional('subscription-changed.html', {
-    salutation: buildSalutation({ prenom }),
+    salutation: buildSalutation({ prenom, nom }),
     old_plan_label,
     new_plan_label,
     cycle_label: CYCLE_LABELS[cycle] || cycle,
@@ -243,9 +243,9 @@ export async function sendSubscriptionChanged({ email, prenom, old_plan_label, n
   })
 }
 
-export async function sendSubscriptionCanceled({ email, prenom, plan_label, period_end }) {
+export async function sendSubscriptionCanceled({ email, prenom, nom, plan_label, period_end }) {
   return sendStripeTransactional('subscription-canceled.html', {
-    salutation: buildSalutation({ prenom }),
+    salutation: buildSalutation({ prenom, nom }),
     plan_label,
     period_end: formatDateFR(period_end),
     billing_url: appUrl() + '/account/billing',
@@ -260,9 +260,9 @@ export async function sendSubscriptionCanceled({ email, prenom, plan_label, peri
 // Email 2 du cycle de résiliation — déclenché à customer.subscription.deleted
 // (entrée en grâce 7j) par le webhook stripe.js (H2b). H2a expose juste le
 // helper et le template ; aucun caller dans le code à ce stade.
-export async function sendSubscriptionGraceStart({ email, prenom, plan_label, grace_until_date, privacy_url }) {
+export async function sendSubscriptionGraceStart({ email, prenom, nom, plan_label, grace_until_date, privacy_url }) {
   return sendStripeTransactional('subscription-grace-start.html', {
-    salutation: buildSalutation({ prenom }),
+    salutation: buildSalutation({ prenom, nom }),
     plan_label,
     grace_until_date: formatDateFR(grace_until_date),
     privacy_url: privacy_url || (appUrl() + '/account/privacy')
@@ -278,9 +278,9 @@ export async function sendSubscriptionGraceStart({ email, prenom, plan_label, gr
 // sendSubscriptionGraceStart : mêmes args, même wrapper, même mécanisme
 // formatDateFR/fallback privacy_url. Seuls diffèrent template, subject, kind.
 // H4a expose juste le helper et le template ; aucun caller à ce stade.
-export async function sendSubscriptionGraceEndingTomorrow({ email, prenom, plan_label, grace_until_date, privacy_url }) {
+export async function sendSubscriptionGraceEndingTomorrow({ email, prenom, nom, plan_label, grace_until_date, privacy_url }) {
   return sendStripeTransactional('subscription-grace-ending-tomorrow.html', {
-    salutation: buildSalutation({ prenom }),
+    salutation: buildSalutation({ prenom, nom }),
     plan_label,
     grace_until_date: formatDateFR(grace_until_date),
     privacy_url: privacy_url || (appUrl() + '/account/privacy')
@@ -291,9 +291,9 @@ export async function sendSubscriptionGraceEndingTomorrow({ email, prenom, plan_
   })
 }
 
-export async function sendPaymentFailed({ email, prenom, plan_label, portal_url }) {
+export async function sendPaymentFailed({ email, prenom, nom, plan_label, portal_url }) {
   return sendStripeTransactional('payment-failed.html', {
-    salutation: buildSalutation({ prenom }),
+    salutation: buildSalutation({ prenom, nom }),
     plan_label,
     portal_url: portal_url || (appUrl() + '/account/billing')
   }, {
@@ -471,9 +471,9 @@ function formatDateFRNumeric(input) {
 // Envoyé à la demande de suppression de compte (art. 17) : confirme
 // l'enregistrement + l'échéance J+7 + la possibilité d'annuler. Lève sur
 // erreur Resend (le caller route gère le best-effort).
-export async function sendAccountDeletionScheduled({ to, prenom, scheduled_at }) {
+export async function sendAccountDeletionScheduled({ to, prenom, nom, scheduled_at }) {
   if (!to) throw new Error('to requis')
-  const salutation = buildSalutation({ prenom })
+  const salutation = buildSalutation({ prenom, nom })
   const scheduledAtFr = formatDateFRNumeric(scheduled_at)
   const tpl = await loadTemplate('account-deletion-scheduled.html')
   const html = applyVars(tpl, {
@@ -510,9 +510,9 @@ export async function sendAccountDeletionScheduled({ to, prenom, scheduled_at })
 // Envoyé après suppression effective par le cron (art. 17). Pas de CTA (le
 // compte n'existe plus). Lève sur erreur Resend (le caller cron gère le
 // best-effort).
-export async function sendAccountDeletionConfirmed({ to, prenom, requested_at }) {
+export async function sendAccountDeletionConfirmed({ to, prenom, nom, requested_at }) {
   if (!to) throw new Error('to requis')
-  const salutation = buildSalutation({ prenom })
+  const salutation = buildSalutation({ prenom, nom })
   const requestedAtFr = formatDateFRNumeric(requested_at)
   const tpl = await loadTemplate('account-deletion-confirmed.html')
   const html = applyVars(tpl, {

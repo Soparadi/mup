@@ -615,9 +615,9 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
     <div class="sdiv"></div>
     <div class="si"><div class="sv" id="st-email">—</div><div class="sl">Taux email pro</div></div>
     <div class="sdiv"></div>
-    <div class="si"><div class="sv" id="st-geo" style="color:var(--green)">0</div><div class="sl">📍 Localisés</div></div>
+    <div class="si"><div class="sv" id="st-geo" style="color:var(--green)">0</div><div class="sl"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align:-2px;margin-right:3px"><path d="M7 1.5c-2.2 0-4 1.8-4 4 0 2.8 4 7 4 7s4-4.2 4-7c0-2.2-1.8-4-4-4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7" cy="5.5" r="1.3" stroke="currentColor" stroke-width="1.5"/></svg> Localisés</div></div>
     <div class="sdiv"></div>
-    <div class="si"><div class="sv" id="st-noloc" style="color:var(--accent)">0</div><div class="sl">⚠️ Non localisés</div></div>
+    <div class="si"><div class="sv" id="st-noloc" style="color:var(--accent)">0</div><div class="sl"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align:-2px;margin-right:3px"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M7 4.3v3.2M7 9.5v.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Non localisés</div></div>
     <div class="fchips">
       <div class="chip c1"><span class="cd"></span>SIRENE</div>
       <div class="chip c2"><span class="cd"></span>BAN / OSM</div>
@@ -686,7 +686,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
         </div>
         <!-- empty state -->
         <div class="empty show" id="empty">
-          <div class="empty-ico">🔍</div>
+          <div class="empty-ico"><svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="14" cy="14" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
           <div class="empty-title">Aucun lead généré</div>
           <div class="empty-sub">Tapez un métier et choisissez une région pour démarrer.<br>Les données proviennent de SIRENE (INSEE), enrichies par BAN et scan web.</div>
         </div>
@@ -2555,11 +2555,11 @@ async function _runGeoQueue() {
       // switch to cluster if threshold crossed
       if(!S.useCluster && S.nGeoOk > CLUSTER_THR) switchToCluster();
       var badge = document.getElementById('geo-'+lead.id);
-      if(badge){ badge.className='badge b-geo-ok'; badge.innerHTML='📍 '+res.src; }
+      if(badge){ badge.className='badge b-geo-ok'; badge.innerHTML='<svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align:-2px;margin-right:3px"><path d="M7 1.5c-2.2 0-4 1.8-4 4 0 2.8 4 7 4 7s4-4.2 4-7c0-2.2-1.8-4-4-4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7" cy="5.5" r="1.3" stroke="currentColor" stroke-width="1.5"/></svg> '+res.src; }
     } else {
       lead.geoStatus = 'failed'; S.nGeoFail++;
       var badge2 = document.getElementById('geo-'+lead.id);
-      if(badge2){ badge2.className='badge b-geo-fail'; badge2.textContent='⚠️ Non localisé'; }
+      if(badge2){ badge2.className='badge b-geo-fail'; badge2.innerHTML='<svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align:-2px;margin-right:3px"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M7 4.3v3.2M7 9.5v.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Non localisé'; }
     }
     // Update live counters
     document.getElementById('st-geo').textContent   = S.nGeoOk;

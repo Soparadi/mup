@@ -77,7 +77,7 @@ async function runTrialJobs() {
 async function runAccountDeletions() {
   const db = await getDb()
   const overdue = await db.query(
-    'SELECT id, email, prenom, deletion_requested_at FROM user'
+    'SELECT id, email, prenom, nom, deletion_requested_at FROM user'
     + ' WHERE deletion_scheduled_at != NONE AND deletion_scheduled_at <= time::now()'
   )
   const users = overdue?.[0] || []
@@ -90,6 +90,7 @@ async function runAccountDeletions() {
           await sendAccountDeletionConfirmed({
             to: u.email,
             prenom: u.prenom || '',
+            nom: u.nom || '',
             requested_at: u.deletion_requested_at ? String(u.deletion_requested_at) : null
           })
         }

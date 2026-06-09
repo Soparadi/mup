@@ -374,6 +374,7 @@ export async function webhookHandler(req, res) {
               await sendSubscriptionActivated({
                 email: u.email,
                 prenom: u.prenom,
+                nom: u.nom,
                 plan_label: PLAN_LABELS[plan] || plan,
                 cycle: billing_cycle,
                 price_display: PLAN_PRICES_DISPLAY[plan]?.[billing_cycle] || '',
@@ -420,6 +421,7 @@ export async function webhookHandler(req, res) {
               await sendSubscriptionChanged({
                 email: user.email,
                 prenom: user.prenom,
+                nom: user.nom,
                 old_plan_label: PLAN_LABELS[oldPlan] || oldPlan,
                 new_plan_label: PLAN_LABELS[newPlan] || newPlan,
                 cycle: newCycle,
@@ -442,6 +444,7 @@ export async function webhookHandler(req, res) {
               await sendSubscriptionCanceled({
                 email: user.email,
                 prenom: user.prenom,
+                nom: user.nom,
                 plan_label: PLAN_LABELS[user.plan] || user.plan || 'Démarrage',
                 period_end: toIsoDate(extractCurrentPeriodEnd(subscription))
               })
@@ -482,6 +485,7 @@ export async function webhookHandler(req, res) {
               await sendSubscriptionGraceStart({
                 email: user.email,
                 prenom: user.prenom,
+                nom: user.nom,
                 plan_label: PLAN_LABELS[user.plan] || user.plan || 'Démarrage',
                 grace_until_date: gracePlus7d,
                 privacy_url: appUrl() + '/account/privacy'
@@ -573,6 +577,7 @@ export async function webhookHandler(req, res) {
               await sendPaymentFailed({
                 email: user.email,
                 prenom: user.prenom,
+                nom: user.nom,
                 plan_label: PLAN_LABELS[user.plan] || user.plan || 'Démarrage',
                 portal_url: portal?.url || null
               })

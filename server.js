@@ -1278,7 +1278,7 @@ app.post('/api/account/delete', async (req, res) => {
     // Email best-effort (doctrine 8b) : un échec d'envoi ne bloque pas la demande.
     try {
       const email = rec.email || req.authUser?.email
-      if (email) await sendAccountDeletionScheduled({ to: email, prenom: rec.prenom || req.authUser?.prenom || '', scheduled_at: scheduledAt })
+      if (email) await sendAccountDeletionScheduled({ to: email, prenom: rec.prenom || req.authUser?.prenom || '', nom: rec.nom || req.authUser?.nom || '', scheduled_at: scheduledAt })
     } catch (err) {
       console.error('[account:delete] sendAccountDeletionScheduled failed:', err.message)
     }

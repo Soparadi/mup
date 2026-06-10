@@ -1,19 +1,15 @@
 // Emails de prévention essai 14 jours — J-2 et J-0.
 //
-// ⚠️ FONCTIONS PRÊTES MAIS NON CÂBLÉES À UN CRON.
-// Pour les activer, il faut un déclencheur récurrent (Railway cron, GitHub
-// Action scheduled, ou node-cron en process serveur). Décision reportée à une
-// passe séparée.
-//
-// Une fois câblé, lancer toutes les heures (idempotent — chaque user reçoit
-// au plus un email J-2 et un email J-0) :
+// Câblées au cron quotidien via cron.js (runTrialJobs). Idempotent — chaque
+// user reçoit au plus un email J-2 et un email J-0, l'unicité étant garantie
+// par les flags DB trial_email_j*_sent_at posés après chaque envoi réussi :
 //   await sendTrialEndingSoonEmails()   // J-2
 //   await sendTrialEndingTodayEmails()  // J-0
 //   await expireTrialAutomatically()    // bascule active → expired pour les inactifs
 
 import { Resend } from 'resend'
 import { getDb } from '../../lib/surreal.js'
-import { sendSubscriptionGraceEndingTomorrow } from './email.js'
+import { sendSubscriptionGraceEndingTomorrow, sendTrialEndingSoon } from './email.js'
 import { PLAN_LABELS } from '../../lib/stripe-config.js'
 
 const FROM = process.env.RESEND_FROM_EMAIL || 'bonjour@movup.io'
@@ -137,27 +133,11 @@ export async function sendTrialEndingSoonEmails() {
   const to = new Date(now.getTime() + 49 * 3600 * 1000)
   const users = await findUsersInWindow(from, to, 'trial_email_j2_sent_at')
   if (!users.length) return { sent: 0, total: 0 }
-  const r = getResendClient()
   let sent = 0
   const errors = []
   for (const u of users) {
     try {
-      const subject = 'Votre essai MovUP expire dans 2 jours'
-      const html = htmlTemplate({
-        subject,
-        intro: `Bonjour ${escapeHtml(u.prenom || '')}, votre essai gratuit de 14 jours touche à sa fin. Dans deux jours, l'application passera en mode lecture seule jusqu'à votre abonnement.`,
-        body: '<p style="margin:14px 0 0;">Pour continuer sans interruption, choisissez votre plan dès maintenant. Tarifs : Démarrage 19 €, Activité 29 €, Croisière 39 € par mois. Sans engagement.</p>',
-        ctaLabel: 'Choisir mon plan',
-        ctaUrl: APP_URL + '/tarifs'
-      })
-      await r.emails.send({
-        from: FROM_HEADER,
-        to: [u.email],
-        replyTo: FROM,
-        subject,
-        html,
-        tags: [{ name: 'kind', value: 'trial_j_minus_2' }]
-      })
+      await sendTrialEndingSoon({ prenom: u.prenom, nom: u.nom, email: u.email })
       await markEmailSent(u.id, 'trial_email_j2_sent_at')
       sent++
     } catch (e) {

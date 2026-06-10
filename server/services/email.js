@@ -6,6 +6,7 @@ import { Resend } from 'resend'
 import { readFile } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { PLAN_PRICES_DISPLAY } from '../../lib/stripe-config.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TEMPLATES_DIR = join(__dirname, '..', 'templates')
@@ -334,6 +335,50 @@ export async function sendRelanceJ12(user) {
     html,
     text,
     tags: [{ name: 'kind', value: 'relance_j12' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}
+
+// ── sendTrialEndingSoon ──
+// Email J-2 de l'essai 14 jours : prévient que l'espace bascule en lecture
+// seule dans 2 jours et invite à choisir un plan. Idempotence (un J-2 par
+// user) gérée côté caller via le flag DB trial_email_j2_sent_at. Les prix
+// viennent de PLAN_PRICES_DISPLAY (incluent déjà « € » → « 24 € »).
+export async function sendTrialEndingSoon(user) {
+  if (!user?.email) throw new Error('user.email requis')
+  const salutation = buildSalutation(user)
+  const ctaUrl = appUrl() + '/tarifs'
+  const tpl = await loadTemplate('trial-ending-soon.html')
+  const html = applyVars(tpl, {
+    salutation,
+    cta_url: ctaUrl,
+    prix_demarrage: PLAN_PRICES_DISPLAY.demarrage.monthly,
+    prix_activite: PLAN_PRICES_DISPLAY.activite.monthly,
+    prix_croisiere: PLAN_PRICES_DISPLAY.croisiere.monthly
+  })
+  const text = [
+    `${salutation},`,
+    '',
+    'Votre essai gratuit de 14 jours touche à sa fin. Dans deux jours, votre espace MovUP passera en lecture seule, jusqu\'à l\'activation de votre abonnement.',
+    '',
+    `Pour continuer sans interruption, choisissez votre plan dès maintenant. Tarifs : Démarrage ${PLAN_PRICES_DISPLAY.demarrage.monthly}, Activité ${PLAN_PRICES_DISPLAY.activite.monthly}, Croisière ${PLAN_PRICES_DISPLAY.croisiere.monthly} par mois. Sans engagement.`,
+    '',
+    `Choisir mon plan : ${ctaUrl}`,
+    '',
+    'Bien à vous,',
+    'L\'équipe MovUP'
+  ].join('\n')
+
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: [user.email],
+    replyTo: FROM,
+    subject: 'Votre essai MovUP expire dans 2 jours',
+    html,
+    text,
+    tags: [{ name: 'kind', value: 'trial_j_minus_2' }]
   })
   if (result.error) throw new Error(result.error.message || 'Resend send failed')
   return { id: result.data?.id || null }

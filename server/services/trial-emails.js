@@ -45,7 +45,7 @@ async function findCanceledUsersInWindow(from, to) {
   const db = await getDb()
   try {
     const r = await db.query(
-      `SELECT id, email, prenom, plan, current_period_end FROM user
+      `SELECT id, email, prenom, nom, plan, current_period_end FROM user
        WHERE subscription_status = 'canceled'
          AND current_period_end >= $from AND current_period_end < $to
          AND grace_j_minus_1_sent_at IS NONE`,
@@ -173,6 +173,7 @@ export async function sendGraceEndingTomorrowEmails() {
       await sendSubscriptionGraceEndingTomorrow({
         email: u.email,
         prenom: u.prenom,
+        nom: u.nom,
         plan_label: PLAN_LABELS[u.plan] || u.plan || 'Démarrage',
         grace_until_date: graceUntilIso,
         privacy_url: APP_URL + '/account/privacy'

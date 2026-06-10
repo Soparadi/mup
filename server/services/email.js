@@ -384,6 +384,48 @@ export async function sendTrialEndingSoon(user) {
   return { id: result.data?.id || null }
 }
 
+// ── sendTrialEndingToday ──
+// Email J-0 de l'essai 14 jours : prévient que l'essai prend fin aujourd'hui
+// et invite à activer un plan. Sans prix (contrairement au J-2) : à J-0 le
+// message est l'urgence de la bascule, pas la comparaison tarifaire.
+// Idempotence (un J-0 par user) gérée côté caller via le flag DB
+// trial_email_j0_sent_at.
+export async function sendTrialEndingToday(user) {
+  if (!user?.email) throw new Error('user.email requis')
+  const salutation = buildSalutation(user)
+  const ctaUrl = appUrl() + '/tarifs'
+  const tpl = await loadTemplate('trial-ending-today.html')
+  const html = applyVars(tpl, {
+    salutation,
+    cta_url: ctaUrl
+  })
+  const text = [
+    `${salutation},`,
+    '',
+    'C\'est aujourd\'hui que votre essai gratuit prend fin. Vos données restent accessibles en lecture après la bascule.',
+    '',
+    'Pour continuer à ajouter des contacts, créer des devis et envoyer des emails, il vous suffit d\'activer un plan.',
+    '',
+    `Activer mon abonnement : ${ctaUrl}`,
+    '',
+    'Bien à vous,',
+    'L\'équipe MovUP'
+  ].join('\n')
+
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: [user.email],
+    replyTo: FROM,
+    subject: 'Votre essai MovUP expire aujourd\'hui',
+    html,
+    text,
+    tags: [{ name: 'kind', value: 'trial_j_zero' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}
+
 // ── sendOptoutVerify ──
 // Email de confirmation magic-link d'une demande d'opposition RGPD (art. 21).
 // N'affiche NI l'IP, NI l'email, NI le SIRET du demandeur (minimisation —

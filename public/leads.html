@@ -22,7 +22,7 @@
 html, body { background: #F5F5F7; min-height: 100vh; margin: 0; }
 html { scroll-behavior: smooth; }
 :root {
-  --app-footer-h:40px;
+  --app-footer-h:50px;
   --bg:#FFFFFF; --surface:#F5F5F7; --surface2:#EBEBF0;
   --card:#FFFFFF; --border:#E8E8ED; --border2:#C7C7CC;
   --text:#1D1D1F; --muted:#6E6E73; --muted2:#AEAEB2;
@@ -279,7 +279,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 .map-col {
   flex: 2; height: 100%;
   display: flex; flex-direction: column;
-  border-right: 1px solid var(--border); overflow: hidden;
+  border-right: 1px solid var(--border); overflow: hidden; isolation: isolate;
 }
 .map-hdr {
   padding: 14px 20px 12px; border-bottom: 1px solid var(--border);
@@ -346,7 +346,7 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
   font-family: var(--mono); font-size: 11px; font-weight: 700;
   color: var(--muted); white-space: nowrap;
 }
-.res-panel { overflow-y: auto; flex: 1; position: relative; min-height: 0; }
+.res-panel { overflow-y: auto; flex: 1; position: relative; min-height: 0; padding-bottom: 50px; }
 .res-panel::-webkit-scrollbar { width: 4px; }
 .res-panel::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
@@ -471,7 +471,6 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
 .bexp:hover { opacity: .85; }
 .bexp-csv { background: var(--green); color: #fff; }
 .bexp-alt { background: rgba(255,255,255,.15); color: #fff; }
-.fpad { height: 80px; }
 
 /* ═══════════════════════════════════════════════
    LEAFLET OVERRIDES
@@ -711,7 +710,6 @@ main { padding-top: 0; min-height: 100vh; display: flex; flex-direction: column;
     <!-- export buttons removed -->
   </div>
 
-  <div class="fpad"></div>
 </main>
 </div><!-- .shell -->
 

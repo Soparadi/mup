@@ -272,6 +272,8 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 
 .menu-toggle { display: none; }
 
+.home-drawer { display: none; }
+
 @media (max-width: 880px) {
   .nav-links, .btn-link { display: none; }
   .menu-toggle {
@@ -284,6 +286,39 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
     background: var(--surface);
     color: var(--text);
   }
+
+  .home-drawer {
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 64px;
+    z-index: 99;
+    gap: 4px;
+    padding: 12px 16px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    max-height: 0;
+    overflow: hidden;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+  }
+  .home-drawer.open {
+    max-height: 320px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    opacity: 1;
+  }
+  .home-drawer a {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .home-drawer a:hover { background: var(--surface); }
+  .home-drawer a.btn-primary { margin-top: 4px; }
 }
 
 
@@ -2379,7 +2414,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
       <div class="header-cta">
         <a href="/login" class="btn-link">Connexion</a>
         <a href="/signup" class="btn-primary">Commencer l’essai gratuit</a>
-        <button class="menu-toggle" aria-label="Menu">
+        <button class="menu-toggle" aria-label="Menu" aria-controls="home-mobile-drawer" aria-expanded="false">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
             <path d="M3 6h18M3 12h18M3 18h18"/>
           </svg>
@@ -2388,6 +2423,13 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
     </div>
   </div>
 </header>
+
+<nav class="home-drawer" id="home-mobile-drawer" role="navigation" aria-label="Menu mobile">
+  <a href="/fonctionnalites">Fonctionnalités</a>
+  <a href="/tarifs">Tarifs</a>
+  <a href="/login">Connexion</a>
+  <a href="/signup" class="btn-primary">Commencer l’essai gratuit</a>
+</nav>
 
 <!-- ──────────────────────────────────────────────────────────
      HERO
@@ -5006,6 +5048,30 @@ window.resetQuizz = resetQuizz;
   }
 
   requestAnimationFrame(tick);
+})();
+</script>
+<script>
+/* ───────────────── MENU MOBILE HOME (hamburger → drawer) ───────────────── */
+(function () {
+  var toggle = document.querySelector('.menu-toggle');
+  var drawer = document.getElementById('home-mobile-drawer');
+  if (!toggle || !drawer) return;
+  toggle.addEventListener('click', function () {
+    var open = drawer.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  drawer.querySelectorAll('a').forEach(function (a) {
+    a.addEventListener('click', function () {
+      drawer.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false');
+    });
+  });
+  window.addEventListener('resize', function () {
+    if (window.innerWidth > 880 && drawer.classList.contains('open')) {
+      drawer.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+  });
 })();
 </script>
 </body>

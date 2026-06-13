@@ -11,6 +11,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --app-footer-h:50px;
+  --footer-real:36px;
   --bg:#FFFFFF;--surface:#F5F5F7;--surface2:#EBEBF0;
   --card:#FFFFFF;--border:#E8E8ED;--border2:#C7C7CC;
   --text:#1D1D1F;--muted:#6E6E73;--muted2:#AEAEB2;
@@ -32,7 +33,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .sb-badge{margin-left:auto;font-size:9px;font-weight:800;font-family:var(--mono);background:var(--text);color:#fff;border-radius:6px;padding:1px 6px}
 
 /* SHELL */
-.shell{flex:1;position:relative;height:calc(100vh - var(--app-footer-h));overflow:hidden;transition:margin-right .25s ease}
+.shell{flex:1;position:relative;height:calc(100vh - var(--footer-real));overflow:hidden;transition:margin-right .25s ease}
 .shell.tour-open{margin-right:280px}
 #map{width:100%;height:100%;isolation:isolate}
 
@@ -64,7 +65,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .user-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;background:#2563eb;animation:pulse 2s ease-out infinite;opacity:.4}
 
 /* TOUR PANEL */
-.tour-panel{position:fixed;right:0;top:0;bottom:0;width:280px;z-index:800;background:var(--card);border-left:1px solid var(--border);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease;overflow:hidden}
+.tour-panel{position:fixed;right:0;top:0;bottom:var(--footer-real);width:280px;z-index:800;background:var(--card);border-left:1px solid var(--border);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease;overflow:hidden}
 .tour-panel.open{transform:translateX(0)}
 .tour-hdr{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .tour-title{font-size:13px;font-weight:700;color:var(--text)}

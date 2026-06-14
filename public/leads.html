@@ -1800,6 +1800,7 @@ function onDeptChange() {
   }
   populateVilleSelect(dept);
   applyMapZoom();
+  updateHint();   // réactive le bouton dès qu'un département est choisi (dept requis)
 }
 
 // Cities by department
@@ -2851,12 +2852,17 @@ function updateExportBar() {
 function updateHint() {
   var btn  = document.getElementById('btn-go');
   var hint = document.getElementById('hint');
-  // Button is only active if NAF is explicitly locked AND region chosen
-  if(S.nafLocked && S.naf && S.region) {
+  var _dept = (document.getElementById('sel-dept')?.value || '').trim();
+  // Button is only active if NAF locked AND region AND department chosen
+  if(S.nafLocked && S.naf && S.region && _dept) {
     btn.classList.add('active');
     var rl = document.getElementById('sel-region');
     hint.textContent = '✓ ' + S.naf + ' — ' + S.nafLabel + ' · ' + rl.options[rl.selectedIndex].text;
     hint.style.color = 'var(--green)';
+  } else if(S.nafLocked && S.naf && S.region) {
+    btn.classList.remove('active');
+    hint.textContent = 'Choisissez un département pour lancer la recherche';
+    hint.style.color = 'var(--black)';
   } else if(S.nafLocked && S.naf) {
     btn.classList.remove('active');
     hint.textContent = S.naf + ' sélectionné — choisissez une région';
@@ -2905,6 +2911,12 @@ function startSearch() {
   if(!S.nafLocked || !selectedNAFCode || !S.naf || !S.region) {
     // Should never happen (button is inactive), but belt-and-suspenders
     showError('Veuillez sélectionner un secteur dans la liste de suggestions et choisir une région.');
+    return;
+  }
+  // Département obligatoire : la région cadre, le département déclenche.
+  var _dept = (document.getElementById('sel-dept')?.value || '').trim();
+  if(!_dept) {
+    showError('Choisissez un département pour lancer la recherche.');
     return;
   }
   if(!btn.classList.contains('active')) return;

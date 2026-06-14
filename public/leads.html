@@ -2351,6 +2351,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     return {
       total: total,
       totalEstimated: totalEstimated,
+      rawCount: (data.etablissements || []).length, // brut upstream (avant filtrage client)
       totalComplete: Math.round(total * 0.3),
       hotCount: Math.round(total * 0.15),
       items: items
@@ -2452,7 +2453,8 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     var total = apiTotal;
     return {
       total: total, totalComplete: Math.round(total * 0.3),
-      hotCount: Math.round(total * 0.15), items: items
+      hotCount: Math.round(total * 0.15), items: items,
+      rawCount: (data.results || []).length // brut upstream (avant filtrage client)
     };
 
   } catch(err) {
@@ -2683,8 +2685,10 @@ async function loadPage(page) {
       S.loaded        = 0;
       S.page          = 1;
       S.upstreamPage  = 1;
-      // Page courte (< PAGE_SIZE) → l'upstream n'a plus rien à donner.
-      S.upstreamExhausted = firstItems.length < PAGE_SIZE;
+      // Fin de flux jugée sur le BRUT upstream, pas sur les fiches filtrées :
+      // page vide (rawCount===0) OU marché atteint. Le test "< PAGE_SIZE" est
+      // cassé car le filtrage (serveur + client) raccourcit une page pleine.
+      S.upstreamExhausted = (firstResp.rawCount === 0) || (S.buffer.length >= S.market);
       _geoQ           = [];
       _geoRunning     = false;
       _resetMapLayers();
@@ -2798,7 +2802,8 @@ async function loadMore() {
     });
     S.buffer = S.buffer.concat(keptItems);
     S.total  = S.buffer.length;
-    if(pageItems.length < PAGE_SIZE) S.upstreamExhausted = true; // dernière page upstream
+    // Fin de flux : page vide upstream (rawCount===0) OU marché atteint.
+    if((dp.rawCount === 0) || (S.buffer.length >= S.market)) S.upstreamExhausted = true;
     // S.market reste figé sur firstResp — on ne touche pas au KPI marché.
     renderChunk(PAGE_SIZE);
     console.log('[Leads] loadMore upstreamPage='+S.upstreamPage+' buffer='+S.buffer.length+' loaded='+S.loaded+' market='+S.market);

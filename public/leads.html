@@ -2108,7 +2108,7 @@ async function applyMapKpis() {
   // KPI 1
   var leadsEl = document.getElementById('kpi-leads');
   var scopeEl = document.getElementById('kpi-scope');
-  if (leadsEl) leadsEl.textContent = (S.total || 0).toLocaleString('fr-FR');
+  if (leadsEl) leadsEl.textContent = (S.market || S.total || 0).toLocaleString('fr-FR');
   if (scopeEl) scopeEl.textContent = _scopeLabel();
   // KPI 3 : intersection SIRET courants (S.buffer) ∩ engagés
   var engagedEl = document.getElementById('kpi-engaged');
@@ -2231,9 +2231,11 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   // sous-compte massivement (DSL wildcard codePostalEtablissement:22* mal
   // interprété → 18 résultats vs 1376 réels). Recherche-entreprises supporte
   // nativement departement/code_postal/code_commune, devient primary dans ce cas.
-  var _selectedDept = (document.getElementById('sel-dept')?.value || '').trim();
-  var _selectedVille = (document.getElementById('sel-ville')?.value || '').trim();
-  var _hasGeoFilter = !!(_selectedDept || _selectedVille);
+  var _hasGeoFilter = !!(
+    (document.getElementById('sel-region')?.value || '').trim() ||
+    (document.getElementById('sel-dept')?.value || '').trim() ||
+    (document.getElementById('sel-ville')?.value || '').trim()
+  );
 
   if (_hasGeoFilter) {
     console.info('[Leads] using recherche-entreprises (geo filter active)');
@@ -2657,6 +2659,7 @@ async function loadPage(page) {
       // (sinon). Miroir de _hasGeoFilter dans fetchLeads. Etalab paginé,
       // INSEE non — cf. commentaire FETCH_MAX_PAGES.
       var _hasGeoFilter = !!(
+        (document.getElementById('sel-region')?.value || '').trim() ||
         (document.getElementById('sel-dept')?.value || '').trim() ||
         (document.getElementById('sel-ville')?.value || '').trim()
       );
@@ -2681,6 +2684,8 @@ async function loadPage(page) {
 
       // S.total = nombre RÉEL d'items disponibles (pas estimation upstream).
       S.total          = allItems.length;
+      S.market = (firstResp && Number.isFinite(Number(firstResp.total)))
+        ? Number(firstResp.total) : allItems.length;
       S.totalEstimated = false;
       S.totalComplete  = (firstResp && firstResp.totalComplete) || 0;
       S.hotCount       = (firstResp && firstResp.hotCount) || 0;
@@ -2771,7 +2776,7 @@ async function loadPage(page) {
 // UI STATE HELPERS
 // ════════════════════════════════════════════════════════════════
 function updateStats() {
-  document.getElementById('st-total').textContent    = S.total.toLocaleString('fr-FR');
+  document.getElementById('st-total').textContent    = (S.market || S.total).toLocaleString('fr-FR');
   document.getElementById('st-complete').textContent = S.totalComplete.toLocaleString('fr-FR');
   document.getElementById('st-hot').textContent      = S.hotCount.toLocaleString('fr-FR');
   var rate = S.total > 0 ? Math.round(S.totalComplete / S.total * 100) : 0;

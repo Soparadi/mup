@@ -2457,7 +2457,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     return {
       total: total, totalComplete: Math.round(total * 0.3),
       hotCount: Math.round(total * 0.15), items: items,
-      rawCount: (data.results || []).length // brut upstream (avant filtrage client)
+      rawCount: (typeof data.raw_count === 'number' ? data.raw_count : (data.results || []).length) // brut upstream de la page (server.js raw_count)
     };
 
   } catch(err) {

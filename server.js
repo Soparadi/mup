@@ -1102,6 +1102,10 @@ app.get('/api/search', async (req, res) => {
     // exact filtré.
     if (Array.isArray(data.results)) {
       const fetched = data.results.length
+      // brut upstream de la page (avant isProspectable/diffusion/blocklist) —
+      // exposé au front pour distinguer "page upstream vide" (fin de flux) de
+      // "page upstream pleine mais 100%-filtrée serveur" (≠ fin de flux).
+      data.raw_count = fetched
       const kept = data.results.filter(isProspectable)
       data.results = kept
       if (fetched > 0 && typeof data.total_results === 'number') {

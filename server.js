@@ -1166,6 +1166,81 @@ app.get('/api/search', async (req, res) => {
   }
 })
 
+// ── Comptage à blanc d'un gisement prospectable (geste 2/3) ──
+// Renvoie le nombre EXACT de fiches prospectables d'un gisement (le
+// « marché réel »), SANS charger ni retourner les fiches — un simple
+// compteur entier. Alimente la convergence du compteur scroll (scéno B1).
+//
+// Réutilise À L'IDENTIQUE la construction d'URL upstream et les deux
+// filtres PURS de /api/search (isProspectable PUIS isFullyDiffusible) :
+// toute divergence ferait diverger ce compte du nombre réellement chargé.
+// N'applique PAS checkBlocklistBatch (impur/coûteux, écart négligeable) ni
+// la dédup per-user (hors marché, propre au pipeline). Lecture seule pure :
+// aucun write DB, aucun effet de bord. Gate auth héritée du middleware /api.
+app.get('/api/search-count', async (req, res) => {
+  // Construction d'URL upstream — calque strict de /api/search (~1078-1094).
+  const base = new URLSearchParams()
+  if(req.query.q) base.set('q', req.query.q)
+  if(req.query.region) base.set('region', req.query.region)
+  if(req.query.code_naf) base.set('activite_principale', req.query.code_naf)
+  if(req.query.activite_principale) base.set('activite_principale', req.query.activite_principale)
+  if(req.query.departement) base.set('departement', req.query.departement)
+  if(req.query.code_postal) base.set('code_postal', req.query.code_postal)
+  if(req.query.code_commune) base.set('code_commune', req.query.code_commune)
+  base.set('per_page', '25')
+  const pageUrl = (page) => {
+    const p = new URLSearchParams(base)
+    p.set('page', String(page))
+    return 'https://recherche-entreprises.api.gouv.fr/search?' + p.toString()
+  }
+  // Compte les fiches d'une page passant les DEUX filtres purs, dans le même
+  // ordre fonctionnel que /api/search : isProspectable PUIS isFullyDiffusible.
+  const countPage = (results) =>
+    Array.isArray(results)
+      ? results.filter(isProspectable).filter(r => isFullyDiffusible(r, 'etalab')).length
+      : 0
+  try {
+    // Page 1 : sonde le total brut (plafond 10 000) et amorce le compteur.
+    const r1 = await fetch(pageUrl(1))
+    if (!r1.ok) return res.status(502).json({ error: 'Service temporairement indisponible' })
+    const d1 = await r1.json()
+    const totalRaw = Number(d1.total_results || 0)
+    if (totalRaw >= 10000) {
+      console.log(`[search-count] capped (total_results=${totalRaw})`)
+      return res.json({ count: null, capped: true })
+    }
+    let count = countPage(d1.results)
+    let pagesScanned = 1
+    const firstLen = Array.isArray(d1.results) ? d1.results.length : 0
+    // Pagination complète : page 2 → épuisement réel du dataset. Borne haute
+    // déduite du total brut (per_page=25) ; arrêt anticipé si un lot entier
+    // revient vide. Lots de 5 (rate-limit Etalab ~7 req/s) + pause inter-lot.
+    if (firstLen >= 25) {
+      const lastPage = Math.ceil(totalRaw / 25) || 1
+      let stop = false
+      for (let start = 2; start <= lastPage && !stop; start += 5) {
+        const batch = []
+        for (let p = start; p < start + 5 && p <= lastPage; p++) batch.push(p)
+        const pages = await Promise.all(batch.map(p =>
+          fetch(pageUrl(p)).then(r => r.ok ? r.json() : null).catch(() => null)
+        ))
+        let batchRaw = 0
+        for (const d of pages) {
+          batchRaw += (d && Array.isArray(d.results)) ? d.results.length : 0
+          count += countPage(d && d.results)
+        }
+        pagesScanned += batch.length
+        if (batchRaw === 0) stop = true                       // fin réelle du dataset
+        else if (start + 5 <= lastPage) await new Promise(r => setTimeout(r, 200))
+      }
+    }
+    console.log(`[search-count] pages=${pagesScanned} count=${count}`)
+    res.json({ count, capped: false })
+  } catch(e) {
+    res.status(502).json({ error: 'Service temporairement indisponible' })
+  }
+})
+
 // ── Historique des recherches Leads pour l'utilisateur authentifié ──
 // Protégé automatiquement par la gate auth /api/* (req.userId déjà rempli).
 app.get('/api/user/search-history', async (req, res) => {

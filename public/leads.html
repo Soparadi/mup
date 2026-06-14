@@ -1801,6 +1801,7 @@ function onDeptChange() {
   populateVilleSelect(dept);
   applyMapZoom();
   updateHint();   // réactive le bouton dès qu'un département est choisi (dept requis)
+  hideError();    // efface le bandeau "Choisissez un département" dès qu'un dept est choisi
 }
 
 // Cities by department
@@ -1853,6 +1854,7 @@ function populateVilleSelect(dept) {
 }
 
 function onVilleChange() {
+  hideError();    // changer de ville nettoie le bandeau
   applyMapZoom();
 }
 
@@ -2934,6 +2936,7 @@ function onRegionChange() {
   S.region = document.getElementById('sel-region').value;
   populateDeptSelect(S.region);
   updateHint();
+  hideError();    // changer de région nettoie un éventuel bandeau résiduel
   applyMapZoom();
 }
 

@@ -1556,9 +1556,11 @@ var S = {
   region:        '',
   onlyComplete:  false,
 
-  // pagination
+  // pagination (legacy) + scroll infini
   page:         1,
   total:        0,
+  upstreamPage:      1,     // dernière page upstream fetchée (scroll infini)
+  upstreamExhausted: false, // plus aucune page upstream à charger
   totalComplete:0,
   hotCount:     0,
   loaded:       0,      // items rendered so far
@@ -2650,49 +2652,39 @@ async function loadPage(page) {
   hideError();
 
   try {
-    // ── À page=1 : fetch toutes les pages upstream une fois pour toutes,
-    //    aggrège dans S.buffer. À page>1 : pas de fetch, juste slice + render.
+    // ── Premier paquet : fetch UNE seule page upstream. Le reste se charge
+    //    progressivement au scroll (loadMore). Découplage : S.buffer = fiches
+    //    fetchées, S.loaded = cartes rendues. INSEE ramène ~1000/fetch (le
+    //    scroll révèle le buffer), Etalab 25/fetch (le scroll re-fetch, cadencé).
     if(isFirstPage) {
-      var allItems = [];
-      var firstResp = null;
-      // Branche upstream effective : Etalab (filtre geo dept/ville) ou INSEE
-      // (sinon). Miroir de _hasGeoFilter dans fetchLeads. Etalab paginé,
-      // INSEE non — cf. commentaire FETCH_MAX_PAGES.
-      var _hasGeoFilter = !!(
-        (document.getElementById('sel-region')?.value || '').trim() ||
-        (document.getElementById('sel-dept')?.value || '').trim() ||
-        (document.getElementById('sel-ville')?.value || '').trim()
-      );
-      var maxPages = _hasGeoFilter ? FETCH_MAX_PAGES : 1;
-      for(var p = 1; p <= maxPages; p++) {
-        var dp = await fetchLeads(loadNaf, loadNafLabel, loadRegion, p, PAGE_SIZE, S.onlyComplete);
-        // ── STALE GUARD: NAF or region changed mid-aggregation → discard
-        if(loadNaf !== selectedNAFCode || loadRegion !== S.region) {
-          console.warn('[Prospect] Stale aggregation discarded. Loaded for "'+loadNaf+'" but current is "'+selectedNAFCode+'"');
-          S.loading = false;
-          return;
-        }
-        if(!firstResp) firstResp = dp;
-        var pageItems = (dp && dp.items) ? dp.items : [];
-        // ── BARRIER 2 sur chaque page upstream
-        var keptItems = pageItems.filter(function(it) {
-          return !(it.naf && loadNaf && it.naf.replace(/\./g,'') !== loadNaf.replace(/\./g,''));
-        });
-        allItems = allItems.concat(keptItems);
-        if(pageItems.length < PAGE_SIZE) break; // dernière page upstream
+      var firstResp = await fetchLeads(loadNaf, loadNafLabel, loadRegion, 1, PAGE_SIZE, S.onlyComplete);
+      // ── STALE GUARD: NAF or region changed mid-fetch → discard
+      if(loadNaf !== selectedNAFCode || loadRegion !== S.region) {
+        console.warn('[Prospect] Stale fetch discarded. Loaded for "'+loadNaf+'" but current is "'+selectedNAFCode+'"');
+        S.loading = false;
+        return;
       }
+      var firstItems = (firstResp && firstResp.items) ? firstResp.items : [];
+      // ── BARRIER 2 sur la page upstream
+      var keptItems = firstItems.filter(function(it) {
+        return !(it.naf && loadNaf && it.naf.replace(/\./g,'') !== loadNaf.replace(/\./g,''));
+      });
 
-      // S.total = nombre RÉEL d'items disponibles (pas estimation upstream).
-      S.total          = allItems.length;
+      // S.market = total marché (figé, alimente #st-total — NE PAS toucher).
       S.market = (firstResp && Number.isFinite(Number(firstResp.total)))
-        ? Number(firstResp.total) : allItems.length;
+        ? Number(firstResp.total) : keptItems.length;
+      S.total          = keptItems.length;   // fiches en buffer (grandit au scroll)
       S.totalEstimated = false;
       S.totalComplete  = (firstResp && firstResp.totalComplete) || 0;
       S.hotCount       = (firstResp && firstResp.hotCount) || 0;
       S.nGeoOk        = 0;
       S.nGeoFail      = 0;
-      S.buffer        = allItems;
+      S.buffer        = keptItems;
       S.loaded        = 0;
+      S.page          = 1;
+      S.upstreamPage  = 1;
+      // Page courte (< PAGE_SIZE) → l'upstream n'a plus rien à donner.
+      S.upstreamExhausted = firstItems.length < PAGE_SIZE;
       _geoQ           = [];
       _geoRunning     = false;
       _resetMapLayers();
@@ -2708,43 +2700,14 @@ async function loadPage(page) {
       document.getElementById('res-title').textContent = S.nafLabel || 'Leads générés';
       document.getElementById('ctx-region').textContent = regionLabel;
       document.getElementById('res-context').classList.add('show');
-    }
 
-    // ── Render slice de la page demandée depuis S.buffer pré-rempli
-    var start = (page - 1) * PAGE_SIZE;
-    var end = start + PAGE_SIZE;
-    var pageItems = S.buffer.slice(start, end);
+      // Premier paquet rendu (cards déjà vidé en tête de loadPage), scroll en haut.
+      renderChunk(PAGE_SIZE);
+      document.getElementById('res-panel').scrollTop = 0;
 
-    if(!isFirstPage) {
-      document.getElementById('cards').innerHTML = '';
-    }
-
-    var frag = document.createDocumentFragment();
-    pageItems.forEach(function(lead, i) {
-      // BARRIER 3 : last-chance NAF check before DOM insertion
-      if(lead.naf !== loadNaf) {
-        console.error('[Prospect] BARRIER-3 blocked render for naf="'+lead.naf+'"');
-        return;
-      }
-      frag.appendChild(createCard(lead, start + i));
-      enqueueGeo(lead);
-    });
-    document.getElementById('cards').appendChild(frag);
-
-    S.loaded = Math.min(end, S.total);
-    S.hasMore = end < S.total;
-    S.page = page;
-    console.log('[Leads] page='+page+' renderedFromBuffer='+pageItems.length+' total='+S.total+' totalPages='+Math.ceil(S.total/PAGE_SIZE));
-
-    updateCountDisplay();
-    updatePagination();
-    updateExportBar();
-    applyMapKpis();
-
-    if(isFirstPage) {
       document.getElementById('stats-bar').classList.add('show');
       document.getElementById('skel').classList.remove('show');
-      if(S.total === 0) {
+      if(S.buffer.length === 0) {
         document.getElementById('empty').classList.add('show');
         document.getElementById('empty').querySelector('.empty-title').textContent = 'Aucun résultat';
         document.getElementById('empty').querySelector('.empty-sub').textContent =
@@ -2768,9 +2731,84 @@ async function loadPage(page) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// INFINITE SCROLL
+// RENDER CHUNK — révèle n fiches déjà présentes dans S.buffer.
+// Append uniquement (jamais innerHTML=''). S.loaded = compteur "rendu".
 // ════════════════════════════════════════════════════════════════
-// Infinite scroll removed — using pagination buttons instead
+function renderChunk(n) {
+  var start = S.loaded;
+  var end = Math.min(start + n, S.buffer.length);
+  if(end <= start) return 0;
+  var frag = document.createDocumentFragment();
+  var rendered = 0;
+  for(var i = start; i < end; i++) {
+    var lead = S.buffer[i];
+    // BARRIER 3 : last-chance NAF check before DOM insertion
+    if(lead.naf !== selectedNAFCode) {
+      console.error('[Prospect] BARRIER-3 blocked render for naf="'+lead.naf+'"');
+      continue;
+    }
+    frag.appendChild(createCard(lead, i));
+    enqueueGeo(lead);
+    rendered++;
+  }
+  document.getElementById('cards').appendChild(frag);
+  S.loaded  = end;
+  S.total   = S.buffer.length;
+  S.hasMore = S.loaded < S.market;
+  updateCountDisplay();
+  updateExportBar();
+  applyMapKpis();
+  return rendered;
+}
+
+// ════════════════════════════════════════════════════════════════
+// INFINITE SCROLL — loadMore() déclenché à ~80% du res-panel.
+// Révèle d'abord le buffer (gratuit) ; ne tape l'upstream QUE s'il est
+// épuisé, et alors avec une cadence sleep (jamais de rafale → protège l'API).
+// ════════════════════════════════════════════════════════════════
+async function loadMore() {
+  if(S.loading) return;
+  if(S.loaded >= S.market) return;               // tout le marché est rendu
+  // Buffer non épuisé → simple révélation, ZÉRO appel API.
+  if(S.loaded < S.buffer.length) {
+    renderChunk(PAGE_SIZE);
+    return;
+  }
+  // Buffer épuisé : plus rien à fetcher upstream → stop.
+  if(S.upstreamExhausted) return;
+  if(!S.nafLocked || !selectedNAFCode || !S.region) return;
+
+  S.loading = true;
+  document.getElementById('page-loader').classList.add('show');
+  var loadNaf    = selectedNAFCode;
+  var loadRegion = S.region;
+  try {
+    await sleep(150); // cadence : protège recherche-entreprises (jamais de rafale)
+    var dp = await fetchLeads(loadNaf, selectedNAFLabel, loadRegion, S.upstreamPage + 1, PAGE_SIZE, S.onlyComplete);
+    // ── STALE GUARD : NAF/région changés pendant le fetch → on jette.
+    if(loadNaf !== selectedNAFCode || loadRegion !== S.region) {
+      console.warn('[Prospect] Stale loadMore discarded for "'+loadNaf+'"');
+      return;
+    }
+    S.upstreamPage++;
+    var pageItems = (dp && dp.items) ? dp.items : [];
+    // ── BARRIER 2 sur la page upstream
+    var keptItems = pageItems.filter(function(it) {
+      return !(it.naf && loadNaf && it.naf.replace(/\./g,'') !== loadNaf.replace(/\./g,''));
+    });
+    S.buffer = S.buffer.concat(keptItems);
+    S.total  = S.buffer.length;
+    if(pageItems.length < PAGE_SIZE) S.upstreamExhausted = true; // dernière page upstream
+    // S.market reste figé sur firstResp — on ne touche pas au KPI marché.
+    renderChunk(PAGE_SIZE);
+    console.log('[Leads] loadMore upstreamPage='+S.upstreamPage+' buffer='+S.buffer.length+' loaded='+S.loaded+' market='+S.market);
+  } catch(err) {
+    console.error('[Prospect] loadMore error:', err);
+  } finally {
+    S.loading = false;
+    document.getElementById('page-loader').classList.remove('show');
+  }
+}
 
 // ════════════════════════════════════════════════════════════════
 // UI STATE HELPERS
@@ -2783,37 +2821,20 @@ function updateStats() {
   document.getElementById('st-email').textContent    = rate + '%';
 }
 
-function prevPage() {
-  if(S.page <= 1) return;
-  document.getElementById('cards').innerHTML = '';
-  S.loaded = 0;
-  loadPage(S.page - 1);
-}
-function nextPage() {
-  if(!S.hasMore) return;
-  document.getElementById('cards').innerHTML = '';
-  S.loaded = 0;
-  loadPage(S.page + 1);
-}
+// prev/next inertes : la pagination numérotée est remplacée par le scroll infini.
+function prevPage() { /* inert — scroll infini (loadMore) */ }
+function nextPage() { /* inert — scroll infini (loadMore) */ }
+// updatePagination neutralisée : garde le bloc pagination masqué.
 function updatePagination() {
-  var totalPages = Math.max(1, Math.ceil(S.total / PAGE_SIZE));
-  console.info('[Leads] pagination', {
-    sTotal: S.total,
-    sLoaded: S.loaded,
-    pageSize: PAGE_SIZE,
-    page: S.page,
-    totalPages: totalPages
-  });
-  document.getElementById('page-info').textContent = 'Page ' + S.page + ' / ' + totalPages;
-  document.getElementById('btn-prev').disabled = S.page <= 1;
-  document.getElementById('btn-next').disabled = S.page >= totalPages;
-  document.getElementById('pagination').style.display = 'flex';
-  document.getElementById('res-panel').scrollTop = 0;
+  var pg = document.getElementById('pagination');
+  if(pg) pg.style.display = 'none';
 }
 function updateCountDisplay() {
-  var suffix = S.totalEstimated ? '+' : '';
-  document.getElementById('res-count').textContent = S.total.toLocaleString('fr-FR') + suffix + ' résultats';
-  document.getElementById('res-title').textContent = (S.nafLabel || 'Leads') + ' · ' + S.total.toLocaleString('fr-FR') + suffix;
+  var market = S.market || S.total;
+  document.getElementById('res-count').textContent =
+    S.loaded.toLocaleString('fr-FR') + ' / ' + market.toLocaleString('fr-FR') + ' chargées';
+  document.getElementById('res-title').textContent =
+    (S.nafLabel || 'Leads') + ' · ' + market.toLocaleString('fr-FR');
 }
 
 function updateExportBar() {
@@ -3290,6 +3311,15 @@ document.addEventListener('click',function(e){
 // ════════════════════════════════════════════════════════════════
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',buildIndex);
 else buildIndex();
+
+// ── Scroll infini : déclenche loadMore() à ~80% du panneau résultats ──
+(function attachInfiniteScroll(){
+  var panel = document.getElementById('res-panel');
+  if(!panel) return;
+  panel.addEventListener('scroll', function() {
+    if(panel.scrollTop + panel.clientHeight >= panel.scrollHeight * 0.8) loadMore();
+  });
+})();
 
 </script>
 <script>

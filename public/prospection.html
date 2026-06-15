@@ -329,7 +329,6 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 }
 .res-hdr-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .res-title { font-size: 13px; font-weight: 700; color: var(--text); }
-.res-count { font-size: 11px; color: var(--muted); font-family: var(--mono); }
 /* Pagination en ligne (haut panneau résultats) */
 .pagination-inline {
   display: flex; align-items: center; gap: 8px; flex-shrink: 0;
@@ -654,7 +653,6 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <div class="res-hdr">
         <div class="res-hdr-left">
           <div class="res-title" id="res-title">Leads générés</div>
-          <div class="res-count" id="res-count">0 résultats</div>
         </div>
         <!-- Pagination en ligne (déplacée du bas) -->
         <div id="pagination" class="pagination-inline" style="display:none">
@@ -2783,8 +2781,6 @@ function updatePagination() {
 }
 function updateCountDisplay() {
   var market = _displayMarket();
-  document.getElementById('res-count').textContent =
-    S.loaded.toLocaleString('fr-FR') + ' / ' + market.toLocaleString('fr-FR') + ' chargées';
   document.getElementById('res-title').textContent =
     (S.nafLabel || 'Leads') + ' · ' + market.toLocaleString('fr-FR');
   // Tuile KPI « Chargées » : nombre de fiches rendues, sans dénominateur.
@@ -2794,8 +2790,7 @@ function updateCountDisplay() {
 
 // ════════════════════════════════════════════════════════════════
 // CONVERGENCE DU COMPTEUR MARCHÉ (scéno B1)
-// Le marché s'affiche à DEUX endroits qui lisent tous _displayMarket() :
-//   a) titre panneau (res-title)   b) sous-titre « x / y chargées » (res-count)
+// Le marché s'affiche via _displayMarket() sur le titre panneau (res-title).
 // (st-total dans le panneau stats lit aussi _displayMarket()).
 // _displayMarket() renvoie : la valeur du tween en cours si actif, sinon le
 // marché réel/extrapolé (S.market). Au lancement on affiche l'extrapolé

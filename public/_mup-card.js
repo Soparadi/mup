@@ -1,7 +1,7 @@
 /* ─────────────────────────────────────────────────────────────────
    MUPCard — composant fiche unifiée (sprint fiche unifiée).
    Format minimaliste : badge secteur + nom dirigeant + raison sociale
-   + adresse 1 ligne + bouton "Ajouter aux contacts" (état lead) ou
+   + adresse 1 ligne + bouton "Ajouter" (état lead) ou
    mention "Déjà dans Pipeline" (état engaged).
    Doctrine 8 avril : MÊME conteneur, contenu adapté à l'état.
    Phase 1 : /leads (cards panneau + popup Leaflet). /pipeline en
@@ -100,7 +100,7 @@
       var onAdd = data.onAdd || (data.id ? "addToPipeline('" + _esc(data.id) + "')" : '');
       var disabledAttr = onAdd ? '' : ' disabled';
       html += '<button type="button" class="mup-card-cta"' + (onAdd ? ' onclick="' + onAdd + '"' : '') + disabledAttr + '>'
-        + SVG_PLUS + 'Ajouter aux contacts</button>';
+        + SVG_PLUS + 'Ajouter</button>';
     } else if (state === 'engaged') {
       html += '<button type="button" class="mup-card-cta" disabled>Déjà dans le pipeline</button>';
     }

@@ -526,7 +526,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <div>
         <div class="field-label">Région</div>
         <select id="sel-region" onchange="onRegionChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px 0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
-          <option value="">Toutes</option>
+          <option value="" disabled selected>Sélectionner</option>
           <option value="ile-de-france">Île-de-France</option>
           <option value="auvergne-rhone-alpes">Auvergne-Rhône-Alpes</option>
           <option value="nouvelle-aquitaine">Nouvelle-Aquitaine</option>
@@ -547,7 +547,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <div>
         <div class="field-label">Département</div>
         <select id="sel-dept" onchange="onDeptChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px 0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
-          <option value="">Tous</option>
+          <option value="" disabled selected>Sélectionner</option>
         </select>
       </div>
 
@@ -555,7 +555,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <div>
         <div class="field-label">Ville</div>
         <select id="sel-ville" onchange="onVilleChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px 0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
-          <option value="">Toutes</option>
+          <option value="" disabled selected>Sélectionner</option>
         </select>
       </div>
 
@@ -1737,7 +1737,9 @@ var REGION_NAMES_BY_CODE = {
 function populateDeptSelect(regionFilter) {
   var sel = document.getElementById('sel-dept');
   var current = sel.value;
-  var html = '<option value="">Tous les départements</option>';
+  // Pas d'option « Tous » : l'absence matérialise l'obligation (dept = déclencheur,
+  // bce9bb3). Placeholder non-sélectionnable, value "" = état bloquant inchangé.
+  var html = '<option value="" disabled selected>Sélectionner</option>';
   var codes = Object.keys(REGION_DEPTS);
   codes.forEach(function(rc) {
     var regionSlug = REGION_NAMES_BY_CODE[rc] || '';
@@ -1815,7 +1817,10 @@ var DEPT_VILLES = {
 
 function populateVilleSelect(dept) {
   var sel = document.getElementById('sel-ville');
-  var html = '<option value="">Toutes</option>';
+  // Ville optionnelle : « Toutes les villes » (value "") = pas de filtre, sélectionnable.
+  // Le placeholder « Sélectionner » est l'invite ; ni l'un ni l'autre ne bloque le lancement.
+  var html = '<option value="" disabled selected>Sélectionner</option>'
+           + '<option value="">Toutes les villes</option>';
   var villes = DEPT_VILLES[dept] || [];
   villes.forEach(function(v) {
     html += '<option value="'+v+'">'+v+'</option>';

@@ -278,7 +278,9 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
   border-right: 1px solid var(--border); overflow: hidden; isolation: isolate;
 }
 .map-hdr {
-  padding: 14px 20px 12px; border-bottom: 1px solid var(--border);
+  /* Bande d'en-tête régulière : même hauteur + padding que .res-context
+     (colonne fiches) → barre du haut continue, textes centrés alignés. */
+  padding: 0 20px; min-height: 42px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
   background: var(--card); flex-shrink: 0;
 }
@@ -347,7 +349,9 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 
 /* context banner */
 .res-context {
-  padding: 8px 20px; background: var(--surface);
+  /* Même hauteur de bande + padding vertical que .map-hdr (colonne carte)
+     → en-tête régulier des deux côtés, textes sur la même ligne (center). */
+  padding: 0 20px; min-height: 42px; background: var(--surface);
   border-bottom: 1px solid var(--border);
   font-size: 11px; color: var(--muted);
   display: none; align-items: center; gap: 6px; flex-wrap: wrap;

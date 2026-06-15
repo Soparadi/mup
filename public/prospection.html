@@ -637,17 +637,10 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 
     <!-- résultats -->
     <div class="res-col">
-      <div class="res-hdr">
-        <div class="res-hdr-left">
-          <div class="res-title" id="res-title">Leads générés</div>
-        </div>
-        <!-- Pagination en ligne (déplacée du bas) -->
-        <div id="pagination" class="pagination-inline" style="display:none">
-          <button onclick="prevPage()" id="btn-prev" class="pg-btn" disabled>←</button>
-          <span id="page-info" class="pg-info">Page 1 / 1</span>
-          <button onclick="nextPage()" id="btn-next" class="pg-btn">→</button>
-        </div>
-      </div>
+      <!-- Titre marché « métier · N » retiré : dissonance avec « Chargées »
+           (la tuile carte donne le concret). La sous-ligne « Résultats pour »
+           ci-dessous identifie la recherche. Pagination inline supprimée avec
+           lui (inerte/masquée depuis le scroll infini). -->
       <!-- contexte de recherche strict -->
       <div class="res-context" id="res-context">
         Résultats pour&nbsp;:
@@ -2513,7 +2506,6 @@ async function loadPage(page) {
       var regionLabel = regionEl.options[regionEl.selectedIndex].text;
       document.getElementById('ctx-naf').textContent    = S.naf;
       document.getElementById('ctx-label').textContent  = S.nafLabel;
-      document.getElementById('res-title').textContent = S.nafLabel || 'Leads générés';
       document.getElementById('ctx-region').textContent = regionLabel;
       document.getElementById('res-context').classList.add('show');
 
@@ -2703,18 +2695,16 @@ function updatePagination() {
   if(pg) pg.style.display = 'none';
 }
 function updateCountDisplay() {
-  var market = _displayMarket();
-  document.getElementById('res-title').textContent =
-    (S.nafLabel || 'Leads') + ' · ' + market.toLocaleString('fr-FR');
   // Tuile KPI « Chargées » : nombre de fiches rendues, sans dénominateur.
+  // (Titre marché « métier · N » retiré — voir res-hdr supprimé.)
   var loadedEl = document.getElementById('kpi-loaded');
   if (loadedEl) loadedEl.textContent = S.loaded.toLocaleString('fr-FR');
 }
 
 // ════════════════════════════════════════════════════════════════
 // CONVERGENCE DU COMPTEUR MARCHÉ (scéno B1)
-// Le marché s'affiche via _displayMarket() sur le titre panneau (res-title).
-// (st-total dans le panneau stats lit aussi _displayMarket()).
+// Le marché s'affiche via _displayMarket() sur st-total (panneau stats).
+// (Le titre marché res-title a été retiré ; st-total reste le seul affichage.)
 // _displayMarket() renvoie : la valeur du tween en cours si actif, sinon le
 // marché réel/extrapolé (S.market). Au lancement on affiche l'extrapolé
 // (« whaou » initial) ; quand /api/search-count répond, on GLISSE vers le

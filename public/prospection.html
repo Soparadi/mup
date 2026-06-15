@@ -1787,7 +1787,8 @@ function onDeptChange() {
 // Clé = code département.
 var DEPT_COMMUNES_CACHE = {};
 
-// Menu Ville peuplé depuis geo.api.gouv (toutes les communes réelles du dept),
+// Menu Ville peuplé depuis geo.api.gouv, limité aux 10 plus grandes communes
+// du dept (par population décroissante), puis affichées par ordre alphabétique.
 // API déjà utilisée ici (zoom dept commune). value = CODE INSEE →
 // le filtre serveur code_commune est exact (zéro fragilité accents/apostrophes)
 // et le double-filtre client par libellé devient inutile.
@@ -1807,12 +1808,17 @@ async function populateVilleSelect(dept) {
   if (DEPT_COMMUNES_CACHE[dept]) { render(DEPT_COMMUNES_CACHE[dept]); return; }
   try {
     var url = 'https://geo.api.gouv.fr/communes?codeDepartement=' + encodeURIComponent(dept)
-            + '&fields=nom,code&format=json';
+            + '&fields=nom,code,population&format=json';
     var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var arr = await r.json();
     if (!Array.isArray(arr)) throw new Error('payload inattendu');
+    // Sélection : trier par population décroissante (commune sans population → 0,
+    // donc classée en dernier), garder les 10 plus grandes.
     var communes = arr.filter(function(c){ return c && c.code && c.nom; })
+                      .sort(function(a,b){ return (b.population || 0) - (a.population || 0); })
+                      .slice(0, 10)
+    // Affichage : re-trier les 10 retenues par ordre alphabétique (lisible).
                       .sort(function(a,b){ return a.nom.localeCompare(b.nom, 'fr'); });
     DEPT_COMMUNES_CACHE[dept] = communes;
     render(communes);

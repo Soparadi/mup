@@ -90,7 +90,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
   width: calc(100% - 96px);
   box-shadow: 0 4px 24px rgba(0,0,0,.06);
 }
-.search-row { display: flex; gap: 16px; align-items: flex-end; margin-bottom: 20px; }
+.search-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 16px; align-items: end; }
 .field-label {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
@@ -183,12 +183,11 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 /* search footer */
 .sfooter { display: flex; align-items: center; gap: 16px; padding-top: 16px; border-top: 1px solid var(--border); flex-wrap: wrap; }
 .shint { font-size: 13px; color: var(--muted); flex: 1; min-width: 0; }
-.sfooter-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 
 /* generate button */
 .btn-go {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 11px 22px; border-radius: 12px; border: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; padding: 0 22px; border-radius: 12px; border: none;
   background: var(--border2); color: var(--muted);
   font-family: var(--font); font-size: 13.5px; font-weight: 700;
   cursor: not-allowed; transition: all .18s; white-space: nowrap;
@@ -196,6 +195,12 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 .btn-go.active { background: var(--text); color: #fff; cursor: pointer; }
 .btn-go.active:hover { background: #000; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.2); }
 .btn-go.loading { background: #000; color: #fff; cursor: wait; }
+
+/* Responsive : en largeur réduite, le bouton passe pleine largeur sous la rangée */
+@media (max-width: 860px) {
+  .search-grid { grid-template-columns: 2fr 1fr 1fr 1fr; }
+  .search-grid > .btn-go { grid-column: 1 / -1; width: 100%; }
+}
 .spinner {
   width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3);
   border-top-color: #fff; border-radius: 50%;
@@ -490,7 +495,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 
   <!-- ── SEARCH ENGINE ── -->
   <div class="search-engine">
-    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:16px;align-items:end">
+    <div class="search-grid">
 
       <!-- secteur -->
       <div>
@@ -554,21 +559,20 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
         </select>
       </div>
 
-    </div><!-- /search-row -->
+      <!-- bouton lancer la recherche — dernier élément de la rangée, aligné sur les selects -->
+      <button class="btn-go" id="btn-go" onclick="startSearch()">
+        <svg id="ico-search" width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10.5 10.5l2.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <div class="spinner" id="spinner"></div>
+        <span id="btn-lbl">Lancer la recherche</span>
+      </button>
+
+    </div><!-- /search-grid -->
 
     <div class="sfooter">
       <div class="shint" id="hint">Tapez un métier ou un code APE, puis choisissez une région</div>
-      <div class="sfooter-right">
-        <!-- bouton générer -->
-        <button class="btn-go" id="btn-go" onclick="startSearch()">
-          <svg id="ico-search" width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M10.5 10.5l2.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <div class="spinner" id="spinner"></div>
-          <span id="btn-lbl">Générer mes leads</span>
-        </button>
-      </div>
     </div>
   </div><!-- /search-engine -->
 
@@ -2888,7 +2892,9 @@ function setBtnReady() {
   btn.classList.remove('loading'); btn.classList.add('active');
   document.getElementById('ico-search').style.display = '';
   document.getElementById('spinner').style.display    = 'none';
-  document.getElementById('btn-lbl').textContent      = 'Relancer';
+  // Libellé figé « Lancer la recherche » (plus de bascule « Relancer ») —
+  // le feedback d'état reste porté par la ré-activation (classes + icône).
+  document.getElementById('btn-lbl').textContent      = 'Lancer la recherche';
 }
 
 function showError(msg) {

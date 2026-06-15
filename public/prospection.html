@@ -90,7 +90,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
   width: calc(100% - 96px);
   box-shadow: 0 4px 24px rgba(0,0,0,.06);
 }
-.search-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 16px; align-items: end; }
+.search-grid { display: grid; grid-template-columns: 2.2fr 1.2fr 1.4fr 0.9fr auto; gap: 16px; align-items: end; }
 .field-label {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
@@ -181,7 +181,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 .sel-arr { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--muted2); }
 
 /* search footer */
-.sfooter { display: flex; align-items: center; gap: 16px; padding-top: 16px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.sfooter { display: flex; align-items: center; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
 .shint { font-size: 13px; color: var(--muted); flex: 1; min-width: 0; }
 
 /* generate button */
@@ -198,7 +198,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 
 /* Responsive : en largeur réduite, le bouton passe pleine largeur sous la rangée */
 @media (max-width: 860px) {
-  .search-grid { grid-template-columns: 2fr 1fr 1fr 1fr; }
+  .search-grid { grid-template-columns: 2.2fr 1.2fr 1.4fr 0.9fr; }
   .search-grid > .btn-go { grid-column: 1 / -1; width: 100%; }
 }
 .spinner {
@@ -525,7 +525,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <!-- région -->
       <div>
         <div class="field-label">Région</div>
-        <select id="sel-region" onchange="onRegionChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
+        <select id="sel-region" onchange="onRegionChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px 0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
           <option value="">Toutes</option>
           <option value="ile-de-france">Île-de-France</option>
           <option value="auvergne-rhone-alpes">Auvergne-Rhône-Alpes</option>
@@ -546,7 +546,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <!-- département -->
       <div>
         <div class="field-label">Département</div>
-        <select id="sel-dept" onchange="onDeptChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
+        <select id="sel-dept" onchange="onDeptChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px 0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
           <option value="">Tous</option>
         </select>
       </div>
@@ -554,7 +554,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <!-- ville -->
       <div>
         <div class="field-label">Ville</div>
-        <select id="sel-ville" onchange="onVilleChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
+        <select id="sel-ville" onchange="onVilleChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px 0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
           <option value="">Toutes</option>
         </select>
       </div>
@@ -3298,6 +3298,7 @@ function pickNAF(code, label) {
   // Update input field — add locked class so user sees it's confirmed
   var inp = document.getElementById('inp-sector');
   inp.value = label;
+  inp.title = label;   // libellé complet au survol (filet pour les labels très longs tronqués)
   inp.classList.add('locked');
 
   document.getElementById('btn-clr').classList.add('show');
@@ -3312,6 +3313,7 @@ function clearSector() {
   S.nafLocked = false;
   var inp = document.getElementById('inp-sector');
   inp.value = '';
+  inp.title = '';
   inp.classList.remove('locked');
   document.getElementById('btn-clr').classList.remove('show');
   document.getElementById('acd').classList.remove('open');

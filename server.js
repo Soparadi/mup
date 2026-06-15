@@ -1231,20 +1231,17 @@ app.get('/api/search', async (req, res) => {
   }
 })
 
-// ── Comptage à blanc d'un gisement prospectable (gestes 2/3 + 4/4) ──
+// ── Comptage à blanc d'un gisement prospectable (Voie 1, étape 2) ──
 // Renvoie le nombre EXACT de fiches que le scroll chargerait (le « marché
 // réel »), SANS charger ni retourner les fiches. Alimente la convergence
 // du compteur scroll (scéno B1).
 //
-// Rejoue À L'IDENTIQUE les QUATRE filtres du scroll, dans le même ordre :
-//   1. isProspectable(r)             — pur (calque /api/search)
-//   2. isFullyDiffusible(r,'etalab') — pur (calque /api/search)
-//   3. blocklist opt-out             — checkBlocklistBatch (calque /api/search:1128-1144)
-//   4. dédup pipeline du user        — parité stricte avec leads.html:2410-2429
-// (3 et 4 sont des retraits d'ensembles : l'ordre entre eux n'affecte pas le
-// total.) Toute divergence ferait diverger ce compte du nombre chargé.
-// Surcoût DB : ~ceil(SIRET/100) requêtes blocklist + 1 requête pipeline.
-// Lecture seule (aucun write). Gate auth héritée du middleware /api → req.userId.
+// Réutilise LA MÊME keepLead que /api/search → une seule définition des
+// filtres, divergence impossible par construction (plus de chaîne recodée).
+// Parcourt toutes les pages upstream (fiches BRUTES accumulées), pré-résout
+// les 2 impurs (blocklist + pipeline) UNE fois, puis applique keepLead en une
+// seule passe sur l'ensemble. Lecture seule (aucun write). Gate auth héritée
+// du middleware /api → req.userId.
 app.get('/api/search-count', async (req, res) => {
   // Construction d'URL upstream — calque strict de /api/search (~1078-1094).
   const base = new URLSearchParams()
@@ -1261,13 +1258,11 @@ app.get('/api/search-count', async (req, res) => {
     p.set('page', String(page))
     return 'https://recherche-entreprises.api.gouv.fr/search?' + p.toString()
   }
-  // Filtres PURS 1+2 d'une page (ordre /api/search) → fiches survivantes.
-  // On ACCUMULE les fiches (pas un compteur) pour appliquer blocklist (1 batch
-  // global) puis dédup à la fin du parcours.
-  const keepPage = (results) =>
-    Array.isArray(results)
-      ? results.filter(isProspectable).filter(r => isFullyDiffusible(r, 'etalab'))
-      : []
+  // On accumule les fiches BRUTES (avant tout filtre) ; keepLead — qui fait
+  // déjà isProspectable + isFullyDiffusible en interne — est appliquée UNE
+  // seule fois à la fin (pas de pré-filtre, sinon les purs tourneraient 2×
+  // et risqueraient une divergence d'ordre avec /api/search).
+  const pageResults = (d) => (d && Array.isArray(d.results)) ? d.results : []
   try {
     // Page 1 : sonde le total brut (plafond 10 000) et amorce l'accumulation.
     const r1 = await fetch(pageUrl(1))
@@ -1278,9 +1273,9 @@ app.get('/api/search-count', async (req, res) => {
       console.log(`[search-count] capped (total_results=${totalRaw})`)
       return res.json({ count: null, capped: true })
     }
-    let survivors = keepPage(d1.results)
+    let allFiches = pageResults(d1)
     let pagesScanned = 1
-    const firstLen = Array.isArray(d1.results) ? d1.results.length : 0
+    const firstLen = allFiches.length
     // Pagination complète : page 2 → épuisement réel du dataset. Borne haute
     // déduite du total brut (per_page=25) ; arrêt anticipé si un lot entier
     // revient vide. Lots de 5 (rate-limit Etalab ~7 req/s) + pause inter-lot.
@@ -1295,83 +1290,50 @@ app.get('/api/search-count', async (req, res) => {
         ))
         let batchRaw = 0
         for (const d of pages) {
-          batchRaw += (d && Array.isArray(d.results)) ? d.results.length : 0
-          survivors = survivors.concat(keepPage(d && d.results))
+          const rs = pageResults(d)
+          batchRaw += rs.length
+          allFiches = allFiches.concat(rs)
         }
         pagesScanned += batch.length
         if (batchRaw === 0) stop = true                       // fin réelle du dataset
         else if (start + 5 <= lastPage) await new Promise(r => setTimeout(r, 200))
       }
     }
-    const purCount = survivors.length
+    const brut = allFiches.length
 
-    // ── Filtre 3 : blocklist opt-out — calque strict /api/search:1128-1144.
-    // Collecte siege.siret + matching_etablissements[].siret sur TOUT le
-    // gisement, un SEUL appel batch (chunké par 100 côté checkBlocklistBatch).
+    // Pré-résolution des 2 impurs UNE fois (identique à /api/search) :
+    // blocklist sur TOUS les SIRET du gisement (siège + matching), 1 batch.
     const allSirets = []
-    for (const r of survivors) {
+    for (const r of allFiches) {
       if (r?.siege?.siret) allSirets.push(r.siege.siret)
       if (Array.isArray(r?.matching_etablissements)) {
         for (const e of r.matching_etablissements) if (e?.siret) allSirets.push(e.siret)
       }
     }
     const blocked = await checkBlocklistBatch(allSirets)
-    const kept = blocked.size
-      ? survivors.filter(r => {
-          if (r?.siege?.siret && blocked.has(r.siege.siret)) return false
-          if (Array.isArray(r?.matching_etablissements) &&
-              r.matching_etablissements.some(e => e?.siret && blocked.has(e.siret))) return false
-          return true
-        })
-      : survivors
-
-    // ── Filtre 4 : dédup pipeline du user — parité stricte avec le scroll.
-    // Lecture DIRECTE du pipeline (même requête que GET /api/pipeline:702),
-    // jamais via l'endpoint HTTP gaté. existing = siren ET siret, falsy
-    // ignorés (réplique _getExistingSirets, leads.html:1705).
+    // pipeline du user (dédup) : siren ET siret, falsy exclus, fail-open Set vide.
     const existing = new Set()
     try {
       const db = await getDb()
       const pres = await db.query('SELECT * FROM pipeline WHERE userId = $userId', { userId: req.userId })
-      const cards = pres[0] || []
-      for (const c of cards) {
+      for (const c of (pres[0] || [])) {
         if (c?.siren) existing.add(String(c.siren))
         if (c?.siret) existing.add(String(c.siret))
       }
     } catch (e) {
       console.warn('[search-count] lecture pipeline échouée (dédup ignorée) :', e.message)
     }
-    // Réplique pickLocalEtab (leads.html:2410-2423) : le scroll teste UN seul
-    // siret par fiche, celui de l'établissement local choisi (1er matching dont
-    // le CP commence par le département demandé, sinon siège). Si un dept est
-    // demandé sans établissement local, le scroll ÉCARTE la fiche (drop).
-    const allowedDepts = req.query.departement ? String(req.query.departement).split(',') : []
-    const pickDedupSiret = (r) => {
-      let local = null
-      const matching = Array.isArray(r.matching_etablissements) ? r.matching_etablissements : []
-      for (const e of matching) {
-        const cp = String(e.code_postal || '')
-        if (allowedDepts.length && allowedDepts.indexOf(cp.slice(0, 2)) !== -1) { local = e; break }
-      }
-      if (!local && r.siege) {
-        const sCp = String(r.siege.code_postal || '')
-        if (!allowedDepts.length || allowedDepts.indexOf(sCp.slice(0, 2)) !== -1) local = r.siege
-      }
-      if (allowedDepts.length && !local) return { drop: true, siret: '' }
-      if (!local) local = matching[0] || r.siege || {}
-      return { drop: false, siret: String(local.siret || '') }
+    // ctx identique à /api/search → parité garantie : une seule keepLead.
+    const ctx = {
+      allowedDepts: req.query.departement ? String(req.query.departement).split(',') : [],
+      naf: String(req.query.code_naf || req.query.activite_principale || '').replace(/\./g, ''),
+      ville: String(req.query.city_name || '').toUpperCase(),
+      existing,
+      blocked
     }
-    let count = 0
-    for (const r of kept) {
-      const { drop, siret } = pickDedupSiret(r)
-      if (drop) continue                                       // pas d'étab local en dept
-      const siren = String(r.siren || '')
-      if (siren && existing.has(siren)) continue
-      if (siret && existing.has(siret)) continue
-      count++
-    }
+    const count = allFiches.filter(f => keepLead(f, ctx)).length
 
-    console.log(`[search-count] pages=${pagesScanned} pur=${purCount} post-blocklist=${kept.length} count=${count} sirets=${allSirets.length} pipeline=${existing.size}`)
+    console.log(`[search-count] pages=${pagesScanned} brut=${brut} count=${count} sirets=${allSirets.length} pipeline=${existing.size}`)
     res.json({ count, capped: false })
   } catch(e) {
     res.status(502).json({ error: 'Service temporairement indisponible' })

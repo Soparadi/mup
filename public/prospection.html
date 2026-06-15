@@ -453,7 +453,12 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
    fiches courtes ont un vide en bas (assumé) ; les longues sont clampées
    pour ne jamais dépasser. Scopé à #cards : la variante popup Leaflet
    (.mup-card-popup, hors #cards) garde sa hauteur auto. */
-#cards .mup-card { height: 190px; overflow: hidden; }
+/* Chaîne min-width:0 cellule → carte : sans ça, les enfants white-space:nowrap
+   (badge NAF, titre, raison sociale) gonflent leur colonne 1fr au lieu de
+   déclencher l'ellipsis → une colonne s'élargit, l'autre déborde hors écran.
+   min-width:0 force chaque 1fr à tenir vraiment 50% et l'ellipsis à tronquer. */
+#cards > * { min-width: 0; }
+#cards .mup-card { height: 190px; width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
 /* Bouton aligné en bas de chaque fiche, quelle que soit la longueur du contenu */
 #cards .mup-card-cta { margin-top: auto; }
 /* Badge NAF, nom, raison sociale : 1 ligne + ellipsis (pas de wrap) */

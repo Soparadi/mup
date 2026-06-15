@@ -2113,7 +2113,7 @@ async function applyMapKpis() {
   // KPI 1
   var leadsEl = document.getElementById('kpi-leads');
   var scopeEl = document.getElementById('kpi-scope');
-  if (leadsEl) leadsEl.textContent = (S.market || S.total || 0).toLocaleString('fr-FR');
+  if (leadsEl) leadsEl.textContent = (_displayMarket() || 0).toLocaleString('fr-FR');
   if (scopeEl) scopeEl.textContent = _scopeLabel();
   // KPI 3 : intersection SIRET courants (S.buffer) ∩ engagés
   var engagedEl = document.getElementById('kpi-engaged');
@@ -2692,6 +2692,10 @@ async function loadPage(page) {
       // page vide (rawCount===0) OU marché atteint. Le test "< PAGE_SIZE" est
       // cassé car le filtrage (serveur + client) raccourcit une page pleine.
       S.upstreamExhausted = (firstResp.rawCount === 0) || (S.buffer.length >= S.market);
+      // Scéno B1 : invalide toute boucle auto-roll d'une recherche précédente
+      // (token gen) et réinitialise la convergence du compteur marché.
+      S.autoRoll.gen++; S.autoRoll.active = false; S.autoRoll.ceiling = 0;
+      S.marketTween = null;
       _geoQ           = [];
       _geoRunning     = false;
       _resetMapLayers();
@@ -2711,6 +2715,8 @@ async function loadPage(page) {
       // Premier paquet rendu (cards déjà vidé en tête de loadPage), scroll en haut.
       renderChunk(PAGE_SIZE);
       document.getElementById('res-panel').scrollTop = 0;
+      // Scéno B1 : le compteur tourne seul — amorce l'auto-déroulement du 1er palier.
+      if(S.buffer.length) nudgeAutoRoll();
 
       document.getElementById('stats-bar').classList.add('show');
       document.getElementById('skel').classList.remove('show');
@@ -2819,10 +2825,65 @@ async function loadMore() {
 }
 
 // ════════════════════════════════════════════════════════════════
+// AUTO-DÉROULEMENT EN PALIER (scéno B1) — on inverse la causalité : le
+// compteur tourne seul, le scroll ne fait que suivre. La boucle révèle
+// d'abord le buffer déjà fetché (zéro API, cadence AUTOROLL_MS) ; elle ne
+// tape l'upstream (loadMore, qui garde son sleep interne) que si le buffer
+// est vide ET upstream pas épuisé, avec une pause additionnelle pour rester
+// SOUS le limiter serveur (~2 req/s). Déroule par PALIER de AUTOROLL_PALIER
+// fiches puis marque une pause ; le scroll 80% relance le palier suivant.
+// Découplage respecté : agit sur le RENDU (renderChunk), jamais sur la garde
+// upstreamExhausted ni rawCount. Boucle séquentielle (await) → aucune rafale.
+// ════════════════════════════════════════════════════════════════
+var AUTOROLL_MS       = 260;   // cadence d'un palier (révélation buffer)
+var AUTOROLL_PALIER   = 250;   // fiches déroulées avant pause
+var AUTOROLL_FETCH_MS = 420;   // pause additionnelle après un fetch upstream
+
+S.autoRoll = { active: false, ceiling: 0, gen: 0 };
+
+async function runAutoRoll() {
+  if (S.autoRoll.active) return;            // pas de double-déclenchement
+  if (document.hidden) return;              // onglet caché → on ne déroule pas dans le vide
+  S.autoRoll.active = true;
+  var myGen = S.autoRoll.gen;               // token : une nouvelle recherche invalide cette boucle
+  try {
+    while (S.autoRoll.active && myGen === S.autoRoll.gen && !document.hidden) {
+      var market  = _displayMarket();
+      var ceiling = Math.min(S.autoRoll.ceiling, market);
+      if (S.loaded >= market)  break;       // marché atteint → fin
+      if (S.loaded >= ceiling) break;       // palier atteint → pause (reprise au scroll)
+      if (S.loaded < S.buffer.length) {
+        renderChunk(PAGE_SIZE);             // révélation pure du buffer — zéro appel API
+        await sleep(AUTOROLL_MS);
+      } else if (!S.upstreamExhausted) {
+        await loadMore();                   // 1 fetch upstream (loadMore garde son sleep)
+        await sleep(AUTOROLL_FETCH_MS);     // marge pour tenir sous le limiter serveur
+      } else {
+        break;                              // buffer vide + upstream épuisé → plus rien
+      }
+    }
+  } finally {
+    if (myGen === S.autoRoll.gen) S.autoRoll.active = false;
+  }
+}
+
+// Relance le déroulement pour le palier suivant (scroll 80%) ou l'amorce
+// (1er paquet). Bump la borne d'un palier puis (re)lance la boucle si inactive.
+function nudgeAutoRoll() {
+  S.autoRoll.ceiling = S.loaded + AUTOROLL_PALIER;
+  runAutoRoll();
+}
+
+// Onglet caché → stoppe net (la boucle sortira à sa prochaine itération).
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden) S.autoRoll.active = false;
+});
+
+// ════════════════════════════════════════════════════════════════
 // UI STATE HELPERS
 // ════════════════════════════════════════════════════════════════
 function updateStats() {
-  document.getElementById('st-total').textContent    = (S.market || S.total).toLocaleString('fr-FR');
+  document.getElementById('st-total').textContent    = _displayMarket().toLocaleString('fr-FR');
   document.getElementById('st-complete').textContent = S.totalComplete.toLocaleString('fr-FR');
   document.getElementById('st-hot').textContent      = S.hotCount.toLocaleString('fr-FR');
   var rate = S.total > 0 ? Math.round(S.totalComplete / S.total * 100) : 0;
@@ -2838,11 +2899,90 @@ function updatePagination() {
   if(pg) pg.style.display = 'none';
 }
 function updateCountDisplay() {
-  var market = S.market || S.total;
+  var market = _displayMarket();
   document.getElementById('res-count').textContent =
     S.loaded.toLocaleString('fr-FR') + ' / ' + market.toLocaleString('fr-FR') + ' chargées';
   document.getElementById('res-title').textContent =
     (S.nafLabel || 'Leads') + ' · ' + market.toLocaleString('fr-FR');
+}
+
+// ════════════════════════════════════════════════════════════════
+// CONVERGENCE DU COMPTEUR MARCHÉ (scéno B1)
+// Le marché s'affiche à TROIS endroits qui lisent tous _displayMarket() :
+//   a) titre panneau (res-title)   b) sous-titre « x / y chargées » (res-count)
+//   c) tuile KPI carte (st-total + kpi-leads)
+// _displayMarket() renvoie : la valeur du tween en cours si actif, sinon le
+// marché réel/extrapolé (S.market). Au lancement on affiche l'extrapolé
+// (« whaou » initial) ; quand /api/search-count répond, on GLISSE vers le
+// compte exact par tween, puis S.market prend la vérité (affichages + gardes).
+// ════════════════════════════════════════════════════════════════
+function _displayMarket() {
+  if (S.marketTween != null) return Math.round(S.marketTween);
+  return S.market || S.total;
+}
+
+// Tween numérique de la valeur marché affichée vers `target`. Les 3 points de
+// lecture bougent ENSEMBLE (via _displayMarket()) ; kpi-leads est rafraîchi
+// directement à chaque frame pour éviter le coût async d'applyMapKpis (rappelé
+// une seule fois à la fin pour resettler les autres KPI).
+function _tweenMarketTo(target) {
+  var from = S.market || S.total || 0;
+  if (!Number.isFinite(target) || target <= 0 || target === from) {
+    if (Number.isFinite(target) && target > 0) S.market = target;
+    S.marketTween = null;
+    updateStats(); updateCountDisplay(); applyMapKpis();
+    return;
+  }
+  var t0 = null, dur = 650;
+  S.marketTween = from;
+  function frame(ts) {
+    if (t0 === null) t0 = ts;
+    var p = Math.min(1, (ts - t0) / dur);
+    var eased = 1 - Math.pow(1 - p, 3);            // easeOutCubic
+    S.marketTween = from + (target - from) * eased;
+    updateStats(); updateCountDisplay();
+    var k = document.getElementById('kpi-leads');
+    if (k) k.textContent = Math.round(S.marketTween).toLocaleString('fr-FR');
+    if (p < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      S.market = target;                           // vérité posée (affichages + gardes)
+      S.marketTween = null;
+      updateStats(); updateCountDisplay(); applyMapKpis();
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+// Fil indépendant lancé au démarrage de la recherche : compte EXACT du
+// gisement via /api/search-count (mêmes params que la recherche en cours).
+// Ne bloque PAS l'affichage des fiches. À la réponse, fait converger le
+// marché ; { capped } ou erreur → on garde l'extrapolé.
+async function launchMarketCount() {
+  var loadNaf = selectedNAFCode, loadRegion = S.region;
+  var nafDotted = loadNaf;
+  if (nafDotted && nafDotted.length >= 4 && nafDotted.indexOf('.') === -1)
+    nafDotted = nafDotted.substring(0,2) + '.' + nafDotted.substring(2);
+  var regionCode = REGION_CODES[loadRegion] || '';
+  var deptFb  = (document.getElementById('sel-dept')?.value || '').trim();
+  var villeFb = (document.getElementById('sel-ville')?.value || '').trim();
+  try {
+    var villeCodeFb = villeFb ? await resolveCommuneCode(villeFb, deptFb) : null;
+    var url = '/api/search-count'
+      + '?activite_principale=' + encodeURIComponent(nafDotted)
+      + (regionCode ? '&region=' + regionCode : '')
+      + (deptFb ? '&departement=' + encodeURIComponent(deptFb) : '')
+      + (villeCodeFb ? '&code_commune=' + encodeURIComponent(villeCodeFb) : '');
+    var resp = await fetch(url);
+    if (!resp.ok) return;
+    var data = await resp.json();
+    // Stale guard : NAF/région changés pendant le comptage → on jette.
+    if (loadNaf !== selectedNAFCode || loadRegion !== S.region) return;
+    if (data && data.capped) return;               // gisement ≥ 10 000 → garder l'extrapolé
+    if (data && typeof data.count === 'number' && data.count > 0) _tweenMarketTo(data.count);
+  } catch(e) {
+    console.warn('[Leads] search-count indisponible:', e.message);
+  }
 }
 
 function updateExportBar() {
@@ -2926,6 +3066,7 @@ function startSearch() {
   document.getElementById('exp-bar').classList.remove('show');
   document.getElementById('stats-bar').classList.remove('show');
   loadPage(1);
+  launchMarketCount();   // fil parallèle (scéno B1) : convergence du compteur marché
 }
 
 function retryLastPage() {
@@ -3337,7 +3478,7 @@ else buildIndex();
   var panel = document.getElementById('res-panel');
   if(!panel) return;
   panel.addEventListener('scroll', function() {
-    if(panel.scrollTop + panel.clientHeight >= panel.scrollHeight * 0.8) loadMore();
+    if(panel.scrollTop + panel.clientHeight >= panel.scrollHeight * 0.8) nudgeAutoRoll();
   });
 })();
 

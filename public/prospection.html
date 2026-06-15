@@ -1822,17 +1822,45 @@ var DEPT_VILLES = {
   '37':['Tours','Joué-lès-Tours','Saint-Cyr-sur-Loire','Amboise']
 };
 
-function populateVilleSelect(dept) {
+// Cache communes par département (évite de refetch geo.api à chaque changement,
+// même logique que COMMUNE_CODE_CACHE). Clé = code département.
+var DEPT_COMMUNES_CACHE = {};
+
+// Menu Ville peuplé depuis geo.api.gouv (toutes les communes réelles du dept),
+// API déjà utilisée ici (resolveCommuneCode, zoom dept). value = CODE INSEE →
+// le filtre serveur code_commune est exact (zéro fragilité accents/apostrophes)
+// et le double-filtre client par libellé devient inutile.
+async function populateVilleSelect(dept) {
   var sel = document.getElementById('sel-ville');
   // Ville optionnelle : « Toutes les villes » (value "") = pas de filtre, sélectionnable.
   // Le placeholder « Sélectionner » est l'invite ; ni l'un ni l'autre ne bloque le lancement.
-  var html = '<option value="" disabled selected>Sélectionner</option>'
-           + '<option value="">Toutes les villes</option>';
-  var villes = DEPT_VILLES[dept] || [];
-  villes.forEach(function(v) {
-    html += '<option value="'+v+'">'+v+'</option>';
-  });
-  sel.innerHTML = html;
+  function render(communes) {
+    var html = '<option value="" disabled selected>Sélectionner</option>'
+             + '<option value="">Toutes les villes</option>';
+    communes.forEach(function(c) {
+      html += '<option value="' + c.code + '">' + esc(c.nom) + '</option>';
+    });
+    sel.innerHTML = html;
+  }
+  if (!dept) { render([]); return; }
+  if (DEPT_COMMUNES_CACHE[dept]) { render(DEPT_COMMUNES_CACHE[dept]); return; }
+  try {
+    var url = 'https://geo.api.gouv.fr/communes?codeDepartement=' + encodeURIComponent(dept)
+            + '&fields=nom,code&format=json';
+    var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var arr = await r.json();
+    if (!Array.isArray(arr)) throw new Error('payload inattendu');
+    var communes = arr.filter(function(c){ return c && c.code && c.nom; })
+                      .sort(function(a,b){ return a.nom.localeCompare(b.nom, 'fr'); });
+    DEPT_COMMUNES_CACHE[dept] = communes;
+    render(communes);
+  } catch(e) {
+    // Échec API : on retombe sur « Toutes les villes » seul — le département
+    // reste cherchable sans ville précise, pas d'erreur bloquante.
+    console.warn('[Leads] populateVilleSelect geo.api échec, ville libre:', dept, e && e.message);
+    render([]);
+  }
 }
 
 function onVilleChange() {
@@ -1962,7 +1990,7 @@ async function applyMapZoom() {
   console.info('[Leads] applyMapZoom', { ville: ville, dept: dept, region: region });
 
   if (ville) {
-    var villeCode = await resolveCommuneCode(ville, dept);
+    var villeCode = ville;   // sel-ville.value EST le code INSEE (peuplé via geo.api)
     if (villeCode) {
       var res = await fetchCommuneBounds(villeCode);
       if (res && res.type === 'bounds') {
@@ -2126,17 +2154,10 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     var q = 'activitePrincipaleEtablissement:' + nafDotted + ' AND etatAdministratifEtablissement:A AND uniteLegale.etatAdministratifUniteLegale:A';
     // Department + ville filter from selects
     var selectedDept = (document.getElementById('sel-dept')?.value || '').trim();
+    // sel-ville.value EST désormais le code INSEE (peuplé via geo.api) → filtre exact.
     var selectedVille = (document.getElementById('sel-ville')?.value || '').trim();
-    // Bug 3 fix : résolution code INSEE commune (match exact, tolère accents/tirets).
-    var villeCode = selectedVille ? await resolveCommuneCode(selectedVille, selectedDept) : null;
     if(selectedVille) {
-      if(villeCode) {
-        q += ' AND codeCommuneEtablissement:' + villeCode;
-      } else {
-        // Fallback (geo.api down ou commune introuvable) : ancien comportement
-        q += ' AND libelleCommuneEtablissement:' + selectedVille.toUpperCase();
-        if(selectedDept) q += ' AND codePostalEtablissement:' + selectedDept + '*';
-      }
+      q += ' AND codeCommuneEtablissement:' + selectedVille;
     } else if(selectedDept) {
       q += ' AND codePostalEtablissement:' + selectedDept + '*';
     } else if(depts.length) {
@@ -2240,15 +2261,15 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   // ── FALLBACK: recherche-entreprises.api.gouv.fr ──
   try {
     var deptFb = (document.getElementById('sel-dept')?.value || '').trim();
-    var villeFb = (document.getElementById('sel-ville')?.value || '').trim();
-    // Bug 2 fix : résolution code INSEE pour push upstream filter natif
-    // (avant : 24/25 résultats jetés client-side car recherche-entreprises
-    // recevait juste region= et nous filtions ensuite).
-    var villeCodeFb = villeFb ? await resolveCommuneCode(villeFb, deptFb) : null;
+    // sel-ville.value EST le code INSEE (peuplé via geo.api) → poussé tel quel en
+    // code_commune, filtre serveur exact. Plus de resolveCommuneCode(libellé).
+    var villeCodeFb = (document.getElementById('sel-ville')?.value || '').trim();
     // Labels lisibles pour le tracking serveur (table lead_search)
     var regionEl = document.getElementById('sel-region');
     var regionName = (regionEl && regionEl.options[regionEl.selectedIndex]) ? regionEl.options[regionEl.selectedIndex].text.trim() : '';
     var deptName = deptFb ? (DEPT_NAMES[deptFb] || '') : '';
+    var villeEl = document.getElementById('sel-ville');
+    var villeName = (villeCodeFb && villeEl && villeEl.selectedIndex >= 0) ? villeEl.options[villeEl.selectedIndex].text.trim() : '';
     var url = '/api/search'
       + '?activite_principale=' + encodeURIComponent(nafDotted)
       + (regionCode ? '&region=' + regionCode : '')
@@ -2260,7 +2281,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       // Aliases lisibles pour tracking/historique (lus côté serveur, pas upstream)
       + (deptFb ? '&code_departement=' + encodeURIComponent(deptFb) : '')
       + (deptName ? '&department_name=' + encodeURIComponent(deptName) : '')
-      + (villeFb ? '&city_name=' + encodeURIComponent(villeFb) : '')
+      + (villeName ? '&city_name=' + encodeURIComponent(villeName) : '')
       + '&per_page=25&page=' + page;
 
     var resp = await fetch(url);
@@ -2278,7 +2299,9 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     var items = [];
     // If specific dept selected, restrict to that dept only
     var allowedDepts = deptFb ? [deptFb] : depts;
-    var filterVille = villeFb ? villeFb.toUpperCase() : '';
+    // Plus de filtre ville client : le serveur filtre déjà par code_commune (code
+    // INSEE exact). L'ancien match par libellé (accents/apostrophe, etab choisi par
+    // dept) jetait à tort tous les résultats → cause du « marché N / 0 chargée ».
 
     data.results.forEach(function(r) {
       var matching = r.matching_etablissements || [];
@@ -2294,8 +2317,6 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       // If dept selected, skip if no local etab found in that dept
       if(deptFb && !localEtab) return;
       if(!localEtab) localEtab = matching[0] || r.siege || {};
-      // Ville filter: skip if commune doesn't match
-      if(filterVille && (localEtab.libelle_commune||'').toUpperCase().indexOf(filterVille)===-1) return;
       var etab = localEtab;
       var siren = r.siren || '';
       var siret = etab.siret || '';
@@ -2834,9 +2855,9 @@ async function launchMarketCount() {
     nafDotted = nafDotted.substring(0,2) + '.' + nafDotted.substring(2);
   var regionCode = REGION_CODES[loadRegion] || '';
   var deptFb  = (document.getElementById('sel-dept')?.value || '').trim();
-  var villeFb = (document.getElementById('sel-ville')?.value || '').trim();
+  // sel-ville.value EST le code INSEE → poussé tel quel (mêmes params que la recherche).
+  var villeCodeFb = (document.getElementById('sel-ville')?.value || '').trim();
   try {
-    var villeCodeFb = villeFb ? await resolveCommuneCode(villeFb, deptFb) : null;
     var url = '/api/search-count'
       + '?activite_principale=' + encodeURIComponent(nafDotted)
       + (regionCode ? '&region=' + regionCode : '')

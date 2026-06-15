@@ -86,11 +86,14 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 .search-engine {
   background: var(--card); border: 1px solid var(--border);
   border-radius: 20px; padding: 28px 32px 24px;
-  max-width: 900px; margin: 32px auto 32px;
+  max-width: 1300px; margin: 32px auto 32px;
   width: calc(100% - 96px);
   box-shadow: 0 4px 24px rgba(0,0,0,.06);
 }
-.search-grid { display: grid; grid-template-columns: 2.2fr 1.2fr 1.4fr 0.9fr auto; gap: 16px; align-items: end; }
+/* Secteur souple (1fr, ellipsis + title) ; les 3 champs géo à largeur uniforme
+   = pire cas commun mesuré (« 04 — Alpes-de-Haute-Provence », 28 car. ≈ 248px) →
+   régularité DA + zéro troncature. Bouton auto en bout de rangée. */
+.search-grid { display: grid; grid-template-columns: 1fr 248px 248px 248px auto; gap: 16px; align-items: end; }
 .field-label {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
@@ -197,8 +200,12 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 .btn-go.loading { background: #000; color: #fff; cursor: wait; }
 
 /* Responsive : en largeur réduite, le bouton passe pleine largeur sous la rangée */
-@media (max-width: 860px) {
-  .search-grid { grid-template-columns: 2.2fr 1.2fr 1.4fr 0.9fr; }
+/* Sous ~1280px les 3 colonnes fixes 248px + bouton ne tiennent plus : on bascule
+   en colonnes flexibles (les champs géo se partagent la rangée, bouton pleine
+   largeur dessous). Troncature des libellés extrêmes alors rattrapée par la liste
+   déroulante native + le title. */
+@media (max-width: 1280px) {
+  .search-grid { grid-template-columns: 1.6fr 1fr 1fr 1fr; }
   .search-grid > .btn-go { grid-column: 1 / -1; width: 100%; }
 }
 .spinner {
@@ -525,7 +532,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <!-- région -->
       <div>
         <div class="field-label">Région</div>
-        <select id="sel-region" onchange="onRegionChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px 0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
+        <select id="sel-region" onchange="onRegionChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px;font-size:13px;text-align:center;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
           <option value="" disabled selected>Sélectionner</option>
           <option value="ile-de-france">Île-de-France</option>
           <option value="auvergne-rhone-alpes">Auvergne-Rhône-Alpes</option>
@@ -546,7 +553,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <!-- département -->
       <div>
         <div class="field-label">Département</div>
-        <select id="sel-dept" onchange="onDeptChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px 0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
+        <select id="sel-dept" onchange="onDeptChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px;font-size:13px;text-align:center;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
           <option value="" disabled selected>Sélectionner</option>
         </select>
       </div>
@@ -554,7 +561,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <!-- ville -->
       <div>
         <div class="field-label">Ville</div>
-        <select id="sel-ville" onchange="onVilleChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px 0 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
+        <select id="sel-ville" onchange="onVilleChange()" style="height:44px;width:100%;border:1.5px solid var(--border);border-radius:10px;padding:0 32px;font-size:13px;text-align:center;font-family:var(--font);background:var(--card);color:var(--text);outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%223 4.5l3 3 3-3%22 stroke=%22%236E6E73%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 12px center">
           <option value="" disabled selected>Sélectionner</option>
         </select>
       </div>

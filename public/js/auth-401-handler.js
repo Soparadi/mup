@@ -18,7 +18,7 @@
   window.__AUTH_401_PATCHED = true
 
   // ── Whitelist des endpoints qui sont vrais indicateurs de session MUP ──
-  // Refonte post-incident /leads : avant on déclenchait sur tout 401 d'une URL
+  // Refonte post-incident /prospection : avant on déclenchait sur tout 401 d'une URL
   // contenant "/api/", ce qui faisait remonter à tort les 401 propagés par les
   // proxies upstream (INSEE Sirene OAuth expiré, recherche-entreprises rate
   // limit, etc.) comme "session expirée".

@@ -4,7 +4,7 @@
    + adresse 1 ligne + bouton "Ajouter" (état lead) ou
    mention "Déjà dans Pipeline" (état engaged).
    Doctrine 8 avril : MÊME conteneur, contenu adapté à l'état.
-   Phase 1 : /leads (cards panneau + popup Leaflet). /pipeline en
+   Phase 1 : /prospection (cards panneau + popup Leaflet). /pipeline en
    sprint séparé pour préserver drag&drop + openDetail.
    ───────────────────────────────────────────────────────────────── */
 (function () {

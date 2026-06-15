@@ -4,8 +4,8 @@
 // (optgroup + option). On en construit un index fuzzy interne, puis on
 // branche un input + un dropdown personnalisé dessus.
 //
-// Pattern porté à l'identique de public/leads.html (synonymes, scoring,
-// rendu, navigation clavier). À terme leads.html pourra l'importer aussi.
+// Pattern porté à l'identique de public/prospection.html (synonymes, scoring,
+// rendu, navigation clavier). À terme prospection.html pourra l'importer aussi.
 //
 // API publique :
 //   window.SectorAutocomplete.init({

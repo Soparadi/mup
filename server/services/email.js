@@ -108,13 +108,13 @@ export async function sendWelcomeVerify(user, token) {
 
 // ── sendWelcome ──
 // Email 2 (post-vérification email). Corps unique, identique pour tous.
-// Subject : 'Votre accès MovUP est ouvert'. CTA → /leads.
+// Subject : 'Votre accès MovUP est ouvert'. CTA → /prospection.
 // Idempotence (anti-double-envoi) gérée par le caller via user.welcome_email_sent_at.
 
 export async function sendWelcome(user) {
   if (!user?.email) throw new Error('user.email requis')
   const salutation = buildSalutation(user)
-  const ctaUrl = `${appUrl()}/leads`
+  const ctaUrl = `${appUrl()}/prospection`
   const tpl = await loadTemplate('email-welcome.html')
   const html = applyVars(tpl, {
     salutation,

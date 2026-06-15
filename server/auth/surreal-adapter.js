@@ -10,7 +10,7 @@ const VERIFY_TTL_MS = 24 * 3600 * 1000            // 24h pour email_verify
 const RESET_TTL_MS = 60 * 60 * 1000               // 1h pour password_reset
 
 // ── Cache mémoire LRU pour getSession ─────────────────────────────────
-// Évite les rafales 100+ queries SurrealDB lors d'une recherche /leads.
+// Évite les rafales 100+ queries SurrealDB lors d'une recherche /prospection.
 // Cache process-local (Map JS) → isolé par instance Railway. Si scale
 // horizontal >1 replica un jour, chaque réplique aura son cache propre,
 // divergence acceptable car TTL court (30s).

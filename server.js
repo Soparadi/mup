@@ -114,7 +114,7 @@ const globalApiLimiter = rateLimit({
 })
 app.use('/api', globalApiLimiter)
 
-// Limiters dédiés aux endpoints proxy à fort volume légitime sur /leads.
+// Limiters dédiés aux endpoints proxy à fort volume légitime sur /prospection.
 // Géocodage : la queue front cadence ~6.6 req/s = ~400/min en pic.
 // SIRENE : pagination upstream + recherches successives.
 // keyGenerator par défaut (ipKeyGenerator v8 = IPv6 /64, IPv4 par adresse).
@@ -386,7 +386,7 @@ function isFullyDiffusible(record, source) {
 }
 
 // ── pickLocalEtab — établissement local d'une fiche pour un périmètre dept.
-// Source de vérité unique (réplique leads.html:2410-2423 + BARRIER NAF) : 1er
+// Source de vérité unique (réplique prospection.html:2410-2423 + BARRIER NAF) : 1er
 // matching_etablissements dont le CP ∈ allowedDepts, sinon siège si son CP ∈
 // allowedDepts (ou allowedDepts vide). drop=true si un dept est demandé sans
 // établissement local (= dept-drop du scroll). Retourne aussi le siret (dédup)
@@ -599,7 +599,7 @@ app.use('/api', (req, res, next) => {
 // HTML protégées sans cookie session valide. Toute autre URL (landing,
 // login, légales, assets) tombe en next() vers express.static.
 const APP_HTML_ROUTES = new Set([
-  '/dashboard', '/leads', '/pipeline', '/agenda', '/mail', '/visio',
+  '/dashboard', '/prospection', '/pipeline', '/agenda', '/mail', '/visio',
   '/carte', '/contacts', '/devis', '/factures', '/frais', '/statistiques'
 ])
 const APP_HTML_PREFIXES = ['/account']
@@ -613,6 +613,13 @@ function isProtectedHtmlRoute(rawPath) {
   }
   return false
 }
+
+// ── Redirection 301 héritée : /leads → /prospection ──
+// La page Leads a été renommée Prospection (nomenclature 14 juin). On préserve
+// les bookmarks/liens existants. PLACÉE AVANT le gate d'auth : /prospection a
+// remplacé /leads dans APP_HTML_ROUTES, donc /leads n'est plus une route app —
+// sans cette 301 il tomberait en 404 via express.static.
+app.get('/leads', (req, res) => res.redirect(301, '/prospection'))
 
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next()
@@ -719,7 +726,7 @@ app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }))
 
 // ── /api/leads/engaged ──
 // Retourne l'union des SIRET et SIREN déjà engagés (Pipeline ∪ Contacts) pour
-// le userId courant. Sert au KPI "Déjà engagés" sur /leads pour signaler les
+// le userId courant. Sert au KPI "Déjà engagés" sur /prospection pour signaler les
 // fiches déjà prospectées et éviter le doublon.
 app.get('/api/leads/engaged', async (req, res) => {
   const userId = requireUserId(req, res)
@@ -769,7 +776,7 @@ app.post('/api/pipeline', async (req, res) => {
 
     // Quota leads (Phase 2 roadmap, commit 1) — ne s'applique QU'AUX ajouts
     // depuis la page Leads, marqués par body.source === 'SIRENE' (posé par
-    // leads.html addToPipeline). Les autres flux (visio/contacts/csv_import/
+    // prospection.html addToPipeline). Les autres flux (visio/contacts/csv_import/
     // manual/paste/facture_import/pipeline) passent sans lookup, sans
     // décompte, sans blocage : comportement strictement inchangé.
     //
@@ -3004,7 +3011,7 @@ app.put('/api/user-settings', async (req, res) => {
 
 // ── USER PLAN ── (1 record par user, défaut "gratuit" si absent)
 // PUT en MERGE pour cohabitation Stripe (payment_method écrit séparément du plan choisi)
-// et cohérence cross-pages (Statistiques + leads.html).
+// et cohérence cross-pages (Statistiques + prospection.html).
 
 // applyMonthlyReset + firstOfMonthIsoUTC déplacés dans
 // server/config/plan-quotas.js (source unique des quotas leads). Importés
@@ -3037,7 +3044,7 @@ app.put('/api/user-plan', async (req, res) => {
   // signup uniquement, JAMAIS par cette route. Test de PRÉSENCE de clé
   // (hasOwnProperty) — un plan:null ou plan:'' est aussi une tentative
   // d'écriture, à rejeter. Cette route ne porte plus que les compteurs
-  // leadsConsumed/leadsConsumedThisMonth (cf. C1 leads.html 747d7f1).
+  // leadsConsumed/leadsConsumedThisMonth (cf. C1 prospection.html 747d7f1).
   if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'plan')) {
     console.warn('[user-plan] rejet body avec champ plan — userId:', userId)
     return res.status(422).json({

@@ -415,7 +415,7 @@ router.get('/verify', async (req, res) => {
     // Premier clic : entrée directe dans l'action (recherche). Le dashboard
     // est vide pour un nouveau compte — la doctrine 'valeur perçue d'abord'
     // impose l'écran d'action. Le re-clic (l.380), profil retour, garde /dashboard.
-    res.redirect('/leads')
+    res.redirect('/prospection')
   } catch (e) {
     console.error('[auth:verify]', e.message)
     res.redirect('/verify?status=error&reason=server_error')

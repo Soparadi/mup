@@ -644,6 +644,10 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
             <span class="kpi-value" id="kpi-leads">0</span>
             <span class="kpi-label">Leads <span id="kpi-scope">—</span></span>
           </div>
+          <div class="kpi-card">
+            <span class="kpi-value" id="kpi-loaded">0</span>
+            <span class="kpi-label">Chargées</span>
+          </div>
         </div>
       </div>
       <div class="geo-bar" id="geo-bar" style="width:0%"></div>
@@ -2562,6 +2566,8 @@ async function loadPage(page) {
     document.getElementById('empty').classList.remove('show');
     document.getElementById('res-context').classList.remove('show');
     document.getElementById('cards').innerHTML = '';
+    var loadedEl0 = document.getElementById('kpi-loaded');
+    if (loadedEl0) loadedEl0.textContent = '0';
     document.getElementById('geo-bar').style.width = '0%';
     document.getElementById('geo-bar').style.opacity = '1';
   } else {
@@ -2816,6 +2822,9 @@ function updateCountDisplay() {
     S.loaded.toLocaleString('fr-FR') + ' / ' + market.toLocaleString('fr-FR') + ' chargées';
   document.getElementById('res-title').textContent =
     (S.nafLabel || 'Leads') + ' · ' + market.toLocaleString('fr-FR');
+  // Tuile KPI « Chargées » : nombre de fiches rendues, sans dénominateur.
+  var loadedEl = document.getElementById('kpi-loaded');
+  if (loadedEl) loadedEl.textContent = S.loaded.toLocaleString('fr-FR');
 }
 
 // ════════════════════════════════════════════════════════════════

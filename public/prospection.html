@@ -447,6 +447,25 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 .ba.pr { background: var(--text); color: #fff; border-color: var(--text); }
 .ba.pr:hover { background: #000; }
 
+/* ── Fiches à hauteur fixe uniforme (DA : régularité globale, pire cas) ──
+   Toutes les cartes du panneau ont la MÊME hauteur, calée sur le pire cas
+   (badge NAF + titre + raison sociale + adresse 2 lignes + bouton). Les
+   fiches courtes ont un vide en bas (assumé) ; les longues sont clampées
+   pour ne jamais dépasser. Scopé à #cards : la variante popup Leaflet
+   (.mup-card-popup, hors #cards) garde sa hauteur auto. */
+#cards .mup-card { height: 190px; overflow: hidden; }
+/* Bouton aligné en bas de chaque fiche, quelle que soit la longueur du contenu */
+#cards .mup-card-cta { margin-top: auto; }
+/* Badge NAF, nom, raison sociale : 1 ligne + ellipsis (pas de wrap) */
+#cards .mup-card-tag { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#cards .mup-card-title,
+#cards .mup-card-subtitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Adresse : 2 lignes max + ellipsis (couvre le pire cas multi-lignes) */
+#cards .mup-card-addr {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* ═══════════════════════════════════════════════
    EXPORT BAR
 ═══════════════════════════════════════════════ */

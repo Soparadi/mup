@@ -1166,17 +1166,20 @@ app.get('/api/search', async (req, res) => {
   }
 })
 
-// ── Comptage à blanc d'un gisement prospectable (geste 2/3) ──
-// Renvoie le nombre EXACT de fiches prospectables d'un gisement (le
-// « marché réel »), SANS charger ni retourner les fiches — un simple
-// compteur entier. Alimente la convergence du compteur scroll (scéno B1).
+// ── Comptage à blanc d'un gisement prospectable (gestes 2/3 + 4/4) ──
+// Renvoie le nombre EXACT de fiches que le scroll chargerait (le « marché
+// réel »), SANS charger ni retourner les fiches. Alimente la convergence
+// du compteur scroll (scéno B1).
 //
-// Réutilise À L'IDENTIQUE la construction d'URL upstream et les deux
-// filtres PURS de /api/search (isProspectable PUIS isFullyDiffusible) :
-// toute divergence ferait diverger ce compte du nombre réellement chargé.
-// N'applique PAS checkBlocklistBatch (impur/coûteux, écart négligeable) ni
-// la dédup per-user (hors marché, propre au pipeline). Lecture seule pure :
-// aucun write DB, aucun effet de bord. Gate auth héritée du middleware /api.
+// Rejoue À L'IDENTIQUE les QUATRE filtres du scroll, dans le même ordre :
+//   1. isProspectable(r)             — pur (calque /api/search)
+//   2. isFullyDiffusible(r,'etalab') — pur (calque /api/search)
+//   3. blocklist opt-out             — checkBlocklistBatch (calque /api/search:1128-1144)
+//   4. dédup pipeline du user        — parité stricte avec leads.html:2410-2429
+// (3 et 4 sont des retraits d'ensembles : l'ordre entre eux n'affecte pas le
+// total.) Toute divergence ferait diverger ce compte du nombre chargé.
+// Surcoût DB : ~ceil(SIRET/100) requêtes blocklist + 1 requête pipeline.
+// Lecture seule (aucun write). Gate auth héritée du middleware /api → req.userId.
 app.get('/api/search-count', async (req, res) => {
   // Construction d'URL upstream — calque strict de /api/search (~1078-1094).
   const base = new URLSearchParams()
@@ -1193,14 +1196,15 @@ app.get('/api/search-count', async (req, res) => {
     p.set('page', String(page))
     return 'https://recherche-entreprises.api.gouv.fr/search?' + p.toString()
   }
-  // Compte les fiches d'une page passant les DEUX filtres purs, dans le même
-  // ordre fonctionnel que /api/search : isProspectable PUIS isFullyDiffusible.
-  const countPage = (results) =>
+  // Filtres PURS 1+2 d'une page (ordre /api/search) → fiches survivantes.
+  // On ACCUMULE les fiches (pas un compteur) pour appliquer blocklist (1 batch
+  // global) puis dédup à la fin du parcours.
+  const keepPage = (results) =>
     Array.isArray(results)
-      ? results.filter(isProspectable).filter(r => isFullyDiffusible(r, 'etalab')).length
-      : 0
+      ? results.filter(isProspectable).filter(r => isFullyDiffusible(r, 'etalab'))
+      : []
   try {
-    // Page 1 : sonde le total brut (plafond 10 000) et amorce le compteur.
+    // Page 1 : sonde le total brut (plafond 10 000) et amorce l'accumulation.
     const r1 = await fetch(pageUrl(1))
     if (!r1.ok) return res.status(502).json({ error: 'Service temporairement indisponible' })
     const d1 = await r1.json()
@@ -1209,7 +1213,7 @@ app.get('/api/search-count', async (req, res) => {
       console.log(`[search-count] capped (total_results=${totalRaw})`)
       return res.json({ count: null, capped: true })
     }
-    let count = countPage(d1.results)
+    let survivors = keepPage(d1.results)
     let pagesScanned = 1
     const firstLen = Array.isArray(d1.results) ? d1.results.length : 0
     // Pagination complète : page 2 → épuisement réel du dataset. Borne haute
@@ -1227,14 +1231,82 @@ app.get('/api/search-count', async (req, res) => {
         let batchRaw = 0
         for (const d of pages) {
           batchRaw += (d && Array.isArray(d.results)) ? d.results.length : 0
-          count += countPage(d && d.results)
+          survivors = survivors.concat(keepPage(d && d.results))
         }
         pagesScanned += batch.length
         if (batchRaw === 0) stop = true                       // fin réelle du dataset
         else if (start + 5 <= lastPage) await new Promise(r => setTimeout(r, 200))
       }
     }
-    console.log(`[search-count] pages=${pagesScanned} count=${count}`)
+    const purCount = survivors.length
+
+    // ── Filtre 3 : blocklist opt-out — calque strict /api/search:1128-1144.
+    // Collecte siege.siret + matching_etablissements[].siret sur TOUT le
+    // gisement, un SEUL appel batch (chunké par 100 côté checkBlocklistBatch).
+    const allSirets = []
+    for (const r of survivors) {
+      if (r?.siege?.siret) allSirets.push(r.siege.siret)
+      if (Array.isArray(r?.matching_etablissements)) {
+        for (const e of r.matching_etablissements) if (e?.siret) allSirets.push(e.siret)
+      }
+    }
+    const blocked = await checkBlocklistBatch(allSirets)
+    const kept = blocked.size
+      ? survivors.filter(r => {
+          if (r?.siege?.siret && blocked.has(r.siege.siret)) return false
+          if (Array.isArray(r?.matching_etablissements) &&
+              r.matching_etablissements.some(e => e?.siret && blocked.has(e.siret))) return false
+          return true
+        })
+      : survivors
+
+    // ── Filtre 4 : dédup pipeline du user — parité stricte avec le scroll.
+    // Lecture DIRECTE du pipeline (même requête que GET /api/pipeline:702),
+    // jamais via l'endpoint HTTP gaté. existing = siren ET siret, falsy
+    // ignorés (réplique _getExistingSirets, leads.html:1705).
+    const existing = new Set()
+    try {
+      const db = await getDb()
+      const pres = await db.query('SELECT * FROM pipeline WHERE userId = $userId', { userId: req.userId })
+      const cards = pres[0] || []
+      for (const c of cards) {
+        if (c?.siren) existing.add(String(c.siren))
+        if (c?.siret) existing.add(String(c.siret))
+      }
+    } catch (e) {
+      console.warn('[search-count] lecture pipeline échouée (dédup ignorée) :', e.message)
+    }
+    // Réplique pickLocalEtab (leads.html:2410-2423) : le scroll teste UN seul
+    // siret par fiche, celui de l'établissement local choisi (1er matching dont
+    // le CP commence par le département demandé, sinon siège). Si un dept est
+    // demandé sans établissement local, le scroll ÉCARTE la fiche (drop).
+    const allowedDepts = req.query.departement ? String(req.query.departement).split(',') : []
+    const pickDedupSiret = (r) => {
+      let local = null
+      const matching = Array.isArray(r.matching_etablissements) ? r.matching_etablissements : []
+      for (const e of matching) {
+        const cp = String(e.code_postal || '')
+        if (allowedDepts.length && allowedDepts.indexOf(cp.slice(0, 2)) !== -1) { local = e; break }
+      }
+      if (!local && r.siege) {
+        const sCp = String(r.siege.code_postal || '')
+        if (!allowedDepts.length || allowedDepts.indexOf(sCp.slice(0, 2)) !== -1) local = r.siege
+      }
+      if (allowedDepts.length && !local) return { drop: true, siret: '' }
+      if (!local) local = matching[0] || r.siege || {}
+      return { drop: false, siret: String(local.siret || '') }
+    }
+    let count = 0
+    for (const r of kept) {
+      const { drop, siret } = pickDedupSiret(r)
+      if (drop) continue                                       // pas d'étab local en dept
+      const siren = String(r.siren || '')
+      if (siren && existing.has(siren)) continue
+      if (siret && existing.has(siret)) continue
+      count++
+    }
+
+    console.log(`[search-count] pages=${pagesScanned} pur=${purCount} post-blocklist=${kept.length} count=${count} sirets=${allSirets.length} pipeline=${existing.size}`)
     res.json({ count, capped: false })
   } catch(e) {
     res.status(502).json({ error: 'Service temporairement indisponible' })

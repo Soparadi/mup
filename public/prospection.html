@@ -2875,9 +2875,11 @@ function updateHint() {
   // Button is only active if NAF locked AND region AND department chosen
   if(S.nafLocked && S.naf && S.region && _dept) {
     btn.classList.add('active');
-    var rl = document.getElementById('sel-region');
-    hint.textContent = '✓ ' + S.naf + ' — ' + S.nafLabel + ' · ' + rl.options[rl.selectedIndex].text;
-    hint.style.color = 'var(--green)';
+    // Ligne de confirmation verte « ✓ CODE — Label · Région » retirée :
+    // redondante avec le pill secteur + les champs région/dept déjà remplis.
+    // Le bouton actif suffit comme signal « prêt à lancer ».
+    hint.textContent = '';
+    hint.style.color = '';
   } else if(S.nafLocked && S.naf && S.region) {
     btn.classList.remove('active');
     hint.textContent = 'Choisissez un département pour lancer la recherche';

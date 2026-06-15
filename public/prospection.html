@@ -164,22 +164,6 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 .acd-hl { background: #FEF08A; border-radius: 2px; padding: 0 1px; }
 .acd-empty { padding: 20px; text-align: center; font-size: 13px; color: var(--muted2); }
 
-/* NAF chip */
-.nchip { display: none; margin-top: 8px; align-items: center; gap: 6px; }
-.nchip.show { display: flex; }
-.nchip-l {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--text); color: #fff;
-  font-size: 11.5px; font-weight: 700;
-  padding: 4px 10px 4px 12px; border-radius: 20px;
-  font-family: var(--font);
-}
-.nchip-l button {
-  background: none; border: none; color: rgba(255,255,255,.5);
-  cursor: pointer; font-size: 16px; line-height: 1; padding: 0 0 0 2px;
-}
-.nchip-l button:hover { color: #fff; }
-
 /* region select */
 .sel-w { position: relative; }
 .sel-w select {
@@ -571,14 +555,6 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       </div>
 
     </div><!-- /search-row -->
-
-    <!-- NAF chip — below the grid so it doesn't break alignment -->
-    <div class="nchip" id="nchip" style="margin-top:8px">
-      <span class="nchip-l">
-        <span id="nchip-txt"></span>
-        <button onclick="clearSector()">×</button>
-      </span>
-    </div>
 
     <div class="sfooter">
       <div class="shint" id="hint">Tapez un métier ou un code APE, puis choisissez une région</div>
@@ -3280,7 +3256,6 @@ function onSectorInput(v) {
     S.nafLabel  = '';
     S.nafLocked = false;
     document.getElementById('inp-sector').classList.remove('locked');
-    document.getElementById('nchip').classList.remove('show');
   }
 
   updateHint();
@@ -3321,8 +3296,6 @@ function pickNAF(code, label) {
 
   document.getElementById('btn-clr').classList.add('show');
   document.getElementById('acd').classList.remove('open');
-  document.getElementById('nchip-txt').textContent = code + ' — ' + label;
-  document.getElementById('nchip').classList.add('show');
   updateHint();
 }
 function clearSector() {
@@ -3336,7 +3309,6 @@ function clearSector() {
   inp.classList.remove('locked');
   document.getElementById('btn-clr').classList.remove('show');
   document.getElementById('acd').classList.remove('open');
-  document.getElementById('nchip').classList.remove('show');
   updateHint();
 }
 document.addEventListener('click',function(e){

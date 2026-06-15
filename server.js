@@ -414,16 +414,21 @@ function pickLocalEtab(fiche, allowedDepts) {
 // sont pré-résolus par l'appelant et passés dans ctx. Compose les 5 filtres
 // dans l'ordre du scroll. Appelée par /api/search ET /api/search-count → une
 // seule définition, divergence impossible par construction.
-//   ctx = { allowedDepts:[], naf:'', ville:'', existing:Set, blocked:Set }
+//   ctx = { allowedDepts:[], naf:'', existing:Set, blocked:Set }
 // Asymétrie respectée : blocklist testée sur TOUS les SIRET (siège+matching),
 // dédup testée sur fiche.siren + le siret du SEUL établissement local.
+// Filtrage commune : assuré EXCLUSIVEMENT par code_commune (filtre upstream
+// Etalab exact, poussé dans /api/search ET /api/search-count). Pas de re-filtre
+// par libellé ici : il était redondant et fragile (pickLocalEtab choisit l'étab
+// par DÉPARTEMENT, pas par commune → libellé d'une autre commune → drop à tort ;
+// + accents/apostrophes/« Les »). Surtout, city_name n'étant pas transmis à
+// /api/search-count, il rendait ctx.ville divergent entre les deux endpoints
+// (« marché N / 0 chargée »). Retiré → parité stricte rétablie.
 function keepLead(fiche, ctx) {
   if (!isProspectable(fiche)) return false
   if (!isFullyDiffusible(fiche, 'etalab')) return false
   const L = pickLocalEtab(fiche, ctx.allowedDepts)
   if (L.drop) return false
-  // ville : commune de l'établissement local ≠ ville demandée → drop
-  if (ctx.ville && String(L.etab?.libelle_commune || '').toUpperCase().indexOf(ctx.ville) === -1) return false
   // NAF : exclut UNIQUEMENT sur inégalité stricte (naf étab vide = garder).
   if (ctx.naf && L.naf && L.naf !== ctx.naf) return false
   // blocklist : un quelconque SIRET de la fiche opt-out → drop
@@ -1208,7 +1213,6 @@ app.get('/api/search', async (req, res) => {
       const ctx = {
         allowedDepts: req.query.departement ? String(req.query.departement).split(',') : [],
         naf: String(req.query.code_naf || req.query.activite_principale || '').replace(/\./g, ''),
-        ville: String(req.query.city_name || '').toUpperCase(),
         existing,
         blocked
       }
@@ -1334,7 +1338,6 @@ app.get('/api/search-count', async (req, res) => {
     const ctx = {
       allowedDepts: req.query.departement ? String(req.query.departement).split(',') : [],
       naf: String(req.query.code_naf || req.query.activite_principale || '').replace(/\./g, ''),
-      ville: String(req.query.city_name || '').toUpperCase(),
       existing,
       blocked
     }

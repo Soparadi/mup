@@ -385,6 +385,59 @@ function isFullyDiffusible(record, source) {
   return false
 }
 
+// ── pickLocalEtab — établissement local d'une fiche pour un périmètre dept.
+// Source de vérité unique (réplique leads.html:2410-2423 + BARRIER NAF) : 1er
+// matching_etablissements dont le CP ∈ allowedDepts, sinon siège si son CP ∈
+// allowedDepts (ou allowedDepts vide). drop=true si un dept est demandé sans
+// établissement local (= dept-drop du scroll). Retourne aussi le siret (dédup)
+// et le NAF dotless (BARRIER NAF) de l'établissement choisi.
+function pickLocalEtab(fiche, allowedDepts) {
+  const depts = Array.isArray(allowedDepts) ? allowedDepts : []
+  let etab = null
+  const matching = Array.isArray(fiche.matching_etablissements) ? fiche.matching_etablissements : []
+  for (const e of matching) {
+    const cp = String(e?.code_postal || '')
+    if (depts.length && depts.indexOf(cp.slice(0, 2)) !== -1) { etab = e; break }
+  }
+  if (!etab && fiche.siege) {
+    const sCp = String(fiche.siege.code_postal || '')
+    if (!depts.length || depts.indexOf(sCp.slice(0, 2)) !== -1) etab = fiche.siege
+  }
+  if (depts.length && !etab) return { etab: null, siret: '', naf: '', drop: true }
+  if (!etab) etab = matching[0] || fiche.siege || {}
+  const naf = String(etab.activite_principale || fiche.activite_principale || '').replace(/\./g, '')
+  return { etab, siret: String(etab.siret || ''), naf, drop: false }
+}
+
+// ── keepLead — LA fonction de vérité « cette fiche compte-t-elle ? ».
+// PURE (aucun await/IO) : les 2 impurs (existing pipeline, blocked opt-out)
+// sont pré-résolus par l'appelant et passés dans ctx. Compose les 5 filtres
+// dans l'ordre du scroll. Appelée par /api/search ET /api/search-count → une
+// seule définition, divergence impossible par construction.
+//   ctx = { allowedDepts:[], naf:'', ville:'', existing:Set, blocked:Set }
+// Asymétrie respectée : blocklist testée sur TOUS les SIRET (siège+matching),
+// dédup testée sur fiche.siren + le siret du SEUL établissement local.
+function keepLead(fiche, ctx) {
+  if (!isProspectable(fiche)) return false
+  if (!isFullyDiffusible(fiche, 'etalab')) return false
+  const L = pickLocalEtab(fiche, ctx.allowedDepts)
+  if (L.drop) return false
+  // ville : commune de l'établissement local ≠ ville demandée → drop
+  if (ctx.ville && String(L.etab?.libelle_commune || '').toUpperCase().indexOf(ctx.ville) === -1) return false
+  // NAF : exclut UNIQUEMENT sur inégalité stricte (naf étab vide = garder).
+  if (ctx.naf && L.naf && L.naf !== ctx.naf) return false
+  // blocklist : un quelconque SIRET de la fiche opt-out → drop
+  if (ctx.blocked && ctx.blocked.size) {
+    if (fiche.siege?.siret && ctx.blocked.has(fiche.siege.siret)) return false
+    if (Array.isArray(fiche.matching_etablissements) &&
+        fiche.matching_etablissements.some(e => e?.siret && ctx.blocked.has(e.siret))) return false
+  }
+  // dédup pipeline : siren fiche OU siret de l'établissement local déjà détenu
+  if (fiche.siren && ctx.existing.has(String(fiche.siren))) return false
+  if (L.siret && ctx.existing.has(L.siret)) return false
+  return true
+}
+
 const REGION_DEPTS = {
   '11': ['75','77','78','91','92','93','94','95'],
   '24': ['18','28','36','37','41','45'],
@@ -1113,35 +1166,47 @@ app.get('/api/search', async (req, res) => {
         data.total_results = Math.round(data.total_results * ratio)
       }
     }
-    // ── Filtre diffusion INSEE (droit d'opposition) — AVANT le Rempart 1
-    // opt-out : réduit le batch SIRET passé ensuite à checkBlocklistBatch.
+    // ── Filtrage unique via keepLead (source de vérité, Étape 1 Voie 1) ──
+    // Remplace diffusion + blocklist et ajoute dept/ville/NAF/dédup, EN AVAL de
+    // la capture raw_count (le brut reste intact) et de l'extrapolation
+    // isProspectable (le « 182 » d'ouverture reste). data.results est ici
+    // l'échantillon isProspectable ; keepLead re-vérifie (pur, idempotent) puis
+    // applique les 5 autres filtres. Pré-résout les 2 impurs UNE fois/page.
     if (Array.isArray(data.results) && data.results.length) {
-      const before = data.results.length
-      data.results = data.results.filter(r => isFullyDiffusible(r, 'etalab'))
-      if (data.results.length !== before) console.log(`[diffusion] /api/search: ${before - data.results.length} fiche(s) exclue(s)`)
-    }
-    // ── Rempart 1 opt-out (RGPD art. 12) — filtrage silencieux upstream.
-    // recherche-entreprises ne porte pas de SIRET top-level : on collecte
-    // les SIRET candidats par fiche (siège + matching_etablissements) puis
-    // on retire toute fiche dont un SIRET est blocklisté. Sur-filtrage
-    // assumé (doctrine anti-revelation : aucune fiche masquée signalée).
-    if (Array.isArray(data.results) && data.results.length) {
-      const sirets = []
+      const brut = data.results.length
+      // Impur 1 — blocklist opt-out : collecte TOUS les SIRET de la page (siège
+      // + matching), un seul batch (calque doctrine anti-révélation).
+      const allSirets = []
       for (const r of data.results) {
-        if (r?.siege?.siret) sirets.push(r.siege.siret)
+        if (r?.siege?.siret) allSirets.push(r.siege.siret)
         if (Array.isArray(r?.matching_etablissements)) {
-          for (const e of r.matching_etablissements) if (e?.siret) sirets.push(e.siret)
+          for (const e of r.matching_etablissements) if (e?.siret) allSirets.push(e.siret)
         }
       }
-      const blocked = await checkBlocklistBatch(sirets)
-      if (blocked.size) {
-        data.results = data.results.filter(r => {
-          if (r?.siege?.siret && blocked.has(r.siege.siret)) return false
-          if (Array.isArray(r?.matching_etablissements) &&
-              r.matching_etablissements.some(e => e?.siret && blocked.has(e.siret))) return false
-          return true
-        })
+      const blocked = await checkBlocklistBatch(allSirets)
+      // Impur 2 — pipeline du user (dédup) : siren ET siret, falsy exclus
+      // (réplique _getExistingSirets). Fail-open : échec DB → Set vide, jamais
+      // de 500 (la dédup est ignorée, pas bloquante).
+      const existing = new Set()
+      try {
+        const db = await getDb()
+        const pres = await db.query('SELECT * FROM pipeline WHERE userId = $userId', { userId: req.userId })
+        for (const c of (pres[0] || [])) {
+          if (c?.siren) existing.add(String(c.siren))
+          if (c?.siret) existing.add(String(c.siret))
+        }
+      } catch (e) {
+        console.warn('[search] lecture pipeline échouée (dédup ignorée) :', e.message)
       }
+      const ctx = {
+        allowedDepts: req.query.departement ? String(req.query.departement).split(',') : [],
+        naf: String(req.query.code_naf || req.query.activite_principale || '').replace(/\./g, ''),
+        ville: String(req.query.city_name || '').toUpperCase(),
+        existing,
+        blocked
+      }
+      data.results = data.results.filter(f => keepLead(f, ctx))
+      console.log(`[search] page=${req.query.page || 1} brut=${brut} garde=${data.results.length}`)
     }
     res.json(data)
     // Fire-and-forget : tracking historique recherches. Lancé APRÈS res.json

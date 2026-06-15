@@ -313,7 +313,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
   font-family: var(--font); font-size: 10px; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.4px; line-height: 1.3;
 }
-.kpi-label strong, .kpi-label #kpi-scope { color: var(--text); font-weight: 600; }
+.kpi-label strong { color: var(--text); font-weight: 600; }
 .geo-bar {
   position: absolute; bottom: 0; left: 0; height: 3px;
   background: var(--text); transition: width .4s ease;
@@ -640,10 +640,6 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       <div id="map" style="position:relative">
         <!-- KPI overlay haut-droite : marché (leads Côtes-d'Armor) -->
         <div class="map-kpis" aria-label="Indicateurs de prospection">
-          <div class="kpi-card">
-            <span class="kpi-value" id="kpi-leads">0</span>
-            <span class="kpi-label">Leads <span id="kpi-scope">—</span></span>
-          </div>
           <div class="kpi-card">
             <span class="kpi-value" id="kpi-loaded">0</span>
             <span class="kpi-label">Chargées</span>
@@ -2014,36 +2010,6 @@ async function applyMapZoom() {
   map.setView([46.5, 2.5], 6, { animate: false });
 }
 
-// ── Helpers + logique KPI overlay carte ────────────────────────────────
-// 3 KPI sans overlap : marché filtré, contacts ajoutés (session courante),
-// déjà engagés (intersection SIRET recherche ∩ Contacts/Pipeline).
-function _toTitleCase(s) {
-  return String(s || '').toLowerCase().replace(/(^|[\s\-'])(\p{L})/gu, function(_, sep, ch) {
-    return sep + ch.toUpperCase();
-  });
-}
-
-function _scopeLabel() {
-  var ville = (document.getElementById('sel-ville')?.value || '').trim();
-  var dept = (document.getElementById('sel-dept')?.value || '').trim();
-  var region = (document.getElementById('sel-region')?.value || '').trim();
-  if (ville) return _toTitleCase(ville);
-  if (dept) return DEPT_NAMES[dept] || dept;
-  if (region) {
-    var rd = REGIONS[region];
-    return (rd && rd.label) || region;
-  }
-  return 'France';
-}
-
-// Calcule KPI 1 (marché) après chaque chargement.
-function applyMapKpis() {
-  var leadsEl = document.getElementById('kpi-leads');
-  var scopeEl = document.getElementById('kpi-scope');
-  if (leadsEl) leadsEl.textContent = (_displayMarket() || 0).toLocaleString('fr-FR');
-  if (scopeEl) scopeEl.textContent = _scopeLabel();
-}
-
 // ── Câblage défensif ceinture-bretelles : event listeners JS en plus des
 // attributs onchange="..." HTML. Couvre le cas où l'attribut HTML serait
 // stale (cache navigateur servant l'ancien markup) ou écrasé par un script
@@ -2688,7 +2654,6 @@ function renderChunk(n) {
   S.hasMore = S.loaded < S.market;
   updateCountDisplay();
   updateExportBar();
-  applyMapKpis();
   return rendered;
 }
 
@@ -2829,9 +2794,9 @@ function updateCountDisplay() {
 
 // ════════════════════════════════════════════════════════════════
 // CONVERGENCE DU COMPTEUR MARCHÉ (scéno B1)
-// Le marché s'affiche à TROIS endroits qui lisent tous _displayMarket() :
+// Le marché s'affiche à DEUX endroits qui lisent tous _displayMarket() :
 //   a) titre panneau (res-title)   b) sous-titre « x / y chargées » (res-count)
-//   c) tuile KPI carte (st-total + kpi-leads)
+// (st-total dans le panneau stats lit aussi _displayMarket()).
 // _displayMarket() renvoie : la valeur du tween en cours si actif, sinon le
 // marché réel/extrapolé (S.market). Au lancement on affiche l'extrapolé
 // (« whaou » initial) ; quand /api/search-count répond, on GLISSE vers le
@@ -2842,15 +2807,14 @@ function _displayMarket() {
   return S.market || S.total;
 }
 
-// Tween numérique de la valeur marché affichée vers `target`. Les 3 points de
-// lecture bougent ENSEMBLE (via _displayMarket()) ; kpi-leads est rafraîchi
-// directement à chaque frame, applyMapKpis n'étant rappelé qu'une fois à la fin.
+// Tween numérique de la valeur marché affichée vers `target`. Les points de
+// lecture bougent ENSEMBLE (via _displayMarket()) à chaque frame.
 function _tweenMarketTo(target) {
   var from = S.market || S.total || 0;
   if (!Number.isFinite(target) || target <= 0 || target === from) {
     if (Number.isFinite(target) && target > 0) S.market = target;
     S.marketTween = null;
-    updateStats(); updateCountDisplay(); applyMapKpis();
+    updateStats(); updateCountDisplay();
     return;
   }
   var t0 = null, dur = 650;
@@ -2861,14 +2825,12 @@ function _tweenMarketTo(target) {
     var eased = 1 - Math.pow(1 - p, 3);            // easeOutCubic
     S.marketTween = from + (target - from) * eased;
     updateStats(); updateCountDisplay();
-    var k = document.getElementById('kpi-leads');
-    if (k) k.textContent = Math.round(S.marketTween).toLocaleString('fr-FR');
     if (p < 1) {
       requestAnimationFrame(frame);
     } else {
       S.market = target;                           // vérité posée (affichages + gardes)
       S.marketTween = null;
-      updateStats(); updateCountDisplay(); applyMapKpis();
+      updateStats(); updateCountDisplay();
     }
   }
   requestAnimationFrame(frame);

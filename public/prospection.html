@@ -1783,51 +1783,12 @@ function onDeptChange() {
   hideError();    // efface le bandeau "Choisissez un département" dès qu'un dept est choisi
 }
 
-// Cities by department
-var DEPT_VILLES = {
-  '22':['Saint-Brieuc','Dinan','Lannion','Guingamp','Lamballe','Paimpol'],
-  '29':['Brest','Quimper','Morlaix','Concarneau','Landerneau','Douarnenez'],
-  '35':['Rennes','Saint-Malo','Fougères','Vitré','Redon','Cesson-Sévigné','Bruz'],
-  '56':['Vannes','Lorient','Pontivy','Auray','Ploërmel','Hennebont'],
-  '44':['Nantes','Saint-Nazaire','Rezé','Orvault','Saint-Herblain','Vertou'],
-  '49':['Angers','Cholet','Saumur','Avrillé','Les Ponts-de-Cé'],
-  '53':['Laval','Mayenne','Château-Gontier','Évron'],
-  '72':['Le Mans','La Flèche','Sablé-sur-Sarthe','Allonnes'],
-  '85':['La Roche-sur-Yon','Les Sables-d\'Olonne','Challans','Fontenay-le-Comte'],
-  '75':['Paris'],
-  '77':['Meaux','Melun','Chelles','Pontault-Combault'],
-  '78':['Versailles','Saint-Germain-en-Laye','Mantes-la-Jolie','Poissy'],
-  '91':['Évry','Corbeil-Essonnes','Massy','Savigny-sur-Orge'],
-  '92':['Boulogne-Billancourt','Nanterre','Courbevoie','Colombes','Issy-les-Moulineaux'],
-  '93':['Saint-Denis','Montreuil','Aubervilliers','Bobigny','Pantin'],
-  '94':['Créteil','Vitry-sur-Seine','Champigny-sur-Marne','Ivry-sur-Seine'],
-  '95':['Cergy','Argenteuil','Sarcelles','Garges-lès-Gonesse'],
-  '13':['Marseille','Aix-en-Provence','Arles','Martigues','Salon-de-Provence'],
-  '06':['Nice','Antibes','Cannes','Grasse','Saint-Laurent-du-Var'],
-  '83':['Toulon','Fréjus','Hyères','Draguignan'],
-  '84':['Avignon','Carpentras','Orange','Cavaillon'],
-  '33':['Bordeaux','Mérignac','Pessac','Talence','Libourne'],
-  '31':['Toulouse','Colomiers','Tournefeuille','Blagnac','Muret'],
-  '34':['Montpellier','Béziers','Sète','Lunel','Agde'],
-  '69':['Lyon','Villeurbanne','Vénissieux','Vaulx-en-Velin','Saint-Priest'],
-  '38':['Grenoble','Saint-Martin-d\'Hères','Échirolles','Voiron'],
-  '42':['Saint-Étienne','Roanne','Firminy','Montbrison'],
-  '59':['Lille','Roubaix','Tourcoing','Dunkerque','Villeneuve-d\'Ascq'],
-  '62':['Calais','Boulogne-sur-Mer','Arras','Lens','Liévin'],
-  '67':['Strasbourg','Haguenau','Schiltigheim','Illkirch-Graffenstaden'],
-  '68':['Mulhouse','Colmar','Saint-Louis','Wittenheim'],
-  '76':['Rouen','Le Havre','Dieppe','Sotteville-lès-Rouen'],
-  '14':['Caen','Hérouville-Saint-Clair','Lisieux','Bayeux'],
-  '45':['Orléans','Olivet','Fleury-les-Aubrais','Saint-Jean-de-la-Ruelle'],
-  '37':['Tours','Joué-lès-Tours','Saint-Cyr-sur-Loire','Amboise']
-};
-
-// Cache communes par département (évite de refetch geo.api à chaque changement,
-// même logique que COMMUNE_CODE_CACHE). Clé = code département.
+// Cache communes par département (évite de refetch geo.api à chaque changement).
+// Clé = code département.
 var DEPT_COMMUNES_CACHE = {};
 
 // Menu Ville peuplé depuis geo.api.gouv (toutes les communes réelles du dept),
-// API déjà utilisée ici (resolveCommuneCode, zoom dept). value = CODE INSEE →
+// API déjà utilisée ici (zoom dept commune). value = CODE INSEE →
 // le filtre serveur code_commune est exact (zéro fragilité accents/apostrophes)
 // et le double-filtre client par libellé devient inutile.
 async function populateVilleSelect(dept) {
@@ -2051,63 +2012,6 @@ async function applyMapZoom() {
   }
 })();
 
-// ── Résolution code INSEE commune via geo.api.gouv.fr ─────────────────
-// Bug 3 fix : libelleCommuneEtablissement uppercase mismatch sur communes
-// avec tirets/accents (Saint-Brieuc, Pont-l'Abbé, Île-Tudy). On résout le
-// code INSEE officiel (codeCommuneEtablissement = match exact, robuste).
-// API publique gratuite, sans auth, sans rate-limit officiel. CORS OK.
-// Cache local par session, persistant via localStorage pour éviter refetch.
-var COMMUNE_CODE_CACHE = null;
-var COMM_CACHE_VERSION = 2;
-function _commCacheLoad() {
-  if (COMMUNE_CODE_CACHE !== null) return;
-  try {
-    var v = parseInt(localStorage.getItem('mup_commune_codes_v') || '0', 10);
-    if (v !== COMM_CACHE_VERSION) {
-      localStorage.removeItem('mup_commune_codes');
-      localStorage.setItem('mup_commune_codes_v', String(COMM_CACHE_VERSION));
-      COMMUNE_CODE_CACHE = {};
-      console.info('[Leads] mup_commune_codes purged (version bump → ' + COMM_CACHE_VERSION + ')');
-      return;
-    }
-    COMMUNE_CODE_CACHE = JSON.parse(localStorage.getItem('mup_commune_codes') || '{}');
-  } catch(e) { COMMUNE_CODE_CACHE = {}; }
-}
-function _commCachePersist() {
-  try { localStorage.setItem('mup_commune_codes', JSON.stringify(COMMUNE_CODE_CACHE)); } catch(e){}
-}
-async function resolveCommuneCode(name, deptCode) {
-  if (!name) return null;
-  _commCacheLoad();
-  var key = (deptCode || '') + ':' + String(name).toLowerCase();
-  if (COMMUNE_CODE_CACHE[key]) {
-    console.info('[Leads] resolveCommuneCode cache hit:', key, '→', COMMUNE_CODE_CACHE[key]);
-    return COMMUNE_CODE_CACHE[key];
-  }
-  try {
-    var url = 'https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(name);
-    if (deptCode) url += '&codeDepartement=' + encodeURIComponent(deptCode);
-    url += '&fields=code,nom&limit=10';
-    console.info('[Leads] resolveCommuneCode GET', url);
-    var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!r.ok) { console.warn('[Leads] resolveCommuneCode HTTP', r.status); return null; }
-    var arr = await r.json();
-    if (!Array.isArray(arr) || !arr.length) { console.warn('[Leads] resolveCommuneCode no result for', name); return null; }
-    // Match exact case-insensitive sur le nom officiel, sinon premier résultat
-    var lower = String(name).toLowerCase();
-    var match = arr.find(function(c){ return c.nom && c.nom.toLowerCase() === lower; }) || arr[0];
-    var code = (match && match.code) || null;
-    if (code) {
-      COMMUNE_CODE_CACHE[key] = code;
-      _commCachePersist();
-    }
-    return code;
-  } catch(e) {
-    console.warn('[Leads] resolveCommuneCode error:', name, e && e.message);
-    return null;
-  }
-}
-
 // Init dept select and link to region change
 (function(){
   populateDeptSelect('');
@@ -2262,7 +2166,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
   try {
     var deptFb = (document.getElementById('sel-dept')?.value || '').trim();
     // sel-ville.value EST le code INSEE (peuplé via geo.api) → poussé tel quel en
-    // code_commune, filtre serveur exact. Plus de resolveCommuneCode(libellé).
+    // code_commune, filtre serveur exact. Plus de résolution libellé→code côté client.
     var villeCodeFb = (document.getElementById('sel-ville')?.value || '').trim();
     // Labels lisibles pour le tracking serveur (table lead_search)
     var regionEl = document.getElementById('sel-region');

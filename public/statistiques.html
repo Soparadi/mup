@@ -61,9 +61,8 @@
   .container{padding:24px 36px 60px;display:flex;flex-direction:column;gap:18px;}
 
   .grid-kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
-  .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px 14px;display:flex;flex-direction:column;gap:3px;position:relative;overflow:hidden;border-left:3px solid var(--border);}
-  .kpi-card.k-leads{border-left-color:#E67E00;}
-  .kpi-card.k-leads .kpi-value{color:var(--text);}
+  .kpi-card{background:#fdfcfa;border:1px solid #e6e3da;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:2px;position:relative;overflow:hidden;text-align:center;}
+  .kpi-card.k-leads .kpi-value{color:#B84C00;}
   .plan-pill{display:inline-flex;align-self:flex-start;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:3px 7px;border-radius:4px;margin-bottom:4px;}
   .plan-pill.demarrage{background:#E8E8ED;color:#6E6E73;}
   .plan-pill.activite{background:rgba(29,131,72,0.12);color:#1D8348;}
@@ -72,15 +71,16 @@
   .plan-gauge-fill{height:100%;transition:width .3s,background .3s;border-radius:2px;}
   .plan-restants{font-size:10.5px;color:#6E6E73;margin-top:4px;font-family:var(--mono);}
 
-  .kpi-card.k-prospects{border-left-color:#4338CA;} .kpi-card.k-prospects .kpi-value{color:#4338CA;}
-  .kpi-card.k-won{border-left-color:#1D8348;} .kpi-card.k-won .kpi-value{color:#1D8348;}
-  .kpi-card.k-cycle{border-left-color:#0A66C2;} .kpi-card.k-cycle .kpi-value{color:#0A66C2;}
-  .kpi-card.k-closing{border-left-color:var(--text);} .kpi-card.k-closing .kpi-value{color:var(--text);}
-  .kpi-label{font-size:9.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px;line-height:1;}
+  .kpi-card.k-prospects .kpi-value{color:#CC0000;}
+  .kpi-card.k-won .kpi-value{color:#1D8348;}
+  .kpi-card.k-cycle .kpi-value{color:#0A66C2;}
+  .kpi-card.k-closing .kpi-value{color:#1D1D1F;}
+  .kpi-label{font-size:9.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#1D1D1F;display:flex;align-items:center;justify-content:center;gap:5px;line-height:1;min-height:12px;}
   .kpi-label svg{flex-shrink:0;}
-  .kpi-value{font-size:32px;font-weight:900;line-height:1;letter-spacing:-.8px;font-family:var(--font);margin-top:6px;}
-  .kpi-sub{font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:3px;letter-spacing:.2px;}
+  .kpi-value{font-size:46px;font-weight:300;line-height:1;letter-spacing:-2px;font-family:var(--font);margin-top:4px;min-height:52px;display:flex;align-items:center;justify-content:center;}
+  .kpi-sub{font-size:9px;color:#6E6E73;font-family:var(--mono);margin-top:2px;letter-spacing:.2px;min-height:12px;}
   .kpi-spark{height:24px;margin-top:4px;width:100%;opacity:.85;}
+  @media(max-width:480px){.kpi-value{font-size:34px;letter-spacing:-1px;}}
 
   .grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;}
   .grid-1{display:grid;grid-template-columns:1fr;gap:14px;}
@@ -260,7 +260,7 @@
       </div>
       <div class="kpi-card k-prospects">
         <div class="kpi-label">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#CC0000" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
           Prospects actifs
         </div>
         <div class="kpi-value" id="kpi-prospects">—</div>
@@ -298,21 +298,21 @@
       <div class="card-header-light"><h3>Facturation 2026</h3><span class="card-subtitle" id="fact-period">12 mois</span></div>
       <div class="card-body">
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-          <div style="padding:14px 16px;background:var(--surface);border-radius:10px;border-left:3px solid #1D9E75;">
-            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">CA réalisé</div>
-            <div id="fact-realized" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:#1D9E75;margin-top:4px;font-family:var(--font);">0 €</div>
+          <div style="padding:14px 16px;background:#fdfcfa;border:1px solid #e6e3da;border-radius:16px;">
+            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#1D1D1F;">CA réalisé</div>
+            <div id="fact-realized" style="font-size:30px;font-weight:300;letter-spacing:-1px;color:#1D8348;margin-top:4px;font-family:var(--font);">0 €</div>
           </div>
-          <div style="padding:14px 16px;background:var(--surface);border-radius:10px;border-left:3px solid #EF9F27;">
-            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">CA en attente</div>
-            <div id="fact-pending" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:#EF9F27;margin-top:4px;font-family:var(--font);">0 €</div>
+          <div style="padding:14px 16px;background:#fdfcfa;border:1px solid #e6e3da;border-radius:16px;">
+            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#1D1D1F;">CA en attente</div>
+            <div id="fact-pending" style="font-size:30px;font-weight:300;letter-spacing:-1px;color:#F59E0B;margin-top:4px;font-family:var(--font);">0 €</div>
           </div>
-          <div style="padding:14px 16px;background:var(--surface);border-radius:10px;border-left:3px solid var(--text);">
-            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">Factures émises</div>
-            <div id="fact-count" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:var(--text);margin-top:4px;font-family:var(--font);">0</div>
+          <div style="padding:14px 16px;background:#fdfcfa;border:1px solid #e6e3da;border-radius:16px;">
+            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#1D1D1F;">Factures émises</div>
+            <div id="fact-count" style="font-size:30px;font-weight:300;letter-spacing:-1px;color:#1D1D1F;margin-top:4px;font-family:var(--font);">0</div>
           </div>
-          <div style="padding:14px 16px;background:var(--surface);border-radius:10px;border-left:3px solid #4338CA;">
-            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">Ticket moyen</div>
-            <div id="fact-avg" style="font-size:24px;font-weight:900;letter-spacing:-.5px;color:#4338CA;margin-top:4px;font-family:var(--font);">0 €</div>
+          <div style="padding:14px 16px;background:#fdfcfa;border:1px solid #e6e3da;border-radius:16px;">
+            <div style="font-size:9.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#1D1D1F;">Ticket moyen</div>
+            <div id="fact-avg" style="font-size:30px;font-weight:300;letter-spacing:-1px;color:#4338CA;margin-top:4px;font-family:var(--font);">0 €</div>
           </div>
         </div>
         <div style="margin-top:14px;font-size:10.5px;color:var(--muted2);font-style:italic;">

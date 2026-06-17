@@ -72,7 +72,14 @@
   .sb-today-date{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;}
 
   /* ── MAIN ── */
-  .main{background:var(--bg);overflow-y:auto;min-height:0;height:calc(100vh - var(--footer-real));padding:24px 28px;display:flex;flex-direction:column;gap:20px;}
+  .main{background:var(--bg);overflow-y:auto;min-height:0;height:calc(100vh - var(--footer-real));display:flex;flex-direction:column;}
+
+  /* ── PAGE HEADER (bandeau noir, gabarit app) ── */
+  .page-header{background:var(--text);color:#fff;padding:28px 36px;display:flex;align-items:center;justify-content:space-between;}
+  .page-title{font-size:24px;font-weight:800;letter-spacing:-.4px;}
+
+  /* ── CONTENU (padding/gap, ex-.main) ── */
+  .dash-content{padding:24px 28px;display:flex;flex-direction:column;gap:20px;}
 
   /* ── TOP BAR ── */
   .topbar{display:flex;flex-direction:column;gap:14px;}
@@ -265,7 +272,7 @@
     .shell{grid-template-columns:1fr;}
     .sidebar{position:fixed;left:-240px;top:0;bottom:0;z-index:160;width:220px;transition:left .25s ease;}
     .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,.2);}
-    .main{padding:56px 20px 24px;gap:12px;}
+    .dash-content{padding:56px 20px 24px;gap:12px;}
 
     /* Topbar: titre + KPI scroll */
     .topbar{gap:8px;}
@@ -333,7 +340,7 @@
     .shell{grid-template-columns:1fr;}
     .sidebar{position:fixed;left:-240px;top:0;bottom:0;z-index:160;width:220px;transition:left .25s ease;}
     .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,.15);}
-    .main{padding:56px 24px 24px;gap:14px;}
+    .dash-content{padding:56px 24px 24px;gap:14px;}
 
     /* Topbar */
     .topbar > div:last-child{
@@ -385,7 +392,7 @@
     .sidebar > div:first-child > span{display:none!important;}
     .sidebar > div:first-child{justify-content:center;padding:14px 8px;}
 
-    .main{padding:20px 28px;gap:16px;}
+    .dash-content{padding:20px 28px;gap:16px;}
 
     /* Topbar */
     .topbar > div:first-child h1{font-size:20px;}
@@ -431,7 +438,7 @@
   ════════════════════════════════ */
   @media (min-width: 1024px) and (max-width: 1279px) {
     .shell{grid-template-columns:180px 1fr;}
-    .main{padding:20px 28px;gap:16px;}
+    .dash-content{padding:20px 28px;gap:16px;}
     /* KPI: allow wrapping if needed */
     .topbar > div:last-child{flex-wrap:wrap;gap:6px;}
     /* Today: 5 cols (all) */
@@ -445,7 +452,7 @@
   ════════════════════════════════ */
   @media (min-width: 1280px) and (max-width: 1535px) {
     .shell{grid-template-columns:200px 1fr;}
-    .main{padding:24px 28px;gap:18px;}
+    .dash-content{padding:24px 28px;gap:18px;}
   }
 
   /* ════════════════════════════════
@@ -453,7 +460,7 @@
   ════════════════════════════════ */
   @media (min-width: 1536px) {
     .shell{grid-template-columns:240px 1fr;}
-    .main{padding:32px 40px;gap:22px;}
+    .dash-content{padding:32px 40px;gap:22px;}
     .grid-main{gap:20px;}
     .card-header{height:64px;padding:18px 22px;}
     .cal-header{height:64px!important;padding:18px 22px!important;}
@@ -480,13 +487,13 @@
   <!-- MAIN -->
   <main class="main">
 
+    <!-- PAGE HEADER (bandeau noir, gabarit app) -->
+    <div class="page-header"><div class="page-title">Dashboard</div></div>
+
+    <div class="dash-content">
+
     <!-- TOP BAR -->
     <div class="topbar">
-
-      <!-- LIGNE 1 : Titre -->
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <h1 style="font-size:22px;font-weight:900;letter-spacing:-.6px;color:var(--text);">Dashboard</h1>
-      </div>
 
       <!-- LIGNE 2 : Topbar KPI (style Pipeline) -->
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -666,6 +673,7 @@
       </div><!-- /mail-card -->
 
     </div><!-- /grid -->
+    </div><!-- /dash-content -->
   </main>
 </div>
 

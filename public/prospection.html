@@ -286,8 +286,9 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 }
 .map-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
 #map { flex: 1; height: 100%; min-height: 0; }
-/* ── KPI CHIPS (DA dashboard) — rangée en tête de zone de contenu ── */
+/* ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite de la carte ── */
 .kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0}
+#prospection-kpis{position:absolute;top:12px;right:12px;z-index:1000;box-shadow:0 2px 12px rgba(0,0,0,.08)}
 .kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-right:1px solid var(--border);transition:background .12s;flex-shrink:0}
 .kpi-chip:last-child{border-right:none}
 .kpi-chip:hover{background:var(--surface2)}
@@ -622,26 +623,6 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
     </div>
   </div>
 
-  <!-- ── KPI CHIPS (DA dashboard) — rangée en tête de zone de contenu ── -->
-  <div class="kpi-group" id="prospection-kpis" aria-label="Indicateurs de prospection" style="margin:14px 20px 0">
-    <div class="kpi-chip">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <div><div class="kpi-num" id="kpi-prospects-count" style="color:#B84C00">0</div><div class="kpi-lbl">Prospects trouvés</div></div>
-    </div>
-    <div class="kpi-chip">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
-      <div><div class="kpi-num" id="kpi-pipeline-count" style="color:#1D8348">0</div><div class="kpi-lbl">Pipeline</div></div>
-    </div>
-    <div class="kpi-chip">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M19 20H6a2 2 0 0 0-2 2"/><path d="M8 8h7M8 12h7"/></svg>
-      <div><div class="kpi-num" id="kpi-contacts-count" style="color:#4338CA">0</div><div class="kpi-lbl">Contacts</div></div>
-    </div>
-    <div class="kpi-chip">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      <div><div class="kpi-num" id="kpi-session-adds" style="color:#7C3AED">0</div><div class="kpi-lbl">Contacts ajoutés</div></div>
-    </div>
-  </div>
-
   <!-- ── CONTENT ── -->
   <div class="content-area">
 
@@ -653,8 +634,25 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
         </div>
       </div>
       <div id="map" style="position:relative">
-        <!-- Compteur « Prospects trouvés » déplacé dans la rangée KPI en tête
-             de zone de contenu (#kpi-prospects-count) ; overlay carte retiré. -->
+        <!-- ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite ── -->
+        <div class="kpi-group" id="prospection-kpis" aria-label="Indicateurs de prospection">
+          <div class="kpi-chip">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <div><div class="kpi-num" id="kpi-prospects-count" style="color:#B84C00">0</div><div class="kpi-lbl">Prospects trouvés</div></div>
+          </div>
+          <div class="kpi-chip">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+            <div><div class="kpi-num" id="kpi-pipeline-count" style="color:#1D8348">0</div><div class="kpi-lbl">Pipeline</div></div>
+          </div>
+          <div class="kpi-chip">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M19 20H6a2 2 0 0 0-2 2"/><path d="M8 8h7M8 12h7"/></svg>
+            <div><div class="kpi-num" id="kpi-contacts-count" style="color:#4338CA">0</div><div class="kpi-lbl">Contacts</div></div>
+          </div>
+          <div class="kpi-chip">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            <div><div class="kpi-num" id="kpi-session-adds" style="color:#7C3AED">0</div><div class="kpi-lbl">Contacts ajoutés</div></div>
+          </div>
+        </div>
       </div>
       <div class="geo-bar" id="geo-bar" style="width:0%"></div>
     </div>

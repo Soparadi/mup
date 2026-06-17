@@ -529,7 +529,7 @@
         </div>
         <span class="card-action" style="cursor:pointer" onclick="window.location.href='/pipeline'">Gérer <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
       </div>
-      <div id="dash-funnel" style="padding:18px 22px;display:grid;grid-template-columns:repeat(8,1fr);gap:6px;"></div>
+      <div id="dash-funnel" style="padding:18px 22px;display:grid;grid-template-columns:repeat(9,1fr);gap:6px;"></div>
       <div style="padding:0 22px 16px;display:grid;grid-template-columns:1fr 1fr;gap:18px;">
         <div>
           <div style="font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);">Conversion globale</div>
@@ -1051,9 +1051,10 @@ async function renderDashFunnel(cards){
     {id:'mailing',   name:'Mailing',     color:'#B84C00'},
     {id:'phoning',   name:'Phoning',     color:'#4338CA'},
     {id:'visio',     name:'Visio',       color:'#7C3AED'},
-    {id:'rdv',       name:'RDV',         color:'#1D8348'},
+    {id:'rdv',       name:'RDV',         color:'#0BBCD4'},
     {id:'devis',     name:'Devis',       color:'#0A66C2'},
-    {id:'nego',      name:'Négo',        color:'#EA580C'}
+    {id:'nego',      name:'Négo',        color:'#EA580C'},
+    {id:'won',       name:'Gagné',       color:'#1D8348'}
   ];
   var counts = {};
   FCOLS.forEach(function(c){ counts[c.id] = 0; });
@@ -1061,7 +1062,7 @@ async function renderDashFunnel(cards){
   cards.forEach(function(c){
     if(c.col === 'won') won++;
     else if(c.col === 'lost') lost++;
-    else if(counts[c.col] !== undefined) counts[c.col]++;
+    if(counts[c.col] !== undefined) counts[c.col]++;
   });
   var root = document.getElementById('dash-funnel');
   if(root){

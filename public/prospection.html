@@ -2963,24 +2963,12 @@ async function addToPipeline(leadId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newCard)
     });
-    // Phase 2 commit 2 : 402 pipeline_quota = plafond serveur atteint
-    // (autorité b4bf430). Déclenche la modale upgrade sans toast d'erreur
-    // générique. body.error === 'grace_active' laissé au comportement
-    // existant (trial-expired-modal H5b déjà branché là-dessus, ne pas
-    // interférer).
-    if (apiResp.status === 402) {
-      try {
-        var errBody = await apiResp.json();
-        if (errBody && errBody.error === 'pipeline_quota') {
-          if (typeof window.showPlafondModal === 'function') {
-            window.showPlafondModal(errBody.plan || 'demarrage');
-          } else {
-            showToast('Plafond de leads atteint — passez à un plan supérieur');
-          }
-          return;
-        }
-      } catch(e) { /* body non-JSON ou lecture impossible : tombe sur le throw ci-dessous */ }
-    }
+    // Geste A : le serveur n'émet plus de 402 'pipeline_quota' à l'ajout
+    // (décompte de quota retiré). Le déclenchement de showPlafondModal sur
+    // ajout est donc neutralisé. La définition de la modale est conservée
+    // (inerte) en vue du report du péage sur la Vitesse 2 (enrichissement).
+    // Les autres 402 éventuels (ex. grace_active) restent gérés en aval par
+    // le throw générique, comportement inchangé.
     if(!apiResp.ok) throw new Error('HTTP ' + apiResp.status);
     var apiResult = await apiResp.json();
     // Dual-write localStorage

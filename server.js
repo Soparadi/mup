@@ -804,25 +804,14 @@ app.post('/api/pipeline', async (req, res) => {
       })
     }
 
-    let consumedNow = 0
-    if (isLeadsAddition) {
-      const user = req.authUser
-      if (!user) return res.status(401).json({ error: 'unauthorized' })
-      const recResult = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
-      const rec = recResult[0]?.[0] || { userId, plan: 'gratuit', leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null }
-      consumedNow = await getLeadsConsumed(db, userId, rec, user)
-      const limit = getLeadLimit(user)
-      if (consumedNow >= limit) {
-        const plan = getEffectivePlan(user)
-        return res.status(402).json({
-          error: 'pipeline_quota',
-          plan,
-          quotaUsed: consumedNow,
-          quotaLimit: limit === Infinity ? null : limit,
-          period: plan === 'essai' ? 'essai' : 'monthly'
-        })
-      }
-    }
+    // Geste A : décompte de quota retiré à l'AJOUT au pipeline. Plus aucun
+    // plafond ni 402 'pipeline_quota' sur les ajouts source 'SIRENE' — l'ajout
+    // au pipeline est désormais libre. Le péage est déplacé vers la Vitesse 2
+    // (enrichissement de fiche), hors périmètre ici. Les helpers de quota
+    // (getLeadLimit/getLeadsConsumed/getEffectivePlan) et la route
+    // /api/user-plan/check-quota restent en place pour ce réemploi futur.
+    // Le Rempart 2 opt-out RGPD ci-dessus (blocklist SIRET) reste pleinement
+    // actif : il ne dépend pas du quota.
 
     const cleanId = cleanRecordId('pipeline', body?.id)
     let createdOk = false
@@ -841,51 +830,9 @@ app.post('/api/pipeline', async (req, res) => {
       createdOk = !!payload
     }
 
-    // Incrément +1 leadsConsumedThisMonth UNIQUEMENT si ajout Leads ET création
-    // effective réussie (atomicité stricte : un upsert qui update ne décompte
-    // pas, un CREATE qui retourne null ne décompte pas non plus). Échec
-    // d'incrément non bloquant : la card est rendue au client, log warn —
-    // pas de rollback pour ne pas dégrader l'UX (1 lead "gratuit" est moins
-    // grave qu'une card promise puis supprimée).
-    if (isLeadsAddition && createdOk) {
-      try {
-        // Hotfix régression e0ccd39 : UPDATE MERGE sur record inexistant
-        // est no-op silencieux en SurrealDB v3. Le retrait du PUT client
-        // (savePlan) au commit 2 a supprimé le mécanisme implicite de
-        // création du record user_plan. Sans upsert ici, le quota serveur
-        // ne s'incrémente jamais pour les users sans record préexistant
-        // → levier de conversion neutralisé. Pattern upsert identique à
-        // PUT /api/user-plan (l.2482-2501).
-        // req.authUser re-récupéré localement : la variable `user` du
-        // bloc check quota plus haut (l.657) est const dans son propre
-        // scope, pas accessible ici. Garanti non-null à ce stade : le
-        // bloc check quota a déjà fait if(!user) return 401 en amont.
-        const userForPlan = req.authUser
-        const sel = await db.query('SELECT id FROM type::record("user_plan", $id)', { id: userId })
-        const exists = sel[0]?.[0]
-        const updatedAt = new Date().toISOString()
-        if (exists) {
-          await db.query(
-            'UPDATE type::record("user_plan", $id) MERGE $body',
-            { id: userId, body: { leadsConsumedThisMonth: consumedNow + 1, updatedAt } }
-          )
-        } else {
-          await db.query(
-            'CREATE type::record("user_plan", $id) CONTENT $body',
-            { id: userId, body: {
-              userId,
-              plan: getEffectivePlan(userForPlan),
-              leadsConsumed: consumedNow + 1,
-              leadsConsumedThisMonth: consumedNow + 1,
-              lastResetDate: null,
-              updatedAt
-            }}
-          )
-        }
-      } catch (e) {
-        console.warn('[pipeline] incrément quota leads échoué :', e.message)
-      }
-    }
+    // Geste A : incrément leadsConsumedThisMonth retiré à l'ajout au pipeline.
+    // L'ajout d'une fiche (source 'SIRENE') ne décompte plus le quota. Le péage
+    // sera reporté sur l'enrichissement (Vitesse 2), hors périmètre ici.
 
     return res.status(payloadStatus).json(payload)
   } catch (err) {

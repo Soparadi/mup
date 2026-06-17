@@ -20,7 +20,7 @@
     --mono:'Geist Mono','SF Mono','Menlo',monospace;
     --footer-real:36px;
   }
-  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;display:flex;}
   html,body{height:100%;overflow:hidden;background:var(--bg);}
   ::-webkit-scrollbar{width:4px;height:4px;} ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 
@@ -55,10 +55,10 @@
   .btn-outline:hover{background:var(--surface);border-color:var(--text);}
 
   /* ── LAYOUT ── */
-  .shell{display:grid;grid-template-columns:220px 1fr;height:100vh;overflow:hidden;}
+  .shell{flex:1;display:flex;height:100vh;overflow:hidden;}
 
   /* ── SIDEBAR ── */
-  .sidebar{background:var(--surface);border-right:1px solid var(--border);padding:20px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  .sidebar{background:var(--surface);border-right:1px solid var(--border);padding:20px 12px;display:flex;flex-direction:column;gap:4px;width:220px;flex-shrink:0;height:100vh;overflow-y:auto;}
   .sb-label{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);padding:10px 10px 6px;margin-top:8px;}
   .sb-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--muted);transition:all .12s;text-decoration:none;}
   .sb-item:hover{color:var(--text);background:var(--surface2);}
@@ -72,7 +72,7 @@
   .sb-today-date{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;}
 
   /* ── MAIN ── */
-  .main{background:var(--bg);overflow-y:auto;min-height:0;height:calc(100vh - var(--footer-real));display:flex;flex-direction:column;}
+  .main{flex:1;min-width:0;background:var(--bg);overflow-y:auto;min-height:0;height:calc(100vh - var(--footer-real));display:flex;flex-direction:column;}
 
   /* ── PAGE HEADER (bandeau noir, gabarit app) ── */
   .page-header{background:var(--text);color:#fff;padding:28px 36px;display:flex;align-items:center;justify-content:space-between;}
@@ -253,25 +253,15 @@
      2xl 1536px+   (desktops, large monitors)
   ══════════════════════════════════════════ */
 
-  /* ── HAMBURGER BUTTON (mobile only) ── */
-  .hamburger{display:none;position:fixed;top:12px;left:12px;z-index:200;
-    width:36px;height:36px;background:var(--card);border:1px solid var(--border);
-    border-radius:10px;align-items:center;justify-content:center;cursor:pointer;
-    box-shadow:0 2px 8px rgba(0,0,0,.1);}
-  .hamburger span{display:block;width:16px;height:2px;background:var(--text);border-radius:2px;
-    transition:all .2s;}
-  .hamburger span+span{margin-top:3px;}
-  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:150;backdrop-filter:blur(2px);}
-  .sidebar-overlay.open{display:block;}
+  /* ── HAMBURGER / OVERLAY : neutralisés (sidebar fixe permanente) ──
+     Markup conservé mais inerte : forcés en display:none en permanence. */
+  .hamburger{display:none;}
+  .sidebar-overlay{display:none;}
 
   /* ════════════════════════════════
      XS — iPhone SE / small phones (< 480px)
   ════════════════════════════════ */
   @media (max-width: 479px) {
-    .hamburger{display:flex;}
-    .shell{grid-template-columns:1fr;}
-    .sidebar{position:fixed;left:-240px;top:0;bottom:0;z-index:160;width:220px;transition:left .25s ease;}
-    .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,.2);}
     .dash-content{padding:24px 20px 24px;gap:12px;}
 
     /* Topbar: titre + KPI scroll */
@@ -336,10 +326,6 @@
      SM — iPhone Pro Max / grands téléphones (480–767px)
   ════════════════════════════════ */
   @media (min-width: 480px) and (max-width: 767px) {
-    .hamburger{display:flex;}
-    .shell{grid-template-columns:1fr;}
-    .sidebar{position:fixed;left:-240px;top:0;bottom:0;z-index:160;width:220px;transition:left .25s ease;}
-    .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,.15);}
     .dash-content{padding:24px 24px 24px;gap:14px;}
 
     /* Topbar */
@@ -378,20 +364,6 @@
      MD — iPad portrait / tablettes (768–1023px)
   ════════════════════════════════ */
   @media (min-width: 768px) and (max-width: 1023px) {
-    /* Sidebar icônes compacte */
-    .shell{grid-template-columns:64px 1fr;}
-    .sidebar{padding:16px 8px;align-items:center;gap:2px;}
-    .sb-item{
-      justify-content:center;padding:10px 8px;border-radius:10px;
-      position:relative;width:100%;
-    }
-    /* Cache les labels, garde uniquement les icônes */
-    .sb-item > *:not(.sb-icon){display:none!important;}
-    .sb-icon{margin:0;width:26px!important;height:26px!important;}
-    .sb-label,.sb-badge,.sb-today,.sb-sep{display:none!important;}
-    .sidebar > div:first-child > span{display:none!important;}
-    .sidebar > div:first-child{justify-content:center;padding:14px 8px;}
-
     .dash-content{padding:20px 36px;gap:16px;}
 
     /* Topbar */
@@ -437,7 +409,6 @@
      LG — Laptop / iPad landscape (1024–1279px)
   ════════════════════════════════ */
   @media (min-width: 1024px) and (max-width: 1279px) {
-    .shell{grid-template-columns:180px 1fr;}
     .dash-content{padding:20px 36px;gap:16px;}
     /* KPI: allow wrapping if needed */
     .topbar > div:last-child{flex-wrap:wrap;gap:6px;}
@@ -451,7 +422,6 @@
      XL — Standard laptop (1280–1535px)
   ════════════════════════════════ */
   @media (min-width: 1280px) and (max-width: 1535px) {
-    .shell{grid-template-columns:200px 1fr;}
     .dash-content{padding:24px 36px;gap:18px;}
   }
 
@@ -459,7 +429,6 @@
      2XL — Large desktop (1536px+)
   ════════════════════════════════ */
   @media (min-width: 1536px) {
-    .shell{grid-template-columns:240px 1fr;}
     .dash-content{padding:32px 40px;gap:22px;}
     .grid-main{gap:20px;}
     .card-header{height:64px;padding:18px 22px;}

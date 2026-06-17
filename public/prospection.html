@@ -286,32 +286,13 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 }
 .map-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
 #map { flex: 1; height: 100%; min-height: 0; }
-/* KPI overlay sur la carte — haut-droite, charte cards .card existantes */
-.map-kpis {
-  position: absolute; top: 12px; right: 12px; z-index: 1000;
-  display: flex; gap: 8px; pointer-events: none;
-}
-.kpi-card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0,0,0,.06);
-  padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 4px; min-width: 110px;
-  pointer-events: auto;
-}
-.kpi-value {
-  /* Geist sans-serif (pas Geist Mono) : Geist Mono livre le 0 barré
-     comme glyphe principal, non désactivable via OpenType. tabular-nums
-     préserve l'alignement chiffres comme une mono. */
-  font-family: var(--font); font-size: 22px; font-weight: 600;
-  color: var(--text); line-height: 1;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
-}
-.kpi-label {
-  font-family: var(--font); font-size: 10px; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.4px; line-height: 1.3;
-}
-.kpi-label strong { color: var(--text); font-weight: 600; }
+/* ── KPI CHIPS (DA dashboard) — rangée en tête de zone de contenu ── */
+.kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0}
+.kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-right:1px solid var(--border);transition:background .12s;flex-shrink:0}
+.kpi-chip:last-child{border-right:none}
+.kpi-chip:hover{background:var(--surface2)}
+.kpi-num{font-size:22px;font-weight:900;line-height:1;letter-spacing:-.5px}
+.kpi-lbl{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
 .geo-bar {
   position: absolute; bottom: 0; left: 0; height: 3px;
   background: var(--text); transition: width .4s ease;
@@ -641,6 +622,26 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
     </div>
   </div>
 
+  <!-- ── KPI CHIPS (DA dashboard) — rangée en tête de zone de contenu ── -->
+  <div class="kpi-group" id="prospection-kpis" aria-label="Indicateurs de prospection" style="margin:14px 20px 0">
+    <div class="kpi-chip">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <div><div class="kpi-num" id="kpi-prospects-count" style="color:#B84C00">0</div><div class="kpi-lbl">Prospects trouvés</div></div>
+    </div>
+    <div class="kpi-chip">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+      <div><div class="kpi-num" id="kpi-pipeline-count" style="color:#1D8348">0</div><div class="kpi-lbl">Pipeline</div></div>
+    </div>
+    <div class="kpi-chip">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M19 20H6a2 2 0 0 0-2 2"/><path d="M8 8h7M8 12h7"/></svg>
+      <div><div class="kpi-num" id="kpi-contacts-count" style="color:#4338CA">0</div><div class="kpi-lbl">Contacts</div></div>
+    </div>
+    <div class="kpi-chip">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      <div><div class="kpi-num" id="kpi-session-adds" style="color:#7C3AED">0</div><div class="kpi-lbl">Contacts ajoutés</div></div>
+    </div>
+  </div>
+
   <!-- ── CONTENT ── -->
   <div class="content-area">
 
@@ -652,13 +653,8 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
         </div>
       </div>
       <div id="map" style="position:relative">
-        <!-- KPI overlay haut-droite : marché (leads Côtes-d'Armor) -->
-        <div class="map-kpis" aria-label="Indicateurs de prospection">
-          <div class="kpi-card">
-            <span class="kpi-value" id="kpi-loaded">0</span>
-            <span class="kpi-label">Chargées</span>
-          </div>
-        </div>
+        <!-- Compteur « Prospects trouvés » déplacé dans la rangée KPI en tête
+             de zone de contenu (#kpi-prospects-count) ; overlay carte retiré. -->
       </div>
       <div class="geo-bar" id="geo-bar" style="width:0%"></div>
     </div>
@@ -1717,6 +1713,60 @@ async function _getExistingSirets() {
   return sirets;
 }
 
+// ── KPI RANGÉE PROSPECTION (Pipeline / Contacts / Contacts ajoutés) ──
+// Compteur de session : repart de 0 à chaque visite de page.
+var sessionAdds = 0;
+
+// Cache contacts (table contacts), pour la garde de déduplication à l'ajout.
+var _contactsCache = null;
+var _contactsCacheTime = 0;
+
+async function _getExistingContacts() {
+  if (_contactsCache && (Date.now() - _contactsCacheTime < 30000)) {
+    return _contactsCache;
+  }
+  var contacts = [];
+  try {
+    var resp = await fetch('/api/contacts');
+    if (resp.ok) {
+      var data = await resp.json();
+      if (Array.isArray(data)) contacts = data;
+    }
+  } catch (e) {
+    console.warn('[Leads] _getExistingContacts API failed', e);
+  }
+  _contactsCache = contacts;
+  _contactsCacheTime = Date.now();
+  return contacts;
+}
+
+// KPI « Pipeline » : fiches EN COURS (ni gagnées ni perdues).
+async function refreshKpiPipeline() {
+  try {
+    var resp = await fetch('/api/pipeline');
+    if (!resp.ok) return;
+    var cards = await resp.json();
+    if (!Array.isArray(cards)) return;
+    var n = cards.filter(function (c) { return c.col !== 'lost' && c.col !== 'won'; }).length;
+    var el = document.getElementById('kpi-pipeline-count');
+    if (el) el.textContent = n.toLocaleString('fr-FR');
+  } catch (e) {
+    console.warn('[Leads] refreshKpiPipeline failed', e);
+  }
+}
+
+// KPI « Contacts » : contacts entreprises (source SIRENE).
+async function refreshKpiContacts() {
+  try {
+    var data = await _getExistingContacts();
+    var n = data.filter(function (c) { return c.source === 'SIRENE'; }).length;
+    var el = document.getElementById('kpi-contacts-count');
+    if (el) el.textContent = n.toLocaleString('fr-FR');
+  } catch (e) {
+    console.warn('[Leads] refreshKpiContacts failed', e);
+  }
+}
+
 // Department lists per region code
 var REGION_DEPTS = {
   '11':['75','77','78','91','92','93','94','95'],
@@ -2474,8 +2524,8 @@ async function loadPage(page) {
     document.getElementById('empty').classList.remove('show');
     document.getElementById('res-context').classList.remove('show');
     document.getElementById('cards').innerHTML = '';
-    var loadedEl0 = document.getElementById('kpi-loaded');
-    if (loadedEl0) loadedEl0.textContent = '0';
+    var prospectsEl0 = document.getElementById('kpi-prospects-count');
+    if (prospectsEl0) prospectsEl0.textContent = '0';
     document.getElementById('geo-bar').style.width = '0%';
     document.getElementById('geo-bar').style.opacity = '1';
   } else {
@@ -2725,8 +2775,9 @@ function updatePagination() {
 function updateCountDisplay() {
   // Tuile KPI « Chargées » : nombre de fiches rendues, sans dénominateur.
   // (Titre marché « métier · N » retiré — voir res-hdr supprimé.)
-  var loadedEl = document.getElementById('kpi-loaded');
-  if (loadedEl) loadedEl.textContent = S.loaded.toLocaleString('fr-FR');
+  // Chip « Prospects trouvés » (rangée KPI) : source unique S.loaded.
+  var prospectsEl = document.getElementById('kpi-prospects-count');
+  if (prospectsEl) prospectsEl.textContent = S.loaded.toLocaleString('fr-FR');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2993,6 +3044,60 @@ async function addToPipeline(leadId) {
     } catch(e3) {
       console.warn('[Leads] storage event dispatch failed', e3);
     }
+
+    // ── Effets KPI (l'ajout pipeline a réussi) ───────────────────────
+    // La fiche vient d'entrer en 'prospects' → comptée « en cours ».
+    var pipEl = document.getElementById('kpi-pipeline-count');
+    if (pipEl) {
+      var pipN = parseInt(pipEl.textContent.replace(/\D/g, ''), 10);
+      pipEl.textContent = ((isNaN(pipN) ? 0 : pipN) + 1).toLocaleString('fr-FR');
+    }
+
+    // Garde de dédup contacts (le serveur NE déduplique PAS) : on crée le
+    // contact entreprise seulement s'il n'existe pas déjà (siren OU siret).
+    // Isolé en try/catch : un échec ici ne bloque pas l'ajout pipeline.
+    try {
+      var existingContacts = await _getExistingContacts();
+      var already = existingContacts.some(function (c) {
+        return (lead.siren && String(c.siren) === String(lead.siren)) ||
+               (lead.siret && String(c.siret) === String(lead.siret));
+      });
+      if (!already) {
+        var contactBody = {
+          siren: lead.siren || '',
+          siret: lead.siret || '',
+          nom: lead.name,
+          company: lead.name,
+          name: lead.director || '',
+          email: lead.email || '',
+          phone: lead.phone || '',
+          address: lead.address || '',
+          source: 'SIRENE'
+        };
+        var cResp = await fetch('/api/contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(contactBody)
+        });
+        if (cResp.ok) {
+          _contactsCache = null; _contactsCacheTime = 0;   // invalide le cache
+          var conEl = document.getElementById('kpi-contacts-count');
+          if (conEl) {
+            var conN = parseInt(conEl.textContent.replace(/\D/g, ''), 10);
+            conEl.textContent = ((isNaN(conN) ? 0 : conN) + 1).toLocaleString('fr-FR');
+          }
+        } else {
+          console.warn('[Leads] addToPipeline POST contact HTTP ' + cResp.status);
+        }
+      }
+    } catch(eContact) {
+      console.warn('[Leads] addToPipeline POST contact failed', eContact);
+    }
+
+    // Compteur de session : +1 par ajout (repart de 0 à chaque visite).
+    sessionAdds++;
+    var saEl = document.getElementById('kpi-session-adds');
+    if (saEl) saEl.textContent = String(sessionAdds);
   } catch(e) {
     console.error('[Leads] addToPipeline API failed', e);
     showToast('Erreur ajout pipeline');
@@ -3277,6 +3382,18 @@ document.addEventListener('click',function(e){
 // ════════════════════════════════════════════════════════════════
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',buildIndex);
 else buildIndex();
+
+// ── Rangée KPI : alimentation au chargement (Pipeline + Contacts) ──
+(function initProspectionKpis(){
+  function boot(){
+    var sa = document.getElementById('kpi-session-adds');
+    if (sa) sa.textContent = String(sessionAdds);   // « 0 » à chaque visite
+    refreshKpiPipeline();
+    refreshKpiContacts();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true});
+  else boot();
+})();
 
 // ── Scroll infini : déclenche loadMore() à ~80% du panneau résultats ──
 (function attachInfiniteScroll(){

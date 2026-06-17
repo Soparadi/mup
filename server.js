@@ -814,20 +814,17 @@ app.post('/api/pipeline', async (req, res) => {
     // actif : il ne dépend pas du quota.
 
     const cleanId = cleanRecordId('pipeline', body?.id)
-    let createdOk = false
     let payload = null
     let payloadStatus = 201
     if (cleanId) {
       const { record, status, action } = await upsertRecord(db, 'pipeline', cleanId, body)
       if (action === 'updated') console.log(`[pipeline] upsert pipeline:${cleanId}`)
-      createdOk = action === 'created'
       payload = record
       payloadStatus = status
     } else {
       const result = await db.query('CREATE pipeline CONTENT $body', { body })
       payload = result[0]?.[0] || result[0] || null
       payloadStatus = 201
-      createdOk = !!payload
     }
 
     // Geste A : incrément leadsConsumedThisMonth retiré à l'ajout au pipeline.

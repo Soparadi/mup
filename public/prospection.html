@@ -646,7 +646,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
           </div>
           <div class="kpi-chip">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M19 20H6a2 2 0 0 0-2 2"/><path d="M8 8h7M8 12h7"/></svg>
-            <div><div class="kpi-num" id="kpi-contacts-count" style="color:#4338CA">0</div><div class="kpi-lbl">Contacts</div></div>
+            <div><div class="kpi-num" id="kpi-contacts-count" style="color:#4338CA">0</div><div class="kpi-lbl">Contacts entreprises</div></div>
           </div>
           <div class="kpi-chip">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -1753,11 +1753,12 @@ async function refreshKpiPipeline() {
   }
 }
 
-// KPI « Contacts » : contacts entreprises (source SIRENE).
+// KPI « Contacts » : contacts entreprises générés par MovUP (source pipeline,
+// même clé que l'onglet « Générés par MovUP » de la page Contacts).
 async function refreshKpiContacts() {
   try {
     var data = await _getExistingContacts();
-    var n = data.filter(function (c) { return c.source === 'SIRENE'; }).length;
+    var n = data.filter(function (c) { return c.source === 'pipeline'; }).length;
     var el = document.getElementById('kpi-contacts-count');
     if (el) el.textContent = n.toLocaleString('fr-FR');
   } catch (e) {
@@ -3070,7 +3071,8 @@ async function addToPipeline(leadId) {
           email: lead.email || '',
           phone: lead.phone || '',
           address: lead.address || '',
-          source: 'SIRENE'
+          source: 'pipeline',
+          entity_origine: 'mup'
         };
         var cResp = await fetch('/api/contacts', {
           method: 'POST',

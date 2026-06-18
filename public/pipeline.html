@@ -114,7 +114,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .modal-hdr{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .modal-title{font-size:15px;font-weight:700}
 .modal-x{width:26px;height:26px;border-radius:7px;border:none;background:var(--surface2);cursor:pointer;font-size:15px;color:var(--muted);display:flex;align-items:center;justify-content:center}
-.modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:12px;max-height:70vh;overflow-y:auto}
 .frow{display:flex;flex-direction:column;gap:4px}
 .flabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)}
 .finput{border:1.5px solid var(--border);border-radius:9px;padding:9px 12px;font-size:13px;font-family:var(--font);color:var(--text);background:var(--surface);width:100%;outline:none;transition:border-color .15s}
@@ -542,12 +542,36 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
     <div class="modal-body">
       <div class="f2">
         <div class="frow">
-          <div class="flabel">Prénom Nom</div>
-          <input class="finput" id="m-name" placeholder="Laurent Morin">
+          <div class="flabel">Raison sociale *</div>
+          <input class="finput" id="m-raison" placeholder="Dinan France">
         </div>
         <div class="frow">
-          <div class="flabel">Société</div>
-          <input class="finput" id="m-co" placeholder="Hôtel Le Grand">
+          <div class="flabel">Forme juridique</div>
+          <input class="finput" id="m-forme" placeholder="SAS, SARL…">
+        </div>
+      </div>
+      <div class="f2">
+        <div class="frow">
+          <div class="flabel">SIREN</div>
+          <input class="finput" id="m-siren" placeholder="839361508">
+        </div>
+        <div class="frow">
+          <div class="flabel">SIRET</div>
+          <input class="finput" id="m-siret" placeholder="839 361 508 00022">
+        </div>
+      </div>
+      <div class="frow">
+        <div class="flabel">Code NAF — Activité</div>
+        <input class="finput" id="m-naf" placeholder="56.10A — Restauration traditionnelle">
+      </div>
+      <div class="f2">
+        <div class="frow">
+          <div class="flabel">Secteur</div>
+          <input class="finput" id="m-sector" placeholder="Hôtellerie">
+        </div>
+        <div class="frow">
+          <div class="flabel">Site web</div>
+          <input class="finput" id="m-website" type="url" placeholder="https://…">
         </div>
       </div>
       <div class="f2">
@@ -571,19 +595,33 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
           </select>
         </div>
       </div>
+      <div class="frow">
+        <div class="flabel">Adresse</div>
+        <input class="finput" id="m-addr" placeholder="10 rue de la vigne 14650 Carpiquet">
+      </div>
       <div class="f2">
         <div class="frow">
-          <div class="flabel">Email</div>
-          <input class="finput" id="m-email" placeholder="contact@example.com" type="email">
+          <div class="flabel">Code postal</div>
+          <input class="finput" id="m-zip" placeholder="14650">
         </div>
         <div class="frow">
-          <div class="flabel">Téléphone</div>
-          <input class="finput" id="m-tel" placeholder="06 00 00 00 00">
+          <div class="flabel">LinkedIn</div>
+          <input class="finput" id="m-linkedin" type="url" placeholder="https://linkedin.com/company/…">
+        </div>
+      </div>
+      <div class="f2">
+        <div class="frow">
+          <div class="flabel">Facebook</div>
+          <input class="finput" id="m-facebook" type="url" placeholder="https://facebook.com/…">
+        </div>
+        <div class="frow">
+          <div class="flabel">Instagram</div>
+          <input class="finput" id="m-instagram" type="url" placeholder="https://instagram.com/…">
         </div>
       </div>
       <div class="frow">
-        <div class="flabel">Adresse</div>
-        <input class="finput" id="m-addr" placeholder="33460 Margaux">
+        <div class="flabel">WhatsApp</div>
+        <input class="finput" id="m-whatsapp" placeholder="Numéro sans espace">
       </div>
       <div class="frow">
         <div class="flabel">Notes</div>
@@ -1199,29 +1237,33 @@ function onDrop(e, colId) {
 
 // ── MODAL ──
 let editingId = null;
+const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-linkedin','m-facebook','m-instagram','m-whatsapp','m-notes'];
 function openModal(colId) {
   editingId = null;
-  document.getElementById('m-name').value = '';
-  document.getElementById('m-co').value = '';
-  document.getElementById('m-val').value = '';
-  document.getElementById('m-email').value = '';
-  document.getElementById('m-tel').value = '';
-  document.getElementById('m-notes').value = '';
+  MODAL_FIELDS.forEach(fid => document.getElementById(fid).value = '');
   document.getElementById('m-col').value = colId || 'prospects';
   document.getElementById('modal-title').textContent = 'Nouvelle fiche';
   document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(() => document.getElementById('m-name').focus(), 100);
+  setTimeout(() => document.getElementById('m-raison').focus(), 100);
 }
 function editCard(id) {
   const c = cards.find(x=>String(x.id)===String(id));
   if(!c) return;
   editingId = id;
-  document.getElementById('m-name').value = c.name||'';
-  document.getElementById('m-co').value = c.co||'';
+  document.getElementById('m-raison').value = c.co||c.name||'';
+  document.getElementById('m-forme').value = c.forme||'';
+  document.getElementById('m-siren').value = c.siren||'';
+  document.getElementById('m-siret').value = c.siret||'';
+  document.getElementById('m-naf').value = c.naf||'';
+  document.getElementById('m-sector').value = c.sector||'';
+  document.getElementById('m-website').value = c.website||'';
   document.getElementById('m-val').value = c.val||'';
-  document.getElementById('m-email').value = c.email||'';
-  document.getElementById('m-tel').value = c.tel||'';
   document.getElementById('m-addr').value = c.address||'';
+  document.getElementById('m-zip').value = c.zip||'';
+  document.getElementById('m-linkedin').value = c.linkedin||'';
+  document.getElementById('m-facebook').value = c.facebook||'';
+  document.getElementById('m-instagram').value = c.instagram||'';
+  document.getElementById('m-whatsapp').value = c.whatsapp||'';
   document.getElementById('m-notes').value = c.notes||'';
   document.getElementById('m-col').value = c.col||'prospects';
   document.getElementById('modal-title').textContent = 'Modifier la fiche';
@@ -1229,22 +1271,33 @@ function editCard(id) {
 }
 function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
 function saveCard() {
-  const name = document.getElementById('m-name').value.trim();
-  if(!name) { document.getElementById('m-name').focus(); return; }
+  const raison = document.getElementById('m-raison').value.trim();
+  if(!raison) { document.getElementById('m-raison').focus(); return; }
+  const fields = {
+    co: raison,
+    forme: document.getElementById('m-forme').value.trim(),
+    siren: document.getElementById('m-siren').value.trim(),
+    siret: document.getElementById('m-siret').value.trim(),
+    naf: document.getElementById('m-naf').value.trim(),
+    sector: document.getElementById('m-sector').value.trim(),
+    website: document.getElementById('m-website').value.trim(),
+    val: parseFloat(document.getElementById('m-val').value.replace(',', '.'))||0,
+    address: document.getElementById('m-addr').value.trim(),
+    zip: document.getElementById('m-zip').value.trim(),
+    linkedin: document.getElementById('m-linkedin').value.trim(),
+    facebook: document.getElementById('m-facebook').value.trim(),
+    instagram: document.getElementById('m-instagram').value.trim(),
+    whatsapp: document.getElementById('m-whatsapp').value.trim(),
+    notes: document.getElementById('m-notes').value.trim(),
+    col: document.getElementById('m-col').value
+  };
   if(editingId) {
     const c = cards.find(x=>x.id===editingId);
-    if(c) { c.name=name; c.co=document.getElementById('m-co').value.trim(); c.address=document.getElementById('m-addr').value.trim(); c.val=parseFloat(document.getElementById('m-val').value.replace(',', '.'))||0; c.email=document.getElementById('m-email').value.trim(); c.tel=document.getElementById('m-tel').value.trim(); c.notes=document.getElementById('m-notes').value.trim(); c.col=document.getElementById('m-col').value; }
+    if(c) Object.assign(c, fields);
   } else {
     cards.push({
       id: String('c'+Date.now()),
-      name,
-      co: document.getElementById('m-co').value.trim(),
-      address: document.getElementById('m-addr').value.trim(),
-      val: parseFloat(document.getElementById('m-val').value.replace(',', '.'))||0,
-      email: document.getElementById('m-email').value.trim(),
-      tel: document.getElementById('m-tel').value.trim(),
-      notes: document.getElementById('m-notes').value.trim(),
-      col: document.getElementById('m-col').value,
+      ...fields,
       days: 0,
       src: 'Manuel',
       entity_origine: 'mup',

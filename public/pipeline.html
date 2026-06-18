@@ -89,6 +89,13 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .kcard:hover .kcard-actions{display:flex}
 .kcard-btn{width:20px;height:20px;border-radius:5px;border:none;background:var(--surface2);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .12s}
 .kcard-btn:hover{background:var(--border2);color:var(--text)}
+/* Cartes sans bouton (dès Phoning) : tag secteur + montant centrés dans
+   l'espace libre entre titre (haut) et timeline (bas, margin-top:auto).
+   Le premier élément présent du groupe porte margin-top:auto → l'espace se
+   répartit au-dessus du groupe et au-dessus de la timeline → groupe centré. */
+.kcard--nobtn .kcard-foot{margin-top:auto}
+.kcard--nobtn .card-naf-pill{margin-top:auto}
+.kcard--nobtn .card-naf-pill ~ .kcard-foot{margin-top:0}
 
 /* ── COLONNES SPÉCIALES ── */
 .col.won .col-body{background:rgba(29,131,72,.04)}
@@ -1112,7 +1119,8 @@ function renderKanban() {
 
 function renderCard(c, color) {
   const valFmt = fmtVal(c.val);
-  return `<div class="kcard" id="kcard-${c.id}"
+  const hasBtn = ['prospects','linkedin','mailing'].includes(c.col);
+  return `<div class="kcard${hasBtn?'':' kcard--nobtn'}" id="kcard-${c.id}"
       draggable="true"
       ondragstart="onDragStart(event,'${c.id}')"
       ondragend="onDragEnd(event)"
@@ -1129,7 +1137,7 @@ function renderCard(c, color) {
       <div class="kcard-val">${valFmt||'0,00 €'}</div>
       <div class="kcard-days">J+${c.days||0}</div>
     </div>
-    ${['prospects','linkedin','mailing'].includes(c.col) ? `
+    ${hasBtn ? `
     ${renderProgress(c)}
     ${c.src?`<div class="kcard-src">↳ ${esc(c.src)}</div>`:''}
     <button class="d-btn" type="button" onclick="event.stopPropagation()" style="margin-top:auto;padding:4px 9px;font-size:10px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:transparent;color:var(--orange);border:1.5px solid var(--orange)">

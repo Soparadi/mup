@@ -89,13 +89,18 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .kcard:hover .kcard-actions{display:flex}
 .kcard-btn{width:20px;height:20px;border-radius:5px;border:none;background:var(--surface2);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .12s}
 .kcard-btn:hover{background:var(--border2);color:var(--text)}
-/* Cartes sans bouton (dès Phoning) : tag secteur + montant centrés dans
-   l'espace libre entre titre (haut) et timeline (bas, margin-top:auto).
-   Le premier élément présent du groupe porte margin-top:auto → l'espace se
-   répartit au-dessus du groupe et au-dessus de la timeline → groupe centré. */
-.kcard--nobtn .kcard-foot{margin-top:auto}
+/* Cartes sans bouton (dès Phoning) : tag secteur + montant en centre optique
+   dans l'espace libre entre titre (haut) et timeline (bas).
+   Le groupe est encadré par DEUX auto-margins symétriques : margin-top:auto sur
+   son premier élément présent (.card-naf-pill si tag, sinon .kcard-foot) et
+   margin-bottom:auto sur .kcard-foot (dernier élément du groupe). On neutralise
+   le margin-top:auto de la timeline sur ces cartes : tout le slack est alors
+   réparti à parts égales au-dessus et en dessous du groupe, et src+timeline,
+   sans auto, se tassent naturellement tout en bas. → air(haut)=air(bas). */
+.kcard--nobtn .kcard-foot{margin-top:auto;margin-bottom:auto}
 .kcard--nobtn .card-naf-pill{margin-top:auto}
 .kcard--nobtn .card-naf-pill ~ .kcard-foot{margin-top:0}
+.kcard--nobtn .kcard-progress{margin-top:0}
 
 /* ── COLONNES SPÉCIALES ── */
 .col.won .col-body{background:rgba(29,131,72,.04)}

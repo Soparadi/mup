@@ -17,6 +17,7 @@ import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
 import { normaliserSociete } from './lib/societes.js'
 import { analyserImport } from './lib/import.js'
+import { normalizePersonFields } from './lib/person-fields.js'
 import { router as authRouter } from './server/auth/routes.js'
 import { router as stripeRouter, webhookHandler as stripeWebhookHandler } from './server/routes/stripe.js'
 import { requireAuth, requireAuthHtml } from './server/middleware/requireAuth.js'
@@ -912,6 +913,9 @@ app.post('/api/contacts', async (req, res) => {
     if ('societe_id' in body && !(typeof body.societe_id === 'string' && body.societe_id.trim())) {
       body.societe_id = null
     }
+    // Brique A — face personne : champs additifs garantis + sync emails[]/email
+    // et telephones[]/phone. Non destructif (voir lib/person-fields.js).
+    Object.assign(body, normalizePersonFields(body))
     const db = await getDb()
     const cleanId = cleanRecordId('contacts', body?.id)
     if (cleanId) {
@@ -983,6 +987,8 @@ app.put('/api/contacts/:id', async (req, res) => {
     if ('societe_id' in cleanBody && !(typeof cleanBody.societe_id === 'string' && cleanBody.societe_id.trim())) {
       cleanBody.societe_id = null
     }
+    // Brique A — face personne (table contacts uniquement, jamais pipeline).
+    if (tb === 'contacts') Object.assign(cleanBody, normalizePersonFields(cleanBody))
     const sql = tb === 'pipeline'
       ? 'UPDATE type::record("pipeline", $id) CONTENT $body'
       : 'UPDATE type::record("contacts", $id) CONTENT $body'
@@ -1221,13 +1227,13 @@ async function ecrireImport(db, userId, plan) {
       const id = String(existant.id).replace(/^contacts:/, '')
       delete merged.id
       params['cid' + ci] = id
-      params['cbody' + ci] = merged
+      params['cbody' + ci] = normalizePersonFields(merged)
       stmts.push(`UPDATE type::record("contacts", $cid${ci}) CONTENT $cbody${ci};`)
       nbEnrichis++
     } else {
       const id = genId('c_')
       params['cid' + ci] = id
-      params['cbody' + ci] = {
+      params['cbody' + ci] = normalizePersonFields({
         userId,
         nom: societe ? societe.raison : fullName,
         contact_nom: fullName,
@@ -1243,7 +1249,7 @@ async function ecrireImport(db, userId, plan) {
         entity_origine: 'mup',
         created_at: now,
         updated_at: now
-      }
+      })
       stmts.push(`CREATE type::record("contacts", $cid${ci}) CONTENT $cbody${ci};`)
       nbCrees++
     }
@@ -1261,7 +1267,7 @@ async function ecrireImport(db, userId, plan) {
     if (bySocieteId.has(String(soc.id))) continue // déjà matérialisée
     const id = genId('c_')
     params['cid' + ci] = id
-    params['cbody' + ci] = {
+    params['cbody' + ci] = normalizePersonFields({
       userId,
       nom: s.raison_sociale || soc.raison || '',
       contact_nom: '',
@@ -1280,7 +1286,7 @@ async function ecrireImport(db, userId, plan) {
       entity_origine: 'mup',
       created_at: now,
       updated_at: now
-    }
+    })
     stmts.push(`CREATE type::record("contacts", $cid${ci}) CONTENT $cbody${ci};`)
     bySocieteId.set(String(soc.id), true)
     nbEntites++

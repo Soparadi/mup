@@ -913,15 +913,21 @@ function renderPersonBlock(p, idx){
 }
 
 function renderPeople(){
+  // RÈGLE DEUX FACES : si aucune personne liée, on affiche un bloc personne
+  // VIERGE par défaut (comme la face société s'affiche vide), sans clic.
+  // RÈGLE ANTI-FANTÔME : ce bloc n'est qu'un people[] SANS id -> aucun POST tant
+  // qu'aucun champ n'est saisi (savePerson n'est déclenché que par une édition).
+  if (!people.length) people.push(normalizePersonFields({}));
+
   const list = getPeople();
   const subtitle = document.getElementById('people-subtitle');
   const section = document.getElementById('people-section');
-  subtitle.textContent = list.length + ' personne' + (list.length>1?'s':'') + ' identifiée' + (list.length>1?'s':'');
+  // Compteur = personnes RÉELLES (record existant ou champ rempli) ; le bloc
+  // vierge par défaut n'est pas compté -> affiche "0 personne identifiée".
+  const count = list.filter(p => p.id || hasPersonIdentity(p)).length;
+  subtitle.textContent = count + ' personne' + (count>1?'s':'') + ' identifiée' + (count>1?'s':'');
 
-  const blocks = list.length
-    ? list.map((p, i) => renderPersonBlock(p, i)).join('')
-    : '<div class="contact-empty">Aucune personne identifiée.</div>';
-
+  const blocks = list.map((p, i) => renderPersonBlock(p, i)).join('');
   section.innerHTML = blocks
     + '<button class="add-contact" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Ajouter une personne</button>';
 }

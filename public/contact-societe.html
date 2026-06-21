@@ -232,6 +232,18 @@ body{display:flex;min-height:100vh}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;font-weight:600;z-index:300;transition:transform .25s cubic-bezier(.34,1.56,.64,1);box-shadow:0 4px 16px rgba(0,0,0,.18);display:flex;align-items:center;gap:8px}
 .toast.show{transform:translateX(-50%) translateY(0)}
 
+/* ── BLOC PERSONNE ÉDITABLE (panneau Personnes) ── */
+.person-block{background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:12px}
+.person-block .field{gap:5px}
+.person-block .input,.person-block .select,.person-block .textarea{font-size:13px;padding:8px 10px}
+.person-block .textarea{min-height:70px}
+.pf-row{display:flex;gap:8px}
+.pf-row .field{flex:1;min-width:0}
+.pf-multi{display:flex;flex-direction:column;gap:6px}
+.pf-add{align-self:flex-start;background:transparent;border:1px dashed var(--border-input);border-radius:var(--radius-xs);color:var(--muted);font-family:inherit;font-size:12px;font-weight:600;padding:6px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s}
+.pf-add:hover{color:var(--text);border-color:var(--text)}
+.pf-add svg{width:12px;height:12px;stroke:currentColor;stroke-width:2;fill:none}
+
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -578,12 +590,15 @@ body{display:flex;min-height:100vh}
 
 <div class="toast" id="toast"></div>
 
+<script src="/js/person-fields.js"></script>
 <script>
 // ── STATE ──
 let contactId = null;
 let contact = null;
 let saveTimer = null;
 let activityType = 'note';
+let people = [];            // Modèle A : records contacts liés par societe_id
+let personSaveTimers = {};  // débounce de sauvegarde par personne (clé = index)
 
 // ── BOOT : id depuis l'URL ──
 function readContactIdFromUrl(){
@@ -615,21 +630,79 @@ function initials(name){
   return String(name||'').split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0].toUpperCase()).join('') || '·';
 }
 
-// Personnes : Sprint 3 = à partir de contact_nom + email + phone du record courant.
-// Si vide : empty state. Sprint 4+ : champ personnes[] dédié.
-function getPeople(){
-  if (Array.isArray(contact.personnes) && contact.personnes.length){
-    return contact.personnes;
+// Personnes — MODÈLE A : chaque personne est un record contacts relié à la
+// société courante par societe_id. getPeople() renvoie l'état chargé en mémoire
+// (peuplé par loadPeople()). PAS de pseudo-personne fabriquée depuis la société.
+function getPeople(){ return people; }
+
+// Clé société normalisée (compare societe_id quelle que soit sa forme : string
+// "societes:xxx" ou objet RecordId {tb,id}). null si pas de société liée.
+function socKey(c){
+  const s = c && c.societe_id;
+  if (s == null || s === '') return null;
+  if (typeof s === 'string') return s;
+  if (typeof s === 'object'){
+    if (s.tb != null && s.id != null) return s.tb + ':' + (typeof s.id === 'object' ? JSON.stringify(s.id) : s.id);
+    if (s.id != null) return String(s.id);
+    if (typeof s.toString === 'function') return s.toString();
   }
-  if (contact.contact_nom || contact.contact || contact.email || contact.phone){
-    return [{
-      nom: contact.contact_nom || contact.contact || contact.nom || '—',
-      role: '',
-      email: contact.email || '',
-      phone: contact.phone || ''
-    }];
+  return String(s);
+}
+
+// id d'un record -> segment d'URL pour /api/contacts/:id (gère RecordId objet).
+function idToPath(id){
+  let s = id;
+  if (id && typeof id === 'object'){
+    if (id.tb != null && id.id != null) s = id.tb + ':' + (typeof id.id === 'object' ? id.id.toString() : id.id);
+    else s = (typeof id.toString === 'function') ? id.toString() : String(id);
   }
-  return [];
+  return encodeURIComponent(String(s));
+}
+
+// Une « vraie » personne : au moins un champ d'identité personne rempli.
+// Exclut les records « entité pure » (face personne vide) -> liste vide.
+function hasPersonIdentity(c){
+  if (!c) return false;
+  const e = (Array.isArray(c.emails) && c.emails.length) || c.email;
+  const t = (Array.isArray(c.telephones) && c.telephones.length) || c.phone;
+  return !!(c.civilite || c.prenom || c.nom_personne || c.contact_nom || c.poste || c.linkedin || e || t);
+}
+
+// Nom d'affichage d'une personne (civilité non incluse ici).
+function personDisplayName(p){
+  const full = [p.prenom, p.nom_personne].filter(Boolean).join(' ').trim();
+  return full || p.contact_nom || '—';
+}
+
+// Charge les personnes liées (records contacts de même societe_id). Le record
+// courant, s'il est lui-même une personne, est inclus PAR RÉFÉRENCE (= contact)
+// pour rester synchrone avec l'autosave société.
+async function loadPeople(){
+  people = [];
+  const myKey = socKey(contact);
+  let fetched = [];
+  if (myKey){
+    try {
+      const resp = await fetch('/api/contacts');
+      if (resp.ok){
+        const all = await resp.json();
+        fetched = (Array.isArray(all) ? all : [])
+          .filter(c => socKey(c) === myKey)
+          .map(normalizePersonFields)
+          .filter(hasPersonIdentity);
+      }
+    } catch(_){}
+  }
+  if (fetched.length){
+    people = fetched.map(p =>
+      String(p.id) === String(contactId)
+        ? Object.assign(contact, normalizePersonFields(contact)) // réf. partagée
+        : p
+    );
+  } else if (hasPersonIdentity(contact)){
+    // Société sans autre personne, ou record indépendant : la personne = le record courant.
+    people = [Object.assign(contact, normalizePersonFields(contact))];
+  }
 }
 
 // ── FETCH + POPULATE ──
@@ -649,6 +722,8 @@ async function loadContact(){
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     contact = await resp.json();
     if (!contact || typeof contact !== 'object') throw new Error('Réponse invalide');
+    contact = normalizePersonFields(contact); // garantit emails[]/telephones[] sur le record courant
+    await loadPeople();                        // personnes liées (modèle A)
     populate();
   } catch (e) {
     document.getElementById('fiche-name').textContent = 'Erreur de chargement';
@@ -793,30 +868,59 @@ function renderTimeline(){
   }).join('');
 }
 
+// Une ligne d'input répétable (email ou téléphone). `cls` = classe du champ.
+function pfRowInput(cls, type, value){
+  return '<input class="input ' + cls + '" type="' + type + '" value="' + esc(value || '') + '">';
+}
+
+// Bloc multi-valeurs (emails / téléphones) avec bouton « + ajouter ».
+function pfMulti(cls, type, label, values, addClass){
+  const list = (values && values.length ? values : ['']);
+  const rows = list.map(v => pfRowInput(cls, type, v)).join('');
+  return '<div class="field">'
+    + '<label class="label">' + label + '</label>'
+    + '<div class="pf-multi" data-multi="' + cls + '">' + rows + '</div>'
+    + '<button class="pf-add" type="button" data-add="' + addClass + '">'
+    +   '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Ajouter'
+    + '</button>'
+    + '</div>';
+}
+
+// Un bloc personne entièrement éditable. `idx` = index dans people[].
+function renderPersonBlock(p, idx){
+  const civ = () => {
+    const opt = (val, lbl) => '<option value="' + val + '"' + (String(p.civilite||'')===val ? ' selected' : '') + '>' + lbl + '</option>';
+    return '<select class="select pf-civilite">' + opt('', '—') + opt('M.', 'M.') + opt('Mme', 'Mme') + '</select>';
+  };
+  return '<div class="person-block" data-pidx="' + idx + '">'
+    + '<div class="pf-row">'
+    +   '<div class="field" style="flex:0 0 92px"><label class="label">Civilité</label>' + civ() + '</div>'
+    +   '<div class="field"><label class="label">Prénom</label><input class="input pf-prenom" type="text" value="' + esc(p.prenom) + '"></div>'
+    + '</div>'
+    + '<div class="field"><label class="label">Nom</label><input class="input pf-nom" type="text" value="' + esc(p.nom_personne) + '"></div>'
+    + '<div class="field"><label class="label">Poste</label><input class="input pf-poste" type="text" value="' + esc(p.poste) + '"></div>'
+    + '<div class="field"><label class="label">Anniversaire</label><input class="input pf-anniv" type="text" value="' + esc(p.anniversaire) + '"></div>'
+    + pfMulti('pf-email', 'email', 'Emails', p.emails, 'email')
+    + pfMulti('pf-phone', 'tel', 'Téléphones', p.telephones, 'phone')
+    + '<div class="field"><label class="label">LinkedIn</label><input class="input pf-linkedin" type="url" value="' + esc(p.linkedin) + '"></div>'
+    + '<div class="field"><label class="label">Instagram</label><input class="input pf-instagram" type="url" value="' + esc(p.instagram_perso) + '"></div>'
+    + '<div class="field"><label class="label">Facebook</label><input class="input pf-facebook" type="url" value="' + esc(p.facebook_perso) + '"></div>'
+    + '<div class="field"><label class="label">Note</label><textarea class="textarea pf-note">' + esc(p.note_personne) + '</textarea></div>'
+    + '<div class="field"><div class="check"><input type="checkbox" class="pf-rgpd" id="pf-rgpd-' + idx + '"' + (p.rgpd_consent_personne ? ' checked' : '') + '><label for="pf-rgpd-' + idx + '">Consentement RGPD obtenu pour cette personne.</label></div></div>'
+    + '</div>';
+}
+
 function renderPeople(){
-  const people = getPeople();
+  const list = getPeople();
   const subtitle = document.getElementById('people-subtitle');
   const section = document.getElementById('people-section');
-  subtitle.textContent = people.length + ' contact' + (people.length>1?'s':'') + ' identifié' + (people.length>1?'s':'');
+  subtitle.textContent = list.length + ' personne' + (list.length>1?'s':'') + ' identifiée' + (list.length>1?'s':'');
 
-  if (!people.length){
-    section.innerHTML = '<div class="contact-empty">Aucune personne identifiée.</div>'
-      + '<button class="add-contact" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Ajouter une personne</button>';
-    return;
-  }
+  const blocks = list.length
+    ? list.map((p, i) => renderPersonBlock(p, i)).join('')
+    : '<div class="contact-empty">Aucune personne identifiée.</div>';
 
-  const cardsHtml = people.map(p => {
-    const ini = initials(p.nom);
-    const role = p.role ? '<div class="contact-role">' + esc(p.role) + '</div>' : '';
-    const email = p.email ? '<div class="coord"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><a href="mailto:' + esc(p.email) + '">' + esc(p.email) + '</a></div>' : '';
-    const phone = p.phone ? '<div class="coord"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg><a href="tel:' + esc(p.phone.replace(/\s/g,'')) + '" class="coord-mono">' + esc(p.phone) + '</a></div>' : '';
-    return '<div class="contact-card">'
-      + '<div class="contact-header"><div class="avatar">' + ini + '</div><div><div class="contact-name">' + esc(p.nom) + '</div>' + role + '</div></div>'
-      + (email || phone ? '<div class="contact-coords">' + email + phone + '</div>' : '')
-      + '</div>';
-  }).join('');
-
-  section.innerHTML = cardsHtml
+  section.innerHTML = blocks
     + '<button class="add-contact" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Ajouter une personne</button>';
 }
 
@@ -837,8 +941,9 @@ function wireActions(){
   const buildDd = (kind) => {
     if (!people.length) return '<div class="dropdown-empty">Aucune personne identifiée</div>';
     return people.map(p => {
-      const ini = initials(p.nom);
-      const role = p.role || '';
+      const nom = personDisplayName(p);
+      const ini = initials(nom);
+      const role = p.poste || '';
       let val = '', href = '#';
       if (kind === 'call') { val = p.phone || ''; href = p.phone ? 'tel:' + p.phone.replace(/\s/g,'') : '#'; }
       if (kind === 'mail') { val = p.email || ''; href = p.email ? 'mailto:' + p.email : '#'; }
@@ -846,7 +951,7 @@ function wireActions(){
       return '<a href="' + href + '" class="dropdown-item">'
         + '<div class="dropdown-avatar">' + ini + '</div>'
         + '<div class="dropdown-info">'
-        +   '<div class="dropdown-name">' + esc(p.nom) + '</div>'
+        +   '<div class="dropdown-name">' + esc(nom) + '</div>'
         +   (role ? '<div class="dropdown-role">' + esc(role) + '</div>' : '')
         +   (val ? '<div class="dropdown-value">' + esc(val) + '</div>' : '')
         + '</div></a>';
@@ -1026,6 +1131,106 @@ function wireDelete(){
   });
 }
 
+// ── PERSONNES : capture + sauvegarde (modèle A, un record par personne) ──
+// Lit les champs d'un bloc personne et les écrit dans people[idx]. Pour le
+// record courant (people[idx] === contact par référence), seuls les champs
+// PERSONNE sont touchés : la face société reste intacte.
+function capturePersonBlock(idx){
+  const p = people[idx];
+  if (!p) return;
+  const block = document.querySelector('.person-block[data-pidx="' + idx + '"]');
+  if (!block) return;
+  const val = (sel) => { const el = block.querySelector(sel); return el ? el.value.trim() : ''; };
+  p.civilite = val('.pf-civilite');
+  p.prenom = val('.pf-prenom');
+  p.nom_personne = val('.pf-nom');
+  p.poste = val('.pf-poste');
+  p.anniversaire = val('.pf-anniv');
+  p.emails = [...block.querySelectorAll('.pf-email')].map(i => i.value.trim()).filter(Boolean);
+  p.email = p.emails[0] || '';
+  p.telephones = [...block.querySelectorAll('.pf-phone')].map(i => i.value.trim()).filter(Boolean);
+  p.phone = p.telephones[0] || '';
+  p.linkedin = val('.pf-linkedin');
+  p.instagram_perso = val('.pf-instagram');
+  p.facebook_perso = val('.pf-facebook');
+  const note = block.querySelector('.pf-note');
+  p.note_personne = note ? note.value.trim() : '';
+  const rgpd = block.querySelector('.pf-rgpd');
+  p.rgpd_consent_personne = rgpd ? rgpd.checked : false;
+  // contact_nom maintenu pour compat (Prénom Nom complet).
+  p.contact_nom = [p.prenom, p.nom_personne].filter(Boolean).join(' ').trim() || p.contact_nom || '';
+}
+
+function schedulePersonSave(idx){
+  if (personSaveTimers[idx]) clearTimeout(personSaveTimers[idx]);
+  personSaveTimers[idx] = setTimeout(() => savePerson(idx), 800);
+}
+
+// PUT si la personne a déjà un id, sinon POST (rattachée à la société courante).
+async function savePerson(idx){
+  const p = people[idx];
+  if (!p) return;
+  setAutosaveState('saving');
+  try {
+    const body = normalizePersonFields(p); // copie complète (face société incluse pour le record courant)
+    let resp;
+    if (p.id){
+      resp = await fetch('/api/contacts/' + idToPath(p.id), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    } else {
+      if (contact && contact.societe_id) body.societe_id = contact.societe_id;
+      resp = await fetch('/api/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const saved = await resp.json().catch(() => null);
+      if (saved && saved.id) p.id = saved.id;
+    }
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    setAutosaveState('saved');
+  } catch (e) {
+    console.error('[contact-societe] savePerson', e);
+    setAutosaveState('error');
+  }
+}
+
+// Délégation d'événements sur #people-section (survit aux re-render innerHTML).
+function wirePeople(){
+  const sec = document.getElementById('people-section');
+  if (!sec) return;
+  const onEdit = (e) => {
+    const block = e.target.closest('.person-block');
+    if (!block) return;
+    const idx = parseInt(block.getAttribute('data-pidx'), 10);
+    if (isNaN(idx)) return;
+    capturePersonBlock(idx);
+    schedulePersonSave(idx);
+  };
+  sec.addEventListener('input', onEdit);
+  sec.addEventListener('change', onEdit);
+  sec.addEventListener('click', (e) => {
+    const addBtn = e.target.closest('.pf-add');
+    if (!addBtn) return;
+    e.preventDefault();
+    const block = addBtn.closest('.person-block');
+    if (!block) return;
+    const kind = addBtn.getAttribute('data-add'); // 'email' | 'phone'
+    const cls = kind === 'phone' ? 'pf-phone' : 'pf-email';
+    const type = kind === 'phone' ? 'tel' : 'email';
+    const listEl = block.querySelector('.pf-multi[data-multi="' + cls + '"]');
+    if (!listEl) return;
+    const input = document.createElement('input');
+    input.className = 'input ' + cls;
+    input.type = type;
+    listEl.appendChild(input);
+    input.focus();
+  });
+}
+
 // ── TOAST ──
 let toastTimer;
 function toast(msg){
@@ -1042,6 +1247,7 @@ function toast(msg){
   wireActivityComposer();
   wireForm();
   wireDelete();
+  wirePeople();
   await loadContact();
 })();
 </script>

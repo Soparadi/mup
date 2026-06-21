@@ -505,22 +505,16 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       <!-- CSV TAB -->
       <div class="tab-panel active" id="tab-csv">
         <div class="drop-zone" id="drop-zone">
-          <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" multiple onchange="handleFileSelect(this)">
+          <input type="file" id="csv-file-input" accept=".csv,.xlsx,.vcf" multiple onchange="handleFileSelect(this)">
           <div class="drop-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
-          <div class="drop-title">Glisser un fichier CSV ici</div>
-          <div class="drop-sub">ou <span>cliquer pour parcourir</span> · CSV, Excel acceptés</div>
+          <div class="drop-title">Glisser un fichier ici</div>
+          <div class="drop-sub">ou <span>cliquer pour parcourir</span> · CSV, Excel (.xlsx), vCard acceptés</div>
         </div>
         <div style="margin-top:10px;font-size:11px;color:var(--muted)">
-          <strong>Colonnes reconnues :</strong> nom, société, email, téléphone, adresse, secteur, statut, site web, directeur, siren
-        </div>
-        <div class="csv-preview" id="csv-preview">
-          <table>
-            <thead id="csv-thead"></thead>
-            <tbody id="csv-tbody"></tbody>
-          </table>
+          <strong>Formats :</strong> carnet, LinkedIn, Gmail, Outlook, listings de prospection (.csv / .xlsx) et contacts iPhone (.vcf). Sociétés, dédoublonnage et statut pro/réserve gérés automatiquement.
         </div>
         <div class="csv-info" id="csv-info" style="display:none">
-          <strong id="csv-count">0</strong> contacts détectés — prêts à importer
+          <strong id="csv-count">0</strong> <span id="csv-count-label">fichier prêt à importer</span>
         </div>
       </div>
 
@@ -623,7 +617,6 @@ let prospects = [];
 let filteredProspects = [];
 let sortField = 'lastContact';
 let sortDir = -1;
-let csvParsed = [];
 let activeModalTab = 'csv';
 let currentOriginFilter = 'all';
 let currentPage = 1;
@@ -631,13 +624,25 @@ const PAGE_SIZE = 10;
 
 // Définition statique des filtres "Origine" — étiquettes UI + matcher fonction.
 // Compteurs dynamiques calculés dans renderOriginFilters().
+// Sources du moteur /api/import (linkedin, iphone, carnet, gmail, outlook,
+// prospection) rangées dans les onglets/pastilles existants — pas de nouvel
+// onglet ni de nouvelle couleur :
+//   linkedin -> LinkedIn (#0A66C2)
+//   iphone   -> Téléphone (#525252)
+//   carnet, gmail, outlook, prospection -> Direct (#6B6B6B)
+const SOURCES_PHONE  = ['phone', 'iphone'];
+const SOURCES_DIRECT = ['manual', 'csv_import', 'paste', 'facture_import', 'carnet', 'gmail', 'outlook', 'prospection', 'import'];
+
 const ORIGIN_FILTERS = [
   { key: 'all',      label: 'Tous',                match: () => true },
   { key: 'pipeline', label: 'Générés par MovUP',   match: p => p.source === 'pipeline' },
   { key: 'relations',label: 'Relations',           match: p => p.source === 'relations' },
   { key: 'linkedin', label: 'LinkedIn',            match: p => p.source === 'linkedin' },
-  { key: 'phone',    label: 'Téléphone',           match: p => p.source === 'phone' },
-  { key: 'direct',   label: 'Direct',              match: p => ['manual','csv_import','paste','facture_import'].includes(p.source) }
+  { key: 'phone',    label: 'Téléphone',           match: p => SOURCES_PHONE.includes(p.source) },
+  { key: 'direct',   label: 'Direct',              match: p => SOURCES_DIRECT.includes(p.source) },
+  // Réserve : contacts statut="reserve", masqués des autres vues (silence par
+  // défaut), récupérables uniquement via cet onglet.
+  { key: 'reserve',  label: 'Réserve',             match: p => p.statut === 'reserve' }
 ];
 
 // Pastilles couleur Origine (cellule + KPI éventuel).
@@ -646,20 +651,32 @@ const ORIGIN_DOT = {
   relations: '#1D8348',
   linkedin: '#0A66C2',
   phone: '#525252',
+  iphone: '#525252',
   manual: '#6B6B6B',
   csv_import: '#6B6B6B',
   paste: '#6B6B6B',
-  facture_import: '#6B6B6B'
+  facture_import: '#6B6B6B',
+  carnet: '#6B6B6B',
+  gmail: '#6B6B6B',
+  outlook: '#6B6B6B',
+  prospection: '#6B6B6B',
+  import: '#6B6B6B'
 };
 const ORIGIN_LABEL = {
   pipeline: 'Générés par MovUP',
   relations: 'Relations',
   linkedin: 'LinkedIn',
   phone: 'Téléphone',
+  iphone: 'Téléphone',
   manual: 'Direct',
   csv_import: 'Direct',
   paste: 'Direct',
-  facture_import: 'Direct'
+  facture_import: 'Direct',
+  carnet: 'Direct',
+  gmail: 'Direct',
+  outlook: 'Direct',
+  prospection: 'Direct',
+  import: 'Direct'
 };
 
 function save(){
@@ -915,7 +932,11 @@ function renderOriginFilters(){
   container.innerHTML = '';
   if(label) container.appendChild(label);
   ORIGIN_FILTERS.forEach(f => {
-    const count = prospects.filter(f.match).length;
+    // Les compteurs hors "Réserve" excluent les contacts reserve (cohérent avec
+    // la liste qui les masque par défaut).
+    const count = f.key === 'reserve'
+      ? prospects.filter(p => p.statut === 'reserve').length
+      : prospects.filter(p => p.statut !== 'reserve' && f.match(p)).length;
     const btn = document.createElement('button');
     btn.className = 'origin-filter';
     if(currentOriginFilter === f.key) btn.classList.add('active');
@@ -933,8 +954,15 @@ function renderTable(){
   if(!tbody) return;
 
   let list = [...prospects];
-  const filter = ORIGIN_FILTERS.find(f => f.key === currentOriginFilter);
-  if(filter) list = list.filter(filter.match);
+  // Réserve : silence par défaut. L'onglet "Réserve" les isole ; toutes les
+  // autres vues les excluent.
+  if(currentOriginFilter === 'reserve'){
+    list = list.filter(p => p.statut === 'reserve');
+  } else {
+    list = list.filter(p => p.statut !== 'reserve');
+    const filter = ORIGIN_FILTERS.find(f => f.key === currentOriginFilter);
+    if(filter) list = list.filter(filter.match);
+  }
   const qInput = document.getElementById('search-input');
   const q = qInput ? qInput.value.toLowerCase() : '';
   if(q) list = list.filter(p =>
@@ -1075,28 +1103,73 @@ function switchModalTab(tab, el){
   btn.textContent=tab==='csv'?'Importer le fichier':tab==='manual'?'Ajouter le prospect':'Importer les données';
 }
 
-// ── CSV IMPORT ──
-function readFileAsText(file){
+// ── IMPORT FICHIER (moteur serveur /api/import) ──
+// CSV / xlsx / vCard : le fichier brut est envoyé en base64, le moteur serveur
+// détecte le format, lit le xlsx, dédoublonne, crée sociétés + personnes et
+// pose le statut pro/réserve. Aucun parsing navigateur.
+let importFiles = [];
+
+function readFileAsBase64(file){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
-    reader.onload=e=>resolve(e.target.result);
+    reader.onload=()=>{ const s=String(reader.result||''); resolve(s.slice(s.indexOf(',')+1)); };
     reader.onerror=reject;
-    reader.readAsText(file,'UTF-8');
+    reader.readAsDataURL(file);
   });
 }
 
-async function handleFiles(files){
+function handleFiles(files){
   if(!files||!files.length)return;
-  csvParsed=[];
-  for(const file of files){
-    const text=await readFileAsText(file);
-    const rows=parseCSV(text);
-    if(rows.length) csvParsed.push(...rows);
-  }
-  showCsvPreview();
+  importFiles=Array.from(files);
+  const info=document.getElementById('csv-info');
+  const count=document.getElementById('csv-count');
+  const label=document.getElementById('csv-count-label');
+  if(count) count.textContent=importFiles.length;
+  if(label) label.textContent=(importFiles.length>1?'fichiers prêts':'fichier prêt')+' à importer : '+importFiles.map(f=>f.name).join(', ');
+  if(info) info.style.display='flex';
 }
 
 function handleFileSelect(input){ handleFiles(input.files); }
+
+async function importFichiers(){
+  if(!importFiles.length){ toast('Sélectionnez un fichier'); return; }
+  const btn=document.getElementById('modal-confirm-btn');
+  if(btn) btn.disabled=true;
+  let totSoc=0, totPro=0, totReserve=0;
+  try{
+    for(const file of importFiles){
+      const content=await readFileAsBase64(file);
+      const resp=await fetch('/api/import',{
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body:JSON.stringify({ filename:file.name, content })
+      });
+      if(!resp.ok){
+        let msg='HTTP '+resp.status;
+        try{ const e=await resp.json(); if(e&&e.error) msg=e.error; }catch(_){}
+        throw new Error(msg);
+      }
+      const r=await resp.json();
+      const s=r.stats||{};
+      totSoc+=(s.nb_societes||0);
+      totPro+=(s.nb_pro||0);
+      totReserve+=(s.nb_reserve||0);
+    }
+    toast('Importé · '+totSoc+' entreprise'+(totSoc>1?'s':'')+' · '+totPro+' personne'+(totPro>1?'s':''));
+    importFiles=[];
+    const info=document.getElementById('csv-info');
+    if(info) info.style.display='none';
+    const input=document.getElementById('csv-file-input');
+    if(input) input.value='';
+    closeModal();
+    await init();
+  }catch(err){
+    console.error('[import]', err);
+    toast('Échec import : '+(err.message||'erreur'));
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
 
 // Drag & drop
 const dz=document.getElementById('drop-zone');
@@ -1107,98 +1180,14 @@ dz.addEventListener('drop',e=>{
   handleFiles(e.dataTransfer.files);
 });
 
-const FIELD_MAP={
-  'nom':'name','name':'name','prénom nom':'name',
-  'société':'company','company':'company','entreprise':'company','agence':'company','partner_name':'company',
-  'email':'email','e-mail':'email','mail':'email','courriel':'email','email_from':'email',
-  'téléphone':'phone','telephone':'phone','tél':'phone','tel':'phone','phone':'phone','mobile':'phone',
-  'adresse':'location','localisation':'location','ville':'location','location':'location','commune':'location','city':'location',
-  'zip':'zip',
-  'secteur':'sector','activité':'sector','sector':'sector','industry_id/name':'sector',
-  'statut':'status','status':'status','priorité':'status',
-  'site':'website','website':'website','site web':'website','url':'website',
-  'directeur':'director','dirigeant':'director','contact':'director','director':'director',
-  'siren':'siren','siret':'siren','n° siren':'siren',
-  'notes':'notes','remarques':'notes','note':'notes','description':'notes',
-  'source_id/name':'source','contact_name':'name',
-  'linkedin':'linkedin','facebook':'facebook','instagram':'instagram',
-};
-
-function parseCSV(text){
-  // Detect separator
-  const firstLine=text.split('\n')[0];
-  let sep=',';
-  if(firstLine.split(';').length>firstLine.split(',').length)sep=';';
-  else if(firstLine.split('\t').length>firstLine.split(',').length)sep='\t';
-
-  const lines=text.trim().split('\n').map(l=>l.replace(/\r/g,''));
-  if(lines.length<2){toast('Fichier vide ou invalide');return [];}
-
-  const headers=lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/['"]/g,''));
-  const mapped=headers.map(h=>FIELD_MAP[h]||h);
-
-  return lines.slice(1).filter(l=>l.trim()).map((line,idx)=>{
-    const vals=line.split(sep).map(v=>v.trim().replace(/^["']|["']$/g,''));
-    const obj={id:Date.now()+Math.random()*1000+idx,status:'new'};
-    mapped.forEach((field,i)=>{if(vals[i])obj[field]=vals[i];});
-    // Strip Odoo export prefix
-    if(obj.name&&obj.name.startsWith('Agence Event - '))obj.name=obj.name.replace('Agence Event - ','');
-    if(obj.company&&obj.company.startsWith('Agence Event - '))obj.company=obj.company.replace('Agence Event - ','');
-    if(!obj.name&&!obj.company)return null;
-    return obj;
-  }).filter(Boolean);
-}
-
-function showCsvPreview(){
-  const previewFields=['name','company','email','phone','location','status'];
-  const pf=previewFields.filter(f=>csvParsed.some(r=>r[f]));
-  const thead=document.getElementById('csv-thead');
-  const tbody=document.getElementById('csv-tbody');
-  thead.innerHTML='<tr>'+pf.map(f=>`<th>${f}</th>`).join('')+'</tr>';
-  tbody.innerHTML=csvParsed.slice(0,4).map(r=>
-    '<tr>'+pf.map(f=>`<td>${r[f]||'—'}</td>`).join('')+'</tr>'
-  ).join('');
-  document.getElementById('csv-preview').classList.add('visible');
-  document.getElementById('csv-info').style.display='flex';
-  document.getElementById('csv-count').textContent=csvParsed.length;
-}
-
 function newContactId(){ return 'contact_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
 
 // ── CONFIRM IMPORT ──
 function confirmImport(){
   if(activeModalTab==='csv'){
-    if(!csvParsed.length){toast('Aucune donnée à importer');return;}
-    var added = csvParsed.map(function(r){
-      return migrateProspect({
-        id: newContactId(),
-        nom: r.company || r.name || '—',
-        contact_nom: r.name || r.director || '',
-        email: r.email || '',
-        phone: r.phone || '',
-        adresse: r.location || r.address || '',
-        zip: r.zip || '',
-        sector: r.sector || '',
-        website: r.website || '',
-        siren: r.siren || '',
-        notes: r.notes || '',
-        linkedin: r.linkedin || '',
-        facebook: r.facebook || '',
-        instagram: r.instagram || '',
-        source: 'csv_import',
-        entity_origine: 'mup',
-        factures_ids: [],
-        ca_total: 0,
-        created_at: new Date().toISOString()
-      });
-    });
-    prospects = [...prospects, ...added];
-    save();
-    toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}`);
-    csvParsed=[];
-    document.getElementById('csv-preview').classList.remove('visible');
-    document.getElementById('csv-info').style.display='none';
-    document.getElementById('csv-file-input').value='';
+    // Onglet Import CSV : délégué au moteur serveur (CSV / xlsx / vCard).
+    importFichiers();
+    return;
   } else if(activeModalTab==='manual'){
     const name=document.getElementById('f-name').value.trim();
     const company=document.getElementById('f-company').value.trim();

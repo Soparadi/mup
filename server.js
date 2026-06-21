@@ -1134,21 +1134,32 @@ async function ecrireImport(db, userId, plan) {
     }
   }
 
-  // Contacts existants -> index par email et par (contact_nom + societe_id).
+  // Contacts existants -> index par email, par (contact_nom + societe_id) et
+  // par societe_id (pour ne pas re-matérialiser une entité pure déjà représentée).
   const cExist = await db.query('SELECT * FROM contacts WHERE userId = $userId', { userId })
   const byEmail = new Map()
   const byNomSoc = new Map()
+  const bySocieteId = new Map()
   for (const c of cExist[0] || []) {
     if (c.email) byEmail.set(String(c.email).toLowerCase(), c)
     const nomNorm = normaliserSociete(c.contact_nom || '')
     if (nomNorm) byNomSoc.set(nomNorm + '|' + (c.societe_id ? String(c.societe_id) : ''), c)
+    if (c.societe_id) bySocieteId.set(String(c.societe_id), c)
   }
+
+  // Clés société portées par au moins une personne de cet import : ces sociétés
+  // sont déjà représentées par une fiche (face société du contact). Les autres
+  // sont des ENTITÉS PURES, à matérialiser comme contact à face personne vide.
+  const clesAvecPersonne = new Set(
+    (plan.personnes || []).map(p => p.societe_cle).filter(Boolean)
+  )
 
   const stmts = ['BEGIN TRANSACTION;']
   const params = { }
   let nbSocietes = 0
   let nbCrees = 0
   let nbEnrichis = 0
+  let nbEntites = 0
 
   // 1) Sociétés absentes.
   let si = 0
@@ -1239,6 +1250,43 @@ async function ecrireImport(db, userId, plan) {
     ci++
   }
 
+  // 3) Entités pures : société sans aucune personne -> contact face personne
+  // vide. On NE pose PAS email/phone/contact_nom dessus (sinon la fiche
+  // afficherait une personne fantôme) : les coordonnées restent sur la société.
+  // Invariant d'affichage : une fiche deux faces, jamais amputée.
+  for (const s of plan.societes) {
+    if (clesAvecPersonne.has(s.cle_normalisee)) continue
+    const soc = cleToSociete.get(s.cle_normalisee)
+    if (!soc) continue
+    if (bySocieteId.has(String(soc.id))) continue // déjà matérialisée
+    const id = genId('c_')
+    params['cid' + ci] = id
+    params['cbody' + ci] = {
+      userId,
+      nom: s.raison_sociale || soc.raison || '',
+      contact_nom: '',
+      prenom: '',
+      poste: '',
+      email: '',
+      phone: '',
+      linkedin: s.linkedin || '',
+      website: s.site || '',
+      adresse: s.adresse || '',
+      zip: s.cp || '',
+      societe_id: soc.id,
+      statut: 'pro',
+      source: s.source || 'import',
+      status: 'new',
+      entity_origine: 'mup',
+      created_at: now,
+      updated_at: now
+    }
+    stmts.push(`CREATE type::record("contacts", $cid${ci}) CONTENT $cbody${ci};`)
+    bySocieteId.set(String(soc.id), true)
+    nbEntites++
+    ci++
+  }
+
   stmts.push('COMMIT TRANSACTION;')
   if (si + ci > 0) await db.query(stmts.join('\n'), params)
 
@@ -1247,7 +1295,8 @@ async function ecrireImport(db, userId, plan) {
       ...plan.stats,
       nb_societes_creees: nbSocietes,
       nb_contacts_crees: nbCrees,
-      nb_contacts_enrichis: nbEnrichis
+      nb_contacts_enrichis: nbEnrichis,
+      nb_entites_materialisees: nbEntites
     }
   }
 }

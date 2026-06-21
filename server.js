@@ -15,6 +15,7 @@ import { getDb } from './lib/surreal.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
+import { normaliserSociete } from './lib/societes.js'
 import { router as authRouter } from './server/auth/routes.js'
 import { router as stripeRouter, webhookHandler as stripeWebhookHandler } from './server/routes/stripe.js'
 import { requireAuth, requireAuthHtml } from './server/middleware/requireAuth.js'
@@ -903,6 +904,13 @@ app.post('/api/contacts', async (req, res) => {
   if (!userId) return
   try {
     const body = { ...(req.body || {}), userId }
+    // Lien société (SCHEMALESS, champs optionnels) : societe_id (record/null),
+    // statut ("pro"/"reserve"), source (saisie/linkedin/phone/mail/carnet).
+    // Persistés tels quels via CONTENT ; on coerce seulement societe_id vide -> null.
+    // Les contacts qui n'envoient pas ces clés ne sont pas touchés.
+    if ('societe_id' in body && !(typeof body.societe_id === 'string' && body.societe_id.trim())) {
+      body.societe_id = null
+    }
     const db = await getDb()
     const cleanId = cleanRecordId('contacts', body?.id)
     if (cleanId) {
@@ -970,6 +978,10 @@ app.put('/api/contacts/:id', async (req, res) => {
     const cleanBody = { ...(req.body || {}) }
     delete cleanBody.id
     cleanBody.userId = userId
+    // Lien société (SCHEMALESS) : voir POST /api/contacts. Coerce societe_id vide -> null.
+    if ('societe_id' in cleanBody && !(typeof cleanBody.societe_id === 'string' && cleanBody.societe_id.trim())) {
+      cleanBody.societe_id = null
+    }
     const sql = tb === 'pipeline'
       ? 'UPDATE type::record("pipeline", $id) CONTENT $body'
       : 'UPDATE type::record("contacts", $id) CONTENT $body'
@@ -1000,6 +1012,96 @@ app.delete('/api/contacts/:id', async (req, res) => {
   } catch (err) {
     console.error('[contacts:delete]', err)
     res.status(500).json({ error: 'Impossible de supprimer le contact' })
+  }
+})
+
+// ── /api/societes — calquées sur /api/contacts (SCHEMALESS, scoping userId,
+// cleanRecordId, type::record hardcodé). cle_normalisee via normaliserSociete.
+app.get('/api/societes', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const result = await db.query('SELECT * FROM societes WHERE userId = $userId', { userId })
+    res.json(result[0] || [])
+  } catch (err) {
+    console.error('[societes]', err)
+    res.status(500).json({ error: 'Impossible de lire les sociétés' })
+  }
+})
+
+app.post('/api/societes', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const body = { ...(req.body || {}), userId }
+    // cle_normalisee calculée si absente ; valeur fournie explicitement respectée.
+    if (!body.cle_normalisee && body.raison_sociale) {
+      body.cle_normalisee = normaliserSociete(body.raison_sociale)
+    }
+    const now = new Date().toISOString()
+    if (!body.created_at) body.created_at = now
+    body.updated_at = now
+    const db = await getDb()
+    const cleanId = cleanRecordId('societes', body?.id)
+    if (cleanId) {
+      const { record, status, action } = await upsertRecord(db, 'societes', cleanId, body)
+      if (action === 'updated') console.log(`[societes] upsert societes:${cleanId}`)
+      return res.status(status).json(record)
+    }
+    const result = await db.query('CREATE societes CONTENT $body', { body })
+    res.status(201).json(result[0]?.[0] || result[0] || null)
+  } catch (err) {
+    console.error('[societes]', err)
+    res.status(500).json({ error: 'Impossible de créer la société' })
+  }
+})
+
+app.put('/api/societes/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('societes', req.params.id) || String(req.params.id || '').replace(/^[a-z_]+:/i, '')
+    const existing = await db.query('SELECT * FROM type::record("societes", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Société introuvable' })
+    const cleanBody = { ...(req.body || {}) }
+    delete cleanBody.id
+    cleanBody.userId = userId
+    // Recalcule la clé si la raison sociale change (sauf clé fournie explicitement).
+    if (
+      cleanBody.raison_sociale &&
+      cleanBody.raison_sociale !== rec.raison_sociale &&
+      !('cle_normalisee' in (req.body || {}))
+    ) {
+      cleanBody.cle_normalisee = normaliserSociete(cleanBody.raison_sociale)
+    }
+    // Préserve created_at initial (CONTENT remplace tout le record).
+    if (rec.created_at) cleanBody.created_at = rec.created_at
+    cleanBody.updated_at = new Date().toISOString()
+    const result = await db.query('UPDATE type::record("societes", $id) CONTENT $body', { id, body: cleanBody })
+    res.json(result[0]?.[0] || result[0] || {})
+  } catch (err) {
+    console.error('[societes:put]', err)
+    res.status(500).json({ error: 'Impossible de mettre à jour la société' })
+  }
+})
+
+app.delete('/api/societes/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const id = cleanRecordId('societes', req.params.id) || String(req.params.id || '').replace(/^[a-z_]+:/i, '')
+    const existing = await db.query('SELECT * FROM type::record("societes", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Société introuvable' })
+    await db.query('DELETE type::record("societes", $id)', { id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[societes:delete]', err)
+    res.status(500).json({ error: 'Impossible de supprimer la société' })
   }
 })
 
@@ -3856,6 +3958,7 @@ app.use((req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS campaigns SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS campaign_events SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS mailbox_credentials SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS societes SCHEMALESS')
     // Indexes pour les requêtes scoping userId et lookups par campagne/destinataire
     await db.query('DEFINE INDEX IF NOT EXISTS campaigns_user ON TABLE campaigns COLUMNS userId')
     await db.query('DEFINE INDEX IF NOT EXISTS domains_user ON TABLE domains_resend COLUMNS userId')
@@ -3864,7 +3967,9 @@ app.use((req, res) => {
     // Unicité (ownerId, email, provider) — un user ne peut connecter 2x la même boîte sur le même provider
     await db.query('DEFINE INDEX IF NOT EXISTS mailbox_creds_unique ON TABLE mailbox_credentials COLUMNS ownerId, email, provider UNIQUE')
     await db.query('DEFINE INDEX IF NOT EXISTS mailbox_creds_owner ON TABLE mailbox_credentials COLUMNS ownerId')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials + 6 indexes)')
+    // Sociétés — rapprochement par cle_normalisee (NON unique : homonymes possibles)
+    await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_cle ON societes FIELDS cle_normalisee')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes + 7 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

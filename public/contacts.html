@@ -272,6 +272,28 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 
+/* IMPORT VALIDATION */
+.iv-progress{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+.iv-section{font-size:12px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.4px;margin:18px 0 6px}
+.iv-section:first-child{margin-top:0}
+.iv-note{font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:10px}
+.iv-table{width:100%;border-collapse:collapse;font-size:12px}
+.iv-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;padding:6px 8px;border-bottom:1px solid var(--border)}
+.iv-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.iv-table tr:last-child td{border-bottom:none}
+.iv-entete{font-weight:700;color:var(--text)}
+.iv-exemple{color:var(--muted);font-family:var(--mono);font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.iv-select{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-family:var(--font);font-size:12px;outline:none;cursor:pointer}
+.iv-select:focus{border-color:var(--blue)}
+.iv-card{border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:var(--bg)}
+.iv-card-soc{font-weight:800;font-size:13px;color:var(--text);margin-bottom:2px}
+.iv-card-coord{font-size:11px;color:var(--muted);margin-top:1px}
+.iv-card-pers{margin-top:7px;padding-top:7px;border-top:1px dashed var(--border)}
+.iv-card-pers-nom{font-weight:700;font-size:12px;color:var(--text)}
+.iv-tag{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:1px 6px;border-radius:20px;margin-left:6px;vertical-align:middle}
+.iv-tag-soc{background:var(--blue-bg);color:var(--blue)}
+.iv-tag-pers{background:#ecfdf5;color:#047857}
+
 /* Drop zone */
 .drop-zone{
   border:2px dashed var(--border2);border-radius:10px;padding:32px;
@@ -604,6 +626,38 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       <button class="btn btn-dark" id="modal-confirm-btn" onclick="confirmImport()">
         Importer
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT VALIDATION MODAL (affichée après le dryrun, avant toute écriture) -->
+<div class="modal-overlay" id="iv-overlay" onclick="ivOverlayClick(event)">
+  <div class="modal" style="width:780px">
+    <div class="modal-header">
+      <div class="modal-title" id="iv-title">Vérifier l'import</div>
+      <div class="modal-close" onclick="cancelValidation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+    </div>
+    <div class="modal-body">
+      <div id="iv-progress" class="iv-progress"></div>
+
+      <div id="iv-mapping-wrap">
+        <div class="iv-section">Colonnes du fichier</div>
+        <div class="iv-note">Choisissez à quel champ MovUP correspond chaque colonne. Le routage des téléphones (fixe&nbsp;→&nbsp;société, mobile&nbsp;→&nbsp;personne) et des emails (générique&nbsp;→&nbsp;société, nominatif&nbsp;→&nbsp;personne) reste automatique, décidé par la valeur.</div>
+        <table class="iv-table">
+          <thead><tr><th>Colonne fichier</th><th>Exemple</th><th>Champ MovUP</th></tr></thead>
+          <tbody id="iv-mapping-body"></tbody>
+        </table>
+      </div>
+
+      <div id="iv-preview-wrap">
+        <div class="iv-section">Aperçu des fiches créées</div>
+        <div class="iv-note" id="iv-preview-note"></div>
+        <div id="iv-preview"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="cancelValidation()">Annuler</button>
+      <button class="btn btn-dark" id="iv-confirm-btn" onclick="confirmValidatedImport()">Confirmer l'import</button>
     </div>
   </div>
 </div>
@@ -1131,38 +1185,191 @@ function handleFiles(files){
 
 function handleFileSelect(input){ handleFiles(input.files); }
 
-async function importFichiers(){
+// ── FLUX dryrun -> écran de validation -> import confirmé ──
+// Les fichiers sont traités l'un après l'autre : chaque fichier passe par son
+// propre écran (mapping + aperçu) AVANT toute écriture. Rien n'est écrit tant
+// que l'abonné n'a pas confirmé.
+let ivQueue=[];      // [{ file, content }]
+let ivIndex=0;
+let ivDryrun=null;   // dryrun du fichier courant
+let ivTotals=null;   // cumul des stats sur la file
+
+async function startImportFlow(){
   if(!importFiles.length){ toast('Sélectionnez un fichier'); return; }
-  const btn=document.getElementById('modal-confirm-btn');
-  if(btn) btn.disabled=true;
-  let totSoc=0, totPro=0, totReserve=0;
+  ivQueue=importFiles.map(file=>({ file, content:null }));
+  ivIndex=0;
+  ivTotals={ soc:0, pro:0, reserve:0 };
+  closeModal();
+  await dryrunCurrent();
+}
+
+async function dryrunCurrent(){
+  if(ivIndex>=ivQueue.length){ finishImportFlow(); return; }
+  const item=ivQueue[ivIndex];
   try{
-    for(const file of importFiles){
-      const content=await readFileAsBase64(file);
-      const resp=await fetch('/api/import',{
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body:JSON.stringify({ filename:file.name, content })
-      });
-      if(!resp.ok){
-        let msg='HTTP '+resp.status;
-        try{ const e=await resp.json(); if(e&&e.error) msg=e.error; }catch(_){}
-        throw new Error(msg);
-      }
-      const r=await resp.json();
-      const s=r.stats||{};
-      totSoc+=(s.nb_societes||0);
-      totPro+=(s.nb_pro||0);
-      totReserve+=(s.nb_reserve||0);
+    if(item.content===null) item.content=await readFileAsBase64(item.file);
+    const resp=await fetch('/api/import/dryrun',{
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({ filename:item.file.name, content:item.content })
+    });
+    if(!resp.ok){
+      let msg='HTTP '+resp.status;
+      try{ const e=await resp.json(); if(e&&e.error) msg=e.error; }catch(_){}
+      throw new Error(msg);
     }
-    toast('Importé · '+totSoc+' entreprise'+(totSoc>1?'s':'')+' · '+totPro+' personne'+(totPro>1?'s':''));
-    importFiles=[];
-    const info=document.getElementById('csv-info');
-    if(info) info.style.display='none';
-    const input=document.getElementById('csv-file-input');
-    if(input) input.value='';
-    closeModal();
-    await init();
+    ivDryrun=await resp.json();
+    renderValidation();
+  }catch(err){
+    console.error('[import:dryrun]', err);
+    toast('Analyse impossible : '+(err.message||'erreur'));
+    cancelValidation();
+  }
+}
+
+function ivEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderValidation(){
+  const d=ivDryrun||{};
+  const item=ivQueue[ivIndex];
+  document.getElementById('iv-title').textContent='Vérifier l\'import — '+item.file.name;
+  const prog=document.getElementById('iv-progress');
+  prog.textContent=ivQueue.length>1 ? ('Fichier '+(ivIndex+1)+' sur '+ivQueue.length) : '';
+  prog.style.display=ivQueue.length>1?'block':'none';
+
+  // Mapping colonne -> champ (grille uniquement ; vCard = passe-direct).
+  const wrap=document.getElementById('iv-mapping-wrap');
+  const body=document.getElementById('iv-mapping-body');
+  if(d.format==='vcard' || !(d.mapping&&d.mapping.length)){
+    wrap.style.display='none';
+    body.innerHTML='';
+  }else{
+    wrap.style.display='block';
+    const champs=d.champs||[];
+    const groupes=[];
+    champs.forEach(c=>{ let g=groupes.find(x=>x.nom===c.groupe); if(!g){ g={nom:c.groupe,items:[]}; groupes.push(g);} g.items.push(c); });
+    function optionsHtml(sel){
+      let h='<option value="ignorer"'+(sel==='ignorer'?' selected':'')+'>Ignorer cette colonne</option>';
+      groupes.forEach(g=>{
+        h+='<optgroup label="'+ivEsc(g.nom)+'">';
+        g.items.forEach(c=>{ h+='<option value="'+c.champ+'"'+(sel===c.champ?' selected':'')+'>'+ivEsc(c.label)+'</option>'; });
+        h+='</optgroup>';
+      });
+      return h;
+    }
+    body.innerHTML=d.mapping.map((m,i)=>{
+      const ex=(d.exemples||[]).map(r=>r[i]).find(v=>v&&v.trim())||'';
+      const ent=m.entete_brut&&m.entete_brut.trim() ? ivEsc(m.entete_brut) : '<span style="color:var(--muted)">(colonne '+m.colonne+')</span>';
+      return '<tr>'+
+        '<td><span class="iv-entete">'+ent+'</span></td>'+
+        '<td class="iv-exemple" title="'+ivEsc(ex)+'">'+ivEsc(ex)+'</td>'+
+        '<td><select class="iv-select" data-col="'+m.colonne+'">'+optionsHtml(m.champ_canonique)+'</select></td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  // Aperçu des fiches telles qu'elles seront créées (routage réel tel/email).
+  document.getElementById('iv-preview').innerHTML=buildPreview(d);
+  const note=document.getElementById('iv-preview-note');
+  const st=d.stats||{};
+  note.textContent=(st.nb_societes||0)+' entreprise'+((st.nb_societes||0)>1?'s':'')+
+    ' · '+(st.nb_pro||0)+' personne'+((st.nb_pro||0)>1?'s':'')+' pro'+
+    ' · '+(st.nb_reserve||0)+' en réserve'+
+    (st.nb_doublons_evites?(' · '+st.nb_doublons_evites+' doublon'+(st.nb_doublons_evites>1?'s':'')+' évité'+(st.nb_doublons_evites>1?'s':'')):'');
+
+  document.getElementById('iv-overlay').classList.add('open');
+}
+
+function coordLine(o){
+  const parts=[];
+  if(o.tel) parts.push('Tél '+ivEsc(o.tel));
+  if(o.email) parts.push(ivEsc(o.email));
+  if(o.site) parts.push(ivEsc(o.site));
+  return parts.join(' · ');
+}
+
+function buildPreview(d){
+  const socs=d.societes||[];
+  const pers=d.personnes||[];
+  const byCle={};
+  socs.forEach(s=>{ byCle[s.cle_normalisee]={ soc:s, gens:[] }; });
+  const indep=[];
+  pers.forEach(p=>{
+    if(p.societe_cle && byCle[p.societe_cle]) byCle[p.societe_cle].gens.push(p);
+    else indep.push(p);
+  });
+  const cards=[];
+  // Sociétés (avec ou sans personne) d'abord.
+  socs.forEach(s=>{
+    const g=byCle[s.cle_normalisee];
+    let h='<div class="iv-card"><div class="iv-card-soc">'+ivEsc(s.raison_sociale||'(société)')+'<span class="iv-tag iv-tag-soc">société</span></div>';
+    const cl=coordLine(s); if(cl) h+='<div class="iv-card-coord">'+cl+'</div>';
+    if(!g.gens.length) h+='<div class="iv-card-coord" style="font-style:italic">Société seule (pas de contact nominatif)</div>';
+    g.gens.forEach(p=>{ h+=persBlock(p); });
+    h+='</div>';
+    cards.push(h);
+  });
+  // Personnes indépendantes (sans société tierce).
+  indep.forEach(p=>{
+    const nom=[p.prenom,p.nom].filter(Boolean).join(' ')||'(contact)';
+    let h='<div class="iv-card"><div class="iv-card-pers-nom">'+ivEsc(nom)+'<span class="iv-tag iv-tag-pers">personne</span></div>';
+    if(p.poste) h+='<div class="iv-card-coord">'+ivEsc(p.poste)+'</div>';
+    const cl=coordLine(p); if(cl) h+='<div class="iv-card-coord">'+cl+'</div>';
+    h+='</div>';
+    cards.push(h);
+  });
+  if(!cards.length) return '<div class="iv-note">Aucune fiche détectée dans ce fichier.</div>';
+  let html=cards.slice(0,5).join('');
+  if(cards.length>5) html+='<div class="iv-note">… et '+(cards.length-5)+' autre'+(cards.length-5>1?'s':'')+' fiche'+(cards.length-5>1?'s':'')+'.</div>';
+  return html;
+}
+
+function persBlock(p){
+  const nom=[p.prenom,p.nom].filter(Boolean).join(' ')||'(contact)';
+  let h='<div class="iv-card-pers"><span class="iv-card-pers-nom">'+ivEsc((p.civilite?p.civilite+' ':'')+nom)+'</span><span class="iv-tag iv-tag-pers">personne</span>';
+  if(p.poste) h+='<div class="iv-card-coord">'+ivEsc(p.poste)+'</div>';
+  const cl=coordLine(p); if(cl) h+='<div class="iv-card-coord">'+cl+'</div>';
+  h+='</div>';
+  return h;
+}
+
+function collectMapping(){
+  if(ivDryrun && ivDryrun.format==='vcard') return null;
+  const map={};
+  document.querySelectorAll('#iv-mapping-body select.iv-select').forEach(sel=>{
+    map[sel.getAttribute('data-col')]=sel.value;
+  });
+  return Object.keys(map).length?map:null;
+}
+
+async function confirmValidatedImport(){
+  const btn=document.getElementById('iv-confirm-btn');
+  if(btn) btn.disabled=true;
+  const item=ivQueue[ivIndex];
+  const mapping=collectMapping();
+  try{
+    const resp=await fetch('/api/import',{
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({ filename:item.file.name, content:item.content, mapping })
+    });
+    if(!resp.ok){
+      let msg='HTTP '+resp.status;
+      try{ const e=await resp.json(); if(e&&e.error) msg=e.error; }catch(_){}
+      throw new Error(msg);
+    }
+    const r=await resp.json();
+    const s=r.stats||{};
+    ivTotals.soc+=(s.nb_societes||0);
+    ivTotals.pro+=(s.nb_pro||0);
+    ivTotals.reserve+=(s.nb_reserve||0);
+    ivIndex++;
+    if(ivIndex<ivQueue.length){
+      await dryrunCurrent();
+    }else{
+      document.getElementById('iv-overlay').classList.remove('open');
+      finishImportFlow();
+    }
   }catch(err){
     console.error('[import]', err);
     toast('Échec import : '+(err.message||'erreur'));
@@ -1170,6 +1377,28 @@ async function importFichiers(){
     if(btn) btn.disabled=false;
   }
 }
+
+function finishImportFlow(){
+  toast('Importé · '+ivTotals.soc+' entreprise'+(ivTotals.soc>1?'s':'')+' · '+ivTotals.pro+' personne'+(ivTotals.pro>1?'s':''));
+  resetImportState();
+  init();
+}
+
+function resetImportState(){
+  importFiles=[];
+  ivQueue=[]; ivIndex=0; ivDryrun=null;
+  const info=document.getElementById('csv-info');
+  if(info) info.style.display='none';
+  const input=document.getElementById('csv-file-input');
+  if(input) input.value='';
+}
+
+function cancelValidation(){
+  document.getElementById('iv-overlay').classList.remove('open');
+  resetImportState();
+}
+
+function ivOverlayClick(e){ if(e.target===document.getElementById('iv-overlay')) cancelValidation(); }
 
 // Drag & drop
 const dz=document.getElementById('drop-zone');
@@ -1185,8 +1414,8 @@ function newContactId(){ return 'contact_' + Date.now() + '_' + Math.random().to
 // ── CONFIRM IMPORT ──
 function confirmImport(){
   if(activeModalTab==='csv'){
-    // Onglet Import CSV : délégué au moteur serveur (CSV / xlsx / vCard).
-    importFichiers();
+    // Onglet Import CSV : dryrun -> écran de validation -> import confirmé.
+    startImportFlow();
     return;
   } else if(activeModalTab==='manual'){
     const name=document.getElementById('f-name').value.trim();

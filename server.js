@@ -16,7 +16,7 @@ import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
 import { normaliserSociete } from './lib/societes.js'
-import { analyserImport } from './lib/import.js'
+import { analyserImport, analyserImportDetaille } from './lib/import.js'
 import { normalizePersonFields } from './lib/person-fields.js'
 import { router as authRouter } from './server/auth/routes.js'
 import { router as stripeRouter, webhookHandler as stripeWebhookHandler } from './server/routes/stripe.js'
@@ -1316,7 +1316,7 @@ app.post('/api/import/dryrun', async (req, res) => {
       return res.status(400).json({ error: 'Contenu manquant' })
     }
     const buffer = Buffer.from(content, 'base64')
-    const plan = analyserImport(filename || '', buffer)
+    const plan = analyserImportDetaille(filename || '', buffer)
     res.json(plan)
   } catch (err) {
     console.error('[import:dryrun]', err)
@@ -1328,12 +1328,13 @@ app.post('/api/import', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   try {
-    const { filename, content } = req.body || {}
+    const { filename, content, mapping } = req.body || {}
     if (!content || typeof content !== 'string') {
       return res.status(400).json({ error: 'Contenu manquant' })
     }
     const buffer = Buffer.from(content, 'base64')
-    const plan = analyserImport(filename || '', buffer)
+    const map = mapping && typeof mapping === 'object' ? mapping : null
+    const plan = analyserImport(filename || '', buffer, map)
     const db = await getDb()
     const result = await ecrireImport(db, userId, plan)
     res.json({ ok: true, ...result })

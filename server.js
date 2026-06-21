@@ -16,6 +16,7 @@ import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
 import { normaliserSociete } from './lib/societes.js'
+import { analyserImport } from './lib/import.js'
 import { router as authRouter } from './server/auth/routes.js'
 import { router as stripeRouter, webhookHandler as stripeWebhookHandler } from './server/routes/stripe.js'
 import { requireAuth, requireAuthHtml } from './server/middleware/requireAuth.js'
@@ -1102,6 +1103,188 @@ app.delete('/api/societes/:id', async (req, res) => {
   } catch (err) {
     console.error('[societes:delete]', err)
     res.status(500).json({ error: 'Impossible de supprimer la société' })
+  }
+})
+
+// ── /api/import — moteur d'import contacts multi-format ──
+// Le client envoie { filename, content } avec content = base64 du fichier brut
+// (uniforme csv/xlsx/vcf : xlsx est binaire). analyserImport (lib/import.js)
+// est pur (zéro DB) ; seule la route /api/import écrit, en transaction.
+
+function genId(prefix) {
+  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+}
+
+// Construit et exécute l'écriture en UNE transaction SurrealDB : sociétés
+// absentes d'abord, puis personnes (création ou enrichissement). Les ids des
+// sociétés neuves sont générés côté JS pour résoudre societe_id avant l'écriture.
+// Erreur -> la transaction est annulée, rien n'est écrit à moitié.
+async function ecrireImport(db, userId, plan) {
+  const now = new Date().toISOString()
+
+  // Sociétés existantes (cle_normalisee -> { id, raison }).
+  const sExist = await db.query(
+    'SELECT id, cle_normalisee, raison_sociale FROM societes WHERE userId = $userId',
+    { userId }
+  )
+  const cleToSociete = new Map()
+  for (const s of sExist[0] || []) {
+    if (s.cle_normalisee) {
+      cleToSociete.set(s.cle_normalisee, { id: String(s.id), raison: s.raison_sociale || '' })
+    }
+  }
+
+  // Contacts existants -> index par email et par (contact_nom + societe_id).
+  const cExist = await db.query('SELECT * FROM contacts WHERE userId = $userId', { userId })
+  const byEmail = new Map()
+  const byNomSoc = new Map()
+  for (const c of cExist[0] || []) {
+    if (c.email) byEmail.set(String(c.email).toLowerCase(), c)
+    const nomNorm = normaliserSociete(c.contact_nom || '')
+    if (nomNorm) byNomSoc.set(nomNorm + '|' + (c.societe_id ? String(c.societe_id) : ''), c)
+  }
+
+  const stmts = ['BEGIN TRANSACTION;']
+  const params = { }
+  let nbSocietes = 0
+  let nbCrees = 0
+  let nbEnrichis = 0
+
+  // 1) Sociétés absentes.
+  let si = 0
+  for (const s of plan.societes) {
+    if (cleToSociete.has(s.cle_normalisee)) continue
+    const id = genId('s_')
+    cleToSociete.set(s.cle_normalisee, { id, raison: s.raison_sociale || '' })
+    params['sid' + si] = id
+    params['sbody' + si] = {
+      userId,
+      raison_sociale: s.raison_sociale || '',
+      cle_normalisee: s.cle_normalisee,
+      email: s.email || '',
+      phone: s.tel || '',
+      website: s.site || '',
+      linkedin: s.linkedin || '',
+      adresse: s.adresse || '',
+      ville: s.ville || '',
+      zip: s.cp || '',
+      source: s.source || 'import',
+      created_at: now,
+      updated_at: now
+    }
+    stmts.push(`CREATE type::record("societes", $sid${si}) CONTENT $sbody${si};`)
+    si++
+    nbSocietes++
+  }
+
+  // 2) Personnes : création ou enrichissement (vides only).
+  let ci = 0
+  for (const p of plan.personnes) {
+    const societe = p.societe_cle ? cleToSociete.get(p.societe_cle) : null
+    const societeId = societe ? societe.id : null
+    const fullName = [p.prenom, p.nom].filter(Boolean).join(' ').trim()
+    const nomNorm = normaliserSociete(fullName)
+
+    let existant = null
+    if (p.email) existant = byEmail.get(String(p.email).toLowerCase())
+    if (!existant && !p.email && nomNorm) {
+      existant = byNomSoc.get(nomNorm + '|' + (societeId || ''))
+    }
+
+    if (existant) {
+      // Enrichir les champs vides uniquement, jamais écraser.
+      const merged = { ...existant }
+      const apport = {
+        prenom: p.prenom, contact_nom: fullName, poste: p.poste,
+        email: p.email, phone: p.tel, linkedin: p.linkedin
+      }
+      for (const [k, v] of Object.entries(apport)) {
+        if (!merged[k] && v) merged[k] = v
+      }
+      if (!merged.societe_id && societeId) merged.societe_id = societeId
+      if (!merged.statut) merged.statut = p.statut
+      else if (merged.statut === 'reserve' && p.statut === 'pro') merged.statut = 'pro'
+      if (!merged.source && p.source) merged.source = p.source
+      merged.userId = userId
+      merged.updated_at = now
+      const id = String(existant.id).replace(/^contacts:/, '')
+      delete merged.id
+      params['cid' + ci] = id
+      params['cbody' + ci] = merged
+      stmts.push(`UPDATE type::record("contacts", $cid${ci}) CONTENT $cbody${ci};`)
+      nbEnrichis++
+    } else {
+      const id = genId('c_')
+      params['cid' + ci] = id
+      params['cbody' + ci] = {
+        userId,
+        nom: societe ? societe.raison : fullName,
+        contact_nom: fullName,
+        prenom: p.prenom || '',
+        poste: p.poste || '',
+        email: p.email || '',
+        phone: p.tel || '',
+        linkedin: p.linkedin || '',
+        societe_id: societeId,
+        statut: p.statut,
+        source: p.source || 'import',
+        status: 'new',
+        entity_origine: 'mup',
+        created_at: now,
+        updated_at: now
+      }
+      stmts.push(`CREATE type::record("contacts", $cid${ci}) CONTENT $cbody${ci};`)
+      nbCrees++
+    }
+    ci++
+  }
+
+  stmts.push('COMMIT TRANSACTION;')
+  if (si + ci > 0) await db.query(stmts.join('\n'), params)
+
+  return {
+    stats: {
+      ...plan.stats,
+      nb_societes_creees: nbSocietes,
+      nb_contacts_crees: nbCrees,
+      nb_contacts_enrichis: nbEnrichis
+    }
+  }
+}
+
+app.post('/api/import/dryrun', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const { filename, content } = req.body || {}
+    if (!content || typeof content !== 'string') {
+      return res.status(400).json({ error: 'Contenu manquant' })
+    }
+    const buffer = Buffer.from(content, 'base64')
+    const plan = analyserImport(filename || '', buffer)
+    res.json(plan)
+  } catch (err) {
+    console.error('[import:dryrun]', err)
+    res.status(400).json({ error: err.message || 'Analyse impossible' })
+  }
+})
+
+app.post('/api/import', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const { filename, content } = req.body || {}
+    if (!content || typeof content !== 'string') {
+      return res.status(400).json({ error: 'Contenu manquant' })
+    }
+    const buffer = Buffer.from(content, 'base64')
+    const plan = analyserImport(filename || '', buffer)
+    const db = await getDb()
+    const result = await ecrireImport(db, userId, plan)
+    res.json({ ok: true, ...result })
+  } catch (err) {
+    console.error('[import]', err)
+    res.status(500).json({ error: err.message || 'Import impossible' })
   }
 })
 

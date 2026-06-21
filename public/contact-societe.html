@@ -599,6 +599,8 @@ let saveTimer = null;
 let activityType = 'note';
 let people = [];            // Modèle A : records contacts liés par societe_id
 let personSaveTimers = {};  // débounce de sauvegarde par personne (clé = index)
+let personLocks = {};       // verrou « save en vol » par personne (anti double POST)
+let personDirty = {};       // re-save demandé pendant un save en vol (coalescing)
 
 // ── BOOT : id depuis l'URL ──
 function readContactIdFromUrl(){
@@ -1162,17 +1164,30 @@ function capturePersonBlock(idx){
 }
 
 function schedulePersonSave(idx){
+  // SOURCE DE VÉRITÉ UNIQUE pour le record courant : si ce bloc EST le record
+  // ouvert (people[idx] === contact, même référence), on ne déclenche PAS un
+  // second PUT — l'autosave société écrit déjà le record complet (faces société
+  // + personne fusionnées sur le même objet). Évite l'écriture concurrente.
+  if (people[idx] === contact){
+    scheduleAutoSave();
+    return;
+  }
   if (personSaveTimers[idx]) clearTimeout(personSaveTimers[idx]);
   personSaveTimers[idx] = setTimeout(() => savePerson(idx), 800);
 }
 
 // PUT si la personne a déjà un id, sinon POST (rattachée à la société courante).
+// Verrou par index : tant qu'un save est en vol, un nouvel appel marque "dirty"
+// et re-save APRÈS coup (quand l'id POST est posé) -> jamais de double création.
 async function savePerson(idx){
   const p = people[idx];
   if (!p) return;
+  if (p === contact){ scheduleAutoSave(); return; } // garde-fou : record courant -> autosave société
+  if (personLocks[idx]){ personDirty[idx] = true; return; }
+  personLocks[idx] = true;
   setAutosaveState('saving');
   try {
-    const body = normalizePersonFields(p); // copie complète (face société incluse pour le record courant)
+    const body = normalizePersonFields(p);
     let resp;
     if (p.id){
       resp = await fetch('/api/contacts/' + idToPath(p.id), {
@@ -1188,13 +1203,16 @@ async function savePerson(idx){
         body: JSON.stringify(body)
       });
       const saved = await resp.json().catch(() => null);
-      if (saved && saved.id) p.id = saved.id;
+      if (saved && saved.id) p.id = saved.id; // les saves suivants deviennent des PUT
     }
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     setAutosaveState('saved');
   } catch (e) {
     console.error('[contact-societe] savePerson', e);
     setAutosaveState('error');
+  } finally {
+    personLocks[idx] = false;
+    if (personDirty[idx]){ personDirty[idx] = false; savePerson(idx); } // flush les éditions arrivées pendant le vol
   }
 }
 
@@ -1213,6 +1231,19 @@ function wirePeople(){
   sec.addEventListener('input', onEdit);
   sec.addEventListener('change', onEdit);
   sec.addEventListener('click', (e) => {
+    // « + Ajouter une personne » : ajoute un bloc VIDE (sans id). Aucun POST ici —
+    // la création n'a lieu qu'à la première saisie réelle (via savePerson).
+    const addPersonBtn = e.target.closest('.add-contact');
+    if (addPersonBtn){
+      e.preventDefault();
+      people.push(normalizePersonFields({})); // bloc vide, pas d'id
+      renderPeople();
+      const blocks = document.querySelectorAll('.person-block');
+      const last = blocks[blocks.length - 1];
+      const first = last && last.querySelector('.pf-prenom');
+      if (first) first.focus();
+      return;
+    }
     const addBtn = e.target.closest('.pf-add');
     if (!addBtn) return;
     e.preventDefault();

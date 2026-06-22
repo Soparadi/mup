@@ -1038,6 +1038,63 @@ async function findSocieteBySiret(siret, userId) {
   return result[0]?.[0] || null
 }
 
+// ── Re-fetch dirigeants Etalab par SIREN (matérialisation d'un prospect) ──
+// Au passage d'un lead en société on recharge la fiche complète recherche-
+// entreprises pour récupérer, en UN SEUL appel (zéro requête en plus) :
+//   - dirigeants[] (filtrés aux personnes physiques)
+//   - tranche_effectif_salarie / etat_administratif / statut_diffusion
+// Mapping dirigeant -> { prenom, nom_personne, poste } (champs contacts).
+// Les personnes morales (type_dirigeant !== 'personne physique', portant une
+// denomination) sont rejetées : on ne matérialise que des contacts physiques.
+//
+// DÉGRADÉ GRACIEUX : tout échec (429 persistant, réseau, 5xx, fiche absente)
+// retourne un résultat VIDE — jamais de throw. L'appelant crée la société
+// quand même (dirigeants_crees:0), un hoquet API ne bloque pas l'ajout.
+// 429 : un seul retry, qui lit Retry-After et patiente avant de réessayer.
+async function refetchDirigeants(siren) {
+  const vide = { dirigeants: [], effectif: '', etat_administratif: '', statut_diffusion: '' }
+  const clean = String(siren || '').replace(/\s+/g, '')
+  if (!clean) return vide
+  const url = 'https://recherche-entreprises.api.gouv.fr/search?q=' + encodeURIComponent(clean) + '&per_page=1'
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch(url)
+      // 429 rate-limit : sur la 1re tentative on respecte Retry-After (défaut
+      // 1 s) puis on réessaie UNE fois ; 429 persistant -> dégradé vide.
+      if (r.status === 429) {
+        if (attempt === 0) {
+          const ra = parseInt(r.headers.get('retry-after'), 10)
+          const delay = Number.isFinite(ra) && ra > 0 ? ra * 1000 : 1000
+          await new Promise(res => setTimeout(res, delay))
+          continue
+        }
+        return vide
+      }
+      if (!r.ok) return vide
+      const data = await r.json()
+      const fiche = Array.isArray(data.results) ? data.results[0] : null
+      if (!fiche) return vide
+      const dirigeants = (Array.isArray(fiche.dirigeants) ? fiche.dirigeants : [])
+        .filter(d => d && d.type_dirigeant === 'personne physique')
+        .filter(d => (typeof d.nom === 'string' && d.nom.trim()) || (typeof d.prenoms === 'string' && d.prenoms.trim()))
+        .map(d => ({
+          prenom: typeof d.prenoms === 'string' ? d.prenoms.trim() : '',
+          nom_personne: typeof d.nom === 'string' ? d.nom.trim() : '',
+          poste: typeof d.qualite === 'string' ? d.qualite.trim() : ''
+        }))
+      return {
+        dirigeants,
+        effectif: typeof fiche.tranche_effectif_salarie === 'string' ? fiche.tranche_effectif_salarie : '',
+        etat_administratif: typeof fiche.etat_administratif === 'string' ? fiche.etat_administratif : '',
+        statut_diffusion: typeof fiche.statut_diffusion === 'string' ? fiche.statut_diffusion : ''
+      }
+    } catch (e) {
+      return vide
+    }
+  }
+  return vide
+}
+
 // ── /api/societes — calquées sur /api/contacts (SCHEMALESS, scoping userId,
 // cleanRecordId, type::record hardcodé). cle_normalisee via normaliserSociete.
 app.get('/api/societes', async (req, res) => {

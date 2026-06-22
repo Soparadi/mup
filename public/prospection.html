@@ -2999,54 +2999,90 @@ async function addToPipeline(leadId) {
     showToast('Déjà dans le pipeline');
     return;
   }
-  var newCard = {
-    id: 'c' + Date.now(),
-    name: lead.director || lead.name,
-    co: lead.name,
-    company: lead.name,
-    contact: lead.director || '',
-    email: lead.email || '',
-    phone: lead.phone || '',
-    tel: lead.phone || '',
-    address: lead.address || '',
-    location: lead.address || '',
-    sector: lead.nafLabel || lead.sector || '',
-    siren: lead.siren || '',
+  // Contrat de body — clés lues par POST /api/pipeline/from-lead (commit 2) :
+  //   siret, siren, raison_sociale(lead.name), naf, naf_libelle(lead.nafLabel),
+  //   forme(lead.forme), date_creation(lead.created), capital, lat, lng,
+  //   adresse_numero_voie / _type_voie / _libelle_voie / _code_postal /
+  //   _libelle_commune (posés au buffer par fetchLeads, commit 3).
+  // Le serveur pose source:'prospection' (autorité serveur, non spoofable),
+  // re-fetch les dirigeants et matérialise société + contacts + carte en UNE
+  // transaction. Remplace l'ancien double POST (/api/pipeline plat +
+  // /api/contacts) : plus de dédup contacts client, le serveur orchestre tout.
+  var body = {
     siret: lead.siret || '',
-    website: lead.website || '',
-    source: 'SIRENE',
-    notes: '',
-    col: 'prospects',
-    val: 0,
-    days: 0,
-    activity: []
+    siren: lead.siren || '',
+    raison_sociale: lead.name || '',
+    naf: lead.naf || '',
+    naf_libelle: lead.nafLabel || '',
+    forme: lead.forme || '',
+    date_creation: lead.created || '',
+    capital: lead.capital || '',
+    lat: lead.lat != null ? lead.lat : null,
+    lng: lead.lng != null ? lead.lng : null,
+    adresse_numero_voie: lead.adresse_numero_voie || '',
+    adresse_type_voie: lead.adresse_type_voie || '',
+    adresse_libelle_voie: lead.adresse_libelle_voie || '',
+    adresse_code_postal: lead.adresse_code_postal || '',
+    adresse_libelle_commune: lead.adresse_libelle_commune || ''
   };
   try {
-    var apiResp = await fetch('/api/pipeline', {
+    var apiResp = await fetch('/api/pipeline/from-lead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newCard)
+      body: JSON.stringify(body)
     });
-    // Geste A : le serveur n'émet plus de 402 'pipeline_quota' à l'ajout
-    // (décompte de quota retiré) et la modale plafond a été supprimée. Le
-    // péage sera reporté sur la Vitesse 2 (enrichissement). Les autres 402
-    // éventuels (ex. grace_active) restent gérés en aval par le throw
-    // générique, comportement inchangé.
+    // Opt-out RGPD (403) : entreprise retirée de la prospection. Message dédié,
+    // aucun effet KPI, l'UI reste intacte.
+    if (apiResp.status === 403) {
+      var optOut = await apiResp.json().catch(function(){ return {}; });
+      showToast(optOut.message || "Entreprise non disponible pour prospection");
+      return;
+    }
     if(!apiResp.ok) throw new Error('HTTP ' + apiResp.status);
-    var apiResult = await apiResp.json();
-    // Dual-write localStorage
+    var result = await apiResp.json();
+
+    // Dual-write localStorage — carte locale au format board (le serveur a déjà
+    // créé le record pipeline ; on reflète localement, le board se resynchronise
+    // au prochain fetch). name = raison sociale (aligné sur la carte serveur).
     try {
       var localCards = [];
       var r = localStorage.getItem('mup_pipeline');
       if(r) localCards = JSON.parse(r);
-      localCards.push(Object.assign({}, newCard, apiResult || {}));
+      localCards.push({
+        id: 'c' + Date.now(),
+        name: lead.name || '',
+        co: lead.name || '',
+        company: lead.name || '',
+        contact: lead.director || '',
+        email: '', phone: '', website: '',
+        address: lead.address || '',
+        sector: lead.nafLabel || lead.sector || '',
+        siren: lead.siren || '',
+        siret: lead.siret || '',
+        source: 'prospection',
+        col: 'prospects', val: 0, days: 0, activity: [],
+        societe_id: result.societe_id || ''
+      });
       localStorage.setItem('mup_pipeline', JSON.stringify(localCards));
     } catch(e2) {
       console.warn('[Leads] addToPipeline localStorage update failed', e2);
     }
     _siretsCache = null;
     _siretsCacheTime = 0;
-    showToast(lead.name + ' ajouté au pipeline');
+    _contactsCache = null;
+    _contactsCacheTime = 0;
+
+    // Toast selon le résultat serveur : société déjà connue (dedup) ou nombre
+    // de dirigeants matérialisés (0 si re-fetch Etalab dégradé).
+    var msg = (lead.name || 'Fiche') + ' ajouté au pipeline';
+    if (result.dedup) {
+      msg = (lead.name || 'Fiche') + ' ajouté (société déjà connue)';
+    } else if (result.dirigeants_crees > 0) {
+      msg = (lead.name || 'Fiche') + ' ajouté · ' + result.dirigeants_crees
+          + ' dirigeant' + (result.dirigeants_crees > 1 ? 's' : '');
+    }
+    showToast(msg);
+
     var card = document.getElementById('card-' + leadId);
     if(card) {
       var btn = card.querySelector('.ba.pr');
@@ -3059,53 +3095,20 @@ async function addToPipeline(leadId) {
     }
 
     // ── Effets KPI (l'ajout pipeline a réussi) ───────────────────────
-    // La fiche vient d'entrer en 'prospects' → comptée « en cours ».
+    // Pipeline +1 (fiche entrée en 'prospects').
     var pipEl = document.getElementById('kpi-pipeline-count');
     if (pipEl) {
       var pipN = parseInt(pipEl.textContent.replace(/\D/g, ''), 10);
       pipEl.textContent = ((isNaN(pipN) ? 0 : pipN) + 1).toLocaleString('fr-FR');
     }
-
-    // Garde de dédup contacts (le serveur NE déduplique PAS) : on crée le
-    // contact entreprise seulement s'il n'existe pas déjà (siren OU siret).
-    // Isolé en try/catch : un échec ici ne bloque pas l'ajout pipeline.
-    try {
-      var existingContacts = await _getExistingContacts();
-      var already = existingContacts.some(function (c) {
-        return (lead.siren && String(c.siren) === String(lead.siren)) ||
-               (lead.siret && String(c.siret) === String(lead.siret));
-      });
-      if (!already) {
-        var contactBody = {
-          siren: lead.siren || '',
-          siret: lead.siret || '',
-          nom: lead.name,
-          company: lead.name,
-          name: lead.director || '',
-          email: lead.email || '',
-          phone: lead.phone || '',
-          address: lead.address || '',
-          source: 'pipeline',
-          entity_origine: 'mup'
-        };
-        var cResp = await fetch('/api/contacts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(contactBody)
-        });
-        if (cResp.ok) {
-          _contactsCache = null; _contactsCacheTime = 0;   // invalide le cache
-          var conEl = document.getElementById('kpi-contacts-count');
-          if (conEl) {
-            var conN = parseInt(conEl.textContent.replace(/\D/g, ''), 10);
-            conEl.textContent = ((isNaN(conN) ? 0 : conN) + 1).toLocaleString('fr-FR');
-          }
-        } else {
-          console.warn('[Leads] addToPipeline POST contact HTTP ' + cResp.status);
-        }
+    // Contacts +dirigeants_crees (contacts dirigeants créés serveur, RGPD sans
+    // coordonnées). 0 si société dédupliquée ou re-fetch Etalab dégradé.
+    if (result.dirigeants_crees > 0) {
+      var conEl = document.getElementById('kpi-contacts-count');
+      if (conEl) {
+        var conN = parseInt(conEl.textContent.replace(/\D/g, ''), 10);
+        conEl.textContent = ((isNaN(conN) ? 0 : conN) + result.dirigeants_crees).toLocaleString('fr-FR');
       }
-    } catch(eContact) {
-      console.warn('[Leads] addToPipeline POST contact failed', eContact);
     }
 
     // Compteur de session : +1 par ajout (repart de 0 à chaque visite).

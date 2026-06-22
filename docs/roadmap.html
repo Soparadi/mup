@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roadmap — MovUP</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F5F5F7; --surface:#FFFFFF; --border:#E8E8ED; --border2:#C7C7CC;
+  --text:#1D1D1F; --muted:#6E6E73; --muted2:#AEAEB2;
+  --orange:#B84C00; --orange-bg:#FFF4EC; --blue:#0A66C2; --blue-bg:#EEF3FD;
+  --red:#B42318; --red-bg:#FEF3F2;
+  --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+  --mono:'Geist Mono','SF Mono','Menlo',monospace;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);font-size:14px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;line-height:1.5}
+.wrap{max-width:860px;margin:0 auto;padding:48px 24px 80px}
+.page-title{font-size:26px;font-weight:800;letter-spacing:-.6px}
+.page-sub{font-size:13px;color:var(--muted);margin-top:4px}
+.section-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:36px 0 12px;display:flex;align-items:center;gap:8px}
+.section-title svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:10px;box-shadow:var(--shadow-sm)}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.card-title{font-size:14px;font-weight:700}
+.tag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 8px;border-radius:20px}
+.tag-debt{background:var(--red-bg);color:var(--red)}
+.tag-pre{background:var(--orange-bg);color:var(--orange)}
+.card-body{font-size:13px;color:var(--text)}
+.card-body code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 5px;border-radius:5px}
+.meta{font-size:11.5px;color:var(--muted);margin-top:8px}
+.meta b{color:var(--text);font-weight:600}
+.empty{font-size:12.5px;color:var(--muted2);font-style:italic;padding:8px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-title">Roadmap MovUP</div>
+  <div class="page-sub">Suivi des chantiers à venir et de la dette technique. Document autonome.</div>
+
+  <div class="section-title">
+    <svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    Dette technique
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Face société lue depuis le record contact</span>
+      <span class="tag tag-debt">Dette</span>
+      <span class="tag tag-pre">Avant mise en production</span>
+    </div>
+    <div class="card-body">
+      La face société d'une fiche (raison sociale, adresse, code postal, ville,
+      site, email/téléphone société) est aujourd'hui <b>dupliquée sur chaque record
+      <code>contact</code></b> à l'import, parce que la fiche lit ces champs depuis
+      le contact (<code>contact-societe.html</code>) et jamais depuis la table
+      <code>societes</code>. Donnée redondante, risque de divergence entre les
+      contacts d'une même société.
+      <div class="meta">
+        <b>Refactor cible :</b> lire la face société depuis la table
+        <code>societes</code> via <code>societe_id</code> (source unique de vérité),
+        et cesser de dupliquer ces champs sur les contacts. À faire <b>avant la mise
+        en production</b>.
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

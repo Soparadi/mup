@@ -1271,7 +1271,7 @@ async function ecrireImport(db, userId, plan) {
       // Enrichir les champs vides uniquement, jamais écraser.
       const merged = { ...existant }
       const apport = {
-        prenom: p.prenom, contact_nom: fullName, poste: p.poste,
+        prenom: p.prenom, nom_personne: p.nom, contact_nom: fullName, poste: p.poste,
         email: p.email, phone: p.tel, linkedin: p.linkedin,
         ...faceSociete
       }
@@ -1298,6 +1298,7 @@ async function ecrireImport(db, userId, plan) {
         nom: societe ? societe.raison : fullName,
         contact_nom: fullName,
         prenom: p.prenom || '',
+        nom_personne: p.nom || '',
         poste: p.poste || '',
         email: p.email || '',
         phone: p.tel || '',

@@ -1277,7 +1277,7 @@ async function ecrireImport(db, userId, plan) {
       const merged = { ...existant }
       const apport = {
         prenom: p.prenom, nom_personne: p.nom, contact_nom: fullName, poste: p.poste,
-        email: p.email, phone: p.tel, linkedin: p.linkedin,
+        email: p.email, phone: p.tel, linkedin: p.linkedin, note_personne: p.note_personne,
         ...faceSociete
       }
       for (const [k, v] of Object.entries(apport)) {
@@ -1308,6 +1308,7 @@ async function ecrireImport(db, userId, plan) {
         email: p.email || '',
         phone: p.tel || '',
         linkedin: p.linkedin || '',
+        note_personne: p.note_personne || '',
         ...faceSociete,
         societe_id: societeId,
         statut: p.statut,

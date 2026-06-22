@@ -2219,6 +2219,13 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
         forme: ul.categorieJuridiqueUniteLegale || '',
         created: ul.dateCreationUniteLegale || etab.dateCreationEtablissement || '',
         complete: false,
+        // Adresse structurée (en sus de `address` agrégée) — consommée par
+        // /api/pipeline/from-lead pour le record société (voie / CP / commune).
+        adresse_numero_voie: adr.numeroVoieEtablissement || '',
+        adresse_type_voie: adr.typeVoieEtablissement || '',
+        adresse_libelle_voie: adr.libelleVoieEtablissement || '',
+        adresse_code_postal: adr.codePostalEtablissement || '',
+        adresse_libelle_commune: adr.libelleCommuneEtablissement || '',
         source: 'INSEE'
       });
     });
@@ -2319,6 +2326,13 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
         phone: null, website: null, email: null, socials: [],
         priority: 'cold', capital: r.capital ? r.capital + ' \u20AC' : '',
         forme: r.nature_juridique || '', created: r.date_creation || '',
+        // Adresse structur\u00E9e (en sus de `addr` agr\u00E9g\u00E9e) \u2014 consomm\u00E9e par
+        // /api/pipeline/from-lead pour le record soci\u00E9t\u00E9 (voie / CP / commune).
+        adresse_numero_voie: etab.numero_voie || '',
+        adresse_type_voie: etab.type_voie || '',
+        adresse_libelle_voie: etab.libelle_voie || '',
+        adresse_code_postal: etab.code_postal || '',
+        adresse_libelle_commune: etab.libelle_commune || '',
         complete: false, source: 'SIRENE'
       });
     });

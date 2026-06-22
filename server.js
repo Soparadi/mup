@@ -1260,14 +1260,27 @@ async function refetchDirigeants(siren) {
       const data = await r.json()
       const fiche = Array.isArray(data.results) ? data.results[0] : null
       if (!fiche) return vide
-      const dirigeants = (Array.isArray(fiche.dirigeants) ? fiche.dirigeants : [])
+      // Prénom : premier mot seulement (Etalab empile tous les prénoms d'état
+      // civil — « FABIENNE FRANCOISE MARIE-JOSEPHE » → « FABIENNE »). Nom laissé
+      // brut (nom de naissance + nom d'usage entre parenthèses conservés).
+      const dirigeantsRaw = (Array.isArray(fiche.dirigeants) ? fiche.dirigeants : [])
         .filter(d => d && d.type_dirigeant === 'personne physique')
         .filter(d => (typeof d.nom === 'string' && d.nom.trim()) || (typeof d.prenoms === 'string' && d.prenoms.trim()))
         .map(d => ({
-          prenom: typeof d.prenoms === 'string' ? d.prenoms.trim() : '',
+          prenom: typeof d.prenoms === 'string' ? (d.prenoms.trim().split(/\s+/)[0] || '') : '',
           nom_personne: typeof d.nom === 'string' ? d.nom.trim() : '',
           poste: typeof d.qualite === 'string' ? d.qualite.trim() : ''
         }))
+      // Dédup personne : Etalab répète la même personne sur plusieurs mandats
+      // (périodes distinctes). Clé = prénom(1er mot) + nom, insensible à la casse.
+      // On garde la 1re occurrence.
+      const vus = new Set()
+      const dirigeants = dirigeantsRaw.filter(d => {
+        const cle = (d.prenom + '|' + d.nom_personne).toLowerCase().trim()
+        if (vus.has(cle)) return false
+        vus.add(cle)
+        return true
+      })
       return {
         dirigeants,
         effectif: typeof fiche.tranche_effectif_salarie === 'string' ? fiche.tranche_effectif_salarie : '',

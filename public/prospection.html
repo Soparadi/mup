@@ -3092,12 +3092,9 @@ async function addToPipeline(leadId) {
 
     // Toast selon le résultat serveur : société déjà connue (dedup) ou nombre
     // de dirigeants matérialisés (0 si re-fetch Etalab dégradé).
-    var msg = (lead.name || 'Fiche') + ' ajouté au pipeline';
+    var msg = (lead.name || 'Fiche') + ' ajouté';
     if (result.dedup) {
       msg = (lead.name || 'Fiche') + ' ajouté (société déjà connue)';
-    } else if (result.dirigeants_crees > 0) {
-      msg = (lead.name || 'Fiche') + ' ajouté · ' + result.dirigeants_crees
-          + ' dirigeant' + (result.dirigeants_crees > 1 ? 's' : '');
     }
     showToast(msg);
 

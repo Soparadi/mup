@@ -391,7 +391,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     <div class="page-header">
       <div class="page-title-block">
         <div class="page-title">Contacts</div>
-        <div class="page-subtitle" id="page-subtitle">— sociétés · — personnes</div>
+        <div class="page-subtitle" id="page-subtitle">— contacts</div>
       </div>
       <div class="header-actions">
         <button class="btn btn-import" onclick="openImport('csv')">
@@ -965,30 +965,32 @@ function countActionsToday(){
   }).length;
 }
 
+// 1 contact = 1 entreprise = 1 societe_id distinct ; repli __id__<id> pour les
+// entrées sans societe_id (chacune = son propre contact). Même clé que le
+// regroupement de renderTable, pour ne jamais diverger.
+function countContacts(list){
+  const keys = new Set();
+  (list||[]).forEach(p => {
+    const sid = p.societe_id != null ? String(p.societe_id).trim() : '';
+    keys.add(sid || ('__id__' + p.id));
+  });
+  return keys.size;
+}
+
 function renderKpis(){
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
-  set('kpi-total', prospects.length);
-  set('kpi-pipeline', prospects.filter(p => p.source === 'pipeline' || p.source === 'prospection').length);
-  set('kpi-relations', prospects.filter(p => p.source === 'relations').length);
+  set('kpi-total', countContacts(prospects));
+  set('kpi-pipeline', countContacts(prospects.filter(p => p.source === 'pipeline' || p.source === 'prospection')));
+  set('kpi-relations', countContacts(prospects.filter(p => p.source === 'relations')));
   set('kpi-actions-today', countActionsToday());
 }
 
 function renderSubtitle(){
-  // Comptes réels après regroupement par société :
-  //   nb sociétés  = groupes portant un societe_id réel (orphelin sans
-  //                  societe_id n'est PAS une société),
-  //   nb personnes = records contacts (les cartes pipeline du board ne sont
-  //                  pas des personnes).
-  const socIds = new Set();
-  let m = 0;
-  prospects.forEach(p => {
-    const sid = p.societe_id != null ? String(p.societe_id).trim() : '';
-    if(sid) socIds.add(sid);
-    if(p.source !== 'pipeline') m++;
-  });
-  const n = socIds.size;
+  // 1 contact = 1 entreprise. La personne fait partie du contact (pas un
+  // compteur séparé), on n'affiche donc qu'un seul nombre.
+  const n = countContacts(prospects);
   const el = document.getElementById('page-subtitle');
-  if(el) el.textContent = n + ' société' + (n>1?'s':'') + ' · ' + m + ' personne' + (m>1?'s':'');
+  if(el) el.textContent = n + ' contact' + (n>1?'s':'');
 }
 
 function renderOriginFilters(){
@@ -1073,7 +1075,7 @@ function renderTable(){
   });
 
   const headerTitle = document.getElementById('table-header-title');
-  if(headerTitle) headerTitle.textContent = groups.length + ' société' + (groups.length>1?'s':'') + ' · triées par dernière activité';
+  if(headerTitle) headerTitle.textContent = groups.length + ' contact' + (groups.length>1?'s':'') + ' · triés par dernière activité';
 
   // Empty state si AUCUN contact en base ; sinon table même si filtre vide.
   if(!prospects.length){

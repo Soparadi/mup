@@ -2310,7 +2310,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       if(existing[siren] || existing[siret]) return;
 
       var addr = etab.adresse || etab.geo_adresse || [etab.numero_voie, etab.type_voie, etab.libelle_voie, etab.code_postal, etab.libelle_commune].filter(Boolean).join(' ');
-      var name = r.nom_complet || r.nom_raison_sociale || '';
+      var name = r.nom_raison_sociale || r.nom_complet || '';
       var dirigeants = r.dirigeants || [];
       var dir = dirigeants.length ? (dirigeants[0].prenom||'') + ' ' + (dirigeants[0].nom||'') : '';
       var nafEtab = (etab.activite_principale || r.activite_principale || '').replace('.','');

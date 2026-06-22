@@ -859,9 +859,12 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
   if (!userId) return
   try {
     const body = req.body || {}
-    // 1. SIRET requis (identifiant de dédup + cible opt-out).
+    // 1. SIREN requis (identifiant de dédup : une société = une unité légale).
+    //    SIRET conservé pour le stockage / l'opt-out, mais n'est plus la
+    //    condition de rejet.
     const siret = String(body.siret || '').replace(/\s+/g, '')
-    if (!siret) return res.status(400).json({ error: 'siret_requis' })
+    const siren = String(body.siren || '').replace(/\s+/g, '')
+    if (!siren) return res.status(400).json({ error: 'siren_requis' })
     // 2. Rempart opt-out RGPD — refus dur AVANT toute écriture.
     if (await checkBlocklistOne(siret)) {
       return res.status(403).json({
@@ -869,15 +872,15 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
         message: "Cette entreprise n'est pas disponible pour prospection."
       })
     }
-    const siren = String(body.siren || '').replace(/\s+/g, '')
     // 3. Re-fetch dirigeants + identité INSEE, HORS transaction (réseau lent).
     //    Dégradé gracieux assuré par le helper : vide si 429/erreur, jamais throw.
     const dd = await refetchDirigeants(siren)
 
     const db = await getDb()
-    // 4. Dédup société par SIRET (scope user). societe_id stocké SANS préfixe
-    //    de table (cohérent avec genId / ecrireImport).
-    const existing = await findSocieteBySiret(siret, userId)
+    // 4. Dédup société par SIREN (une société = une unité légale ; deux
+    //    établissements d'un même SIREN → UNE fiche). societe_id stocké SANS
+    //    préfixe de table (cohérent avec genId / ecrireImport).
+    const existing = await findSocieteBySiren(siren, userId)
     const neuve = !existing
     const societeId = existing
       ? String(existing.id).replace(/^societes:/, '')
@@ -974,6 +977,10 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
           email: '',
           phone: '',
           linkedin: '',
+          siren,
+          siret,
+          naf: body.naf || '',
+          code_naf: body.naf || '',
           ...faceSociete,
           societe_id: societeId,
           statut: 'pro',
@@ -1229,6 +1236,20 @@ async function findSocieteBySiret(siret, userId) {
   const result = await db.query(
     'SELECT * FROM societes WHERE siret = $siret AND userId = $userId LIMIT 1',
     { siret: clean, userId }
+  )
+  return result[0]?.[0] || null
+}
+
+// Dédup d'une société par SIREN, scopée au user. Retourne le record ou null.
+// SIREN nettoyé des espaces (les sources INSEE le formatent par blocs).
+// Siren vide → null (jamais de match sur chaîne vide). Index idx_societes_siren.
+async function findSocieteBySiren(siren, userId) {
+  const clean = String(siren || '').replace(/\s+/g, '')
+  if (!clean || !userId) return null
+  const db = await getDb()
+  const result = await db.query(
+    'SELECT * FROM societes WHERE siren = $siren AND userId = $userId LIMIT 1',
+    { siren: clean, userId }
   )
   return result[0]?.[0] || null
 }
@@ -4573,6 +4594,8 @@ app.use((req, res) => {
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_cle ON societes FIELDS cle_normalisee')
     // Sociétés — dédup par SIRET (NON unique : siret vide partagé tant que non enrichi)
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siret ON societes FIELDS siret')
+    // Sociétés — dédup par SIREN (NON unique : siren vide partagé tant que non enrichi)
+    await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siren ON societes FIELDS siren')
     console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes + 8 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)

@@ -1118,18 +1118,6 @@ app.delete('/api/societes/:id', async (req, res) => {
 // du userId courant en UNE transaction tout-ou-rien. Outil de test destructeur,
 // gardé par le flag ENABLE_DEV_RESET (absent → 404, ne révèle pas la route).
 // Exempté du rate-limit global et du gate abonnement (cf. skip + middleware).
-// TEMPORAIRE — diagnostic de la variable ENABLE_DEV_RESET. Ne révèle aucune
-// donnée sensible (présence, longueur, égalité stricte à '1'). Non gardé par le
-// flag (sinon indiagnostiquable), mais derrière requireAuth. À RETIRER après usage.
-app.get('/api/dev/flag-check', (req, res) => {
-  res.json({
-    enable_dev_reset_present: process.env.ENABLE_DEV_RESET !== undefined,
-    enable_dev_reset_value_length: (process.env.ENABLE_DEV_RESET || '').length,
-    enable_dev_reset_equals_1: process.env.ENABLE_DEV_RESET === '1',
-    node_env: process.env.NODE_ENV || null
-  })
-})
-
 app.post('/api/dev/reset-contacts', async (req, res) => {
   if (process.env.ENABLE_DEV_RESET !== '1') return res.status(404).end()
   const userId = requireUserId(req, res)

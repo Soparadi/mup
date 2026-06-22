@@ -1201,6 +1201,14 @@ async function ecrireImport(db, userId, plan) {
     (plan.personnes || []).map(p => p.societe_cle).filter(Boolean)
   )
 
+  // Plan société indexé par clé : la face société (adresse/cp/ville/site/email/
+  // tél standard) est dupliquée sur le contact, car la fiche lit cette face
+  // depuis le record contact, jamais depuis la table societes (dette technique
+  // tracée en roadmap : source de vérité à basculer sur societes via societe_id).
+  const planSocieteByCle = new Map(
+    (plan.societes || []).map(s => [s.cle_normalisee, s])
+  )
+
   const stmts = ['BEGIN TRANSACTION;']
   const params = { }
   let nbSocietes = 0
@@ -1240,6 +1248,16 @@ async function ecrireImport(db, userId, plan) {
   for (const p of plan.personnes) {
     const societe = p.societe_cle ? cleToSociete.get(p.societe_cle) : null
     const societeId = societe ? societe.id : null
+    const sPlan = p.societe_cle ? planSocieteByCle.get(p.societe_cle) : null
+    // Face société dupliquée sur le contact (lue par la fiche depuis le contact).
+    const faceSociete = {
+      website: (sPlan && sPlan.site) || '',
+      adresse: (sPlan && sPlan.adresse) || '',
+      zip: (sPlan && sPlan.cp) || '',
+      ville: (sPlan && sPlan.ville) || '',
+      societe_email: (sPlan && sPlan.email) || '',
+      societe_tel: (sPlan && sPlan.tel) || ''
+    }
     const fullName = [p.prenom, p.nom].filter(Boolean).join(' ').trim()
     const nomNorm = normaliserSociete(fullName)
 
@@ -1254,7 +1272,8 @@ async function ecrireImport(db, userId, plan) {
       const merged = { ...existant }
       const apport = {
         prenom: p.prenom, contact_nom: fullName, poste: p.poste,
-        email: p.email, phone: p.tel, linkedin: p.linkedin
+        email: p.email, phone: p.tel, linkedin: p.linkedin,
+        ...faceSociete
       }
       for (const [k, v] of Object.entries(apport)) {
         if (!merged[k] && v) merged[k] = v
@@ -1283,6 +1302,7 @@ async function ecrireImport(db, userId, plan) {
         email: p.email || '',
         phone: p.tel || '',
         linkedin: p.linkedin || '',
+        ...faceSociete,
         societe_id: societeId,
         statut: p.statut,
         source: p.source || 'import',
@@ -1320,6 +1340,9 @@ async function ecrireImport(db, userId, plan) {
       website: s.site || '',
       adresse: s.adresse || '',
       zip: s.cp || '',
+      ville: s.ville || '',
+      societe_email: s.email || '',
+      societe_tel: s.tel || '',
       societe_id: soc.id,
       statut: 'pro',
       source: s.source || 'import',

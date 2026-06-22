@@ -831,6 +831,7 @@ async function init(){
             instagram: p.instagram || '',
             siren: p.siren || '',
             siret: p.siret || '',
+            societe_id: p.societe_id || '',
             source: 'pipeline',
             entity_origine: p.entity_origine || 'mup',
             col: p.col || 'leads',
@@ -973,9 +974,19 @@ function renderKpis(){
 }
 
 function renderSubtitle(){
-  const n = prospects.length;
-  // Sprint 2 : champ personnes[] inexistant → m = n par défaut.
-  const m = prospects.reduce((sum, p) => sum + Math.max(1, (p.personnes || []).length), 0);
+  // Comptes réels après regroupement par société :
+  //   nb sociétés  = groupes portant un societe_id réel (orphelin sans
+  //                  societe_id n'est PAS une société),
+  //   nb personnes = records contacts (les cartes pipeline du board ne sont
+  //                  pas des personnes).
+  const socIds = new Set();
+  let m = 0;
+  prospects.forEach(p => {
+    const sid = p.societe_id != null ? String(p.societe_id).trim() : '';
+    if(sid) socIds.add(sid);
+    if(p.source !== 'pipeline') m++;
+  });
+  const n = socIds.size;
   const el = document.getElementById('page-subtitle');
   if(el) el.textContent = n + ' société' + (n>1?'s':'') + ' · ' + m + ' personne' + (m>1?'s':'');
 }
@@ -1029,16 +1040,40 @@ function renderTable(){
     (p.notes||'').toLowerCase().includes(q)
   );
 
-  // Tri figé : lastContact DESC (fallback updated_at).
-  list.sort((a, b) => {
+  filteredProspects = list;
+
+  // ── Regroupement par société : une ligne = une société ─────────────────
+  // S'applique APRÈS les filtres origine/recherche (ne touche pas filterProspects).
+  // Clé de groupe = societe_id non vide (format nu, uniforme) ; sinon repli sur
+  // l'id du record → un orphelin (sans societe_id) reste sa propre ligne.
+  // Représentant = 1er record contact (source ≠ pipeline), porteur de la face
+  // société, dont l'id ouvre la fiche société (contact-societe.html charge les
+  // dirigeants par societe_id) ; repli sur le 1er membre. nbPers = records
+  // personnes du groupe — les cartes pipeline (board) ne comptent pas.
+  const groupMap = new Map();
+  list.forEach(p => {
+    const sid = p.societe_id != null ? String(p.societe_id).trim() : '';
+    const key = sid || ('__id__' + p.id);
+    let g = groupMap.get(key);
+    if(!g){ g = []; groupMap.set(key, g); }
+    g.push(p);
+  });
+  let groups = [];
+  groupMap.forEach(members => {
+    const rep = members.find(m => m.source !== 'pipeline') || members[0];
+    const nbPers = Math.max(1, members.filter(m => m.source !== 'pipeline').length);
+    groups.push(Object.assign({}, rep, { _nbPers: nbPers }));
+  });
+
+  // Tri figé : lastContact DESC (fallback updated_at), sur les représentants.
+  groups.sort((a, b) => {
     const da = new Date(a.lastContact || a.updated_at || 0).getTime();
     const db = new Date(b.lastContact || b.updated_at || 0).getTime();
     return db - da;
   });
-  filteredProspects = list;
 
   const headerTitle = document.getElementById('table-header-title');
-  if(headerTitle) headerTitle.textContent = list.length + ' contact' + (list.length>1?'s':'') + ' · triés par dernière activité';
+  if(headerTitle) headerTitle.textContent = groups.length + ' société' + (groups.length>1?'s':'') + ' · triées par dernière activité';
 
   // Empty state si AUCUN contact en base ; sinon table même si filtre vide.
   if(!prospects.length){
@@ -1049,10 +1084,10 @@ function renderTable(){
   if(tableCard) tableCard.style.display = 'flex';
   if(empty) empty.style.display = 'none';
 
-  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
   if(currentPage > totalPages) currentPage = totalPages;
   const start = (currentPage - 1) * PAGE_SIZE;
-  const slice = list.slice(start, start + PAGE_SIZE);
+  const slice = groups.slice(start, start + PAGE_SIZE);
 
   const svgNote = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
 
@@ -1060,7 +1095,7 @@ function renderTable(){
     const id = esc(String(p.id));
     const nom = esc(p.nom || '—');
     const ville = esc(p.adresse || '');
-    const nbPers = Math.max(1, (p.personnes || []).length);
+    const nbPers = p._nbPers || 1;
     const subParts = [];
     if(ville) subParts.push(ville);
     subParts.push(nbPers + ' personne' + (nbPers>1?'s':''));
@@ -1103,8 +1138,8 @@ function renderTable(){
 
   const info = document.getElementById('table-footer-info');
   if(info){
-    if(list.length === 0) info.textContent = 'Aucun contact ne correspond aux filtres';
-    else info.textContent = 'Affichage ' + (start + 1) + '-' + Math.min(start + PAGE_SIZE, list.length) + ' sur ' + list.length;
+    if(groups.length === 0) info.textContent = 'Aucun contact ne correspond aux filtres';
+    else info.textContent = 'Affichage ' + (start + 1) + '-' + Math.min(start + PAGE_SIZE, groups.length) + ' sur ' + groups.length;
   }
   renderPagination(totalPages);
 }

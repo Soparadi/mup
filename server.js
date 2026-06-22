@@ -16,6 +16,7 @@ import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
 import { normaliserSociete } from './lib/societes.js'
+import { libelleFormeJuridique } from './lib/formes-juridiques.js'
 import { analyserImport, analyserImportDetaille } from './lib/import.js'
 import { normalizePersonFields } from './lib/person-fields.js'
 import { router as authRouter } from './server/auth/routes.js'
@@ -840,6 +841,191 @@ app.post('/api/pipeline', async (req, res) => {
   } catch (err) {
     console.error('[pipeline]', err)
     res.status(500).json({ error: 'Impossible de créer la carte pipeline' })
+  }
+})
+
+// ── POST /api/pipeline/from-lead — matérialise un prospect en UNE transaction :
+// société + dirigeants (contacts) + carte pipeline. Autorité serveur sur la
+// provenance (source:'prospection' posée ici, non spoofable côté client) ;
+// lève la dette du double POST plat + source hardcodée (cf. POST /api/pipeline).
+//
+// Ordre strict : 400 siret manquant -> 403 opt-out (AVANT toute écriture) ->
+// re-fetch dirigeants HORS transaction (dégradé gracieux) -> dédup SIRET ->
+// transaction unique. Société déjà existante (findSocieteBySiret) : SKIP
+// création société + dirigeants, carte créée seulement si pas déjà au pipeline.
+// Échec re-fetch : société/carte créées quand même, dirigeants_crees:0.
+app.post('/api/pipeline/from-lead', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const body = req.body || {}
+    // 1. SIRET requis (identifiant de dédup + cible opt-out).
+    const siret = String(body.siret || '').replace(/\s+/g, '')
+    if (!siret) return res.status(400).json({ error: 'siret_requis' })
+    // 2. Rempart opt-out RGPD — refus dur AVANT toute écriture.
+    if (await checkBlocklistOne(siret)) {
+      return res.status(403).json({
+        error: 'opt_out',
+        message: "Cette entreprise n'est pas disponible pour prospection."
+      })
+    }
+    const siren = String(body.siren || '').replace(/\s+/g, '')
+    // 3. Re-fetch dirigeants + identité INSEE, HORS transaction (réseau lent).
+    //    Dégradé gracieux assuré par le helper : vide si 429/erreur, jamais throw.
+    const dd = await refetchDirigeants(siren)
+
+    const db = await getDb()
+    // 4. Dédup société par SIRET (scope user). societe_id stocké SANS préfixe
+    //    de table (cohérent avec genId / ecrireImport).
+    const existing = await findSocieteBySiret(siret, userId)
+    const neuve = !existing
+    const societeId = existing
+      ? String(existing.id).replace(/^societes:/, '')
+      : genId('s_')
+
+    // Carte pipeline : créée sauf si la société est déjà au board (dédup
+    // siren/siret). Lookup unique avant la transaction (fail-fast lecture).
+    const pres = await db.query('SELECT siren, siret FROM pipeline WHERE userId = $userId', { userId })
+    const dejaPipeline = (pres[0] || []).some(c =>
+      (siren && String(c.siren) === siren) || (siret && String(c.siret) === siret)
+    )
+
+    const now = new Date().toISOString()
+    const raison = body.raison_sociale || ''
+    // Adresse « voie » (numéro + type + libellé) pour le record société et la
+    // face société dupliquée ; adresse « complète » (+ CP + ville) pour la carte.
+    const adresse = [body.adresse_numero_voie, body.adresse_type_voie, body.adresse_libelle_voie]
+      .filter(Boolean).join(' ').trim()
+    const zip = body.adresse_code_postal || ''
+    const ville = body.adresse_libelle_commune || ''
+    const adresseComplete = [adresse, zip, ville].filter(Boolean).join(' ').trim()
+    const formeLib = libelleFormeJuridique(body.forme)
+    // Face société dupliquée sur chaque contact (dette ch.3 : la fiche lit la
+    // face société depuis le record contact, pas depuis la table societes).
+    const faceSociete = {
+      website: '',
+      adresse,
+      zip,
+      ville,
+      societe_email: '',
+      societe_tel: '',
+      societe_linkedin: '',
+      forme_juridique: formeLib,
+      note_societe: ''
+    }
+
+    const stmts = ['BEGIN TRANSACTION;']
+    const params = {}
+
+    // [si neuve] CREATE société.
+    if (neuve) {
+      params.sid = societeId
+      params.sbody = {
+        userId,
+        raison_sociale: raison,
+        cle_normalisee: normaliserSociete(raison),
+        siret,
+        siren,
+        naf: body.naf || '',
+        naf_libelle: body.naf_libelle || '',
+        forme_juridique_code: body.forme || '',
+        forme_juridique: formeLib,
+        date_creation: body.date_creation || '',
+        capital: body.capital || '',
+        effectif: dd.effectif || '',
+        etat_administratif: dd.etat_administratif || '',
+        statut_diffusion: dd.statut_diffusion || '',
+        adresse,
+        zip,
+        ville,
+        lat: body.lat != null ? body.lat : null,
+        lng: body.lng != null ? body.lng : null,
+        source: 'prospection',
+        created_at: now,
+        updated_at: now
+      }
+      stmts.push('CREATE type::record("societes", $sid) CONTENT $sbody;')
+    }
+
+    // [si neuve] CREATE un contact par dirigeant physique (RGPD : pas
+    // d'email/mobile/linkedin, coordonnées laissées vides).
+    let dirigeantsCrees = 0
+    if (neuve) {
+      let di = 0
+      for (const d of dd.dirigeants) {
+        const contactNom = [d.prenom, d.nom_personne].filter(Boolean).join(' ').trim()
+        params['cid' + di] = genId('c_')
+        params['cbody' + di] = normalizePersonFields({
+          userId,
+          nom: raison,
+          contact_nom: contactNom,
+          prenom: d.prenom || '',
+          nom_personne: d.nom_personne || '',
+          poste: d.poste || '',
+          email: '',
+          phone: '',
+          linkedin: '',
+          ...faceSociete,
+          societe_id: societeId,
+          statut: 'pro',
+          source: 'prospection',
+          entity_origine: 'mup',
+          status: 'new',
+          created_at: now,
+          updated_at: now
+        })
+        stmts.push(`CREATE type::record("contacts", $cid${di}) CONTENT $cbody${di};`)
+        di++
+        dirigeantsCrees++
+      }
+    }
+
+    // CREATE carte pipeline (sauf société déjà au board). Titre = raison
+    // sociale ; contact = 1er dirigeant (vide si dégradé).
+    if (!dejaPipeline) {
+      const premier = dd.dirigeants[0]
+      const contactCarte = premier
+        ? [premier.prenom, premier.nom_personne].filter(Boolean).join(' ').trim()
+        : ''
+      params.pbody = {
+        userId,
+        company: raison,
+        co: raison,
+        name: raison,
+        siren,
+        siret,
+        sector: body.naf_libelle || '',
+        address: adresseComplete,
+        contact: contactCarte,
+        email: '',
+        phone: '',
+        website: '',
+        col: 'prospects',
+        val: 0,
+        days: 0,
+        activity: [],
+        source: 'prospection',
+        societe_id: societeId
+      }
+      stmts.push('CREATE pipeline CONTENT $pbody;')
+    }
+
+    stmts.push('COMMIT TRANSACTION;')
+    // hasWrites : société neuve OU carte à créer. Si société existante ET déjà
+    // au pipeline -> aucune écriture, on évite une transaction vide.
+    if (neuve || !dejaPipeline) {
+      await db.query(stmts.join('\n'), params)
+    }
+
+    return res.status(neuve ? 201 : 200).json({
+      ok: true,
+      societe_id: societeId,
+      dirigeants_crees: dirigeantsCrees,
+      dedup: !neuve
+    })
+  } catch (err) {
+    console.error('[pipeline:from-lead]', err)
+    res.status(500).json({ error: 'Impossible de matérialiser le prospect' })
   }
 })
 

@@ -1235,6 +1235,16 @@ async function ecrireImport(db, userId, plan) {
       ville: s.ville || '',
       zip: s.cp || '',
       forme_juridique: s.forme_juridique || '',
+      // Identité INSEE — jamais fournie par l'import (reste vide), alimentée
+      // ultérieurement par l'enrichissement SIRENE / la fiche société.
+      siret: s.siret || '',
+      siren: s.siren || '',
+      naf: s.naf || '',
+      naf_libelle: s.naf_libelle || '',
+      forme_juridique_code: s.forme_juridique_code || '',
+      date_creation: s.date_creation || '',
+      capital: s.capital || '',
+      effectif: s.effectif || '',
       note_societe: s.note_societe || '',
       source: s.source || 'import',
       created_at: now,

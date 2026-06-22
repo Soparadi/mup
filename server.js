@@ -1168,10 +1168,14 @@ async function ecrireImport(db, userId, plan) {
     'SELECT id, cle_normalisee, raison_sociale FROM societes WHERE userId = $userId',
     { userId }
   )
+  // societe_id stocké SANS préfixe de table (cohérent avec genId). La relecture
+  // SurrealDB renvoie l'id préfixé ("societes:xxx") -> on strip pour que les
+  // clés d'index coïncident avec celles écrites à la création (sinon le 2e
+  // import ne reconnaît plus l'existant et recrée des doublons).
   const cleToSociete = new Map()
   for (const s of sExist[0] || []) {
     if (s.cle_normalisee) {
-      cleToSociete.set(s.cle_normalisee, { id: String(s.id), raison: s.raison_sociale || '' })
+      cleToSociete.set(s.cle_normalisee, { id: String(s.id).replace(/^societes:/, ''), raison: s.raison_sociale || '' })
     }
   }
 
@@ -1183,9 +1187,11 @@ async function ecrireImport(db, userId, plan) {
   const bySocieteId = new Map()
   for (const c of cExist[0] || []) {
     if (c.email) byEmail.set(String(c.email).toLowerCase(), c)
+    // Même normalisation d'id que cleToSociete : strip du préfixe "societes:".
+    const cSocId = c.societe_id ? String(c.societe_id).replace(/^societes:/, '') : ''
     const nomNorm = normaliserSociete(c.contact_nom || '')
-    if (nomNorm) byNomSoc.set(nomNorm + '|' + (c.societe_id ? String(c.societe_id) : ''), c)
-    if (c.societe_id) bySocieteId.set(String(c.societe_id), c)
+    if (nomNorm) byNomSoc.set(nomNorm + '|' + cSocId, c)
+    if (cSocId) bySocieteId.set(cSocId, c)
   }
 
   // Clés société portées par au moins une personne de cet import : ces sociétés

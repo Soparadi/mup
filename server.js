@@ -113,6 +113,7 @@ const globalApiLimiter = rateLimit({
         || req.path.startsWith('/geocode')
         || req.path.startsWith('/sirene')
         || req.path.startsWith('/search')
+        || req.path === '/dev/reset-contacts'  // outil dev : purge en 1 requête, hors 60/min
   }
 })
 app.use('/api', globalApiLimiter)
@@ -597,6 +598,7 @@ app.use('/api', (req, res, next) => {
   if (req.path === '/user/me') return next()
   if (req.path === '/account/privacy/export') return next()
   if (req.path === '/account/delete') return next()  // suppression compte art. 17 — accessible même abonnement expiré
+  if (req.path === '/dev/reset-contacts') return next()  // outil dev gardé par flag ENABLE_DEV_RESET
   return requireActiveSubscription(req, res, next)
 })
 
@@ -1109,6 +1111,39 @@ app.delete('/api/societes/:id', async (req, res) => {
   } catch (err) {
     console.error('[societes:delete]', err)
     res.status(500).json({ error: 'Impossible de supprimer la société' })
+  }
+})
+
+// ── /api/dev/reset-contacts — purge dev : vide contacts + societes + pipeline
+// du userId courant en UNE transaction tout-ou-rien. Outil de test destructeur,
+// gardé par le flag ENABLE_DEV_RESET (absent → 404, ne révèle pas la route).
+// Exempté du rate-limit global et du gate abonnement (cf. skip + middleware).
+app.post('/api/dev/reset-contacts', async (req, res) => {
+  if (process.env.ENABLE_DEV_RESET !== '1') return res.status(404).end()
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  if (req.body?.confirm !== 'RESET') {
+    return res.status(400).json({ error: 'confirmation requise' })
+  }
+  try {
+    const db = await getDb()
+    const result = await db.query(
+      'BEGIN TRANSACTION;\n' +
+      'DELETE contacts WHERE userId = $userId RETURN BEFORE;\n' +
+      'DELETE societes WHERE userId = $userId RETURN BEFORE;\n' +
+      'DELETE pipeline WHERE userId = $userId RETURN BEFORE;\n' +
+      'COMMIT TRANSACTION;',
+      { userId }
+    )
+    res.json({
+      ok: true,
+      contacts_supprimes: (result[0] || []).length,
+      societes_supprimees: (result[1] || []).length,
+      pipeline_supprimes: (result[2] || []).length
+    })
+  } catch (err) {
+    console.error('[dev:reset-contacts]', err)
+    res.status(500).json({ error: 'Reset impossible' })
   }
 })
 

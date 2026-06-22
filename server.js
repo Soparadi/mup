@@ -390,6 +390,21 @@ function isFullyDiffusible(record, source) {
   return false
 }
 
+// ── deptMatchCp — un CP appartient-il au périmètre de départements demandé ?
+// Cas général : préfixe CP (2 car.) ∈ allowedDepts. Cas Corse : le code
+// département est 2A/2B mais les CP corses commencent par "20" (seul cas en
+// France où préfixe CP ≠ code dept) → on accepte un CP "20xxx" dès que le
+// périmètre inclut 2A ou 2B. allowedDepts vide = aucun filtre (accepte tout).
+// Doit rester identique à prospection.html:deptMatchCp (cohérence client/serveur).
+function deptMatchCp(allowedDepts, cp) {
+  const depts = Array.isArray(allowedDepts) ? allowedDepts : []
+  if (!depts.length) return true
+  const prefix = String(cp || '').slice(0, 2)
+  if (depts.indexOf(prefix) !== -1) return true
+  if (prefix === '20' && (depts.indexOf('2A') !== -1 || depts.indexOf('2B') !== -1)) return true
+  return false
+}
+
 // ── pickLocalEtab — établissement local d'une fiche pour un périmètre dept.
 // Source de vérité unique (réplique prospection.html:2410-2423 + BARRIER NAF) : 1er
 // matching_etablissements dont le CP ∈ allowedDepts, sinon siège si son CP ∈
@@ -402,11 +417,11 @@ function pickLocalEtab(fiche, allowedDepts) {
   const matching = Array.isArray(fiche.matching_etablissements) ? fiche.matching_etablissements : []
   for (const e of matching) {
     const cp = String(e?.code_postal || '')
-    if (depts.length && depts.indexOf(cp.slice(0, 2)) !== -1) { etab = e; break }
+    if (depts.length && deptMatchCp(depts, cp)) { etab = e; break }
   }
   if (!etab && fiche.siege) {
     const sCp = String(fiche.siege.code_postal || '')
-    if (!depts.length || depts.indexOf(sCp.slice(0, 2)) !== -1) etab = fiche.siege
+    if (deptMatchCp(depts, sCp)) etab = fiche.siege
   }
   if (depts.length && !etab) return { etab: null, siret: '', naf: '', drop: true }
   if (!etab) etab = matching[0] || fiche.siege || {}
@@ -461,7 +476,7 @@ const REGION_DEPTS = {
   '76': ['09','11','12','30','31','32','34','46','48','65','66','81','82'],
   '84': ['01','03','07','15','26','38','42','43','63','69','73','74'],
   '93': ['04','05','06','13','83','84'],
-  '94': ['2A','2B','20']
+  '94': ['2A','2B']
 }
 
 app.get('/api/public/search-demo', async (req, res) => {
@@ -499,13 +514,11 @@ app.get('/api/public/search-demo', async (req, res) => {
     const matching = Array.isArray(item.matching_etablissements) ? item.matching_etablissements : []
     for (let i = 0; i < matching.length; i++) {
       const cp = String(matching[i].code_postal || '')
-      const dept = cp.length >= 2 ? cp.slice(0, 2) : ''
-      if (depts.indexOf(dept) !== -1) return matching[i]
+      if (deptMatchCp(depts, cp)) return matching[i]
     }
     const siege = item.siege || {}
     const cp = String(siege.code_postal || '')
-    const dept = cp.length >= 2 ? cp.slice(0, 2) : ''
-    if (depts.indexOf(dept) !== -1) return siege
+    if (deptMatchCp(depts, cp)) return siege
     return null
   }
 

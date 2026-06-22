@@ -1780,8 +1780,23 @@ var REGION_DEPTS = {
   '76':['09','11','12','30','31','32','34','46','48','65','66','81','82'],
   '84':['01','03','07','15','26','38','42','43','63','69','73','74'],
   '93':['04','05','06','13','83','84'],
-  '94':['2A','2B','20']
+  '94':['2A','2B']
 };
+
+// deptMatchCp — un CP appartient-il au périmètre de départements demandé ?
+// Cas général : préfixe CP (2 car.) ∈ allowedDepts. Cas Corse : le code
+// département est 2A/2B mais les CP corses commencent par "20" (seul cas en
+// France où préfixe CP ≠ code dept) → on accepte un CP "20xxx" dès que le
+// périmètre inclut 2A ou 2B. allowedDepts vide = aucun filtre (accepte tout).
+// Doit rester identique à server.js:deptMatchCp (cohérence client/serveur).
+function deptMatchCp(allowedDepts, cp) {
+  var depts = allowedDepts || [];
+  if(!depts.length) return true;
+  var prefix = String(cp || '').substring(0,2);
+  if(depts.indexOf(prefix) !== -1) return true;
+  if(prefix === '20' && (depts.indexOf('2A') !== -1 || depts.indexOf('2B') !== -1)) return true;
+  return false;
+}
 
 // Department names for select
 var DEPT_NAMES = {
@@ -2295,11 +2310,11 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       var localEtab = null;
       for(var i=0;i<matching.length;i++){
         var cp = matching[i].code_postal || '';
-        if(allowedDepts.length && allowedDepts.indexOf(cp.substring(0,2)) !== -1){ localEtab = matching[i]; break; }
+        if(allowedDepts.length && deptMatchCp(allowedDepts, cp)){ localEtab = matching[i]; break; }
       }
       if(!localEtab && r.siege){
         var sCp = r.siege.code_postal || '';
-        if(!allowedDepts.length || allowedDepts.indexOf(sCp.substring(0,2)) !== -1) localEtab = r.siege;
+        if(deptMatchCp(allowedDepts, sCp)) localEtab = r.siege;
       }
       // If dept selected, skip if no local etab found in that dept
       if(deptFb && !localEtab) return;

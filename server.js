@@ -1024,6 +1024,20 @@ app.delete('/api/contacts/:id', async (req, res) => {
   }
 })
 
+// Dédup d'une société par SIRET, scopée au user. Retourne le record ou null.
+// SIRET nettoyé des espaces (les sources INSEE le formatent par blocs).
+// Siret vide → null (jamais de match sur chaîne vide). Index idx_societes_siret.
+async function findSocieteBySiret(siret, userId) {
+  const clean = String(siret || '').replace(/\s+/g, '')
+  if (!clean || !userId) return null
+  const db = await getDb()
+  const result = await db.query(
+    'SELECT * FROM societes WHERE siret = $siret AND userId = $userId LIMIT 1',
+    { siret: clean, userId }
+  )
+  return result[0]?.[0] || null
+}
+
 // ── /api/societes — calquées sur /api/contacts (SCHEMALESS, scoping userId,
 // cleanRecordId, type::record hardcodé). cle_normalisee via normaliserSociete.
 app.get('/api/societes', async (req, res) => {
@@ -4292,7 +4306,9 @@ app.use((req, res) => {
     await db.query('DEFINE INDEX IF NOT EXISTS mailbox_creds_owner ON TABLE mailbox_credentials COLUMNS ownerId')
     // Sociétés — rapprochement par cle_normalisee (NON unique : homonymes possibles)
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_cle ON societes FIELDS cle_normalisee')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes + 7 indexes)')
+    // Sociétés — dédup par SIRET (NON unique : siret vide partagé tant que non enrichi)
+    await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siret ON societes FIELDS siret')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes + 8 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

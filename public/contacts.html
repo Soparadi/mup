@@ -683,13 +683,14 @@ const PAGE_SIZE = 10;
 // onglet ni de nouvelle couleur :
 //   linkedin -> LinkedIn (#0A66C2)
 //   iphone   -> Téléphone (#525252)
-//   carnet, gmail, outlook, prospection -> Direct (#6B6B6B)
+//   carnet, gmail, outlook -> Direct (#6B6B6B)
+//   prospection -> Générés par MovUP (matérialisé via le pipeline, cf. seau pipeline)
 const SOURCES_PHONE  = ['phone', 'iphone'];
-const SOURCES_DIRECT = ['manual', 'csv_import', 'paste', 'facture_import', 'carnet', 'gmail', 'outlook', 'prospection', 'import'];
+const SOURCES_DIRECT = ['manual', 'csv_import', 'paste', 'facture_import', 'carnet', 'gmail', 'outlook', 'import'];
 
 const ORIGIN_FILTERS = [
   { key: 'all',      label: 'Tous',                match: () => true },
-  { key: 'pipeline', label: 'Générés par MovUP',   match: p => p.source === 'pipeline' },
+  { key: 'pipeline', label: 'Générés par MovUP',   match: p => p.source === 'pipeline' || p.source === 'prospection' },
   { key: 'relations',label: 'Relations',           match: p => p.source === 'relations' },
   { key: 'linkedin', label: 'LinkedIn',            match: p => p.source === 'linkedin' },
   { key: 'phone',    label: 'Téléphone',           match: p => SOURCES_PHONE.includes(p.source) },
@@ -713,7 +714,7 @@ const ORIGIN_DOT = {
   carnet: '#6B6B6B',
   gmail: '#6B6B6B',
   outlook: '#6B6B6B',
-  prospection: '#6B6B6B',
+  prospection: '#B84C00',
   import: '#6B6B6B'
 };
 const ORIGIN_LABEL = {
@@ -729,7 +730,7 @@ const ORIGIN_LABEL = {
   carnet: 'Direct',
   gmail: 'Direct',
   outlook: 'Direct',
-  prospection: 'Direct',
+  prospection: 'Générés par MovUP',
   import: 'Direct'
 };
 
@@ -966,7 +967,7 @@ function countActionsToday(){
 function renderKpis(){
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
   set('kpi-total', prospects.length);
-  set('kpi-pipeline', prospects.filter(p => p.source === 'pipeline').length);
+  set('kpi-pipeline', prospects.filter(p => p.source === 'pipeline' || p.source === 'prospection').length);
   set('kpi-relations', prospects.filter(p => p.source === 'relations').length);
   set('kpi-actions-today', countActionsToday());
 }

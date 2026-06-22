@@ -894,8 +894,17 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
     const raison = body.raison_sociale || ''
     // Adresse « voie » (numéro + type + libellé) pour le record société et la
     // face société dupliquée ; adresse « complète » (+ CP + ville) pour la carte.
-    const adresse = [body.adresse_numero_voie, body.adresse_type_voie, body.adresse_libelle_voie]
+    let adresse = [body.adresse_numero_voie, body.adresse_type_voie, body.adresse_libelle_voie]
       .filter(Boolean).join(' ').trim()
+    // Repli (option A) : les matching_etablissements de recherche-entreprises ne
+    // portent PAS les champs voie structurés (numero/type/libelle), seulement
+    // l'adresse agrégée. Si la voie est vide mais qu'un body.address agrégé
+    // existe, on extrait la rue en retirant « <CP 5 chiffres> <ville> » de la
+    // fin. Pas de match -> on garde l'agrégé complet (jamais de perte).
+    if (!adresse && body.address) {
+      const agg = String(body.address).trim()
+      adresse = agg.replace(/\s+\d{5}\s+.+$/, '').trim() || agg
+    }
     const zip = body.adresse_code_postal || ''
     const ville = body.adresse_libelle_commune || ''
     const adresseComplete = [adresse, zip, ville].filter(Boolean).join(' ').trim()

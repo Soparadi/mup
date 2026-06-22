@@ -1234,6 +1234,8 @@ async function ecrireImport(db, userId, plan) {
       adresse: s.adresse || '',
       ville: s.ville || '',
       zip: s.cp || '',
+      forme_juridique: s.forme_juridique || '',
+      note_societe: s.note_societe || '',
       source: s.source || 'import',
       created_at: now,
       updated_at: now
@@ -1256,7 +1258,10 @@ async function ecrireImport(db, userId, plan) {
       zip: (sPlan && sPlan.cp) || '',
       ville: (sPlan && sPlan.ville) || '',
       societe_email: (sPlan && sPlan.email) || '',
-      societe_tel: (sPlan && sPlan.tel) || ''
+      societe_tel: (sPlan && sPlan.tel) || '',
+      societe_linkedin: (sPlan && sPlan.linkedin) || '',
+      forme_juridique: (sPlan && sPlan.forme_juridique) || '',
+      note_societe: (sPlan && sPlan.note_societe) || ''
     }
     const fullName = [p.prenom, p.nom].filter(Boolean).join(' ').trim()
     const nomNorm = normaliserSociete(fullName)
@@ -1337,13 +1342,16 @@ async function ecrireImport(db, userId, plan) {
       poste: '',
       email: '',
       phone: '',
-      linkedin: s.linkedin || '',
+      linkedin: '',
+      societe_linkedin: s.linkedin || '',
       website: s.site || '',
       adresse: s.adresse || '',
       zip: s.cp || '',
       ville: s.ville || '',
       societe_email: s.email || '',
       societe_tel: s.tel || '',
+      forme_juridique: s.forme_juridique || '',
+      note_societe: s.note_societe || '',
       societe_id: soc.id,
       statut: 'pro',
       source: s.source || 'import',

@@ -421,6 +421,10 @@ body{display:flex;min-height:100vh}
                   <input class="input" id="f-zip" type="text">
                 </div>
                 <div class="field">
+                  <label class="label">Ville</label>
+                  <input class="input" id="f-ville" type="text">
+                </div>
+                <div class="field">
                   <label class="label">LinkedIn</label>
                   <input class="input" id="f-linkedin" type="url" placeholder="https://linkedin.com/company/…">
                 </div>
@@ -435,6 +439,10 @@ body{display:flex;min-height:100vh}
                 <div class="field">
                   <label class="label">WhatsApp</label>
                   <input class="input" id="f-whatsapp" type="text" placeholder="Numéro sans espace">
+                </div>
+                <div class="field field-full">
+                  <label class="label">Remarques / note société</label>
+                  <textarea class="textarea" id="f-note-societe" rows="2"></textarea>
                 </div>
                 <div class="field field-full">
                   <div class="check">
@@ -784,7 +792,11 @@ function populate(){
   document.getElementById('f-societe-tel').value = c.societe_tel || '';
   document.getElementById('f-adresse').value = c.adresse || '';
   document.getElementById('f-zip').value = c.zip || '';
-  document.getElementById('f-linkedin').value = c.linkedin || '';
+  document.getElementById('f-ville').value = c.ville || '';
+  // f-linkedin = LinkedIn SOCIÉTÉ (/company/) ; le LinkedIn personne (/in/) vit
+  // dans le bloc personne (pf-linkedin). On lit donc societe_linkedin, pas c.linkedin.
+  document.getElementById('f-linkedin').value = c.societe_linkedin || '';
+  document.getElementById('f-note-societe').value = c.note_societe || '';
   document.getElementById('f-facebook').value = c.facebook || '';
   document.getElementById('f-instagram').value = c.instagram || '';
   document.getElementById('f-whatsapp').value = c.whatsapp || '';
@@ -999,7 +1011,11 @@ function captureFields(){
   c.societe_tel = document.getElementById('f-societe-tel').value.trim();
   c.adresse = document.getElementById('f-adresse').value.trim();
   c.zip = document.getElementById('f-zip').value.trim();
-  c.linkedin = document.getElementById('f-linkedin').value.trim();
+  c.ville = document.getElementById('f-ville').value.trim();
+  c.note_societe = document.getElementById('f-note-societe').value.trim();
+  // f-linkedin = LinkedIn SOCIÉTÉ -> societe_linkedin (le LinkedIn personne est
+  // géré dans le bloc personne via pf-linkedin, jamais écrasé ici).
+  c.societe_linkedin = document.getElementById('f-linkedin').value.trim();
   c.facebook = document.getElementById('f-facebook').value.trim();
   c.instagram = document.getElementById('f-instagram').value.trim();
   c.whatsapp = document.getElementById('f-whatsapp').value.trim();

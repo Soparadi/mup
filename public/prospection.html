@@ -3023,7 +3023,10 @@ async function addToPipeline(leadId) {
     adresse_type_voie: lead.adresse_type_voie || '',
     adresse_libelle_voie: lead.adresse_libelle_voie || '',
     adresse_code_postal: lead.adresse_code_postal || '',
-    adresse_libelle_commune: lead.adresse_libelle_commune || ''
+    adresse_libelle_commune: lead.adresse_libelle_commune || '',
+    // Adresse agrégée (blob) — repli serveur pour extraire la rue quand les
+    // champs voie structurés sont absents (matching_etablissements Etalab).
+    address: lead.address || ''
   };
   try {
     var apiResp = await fetch('/api/pipeline/from-lead', {

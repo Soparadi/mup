@@ -2348,6 +2348,12 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
         adresse_libelle_voie: etab.libelle_voie || '',
         adresse_code_postal: etab.code_postal || '',
         adresse_libelle_commune: etab.libelle_commune || '',
+        // Siège social (Etalab r.siege) — transporté SANS appel réseau (déjà en
+        // mémoire). L'établissement affiché (etab) reste la boutique ; on ajoute
+        // seulement l'info siège pour le bandeau « siège ailleurs » sur la fiche.
+        siege_adresse: r.siege && r.siege.adresse || '',
+        siege_siret: r.siege && r.siege.siret || '',
+        nombre_etablissements: r.nombre_etablissements != null ? r.nombre_etablissements : null,
         complete: false, source: 'SIRENE'
       });
     });
@@ -3041,7 +3047,12 @@ async function addToPipeline(leadId) {
     adresse_libelle_commune: lead.adresse_libelle_commune || '',
     // Adresse agrégée (blob) — repli serveur pour extraire la rue quand les
     // champs voie structurés sont absents (matching_etablissements Etalab).
-    address: lead.address || ''
+    address: lead.address || '',
+    // Siège social (transporté depuis r.siege à la recherche) — persisté côté
+    // serveur sur le record société ET la face société du contact.
+    siege_adresse: lead.siege_adresse || '',
+    siege_siret: lead.siege_siret || '',
+    nombre_etablissements: lead.nombre_etablissements != null ? lead.nombre_etablissements : null
   };
   try {
     var apiResp = await fetch('/api/pipeline/from-lead', {

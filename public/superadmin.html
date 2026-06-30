@@ -301,7 +301,12 @@ td.muted{color:var(--muted)}
 
   fetch('/api/admin/comptes', { credentials: 'same-origin' })
     .then(function (res) {
-      if (res.status === 403) { content.innerHTML = noticeForbidden(); return null; }
+      if (res.status === 403) {
+        var header = document.querySelector('.page-header');
+        if (header) header.style.display = 'none';
+        content.innerHTML = noticeForbidden();
+        return null;
+      }
       if (!res.ok) { content.innerHTML = noticeError(); return null; }
       return res.json();
     })

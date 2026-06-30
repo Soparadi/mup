@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MovUP — Comptes</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/sidebar.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F5F5F7;
+  --surface:#FFFFFF;
+  --surface2:#EBEBF0;
+  --card:#FFFFFF;
+  --border:#E8E8ED;
+  --border2:#C7C7CC;
+  --text:#1D1D1F;
+  --muted:#6E6E73;
+  --muted2:#AEAEB2;
+  --green:#1D8348;
+  --green-bg:#EDF7F2;
+  --orange:#B84C00;
+  --orange-bg:#FFF4EC;
+  --red:#CC0000;
+  --red-bg:#FFF0F0;
+  --blue:#0A66C2;
+  --blue-bg:#EEF3FD;
+  --accent:#1D1D1F;
+  --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+  --mono:'Geist Mono','SF Mono','Menlo',monospace;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 16px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.04);
+  --shadow-lg:0 16px 48px rgba(0,0,0,.12),0 4px 12px rgba(0,0,0,.06);
+  --radius:10px;
+}
+
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoothing:antialiased;display:flex}
+
+/* ── SHELL ── */
+.shell{display:flex;flex:1;overflow:hidden;height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:220px;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  padding:0 0 16px;flex-shrink:0;
+  height:100%;overflow-y:auto;
+}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+
+.page-header{
+  padding:20px 24px 0;
+  display:flex;align-items:flex-start;justify-content:space-between;
+  gap:16px;flex-shrink:0;
+}
+.page-title{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--text)}
+.page-subtitle{font-size:12.5px;color:var(--muted);margin-top:2px}
+
+.content{flex:1;overflow:auto;padding:20px 24px 32px}
+
+/* ── ENCART ÉTAT (chargement / refus / vide) ── */
+.notice{
+  max-width:520px;margin:40px auto;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:28px 24px;text-align:center;box-shadow:var(--shadow-sm);
+}
+.notice-icon{
+  width:44px;height:44px;border-radius:11px;
+  display:flex;align-items:center;justify-content:center;margin:0 auto 14px;
+  background:var(--surface2);color:var(--muted);
+}
+.notice-title{font-size:15px;font-weight:700;color:var(--text)}
+.notice-text{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.5}
+
+/* ── TABLEAU ── */
+.table-wrap{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;box-shadow:var(--shadow-sm);
+}
+table.accounts{width:100%;border-collapse:collapse;font-size:12.5px}
+table.accounts thead th{
+  text-align:left;font-weight:600;color:var(--muted);
+  font-size:11px;text-transform:uppercase;letter-spacing:.4px;
+  padding:11px 14px;border-bottom:1px solid var(--border);
+  background:var(--bg);white-space:nowrap;
+}
+table.accounts tbody td{
+  padding:11px 14px;border-bottom:1px solid var(--border);
+  color:var(--text);vertical-align:middle;
+}
+table.accounts tbody tr:last-child td{border-bottom:none}
+table.accounts tbody tr:hover{background:var(--bg)}
+td.email{font-weight:500}
+td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);color:var(--muted)}
+td.muted{color:var(--muted)}
+.tag{
+  display:inline-block;padding:2px 8px;border-radius:6px;
+  font-size:11px;font-weight:600;white-space:nowrap;
+  background:var(--surface2);color:var(--text);
+}
+.dash{color:var(--muted2)}
+</style>
+</head>
+<body>
+
+<!-- SHELL -->
+<div class="shell">
+
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main-content">
+
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+      <div class="page-title-block">
+        <div class="page-title">Comptes</div>
+        <div class="page-subtitle" id="page-subtitle">Inventaire des comptes — lecture seule</div>
+      </div>
+    </div>
+
+    <div class="content" id="content">
+      <div class="notice">
+        <div class="notice-title">Chargement…</div>
+        <div class="notice-text">Récupération de l'inventaire des comptes.</div>
+      </div>
+    </div>
+
+  </main>
+
+</div>
+
+<script src="/sidebar.js"></script>
+<script>
+(function () {
+  var content = document.getElementById('content');
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Date FR lisible (jj/mm/aaaa) ; vide si null/invalide.
+  function fmtDate(v) {
+    if (!v) return '';
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
+  function num(v) {
+    var n = Number(v);
+    return Number.isFinite(n) ? String(n) : '0';
+  }
+
+  function cellText(v) {
+    var s = (v == null ? '' : String(v)).trim();
+    return s ? esc(s) : '<span class="dash">—</span>';
+  }
+
+  function noticeForbidden() {
+    return '<div class="notice">'
+      + '<div class="notice-icon">'
+      + '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+      + '</div>'
+      + '<div class="notice-title">Accès non autorisé</div>'
+      + '<div class="notice-text">Vous n\'avez pas les droits nécessaires pour consulter cette page.</div>'
+      + '</div>';
+  }
+
+  function noticeError(msg) {
+    return '<div class="notice">'
+      + '<div class="notice-title">Chargement impossible</div>'
+      + '<div class="notice-text">' + esc(msg || 'Une erreur est survenue. Veuillez réessayer plus tard.') + '</div>'
+      + '</div>';
+  }
+
+  function noticeEmpty() {
+    return '<div class="notice">'
+      + '<div class="notice-title">Aucun compte</div>'
+      + '<div class="notice-text">L\'inventaire ne contient aucun compte pour le moment.</div>'
+      + '</div>';
+  }
+
+  function renderTable(rows) {
+    var head = '<thead><tr>'
+      + '<th>Email</th>'
+      + '<th>Prénom</th>'
+      + '<th>Plan</th>'
+      + '<th>Statut abo</th>'
+      + '<th>Essai</th>'
+      + '<th>Fin période</th>'
+      + '<th>Fiches</th>'
+      + '<th>Leads</th>'
+      + '<th>Créé le</th>'
+      + '</tr></thead>';
+
+    var body = '<tbody>';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i] || {};
+      body += '<tr>'
+        + '<td class="email">' + cellText(r.email) + '</td>'
+        + '<td>' + cellText(r.prenom) + '</td>'
+        + '<td><span class="tag">' + esc(r.plan || 'gratuit') + '</span></td>'
+        + '<td class="muted">' + cellText(r.subscription_status) + '</td>'
+        + '<td class="muted">' + cellText(r.trial_status) + '</td>'
+        + '<td class="muted">' + (fmtDate(r.current_period_end) ? esc(fmtDate(r.current_period_end)) : '<span class="dash">—</span>') + '</td>'
+        + '<td class="num">' + num(r.fiches) + '</td>'
+        + '<td class="num">' + num(r.leads) + '</td>'
+        + '<td class="muted">' + (fmtDate(r.created_at) ? esc(fmtDate(r.created_at)) : '<span class="dash">—</span>') + '</td>'
+        + '</tr>';
+    }
+    body += '</tbody>';
+
+    return '<div class="table-wrap"><table class="accounts">' + head + body + '</table></div>';
+  }
+
+  fetch('/api/admin/comptes', { credentials: 'same-origin' })
+    .then(function (res) {
+      if (res.status === 403) { content.innerHTML = noticeForbidden(); return null; }
+      if (!res.ok) { content.innerHTML = noticeError(); return null; }
+      return res.json();
+    })
+    .then(function (rows) {
+      if (rows === null) return;
+      if (!Array.isArray(rows) || rows.length === 0) { content.innerHTML = noticeEmpty(); return; }
+      var sub = document.getElementById('page-subtitle');
+      if (sub) sub.textContent = rows.length + ' compte' + (rows.length > 1 ? 's' : '') + ' — lecture seule';
+      content.innerHTML = renderTable(rows);
+    })
+    .catch(function () {
+      content.innerHTML = noticeError();
+    });
+})();
+</script>
+</body>
+</html>

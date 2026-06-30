@@ -411,6 +411,11 @@ export async function runAuthMigration() {
     // Suppression de compte RGPD art. 17 (Phase 6 Étape 13) — demande + échéance J+7.
     'DEFINE FIELD IF NOT EXISTS deletion_requested_at ON user TYPE option<datetime>',
     'DEFINE FIELD IF NOT EXISTS deletion_scheduled_at ON user TYPE option<datetime>',
+    // Statut VIP — libère le compte de TOUTE contrainte d'abonnement (mur 402,
+    // expiration d'essai). Lu par deriveAppState : bypass === true → 'active'.
+    // N'ouvre JAMAIS le superadmin (verrou email seul, statut disjoint). Géré
+    // depuis le tableau superadmin via POST /api/admin/comptes/bypass.
+    'DEFINE FIELD IF NOT EXISTS bypass ON user TYPE option<bool> DEFAULT false',
     'DEFINE INDEX IF NOT EXISTS user_email_unique ON user FIELDS email UNIQUE',
     // SIRET unique mais optionnel : plusieurs users peuvent rester sans siret
     // tant qu'ils n'ont pas franchi /account/upgrade (pré-Stripe Checkout).

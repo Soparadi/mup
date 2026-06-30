@@ -60,6 +60,12 @@ DEFINE FIELD IF NOT EXISTS plan_billing_cycle ON user TYPE option<string>
   ASSERT $value = NONE OR $value INSIDE ["monthly", "annual"];
 DEFINE FIELD IF NOT EXISTS billing_address ON user TYPE option<object>;
 
+-- Statut VIP — libère le compte de TOUTE contrainte d'abonnement (mur 402,
+-- expiration d'essai). Lu par deriveAppState : bypass === true → 'active'.
+-- N'ouvre JAMAIS le superadmin (verrou email seul, statut disjoint). Géré
+-- depuis le tableau superadmin via POST /api/admin/comptes/bypass.
+DEFINE FIELD IF NOT EXISTS bypass ON user TYPE option<bool> DEFAULT false;
+
 -- ── privacy_export_log ──
 -- Trace des téléchargements RGPD article 20. Sert au rate limit (5 / 24h / user).
 DEFINE TABLE IF NOT EXISTS privacy_export_log SCHEMAFULL;

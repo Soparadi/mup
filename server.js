@@ -1008,6 +1008,13 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
     const ville = body.adresse_libelle_commune || ''
     const adresseComplete = [adresse, zip, ville].filter(Boolean).join(' ').trim()
     const formeLib = libelleFormeJuridique(body.forme)
+    // Siège social (transporté par le client depuis r.siege Etalab, sans appel
+    // réseau). Persisté sur le record société ET dupliqué sur la face société du
+    // contact (la fiche lit la face depuis le record contact, pas societes) pour
+    // que le bandeau « siège ailleurs » puisse comparer siege_siret au siret.
+    const siegeAdresse = body.siege_adresse || ''
+    const siegeSiret = body.siege_siret || ''
+    const nombreEtablissements = body.nombre_etablissements != null ? body.nombre_etablissements : null
     // Face société dupliquée sur chaque contact (dette ch.3 : la fiche lit la
     // face société depuis le record contact, pas depuis la table societes).
     const faceSociete = {
@@ -1019,7 +1026,10 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
       societe_tel: '',
       societe_linkedin: '',
       forme_juridique: formeLib,
-      note_societe: ''
+      note_societe: '',
+      siege_adresse: siegeAdresse,
+      siege_siret: siegeSiret,
+      nombre_etablissements: nombreEtablissements
     }
 
     const stmts = ['BEGIN TRANSACTION;']
@@ -1046,6 +1056,9 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
         adresse,
         zip,
         ville,
+        siege_adresse: siegeAdresse,
+        siege_siret: siegeSiret,
+        nombre_etablissements: nombreEtablissements,
         lat: body.lat != null ? body.lat : null,
         lng: body.lng != null ? body.lng : null,
         source: 'prospection',

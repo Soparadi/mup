@@ -25,7 +25,7 @@ import { requireAuth, requireAuthHtml } from './server/middleware/requireAuth.js
 import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { requireSuperadmin } from './server/middleware/requireSuperadmin.js'
 import { deriveAppState } from './lib/derive-app-state.js'
-import { runAuthMigration } from './server/auth/surreal-adapter.js'
+import { runAuthMigration, invalidateSessionCacheByUserId } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
 import { getInseeToken } from './server/services/insee.js'
 import {
@@ -820,13 +820,44 @@ app.get('/api/admin/comptes', requireSuperadmin, async (req, res) => {
         current_period_end: userField(u, plan, 'current_period_end') || null,
         leads: plan?.leadsConsumedThisMonth ?? u.leadsConsumedThisMonth ?? 0,
         fiches: fichesById.get(id) ?? 0,
-        created_at: u.created_at || null
+        created_at: u.created_at || null,
+        // Statut VIP — vit sur user (pas user_plan). Lu par le toggle superadmin.
+        bypass: !!u.bypass
       }
     })
     res.json(rows)
   } catch (err) {
     console.error('[admin/comptes]', err.message)
     res.status(500).json({ error: 'Lecture comptes impossible' })
+  }
+})
+
+// ── POST /api/admin/comptes/bypass — superadmin, écriture VIP CHIRURGICALE ──
+// Même verrou que le GET (requireSuperadmin, dev@soparadi.com SEUL). Ne touche
+// QUE le champ bypass via MERGE — jamais password_hash, email, plan,
+// subscription_status, trial_status ni aucun autre champ. Après l'UPDATE,
+// invalide le cache de session du user modifié pour que deriveAppState relise
+// bypass sans attendre l'expiration du cache (sinon délai de ~30s).
+app.post('/api/admin/comptes/bypass', requireSuperadmin, async (req, res) => {
+  const email = String(req.body?.email ?? '').toLowerCase().trim()
+  const bypass = req.body?.bypass
+  // Booléen STRICT : rejette "true", 1, null, undefined.
+  if (!email) return res.status(400).json({ error: 'email requis' })
+  if (typeof bypass !== 'boolean') return res.status(400).json({ error: 'bypass doit être un booléen' })
+  try {
+    const db = await getDb()
+    const found = await db.query('SELECT * FROM user WHERE email = $email LIMIT 1', { email })
+    const u = found[0]?.[0]
+    if (!u) return res.status(404).json({ error: 'compte introuvable' })
+    // Id nettoyé (même norm que le GET) : sert au type::record ET à
+    // l'invalidation — sinon l'invalidation par userId rate la comparaison.
+    const id = String(u.id ?? '').replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+    await db.query('UPDATE type::record("user", $id) MERGE { bypass: $v }', { id, v: bypass })
+    invalidateSessionCacheByUserId(id)
+    res.json({ email, bypass })
+  } catch (err) {
+    console.error('[admin/comptes/bypass]', err.message)
+    res.status(500).json({ error: 'Mise à jour bypass impossible' })
   }
 })
 

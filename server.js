@@ -23,6 +23,7 @@ import { router as authRouter } from './server/auth/routes.js'
 import { router as stripeRouter, webhookHandler as stripeWebhookHandler } from './server/routes/stripe.js'
 import { requireAuth, requireAuthHtml } from './server/middleware/requireAuth.js'
 import { requireActiveSubscription } from './server/middleware/subscription.js'
+import { requireSuperadmin } from './server/middleware/requireSuperadmin.js'
 import { deriveAppState } from './lib/derive-app-state.js'
 import { runAuthMigration } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
@@ -624,7 +625,8 @@ app.use('/api', (req, res, next) => {
 // login, légales, assets) tombe en next() vers express.static.
 const APP_HTML_ROUTES = new Set([
   '/dashboard', '/prospection', '/pipeline', '/agenda', '/mail', '/visio',
-  '/carte', '/contacts', '/devis', '/factures', '/frais', '/statistiques'
+  '/carte', '/contacts', '/devis', '/factures', '/frais', '/statistiques',
+  '/superadmin'
 ])
 const APP_HTML_PREFIXES = ['/account']
 
@@ -775,6 +777,56 @@ app.get('/api/leads/engaged', async (req, res) => {
   } catch (err) {
     console.error('[leads/engaged]', err.message)
     res.status(500).json({ error: 'Lecture engagés impossible' })
+  }
+})
+
+// ── /api/admin/comptes — superadmin, LECTURE SEULE ──
+// Verrou route-level requireSuperadmin (req.authUser garanti par le gate global
+// requireAuth, server.js:592). GET → passe le gate abonnement (lecture seule),
+// donc dev accède même essai expiré. Rejoue les 3 SELECT de
+// scripts/inventaire-comptes.js (aucune mutation, aucun appel Stripe) et agrège
+// par compte. Renvoie un tableau JSON trié par created_at.
+app.get('/api/admin/comptes', requireSuperadmin, async (req, res) => {
+  const norm = (id) => String(id ?? '')
+    .replace(/^user:/, '').replace(/^user_plan:/, '').replace(/^⟨+|⟩+$/g, '')
+  // userField : valeur du champ sur user, sinon fallback sur user_plan.
+  const userField = (u, plan, key) => {
+    if (u[key] !== undefined && u[key] !== null && u[key] !== '') return u[key]
+    if (plan && plan[key] !== undefined && plan[key] !== null && plan[key] !== '') return plan[key]
+    return null
+  }
+  try {
+    const db = await getDb()
+    const [usersRes, planRes, pipeRes] = await Promise.all([
+      db.query('SELECT * FROM user ORDER BY created_at'),
+      db.query('SELECT * FROM user_plan'),
+      db.query('SELECT userId, count() AS n FROM pipeline GROUP BY userId')
+    ])
+    const users = usersRes[0] || []
+    const planById = new Map()
+    for (const p of (planRes[0] || [])) planById.set(norm(p.userId || p.id), p)
+    const fichesById = new Map()
+    for (const r of (pipeRes[0] || [])) fichesById.set(norm(r.userId), r.n)
+
+    const rows = users.map((u) => {
+      const id = norm(u.id)
+      const plan = planById.get(id)
+      return {
+        email: u.email || '',
+        prenom: u.prenom || u.name || '',
+        plan: userField(u, plan, 'plan') || 'gratuit',
+        subscription_status: userField(u, plan, 'subscription_status') || '',
+        trial_status: userField(u, plan, 'trial_status') || '',
+        current_period_end: userField(u, plan, 'current_period_end') || null,
+        leads: plan?.leadsConsumedThisMonth ?? u.leadsConsumedThisMonth ?? 0,
+        fiches: fichesById.get(id) ?? 0,
+        created_at: u.created_at || null
+      }
+    })
+    res.json(rows)
+  } catch (err) {
+    console.error('[admin/comptes]', err.message)
+    res.status(500).json({ error: 'Lecture comptes impossible' })
   }
 })
 

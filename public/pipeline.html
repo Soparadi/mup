@@ -618,10 +618,6 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
         </div>
       </div>
       <div class="frow">
-        <div class="flabel">WhatsApp</div>
-        <input class="finput" id="m-whatsapp" placeholder="Numéro sans espace">
-      </div>
-      <div class="frow">
         <div class="flabel">Notes</div>
         <textarea class="finput" id="m-notes" rows="2" style="resize:none" placeholder="Contexte, besoins, prochaine action…"></textarea>
       </div>
@@ -1247,7 +1243,7 @@ function onDrop(e, colId) {
 
 // ── MODAL ──
 let editingId = null;
-const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-linkedin','m-facebook','m-instagram','m-whatsapp','m-notes'];
+const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-linkedin','m-facebook','m-instagram','m-notes'];
 function openModal(colId) {
   editingId = null;
   MODAL_FIELDS.forEach(fid => document.getElementById(fid).value = '');
@@ -1273,7 +1269,6 @@ function editCard(id) {
   document.getElementById('m-linkedin').value = c.linkedin||'';
   document.getElementById('m-facebook').value = c.facebook||'';
   document.getElementById('m-instagram').value = c.instagram||'';
-  document.getElementById('m-whatsapp').value = c.whatsapp||'';
   document.getElementById('m-notes').value = c.notes||'';
   document.getElementById('m-col').value = c.col||'prospects';
   document.getElementById('modal-title').textContent = 'Modifier la fiche';
@@ -1297,7 +1292,6 @@ function saveCard() {
     linkedin: document.getElementById('m-linkedin').value.trim(),
     facebook: document.getElementById('m-facebook').value.trim(),
     instagram: document.getElementById('m-instagram').value.trim(),
-    whatsapp: document.getElementById('m-whatsapp').value.trim(),
     notes: document.getElementById('m-notes').value.trim(),
     col: document.getElementById('m-col').value
   };

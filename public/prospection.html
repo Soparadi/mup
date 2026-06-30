@@ -90,10 +90,17 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
   width: calc(100% - 96px);
   box-shadow: 0 4px 24px rgba(0,0,0,.06);
 }
-/* Secteur souple (1fr, ellipsis + title) ; les 3 champs géo à largeur uniforme
-   = pire cas commun mesuré (« 04 — Alpes-de-Haute-Provence », 28 car. ≈ 248px) →
-   régularité DA + zéro troncature. Bouton auto en bout de rangée. */
-.search-grid { display: grid; grid-template-columns: 1fr 248px 248px 248px auto; gap: 16px; align-items: end; }
+/* La barre = un flex centré contenant (a) la grille métier+zone existante et
+   (b) le bloc recherche par identifiant. flex-wrap : sur écran large le bloc
+   identifiant tient à droite de « Lancer » ; si la largeur manque il passe
+   proprement en dessous, centré, sans casser l'alignement interne de la grille. */
+.search-bar { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 16px; }
+/* Colonnes resserrées pour dégager la place du bloc identifiant. Département
+   gardé le plus large des trois selects géo (libellés type « 04 — Alpes-de-
+   Haute-Provence ») ; au-delà, troncature native ellipsis, valeur complète
+   visible à l'ouverture de la liste. Bouton auto en bout de rangée. */
+.search-grid { display: grid; grid-template-columns: 185px 170px 200px 170px auto; gap: 16px; align-items: end; flex: 0 0 auto; }
+.search-grid select { text-overflow: ellipsis; }
 .field-label {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
@@ -199,14 +206,29 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 .btn-go.active:hover { background: #000; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.2); }
 .btn-go.loading { background: #000; color: #fff; cursor: wait; }
 
-/* Responsive : en largeur réduite, le bouton passe pleine largeur sous la rangée */
-/* Sous ~1280px les 3 colonnes fixes 248px + bouton ne tiennent plus : on bascule
-   en colonnes flexibles (les champs géo se partagent la rangée, bouton pleine
-   largeur dessous). Troncature des libellés extrêmes alors rattrapée par la liste
-   déroulante native + le title. */
+/* bloc recherche par identifiant (SIRET / SIREN) — à droite de « Lancer » */
+.id-block { display: flex; align-items: flex-end; gap: 10px; flex: 0 0 auto; }
+.id-field { width: 165px; }
+.id-field .field-label { white-space: nowrap; }
+.btn-id {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; padding: 0 16px; border-radius: 12px; border: none;
+  background: var(--border2); color: var(--muted);
+  font-family: var(--font); font-size: 13.5px; font-weight: 700;
+  cursor: not-allowed; transition: all .18s; white-space: nowrap;
+}
+.btn-id.active { background: #B84C00; color: #fff; cursor: pointer; }
+.btn-id.active:hover { background: #9D4000; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(184,76,0,.25); }
+
+/* Responsive : en largeur réduite, la grille prend toute la rangée (colonnes
+   flexibles, « Lancer » pleine largeur dessous) et le bloc identifiant passe en
+   dessous, centré. Troncature des libellés extrêmes rattrapée par la liste
+   déroulante native + l'ellipsis. */
 @media (max-width: 1280px) {
-  .search-grid { grid-template-columns: 1.6fr 1fr 1fr 1fr; }
+  .search-grid { flex: 1 1 100%; grid-template-columns: 1.5fr 1fr 1.3fr 1fr; }
   .search-grid > .btn-go { grid-column: 1 / -1; width: 100%; }
+  .id-block { flex: 1 1 100%; }
+  .id-field { flex: 1; width: auto; }
 }
 .spinner {
   width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3);
@@ -512,6 +534,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 
   <!-- ── SEARCH ENGINE ── -->
   <div class="search-engine">
+    <div class="search-bar">
     <div class="search-grid">
 
       <!-- secteur -->
@@ -587,6 +610,31 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
       </button>
 
     </div><!-- /search-grid -->
+
+      <!-- recherche par identifiant SIRET / SIREN — UI seule, non câblée -->
+      <div class="id-block">
+        <div class="id-field">
+          <div class="field-label">SIRET / SIREN</div>
+          <div class="sip" style="height:44px;display:flex;align-items:center">
+            <svg class="loup" width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <rect x="3" y="3" width="12" height="12" rx="2.5" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M6.5 6.5v5M9 6.5v5M11.5 6.5v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <input type="text" id="inp-id"
+              placeholder="14 ou 9 chiffres"
+              autocomplete="off" spellcheck="false" inputmode="numeric"/>
+          </div>
+        </div>
+        <button class="btn-id" id="btn-id" disabled>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M10.5 10.5l2.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>Rechercher</span>
+        </button>
+      </div>
+
+    </div><!-- /search-bar -->
 
     <div class="sfooter">
       <div class="shint" id="hint">Tapez un métier ou un code APE, puis choisissez une région</div>

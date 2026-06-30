@@ -940,6 +940,7 @@ async function load() {
   }
 }
 async function save() {
+  let rejected402 = false;
   for (const card of cards) {
     if (card.id) {
       try {
@@ -948,6 +949,7 @@ async function save() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(card)
         });
+        if (res.status === 402) { rejected402 = true; break; }
         if (!res.ok && res.status !== 404) {
           throw new Error(`HTTP ${res.status}`);
         }
@@ -957,6 +959,7 @@ async function save() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(card)
           });
+          if (resPost.status === 402) { rejected402 = true; break; }
           if (!resPost.ok) throw new Error(`POST failed: HTTP ${resPost.status}`);
         }
       } catch (err) {
@@ -964,6 +967,15 @@ async function save() {
       }
     }
   }
+  if (rejected402) {
+    // Fiche refusee par le peage : rollback a la verite serveur, sans ecrire le cache.
+    // Le toast/modal est deja affiche par l'intercepteur 402 global (trial-expired-modal.js).
+    await load();
+    renderKanban();
+    return;
+  }
+  // localStorage = cache lecture / tampon hors-ligne : ecrit sur succes serveur ou
+  // sur erreur reseau/5xx (offline), jamais sur l'etat optimiste refuse (402).
   localStorage.setItem('mup_pipeline', JSON.stringify(cards));
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch (_) {}
 }
@@ -2394,8 +2406,10 @@ function importFromProspects() {
         activity: ct.activity || [],
         noteEntries: ct.noteEntries || []
       };
+      // Ajout en memoire uniquement (affichage embed) : pas d'ecriture mup_pipeline
+      // hors API. SurrealDB reste la seule source de verite ; le cache n'est ecrit
+      // que par save() apres confirmation serveur.
       window.cards.push(newCard);
-      try { localStorage.setItem('mup_pipeline', JSON.stringify(window.cards)); } catch(e){}
     }
     function tryOpen(retry){
       if(typeof window.openDetail === 'function'){

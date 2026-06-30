@@ -58,6 +58,24 @@
     html += '</a>';
   }
 
+  // ── Entrée Superadmin — CONFORT D'AFFICHAGE, PAS LA SÉCURITÉ ──
+  // Dessinée UNIQUEMENT si le compte connecté est dev@soparadi.com (comparaison
+  // normalisée lowercase+trim). Pour tout autre compte ou si __USER__ est absent,
+  // l'entrée n'est pas générée du tout (absente du DOM). La vraie barrière reste
+  // le 403 serveur sur /api/admin/comptes — ce lien ne fait qu'éviter d'exposer
+  // /superadmin aux abonnés.
+  var suEmail = window.__USER__ && window.__USER__.email
+    ? String(window.__USER__.email).toLowerCase().trim() : '';
+  if (suEmail === 'dev@soparadi.com') {
+    var suActive = (path === '/superadmin') ? ' active' : '';
+    html += '<a class="sb-item' + suActive + '" href="/superadmin">'
+      + '<div class="sb-icon" style="background:rgba(29,29,31,.08);color:#1D1D1F">'
+      + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'
+      + '</div>'
+      + 'Superadmin'
+      + '</a>';
+  }
+
   // Stack en bas de sidebar : bloc utilisateur (tout en bas absolu).
   // Le lien "Légal" a été retiré (redondant avec le footer légal de chaque page app).
   // Wrapper avec margin-top:auto pour garantir position bottom indépendamment du

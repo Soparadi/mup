@@ -1616,6 +1616,9 @@ var S = {
   nGeoFail:     0,
   lastNomTs:    0,
 
+  // convergence compteur « Prospects trouvés » vers les points réellement posés
+  finished:     false,
+
   // map
   useCluster:   false
 };
@@ -2666,6 +2669,7 @@ async function loadPage(page) {
       S.hotCount       = (firstResp && firstResp.hotCount) || 0;
       S.nGeoOk        = 0;
       S.nGeoFail      = 0;
+      S.finished      = false;   // nouvelle recherche : le compteur reprend sa progression
       S.buffer        = keptItems;
       S.loaded        = 0;
       S.page          = 1;
@@ -2884,8 +2888,13 @@ function updateCountDisplay() {
   // Tuile KPI « Chargées » : nombre de fiches rendues, sans dénominateur.
   // (Titre marché « métier · N » retiré — voir res-hdr supprimé.)
   // Chip « Prospects trouvés » (rangée KPI) : source unique S.loaded.
-  var prospectsEl = document.getElementById('kpi-prospects-count');
-  if (prospectsEl) prospectsEl.textContent = S.loaded.toLocaleString('fr-FR');
+  // Après convergence (S.finished), le compteur est figé sur S.nGeoOk (points
+  // réellement posés) : ne pas le ré-écrire depuis S.loaded (re-rendu, réponse
+  // search-count tardive écraseraient la valeur figée).
+  if (!S.finished) {
+    var prospectsEl = document.getElementById('kpi-prospects-count');
+    if (prospectsEl) prospectsEl.textContent = S.loaded.toLocaleString('fr-FR');
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -3026,6 +3035,12 @@ function maybeFinishSearch(gen) {
   if(gen !== undefined && gen !== S.autoRoll.gen) return;
   if(S.upstreamExhausted && !S.autoRoll.active && !_geoRunning && _geoQ.length === 0) {
     setBtnReady();
+    // Convergence : « Prospects trouvés » se fige sur le nombre de points
+    // réellement posés sur la carte (carte = compteur). Flag pour que
+    // updateCountDisplay n'écrase plus cette valeur depuis S.loaded.
+    S.finished = true;
+    var prospectsEl = document.getElementById('kpi-prospects-count');
+    if (prospectsEl) prospectsEl.textContent = S.nGeoOk.toLocaleString('fr-FR');
   }
 }
 

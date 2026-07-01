@@ -1601,6 +1601,7 @@ var S = {
   total:        0,
   upstreamPage:      1,     // dernière page upstream fetchée (scroll infini)
   upstreamExhausted: false, // plus aucune page upstream à charger
+  emptyStreak:       0,     // pages upstream vides CONSÉCUTIVES (trou Etalab isolé toléré)
   totalComplete:0,
   hotCount:     0,
   loaded:       0,      // items rendered so far
@@ -2674,9 +2675,13 @@ async function loadPage(page) {
       S.loaded        = 0;
       S.page          = 1;
       S.upstreamPage  = 1;
+      S.emptyStreak   = 0;   // nouvelle recherche : streak de pages vides remis à zéro
       // Fin de flux jugée sur le BRUT upstream, pas sur les fiches filtrées :
       // page vide (rawCount===0) OU marché atteint. Le test "< PAGE_SIZE" est
       // cassé car le filtrage (serveur + client) raccourcit une page pleine.
+      // Page 1 : une page vide dès le premier fetch = gisement vide (vraie recherche
+      // sans résultat) → arrêt immédiat, on n'applique PAS le streak au tout premier
+      // fetch (le tolérer ferait boucler une recherche à 0 résultat).
       S.upstreamExhausted = (firstResp.rawCount === 0) || (S.buffer.length >= S.market);
       // Scéno B1 : invalide toute boucle auto-roll d'une recherche précédente
       // (token gen) et réinitialise la convergence du compteur marché.
@@ -2767,6 +2772,13 @@ function renderChunk(n) {
 // Révèle d'abord le buffer (gratuit) ; ne tape l'upstream QUE s'il est
 // épuisé, et alors avec une cadence sleep (jamais de rafale → protège l'API).
 // ════════════════════════════════════════════════════════════════
+// Nombre de pages upstream VIDES CONSÉCUTIVES qui concluent la fin réelle du
+// gisement. Aligne le front sur la doctrine serveur batchRaw===0 (search-count) :
+// un trou Etalab isolé (200 OK results:[] en milieu de gisement) n'arrête plus
+// le flux ; seules N pages vides d'affilée = vraie fin. Terminaison garantie :
+// au-delà du dataset Etalab renvoie vide pour toujours → le streak atteint N.
+var EMPTY_STREAK_MAX = 2;
+
 async function loadMore() {
   if(S.loading) return;
   if(S.loaded >= S.market) return;               // tout le marché est rendu
@@ -2799,8 +2811,19 @@ async function loadMore() {
     });
     S.buffer = S.buffer.concat(keptItems);
     S.total  = S.buffer.length;
-    // Fin de flux : page vide upstream (rawCount===0) OU marché atteint.
-    if((dp.rawCount === 0) || (S.buffer.length >= S.market)) S.upstreamExhausted = true;
+    // Fin de flux à deux temps :
+    //  1) marché atteint = fin immédiate et sûre ;
+    //  2) page vide = on incrémente le streak, et on ne conclut la fin qu'à
+    //     EMPTY_STREAK_MAX pages vides consécutives. Toute page avec du brut
+    //     (rawCount>0) REMET le streak à 0 → un trou Etalab isolé est absorbé.
+    if(S.buffer.length >= S.market) {
+      S.upstreamExhausted = true;
+    } else if(dp.rawCount === 0) {
+      S.emptyStreak++;
+      if(S.emptyStreak >= EMPTY_STREAK_MAX) S.upstreamExhausted = true; // vraie fin
+    } else {
+      S.emptyStreak = 0;   // page non vide → le trou (s'il y en avait un) est absorbé
+    }
     // S.market reste figé sur firstResp — on ne touche pas au KPI marché.
     renderChunk(PAGE_SIZE);
     console.log('[Leads] loadMore upstreamPage='+S.upstreamPage+' buffer='+S.buffer.length+' loaded='+S.loaded+' market='+S.market);

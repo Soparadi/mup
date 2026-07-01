@@ -103,22 +103,38 @@ function firstDirigeantPP(fiche) {
   return null
 }
 
-// UPSERT idempotent par record id. Réplique la logique de upsertRecord
-// (server.js:250) : celle-ci n'est PAS exportable (fonction interne de server.js ;
-// l'importer créerait un cycle server.js ⇄ referentiel.js). CREATE si absent,
-// UPDATE ... CONTENT si le record existe déjà.
+// UPSERT idempotent par record id. S'inspire de upsertRecord (server.js:250) —
+// non exportable (fonction interne de server.js ; l'importer créerait un cycle
+// server.js ⇄ referentiel.js). CREATE si absent, UPDATE ... SET si le record
+// existe déjà.
+//
+// Mode SET à liste dynamique (et NON CONTENT $body) : les datetimes cached_at /
+// refreshed_at sont calculés côté SurrealQL via time::now(), jamais posés dans
+// $body ni en string ISO — c'est exactement la cause du bug b219bf7 (le DEFAULT
+// time::now() en CONTENT échoue sous 2.6.5). Les assignations "champ = $param"
+// ne portent QUE les clés réellement présentes dans body : l'omission d'un champ
+// optionnel absent est préservée (→ NONE), aucun champ vide n'est forcé.
 async function upsertRecordRef(db, table, cleanId, body) {
-  const createSql = `CREATE type::record("${table}", $id) CONTENT $body`
-  const updateSql = `UPDATE type::record("${table}", $id) CONTENT $body`
+  const params = { id: cleanId }
+  const assigns = []
+  for (const [k, v] of Object.entries(body)) {
+    assigns.push(`${k} = $${k}`)
+    params[k] = v
+  }
+  // Datetimes calculés en SurrealQL (jamais dans $body — cf. b219bf7).
+  assigns.push('cached_at = time::now()', 'refreshed_at = time::now()')
+  const setClause = assigns.join(', ')
+  const createSql = `CREATE type::record("${table}", $id) SET ${setClause}`
+  const updateSql = `UPDATE type::record("${table}", $id) SET ${setClause}`
   try {
-    await db.query(createSql, { id: cleanId, body })
+    await db.query(createSql, params)
   } catch (e) {
     const isAlreadyExists =
       e?.name === 'AlreadyExistsError' ||
       e?.kind === 'AlreadyExists' ||
       String(e?.message || '').includes('already exists')
     if (!isAlreadyExists) throw e
-    await db.query(updateSql, { id: cleanId, body })
+    await db.query(updateSql, params)
   }
 }
 
@@ -126,15 +142,11 @@ async function upsertRecordRef(db, table, cleanId, body) {
 // FIRE-AND-FORGET : appelée sans await APRÈS res.json — ne doit JAMAIS throw ni
 // affecter la réponse déjà servie. Tout échec est avalé + loggé [referentiel-upsert].
 //
-// ATTENTION — CONTENT complet : upsertRecordRef fait UPDATE ... CONTENT $body
-// (remplacement TOTAL du record). Acceptable UNIQUEMENT ici car on n'écrit que le
-// socle Etalab (personne morale + établissement servi + dirigeant public) et
-// qu'aucun champ enrichi par un abonné n'existe encore en base. À REMPLACER par un
-// MERGE / UPDATE sélectif au prompt enrichissement, sinon les champs enrichis futurs
-// (email générique, fixe, …) seraient écrasés par une simple réécriture Etalab.
-// Corollaire : cached_at (DEFAULT time::now()) est réinitialisé à chaque réécriture
-// — dette connue, préservation via VALUE $before.cached_at OR time::now() traitée au
-// prompt enrichissement, PAS ici.
+// ATTENTION — cached_at réinitialisé : upsertRecordRef réassigne cached_at =
+// time::now() à CHAQUE UPDATE (le passage CONTENT→SET ne change pas ce point ; le
+// SET porte le socle Etalab servi à l'abonné + les 2 datetimes). Dette connue :
+// préservation via VALUE $before.cached_at OR time::now() traitée au prompt
+// enrichissement, PAS ici.
 export async function upsertReferentiel(fiches) {
   try {
     if (!Array.isArray(fiches) || fiches.length === 0) return
@@ -184,7 +196,8 @@ export async function upsertReferentiel(fiches) {
           if (dir.prenom) body.dirigeant_prenom = dir.prenom
           if (dir.fonction) body.dirigeant_fonction = dir.fonction
         }
-        // source / cached_at / refreshed_at : laissés au DEFAULT DB (time::now()).
+        // source : laissée au DEFAULT DB ('etalab_referentiel'). cached_at /
+        // refreshed_at : posés en SurrealQL (time::now()) par upsertRecordRef.
         await upsertRecordRef(db, 'referentiel_societes', id, body)
       } catch (e) {
         console.warn('[referentiel-upsert]', String(e?.message || e).slice(0, 80))

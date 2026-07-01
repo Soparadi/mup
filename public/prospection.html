@@ -622,7 +622,8 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
             </svg>
             <input type="text" id="inp-id"
               placeholder="14 ou 9 chiffres"
-              autocomplete="off" spellcheck="false" inputmode="numeric"/>
+              autocomplete="off" spellcheck="false" inputmode="numeric"
+              oninput="onIdInput(this.value)"/>
           </div>
         </div>
         <button class="btn-id" id="btn-id" disabled>
@@ -3394,6 +3395,24 @@ function _renderItem(r,q) {
     +'<span class="acd-label">'+_hl(r.label,q)+'</span>'
     +'</div>';
 }
+// ── Mode identifiant (SIRET / SIREN) ───────────────────────────
+// Strictement isolé du mode métier : ne lit ni n'écrit selectedNAFCode,
+// S.naf, S.nafLocked, ni aucun état de recherche par secteur.
+// Commit 2 : détection + activation visuelle du bouton seulement.
+function isValidIdentifier(v) {
+  var d = String(v || '').replace(/\s/g, '');
+  return /^\d{9}$/.test(d) || /^\d{14}$/.test(d);
+}
+function onIdInput(v) {
+  var inp = document.getElementById('inp-id');
+  var filtered = v.replace(/[^\d\s]/g, '');   // n'autorise que chiffres + espaces
+  if (filtered !== v) inp.value = filtered;
+  var btn = document.getElementById('btn-id');
+  var ok = isValidIdentifier(filtered);
+  btn.disabled = !ok;
+  btn.classList.toggle('active', ok);
+}
+
 function onSectorInput(v) {
   document.getElementById('btn-clr').classList.toggle('show', v.length > 0);
 

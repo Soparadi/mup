@@ -1967,8 +1967,12 @@ async function populateVilleSelect(dept) {
   // Ville optionnelle : « Toutes les villes » (value "") = pas de filtre, sélectionnable.
   // Le placeholder « Sélectionner » est l'invite ; ni l'un ni l'autre ne bloque le lancement.
   function render(communes) {
+    // Cas Paris/Lyon/Marseille : la commune unique du dept est détendue en
+    // arrondissements. On retire « Toutes les villes » (sa value vide lancerait
+    // une recherche sur tout le département = ville entière = gros gisement).
+    var isPLM = communes.some(function(c){ return PLM_ARR_UI[c.code]; });
     var html = '<option value="" disabled selected>Sélectionner</option>'
-             + '<option value="">Toutes les villes</option>';
+             + (isPLM ? '' : '<option value="">Toutes les villes</option>');
     communes.forEach(function(c) {
       // Ville PLM : étiquette non sélectionnable + arrondissements. Sinon option normale.
       var plm = plmArrOptions(c.code, c.nom);

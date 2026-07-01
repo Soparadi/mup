@@ -1611,6 +1611,9 @@ var S = {
 
   // leads buffer (all loaded, for export)
   buffer:       [],
+  // SIREN déjà entrés au buffer (dédup par entreprise, aligné search-count).
+  // Réinitialisé à chaque nouvelle recherche (loadPage page 1).
+  seenSiren:    null,
 
   // geocoding
   nGeoOk:       0,
@@ -2660,6 +2663,10 @@ async function loadPage(page) {
       var keptItems = firstItems.filter(function(it) {
         return !(it.naf && loadNaf && it.naf.replace(/\./g,'') !== loadNaf.replace(/\./g,''));
       });
+      // Nouvelle recherche : Set SIREN vierge, puis on ne garde que les
+      // entreprises jamais vues (aligné search-count). S.buffer sans doublon.
+      S.seenSiren = new Set();
+      keptItems = dedupNewBySiren(keptItems);
 
       // S.market = total marché (figé, alimente #st-total — NE PAS toucher).
       S.market = (firstResp && Number.isFinite(Number(firstResp.total)))
@@ -2779,6 +2786,23 @@ function renderChunk(n) {
 // au-delà du dataset Etalab renvoie vide pour toujours → le streak atteint N.
 var EMPTY_STREAK_MAX = 2;
 
+// Dédup SIREN — même doctrine que /api/search-count (dédup par entreprise).
+// Ne garde que les fiches dont le SIREN n'a jamais été vu dans cette recherche
+// et alimente S.seenSiren. Les fiches sans SIREN (rare) sont conservées telles
+// quelles (aucune clé sur laquelle dédupliquer). Renvoie le sous-ensemble neuf.
+function dedupNewBySiren(items) {
+  var out = [];
+  for(var i=0;i<items.length;i++){
+    var s = items[i] && items[i].siren;
+    if(s){
+      if(S.seenSiren.has(s)) continue;
+      S.seenSiren.add(s);
+    }
+    out.push(items[i]);
+  }
+  return out;
+}
+
 async function loadMore() {
   if(S.loading) return;
   if(S.loaded >= S.market) return;               // tout le marché est rendu
@@ -2809,20 +2833,27 @@ async function loadMore() {
     var keptItems = pageItems.filter(function(it) {
       return !(it.naf && loadNaf && it.naf.replace(/\./g,'') !== loadNaf.replace(/\./g,''));
     });
+    // Dédup SIREN : ne concaténer que les entreprises jamais vues (aligné
+    // search-count). batchNew = nombre de fiches réellement neuves cette page.
+    keptItems = dedupNewBySiren(keptItems);
+    var batchNew = keptItems.length;
     S.buffer = S.buffer.concat(keptItems);
     S.total  = S.buffer.length;
     // Fin de flux à deux temps :
     //  1) marché atteint = fin immédiate et sûre ;
-    //  2) page vide = on incrémente le streak, et on ne conclut la fin qu'à
-    //     EMPTY_STREAK_MAX pages vides consécutives. Toute page avec du brut
-    //     (rawCount>0) REMET le streak à 0 → un trou Etalab isolé est absorbé.
+    //  2) page sans rien de neuf = on incrémente le streak, et on ne conclut la
+    //     fin qu'à EMPTY_STREAK_MAX pages consécutives. Une page « vide » ici =
+    //     brut nul (rawCount===0) OU 100 % doublons (batchNew===0), même
+    //     doctrine que le serveur (batchNew===0 = gisement épuisé). Toute page
+    //     apportant du neuf REMET le streak à 0 → trou/doublon isolé absorbé.
+    //     Garantit la terminaison même si S.market (estimé) n'est jamais atteint.
     if(S.buffer.length >= S.market) {
       S.upstreamExhausted = true;
-    } else if(dp.rawCount === 0) {
+    } else if(dp.rawCount === 0 || batchNew === 0) {
       S.emptyStreak++;
       if(S.emptyStreak >= EMPTY_STREAK_MAX) S.upstreamExhausted = true; // vraie fin
     } else {
-      S.emptyStreak = 0;   // page non vide → le trou (s'il y en avait un) est absorbé
+      S.emptyStreak = 0;   // page apportant du neuf → trou/doublon absorbé
     }
     // S.market reste figé sur firstResp — on ne touche pas au KPI marché.
     renderChunk(PAGE_SIZE);

@@ -1932,6 +1932,32 @@ var DEPT_COMMUNES_CACHE = {};
 // API déjà utilisée ici (zoom dept commune). value = CODE INSEE →
 // le filtre serveur code_commune est exact (zéro fragilité accents/apostrophes)
 // et le double-filtre client par libellé devient inutile.
+// Paris/Lyon/Marseille : la commune globale (75056/69123/13055) est détendue en
+// arrondissements côté serveur (communeParam) → gros gisement instable. On propose
+// donc directement les arrondissements comme cibles ; leur code INSEE (75118…)
+// n'est PAS dans PLM_ARRONDISSEMENTS serveur, il court-circuite la détente et donne
+// un gisement d'un seul arrondissement. Mêmes séries que le serveur (source unique
+// de vérité : bornes identiques). La commune globale devient une étiquette de groupe
+// non sélectionnable (pas de recherche « Paris entier » depuis le menu).
+var PLM_ARR_UI = {
+  '75056': { ville: 'Paris',     start: 75101, n: 20 },
+  '69123': { ville: 'Lyon',      start: 69381, n: 9  },
+  '13055': { ville: 'Marseille', start: 13201, n: 16 },
+};
+function plmArrOptions(code, nomVille) {
+  var m = PLM_ARR_UI[code];
+  if (!m) return null;
+  // Étiquette de groupe inerte (disabled) : porte le nom de la ville, ne lance rien.
+  var html = '<option value="" disabled>' + esc(nomVille || m.ville) + '</option>';
+  for (var i = 0; i < m.n; i++) {
+    var c = m.start + i;               // ex. 75101..75120
+    var rang = i + 1;                  // 1er, 2e, 3e…
+    var lbl = m.ville + ' ' + rang + (rang === 1 ? 'er' : 'e') + ' arr.';
+    html += '<option value="' + c + '">' + esc(lbl) + '</option>';
+  }
+  return html;
+}
+
 async function populateVilleSelect(dept) {
   var sel = document.getElementById('sel-ville');
   // Ville optionnelle : « Toutes les villes » (value "") = pas de filtre, sélectionnable.
@@ -1940,7 +1966,10 @@ async function populateVilleSelect(dept) {
     var html = '<option value="" disabled selected>Sélectionner</option>'
              + '<option value="">Toutes les villes</option>';
     communes.forEach(function(c) {
-      html += '<option value="' + c.code + '">' + esc(c.nom) + '</option>';
+      // Ville PLM : étiquette non sélectionnable + arrondissements. Sinon option normale.
+      var plm = plmArrOptions(c.code, c.nom);
+      html += plm !== null ? plm
+                           : '<option value="' + c.code + '">' + esc(c.nom) + '</option>';
     });
     sel.innerHTML = html;
   }

@@ -2137,10 +2137,16 @@ app.get('/api/search-count', async (req, res) => {
       existing,
       blocked
     }
-    const count = allFiches.filter(f => keepLead(f, ctx)).length
+    const kept = allFiches.filter(f => keepLead(f, ctx))
+    const count = kept.length
 
     console.log(`[search-count] pages=${pagesScanned} brut=${brut} count=${count} sirets=${allSirets.length} pipeline=${existing.size}`)
     res.json({ count, capped: false })
+    // Aspiration complète du gisement au référentiel — fire-and-forget, après
+    // réponse (calque /api/search:2018). search-count a parcouru TOUT le gisement,
+    // donc toute recherche stocke désormais l'entièreté des entreprises, plus
+    // seulement les pages scrollées. upsertReferentiel idempotent par SIRET.
+    upsertReferentiel(kept)
   } catch(e) {
     res.status(502).json({ error: 'Service temporairement indisponible' })
   }

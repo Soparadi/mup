@@ -2495,6 +2495,7 @@ function switchToCluster() {
 // ════════════════════════════════════════════════════════════════
 var _geoQ = [];
 var _geoRunning = false;
+var GEO_THROTTLE_MS = 150;   // cadence du géocodage réseau (BAN/Nominatim) — jamais de rafale
 
 function enqueueGeo(lead) {
   _geoQ.push(lead);
@@ -2503,6 +2504,7 @@ function enqueueGeo(lead) {
 
 async function _runGeoQueue() {
   _geoRunning = true;
+  var myGen = S.autoRoll.gen;   // token : une file d'une recherche relancée ne libère pas le bouton
   while(_geoQ.length > 0) {
     var lead = _geoQ.shift();
 
@@ -2511,6 +2513,26 @@ async function _runGeoQueue() {
     if(lead.naf !== selectedNAFCode) {
       var stBadge = document.getElementById('geo-'+lead.id);
       if(stBadge) stBadge.parentElement && stBadge.closest('.card') && stBadge.closest('.card').remove();
+      continue;
+    }
+
+    // Coords Etalab déjà présentes → point posé DIRECTEMENT, sans géocodage réseau
+    // ni throttle : apparition rapide. Reproduit tous les effets de bord du chemin
+    // succès (compteur, marqueur, cluster, badge, geo-bar). Coords jamais écrasées.
+    if(lead.lat && lead.lng) {
+      lead.geoStatus = 'ok';
+      if(!lead.geoSrc) lead.geoSrc = 'api';
+      S.nGeoOk++;
+      addMarker(lead);
+      if(!S.useCluster && S.nGeoOk > CLUSTER_THR) switchToCluster();
+      var badgeApi = document.getElementById('geo-'+lead.id);
+      if(badgeApi){ badgeApi.className='badge b-geo-ok'; badgeApi.innerHTML='<svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align:-2px;margin-right:3px"><path d="M7 1.5c-2.2 0-4 1.8-4 4 0 2.8 4 7 4 7s4-4.2 4-7c0-2.2-1.8-4-4-4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7" cy="5.5" r="1.3" stroke="currentColor" stroke-width="1.5"/></svg> '+lead.geoSrc; }
+      document.getElementById('st-geo').textContent   = S.nGeoOk;
+      document.getElementById('st-noloc').textContent = S.nGeoFail;
+      var totalApi = S.nGeoOk + S.nGeoFail;
+      if(S.total > 0) {
+        document.getElementById('geo-bar').style.width = Math.min(100,Math.round(totalApi/Math.min(S.loaded,200)*100))+'%';
+      }
       continue;
     }
 
@@ -2535,9 +2557,10 @@ async function _runGeoQueue() {
     if(S.total > 0) {
       document.getElementById('geo-bar').style.width = Math.min(100,Math.round(total/Math.min(S.loaded,200)*100))+'%';
     }
-    await sleep(150);
+    await sleep(GEO_THROTTLE_MS);   // cadence géocodage réseau (branche pending uniquement)
   }
   _geoRunning = false;
+  maybeFinishSearch(myGen);   // 2e point de convergence : la file de points est vidée
   // Fade out geo bar
   setTimeout(function(){
     var b = document.getElementById('geo-bar');
@@ -2693,11 +2716,15 @@ async function loadPage(page) {
     showError(err.message || 'Service temporairement indisponible, réessayez dans quelques instants');
     if(isFirstPage) {
       document.getElementById('skel').classList.remove('show');
+      setBtnReady();   // garde-fou : sur erreur le bouton se libère, jamais bloqué en chargement
     }
   } finally {
     S.loading = false;
     document.getElementById('page-loader').classList.remove('show');
-    if(page === 1) setBtnReady();
+    // Plus de libération prématurée : le bouton reste en chargement jusqu'au dernier
+    // point (convergence). Ici on ne clôt que le cas « aucun résultat » (auto-roll
+    // jamais amorcé, file vide) — maybeFinishSearch libère alors immédiatement.
+    if(page === 1) maybeFinishSearch();
   }
 }
 
@@ -2782,19 +2809,18 @@ async function loadMore() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// AUTO-DÉROULEMENT EN PALIER (scéno B1) — on inverse la causalité : le
-// compteur tourne seul, le scroll ne fait que suivre. La boucle révèle
-// d'abord le buffer déjà fetché (zéro API, cadence AUTOROLL_MS) ; elle ne
-// tape l'upstream (loadMore, qui garde son sleep interne) que si le buffer
-// est vide ET upstream pas épuisé, avec une pause additionnelle pour rester
-// SOUS le limiter serveur (~2 req/s). Déroule par PALIER de AUTOROLL_PALIER
-// fiches puis marque une pause ; le scroll 80% relance le palier suivant.
-// Découplage respecté : agit sur le RENDU (renderChunk), jamais sur la garde
-// upstreamExhausted ni rawCount. Boucle séquentielle (await) → aucune rafale.
+// AUTO-DÉROULEMENT CONTINU (scéno B1) — on inverse la causalité : le compteur
+// tourne seul jusqu'au bout du gisement, le scroll ne fait que suivre. La boucle
+// révèle d'abord le buffer déjà fetché (zéro API, cadence AUTOROLL_MS) ; elle ne
+// tape l'upstream (loadMore, qui garde son sleep interne) que si le buffer est
+// vide ET upstream pas épuisé, avec une pause additionnelle pour rester SOUS le
+// limiter serveur (~1,75 req/s). Plus de plafond de palier : la boucle déroule
+// d'elle-même jusqu'à S.market, sans attendre de scroll — mais reste séquentielle
+// (await) → cadence réseau protégée, jamais de rafale. Découplage respecté : agit
+// sur le RENDU (renderChunk), jamais sur la garde upstreamExhausted ni rawCount.
 // ════════════════════════════════════════════════════════════════
-var AUTOROLL_MS       = 260;   // cadence d'un palier (révélation buffer)
-var AUTOROLL_PALIER   = 250;   // fiches déroulées avant pause
-var AUTOROLL_FETCH_MS = 420;   // pause additionnelle après un fetch upstream
+var AUTOROLL_MS       = 260;   // cadence de révélation du buffer (cosmétique, zéro API)
+var AUTOROLL_FETCH_MS = 420;   // pause additionnelle après un fetch upstream (cadence Etalab)
 
 S.autoRoll = { active: false, ceiling: 0, gen: 0 };
 
@@ -2806,9 +2832,7 @@ async function runAutoRoll() {
   try {
     while (S.autoRoll.active && myGen === S.autoRoll.gen && !document.hidden) {
       var market  = _displayMarket();
-      var ceiling = Math.min(S.autoRoll.ceiling, market);
-      if (S.loaded >= market)  break;       // marché atteint → fin
-      if (S.loaded >= ceiling) break;       // palier atteint → pause (reprise au scroll)
+      if (S.loaded >= market)  break;       // marché atteint → fin (déroulement continu, plus de palier)
       if (S.loaded < S.buffer.length) {
         renderChunk(PAGE_SIZE);             // révélation pure du buffer — zéro appel API
         await sleep(AUTOROLL_MS);
@@ -2821,13 +2845,14 @@ async function runAutoRoll() {
     }
   } finally {
     if (myGen === S.autoRoll.gen) S.autoRoll.active = false;
+    maybeFinishSearch(myGen);   // 1er point de convergence : la boucle s'est éteinte
   }
 }
 
-// Relance le déroulement pour le palier suivant (scroll 80%) ou l'amorce
-// (1er paquet). Bump la borne d'un palier puis (re)lance la boucle si inactive.
+// Amorce / confirme l'auto-déroulement continu. 1er paquet (2677) : lance la boucle.
+// Scroll 80% (inoffensif) : ne fait que confirmer un déroulement déjà en cours —
+// plus de plafond de palier, la boucle déroule d'elle-même jusqu'au marché.
 function nudgeAutoRoll() {
-  S.autoRoll.ceiling = S.loaded + AUTOROLL_PALIER;
   runAutoRoll();
 }
 
@@ -2990,6 +3015,18 @@ function setBtnReady() {
   // Libellé figé « Lancer la recherche » (plus de bascule « Relancer ») —
   // le feedback d'état reste porté par la ré-activation (classes + icône).
   document.getElementById('btn-lbl').textContent      = 'Lancer la recherche';
+}
+
+// Le bouton reste en chargement jusqu'au DERNIER point posé. Libération seulement
+// quand TOUT est fini : upstream épuisé, boucle auto-roll éteinte, file de points
+// vidée. Appelé aux 2 points de convergence (fin runAutoRoll, fin _runGeoQueue) et
+// en clôture du 1er paquet (cas « aucun résultat »). Le token gen empêche une
+// file/boucle d'une recherche relancée de libérer le bouton de la nouvelle.
+function maybeFinishSearch(gen) {
+  if(gen !== undefined && gen !== S.autoRoll.gen) return;
+  if(S.upstreamExhausted && !S.autoRoll.active && !_geoRunning && _geoQ.length === 0) {
+    setBtnReady();
+  }
 }
 
 function showError(msg) {

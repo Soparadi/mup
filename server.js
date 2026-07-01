@@ -1935,9 +1935,12 @@ app.get('/api/search', async (req, res) => {
   // par le commit 1828e2d (per_page hardcoded à 10 sur cette branche).
   params.set('per_page', String(Math.min(parseInt(req.query.per_page) || 25, 25)))
   if(req.query.page) params.set('page', req.query.page)
+  console.log('[DIAG /api/search] query reçue =', JSON.stringify(req.query))
+  console.log('[DIAG /api/search] URL upstream =', 'https://recherche-entreprises.api.gouv.fr/search?' + params.toString())
   try {
     const r = await fetch('https://recherche-entreprises.api.gouv.fr/search?' + params.toString())
     const data = await r.json()
+    console.log('[DIAG /api/search] etalab total_results =', data.total_results, '| erreur =', data.erreur, '| results.len =', (data.results ? data.results.length : 'n/a'))
     // Filtre qualité : on retire les fiches non-prospectables (sans dirigeant,
     // cessées, ou nature juridique exclue — SCI/organismes publics/droit
     // étranger). total_results est ré-estimé via le ratio observé sur la page
@@ -1996,6 +1999,7 @@ app.get('/api/search', async (req, res) => {
       }
       data.results = data.results.filter(f => keepLead(f, ctx))
       console.log(`[search] page=${req.query.page || 1} brut=${brut} garde=${data.results.length}`)
+      console.log('[DIAG /api/search] après keepLead =', data.results.length)
     }
     res.json(data)
     // Fire-and-forget : tracking historique recherches. Lancé APRÈS res.json

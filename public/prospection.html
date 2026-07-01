@@ -626,7 +626,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
               oninput="onIdInput(this.value)"/>
           </div>
         </div>
-        <button class="btn-id" id="btn-id" title="Rechercher" aria-label="Rechercher" disabled>
+        <button class="btn-id" id="btn-id" title="Rechercher" aria-label="Rechercher" onclick="searchById()" disabled>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
             <path d="M10.5 10.5l2.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -3410,6 +3410,134 @@ function onIdInput(v) {
   var ok = isValidIdentifier(filtered);
   btn.disabled = !ok;
   btn.classList.toggle('active', ok);
+}
+
+// Mappe UN résultat Etalab brut au format lead exact du buffer (mêmes clés que
+// fetchLeads ~2381), pour que createCard/addToPipeline/from-lead le traitent à
+// l'identique. Pas de filtre dept ici : l'identifiant cible une entreprise précise.
+function _mapIdResult(r) {
+  var etab = (r.matching_etablissements && r.matching_etablissements[0]) || r.siege || {};
+  var siren = r.siren || '';
+  var siret = etab.siret || '';
+  var addr  = etab.adresse || etab.geo_adresse || [etab.numero_voie, etab.type_voie, etab.libelle_voie, etab.code_postal, etab.libelle_commune].filter(Boolean).join(' ');
+  var dirigeants = r.dirigeants || [];
+  var dir = dirigeants.length ? (dirigeants[0].prenom || '') + ' ' + (dirigeants[0].nom || '') : '';
+  var nafEtab = (etab.activite_principale || r.activite_principale || '').replace('.', '');
+  return {
+    id: siret || siren || String(Math.abs((siren + siret).split('').reduce(function(a, c){ return a + c.charCodeAt(0); }, 0))),
+    name: r.nom_raison_sociale || r.nom_complet || '',
+    naf: nafEtab, nafLabel: etab.libelle_activite_principale || '',
+    sector: etab.libelle_activite_principale || '',
+    siren: siren, siret: siret, director: dir.trim(), address: addr,
+    lat: etab.latitude ? parseFloat(etab.latitude) : null,
+    lng: etab.longitude ? parseFloat(etab.longitude) : null,
+    geoStatus: etab.latitude ? 'ok' : 'pending', geoSrc: etab.latitude ? 'api' : null,
+    phone: null, website: null, email: null, socials: [],
+    priority: 'cold', capital: r.capital ? r.capital + ' €' : '',
+    forme: r.nature_juridique || '', created: r.date_creation || '',
+    adresse_numero_voie: etab.numero_voie || '',
+    adresse_type_voie: etab.type_voie || '',
+    adresse_libelle_voie: etab.libelle_voie || '',
+    adresse_code_postal: etab.code_postal || '',
+    adresse_libelle_commune: etab.libelle_commune || '',
+    siege_adresse: r.siege && r.siege.adresse || '',
+    siege_siret: r.siege && r.siege.siret || '',
+    nombre_etablissements: r.nombre_etablissements != null ? r.nombre_etablissements : null,
+    complete: false, source: 'SIRENE',
+    // commune retenue pour l'entête « Résultats pour » (aucune variable NAF touchée)
+    _ville: etab.libelle_commune || ''
+  };
+}
+
+// Géocode + pose les marqueurs des résultats identifiant SANS passer par
+// _runGeoQueue (donc SANS le test lead.naf !== selectedNAFCode / BARRIER-4).
+// Réutilise geocode() et addMarker(), tous deux sans logique NAF.
+async function _placeIdMarkers(items) {
+  var pts = [];
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if ((!it.lat || !it.lng) && it.address) {
+      var res = await geocode(it.address);
+      if (res) { it.lat = res.lat; it.lng = res.lng; it.geoStatus = 'ok'; it.geoSrc = res.src; }
+    }
+    if (it.lat && it.lng) { addMarker(it); pts.push([it.lat, it.lng]); }
+  }
+  if (pts.length === 1) map.setView(pts[0], 15, { animate: true });
+  else if (pts.length > 1) map.fitBounds(pts, { padding: [60, 60], maxZoom: 14, animate: true });
+}
+
+// Recherche par identifiant SIRET/SIREN. Chemin dédié, strictement isolé du
+// mode métier : ne lit/écrit jamais selectedNAFCode, S.nafLocked, S.naf, S.region,
+// et ne passe pas par loadPage/renderChunk/enqueueGeo (barrières NAF).
+async function searchById() {
+  var inp = document.getElementById('inp-id');
+  var raw = String(inp.value || '').replace(/\s/g, '');
+  if (!isValidIdentifier(raw)) return;
+
+  var btn = document.getElementById('btn-id');
+  btn.disabled = true;   // anti double-clic pendant le fetch (restauré en fin)
+  document.getElementById('skel').classList.add('show');
+  document.getElementById('empty').classList.remove('show');
+  document.getElementById('res-context').classList.remove('show');
+  document.getElementById('cards').innerHTML = '';
+  hideError();
+
+  try {
+    var resp = await fetch('/api/search?q=' + encodeURIComponent(raw) + '&per_page=25&page=1');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var results = (data && Array.isArray(data.results)) ? data.results : [];
+    var items = results.map(_mapIdResult);
+
+    document.getElementById('skel').classList.remove('show');
+
+    // Buffer partagé avec addToPipeline (recherche par id dans S.buffer par lead.id).
+    S.buffer = items;
+    S.loaded = items.length;
+    S.total  = items.length;
+    S.market = items.length;
+    S.marketTween = null;
+    S.totalComplete = 0;
+    S.hotCount = 0;
+    updateStats();
+    updateCountDisplay();
+
+    if (items.length === 0) {
+      _resetMapLayers();
+      var emptyEl = document.getElementById('empty');
+      emptyEl.classList.add('show');
+      emptyEl.querySelector('.empty-title').textContent = 'Aucun résultat';
+      emptyEl.querySelector('.empty-sub').textContent = 'Aucune entreprise pour cet identifiant ' + raw + '.';
+      return;
+    }
+
+    // Rendu direct dans #cards, hors renderChunk/loadPage → aucune barrière NAF.
+    var cardsEl = document.getElementById('cards');
+    for (var i = 0; i < items.length; i++) cardsEl.appendChild(createCard(items[i], i));
+    document.getElementById('res-panel').scrollTop = 0;
+    document.getElementById('stats-bar').classList.add('show');
+
+    // Entête « Résultats pour : <id> <raison sociale> — Région : <commune> », en
+    // réutilisant res-context via textContent (ne touche à aucune variable NAF).
+    document.getElementById('ctx-naf').textContent    = raw;
+    document.getElementById('ctx-label').textContent  = items[0].name || '';
+    document.getElementById('ctx-region').textContent = items[0]._ville || '';
+    document.getElementById('res-context').classList.add('show');
+
+    // Marqueur(s) carte + centrage (obligatoire), chemin sans test NAF.
+    _resetMapLayers();
+    await _placeIdMarkers(items);
+
+  } catch (err) {
+    console.error('[Prospect] searchById error:', err.message);
+    document.getElementById('skel').classList.remove('show');
+    showError('Service temporairement indisponible, réessayez dans quelques instants');
+  } finally {
+    // Restaure l'état du bouton selon la validité courante de la saisie.
+    var still = isValidIdentifier(String(inp.value || '').replace(/\s/g, ''));
+    btn.disabled = !still;
+    btn.classList.toggle('active', still);
+  }
 }
 
 function onSectorInput(v) {

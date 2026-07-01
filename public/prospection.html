@@ -716,7 +716,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
         Résultats pour&nbsp;:
         <span class="naf-tag" id="ctx-naf"></span>
         <strong id="ctx-label"></strong>
-        —&nbsp;Région :
+        —&nbsp;<span id="ctx-geo-label">Région&nbsp;:</span>
         <strong id="ctx-region"></strong>
       </div>
       <div class="res-panel" id="res-panel">
@@ -2667,6 +2667,7 @@ async function loadPage(page) {
       document.getElementById('ctx-naf').textContent    = S.naf;
       document.getElementById('ctx-label').textContent  = S.nafLabel;
       document.getElementById('ctx-region').textContent = regionLabel;
+      document.getElementById('ctx-geo-label').textContent = 'Région :';
       document.getElementById('res-context').classList.add('show');
 
       // Premier paquet rendu (cards déjà vidé en tête de loadPage), scroll en haut.
@@ -3522,6 +3523,7 @@ async function searchById() {
     document.getElementById('ctx-naf').textContent    = raw;
     document.getElementById('ctx-label').textContent  = items[0].name || '';
     document.getElementById('ctx-region').textContent = items[0]._ville || '';
+    document.getElementById('ctx-geo-label').textContent = 'Commune :';
     document.getElementById('res-context').classList.add('show');
 
     // Marqueur(s) carte + centrage (obligatoire), chemin sans test NAF.

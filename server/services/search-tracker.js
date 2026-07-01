@@ -93,12 +93,12 @@ export async function trackLeadSearch({
       {
         uid: cleanUserId,
         nafCode: normalizedNafCode,
-        nafLabel: nafLabel || null,
-        regionCode: regionCode || null,
-        regionName: regionName || null,
-        departmentCode: departmentCode || null,
-        departmentName: departmentName || null,
-        cityName: cityName || null,
+        nafLabel: nafLabel || '',
+        regionCode: regionCode || '',
+        regionName: regionName || '',
+        departmentCode: departmentCode || '',
+        departmentName: departmentName || '',
+        cityName: cityName || '',
         resultsCount: Number(resultsCount) || 0,
         fichesCompletesFilter: !!fichesCompletesFilter
       }

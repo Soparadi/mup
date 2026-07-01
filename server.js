@@ -2023,12 +2023,12 @@ app.get('/api/search', async (req, res) => {
       trackLeadSearch({
         userId: req.userId,
         nafCode: req.query.activite_principale || req.query.code_naf || req.query.q || '',
-        nafLabel: req.query.naf_label || null,
-        regionCode: req.query.code_region || req.query.region || null,
-        regionName: req.query.region_name || null,
-        departmentCode: req.query.code_departement || req.query.departement || null,
-        departmentName: req.query.department_name || null,
-        cityName: req.query.code_commune || req.query.ville || null,
+        nafLabel: req.query.naf_label || '',
+        regionCode: req.query.code_region || req.query.region || '',
+        regionName: req.query.region_name || '',
+        departmentCode: req.query.code_departement || req.query.departement || '',
+        departmentName: req.query.department_name || '',
+        cityName: req.query.code_commune || req.query.ville || '',
         resultsCount: typeof data.total_results === 'number' ? data.total_results : (Array.isArray(data.results) ? data.results.length : 0),
         fichesCompletesFilter: req.query.fiches_completes === 'true' || req.query.fiches_completes === '1'
       }).catch(() => {})

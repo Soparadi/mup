@@ -1917,6 +1917,17 @@ app.delete('/api/agenda/:id', async (req, res) => {
 // ── INSEE OAuth2 token cache ── déplacé dans server/services/insee.js,
 // getInseeToken importé en tête de fichier (seule source de vérité).
 
+// Paris/Lyon/Marseille : Etalab indexe les établissements sous les codes
+// d'arrondissement, PAS sous le code commune globale INSEE (75056/69123/13055
+// renvoient ~0 établissement). On détend ces 3 codes en CSV d'arrondissements ;
+// toute autre commune passe en l'état. Bornes vérifiées côté Etalab.
+const PLM_ARRONDISSEMENTS = {
+  '75056': Array.from({ length: 20 }, (_, i) => String(75101 + i)).join(','), // Paris 75101–75120
+  '69123': Array.from({ length: 9 },  (_, i) => String(69381 + i)).join(','), // Lyon  69381–69389
+  '13055': Array.from({ length: 16 }, (_, i) => String(13201 + i)).join(','), // Marseille 13201–13216
+}
+function communeParam(code) { return PLM_ARRONDISSEMENTS[code] || code }
+
 // ── API proxies ──
 app.get('/api/search', async (req, res) => {
   const params = new URLSearchParams()
@@ -1928,7 +1939,7 @@ app.get('/api/search', async (req, res) => {
   // le drop client-side (avant : 96% des résultats jetés par pickLocalEtab).
   if(req.query.departement) params.set('departement', req.query.departement)
   if(req.query.code_postal) params.set('code_postal', req.query.code_postal)
-  if(req.query.code_commune) params.set('code_commune', req.query.code_commune)
+  if(req.query.code_commune) params.set('code_commune', communeParam(req.query.code_commune))
   // per_page respecte la demande du front (= PAGE_SIZE client), borné à 25
   // = max Etalab. Aligne pagination client/upstream pour éviter les pages
   // fantômes au-delà du dataset. Lève la régression de volume introduite
@@ -2044,7 +2055,7 @@ app.get('/api/search-count', async (req, res) => {
   if(req.query.activite_principale) base.set('activite_principale', req.query.activite_principale)
   if(req.query.departement) base.set('departement', req.query.departement)
   if(req.query.code_postal) base.set('code_postal', req.query.code_postal)
-  if(req.query.code_commune) base.set('code_commune', req.query.code_commune)
+  if(req.query.code_commune) base.set('code_commune', communeParam(req.query.code_commune))
   base.set('per_page', '25')
   const pageUrl = (page) => {
     const p = new URLSearchParams(base)

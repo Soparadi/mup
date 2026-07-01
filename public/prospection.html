@@ -1623,6 +1623,10 @@ var S = {
   // convergence compteur « Prospects trouvés » vers les points réellement posés
   finished:     false,
 
+  // search-count différé : lancé une seule fois, au point de convergence de fin
+  // du déroulement front (plus jamais en parallèle de loadPage → IP non saturée)
+  marketCountLaunched: false,
+
   // map
   useCluster:   false
 };
@@ -2707,6 +2711,7 @@ async function loadPage(page) {
       S.nGeoOk        = 0;
       S.nGeoFail      = 0;
       S.finished      = false;   // nouvelle recherche : le compteur reprend sa progression
+      S.marketCountLaunched = false; // nouvelle recherche : search-count re-armé (fire-once en fin)
       S.buffer        = keptItems;
       S.loaded        = 0;
       S.page          = 1;
@@ -2850,13 +2855,38 @@ async function loadMore() {
   var loadRegion = S.region;
   try {
     await sleep(150); // cadence : protège recherche-entreprises (jamais de rafale)
-    var dp = await fetchLeads(loadNaf, selectedNAFLabel, loadRegion, S.upstreamPage + 1, PAGE_SIZE, S.onlyComplete);
+    var wantPage = S.upstreamPage + 1;   // page visée : on ne l'incrémente qu'APRÈS succès
+    // Retry borné de la MÊME page. Un 502/429/erreur réseau Etalab n'est PAS une
+    // fin de gisement : on retente la page (jamais en rafale — séquentiel, une
+    // seule requête en vol, backoff 400/800/1600 ms) avant d'abandonner. Tant que
+    // la page n'a pas réussi, S.upstreamPage n'est pas incrémenté → jamais de saut
+    // de page ni de boucle sur une page en échec.
+    var dp = null;
+    var RETRY_BACKOFF = [400, 800, 1600];
+    var attempt = 0;
+    while (true) {
+      try {
+        dp = await fetchLeads(loadNaf, selectedNAFLabel, loadRegion, wantPage, PAGE_SIZE, S.onlyComplete);
+        break;                              // fetch réussi → on sort de la boucle retry
+      } catch (fe) {
+        if (attempt >= RETRY_BACKOFF.length) {
+          // Tentatives épuisées : échec réseau, PAS une fin de gisement. On ne
+          // touche NI à upstreamExhausted NI au streak — l'autoroll retentera
+          // proprement cette même page (wantPage) au prochain tour.
+          console.warn('[Prospect] loadMore page '+wantPage+' abandon après retries : '+fe.message);
+          return;
+        }
+        console.warn('[Prospect] loadMore page '+wantPage+' échec ('+fe.message+'), retry '+(attempt+1)+'/'+RETRY_BACKOFF.length);
+        await sleep(RETRY_BACKOFF[attempt]);  // backoff séquentiel, une seule requête en vol
+        attempt++;
+      }
+    }
     // ── STALE GUARD : NAF/région changés pendant le fetch → on jette.
     if(loadNaf !== selectedNAFCode || loadRegion !== S.region) {
       console.warn('[Prospect] Stale loadMore discarded for "'+loadNaf+'"');
       return;
     }
-    S.upstreamPage++;
+    S.upstreamPage = wantPage;   // incrément SEULEMENT sur succès (jamais de page re-tapée)
     var pageItems = (dp && dp.items) ? dp.items : [];
     // ── BARRIER 2 sur la page upstream
     var keptItems = pageItems.filter(function(it) {
@@ -3124,6 +3154,14 @@ function maybeFinishSearch(gen) {
     S.finished = true;
     var prospectsEl = document.getElementById('kpi-prospects-count');
     if (prospectsEl) prospectsEl.textContent = S.nGeoOk.toLocaleString('fr-FR');
+    // Point de convergence de fin du déroulement front : le déroulement Etalab
+    // est terminé (upstreamExhausted), la file de points est vidée → l'IP est
+    // libre. On lance ALORS search-count, seul (fire-once), pour l'aspiration du
+    // référentiel + le tween final du marché, sans se disputer l'IP avec loadMore.
+    if (!S.marketCountLaunched) {
+      S.marketCountLaunched = true;
+      launchMarketCount();
+    }
   }
 }
 
@@ -3157,7 +3195,10 @@ function startSearch() {
   document.getElementById('exp-bar').classList.remove('show');
   document.getElementById('stats-bar').classList.remove('show');
   loadPage(1);
-  launchMarketCount();   // fil parallèle (scéno B1) : convergence du compteur marché
+  // search-count N'EST PLUS lancé en parallèle de loadPage(1) : les deux flux se
+  // disputaient l'IP (recherche-entreprises) et provoquaient l'attente / le 502.
+  // Il est désormais différé au point de convergence de fin du déroulement front
+  // (maybeFinishSearch conclut) → il tourne alors seul, IP libre.
 }
 
 function retryLastPage() {

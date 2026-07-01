@@ -41,6 +41,14 @@ export async function runReferentielMigration() {
     'DEFINE FIELD IF NOT EXISTS dirigeant_nom ON referentiel_societes TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS dirigeant_prenom ON referentiel_societes TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS dirigeant_fonction ON referentiel_societes TYPE option<string>',
+    // ── Enrichissement additif : listes complètes (dirigeants PP + établissements) + compteur. ──
+    // FLEXIBLE : le SCHEMAFULL n'exige PAS de déclarer les sous-clés de chaque objet
+    // du tableau (calque du pattern prod option<object> FLEXIBLE sur geo_data/metadata).
+    // Si 2.6.5 rejette FLEXIBLE sur array<object> (visible au boot via INFO FOR TABLE),
+    // repli fonctionnel : TYPE option<array> FLEXIBLE.
+    'DEFINE FIELD IF NOT EXISTS dirigeants ON referentiel_societes TYPE option<array<object>> FLEXIBLE',
+    'DEFINE FIELD IF NOT EXISTS etablissements ON referentiel_societes TYPE option<array<object>> FLEXIBLE',
+    'DEFINE FIELD IF NOT EXISTS nombre_etablissements ON referentiel_societes TYPE option<number>',
     "DEFINE FIELD IF NOT EXISTS source ON referentiel_societes TYPE string DEFAULT 'etalab_referentiel'",
     'DEFINE FIELD IF NOT EXISTS cached_at ON referentiel_societes TYPE datetime DEFAULT time::now()',
     'DEFINE FIELD IF NOT EXISTS refreshed_at ON referentiel_societes TYPE datetime DEFAULT time::now()',
@@ -101,6 +109,57 @@ function firstDirigeantPP(fiche) {
     }
   }
   return null
+}
+
+// TOUS les dirigeants PERSONNE PHYSIQUE d'une fiche (enrichissement additif —
+// firstDirigeantPP reste le 1er servi sur les champs plats). Rejoue exactement
+// le même filtre (type_dirigeant === 'personne physique', nom OU prenoms non
+// vide) et le même mapping { nom, prenom (1er mot), fonction (qualite) } sur
+// toute la liste. Liste vide → [] (l'appelant omet le champ → NONE).
+function allDirigeantsPP(fiche) {
+  const dirs = Array.isArray(fiche?.dirigeants) ? fiche.dirigeants : []
+  const out = []
+  for (const d of dirs) {
+    if (!d || d.type_dirigeant !== 'personne physique') continue
+    const nom = typeof d.nom === 'string' ? d.nom.trim() : ''
+    const prenoms = typeof d.prenoms === 'string' ? d.prenoms.trim() : ''
+    if (!nom && !prenoms) continue
+    out.push({
+      nom,
+      prenom: prenoms ? (prenoms.split(/\s+/)[0] || '') : '',
+      fonction: typeof d.qualite === 'string' ? d.qualite.trim() : ''
+    })
+  }
+  return out
+}
+
+// TOUS les établissements d'une fiche (matching_etablissements[], fallback
+// [siege] si matching absent). Enrichissement additif — l'établissement servi
+// sur les champs plats (matching[0]/siege) reste inchangé. Chaque entrée mappée
+// avec gardes str() ; lat/lng en Number seulement si finis (jamais NaN).
+// Liste vide → [] (l'appelant omet le champ → NONE).
+function allEtablissements(fiche) {
+  let list = Array.isArray(fiche?.matching_etablissements) ? fiche.matching_etablissements : []
+  if (list.length === 0 && fiche?.siege) list = [fiche.siege]
+  const out = []
+  for (const e of list) {
+    if (!e || typeof e !== 'object') continue
+    const etab = {
+      siret: str(e.siret),
+      adresse: str(e.adresse),
+      code_postal: str(e.code_postal),
+      commune: str(e.commune),
+      ville: str(e.libelle_commune),
+      est_siege: e.est_siege === true,
+      etat_administratif: str(e.etat_administratif)
+    }
+    const lat = Number(e.latitude)
+    const lng = Number(e.longitude)
+    if (Number.isFinite(lat)) etab.lat = lat
+    if (Number.isFinite(lng)) etab.lng = lng
+    out.push(etab)
+  }
+  return out
 }
 
 // UPSERT idempotent par record id. S'inspire de upsertRecord (server.js:250) —
@@ -196,6 +255,16 @@ export async function upsertReferentiel(fiches) {
           if (dir.prenom) body.dirigeant_prenom = dir.prenom
           if (dir.fonction) body.dirigeant_fonction = dir.fonction
         }
+        // ── Enrichissement additif : listes complètes + compteur (posés seulement
+        // si non vides → NONE sinon, cohérent avec l'omission des champs optionnels).
+        // Tableaux/objets passés en paramètre bindé natif par upsertRecordRef (le
+        // driver SurrealDB sérialise en CBOR — AUCUN JSON.stringify manuel). ──
+        const dirigeants = allDirigeantsPP(fiche)
+        if (dirigeants.length) body.dirigeants = dirigeants
+        const etablissements = allEtablissements(fiche)
+        if (etablissements.length) body.etablissements = etablissements
+        const nbEtab = Number(fiche?.nombre_etablissements)
+        if (Number.isFinite(nbEtab)) body.nombre_etablissements = nbEtab
         // source : laissée au DEFAULT DB ('etalab_referentiel'). cached_at /
         // refreshed_at : posés en SurrealQL (time::now()) par upsertRecordRef.
         await upsertRecordRef(db, 'referentiel_societes', id, body)

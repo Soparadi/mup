@@ -37,6 +37,7 @@ import {
   insertOptoutRequest,
   verifyOptoutToken
 } from './server/services/optout.js'
+import { runReferentielMigration } from './server/services/referentiel.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
@@ -4741,6 +4742,15 @@ app.use((req, res) => {
     console.log('[boot] optout tables ready (request + blocklist, 9 indexes)')
   } catch (e) {
     console.error('[boot] optout migration failed:', e.message)
+  }
+  // Référentiel entreprises mutualisé — table referentiel_societes (clé SIRET),
+  // partagée entre tous les utilisateurs (aucun userId). Vide au boot :
+  // alimentation par UPSERT dans une passe ultérieure.
+  try {
+    await runReferentielMigration()
+    console.log('[boot] referentiel_societes table ready (+ 6 indexes)')
+  } catch (e) {
+    console.error('[boot] referentiel migration failed:', e.message)
   }
   // Cron trial — node-cron in-process déclenché à 8h Europe/Paris.
   // Skip si NODE_ENV !== 'production' (évite spam emails en dev) ou

@@ -37,7 +37,7 @@ import {
   insertOptoutRequest,
   verifyOptoutToken
 } from './server/services/optout.js'
-import { runReferentielMigration } from './server/services/referentiel.js'
+import { runReferentielMigration, upsertReferentiel } from './server/services/referentiel.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
@@ -2010,6 +2010,12 @@ app.get('/api/search', async (req, res) => {
       console.log(`[search] page=${req.query.page || 1} brut=${brut} garde=${data.results.length}`)
     }
     res.json(data)
+    // Fire-and-forget : alimentation du référentiel entreprises mutualisé
+    // (socle Etalab). Lancé APRÈS res.json, sans await — même modèle que
+    // trackLeadSearch : zéro impact sur la latence servie à l'abonné. Le service
+    // avale tout échec (try/catch global + log [referentiel-upsert]), donc jamais
+    // de promesse rejetée à neutraliser ici.
+    upsertReferentiel(data.results)
     // Fire-and-forget : tracking historique recherches. Lancé APRÈS res.json
     // pour ne jamais bloquer la réponse au front. Échec silencieux côté
     // search-tracker, .catch final pour neutraliser toute promesse rejetée.

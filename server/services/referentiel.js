@@ -16,6 +16,7 @@
 // du pattern server/services/optout.js (runOptoutMigration).
 
 import { getDb } from '../../lib/surreal.js'
+import { cleanRecordId } from '../../lib/db.js'
 
 // ── migration idempotente ──
 export async function runReferentielMigration() {
@@ -54,5 +55,142 @@ export async function runReferentielMigration() {
   ]
   for (const q of queries) {
     try { await db.query(q) } catch (e) { console.warn('[referentiel-migration]', q.slice(0, 80), '→', e.message) }
+  }
+}
+
+// ── alimentation référentiel (couche 1 : socle Etalab, fire-and-forget) ──
+
+// Coercition string sûre pour les champs TYPE string obligatoires du schéma
+// SCHEMAFULL : jamais null/undefined (rejet strict), toujours une chaîne trimée.
+const str = v => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v).trim()))
+
+// Dérive le code département à partir du code commune INSEE (champ Etalab
+// 'commune'). GARDE-FOU : une commune non résolue retourne '' — jamais un
+// département faux. L'appelant SKIP la fiche si le retour est vide.
+//   • Corse : '2A…' / '2B…' → '2A' / '2B' (préserver les lettres, ne JAMAIS
+//     convertir en nombre).
+//   • Arrondissements PLM (751xx / 6938x / 132xx) → 75 / 69 / 13 naturellement
+//     par les 2 premiers caractères, AUCUN traitement spécial.
+//   • DOM-TOM ('97…' / '98…') → '' : HORS PÉRIMÈTRE pour l'instant.
+//   • Métropole : 2 premiers caractères (01–95).
+//   • Tout format inattendu (commune vide, non numérique hors Corse) → ''.
+export function communeToDepartement(commune) {
+  const c = String(commune || '').trim()
+  if (c.length < 2) return ''
+  if (c.startsWith('2A') || c.startsWith('2B')) return c.slice(0, 2)
+  const d2 = c.slice(0, 2)
+  if (d2 === '97' || d2 === '98') return ''   // DOM-TOM hors périmètre
+  if (/^[0-9]{2}$/.test(d2)) return d2         // métropole (PLM inclus naturellement)
+  return ''                                     // format inattendu → jamais de dept faux
+}
+
+// 1er dirigeant PERSONNE PHYSIQUE d'une fiche Etalab (données publiques
+// SIRENE/RCS). Les personnes morales (type_dirigeant !== 'personne physique')
+// sont ignorées. Prénom = 1er mot seulement (Etalab empile l'état civil complet).
+function firstDirigeantPP(fiche) {
+  const dirs = Array.isArray(fiche?.dirigeants) ? fiche.dirigeants : []
+  for (const d of dirs) {
+    if (!d || d.type_dirigeant !== 'personne physique') continue
+    const nom = typeof d.nom === 'string' ? d.nom.trim() : ''
+    const prenoms = typeof d.prenoms === 'string' ? d.prenoms.trim() : ''
+    if (!nom && !prenoms) continue
+    return {
+      nom,
+      prenom: prenoms ? (prenoms.split(/\s+/)[0] || '') : '',
+      fonction: typeof d.qualite === 'string' ? d.qualite.trim() : ''
+    }
+  }
+  return null
+}
+
+// UPSERT idempotent par record id. Réplique la logique de upsertRecord
+// (server.js:250) : celle-ci n'est PAS exportable (fonction interne de server.js ;
+// l'importer créerait un cycle server.js ⇄ referentiel.js). CREATE si absent,
+// UPDATE ... CONTENT si le record existe déjà.
+async function upsertRecordRef(db, table, cleanId, body) {
+  const createSql = `CREATE type::record("${table}", $id) CONTENT $body`
+  const updateSql = `UPDATE type::record("${table}", $id) CONTENT $body`
+  try {
+    await db.query(createSql, { id: cleanId, body })
+  } catch (e) {
+    const isAlreadyExists =
+      e?.name === 'AlreadyExistsError' ||
+      e?.kind === 'AlreadyExists' ||
+      String(e?.message || '').includes('already exists')
+    if (!isAlreadyExists) throw e
+    await db.query(updateSql, { id: cleanId, body })
+  }
+}
+
+// Alimente referentiel_societes à partir des fiches Etalab servies à l'abonné.
+// FIRE-AND-FORGET : appelée sans await APRÈS res.json — ne doit JAMAIS throw ni
+// affecter la réponse déjà servie. Tout échec est avalé + loggé [referentiel-upsert].
+//
+// ATTENTION — CONTENT complet : upsertRecordRef fait UPDATE ... CONTENT $body
+// (remplacement TOTAL du record). Acceptable UNIQUEMENT ici car on n'écrit que le
+// socle Etalab (personne morale + établissement servi + dirigeant public) et
+// qu'aucun champ enrichi par un abonné n'existe encore en base. À REMPLACER par un
+// MERGE / UPDATE sélectif au prompt enrichissement, sinon les champs enrichis futurs
+// (email générique, fixe, …) seraient écrasés par une simple réécriture Etalab.
+// Corollaire : cached_at (DEFAULT time::now()) est réinitialisé à chaque réécriture
+// — dette connue, préservation via VALUE $before.cached_at OR time::now() traitée au
+// prompt enrichissement, PAS ici.
+export async function upsertReferentiel(fiches) {
+  try {
+    if (!Array.isArray(fiches) || fiches.length === 0) return
+    const db = await getDb()
+    for (const fiche of fiches) {
+      try {
+        // Établissement servi à l'abonné : matching_etablissements[0], fallback siège.
+        const matching = Array.isArray(fiche?.matching_etablissements) ? fiche.matching_etablissements : []
+        const etab = matching[0] || fiche?.siege || null
+        if (!etab) continue
+        // ID de record = SIRET nettoyé → idempotence par établissement. Sinon SKIP.
+        const id = cleanRecordId('referentiel_societes', typeof etab.siret === 'string' ? etab.siret : '')
+        if (!id) continue
+        // Département dérivé de la commune INSEE. Vide (DOM / non résolu) → SKIP :
+        // jamais de fiche stockée avec un département faux.
+        const commune = str(etab.commune)
+        const departement = communeToDepartement(commune)
+        if (!departement) continue
+        // ── Socle Etalab. Les 6 champs TYPE string sont TOUJOURS des strings ('' si absent). ──
+        const body = {
+          siren: str(fiche?.siren),
+          siret: str(etab.siret),
+          raison_sociale: str(fiche?.nom_complet) || str(fiche?.nom_raison_sociale),
+          naf: str(etab.activite_principale) || str(fiche?.activite_principale),
+          commune,
+          departement
+        }
+        // Champs option<string> : posés seulement si présents (sinon NONE).
+        const nafLib = str(fiche?.activite_principale_libelle) || str(etab.activite_principale_libelle)
+        if (nafLib) body.naf_libelle = nafLib
+        const forme = str(fiche?.nature_juridique)
+        if (forme) body.forme_juridique_code = forme
+        if (str(etab.adresse)) body.adresse = str(etab.adresse)
+        if (str(etab.code_postal)) body.code_postal = str(etab.code_postal)
+        if (str(etab.libelle_commune)) body.ville = str(etab.libelle_commune)
+        const etatAdm = str(etab.etat_administratif) || str(fiche?.etat_administratif)
+        if (etatAdm) body.etat_administratif = etatAdm
+        // lat/lng option<number> : Number + garde Number.isFinite, sinon OMIS (jamais NaN).
+        const lat = Number(etab.latitude)
+        const lng = Number(etab.longitude)
+        if (Number.isFinite(lat)) body.lat = lat
+        if (Number.isFinite(lng)) body.lng = lng
+        // Dirigeant personne physique (1er) — public. Champs à NONE si aucun.
+        const dir = firstDirigeantPP(fiche)
+        if (dir) {
+          if (dir.nom) body.dirigeant_nom = dir.nom
+          if (dir.prenom) body.dirigeant_prenom = dir.prenom
+          if (dir.fonction) body.dirigeant_fonction = dir.fonction
+        }
+        // source / cached_at / refreshed_at : laissés au DEFAULT DB (time::now()).
+        await upsertRecordRef(db, 'referentiel_societes', id, body)
+      } catch (e) {
+        console.warn('[referentiel-upsert]', String(e?.message || e).slice(0, 80))
+      }
+    }
+  } catch (e) {
+    console.warn('[referentiel-upsert]', String(e?.message || e).slice(0, 80))
   }
 }

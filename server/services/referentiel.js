@@ -42,12 +42,17 @@ export async function runReferentielMigration() {
     'DEFINE FIELD IF NOT EXISTS dirigeant_prenom ON referentiel_societes TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS dirigeant_fonction ON referentiel_societes TYPE option<string>',
     // ── Enrichissement additif : listes complètes (dirigeants PP + établissements) + compteur. ──
-    // FLEXIBLE : le SCHEMAFULL n'exige PAS de déclarer les sous-clés de chaque objet
-    // du tableau (calque du pattern prod option<object> FLEXIBLE sur geo_data/metadata).
-    // Si 2.6.5 rejette FLEXIBLE sur array<object> (visible au boot via INFO FOR TABLE),
-    // repli fonctionnel : TYPE option<array> FLEXIBLE.
-    'DEFINE FIELD IF NOT EXISTS dirigeants ON referentiel_societes TYPE option<array<object>> FLEXIBLE',
-    'DEFINE FIELD IF NOT EXISTS etablissements ON referentiel_societes TYPE option<array<object>> FLEXIBLE',
+    // En 2.6.5, FLEXIBLE sur option<array<object>> NE se propage PAS aux objets
+    // contenus dans le tableau : chaque sous-clé (dirigeants[N].fonction,
+    // etablissements[N].adresse) est vue comme un champ non déclaré en SCHEMAFULL
+    // et REJETÉE à l'écriture. Il faut poser FLEXIBLE sur l'ÉLÉMENT du tableau via
+    // le wildcard .* — même mécanisme object FLEXIBLE que geo_data/metadata en prod
+    // (cf. surreal-adapter.js:471-473). OVERWRITE : les champs existent déjà avec le
+    // mauvais type (option<array<object>> FLEXIBLE), IF NOT EXISTS ne les corrigerait pas.
+    'DEFINE FIELD OVERWRITE dirigeants ON referentiel_societes TYPE option<array<object>>',
+    'DEFINE FIELD OVERWRITE dirigeants.* ON referentiel_societes TYPE object FLEXIBLE',
+    'DEFINE FIELD OVERWRITE etablissements ON referentiel_societes TYPE option<array<object>>',
+    'DEFINE FIELD OVERWRITE etablissements.* ON referentiel_societes TYPE object FLEXIBLE',
     'DEFINE FIELD IF NOT EXISTS nombre_etablissements ON referentiel_societes TYPE option<number>',
     "DEFINE FIELD IF NOT EXISTS source ON referentiel_societes TYPE string DEFAULT 'etalab_referentiel'",
     'DEFINE FIELD IF NOT EXISTS cached_at ON referentiel_societes TYPE datetime DEFAULT time::now()',

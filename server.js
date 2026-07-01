@@ -2080,12 +2080,31 @@ app.get('/api/search-count', async (req, res) => {
       console.log(`[search-count] capped (total_results=${totalRaw})`)
       return res.json({ count: null, capped: true })
     }
-    let allFiches = pageResults(d1)
+    // Dédup par SIREN pendant toute la pagination : Etalab répète les mêmes
+    // entreprises en profondeur de gisement (source de l'instabilité 1753/424
+    // sur une même recherche). On n'accumule que les SIREN encore jamais vus,
+    // sans aucun appel Etalab supplémentaire.
+    const allFiches = []
+    const seenSiren = new Set()
+    const addNewFiches = (rs) => {
+      let added = 0
+      for (const f of rs) {
+        const s = (f && f.siren != null) ? String(f.siren) : ''
+        if (s && seenSiren.has(s)) continue                   // doublon de pagination
+        if (s) seenSiren.add(s)
+        allFiches.push(f)
+        added++
+      }
+      return added
+    }
+    addNewFiches(pageResults(d1))
     let pagesScanned = 1
     const firstLen = allFiches.length
     // Pagination complète : page 2 → épuisement réel du dataset. Borne haute
-    // déduite du total brut (per_page=25) ; arrêt anticipé si un lot entier
-    // revient vide. Lots de 5 (rate-limit Etalab ~7 req/s) + pause inter-lot.
+    // déduite du total brut (per_page=25) — bornage anti-boucle uniquement, plus
+    // la vérité de fin. La fin réelle = un lot qui n'apporte AUCUN nouveau SIREN
+    // (le gisement ne fait plus que se répéter). Lots de 5 (rate-limit Etalab
+    // ~7 req/s) + pause inter-lot.
     if (firstLen >= 25) {
       const lastPage = Math.ceil(totalRaw / 25) || 1
       let stop = false
@@ -2096,13 +2115,16 @@ app.get('/api/search-count', async (req, res) => {
           fetch(pageUrl(p)).then(r => r.ok ? r.json() : null).catch(() => null)
         ))
         let batchRaw = 0
+        let batchNew = 0
         for (const d of pages) {
           const rs = pageResults(d)
           batchRaw += rs.length
-          allFiches = allFiches.concat(rs)
+          batchNew += addNewFiches(rs)
         }
         pagesScanned += batch.length
-        if (batchRaw === 0) stop = true                       // fin réelle du dataset
+        // Épuisement réel : aucun nouveau SIREN dans tout le lot (condition
+        // principale). batchRaw===0 conservé en ceinture (lot entièrement vide).
+        if (batchNew === 0 || batchRaw === 0) stop = true
         else if (start + 5 <= lastPage) await new Promise(r => setTimeout(r, 200))
       }
     }
@@ -2138,7 +2160,10 @@ app.get('/api/search-count', async (req, res) => {
       blocked
     }
     const kept = allFiches.filter(f => keepLead(f, ctx))
-    const count = kept.length
+    // count = entreprises distinctes réellement accumulées (allFiches déjà
+    // dédupliqué par SIREN) → reproductible, indépendant des doublons de
+    // pagination profonde. kept reste la sélection prospectable pour l'aspiration.
+    const count = allFiches.length
 
     console.log(`[search-count] pages=${pagesScanned} brut=${brut} count=${count} sirets=${allSirets.length} pipeline=${existing.size}`)
     res.json({ count, capped: false })

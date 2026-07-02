@@ -653,7 +653,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 
   <!-- ── STATS BAR ── -->
   <div class="stats-bar" id="stats-bar">
-    <div class="si"><div class="sv" id="st-total">—</div><div class="sl">Établissements SIRENE</div></div>
+    <div class="si"><div class="sv" id="st-total">—</div><div class="sl">Entreprises</div></div>
     <div class="sdiv"></div>
     <div class="si"><div class="sv" id="st-complete">—</div><div class="sl">Fiches complètes</div></div>
     <div class="sdiv"></div>
@@ -1622,10 +1622,6 @@ var S = {
 
   // convergence compteur « Prospects trouvés » vers les points réellement posés
   finished:     false,
-
-  // search-count différé : lancé une seule fois, au point de convergence de fin
-  // du déroulement front (plus jamais en parallèle de loadPage → IP non saturée)
-  marketCountLaunched: false,
 
   // map
   useCluster:   false
@@ -2715,7 +2711,6 @@ async function loadPage(page) {
       S.nGeoOk        = 0;
       S.nGeoFail      = 0;
       S.finished      = false;   // nouvelle recherche : le compteur reprend sa progression
-      S.marketCountLaunched = false; // nouvelle recherche : search-count re-armé (fire-once en fin)
       S.buffer        = keptItems;
       S.loaded        = 0;
       S.page          = 1;
@@ -3020,8 +3015,8 @@ function updateCountDisplay() {
 // (Le titre marché res-title a été retiré ; st-total reste le seul affichage.)
 // _displayMarket() renvoie : la valeur du tween en cours si actif, sinon le
 // marché réel/extrapolé (S.market). Au lancement on affiche l'extrapolé
-// (« whaou » initial) ; quand /api/search-count répond, on GLISSE vers le
-// compte exact par tween, puis S.market prend la vérité (affichages + gardes).
+// (« whaou » initial) ; en fin de déroulement on GLISSE vers le compte exact
+// (S.buffer.length) par tween, puis S.market prend la vérité (affichages + gardes).
 // ════════════════════════════════════════════════════════════════
 function _displayMarket() {
   if (S.marketTween != null) return Math.round(S.marketTween);
@@ -3055,37 +3050,6 @@ function _tweenMarketTo(target) {
     }
   }
   requestAnimationFrame(frame);
-}
-
-// Fil indépendant lancé au démarrage de la recherche : compte EXACT du
-// gisement via /api/search-count (mêmes params que la recherche en cours).
-// Ne bloque PAS l'affichage des fiches. À la réponse, fait converger le
-// marché ; { capped } ou erreur → on garde l'extrapolé.
-async function launchMarketCount() {
-  var loadNaf = selectedNAFCode, loadRegion = S.region;
-  var nafDotted = loadNaf;
-  if (nafDotted && nafDotted.length >= 4 && nafDotted.indexOf('.') === -1)
-    nafDotted = nafDotted.substring(0,2) + '.' + nafDotted.substring(2);
-  var regionCode = REGION_CODES[loadRegion] || '';
-  var deptFb  = (document.getElementById('sel-dept')?.value || '').trim();
-  // sel-ville.value EST le code INSEE → poussé tel quel (mêmes params que la recherche).
-  var villeCodeFb = (document.getElementById('sel-ville')?.value || '').trim();
-  try {
-    var url = '/api/search-count'
-      + '?activite_principale=' + encodeURIComponent(nafDotted)
-      + (regionCode ? '&region=' + regionCode : '')
-      + (deptFb ? '&departement=' + encodeURIComponent(deptFb) : '')
-      + (villeCodeFb ? '&code_commune=' + encodeURIComponent(villeCodeFb) : '');
-    var resp = await fetch(url);
-    if (!resp.ok) return;
-    var data = await resp.json();
-    // Stale guard : NAF/région changés pendant le comptage → on jette.
-    if (loadNaf !== selectedNAFCode || loadRegion !== S.region) return;
-    if (data && data.capped) return;               // gisement ≥ 10 000 → garder l'extrapolé
-    if (data && typeof data.count === 'number' && data.count > 0) _tweenMarketTo(data.count);
-  } catch(e) {
-    console.warn('[Leads] search-count indisponible:', e.message);
-  }
 }
 
 function updateExportBar() {
@@ -3158,14 +3122,12 @@ function maybeFinishSearch(gen) {
     S.finished = true;
     var prospectsEl = document.getElementById('kpi-prospects-count');
     if (prospectsEl) prospectsEl.textContent = S.nGeoOk.toLocaleString('fr-FR');
-    // Point de convergence de fin du déroulement front : le déroulement Etalab
-    // est terminé (upstreamExhausted), la file de points est vidée → l'IP est
-    // libre. On lance ALORS search-count, seul (fire-once), pour l'aspiration du
-    // référentiel + le tween final du marché, sans se disputer l'IP avec loadMore.
-    if (!S.marketCountLaunched) {
-      S.marketCountLaunched = true;
-      launchMarketCount();
-    }
+    // Le déroulement Etalab est terminé (upstreamExhausted) : le gisement
+    // distinct réellement parcouru EST S.buffer.length (dédup SIREN déjà faite).
+    // On cale le marché final dessus par tween — convergence purement cosmétique,
+    // plus aucun fetch (l'aspiration au référentiel est assurée page par page
+    // par /api/search pendant le déroulement).
+    _tweenMarketTo(S.buffer.length);
   }
 }
 
@@ -3199,10 +3161,10 @@ function startSearch() {
   document.getElementById('exp-bar').classList.remove('show');
   document.getElementById('stats-bar').classList.remove('show');
   loadPage(1);
-  // search-count N'EST PLUS lancé en parallèle de loadPage(1) : les deux flux se
-  // disputaient l'IP (recherche-entreprises) et provoquaient l'attente / le 502.
-  // Il est désormais différé au point de convergence de fin du déroulement front
-  // (maybeFinishSearch conclut) → il tourne alors seul, IP libre.
+  // Flux unique : loadMore parcourt le gisement page par page (aspiration du
+  // référentiel assurée côté serveur par /api/search), et le marché final est
+  // calé sur S.buffer.length en fin de déroulement (maybeFinishSearch). Plus de
+  // second parcours du gisement — l'IP recherche-entreprises n'est jamais saturée.
 }
 
 function retryLastPage() {

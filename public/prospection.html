@@ -2857,11 +2857,13 @@ async function loadMore() {
     var wantPage = S.upstreamPage + 1;   // page visée : on ne l'incrémente qu'APRÈS succès
     // Retry borné de la MÊME page. Un 502/429/erreur réseau Etalab n'est PAS une
     // fin de gisement : on retente la page (jamais en rafale — séquentiel, une
-    // seule requête en vol, backoff 400/800/1600 ms) avant d'abandonner. Tant que
-    // la page n'a pas réussi, S.upstreamPage n'est pas incrémenté → jamais de saut
-    // de page ni de boucle sur une page en échec.
+    // seule requête en vol, backoff 800/1600/3200 ms + jitter ±20 %) avant
+    // d'abandonner. Le jitter désynchronise le retry de la cadence Etalab (on ne
+    // retape pas en rythme synchrone). Tant que la page n'a pas réussi,
+    // S.upstreamPage n'est pas incrémenté → jamais de saut de page ni de boucle
+    // sur une page en échec.
     var dp = null;
-    var RETRY_BACKOFF = [400, 800, 1600];
+    var RETRY_BACKOFF = [800, 1600, 3200];
     var attempt = 0;
     while (true) {
       try {
@@ -2876,7 +2878,10 @@ async function loadMore() {
           return;
         }
         console.warn('[Prospect] loadMore page '+wantPage+' échec ('+fe.message+'), retry '+(attempt+1)+'/'+RETRY_BACKOFF.length);
-        await sleep(RETRY_BACKOFF[attempt]);  // backoff séquentiel, une seule requête en vol
+        // Backoff séquentiel (une seule requête en vol) + jitter ±20 % : évite de
+        // retaper Etalab en rythme synchrone avec les autres clients rate-limités.
+        var backoff = RETRY_BACKOFF[attempt] * (0.8 + Math.random() * 0.4);
+        await sleep(Math.round(backoff));
         attempt++;
       }
     }
@@ -2929,14 +2934,20 @@ async function loadMore() {
 // tourne seul jusqu'au bout du gisement, le scroll ne fait que suivre. La boucle
 // révèle d'abord le buffer déjà fetché (zéro API, cadence AUTOROLL_MS) ; elle ne
 // tape l'upstream (loadMore, qui garde son sleep interne) que si le buffer est
-// vide ET upstream pas épuisé, avec une pause additionnelle pour rester SOUS le
-// limiter serveur (~1,75 req/s). Plus de plafond de palier : la boucle déroule
-// d'elle-même jusqu'à S.market, sans attendre de scroll — mais reste séquentielle
-// (await) → cadence réseau protégée, jamais de rafale. Découplage respecté : agit
-// sur le RENDU (renderChunk), jamais sur la garde upstreamExhausted ni rawCount.
+// vide ET upstream pas épuisé, avec une pause additionnelle pour rester FRANCHEMENT
+// SOUS le limiter Etalab (~1 req/s, doctrine « pérenniser plutôt que saturer » :
+// on préfère un déroulement plus lent à un 502 provoqué). Plus de plafond de
+// palier : la boucle déroule d'elle-même jusqu'à S.market, sans attendre de scroll
+// — mais reste séquentielle (await) → cadence réseau protégée, jamais de rafale.
+// Découplage respecté : agit sur le RENDU (renderChunk), jamais sur la garde
+// upstreamExhausted ni rawCount.
 // ════════════════════════════════════════════════════════════════
-var AUTOROLL_MS       = 260;   // cadence de révélation du buffer (cosmétique, zéro API)
-var AUTOROLL_FETCH_MS = 420;   // pause additionnelle après un fetch upstream (cadence Etalab)
+var AUTOROLL_MS       = 260;    // cadence de révélation du buffer (cosmétique, zéro API)
+// Pause après un fetch upstream. Avec le sleep(150) interne de loadMore, le délai
+// inter-pages effectif ≈ 1150 ms → ~0,87 req/s, franchement sous le seuil Etalab.
+// Ralentir ici n'affecte QUE la vitesse d'affichage (le compteur monte plus
+// lentement) — jamais le résultat final (marché, dédup, condition d'arrêt intacts).
+var AUTOROLL_DELAY_MS = 1000;   // cadence Etalab : ~1 req/s max
 
 S.autoRoll = { active: false, ceiling: 0, gen: 0 };
 
@@ -2954,7 +2965,7 @@ async function runAutoRoll() {
         await sleep(AUTOROLL_MS);
       } else if (!S.upstreamExhausted) {
         await loadMore();                   // 1 fetch upstream (loadMore garde son sleep)
-        await sleep(AUTOROLL_FETCH_MS);     // marge pour tenir sous le limiter serveur
+        await sleep(AUTOROLL_DELAY_MS);     // marge pour tenir franchement sous le limiter Etalab
       } else {
         break;                              // buffer vide + upstream épuisé → plus rien
       }

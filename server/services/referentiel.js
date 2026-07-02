@@ -209,6 +209,52 @@ async function upsertRecordRef(db, table, cleanId, body) {
   }
 }
 
+// ── enrichissement additif du référentiel depuis la saisie abonné ──
+// ENRICHIR-SI-EXISTE : remplit les 4 champs actionnables personne morale du
+// référentiel mutualisé (website / societe_email / societe_tel / societe_linkedin)
+// UNIQUEMENT s'ils y sont vides (NONE ou ''), à partir de la saisie/import de
+// l'abonné. ADDITIF STRICT — jamais d'écrasement d'une valeur déjà présente : la
+// règle est portée PAR CHAMP côté SurrealQL
+//   website = IF website = NONE OR website = '' THEN $website ELSE website END
+// si bien qu'une valeur non vide existante est réécrite à l'identique (no-op réel).
+//
+// UPDATE CIBLÉ, JAMAIS UPSERT : on ne crée aucun record. Le record est ciblé par
+// SIRET via cleanRecordId('referentiel_societes', siret) ; s'il n'existe pas dans
+// le référentiel, l'UPDATE ne touche 0 ligne → no-op silencieux (aucune création,
+// ne pas réutiliser upsertRecordRef qui, lui, CREATE si absent).
+//
+// Champs vides EN ENTRÉE ignorés : ils ne sont pas posés dans le SET, donc le
+// champ existant reste tel quel (on n'écrase jamais avec du vide).
+//
+// FIRE-AND-FORGET : appelée sans await, ne doit JAMAIS throw. Échec avalé + loggé.
+export async function enrichReferentielActionnable(siret, fields = {}) {
+  try {
+    // SIRET normalisé (espaces retirés) avant cleanRecordId — aligne la clé sur les
+    // SIRET du référentiel, déjà 14 chiffres sans espace (cf. server.js:962/1343).
+    const cleanSiret = String(siret || '').replace(/\s+/g, '')
+    const id = cleanRecordId('referentiel_societes', cleanSiret)
+    if (!id) return
+    const params = { id }
+    const assigns = []
+    for (const k of ['website', 'societe_email', 'societe_tel', 'societe_linkedin']) {
+      const v = str(fields?.[k])
+      if (!v) continue   // champ vide en entrée → non posé (jamais d'écrasement par du vide)
+      // Additif par champ : n'écrit que si l'existant est vide (NONE ou '').
+      assigns.push(`${k} = IF ${k} = NONE OR ${k} = '' THEN $${k} ELSE ${k} END`)
+      params[k] = v
+    }
+    if (assigns.length === 0) return   // rien à enrichir
+    const db = await getDb()
+    // UPDATE ciblé (jamais UPSERT) : record absent → 0 ligne modifiée, no-op.
+    await db.query(
+      `UPDATE type::record("referentiel_societes", $id) SET ${assigns.join(', ')}`,
+      params
+    )
+  } catch (e) {
+    console.warn('[referentiel-enrich]', String(e?.message || e).slice(0, 80))
+  }
+}
+
 // Alimente referentiel_societes à partir des fiches Etalab servies à l'abonné.
 // FIRE-AND-FORGET : appelée sans await APRÈS res.json — ne doit JAMAIS throw ni
 // affecter la réponse déjà servie. Tout échec est avalé + loggé [referentiel-upsert].

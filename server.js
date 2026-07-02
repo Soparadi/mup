@@ -37,7 +37,7 @@ import {
   insertOptoutRequest,
   verifyOptoutToken
 } from './server/services/optout.js'
-import { runReferentielMigration, upsertReferentiel } from './server/services/referentiel.js'
+import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
@@ -1307,6 +1307,15 @@ app.put('/api/contacts/:id', async (req, res) => {
       ? 'UPDATE type::record("pipeline", $id) CONTENT $body'
       : 'UPDATE type::record("contacts", $id) CONTENT $body'
     const result = await db.query(sql, { id, body: cleanBody })
+    // Enrichissement additif du référentiel mutualisé (clé SIRET) depuis la saisie
+    // abonné — FIRE-AND-FORGET (sans await) : ne bloque pas la réponse déjà servie,
+    // no-op silencieux si le SIRET est absent du référentiel. Additif strict côté DB.
+    enrichReferentielActionnable(cleanBody.siret, {
+      website: cleanBody.website,
+      societe_email: cleanBody.societe_email,
+      societe_tel: cleanBody.societe_tel,
+      societe_linkedin: cleanBody.societe_linkedin
+    })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
     console.error('[contacts:put]', err)
@@ -1789,6 +1798,19 @@ async function ecrireImport(db, userId, plan) {
 
   stmts.push('COMMIT TRANSACTION;')
   if (si + ci > 0) await db.query(stmts.join('\n'), params)
+
+  // Enrichissement additif du référentiel mutualisé (clé SIRET) depuis la saisie
+  // importée — face société dupliquée sur les contacts (personnes) ET entités pures
+  // dérivent toutes deux de plan.societes. FIRE-AND-FORGET (sans await) : ne bloque
+  // pas la réponse d'import, no-op silencieux pour tout SIRET absent du référentiel.
+  for (const s of plan.societes) {
+    enrichReferentielActionnable(s.siret, {
+      website: s.site,
+      societe_email: s.email,
+      societe_tel: s.tel,
+      societe_linkedin: s.linkedin
+    })
+  }
 
   return {
     stats: {

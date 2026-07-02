@@ -38,6 +38,13 @@ export async function runReferentielMigration() {
     'DEFINE FIELD IF NOT EXISTS lat ON referentiel_societes TYPE option<number>',
     'DEFINE FIELD IF NOT EXISTS lng ON referentiel_societes TYPE option<number>',
     'DEFINE FIELD IF NOT EXISTS etat_administratif ON referentiel_societes TYPE option<string>',
+    // ── Champs actionnables personne morale mutualisés (saisie abonné, additive). ──
+    // Alimentés en remplissage-si-vide depuis la saisie/import (jamais d'écrasement) ;
+    // aucun champ personne physique. Jamais existé → IF NOT EXISTS (pas d'OVERWRITE).
+    'DEFINE FIELD IF NOT EXISTS website ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS societe_email ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS societe_tel ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS societe_linkedin ON referentiel_societes TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS dirigeant_nom ON referentiel_societes TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS dirigeant_prenom ON referentiel_societes TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS dirigeant_fonction ON referentiel_societes TYPE option<string>',

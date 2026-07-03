@@ -312,14 +312,17 @@ export async function amorcerOverpassDeptNaf(dept, naf) {
     const osmSelector = NAF_TO_OSM[nafCode]
     if (!osmSelector) return
 
-    // 2. Cibles d'appariement lues à plat dans le référentiel (index dept+naf).
+    // 2. Cibles d'appariement lues dans le référentiel. Le filtre porte sur le
+    //    département seul (indexé) ; l'appariement NAF se fait en JS pour rester
+    //    insensible au point (base : "47.78A", nafCode strippé : "4778A").
     const db = await getDb()
     const res = await db.query(
-      'SELECT siret, siren, raison_sociale, ville FROM referentiel_societes ' +
-      'WHERE departement = $dept AND naf = $naf',
-      { dept: departement, naf: nafCode }
+      'SELECT siret, siren, raison_sociale, ville, naf FROM referentiel_societes ' +
+      'WHERE departement = $dept',
+      { dept: departement }
     )
-    const rows = Array.isArray(res?.[0]) ? res[0] : []
+    const rows = (Array.isArray(res?.[0]) ? res[0] : [])
+      .filter(r => String(r?.naf || '').replace(/\./g, '') === nafCode)
 
     // Seuls les records dotés d'un SIRET (clé d'écriture indispensable).
     const handles = rows

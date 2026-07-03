@@ -8,6 +8,7 @@
 // pour ne jamais saturer les slots publics d'Overpass.
 
 import { enrichReferentielActionnable, communeToDepartement } from './referentiel.js'
+import { getDb } from '../../lib/surreal.js'
 
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter'
 
@@ -289,5 +290,90 @@ export async function amorcerOverpass(leads) {
     )
   } catch (e) {
     console.error('[overpass-amorce]', String(e?.message || e).slice(0, 120))
+  }
+}
+
+// ---------------------------------------------------------------------------
+// amorcerOverpassDeptNaf(dept, naf) — variante lisant le référentiel en base.
+// NON branchée. Contrairement à amorcerOverpass (qui reçoit des leads Etalab),
+// dept + naf sont fournis explicitement et les cibles d'appariement sont lues
+// dans referentiel_societes via l'index idx_ref_dept_naf. Même doctrine dédup
+// (18 juin) : SIRET certain, sinon nom + ville concordants (nom seul jamais
+// décisif). Écriture fill-if-empty via enrichReferentielActionnable. Aucun throw
+// remontant.
+// ---------------------------------------------------------------------------
+
+export async function amorcerOverpassDeptNaf(dept, naf) {
+  try {
+    const departement = String(dept || '')
+    const nafCode = String(naf || '').replace(/\./g, '')
+
+    // 1. Sélecteur OSM résolu via la table NAF. Absent → silencieux.
+    const osmSelector = NAF_TO_OSM[nafCode]
+    if (!osmSelector) return
+
+    // 2. Cibles d'appariement lues à plat dans le référentiel (index dept+naf).
+    const db = await getDb()
+    const res = await db.query(
+      'SELECT siret, siren, raison_sociale, ville FROM referentiel_societes ' +
+      'WHERE departement = $dept AND naf = $naf',
+      { dept: departement, naf: nafCode }
+    )
+    const rows = Array.isArray(res?.[0]) ? res[0] : []
+
+    // Seuls les records dotés d'un SIRET (clé d'écriture indispensable).
+    const handles = rows
+      .map(r => ({
+        siren: String(r?.siren || '').replace(/\s+/g, ''),
+        siret: String(r?.siret || '').replace(/\s+/g, ''),
+        raison_sociale: String(r?.raison_sociale || ''),
+        ville: String(r?.ville || '')
+      }))
+      .filter(h => h.siret)
+
+    // 3. POI Overpass normalisés.
+    const pois = await fetchOverpass(departement, osmSelector)
+
+    let matchedSiret = 0
+    let matchedNomVille = 0
+    let written = 0
+
+    for (const poi of pois) {
+      // 5.a — SIRET : match certain.
+      let record = handles.find(h => corroborerSiret(poi, h.siren))
+      let viaSiret = !!record
+
+      // 5.b — sinon raison sociale normalisée + ville (les deux concordent).
+      //       Le nom seul n'est jamais décisif.
+      if (!record) {
+        const pn = normText(poi.name)
+        const pc = normText(poi.city)
+        if (pn && pc) {
+          record = handles.find(h => normText(h.raison_sociale) === pn && normText(h.ville) === pc)
+        }
+      }
+
+      if (!record) continue   // POI non apparié → ignoré (pas d'écriture orpheline).
+
+      if (viaSiret) matchedSiret++
+      else matchedNomVille++
+
+      // 6. Enrichissement fill-if-empty, clé = SIRET du record.
+      const fields = {}
+      if (poi.website) fields.website = poi.website
+      if (poi.email) fields.societe_email = poi.email
+      if (poi.phone) fields.societe_tel = poi.phone
+      if (Object.keys(fields).length === 0) continue
+
+      await enrichReferentielActionnable(record.siret, fields)
+      written++
+    }
+
+    console.log(
+      `[overpass-amorce-deptnaf] reçus=${pois.length} appariés_siret=${matchedSiret} ` +
+      `appariés_nom_ville=${matchedNomVille} écrits=${written}`
+    )
+  } catch (e) {
+    console.error('[overpass-amorce-deptnaf]', String(e?.message || e).slice(0, 120))
   }
 }

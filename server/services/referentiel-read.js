@@ -208,3 +208,29 @@ export async function countReferentielFresh({ departement, naf, commune } = {}) 
     return 0
   }
 }
+
+// ── D. getReferentielContactBySiret(siret) — async, fail-safe ──
+// Lecture unitaire des champs contact société (website / societe_email /
+// societe_tel) pour un SIRET donné, tels qu'alimentés par l'amorçage Overpass.
+// Clé SIRET UNIQUE (idx_ref_siret) → LIMIT 1. SIRET normalisé (espaces retirés)
+// comme partout ailleurs. Rend { website, societe_email, societe_tel } ou null
+// si absent. Tout échec → null (fail-safe, jamais de throw remontant).
+export async function getReferentielContactBySiret(siret) {
+  try {
+    const s = str(siret).replace(/\s+/g, '')
+    if (!s) return null
+    const sql = 'SELECT website, societe_email, societe_tel FROM referentiel_societes WHERE siret = $siret LIMIT 1'
+    const db = await getDb()
+    const r = await db.query(sql, { siret: s })
+    const row = (r[0] || [])[0]
+    if (!row) return null
+    return {
+      website: str(row.website),
+      societe_email: str(row.societe_email),
+      societe_tel: str(row.societe_tel)
+    }
+  } catch (e) {
+    console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
+    return null
+  }
+}

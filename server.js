@@ -38,7 +38,7 @@ import {
   verifyOptoutToken
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
-import { amorcerOverpass, amorcerOverpassDeptNaf } from './server/services/overpass.js'
+import { amorcerOverpassDeptNaf } from './server/services/overpass.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
@@ -2039,10 +2039,6 @@ app.get('/api/search', async (req, res) => {
     // avale tout échec (try/catch global + log [referentiel-upsert]), donc jamais
     // de promesse rejetée à neutraliser ici.
     upsertReferentiel(data.results)
-    // Fire-and-forget : amorçage Overpass (corrélation OSM). Même patron —
-    // lancé après res.json, sans await. Le module a son try/catch global
-    // ([overpass] avale tout échec), donc aucune promesse à neutraliser ici.
-    amorcerOverpass(data.results)
     // Fire-and-forget : tracking historique recherches. Lancé APRÈS res.json
     // pour ne jamais bloquer la réponse au front. Échec silencieux côté
     // search-tracker, .catch final pour neutraliser toute promesse rejetée.

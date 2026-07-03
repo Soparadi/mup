@@ -2711,6 +2711,7 @@ async function loadPage(page) {
       S.nGeoOk        = 0;
       S.nGeoFail      = 0;
       S.finished      = false;   // nouvelle recherche : le compteur reprend sa progression
+      S.amorceLancee  = false;   // amorçage Overpass : ré-armé pour cette recherche
       S.buffer        = keptItems;
       S.loaded        = 0;
       S.page          = 1;
@@ -3131,6 +3132,20 @@ function maybeFinishSearch(gen) {
     // réellement posés sur la carte (carte = compteur). Flag pour que
     // updateCountDisplay n'écrase plus cette valeur depuis S.loaded.
     S.finished = true;
+    // Amorçage Overpass à la demande : UNE fois par recherche, à la convergence.
+    // Fire-and-forget, n'attend rien de la réponse, échec silencieux.
+    if (!S.amorceLancee) {
+      S.amorceLancee = true;
+      var _amDept = (document.getElementById('sel-dept')?.value || '').trim();
+      var _amNaf = (selectedNAFCode || '').trim();
+      if (_amDept && _amNaf) {
+        fetch('/api/amorce', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dept: _amDept, naf: _amNaf })
+        }).catch(function(){});
+      }
+    }
     var prospectsEl = document.getElementById('kpi-prospects-count');
     if (prospectsEl) prospectsEl.textContent = S.nGeoOk.toLocaleString('fr-FR');
     // Le déroulement Etalab est terminé (upstreamExhausted) : le gisement

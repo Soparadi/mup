@@ -1084,6 +1084,35 @@ function wireForm(){
     }
     scheduleAutoSave();
   });
+
+  // Bouton Enrichir : restitue les champs contact société depuis le référentiel
+  // (amorçage Overpass), remplissage-si-vide. Aucun écrasement, aucune sauvegarde
+  // auto (poser .value par script ne déclenche pas l'autosave lié à 'input').
+  const enrichBtn = document.getElementById('c-enrich');
+  if (enrichBtn) {
+    enrichBtn.addEventListener('click', async () => {
+      const siret = String((contact && contact.siret) || '').replace(/\s+/g, '');
+      if (!siret) return; // SIRET absent → garde silencieuse
+      try {
+        const resp = await fetch('/api/enrich/' + encodeURIComponent(siret), { method: 'POST' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data || !data.found) return; // found:false → aucun changement visible
+        let n = 0;
+        const fillIfEmpty = (id, val) => {
+          const el = document.getElementById(id);
+          if (el && !el.value.trim() && val) { el.value = val; n++; }
+        };
+        fillIfEmpty('f-website', data.website);
+        fillIfEmpty('f-societe-email', data.societe_email);
+        fillIfEmpty('f-societe-tel', data.societe_tel);
+        if (n > 0) toast('Fiche enrichie — pensez à enregistrer');
+        else toast('Aucune donnée à ajouter');
+      } catch (e) {
+        // restitution best-effort : pas de toast d'erreur
+      }
+    });
+  }
 }
 
 // Composer activités : type selector + submit

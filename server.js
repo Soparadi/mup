@@ -38,7 +38,7 @@ import {
   verifyOptoutToken
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
-import { amorcerOverpass } from './server/services/overpass.js'
+import { amorcerOverpass, amorcerOverpassDeptNaf } from './server/services/overpass.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
@@ -2063,6 +2063,20 @@ app.get('/api/search', async (req, res) => {
   } catch(e) {
     res.status(502).json({ error: 'Service temporairement indisponible' })
   }
+})
+
+// ── Amorçage Overpass à la demande (dept + naf explicites) ──
+// Auto-gated par la gate auth /api/* (req.userId rempli). Répond immédiatement,
+// puis lance l'amorçage en différé : le setTimeout 30s laisse les upsertReferentiel
+// page-par-page (fire-and-forget de /api/search) flusher en base avant que
+// amorcerOverpassDeptNaf ne relise le référentiel. Le module a son try/catch global.
+app.post('/api/amorce', async (req, res) => {
+  const dept = String(req.body?.dept || '').trim()
+  const naf = String(req.body?.naf || '').trim()
+  if (!dept || !naf) return res.status(400).json({ error: 'dept et naf requis' })
+  res.json({ ok: true })
+  // Fire-and-forget différé : lancé APRÈS res.json, sans await.
+  setTimeout(() => { amorcerOverpassDeptNaf(dept, naf) }, 30000)
 })
 
 // ── Historique des recherches Leads pour l'utilisateur authentifié ──

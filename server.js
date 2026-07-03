@@ -38,6 +38,7 @@ import {
   verifyOptoutToken
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
+import { getReferentielContactBySiret } from './server/services/referentiel-read.js'
 import { amorcerOverpassDeptNaf } from './server/services/overpass.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
@@ -2416,6 +2417,21 @@ app.get('/api/sirene/:siret', async (req, res) => {
   } catch(e) {
     res.status(502).json({ error: 'INSEE indisponible' })
   }
+})
+
+// POST /api/enrich/:siret — restitution des champs contact société (website /
+// societe_email / societe_tel) depuis referentiel_societes (amorçage Overpass).
+// Restitution PURE : aucun décompte quota, aucune idempotence (différés).
+app.post('/api/enrich/:siret', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  const siret = String(req.params.siret || '').replace(/\s+/g, '')
+  if (!siret) return res.status(400).json({ error: 'SIRET manquant' })
+  const found = await getReferentielContactBySiret(siret)
+  if (!found) {
+    return res.json({ found: false, website: '', societe_email: '', societe_tel: '' })
+  }
+  res.json({ found: true, ...found })
 })
 
 app.get('/api/geocode', async (req, res) => {

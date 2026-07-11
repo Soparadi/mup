@@ -3492,14 +3492,16 @@ function _wordVariants(w) {
   if (w.length > 3 && w.charAt(w.length-1) !== 's') v.push(w + 's');
   return v;
 }
-// Match tol\u00e9rant : startsWith bidirectionnel + variantes plural + pr\u00e9fixe
-// commun \u2265 5 chars (radical m\u00e9tier : platrier\u2194platrerie, coiffeur\u2194coiffure).
+// Match tol\u00e9rant : le mot requ\u00eate pr\u00e9fixe un mot de libell\u00e9 (jamais l'inverse,
+// sinon \u00ab c \u00bb de clinique matcherait \u00ab c \u00bb de n.c.a.), mots de libell\u00e9 < 2 chars
+// ignor\u00e9s, + variantes plural + pr\u00e9fixe commun \u2265 5 chars (radical m\u00e9tier :
+// platrier\u2194platrerie, coiffeur\u2194coiffure).
 function _wordsMatch(qWord, lWord) {
   var qV = _wordVariants(qWord), lV = _wordVariants(lWord);
   for (var i = 0; i < qV.length; i++) {
     for (var j = 0; j < lV.length; j++) {
+      if (lV[j].length < 2) continue;
       if (lV[j].startsWith(qV[i])) return true;
-      if (qV[i].startsWith(lV[j])) return true;
     }
   }
   if (qWord.length >= 5 && lWord.length >= 5 && qWord.slice(0,5) === lWord.slice(0,5)) return true;

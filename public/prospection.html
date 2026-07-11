@@ -1808,12 +1808,15 @@ async function refreshKpiPipeline() {
   }
 }
 
-// KPI « Contacts » : contacts entreprises générés par MovUP (source pipeline,
-// même clé que l'onglet « Générés par MovUP » de la page Contacts).
+// KPI « Contacts » : contacts entreprises générés par MovUP. Même clé que
+// l'onglet « Générés par MovUP » de la page Contacts (contacts.html) : on
+// matche 'prospection' (source réelle des records écrits par le serveur, cf.
+// server.js POST /api/pipeline/from-lead) ET 'pipeline' (pseudo-contacts
+// dérivés des cartes pipeline côté client).
 async function refreshKpiContacts() {
   try {
     var data = await _getExistingContacts();
-    var n = data.filter(function (c) { return c.source === 'pipeline'; }).length;
+    var n = data.filter(function (c) { return c.source === 'pipeline' || c.source === 'prospection'; }).length;
     var el = document.getElementById('kpi-contacts-count');
     if (el) el.textContent = n.toLocaleString('fr-FR');
   } catch (e) {

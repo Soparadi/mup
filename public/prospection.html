@@ -3740,6 +3740,7 @@ function onSectorInput(v) {
   renderAC(v, _acList);
 }
 function onSectorFocus() {
+  if (S.nafLocked) return;
   var v=document.getElementById('inp-sector').value;
   if(v.trim().length>=2){ _acList=searchNAF(v); if(_acList.length===0&&v.trim().length>=3){_acList=fallbackLabelSearch(v);} renderAC(v,_acList); }
 }

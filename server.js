@@ -330,7 +330,7 @@ app.use('/api/stripe', stripeRouter)
 //   (aucun) — les organismes publics (71 administration publique,
 //   72 collectivités territoriales, 73 établissements administratifs) et le
 //   droit étranger (74) ne sont PLUS exclus : quand on recherche un secteur
-//   donné (ex. 8711Z EHPAD), un établissement public de ce secteur est une
+//   donné (ex. 8710A EHPAD), un établissement public de ce secteur est une
 //   cible valide. La recherche étant bornée par le code NAF, aucun risque
 //   inter-secteur. Les EHPAD étant majoritairement publics/associatifs, les
 //   exclure vidait le résultat.

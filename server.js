@@ -327,11 +327,16 @@ app.use('/api/stripe', stripeRouter)
 // pas les redressements en cours. Pour ces derniers il faudrait enrichir
 // via Pappers ou BODACC en Phase 2.5.
 // Préfixes nature juridique exclus de la prospection :
-//   71 = administration publique · 72 = collectivités territoriales
-//   73 = établissements administratifs · 74 = entreprises étrangères
+//   (aucun) — les organismes publics (71 administration publique,
+//   72 collectivités territoriales, 73 établissements administratifs) et le
+//   droit étranger (74) ne sont PLUS exclus : quand on recherche un secteur
+//   donné (ex. 8711Z EHPAD), un établissement public de ce secteur est une
+//   cible valide. La recherche étant bornée par le code NAF, aucun risque
+//   inter-secteur. Les EHPAD étant majoritairement publics/associatifs, les
+//   exclure vidait le résultat.
 // Les SARL/EURL (préfixe 54) sont la majorité des PME/TPE françaises,
 // cible commerciale légitime → NE PAS exclure.
-const EXCLUDED_NATURE_JURIDIQUE_PREFIXES = ['71', '72', '73', '74']
+const EXCLUDED_NATURE_JURIDIQUE_PREFIXES = []
 
 function hasNamedDirigeant(item) {
   const dirs = item && item.dirigeants
@@ -351,7 +356,10 @@ function isProspectable(item) {
   if (item.etat_administratif !== 'A') return false
   const nat = typeof item.nature_juridique === 'string' ? item.nature_juridique : ''
   if (nat && EXCLUDED_NATURE_JURIDIQUE_PREFIXES.some(p => nat.startsWith(p))) return false
-  return hasNamedDirigeant(item)
+  // hasNamedDirigeant N'EST PLUS bloquant : un établissement sans dirigeant
+  // exposé dans Etalab (typiquement un organisme public/associatif comme un
+  // EHPAD) reste prospectable via son contact d'établissement.
+  return true
 }
 
 // ── Filtre diffusion INSEE (Phase 6 Étape 15 — droit d'opposition SIRENE) ──

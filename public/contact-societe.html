@@ -1352,6 +1352,13 @@ function toast(msg){
   wireDelete();
   wirePeople();
   await loadContact();
+  // DÉCLENCHEMENT AUTOMATIQUE TEMPORAIRE — À RETIRER AVANT LANCEMENT,
+  // l'enrichissement doit redevenir manuel. Pré-lancement sans abonnés : on
+  // rejoue le clic du bouton c-enrich à l'ouverture, une fois le SIRET connu
+  // (loadContact terminé) et les champs peuplés par populate(). On réutilise
+  // le handler existant tel quel — remplissage-si-vide strict, aucun écrasement,
+  // aucune sauvegarde auto. SIRET absent → clic no-op (garde du handler).
+  document.getElementById('c-enrich')?.click();
 })();
 </script>
 <script src="/sidebar.js"></script>

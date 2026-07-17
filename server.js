@@ -889,19 +889,24 @@ app.post('/api/admin/comptes/bypass', requireSuperadmin, async (req, res) => {
 app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
   // Prédicat « champ non vide » (les 3 champs sont option<string> : NONE ou '').
   const nonVide = (f) => `${f} != NONE AND ${f} != ''`
+  const vide = (f) => `(${f} = NONE OR ${f} = '')`
   const auMoinsUn =
     `(${nonVide('website')}) OR (${nonVide('societe_tel')}) OR (${nonVide('societe_email')})`
   const cnt = (rows) => (Array.isArray(rows) && rows[0] && typeof rows[0].count === 'number') ? rows[0].count : 0
   try {
     const db = await getDb()
-    const [totalR, webR, telR, mailR, unR, deptTotR, deptUnR] = await Promise.all([
+    const [totalR, webR, telR, mailR, unR, deptTotR, deptUnR, gisWebR, gisSansContactR, gisSansMailR, gisSansTelR] = await Promise.all([
       db.query('SELECT count() FROM referentiel_societes GROUP ALL'),
       db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} GROUP ALL`),
       db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('societe_tel')} GROUP ALL`),
       db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('societe_email')} GROUP ALL`),
       db.query(`SELECT count() FROM referentiel_societes WHERE ${auMoinsUn} GROUP ALL`),
       db.query('SELECT departement, count() AS n FROM referentiel_societes GROUP BY departement'),
-      db.query(`SELECT departement, count() AS n FROM referentiel_societes WHERE ${auMoinsUn} GROUP BY departement`)
+      db.query(`SELECT departement, count() AS n FROM referentiel_societes WHERE ${auMoinsUn} GROUP BY departement`),
+      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} GROUP ALL`),
+      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} AND ${vide('societe_email')} AND ${vide('societe_tel')} GROUP ALL`),
+      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} AND ${vide('societe_email')} GROUP ALL`),
+      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} AND ${vide('societe_tel')} GROUP ALL`)
     ])
     // Fusion des deux ventilations par département (total vs. au moins un contact).
     const avecContactParDept = new Map()
@@ -961,6 +966,12 @@ app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
       avec_societe_email: cnt(mailR[0]),
       avec_au_moins_un: cnt(unR[0]),
       par_departement_top20: parDepartement,
+      gisement: {
+        avec_website: cnt(gisWebR[0]),
+        website_sans_contact: cnt(gisSansContactR[0]),
+        website_sans_email: cnt(gisSansMailR[0]),
+        website_sans_tel: cnt(gisSansTelR[0])
+      },
       ...(couple ? { couple } : {})
     })
   } catch (err) {

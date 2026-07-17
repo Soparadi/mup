@@ -872,6 +872,54 @@ app.post('/api/admin/comptes/bypass', requireSuperadmin, async (req, res) => {
   }
 })
 
+// ── GET /api/debug/overpass — DIAGNOSTIC DÉVELOPPEMENT, À RETIRER AVANT LANCEMENT.
+// Route de diagnostic LECTURE SEULE du remplissage Overpass dans
+// referentiel_societes. Même verrou que les routes /api/admin/comptes
+// (requireSuperadmin, dev@soparadi.com SEUL, req.authUser posé par le gate
+// global requireAuth). GET → passe le gate abonnement (lecture seule).
+// N'exécute QUE des SELECT (aucun UPDATE/CREATE, aucun appel réseau externe) et
+// ne touche NI /api/search, NI overpass.js, NI /api/enrich.
+app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
+  // Prédicat « champ non vide » (les 3 champs sont option<string> : NONE ou '').
+  const nonVide = (f) => `${f} != NONE AND ${f} != ''`
+  const auMoinsUn =
+    `(${nonVide('website')}) OR (${nonVide('societe_tel')}) OR (${nonVide('societe_email')})`
+  const cnt = (rows) => (Array.isArray(rows) && rows[0] && typeof rows[0].count === 'number') ? rows[0].count : 0
+  try {
+    const db = await getDb()
+    const [totalR, webR, telR, mailR, unR, deptTotR, deptUnR] = await Promise.all([
+      db.query('SELECT count() FROM referentiel_societes GROUP ALL'),
+      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} GROUP ALL`),
+      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('societe_tel')} GROUP ALL`),
+      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('societe_email')} GROUP ALL`),
+      db.query(`SELECT count() FROM referentiel_societes WHERE ${auMoinsUn} GROUP ALL`),
+      db.query('SELECT departement, count() AS n FROM referentiel_societes GROUP BY departement'),
+      db.query(`SELECT departement, count() AS n FROM referentiel_societes WHERE ${auMoinsUn} GROUP BY departement`)
+    ])
+    // Fusion des deux ventilations par département (total vs. au moins un contact).
+    const avecContactParDept = new Map()
+    for (const row of (deptUnR[0] || [])) avecContactParDept.set(String(row.departement ?? ''), row.n || 0)
+    const parDepartement = (deptTotR[0] || [])
+      .map((row) => {
+        const dept = String(row.departement ?? '')
+        return { departement: dept, total: row.n || 0, avec_contact: avecContactParDept.get(dept) || 0 }
+      })
+      .sort((a, b) => b.avec_contact - a.avec_contact || b.total - a.total)
+      .slice(0, 20)
+    res.json({
+      total: cnt(totalR[0]),
+      avec_website: cnt(webR[0]),
+      avec_societe_tel: cnt(telR[0]),
+      avec_societe_email: cnt(mailR[0]),
+      avec_au_moins_un: cnt(unR[0]),
+      par_departement_top20: parDepartement
+    })
+  } catch (err) {
+    console.error('[debug/overpass]', err.message)
+    res.status(500).json({ error: 'Diagnostic overpass impossible' })
+  }
+})
+
 app.get('/api/pipeline', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return

@@ -40,10 +40,16 @@ export async function runReferentielMigration() {
     'DEFINE FIELD IF NOT EXISTS etat_administratif ON referentiel_societes TYPE option<string>',
     // ── Complétude établissement (Phase 2) — capte les champs recherche-entreprises
     // aujourd'hui jetés par la chaîne. Additifs, jamais existé → IF NOT EXISTS.
-    // Alimentés en remplissage-si-vide STRICT (jamais d'écrasement d'une saisie
-    // abonné, cf. fillIfEmpty dans upsertRecordRef). NAF 2025 exclu volontairement
-    // (catalogue en NAF 2008, contamination). tva : défini mais non alimenté (non
-    // renvoyé par recherche-entreprises ; reste NONE tant qu'aucune source réelle).
+    // SOCLE ADMINISTRATIF, pas de la saisie abonné : alimentés en SET direct et
+    // rafraîchis à chaque upsert (comme raison_sociale / naf / adresse). Aucun de ces
+    // champs n'est jamais écrit par un abonné (ce chemin est enrichReferentielActionnable,
+    // séparé), donc rien à protéger d'un écrasement ; les figer en fill-if-empty ne
+    // ferait que geler la 1re valeur (une entreprise qui change d'enseigne resterait
+    // périmée). L'écrasement par du vide est déjà exclu en amont : upsertReferentiel
+    // ne pose ces clés dans body que si non vides. numero/type/libelle_voie DOIVENT
+    // suivre adresse (SET direct) sous peine d'incohérence composé/décomposés.
+    // NAF 2025 exclu volontairement (catalogue en NAF 2008, contamination). tva :
+    // défini mais non alimenté (non renvoyé par recherche-entreprises ; reste NONE).
     'DEFINE FIELD IF NOT EXISTS enseigne ON referentiel_societes TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS enseignes ON referentiel_societes TYPE option<array<string>>',
     'DEFINE FIELD IF NOT EXISTS enseignes.* ON referentiel_societes TYPE string',
@@ -107,14 +113,14 @@ const str = v => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v)
 const cleanStrArray = v =>
   (Array.isArray(v) ? v.map(x => (typeof x === 'string' ? x.trim() : '')).filter(Boolean) : [])
 
-// Champs de complétude établissement écrits en remplissage-si-vide STRICT par
-// upsertReferentiel : jamais d'écrasement d'une valeur déjà présente. tva absent
-// (non alimenté). NAF 2025 exclu volontairement.
-const FILL_IF_EMPTY = [
-  'enseigne', 'enseignes', 'nom_commercial', 'date_fermeture',
-  'tranche_effectif_salarie', 'nature_juridique', 'date_creation',
-  'numero_voie', 'type_voie', 'libelle_voie'
-]
+// Complétude établissement : VIDE à dessein. Ces 10 champs (enseigne, enseignes,
+// nom_commercial, date_fermeture, tranche_effectif_salarie, nature_juridique,
+// date_creation, numero/type/libelle_voie) sont du SOCLE Etalab, pas de la saisie
+// abonné → SET direct dans upsertReferentiel, rafraîchis à chaque upsert. Le
+// remplissage-si-vide ne protégerait aucune saisie (les 4 champs abonné passent par
+// enrichReferentielActionnable, séparé) et ne ferait que figer la 1re valeur captée.
+// Le paramètre fillIfEmpty d'upsertRecordRef reste par généricité, non alimenté ici.
+const FILL_IF_EMPTY = []
 
 // Dérive le code département à partir du code commune INSEE (champ Etalab
 // 'commune'). GARDE-FOU : une commune non résolue retourne '' — jamais un
@@ -223,6 +229,10 @@ function allEtablissements(fiche) {
 // → posé) comme en UPDATE (existant non vide → conservé, no-op réel), même
 // mécanisme que enrichReferentielActionnable. Les clés hors liste gardent le SET
 // direct (le socle Etalab, rafraîchi à chaque upsert — dette connue cached_at).
+// Paramètre GÉNÉRIQUE, ACTUELLEMENT NON ALIMENTÉ par upsertReferentiel (FILL_IF_EMPTY
+// est vide) : les 10 champs de complétude sont du socle et passent en SET direct.
+// La saisie abonné (website / societe_email / …) ne transite PAS par ici mais par
+// enrichReferentielActionnable ; ce paramètre reste pour un futur appelant éventuel.
 async function upsertRecordRef(db, table, cleanId, body, fillIfEmpty = []) {
   const params = { id: cleanId }
   const fillSet = new Set(fillIfEmpty)
@@ -367,10 +377,12 @@ export async function upsertReferentiel(fiches) {
         if (etablissements.length) body.etablissements = etablissements
         const nbEtab = Number(fiche?.nombre_etablissements)
         if (Number.isFinite(nbEtab)) body.nombre_etablissements = nbEtab
-        // ── Complétude établissement (Phase 2). Fill-if-empty strict (FILL_IF_EMPTY,
-        // jamais d'écrasement d'une saisie abonné). Source : l'établissement servi
-        // (etab) d'abord, repli fiche / siège. Posés seulement si non vides → NONE
-        // sinon. tva : NON alimenté (non renvoyé par l'API — champ défini, laissé NONE).
+        // ── Complétude établissement (Phase 2). SOCLE en SET direct (FILL_IF_EMPTY vide),
+        // rafraîchi à chaque upsert comme raison_sociale/naf/adresse — jamais une saisie
+        // abonné (celle-ci passe par enrichReferentielActionnable). Source : l'établissement
+        // servi (etab) d'abord, repli fiche / siège. Posés seulement si non vides → NONE
+        // sinon (le body omet les vides : aucun risque d'écraser une valeur par du vide).
+        // tva : NON alimenté (non renvoyé par l'API — champ défini, laissé NONE).
         const siege = fiche?.siege && typeof fiche.siege === 'object' ? fiche.siege : null
         const enseignes = cleanStrArray(etab.liste_enseignes)
         if (enseignes.length) {

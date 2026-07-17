@@ -879,6 +879,13 @@ app.post('/api/admin/comptes/bypass', requireSuperadmin, async (req, res) => {
 // global requireAuth). GET → passe le gate abonnement (lecture seule).
 // N'exécute QUE des SELECT (aucun UPDATE/CREATE, aucun appel réseau externe) et
 // ne touche NI /api/search, NI overpass.js, NI /api/enrich.
+//
+// Paramètres optionnels ?naf=47.78A&dept=22 : quand les DEUX sont fournis,
+// ajoute un bloc `couple` (total / avec_website / avec_societe_tel /
+// avec_au_moins_un) mesurant le remplissage sur ce couple précis — le seul
+// terrain où le connecteur Overpass a pu s'exécuter. Le NAF est normalisé
+// comme l'appariement d'overpass.js:319-325 : insensible au point (la base
+// stocke en pointé « 47.78A », les deux formes d'entrée sont acceptées).
 app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
   // Prédicat « champ non vide » (les 3 champs sont option<string> : NONE ou '').
   const nonVide = (f) => `${f} != NONE AND ${f} != ''`
@@ -906,13 +913,55 @@ app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
       })
       .sort((a, b) => b.avec_contact - a.avec_contact || b.total - a.total)
       .slice(0, 20)
+
+    // Bloc couple naf+dept (optionnel) — remplissage réel sur ce seul couple.
+    // « au moins un » = website OU societe_tel (les deux champs qu'Overpass
+    // écrit ; l'email n'entre pas dans cette mesure, conformément à la demande).
+    //
+    // Méthode : SELECT sur le DÉPARTEMENT seul (indexé), puis filtre NAF +
+    // comptage en JS post-SELECT. On n'utilise PAS string::replace en SQL :
+    // son support n'est pas garanti sous SurrealDB 2.6.5 (c'est ce qui avait
+    // cassé Overpass en juillet). On reproduit exactement la doctrine
+    // insensible-au-point d'overpass.js:319-325 (base pointée « 47.78A »,
+    // entrée acceptée dans les deux formes via strip JS).
+    let couple = null
+    const nafRaw = String(req.query.naf || '').trim()
+    const deptRaw = String(req.query.dept || '').trim()
+    if (nafRaw && deptRaw) {
+      const nafStrip = nafRaw.replace(/\./g, '')
+      const rowsR = await db.query(
+        'SELECT naf, website, societe_tel FROM referentiel_societes WHERE departement = $dept',
+        { dept: deptRaw }
+      )
+      const rows = (Array.isArray(rowsR?.[0]) ? rowsR[0] : [])
+        .filter((r) => String(r?.naf || '').replace(/\./g, '') === nafStrip)
+      const rempli = (v) => v !== undefined && v !== null && String(v) !== ''
+      let avecWeb = 0, avecTel = 0, avecUn = 0
+      for (const r of rows) {
+        const w = rempli(r?.website)
+        const t = rempli(r?.societe_tel)
+        if (w) avecWeb++
+        if (t) avecTel++
+        if (w || t) avecUn++
+      }
+      couple = {
+        naf: nafRaw,
+        dept: deptRaw,
+        total: rows.length,
+        avec_website: avecWeb,
+        avec_societe_tel: avecTel,
+        avec_au_moins_un: avecUn
+      }
+    }
+
     res.json({
       total: cnt(totalR[0]),
       avec_website: cnt(webR[0]),
       avec_societe_tel: cnt(telR[0]),
       avec_societe_email: cnt(mailR[0]),
       avec_au_moins_un: cnt(unR[0]),
-      par_departement_top20: parDepartement
+      par_departement_top20: parDepartement,
+      ...(couple ? { couple } : {})
     })
   } catch (err) {
     console.error('[debug/overpass]', err.message)

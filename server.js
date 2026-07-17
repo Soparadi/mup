@@ -2041,6 +2041,53 @@ app.get('/api/search', async (req, res) => {
       data.results = data.results.filter(f => keepLead(f, ctx))
       console.log(`[search] page=${req.query.page || 1} brut=${brut} garde=${data.results.length}`)
     }
+    // ══════════════════════════════════════════════════════════════════════
+    // JOINTURE TEMPORAIRE DE DÉVELOPPEMENT — À RETIRER AVANT LANCEMENT.
+    // Le paywall repose sur l'ABSENCE de ces champs à la recherche : /api/search
+    // sert le socle Etalab brut, et les contacts société (website / societe_tel /
+    // societe_email, écrits par l'amorçage Overpass dans referentiel_societes) ne
+    // sont normalement restitués qu'au clic « Enrichir » via /api/enrich/:siret.
+    // Ce bloc les relit EN LECTURE SEULE et les injecte sur les fiches servies,
+    // pour les rendre visibles sans enrichir en pré-lancement (aucun abonné).
+    // UNE seule requête groupée (siret IN $sirets), jamais une par fiche. Champ
+    // absent si vide (jamais de chaîne vide forcée). Fail-open : tout échec est
+    // avalé, la réponse part sans contacts. À SUPPRIMER avant le paywall.
+    if (Array.isArray(data.results) && data.results.length) {
+      try {
+        // SIRET de l'établissement servi par fiche (matching[0], repli siège) —
+        // même clé que upsertReferentiel / le record referentiel_societes.
+        const servedSiret = r => {
+          const m = Array.isArray(r?.matching_etablissements) ? r.matching_etablissements : []
+          return String((m[0] && m[0].siret) || (r?.siege && r.siege.siret) || '').replace(/\s+/g, '')
+        }
+        const uniq = [...new Set(data.results.map(servedSiret).filter(Boolean))]
+        if (uniq.length) {
+          const db = await getDb()
+          const qr = await db.query(
+            'SELECT siret, website, societe_email, societe_tel FROM referentiel_societes WHERE siret IN $sirets',
+            { sirets: uniq }
+          )
+          const byS = new Map()
+          for (const row of (qr && qr[0]) || []) {
+            const k = typeof row?.siret === 'string' ? row.siret.trim() : ''
+            if (k) byS.set(k, row)
+          }
+          for (const r of data.results) {
+            const row = byS.get(servedSiret(r))
+            if (!row) continue
+            const w = typeof row.website === 'string' ? row.website.trim() : ''
+            const tel = typeof row.societe_tel === 'string' ? row.societe_tel.trim() : ''
+            const em = typeof row.societe_email === 'string' ? row.societe_email.trim() : ''
+            if (w) r.website = w
+            if (tel) r.societe_tel = tel
+            if (em) r.societe_email = em
+          }
+        }
+      } catch (e) {
+        console.warn('[search:join-referentiel-dev]', String(e?.message || e).slice(0, 80))
+      }
+    }
+    // ═══════════════════════ FIN JOINTURE TEMPORAIRE ═══════════════════════
     res.json(data)
     // Fire-and-forget : alimentation du référentiel entreprises mutualisé
     // (socle Etalab). Lancé APRÈS res.json, sans await — même modèle que

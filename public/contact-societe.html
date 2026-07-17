@@ -777,7 +777,7 @@ function populate(){
   document.getElementById('etape-container').setAttribute('data-etape', etape);
 
   // Champs informations
-  document.getElementById('f-nom').value = c.nom || '';
+  document.getElementById('f-nom').value = c.nom || c.company || c.name || '';
   document.getElementById('f-forme').value = c.forme_juridique || '';
   document.getElementById('f-siren').value = c.siren || '';
   document.getElementById('f-siret').value = siretFormat(c.siret);
@@ -786,9 +786,24 @@ function populate(){
   document.getElementById('f-website').value = c.website || '';
   document.getElementById('f-societe-email').value = c.societe_email || '';
   document.getElementById('f-societe-tel').value = c.societe_tel || '';
-  document.getElementById('f-adresse').value = c.adresse || '';
-  document.getElementById('f-zip').value = c.zip || '';
-  document.getElementById('f-ville').value = c.ville || '';
+  // Adresse : la carte pipeline porte un champ `address` monobloc là où le
+  // formulaire attend adresse / zip / ville. Si les champs éclatés sont absents
+  // et qu'`address` existe, on le découpe sur le CP (pivot \d{5}, motif repris
+  // de pipeline.html:1494). Sinon on ne fabrique aucune valeur.
+  let fAdresse = c.adresse || '', fZip = c.zip || '', fVille = c.ville || '';
+  if (!c.adresse && !c.zip && !c.ville && c.address) {
+    const m = c.address.match(/^(.*?)(\d{5})\s*(.*)$/);
+    if (m) {
+      fAdresse = m[1].replace(/[,\s]+$/, '').trim();
+      fZip = m[2];
+      fVille = m[3].trim();
+    } else {
+      fAdresse = c.address;   // pas de CP : tout dans l'adresse, zip/ville vides
+    }
+  }
+  document.getElementById('f-adresse').value = fAdresse;
+  document.getElementById('f-zip').value = fZip;
+  document.getElementById('f-ville').value = fVille;
   // f-linkedin = LinkedIn SOCIÉTÉ (/company/) ; le LinkedIn personne (/in/) vit
   // dans le bloc personne (pf-linkedin). On lit donc societe_linkedin, pas c.linkedin.
   document.getElementById('f-linkedin').value = c.societe_linkedin || '';

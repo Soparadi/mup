@@ -2450,14 +2450,21 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       if(existing[siren] || existing[siret]) return;
 
       var addr = etab.adresse || etab.geo_adresse || [etab.numero_voie, etab.type_voie, etab.libelle_voie, etab.code_postal, etab.libelle_commune].filter(Boolean).join(' ');
-      var name = r.nom_raison_sociale || r.nom_complet || '';
+      // Titre de fiche = enseigne commerciale (siege.liste_enseignes, un ARRAY :
+      // null/vide/multi gérés → 1re valeur non vide) ; repli raison sociale.
+      // raison_sociale conservée à part (sous-titre + devis/factures via from-lead).
+      var _ens = (r.siege && Array.isArray(r.siege.liste_enseignes)) ? r.siege.liste_enseignes : [];
+      var enseigne = '';
+      for (var _ei = 0; _ei < _ens.length; _ei++) { var _e = _ens[_ei] == null ? '' : String(_ens[_ei]).trim(); if (_e) { enseigne = _e; break; } }
+      var raisonSociale = r.nom_raison_sociale || r.nom_complet || '';
+      var name = enseigne || raisonSociale;
       var dirigeants = r.dirigeants || [];
       var dir = dirigeants.length ? (dirigeants[0].prenom||'') + ' ' + (dirigeants[0].nom||'') : '';
       var nafEtab = (etab.activite_principale || r.activite_principale || '').replace('.','');
 
       items.push({
         id: siret || siren || Math.random().toString(36).substr(2,9),
-        name: name, naf: nafEtab || naf, nafLabel: etab.libelle_activite_principale || nafLabel || '',
+        name: name, raison_sociale: raisonSociale, naf: nafEtab || naf, nafLabel: etab.libelle_activite_principale || nafLabel || '',
         sector: etab.libelle_activite_principale || nafLabel || '',
         siren: siren, siret: siret, director: dir.trim(), address: addr,
         lat: etab.latitude ? parseFloat(etab.latitude) : null,
@@ -2541,7 +2548,7 @@ function addMarker(lead) {
     id: lead.id,
     nafLabel: lead.nafLabel || lead.sector || '',
     title: lead.director || lead.name || '',
-    subtitle: lead.name || '',
+    subtitle: lead.raison_sociale || lead.name || '',
     address: lead.address || ''
   }, { state: 'lead', popup: true }) : '<div>'+esc(lead.name)+'</div>';
 
@@ -2665,7 +2672,7 @@ function createCard(lead, idx) {
     id: lead.id,
     nafLabel: lead.nafLabel || lead.sector || '',
     title: lead.director || lead.name || '',
-    subtitle: lead.name || '',
+    subtitle: lead.raison_sociale || lead.name || '',
     address: lead.address || ''
   }, { state: 'lead' }) : '';
   return wrap;
@@ -3286,7 +3293,9 @@ async function addToPipeline(leadId) {
   var body = {
     siret: lead.siret || '',
     siren: lead.siren || '',
-    raison_sociale: lead.name || '',
+    // raison_sociale = raison sociale (devis/factures), JAMAIS l'enseigne de
+    // lead.name. Repli lead.name pour les leads sans le champ (rétrocompat).
+    raison_sociale: lead.raison_sociale || lead.name || '',
     naf: lead.naf || '',
     naf_libelle: lead.nafLabel || '',
     forme: lead.forme || '',
@@ -3333,9 +3342,9 @@ async function addToPipeline(leadId) {
       if(r) localCards = JSON.parse(r);
       localCards.push({
         id: 'c' + Date.now(),
-        name: lead.name || '',
-        co: lead.name || '',
-        company: lead.name || '',
+        name: lead.raison_sociale || lead.name || '',
+        co: lead.raison_sociale || lead.name || '',
+        company: lead.raison_sociale || lead.name || '',
         contact: lead.director || '',
         email: '', phone: '', website: '',
         address: lead.address || '',
@@ -5498,9 +5507,16 @@ function _mapIdResult(r) {
   var dirigeants = r.dirigeants || [];
   var dir = dirigeants.length ? (dirigeants[0].prenom || '') + ' ' + (dirigeants[0].nom || '') : '';
   var nafEtab = (etab.activite_principale || r.activite_principale || '').replace('.', '');
+  // Titre de fiche = enseigne commerciale (siege.liste_enseignes, un ARRAY :
+  // null/vide/multi gérés → 1re valeur non vide) ; repli raison sociale.
+  // raison_sociale conservée à part (sous-titre + devis/factures via from-lead).
+  var _ens = (r.siege && Array.isArray(r.siege.liste_enseignes)) ? r.siege.liste_enseignes : [];
+  var enseigne = '';
+  for (var _ei = 0; _ei < _ens.length; _ei++) { var _e = _ens[_ei] == null ? '' : String(_ens[_ei]).trim(); if (_e) { enseigne = _e; break; } }
+  var raisonSociale = r.nom_raison_sociale || r.nom_complet || '';
   return {
     id: siret || siren || String(Math.abs((siren + siret).split('').reduce(function(a, c){ return a + c.charCodeAt(0); }, 0))),
-    name: r.nom_raison_sociale || r.nom_complet || '',
+    name: enseigne || raisonSociale, raison_sociale: raisonSociale,
     naf: nafEtab, nafLabel: etab.libelle_activite_principale || '',
     sector: etab.libelle_activite_principale || '',
     siren: siren, siret: siret, director: dir.trim(), address: addr,

@@ -38,6 +38,24 @@ export async function runReferentielMigration() {
     'DEFINE FIELD IF NOT EXISTS lat ON referentiel_societes TYPE option<number>',
     'DEFINE FIELD IF NOT EXISTS lng ON referentiel_societes TYPE option<number>',
     'DEFINE FIELD IF NOT EXISTS etat_administratif ON referentiel_societes TYPE option<string>',
+    // ── Complétude établissement (Phase 2) — capte les champs recherche-entreprises
+    // aujourd'hui jetés par la chaîne. Additifs, jamais existé → IF NOT EXISTS.
+    // Alimentés en remplissage-si-vide STRICT (jamais d'écrasement d'une saisie
+    // abonné, cf. fillIfEmpty dans upsertRecordRef). NAF 2025 exclu volontairement
+    // (catalogue en NAF 2008, contamination). tva : défini mais non alimenté (non
+    // renvoyé par recherche-entreprises ; reste NONE tant qu'aucune source réelle).
+    'DEFINE FIELD IF NOT EXISTS enseigne ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS enseignes ON referentiel_societes TYPE option<array<string>>',
+    'DEFINE FIELD IF NOT EXISTS enseignes.* ON referentiel_societes TYPE string',
+    'DEFINE FIELD IF NOT EXISTS nom_commercial ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS date_fermeture ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS tranche_effectif_salarie ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS nature_juridique ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS tva ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS date_creation ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS numero_voie ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS type_voie ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS libelle_voie ON referentiel_societes TYPE option<string>',
     // ── Champs actionnables personne morale mutualisés (saisie abonné, additive). ──
     // Alimentés en remplissage-si-vide depuis la saisie/import (jamais d'écrasement) ;
     // aucun champ personne physique. Jamais existé → IF NOT EXISTS (pas d'OVERWRITE).
@@ -83,6 +101,20 @@ export async function runReferentielMigration() {
 // Coercition string sûre pour les champs TYPE string obligatoires du schéma
 // SCHEMAFULL : jamais null/undefined (rejet strict), toujours une chaîne trimée.
 const str = v => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v).trim()))
+
+// Nettoie un array<string> Etalab (ex. liste_enseignes) : rejette les non-strings,
+// trime, retire les vides. Entrée non-tableau → []. Préserve l'ordre et les doublons.
+const cleanStrArray = v =>
+  (Array.isArray(v) ? v.map(x => (typeof x === 'string' ? x.trim() : '')).filter(Boolean) : [])
+
+// Champs de complétude établissement écrits en remplissage-si-vide STRICT par
+// upsertReferentiel : jamais d'écrasement d'une valeur déjà présente. tva absent
+// (non alimenté). NAF 2025 exclu volontairement.
+const FILL_IF_EMPTY = [
+  'enseigne', 'enseignes', 'nom_commercial', 'date_fermeture',
+  'tranche_effectif_salarie', 'nature_juridique', 'date_creation',
+  'numero_voie', 'type_voie', 'libelle_voie'
+]
 
 // Dérive le code département à partir du code commune INSEE (champ Etalab
 // 'commune'). GARDE-FOU : une commune non résolue retourne '' — jamais un
@@ -185,11 +217,23 @@ function allEtablissements(fiche) {
 // time::now() en CONTENT échoue sous 2.6.5). Les assignations "champ = $param"
 // ne portent QUE les clés réellement présentes dans body : l'omission d'un champ
 // optionnel absent est préservée (→ NONE), aucun champ vide n'est forcé.
-async function upsertRecordRef(db, table, cleanId, body) {
+// fillIfEmpty : liste de clés écrites en remplissage-si-vide STRICT — jamais
+// d'écrasement d'une valeur déjà présente (NONE/'' pour les strings, NONE/[] pour
+// les arrays). Guard porté PAR CHAMP en SurrealQL, valide en CREATE (champ = NONE
+// → posé) comme en UPDATE (existant non vide → conservé, no-op réel), même
+// mécanisme que enrichReferentielActionnable. Les clés hors liste gardent le SET
+// direct (le socle Etalab, rafraîchi à chaque upsert — dette connue cached_at).
+async function upsertRecordRef(db, table, cleanId, body, fillIfEmpty = []) {
   const params = { id: cleanId }
+  const fillSet = new Set(fillIfEmpty)
   const assigns = []
   for (const [k, v] of Object.entries(body)) {
-    assigns.push(`${k} = $${k}`)
+    if (fillSet.has(k)) {
+      const emptyLit = Array.isArray(v) ? '[]' : "''"
+      assigns.push(`${k} = IF ${k} = NONE OR ${k} = ${emptyLit} THEN $${k} ELSE ${k} END`)
+    } else {
+      assigns.push(`${k} = $${k}`)
+    }
     params[k] = v
   }
   // Datetimes calculés en SurrealQL (jamais dans $body — cf. b219bf7).
@@ -323,9 +367,32 @@ export async function upsertReferentiel(fiches) {
         if (etablissements.length) body.etablissements = etablissements
         const nbEtab = Number(fiche?.nombre_etablissements)
         if (Number.isFinite(nbEtab)) body.nombre_etablissements = nbEtab
+        // ── Complétude établissement (Phase 2). Fill-if-empty strict (FILL_IF_EMPTY,
+        // jamais d'écrasement d'une saisie abonné). Source : l'établissement servi
+        // (etab) d'abord, repli fiche / siège. Posés seulement si non vides → NONE
+        // sinon. tva : NON alimenté (non renvoyé par l'API — champ défini, laissé NONE).
+        const siege = fiche?.siege && typeof fiche.siege === 'object' ? fiche.siege : null
+        const enseignes = cleanStrArray(etab.liste_enseignes)
+        if (enseignes.length) {
+          body.enseigne = enseignes[0]
+          body.enseignes = enseignes
+        }
+        const nomCommercial = str(etab.nom_commercial) || (siege ? str(siege.nom_commercial) : '')
+        if (nomCommercial) body.nom_commercial = nomCommercial
+        const dateFermeture = str(etab.date_fermeture) || str(fiche?.date_fermeture)
+        if (dateFermeture) body.date_fermeture = dateFermeture
+        const tranche = str(etab.tranche_effectif_salarie) || str(fiche?.tranche_effectif_salarie)
+        if (tranche) body.tranche_effectif_salarie = tranche
+        const natureJur = str(fiche?.nature_juridique)
+        if (natureJur) body.nature_juridique = natureJur
+        const dateCreation = str(etab.date_creation) || str(fiche?.date_creation)
+        if (dateCreation) body.date_creation = dateCreation
+        if (str(etab.numero_voie)) body.numero_voie = str(etab.numero_voie)
+        if (str(etab.type_voie)) body.type_voie = str(etab.type_voie)
+        if (str(etab.libelle_voie)) body.libelle_voie = str(etab.libelle_voie)
         // source : laissée au DEFAULT DB ('etalab_referentiel'). cached_at /
         // refreshed_at : posés en SurrealQL (time::now()) par upsertRecordRef.
-        await upsertRecordRef(db, 'referentiel_societes', id, body)
+        await upsertRecordRef(db, 'referentiel_societes', id, body, FILL_IF_EMPTY)
       } catch (e) {
         console.warn('[referentiel-upsert]', String(e?.message || e).slice(0, 80))
       }

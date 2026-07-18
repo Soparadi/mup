@@ -304,6 +304,7 @@ export async function amorcerOverpass(leads) {
 // ---------------------------------------------------------------------------
 
 export async function amorcerOverpassDeptNaf(dept, naf) {
+  console.log(`[overpass-amorce-deptnaf] ENTER dept=${dept} naf=${naf}`)
   try {
     const departement = String(dept || '')
     const nafCode = String(naf || '').replace(/\./g, '')

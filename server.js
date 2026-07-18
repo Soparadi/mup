@@ -40,6 +40,7 @@ import {
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
 import { getReferentielContactBySiret } from './server/services/referentiel-read.js'
 import { amorcerOverpassDeptNaf } from './server/services/overpass.js'
+import { runMentionsLegalesJob } from './server/services/mentions-legales.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
 import {
@@ -2237,6 +2238,23 @@ app.post('/api/amorce', async (req, res) => {
   res.json({ ok: true })
   // Fire-and-forget différé : lancé APRÈS res.json, sans await.
   setTimeout(() => { amorcerOverpassDeptNaf(dept, naf) }, 30000)
+})
+
+// ── Crawl mentions légales à la demande (lot de SIRET explicite) ──
+// Auto-gated par la gate auth /api/* (req.userId rempli). Répond immédiatement,
+// puis lance le job en différé : maillons URL→page légale→extraction→recoupement,
+// écriture fill-if-empty (website/societe_email/societe_tel) via le référentiel.
+// Idempotent (TTL 30 j sur mentions_legales_checked_at) — un SIRET vérifié
+// récemment est sauté. Le module a son try/catch global (aucun throw remontant).
+app.post('/api/mentions-legales', async (req, res) => {
+  const raw = req.body?.sirets
+  const sirets = Array.isArray(raw)
+    ? raw.map(s => String(s || '').replace(/\s+/g, '')).filter(Boolean)
+    : []
+  if (sirets.length === 0) return res.status(400).json({ error: 'sirets (array) requis' })
+  res.json({ ok: true, recus: sirets.length })
+  // Fire-and-forget différé : lancé APRÈS res.json, sans await.
+  setTimeout(() => { runMentionsLegalesJob(sirets) }, 1000)
 })
 
 // ── Historique des recherches Leads pour l'utilisateur authentifié ──

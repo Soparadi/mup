@@ -203,7 +203,8 @@ export function corroborerSiret(poi, sirenCible) {
 
 // Normalisation texte pour l'appariement nom/ville :
 // minuscule, sans accents, ponctuation → espace, espaces compactés.
-function normText(s) {
+// Exportée : réutilisée par le crawl mentions légales (concordance de faisceau).
+export function normText(s) {
   return String(s || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase()

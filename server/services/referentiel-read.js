@@ -234,3 +234,45 @@ export async function getReferentielContactBySiret(siret) {
     return null
   }
 }
+
+// ── E. getReferentielFaisceauBySiret(siret) — async, fail-safe ──
+// FAISCEAU COMPLET d'un SIRET pour le crawl mentions légales (mentions-legales.js) :
+// identité (siren/siret/raison_sociale), adresse décomposée (voie + CP + ville) pour
+// la concordance, website déjà en base (maillon 1.a), dirigeant_nom (VALIDATEUR de
+// concordance UNIQUEMENT — jamais réécrit ni exposé), et l'horodatage d'idempotence
+// mentions_legales_checked_at. Clé SIRET UNIQUE (idx_ref_siret) → LIMIT 1. SIRET
+// normalisé (espaces retirés). Rend l'objet faisceau ou null (absent / tout échec —
+// fail-safe, jamais de throw remontant).
+export async function getReferentielFaisceauBySiret(siret) {
+  try {
+    const s = str(siret).replace(/\s+/g, '')
+    if (!s) return null
+    const sql =
+      'SELECT siren, siret, raison_sociale, adresse, code_postal, ville, ' +
+      'numero_voie, type_voie, libelle_voie, website, dirigeant_nom, ' +
+      'mentions_legales_checked_at ' +
+      'FROM referentiel_societes WHERE siret = $siret LIMIT 1'
+    const db = await getDb()
+    const r = await db.query(sql, { siret: s })
+    const row = (r[0] || [])[0]
+    if (!row) return null
+    return {
+      siren: str(row.siren),
+      siret: str(row.siret),
+      raison_sociale: str(row.raison_sociale),
+      adresse: str(row.adresse),
+      code_postal: str(row.code_postal),
+      ville: str(row.ville),
+      numero_voie: str(row.numero_voie),
+      type_voie: str(row.type_voie),
+      libelle_voie: str(row.libelle_voie),
+      website: str(row.website),
+      dirigeant_nom: str(row.dirigeant_nom),
+      // Horodatage brut (datetime SurrealDB) — l'appelant décide du TTL. null si NONE.
+      mentions_legales_checked_at: row.mentions_legales_checked_at ?? null
+    }
+  } catch (e) {
+    console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
+    return null
+  }
+}

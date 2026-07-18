@@ -88,6 +88,12 @@ export async function runReferentielMigration() {
     "DEFINE FIELD IF NOT EXISTS source ON referentiel_societes TYPE string DEFAULT 'etalab_referentiel'",
     'DEFINE FIELD IF NOT EXISTS cached_at ON referentiel_societes TYPE datetime DEFAULT time::now()',
     'DEFINE FIELD IF NOT EXISTS refreshed_at ON referentiel_societes TYPE datetime DEFAULT time::now()',
+    // ── Idempotence crawl mentions légales — horodatage du dernier passage du job
+    // mentions-legales.js (maillons URL→page légale→extraction→recoupement). Écrit à
+    // CHAQUE passage (trouvé ou non) ; le job saute tout SIRET vérifié il y a moins de
+    // 30 j (TTL). option<datetime> sans DEFAULT : NONE tant qu'aucun passage. Jamais
+    // alimenté par l'abonné ni par le socle Etalab (bookkeeping interne du job).
+    'DEFINE FIELD IF NOT EXISTS mentions_legales_checked_at ON referentiel_societes TYPE option<datetime>',
     // SIRET clé naturelle → UNIQUE : garantit l'idempotence de l'UPSERT (un établissement = un record).
     'DEFINE INDEX IF NOT EXISTS idx_ref_siret ON referentiel_societes FIELDS siret UNIQUE',
     'DEFINE INDEX IF NOT EXISTS idx_ref_siren ON referentiel_societes FIELDS siren',

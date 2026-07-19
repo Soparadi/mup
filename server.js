@@ -269,6 +269,21 @@ async function upsertRecord(db, table, cleanId, body) {
   }
 }
 
+// Lecture tolérante aux tables jamais créées. Sur une instance neuve, une table
+// SurrealDB n'existe qu'après son premier write ; un SELECT avant cela jette
+// "table does not exist". Ce cas = résultat vide, pas une panne. On ne neutralise
+// QUE ce message ; toute autre erreur (réseau, auth, syntaxe) remonte à l'appelant
+// et finit en 500 comme avant. Renvoie les lignes du 1er statement (result[0] || []).
+async function queryOrEmpty(db, sql, params) {
+  try {
+    const result = await db.query(sql, params)
+    return result[0] || []
+  } catch (err) {
+    if (String(err?.message || '').includes('does not exist')) return []
+    throw err
+  }
+}
+
 app.get('/api/health', async (req, res) => {
   const status = {
     server: 'ok',
@@ -772,13 +787,13 @@ app.get('/api/leads/engaged', async (req, res) => {
   try {
     const db = await getDb()
     const [pip, ctx] = await Promise.all([
-      db.query('SELECT siret, siren FROM pipeline WHERE userId = $userId', { userId }),
-      db.query('SELECT siret, siren FROM contacts WHERE userId = $userId', { userId })
+      queryOrEmpty(db, 'SELECT siret, siren FROM pipeline WHERE userId = $userId', { userId }),
+      queryOrEmpty(db, 'SELECT siret, siren FROM contacts WHERE userId = $userId', { userId })
     ])
     const sirets = new Set()
     const sirens = new Set()
     const collect = (rows) => {
-      (rows?.[0] || []).forEach(r => {
+      (rows || []).forEach(r => {
         if (r?.siret) sirets.add(String(r.siret))
         if (r?.siren) sirens.add(String(r.siren))
       })
@@ -1332,8 +1347,7 @@ app.get('/api/contacts', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM contacts WHERE userId = $userId', { userId })
-    res.json(result[0] || [])
+    res.json(await queryOrEmpty(db, 'SELECT * FROM contacts WHERE userId = $userId', { userId }))
   } catch (err) {
     console.error('[contacts]', err)
     res.status(500).json({ error: 'Impossible de lire les contacts' })
@@ -1386,8 +1400,8 @@ async function selectContactRecord(db, tb, id) {
   const sql = tb === 'pipeline'
     ? 'SELECT * FROM type::record("pipeline", $id)'
     : 'SELECT * FROM type::record("contacts", $id)'
-  const r = await db.query(sql, { id })
-  return r[0]?.[0] || null
+  const r = await queryOrEmpty(db, sql, { id })
+  return r[0] || null
 }
 
 app.get('/api/contacts/:id', async (req, res) => {
@@ -1575,8 +1589,7 @@ app.get('/api/societes', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM societes WHERE userId = $userId', { userId })
-    res.json(result[0] || [])
+    res.json(await queryOrEmpty(db, 'SELECT * FROM societes WHERE userId = $userId', { userId }))
   } catch (err) {
     console.error('[societes]', err)
     res.status(500).json({ error: 'Impossible de lire les sociétés' })
@@ -1992,12 +2005,13 @@ app.get('/api/agenda', async (req, res) => {
     const db = await getDb()
     const ficheId = typeof req.query?.ficheId === 'string' ? req.query.ficheId.trim() : ''
     const result = ficheId
-      ? await db.query(
+      ? await queryOrEmpty(
+          db,
           'SELECT * FROM agenda WHERE userId = $userId AND ficheId = $ficheId',
           { userId, ficheId }
         )
-      : await db.query('SELECT * FROM agenda WHERE userId = $userId', { userId })
-    res.json(result[0] || [])
+      : await queryOrEmpty(db, 'SELECT * FROM agenda WHERE userId = $userId', { userId })
+    res.json(result)
   } catch (err) {
     console.error('[agenda]', err)
     res.status(500).json({ error: 'Impossible de lire les évènements agenda' })
@@ -2418,8 +2432,8 @@ app.get('/api/account/deletion-status', async (req, res) => {
     if (!req.userId) return res.status(401).json({ error: 'unauthorized' })
     const db = await getDb()
     const uid = String(req.userId).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
-    const sel = await db.query("SELECT deletion_requested_at, deletion_scheduled_at FROM type::record('user', $uid)", { uid })
-    const u = sel?.[0]?.[0] || {}
+    const sel = await queryOrEmpty(db, "SELECT deletion_requested_at, deletion_scheduled_at FROM type::record('user', $uid)", { uid })
+    const u = sel[0] || {}
     const requestedAt = u.deletion_requested_at ? String(u.deletion_requested_at) : null
     const scheduledAt = u.deletion_scheduled_at ? String(u.deletion_scheduled_at) : null
     let daysRemaining = null
@@ -2775,8 +2789,7 @@ app.get('/api/mail/settings/:userId', async (req, res) => {
     const userId = String(req.userId)
     if (String(req.params.userId) !== userId) return res.status(403).json({ error: 'forbidden' })
     const db = await getDb()
-    const result = await db.query('SELECT * FROM type::record("mail_settings", $id)', { id: userId })
-    const rec = result[0]?.[0]
+    const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("mail_settings", $id)', { id: userId }))[0]
     if (!rec) return res.status(404).json({ error: 'Configuration mail introuvable' })
     res.json(stripSettingsSecrets(rec))
   } catch (err) {
@@ -2888,14 +2901,15 @@ app.get('/api/mail', async (req, res) => {
     const prospectId = req.query.prospectId ? String(req.query.prospectId) : null
     let result
     if (prospectId) {
-      result = await db.query(
+      result = await queryOrEmpty(
+        db,
         'SELECT * FROM mail WHERE userId = $userId AND prospectId = $prospectId ORDER BY date DESC',
         { userId, prospectId }
       )
     } else {
-      result = await db.query('SELECT * FROM mail WHERE userId = $userId ORDER BY date DESC', { userId })
+      result = await queryOrEmpty(db, 'SELECT * FROM mail WHERE userId = $userId ORDER BY date DESC', { userId })
     }
-    res.json(result[0] || [])
+    res.json(result)
   } catch (err) {
     console.error('[mail:list]', err.message)
     res.status(500).json({ error: 'Lecture mails impossible' })
@@ -2906,8 +2920,7 @@ app.get('/api/mail/:id', async (req, res) => {
   try {
     const userId = String(req.userId)
     const db = await getDb()
-    const result = await db.query('SELECT * FROM type::record("mail", $id)', { id: req.params.id })
-    const rec = result[0]?.[0]
+    const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("mail", $id)', { id: req.params.id }))[0]
     if (!rec || String(rec.userId) !== userId) return res.status(404).json({ error: 'Mail introuvable' })
     res.json(rec)
   } catch (err) {
@@ -3116,8 +3129,8 @@ app.get('/api/visio/settings', async (req, res) => {
   try {
     const db = await getDb()
     const userId = String(getUserId(req))
-    const result = await db.query('SELECT * FROM type::record("visio_settings", $id)', { id: userId })
-    res.json(result[0]?.[0] || { userId })
+    const rows = await queryOrEmpty(db, 'SELECT * FROM type::record("visio_settings", $id)', { id: userId })
+    res.json(rows[0] || { userId })
   } catch (err) {
     console.error('[visio/settings:get]', err.message)
     res.status(500).json({ error: 'Lecture configuration visio impossible' })
@@ -3148,14 +3161,15 @@ app.get('/api/visio/logs', async (req, res) => {
     const prospectId = req.query.prospectId ? String(req.query.prospectId) : null
     let result
     if (prospectId) {
-      result = await db.query(
+      result = await queryOrEmpty(
+        db,
         'SELECT * FROM visio_log WHERE userId = $userId AND prospectId = $prospectId ORDER BY started_at DESC',
         { userId, prospectId }
       )
     } else {
-      result = await db.query('SELECT * FROM visio_log WHERE userId = $userId ORDER BY started_at DESC', { userId })
+      result = await queryOrEmpty(db, 'SELECT * FROM visio_log WHERE userId = $userId ORDER BY started_at DESC', { userId })
     }
-    res.json(result[0] || [])
+    res.json(result)
   } catch (err) {
     console.error('[visio/logs:list]', err.message)
     res.status(500).json({ error: 'Lecture logs visio impossible' })
@@ -3211,8 +3225,7 @@ app.get('/api/visio/drafts/:prospectId', async (req, res) => {
     const db = await getDb()
     const userId = String(getUserId(req))
     const id = draftId(userId, req.params.prospectId)
-    const result = await db.query('SELECT * FROM type::record("visio_draft", $id)', { id })
-    const rec = result[0]?.[0]
+    const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("visio_draft", $id)', { id }))[0]
     if (!rec) return res.status(404).json({ error: 'Draft introuvable' })
     res.json(rec)
   } catch (err) {
@@ -3258,8 +3271,7 @@ app.get('/api/visio/bg-custom', async (req, res) => {
   try {
     const db = await getDb()
     const userId = String(getUserId(req))
-    const result = await db.query('SELECT * FROM type::record("visio_bg_custom", $id)', { id: userId })
-    const rec = result[0]?.[0]
+    const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("visio_bg_custom", $id)', { id: userId }))[0]
     if (!rec) return res.status(404).json({ error: 'Fond personnalisé absent' })
     res.json(rec)
   } catch (err) {
@@ -3304,8 +3316,7 @@ app.get('/api/visio/docs', async (req, res) => {
   try {
     const db = await getDb()
     const userId = String(getUserId(req))
-    const result = await db.query('SELECT * FROM visio_doc WHERE userId = $userId ORDER BY addedAt DESC', { userId })
-    res.json(result[0] || [])
+    res.json(await queryOrEmpty(db, 'SELECT * FROM visio_doc WHERE userId = $userId ORDER BY addedAt DESC', { userId }))
   } catch (err) {
     console.error('[visio/docs:list]', err.message)
     res.status(500).json({ error: 'Lecture documents impossible' })
@@ -3396,11 +3407,11 @@ app.get('/api/visio/doc-opens', async (req, res) => {
   try {
     const db = await getDb()
     const userId = String(getUserId(req))
-    const result = await db.query(
+    res.json(await queryOrEmpty(
+      db,
       'SELECT * FROM visio_doc_open WHERE userId = $userId ORDER BY openedAt DESC',
       { userId }
-    )
-    res.json(result[0] || [])
+    ))
   } catch (err) {
     console.error('[visio/doc-opens:list]', err.message)
     res.status(500).json({ error: 'Lecture historique global ouvertures impossible' })
@@ -3412,11 +3423,11 @@ app.get('/api/visio/docs/:id/opens', async (req, res) => {
     const db = await getDb()
     const userId = String(getUserId(req))
     const docId = req.params.id
-    const result = await db.query(
+    res.json(await queryOrEmpty(
+      db,
       'SELECT * FROM visio_doc_open WHERE userId = $userId AND docId = $docId ORDER BY openedAt DESC',
       { userId, docId }
-    )
-    res.json(result[0] || [])
+    ))
   } catch (err) {
     console.error('[visio/docs:opens]', err.message)
     res.status(500).json({ error: 'Lecture historique ouvertures impossible' })
@@ -3478,8 +3489,7 @@ app.get('/api/devis', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM devis WHERE userId = $userId ORDER BY date_emission DESC, created_at DESC', { userId })
-    res.json(result[0] || [])
+    res.json(await queryOrEmpty(db, 'SELECT * FROM devis WHERE userId = $userId ORDER BY date_emission DESC, created_at DESC', { userId }))
   } catch (err) {
     console.error('[devis:list]', err.message)
     res.status(500).json({ error: 'Lecture devis impossible' })
@@ -3492,8 +3502,7 @@ app.get('/api/devis/:id', async (req, res) => {
   try {
     const db = await getDb()
     const id = cleanRecordId('devis', req.params.id) || req.params.id
-    const result = await db.query('SELECT * FROM type::record("devis", $id)', { id })
-    const rec = result[0]?.[0]
+    const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("devis", $id)', { id }))[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
     res.json(rec)
   } catch (err) {
@@ -3580,8 +3589,7 @@ app.get('/api/factures', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM facture WHERE userId = $userId ORDER BY date_emission DESC, created_at DESC', { userId })
-    res.json(result[0] || [])
+    res.json(await queryOrEmpty(db, 'SELECT * FROM facture WHERE userId = $userId ORDER BY date_emission DESC, created_at DESC', { userId }))
   } catch (err) {
     console.error('[factures:list]', err.message)
     res.status(500).json({ error: 'Lecture factures impossible' })
@@ -3594,8 +3602,7 @@ app.get('/api/factures/:id', async (req, res) => {
   try {
     const db = await getDb()
     const id = cleanRecordId('facture', req.params.id) || req.params.id
-    const result = await db.query('SELECT * FROM type::record("facture", $id)', { id })
-    const rec = result[0]?.[0]
+    const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("facture", $id)', { id }))[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Facture introuvable' })
     res.json(rec)
   } catch (err) {
@@ -3726,8 +3733,7 @@ app.get('/api/frais', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM frais WHERE userId = $userId ORDER BY date DESC, createdAt DESC', { userId })
-    res.json(result[0] || [])
+    res.json(await queryOrEmpty(db, 'SELECT * FROM frais WHERE userId = $userId ORDER BY date DESC, createdAt DESC', { userId }))
   } catch (err) {
     console.error('[frais:list]', err.message)
     res.status(500).json({ error: 'Lecture frais impossible' })
@@ -3740,8 +3746,7 @@ app.get('/api/frais/:id', async (req, res) => {
   try {
     const db = await getDb()
     const id = cleanRecordId('frais', req.params.id) || req.params.id
-    const result = await db.query('SELECT * FROM type::record("frais", $id)', { id })
-    const rec = result[0]?.[0]
+    const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("frais", $id)', { id }))[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Frais introuvable' })
     res.json(rec)
   } catch (err) {
@@ -3816,8 +3821,7 @@ app.get('/api/frais-recurrents', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM frais_recurrents WHERE userId = $userId ORDER BY createdAt DESC', { userId })
-    res.json(result[0] || [])
+    res.json(await queryOrEmpty(db, 'SELECT * FROM frais_recurrents WHERE userId = $userId ORDER BY createdAt DESC', { userId }))
   } catch (err) {
     console.error('[frais-recurrents:list]', err.message)
     res.status(500).json({ error: 'Lecture frais récurrents impossible' })
@@ -3830,8 +3834,7 @@ app.get('/api/frais-recurrents/:id', async (req, res) => {
   try {
     const db = await getDb()
     const id = cleanRecordId('frais_recurrents', req.params.id) || req.params.id
-    const result = await db.query('SELECT * FROM type::record("frais_recurrents", $id)', { id })
-    const rec = result[0]?.[0]
+    const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("frais_recurrents", $id)', { id }))[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Frais récurrent introuvable' })
     res.json(rec)
   } catch (err) {
@@ -3907,8 +3910,7 @@ app.get('/api/user-settings', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM type::record("user_settings", $id)', { id: userId })
-    const rec = result[0]?.[0]
+    const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("user_settings", $id)', { id: userId }))[0]
     if (!rec) return res.json({ tvaAssujetti: false, formeJuridique: '', siret: '' })
     res.json(rec)
   } catch (err) {
@@ -3956,8 +3958,7 @@ app.get('/api/user-plan', async (req, res) => {
     const user = req.authUser
     if (!user) return res.status(401).json({ error: 'unauthorized' })
     const db = await getDb()
-    const result = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
-    const rec = result[0]?.[0]
+    const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("user_plan", $id)', { id: userId }))[0]
     if (!rec) return res.json({ userId, plan: 'gratuit', leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null })
     const fresh = await applyMonthlyReset(db, userId, rec, user)
     res.json(fresh)
@@ -4050,11 +4051,11 @@ app.get('/api/user-plan-history', async (req, res) => {
   try {
     const db = await getDb()
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 5, 1), 50)
-    const result = await db.query(
+    res.json(await queryOrEmpty(
+      db,
       'SELECT * FROM user_plan_history WHERE userId = $userId ORDER BY changed_at DESC LIMIT $limit',
       { userId, limit }
-    )
-    res.json(result[0] || [])
+    ))
   } catch (err) {
     console.error('[user-plan-history:list]', err.message)
     res.status(500).json({ error: 'Lecture historique plan impossible' })
@@ -4451,8 +4452,7 @@ app.get('/api/v2/campaigns/domain/status', async (req, res) => {
     const live = await getResendDomainStatus(domain_id)
     const db = await getDb()
     // Update dans notre table le record matchant resend_domain_id pour ce userId
-    const all = await db.query('SELECT * FROM domains_resend WHERE userId = $userId AND resend_domain_id = $rid', { userId, rid: domain_id })
-    const local = all[0]?.[0]
+    const local = (await queryOrEmpty(db, 'SELECT * FROM domains_resend WHERE userId = $userId AND resend_domain_id = $rid', { userId, rid: domain_id }))[0]
     if (local) {
       const recordId = String(local.id).replace(/^domains_resend:/, '').replace(/^⟨+|⟩+$/g, '')
       const patch = {
@@ -4478,8 +4478,7 @@ app.get('/api/v2/campaigns/domain/list', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT * FROM domains_resend WHERE userId = $userId ORDER BY created_at DESC', { userId })
-    res.json(result[0] || [])
+    res.json(await queryOrEmpty(db, 'SELECT * FROM domains_resend WHERE userId = $userId ORDER BY created_at DESC', { userId }))
   } catch (err) {
     console.error('[campaigns:domain-list]', err.message)
     res.status(500).json({ error: 'Lecture domaines impossible' })
@@ -4627,8 +4626,7 @@ app.get('/api/v2/campaigns', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const result = await db.query('SELECT id, name, status, recipients_count, from_email, scheduled_at, sent_at, stats, created_at FROM campaigns WHERE userId = $userId AND (status != "deleted" OR status IS NONE) ORDER BY created_at DESC', { userId })
-    res.json(result[0] || [])
+    res.json(await queryOrEmpty(db, 'SELECT id, name, status, recipients_count, from_email, scheduled_at, sent_at, stats, created_at FROM campaigns WHERE userId = $userId AND (status != "deleted" OR status IS NONE) ORDER BY created_at DESC', { userId }))
   } catch (err) {
     console.error('[campaigns:list]', err.message)
     res.status(500).json({ error: 'Lecture campagnes impossible' })
@@ -4642,8 +4640,7 @@ app.get('/api/v2/campaigns/:id', async (req, res) => {
   try {
     const db = await getDb()
     const id = cleanRecordId('campaigns', req.params.id) || req.params.id
-    const sel = await db.query('SELECT * FROM type::record("campaigns", $id)', { id })
-    const campaign = sel[0]?.[0]
+    const campaign = (await queryOrEmpty(db, 'SELECT * FROM type::record("campaigns", $id)', { id }))[0]
     if (!campaign || campaign.userId !== userId) return res.status(404).json({ error: 'Campagne introuvable' })
     res.json(campaign)
   } catch (err) {
@@ -4659,13 +4656,11 @@ app.get('/api/v2/campaigns/:id/stats', async (req, res) => {
   try {
     const db = await getDb()
     const id = cleanRecordId('campaigns', req.params.id) || req.params.id
-    const sel = await db.query('SELECT * FROM type::record("campaigns", $id)', { id })
-    const campaign = sel[0]?.[0]
+    const campaign = (await queryOrEmpty(db, 'SELECT * FROM type::record("campaigns", $id)', { id }))[0]
     if (!campaign || campaign.userId !== userId) return res.status(404).json({ error: 'Campagne introuvable' })
 
     // Liste des events de cette campagne
-    const evRes = await db.query('SELECT * FROM campaign_events WHERE campaign_id = $cid ORDER BY timestamp DESC', { cid: String(campaign.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '') })
-    const events = evRes[0] || []
+    const events = await queryOrEmpty(db, 'SELECT * FROM campaign_events WHERE campaign_id = $cid ORDER BY timestamp DESC', { cid: String(campaign.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '') })
 
     // Agrégats par destinataire (dernier event par recipient_email)
     const lastByRecipient = new Map()

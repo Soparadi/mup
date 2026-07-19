@@ -989,6 +989,12 @@ app.get('/api/pipeline', async (req, res) => {
     const result = await db.query('SELECT * FROM pipeline WHERE userId = $userId', { userId })
     res.json(result[0] || [])
   } catch (err) {
+    // Table jamais créée (nouvelle instance, aucun POST pipeline) : liste vide,
+    // pas une erreur. On ne neutralise QUE ce cas ; toute autre panne SurrealDB
+    // continue de remonter en 500.
+    if (String(err?.message || '').includes('does not exist')) {
+      return res.json([])
+    }
     console.error('[pipeline]', err)
     res.status(500).json({ error: 'Impossible de lire les cartes pipeline' })
   }

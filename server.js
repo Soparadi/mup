@@ -269,6 +269,16 @@ async function upsertRecord(db, table, cleanId, body) {
       e?.kind === 'AlreadyExists' ||
       String(e?.message || '').includes('already exists')
     if (!isAlreadyExists) throw e
+    // Garde multi-tenant : un UPDATE ne doit jamais écraser le record d'un autre
+    // tenant. cleanBody.userId est TOUJOURS l'userId de session (posé par chaque
+    // appelant : body = { ...req.body, userId } ou payload.userId = session). On
+    // relit l'appartenance du record préexistant ; si elle diffère, on refuse en
+    // 404 — aligné sur le pattern des PUT/:id. Table hardcodée (jamais user input).
+    const ownerRows = await db.query(`SELECT userId FROM type::record("${table}", $id)`, { id: cleanId })
+    const existing = ownerRows[0]?.[0]
+    if (existing && String(existing.userId) !== String(cleanBody.userId)) {
+      return { record: { error: 'not_found' }, status: 404, action: 'denied' }
+    }
     const result = await db.query(updateSql, { id: cleanId, body: cleanBody })
     return { record: result[0]?.[0] || result[0] || null, status: 200, action: 'updated' }
   }
@@ -4457,6 +4467,8 @@ app.get('/api/v2/campaigns/domain/status', async (req, res) => {
     const db = await getDb()
     // Update dans notre table le record matchant resend_domain_id pour ce userId
     const local = (await queryOrEmpty(db, 'SELECT * FROM domains_resend WHERE userId = $userId AND resend_domain_id = $rid', { userId, rid: domain_id }))[0]
+    // Isolation lecture : ne rien exposer d'un domaine non possédé par ce tenant.
+    if (!local) return res.status(404).json({ error: 'Domaine introuvable' })
     if (local) {
       const recordId = String(local.id).replace(/^domains_resend:/, '').replace(/^⟨+|⟩+$/g, '')
       const patch = {

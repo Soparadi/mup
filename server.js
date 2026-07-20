@@ -824,16 +824,15 @@ app.get('/api/admin/comptes', requireSuperadmin, async (req, res) => {
   }
   try {
     const db = await getDb()
-    const [usersRes, planRes, pipeRes] = await Promise.all([
-      db.query('SELECT * FROM user ORDER BY created_at'),
-      db.query('SELECT * FROM user_plan'),
-      db.query('SELECT userId, count() AS n FROM pipeline GROUP BY userId')
+    const [users, plans, pipes] = await Promise.all([
+      queryOrEmpty(db, 'SELECT * FROM user ORDER BY created_at'),
+      queryOrEmpty(db, 'SELECT * FROM user_plan'),
+      queryOrEmpty(db, 'SELECT userId, count() AS n FROM pipeline GROUP BY userId')
     ])
-    const users = usersRes[0] || []
     const planById = new Map()
-    for (const p of (planRes[0] || [])) planById.set(norm(p.userId || p.id), p)
+    for (const p of plans) planById.set(norm(p.userId || p.id), p)
     const fichesById = new Map()
-    for (const r of (pipeRes[0] || [])) fichesById.set(norm(r.userId), r.n)
+    for (const r of pipes) fichesById.set(norm(r.userId), r.n)
 
     const rows = users.map((u) => {
       const id = norm(u.id)
@@ -4836,6 +4835,10 @@ app.use((req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS campaign_events SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS mailbox_credentials SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS societes SCHEMALESS')
+    // pipeline/contacts : créées-au-write historiquement. Définies au boot pour
+    // qu'un SELECT sur instance neuve renvoie [] au lieu de "table does not exist".
+    await db.query('DEFINE TABLE IF NOT EXISTS pipeline SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS contacts SCHEMALESS')
     // Indexes pour les requêtes scoping userId et lookups par campagne/destinataire
     await db.query('DEFINE INDEX IF NOT EXISTS campaigns_user ON TABLE campaigns COLUMNS userId')
     await db.query('DEFINE INDEX IF NOT EXISTS domains_user ON TABLE domains_resend COLUMNS userId')
@@ -4850,7 +4853,7 @@ app.use((req, res) => {
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siret ON societes FIELDS siret')
     // Sociétés — dédup par SIREN (NON unique : siren vide partagé tant que non enrichi)
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siren ON societes FIELDS siren')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes + 8 indexes)')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes, pipeline, contacts + 8 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

@@ -1113,10 +1113,16 @@ async function renderDashFunnel(cards){
 }
 </script>
 <script>
-// Facturation 2026 — KPIs depuis mup_factures
-(function(){
+// Facturation 2026 — KPIs depuis /api/factures
+(async function(){
   var factures = [];
-  try { factures = JSON.parse(localStorage.getItem('mup_factures') || '[]'); } catch(e){}
+  try {
+    var res = await fetch('/api/factures');
+    if (res.ok) {
+      var data = await res.json();
+      if (Array.isArray(data)) factures = data;
+    }
+  } catch(e){ factures = []; }
   function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0); }
 
   var f2026 = factures.filter(function(f){ return f.date_emission && new Date(f.date_emission).getFullYear() === 2026; });

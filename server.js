@@ -182,8 +182,13 @@ app.use('/api', (req, res, next) => {
   if (req.path === '/stripe/webhook') return next()
   if (req.path.startsWith('/v2/webhooks/')) return next()
 
-  const origin = req.get('Origin') || req.get('Referer') || ''
-  const isAllowed = ALLOWED_ORIGINS.some(a => origin.startsWith(a))
+  // Origin (schéma+hôte) ou fallback Referer (URL complète) → réduits à leur
+  // origine seule via URL().origin, puis égalité stricte contre l'allowlist.
+  // Neutralise le contournement par préfixe (ex. https://movup.io.evil.com).
+  const raw = req.get('Origin') || req.get('Referer') || ''
+  let origin = ''
+  try { origin = raw ? new URL(raw).origin : '' } catch { origin = '' }
+  const isAllowed = origin !== '' && ALLOWED_ORIGINS.includes(origin)
   if (!isAllowed) {
     return res.status(403).json({ error: 'Origin not allowed' })
   }
@@ -2555,7 +2560,7 @@ app.get('/api/account/privacy/export', async (req, res) => {
 // ── INSEE SIRENE search (must be before :siret route) ──
 app.get('/api/sirene/search', async (req, res) => {
   const token = await getInseeToken()
-  console.log('[INSEE] token:', token ? 'OK ('+token.substring(0,20)+'...)' : 'NULL')
+  console.log('[INSEE] token:', token ? 'OK' : 'NULL')
   if(!token) {
     console.error('[INSEE] No token — CLIENT_ID:', process.env.INSEE_CLIENT_ID ? 'present' : 'MISSING', 'SECRET:', process.env.INSEE_CLIENT_SECRET ? 'present' : 'MISSING')
     return res.status(503).json({ error: 'INSEE auth indisponible' })
@@ -4839,6 +4844,7 @@ app.use((req, res) => {
     // qu'un SELECT sur instance neuve renvoie [] au lieu de "table does not exist".
     await db.query('DEFINE TABLE IF NOT EXISTS pipeline SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS contacts SCHEMALESS')
+    await db.query('DEFINE TABLE IF NOT EXISTS agenda SCHEMALESS')
     // Indexes pour les requêtes scoping userId et lookups par campagne/destinataire
     await db.query('DEFINE INDEX IF NOT EXISTS campaigns_user ON TABLE campaigns COLUMNS userId')
     await db.query('DEFINE INDEX IF NOT EXISTS domains_user ON TABLE domains_resend COLUMNS userId')
@@ -4853,7 +4859,7 @@ app.use((req, res) => {
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siret ON societes FIELDS siret')
     // Sociétés — dédup par SIREN (NON unique : siren vide partagé tant que non enrichi)
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siren ON societes FIELDS siren')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes, pipeline, contacts + 8 indexes)')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes, pipeline, contacts, agenda + 8 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

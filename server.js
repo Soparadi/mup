@@ -40,7 +40,7 @@ import {
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
 import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
 import { getReferentielContactBySiret, getOsmContactBySiret } from './server/services/referentiel-read.js'
-import { amorcerOverpassDeptNaf } from './server/services/overpass.js'
+import { rapprocherSirets } from './server/services/rapprochement-osm.js'
 import { runMentionsLegalesJob } from './server/services/mentions-legales.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs } from './server/services/cron.js'
@@ -2261,18 +2261,23 @@ app.get('/api/search', async (req, res) => {
   }
 })
 
-// ── Amorçage Overpass à la demande (dept + naf explicites) ──
-// Auto-gated par la gate auth /api/* (req.userId rempli). Répond immédiatement,
-// puis lance l'amorçage en différé : le setTimeout 30s laisse les upsertReferentiel
-// page-par-page (fire-and-forget de /api/search) flusher en base avant que
-// amorcerOverpassDeptNaf ne relise le référentiel. Le module a son try/catch global.
+// ── Rapprochement OSM à la demande (lot de SIRET de la recherche) ──
+// Auto-gated par la gate auth /api/* (req.userId rempli). Reçoit le tableau des
+// SIRET réellement parcourus par le front en fin de recherche. Répond
+// immédiatement, puis lance le rapprochement en différé : le setTimeout 30s
+// laisse les upsertReferentiel page-par-page (fire-and-forget de /api/search)
+// flusher le socle Etalab en base avant l'appariement OSM. rapprocherSirets est
+// no-throw (try/catch interne), .catch de ceinture sur l'appel différé.
 app.post('/api/amorce', async (req, res) => {
-  const dept = String(req.body?.dept || '').trim()
-  const naf = String(req.body?.naf || '').trim()
-  if (!dept || !naf) return res.status(400).json({ error: 'dept et naf requis' })
+  const raw = req.body?.sirets
+  const sirets = Array.isArray(raw)
+    ? raw.map(s => String(s || '').replace(/\s+/g, '')).filter(Boolean)
+    : []
   res.json({ ok: true })
   // Fire-and-forget différé : lancé APRÈS res.json, sans await.
-  setTimeout(() => { amorcerOverpassDeptNaf(dept, naf) }, 30000)
+  setTimeout(() => {
+    rapprocherSirets(sirets).catch(e => console.warn('[amorce]', String(e?.message || e).slice(0, 80)))
+  }, 30000)
 })
 
 // ── Crawl mentions légales à la demande (lot de SIRET explicite) ──

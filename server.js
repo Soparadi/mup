@@ -38,6 +38,7 @@ import {
   verifyOptoutToken
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
+import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
 import { getReferentielContactBySiret } from './server/services/referentiel-read.js'
 import { amorcerOverpassDeptNaf } from './server/services/overpass.js'
 import { runMentionsLegalesJob } from './server/services/mentions-legales.js'
@@ -4905,6 +4906,16 @@ app.use((req, res) => {
     console.log('[boot] referentiel_societes table ready (+ 6 indexes)')
   } catch (e) {
     console.error('[boot] referentiel migration failed:', e.message)
+  }
+  // Référentiel OSM — réserve nationale de contacts issus du gisement
+  // OpenStreetMap, table referentiel_osm (clé osm_id). Séparée de
+  // referentiel_societes, SIRET en index secondaire pour la jointure.
+  // Vide au boot : alimentation par UPSERT dans une passe ultérieure.
+  try {
+    await runReferentielOsmMigration()
+    console.log('[boot] referentiel_osm table ready (+ 2 indexes)')
+  } catch (e) {
+    console.error('[boot] referentiel_osm migration failed:', e.message)
   }
   // Cron trial — node-cron in-process déclenché à 8h Europe/Paris.
   // Skip si NODE_ENV !== 'production' (évite spam emails en dev) ou

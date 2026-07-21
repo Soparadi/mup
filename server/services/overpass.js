@@ -23,7 +23,11 @@ export const NAF_TO_OSM = {
 // Bbox départementales : [latMin, lonMin, latMax, lonMax] (sud, ouest, nord, est).
 // Structure extensible — ajouter un département = ajouter une ligne.
 export const DEPT_BBOX = {
-  '22': [48.02, -3.63, 48.90, -1.99] // Côtes-d'Armor
+  '22': [48.02, -3.63, 48.90, -1.99], // Côtes-d'Armor
+  '29': [47.72, -5.15, 48.76, -3.38], // Finistère
+  '35': [47.63, -2.31, 48.70, -1.16], // Ille-et-Vilaine
+  '56': [47.28, -3.57, 48.20, -2.03]  // Morbihan
+  // Table à compléter (96 depts métropolitains) avant prospection nationale.
 }
 
 // ---------------------------------------------------------------------------

@@ -235,6 +235,46 @@ export async function getReferentielContactBySiret(siret) {
   }
 }
 
+// ── D-bis. getOsmContactBySiret(siret) — async, fail-safe ──
+// Lecture unitaire des contacts OSM (réserve nationale referentiel_osm) pour un
+// SIRET donné. Index idx_osm_siret NON unique → PLUSIEURS lignes possibles pour un
+// même SIRET (un même établissement peut porter plusieurs objets OSM). On NE fait
+// donc PAS de LIMIT 1 : on fusionne champ par champ en retenant la PREMIÈRE VALEUR
+// NON VIDE inter-lignes. REMAP vers le contrat societe_* (phone→societe_tel,
+// email→societe_email, website→website, facebook→societe_facebook,
+// instagram→societe_instagram, linkedin→societe_linkedin). Rend l'objet fusionné
+// ou null si aucune ligne. Tout échec → null (fail-safe, jamais de throw remontant).
+export async function getOsmContactBySiret(siret) {
+  try {
+    const s = str(siret).replace(/\s+/g, '')
+    if (!s) return null
+    const sql = 'SELECT phone, email, website, facebook, instagram, linkedin FROM referentiel_osm WHERE siret = $siret'
+    const db = await getDb()
+    const r = await db.query(sql, { siret: s })
+    const rows = r[0] || []
+    if (!rows.length) return null
+    // Première valeur non vide inter-lignes pour un champ source donné.
+    const firstNonEmpty = key => {
+      for (const row of rows) {
+        const v = str(row?.[key])
+        if (v) return v
+      }
+      return ''
+    }
+    return {
+      website: firstNonEmpty('website'),
+      societe_email: firstNonEmpty('email'),
+      societe_tel: firstNonEmpty('phone'),
+      societe_facebook: firstNonEmpty('facebook'),
+      societe_instagram: firstNonEmpty('instagram'),
+      societe_linkedin: firstNonEmpty('linkedin')
+    }
+  } catch (e) {
+    console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
+    return null
+  }
+}
+
 // ── E. getReferentielFaisceauBySiret(siret) — async, fail-safe ──
 // FAISCEAU COMPLET d'un SIRET pour le crawl mentions légales (mentions-legales.js) :
 // identité (siren/siret/raison_sociale), adresse décomposée (voie + CP + ville) pour

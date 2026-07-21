@@ -794,6 +794,22 @@ async function sendCompose(){
     setTimeout(function(){ toast('Erreur Google : ' + err, 'error'); }, 200);
     window.history.replaceState(null, '', window.location.pathname);
   }
+  if(params.has('microsoft_connected')){
+    var msEmail = params.get('email') || '';
+    setTimeout(function(){ toast('Compte Microsoft connecté : ' + msEmail, 'ok'); }, 200);
+    window.history.replaceState(null, '', window.location.pathname);
+    // Trigger inbox immédiat + polling 5s pendant 30s pour capturer welcome
+    setTimeout(function(){
+      loadAccountsAndInbox().then(function(){
+        startWelcomePoll();
+      });
+    }, 600);
+  }
+  if(params.has('microsoft_error')){
+    var msErr = params.get('microsoft_error') || 'Erreur OAuth';
+    setTimeout(function(){ toast('Erreur Microsoft : ' + msErr, 'error'); }, 200);
+    window.history.replaceState(null, '', window.location.pathname);
+  }
 })();
 
 function startWelcomePoll(){
@@ -818,7 +834,7 @@ function startWelcomePoll(){
 // COMPTES (Paramètres)
 // ────────────────────────────────────────────────
 async function oauthGoogle(){ window.location.href = '/auth/google'; }
-async function oauthMicrosoft(){ toast('OAuth Microsoft disponible en session 3 (voir README-mail.md)', 'error'); }
+async function oauthMicrosoft(){ window.location.href = '/auth/microsoft'; }
 
 async function loadAccounts(){
   try {
@@ -847,6 +863,10 @@ async function disconnectAccount(provider, email){
       var r = await fetch('/auth/google/disconnect', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email }) });
       if(r.status === 204){ toast('Compte Google déconnecté', 'ok'); }
       else { var err = await r.json().catch(function(){return{}}); toast(err.error || 'Échec', 'error'); }
+    } else if(provider === 'microsoft'){
+      var rm = await fetch('/auth/microsoft/disconnect', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email }) });
+      if(rm.status === 204){ toast('Compte Microsoft déconnecté', 'ok'); }
+      else { var errm = await rm.json().catch(function(){return{}}); toast(errm.error || 'Échec', 'error'); }
     } else if(provider === 'imap'){
       await fetch('/api/v2/mail/disconnect', { method:'POST' });
       toast('Boîte IMAP déconnectée', 'ok');

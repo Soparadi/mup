@@ -13,6 +13,9 @@
 
 import { getDb } from '../../lib/surreal.js'
 import { normaliserTel } from '../../lib/import.js'
+import { normaliserSociete } from '../../lib/societes.js'
+import { corroborerSiret, normText } from './overpass.js'
+import { enrichReferentielActionnable } from './referentiel.js'
 
 // Coercition string sûre (calque referentiel.js / referentiel-read.js).
 const str = v => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v).trim()))
@@ -80,4 +83,136 @@ export async function chargerOsmIndexe() {
     console.warn('[rapprochement-osm]', String(e?.message || e).slice(0, 80))
     return vide()
   }
+}
+
+// Mappe une ligne OSM vers le contrat actionnable de referentiel_societes.
+// REMAP identique à getOsmContactBySiret (referentiel-read.js) : phone→societe_tel,
+// email→societe_email, website→website, facebook→societe_facebook,
+// instagram→societe_instagram, linkedin→societe_linkedin. Valeurs vides tolérées
+// (enrichReferentielActionnable ne pose pas les champs vides).
+function mapperOsmVersContrat(osm) {
+  return {
+    website: str(osm.website),
+    societe_email: str(osm.email),
+    societe_tel: str(osm.phone),
+    societe_facebook: str(osm.facebook),
+    societe_instagram: str(osm.instagram),
+    societe_linkedin: str(osm.linkedin)
+  }
+}
+
+// Cherche la MEILLEURE ligne OSM concordant avec une société, du signal le plus
+// fort au plus faible. Retourne { osm, certitude:'certain'|'presume' } ou null.
+// DOCTRINE :
+//   • SIRET ou SIREN concordant  → CERTAIN (un identifiant légal ne ment pas).
+//   • sinon ≥2 signaux faibles INDÉPENDANTS concordant sur une MÊME ligne OSM
+//     parmi {domaine, tel, email, nom+ville} → PRÉSUMÉ.
+//   • 1 signal faible isolé → null (REJET, rien écrit).
+function trouverMatch(soc, idx) {
+  const siret = str(soc.siret).replace(/\s+/g, '')
+  const siren = str(soc.siren).replace(/\s+/g, '') || (siret ? siret.slice(0, 9) : '')
+
+  // ── CERTAIN : SIRET, puis SIREN (confirmé par corroborerSiret) ──
+  if (siret) {
+    const rows = idx.bySiret.get(siret)
+    if (rows && rows.length) return { osm: rows[0], certitude: 'certain' }
+  }
+  if (siren) {
+    const rows = idx.bySiren.get(siren) || []
+    const ok = rows.find(o => corroborerSiret(o, siren))
+    if (ok) return { osm: ok, certitude: 'certain' }
+  }
+
+  // ── PRÉSUMÉ : chaque signal faible vote pour les lignes OSM qu'il matche ;
+  // on retient une ligne soutenue par ≥2 signaux DISTINCTS (concordance sur un
+  // même établissement, pas 2 lignes différentes). ──
+  const votes = new Map()   // osm_id → { osm, signaux:Set }
+  const voter = (rows, signal) => {
+    for (const o of (rows || [])) {
+      let e = votes.get(o.osm_id)
+      if (!e) { e = { osm: o, signaux: new Set() }; votes.set(o.osm_id, e) }
+      e.signaux.add(signal)
+    }
+  }
+  const domaine = normaliserDomaine(soc.website)
+  if (domaine) voter(idx.byDomaine.get(domaine), 'domaine')
+  const tel = normaliserTel(soc.societe_tel)
+  if (tel) voter(idx.byTel.get(tel), 'tel')
+  const email = str(soc.societe_email).toLowerCase()
+  if (email) voter(idx.byEmail.get(email), 'email')
+
+  // nom+ville : signal de CORROBORATION appliqué aux SEULES lignes déjà surfacées
+  // par un autre signal faible. Une ligne matchée UNIQUEMENT par nom+ville reste
+  // un signal isolé (→ rejet) : inutile d'indexer les ~685 k noms OSM.
+  const nom = normaliserSociete(soc.raison_sociale)
+  const ville = normText(soc.ville)
+  if (nom && ville) {
+    for (const e of votes.values()) {
+      if (normaliserSociete(e.osm.nom) === nom && normText(e.osm.city) === ville) {
+        e.signaux.add('nomville')
+      }
+    }
+  }
+
+  let best = null
+  for (const e of votes.values()) {
+    if (e.signaux.size >= 2 && (!best || e.signaux.size > best.signaux.size)) best = e
+  }
+  return best ? { osm: best.osm, certitude: 'presume' } : null
+}
+
+// Rapproche toutes les sociétés d'un département avec la réserve OSM et enrichit
+// referentiel_societes en fill-if-empty (jamais d'écrasement). LECTURE SEULE de
+// referentiel_osm. Fire-and-forget par société (try/catch avalé) : une société
+// en échec n'interrompt jamais la passe. Compteurs read-only + log de synthèse.
+// NON BRANCHÉ au boot : piloté à la main sur un département d'abord.
+export async function rapprocherDepartement(dept) {
+  const d = str(dept)
+  const compteurs = { traitees: 0, certain: 0, presume: 0, rejet: 0, champs_ecrits: 0 }
+  if (!d) {
+    console.warn('[rapprochement-osm] département vide — rien à faire')
+    return compteurs
+  }
+
+  const idx = await chargerOsmIndexe()
+
+  let societes = []
+  try {
+    const db = await getDb()
+    const r = await db.query(
+      'SELECT siret, siren, raison_sociale, ville, website, societe_email, societe_tel ' +
+      'FROM referentiel_societes WHERE departement = $d',
+      { d }
+    )
+    societes = r[0] || []
+  } catch (e) {
+    console.warn('[rapprochement-osm]', String(e?.message || e).slice(0, 80))
+    return compteurs
+  }
+
+  for (const soc of societes) {
+    compteurs.traitees++
+    try {
+      const match = trouverMatch(soc, idx)
+      if (!match) { compteurs.rejet++; continue }
+      if (match.certitude === 'certain') compteurs.certain++
+      else compteurs.presume++
+      const champs = mapperOsmVersContrat(match.osm)
+      // champs_ecrits : nombre de champs NON VIDES dispatchés (l'écriture réelle
+      // est tranchée en fill-if-empty côté DB — ce compteur ne la mesure pas).
+      compteurs.champs_ecrits += Object.values(champs).filter(Boolean).length
+      const siret = str(soc.siret).replace(/\s+/g, '')
+      // Fire-and-forget : enrichReferentielActionnable avale déjà ses échecs.
+      enrichReferentielActionnable(siret, champs)
+    } catch (e) {
+      console.warn('[rapprochement-osm]', String(e?.message || e).slice(0, 80))
+    }
+  }
+
+  console.log(
+    `[rapprochement-osm] dept ${d} — ${compteurs.traitees} sociétés · ` +
+    `${compteurs.certain} certain · ${compteurs.presume} présumé · ` +
+    `${compteurs.rejet} rejet · ${compteurs.champs_ecrits} champs dispatchés`
+  )
+  return compteurs
 }

@@ -163,9 +163,12 @@ function trouverMatch(soc, idx) {
 
 // Rapproche toutes les sociétés d'un département avec la réserve OSM et enrichit
 // referentiel_societes en fill-if-empty (jamais d'écrasement). LECTURE SEULE de
-// referentiel_osm. Fire-and-forget par société (try/catch avalé) : une société
-// en échec n'interrompt jamais la passe. Compteurs read-only + log de synthèse.
-// NON BRANCHÉ au boot : piloté à la main sur un département d'abord.
+// referentiel_osm. Enrichissement SÉQUENTIEL : on ATTEND chaque écriture avant de
+// passer à la société suivante (pas de fire-and-forget massif — des milliers
+// d'UPDATE concurrents non-awaités satureraient la connexion SurrealDB et
+// perdraient des écritures). enrichReferentielActionnable garde son try/catch
+// interne : une société en échec n'interrompt jamais la passe. Compteurs read-only
+// + log de synthèse. NON BRANCHÉ au boot : piloté à la main sur un département d'abord.
 export async function rapprocherDepartement(dept) {
   const d = str(dept)
   const compteurs = { traitees: 0, certain: 0, presume: 0, rejet: 0, champs_ecrits: 0 }
@@ -202,8 +205,9 @@ export async function rapprocherDepartement(dept) {
       // est tranchée en fill-if-empty côté DB — ce compteur ne la mesure pas).
       compteurs.champs_ecrits += Object.values(champs).filter(Boolean).length
       const siret = str(soc.siret).replace(/\s+/g, '')
-      // Fire-and-forget : enrichReferentielActionnable avale déjà ses échecs.
-      enrichReferentielActionnable(siret, champs)
+      // SÉQUENTIEL : on attend l'écriture avant la société suivante. Aucune écriture
+      // perdue ; enrichReferentielActionnable avale déjà ses propres échecs (no-throw).
+      await enrichReferentielActionnable(siret, champs)
     } catch (e) {
       console.warn('[rapprochement-osm]', String(e?.message || e).slice(0, 80))
     }

@@ -14,7 +14,7 @@
 import { getDb } from '../../lib/surreal.js'
 import { normaliserTel } from '../../lib/import.js'
 import { normaliserSociete } from '../../lib/societes.js'
-import { corroborerSiret, normText } from './overpass.js'
+import { corroborerSiret, normText, DEPT_BBOX } from './overpass.js'
 import { enrichReferentielActionnable } from './referentiel.js'
 
 // Coercition string sûre (calque referentiel.js / referentiel-read.js).
@@ -39,21 +39,23 @@ export function normaliserDomaine(url) {
   }
 }
 
-// Singleton module-level : la réserve OSM est quasi-statique, on ne relit
-// referentiel_osm qu'UNE fois par process. _idxPromise mémorise le chargement
-// (en cours ou abouti) pour partager un éventuel appel concurrent. Un index
-// VIDE — échec transitoire OU table pas encore peuplée — n'est PAS mis en
-// cache : on réessaiera au prochain appel. Pas de TTL (OSM statique à l'échelle
-// du run). Même signature/contrat que l'ancienne fonction (fail-safe, no-throw).
-let _idxPromise = null
+// Cache module-level PAR DÉPARTEMENT : chaque dept ne charge sa bbox qu'UNE fois
+// par process (Map<dept, promise>), la promesse mémorisée est partagée par les
+// appels concurrents. Chargement borné par bbox départementale (mémoire) — plus
+// de relecture de toute la réserve OSM. Un index VIDE — échec transitoire OU
+// tranche pas encore peuplée — n'est PAS mis en cache : on réessaiera au prochain
+// appel. Pas de TTL (OSM statique à l'échelle du run). Fail-safe, no-throw.
+const _idxByDept = new Map()
 
-export async function chargerOsmIndexe() {
-  if (_idxPromise) return _idxPromise
-  _idxPromise = chargerOsmDepuisDb()
-  const idx = await _idxPromise
+export async function chargerOsmIndexe(dept, bbox) {
+  const cache = _idxByDept.get(dept)
+  if (cache) return cache
+  const promise = chargerOsmDepuisDb(bbox)
+  _idxByDept.set(dept, promise)
+  const idx = await promise
   const vide = !(idx.bySiret.size || idx.bySiren.size || idx.byTel.size ||
                  idx.byEmail.size || idx.byDomaine.size)
-  if (vide) _idxPromise = null
+  if (vide) _idxByDept.delete(dept)
   return idx
 }
 
@@ -66,8 +68,11 @@ export async function chargerOsmIndexe() {
 //   byTel     : normaliserTel(phone) — forme nationale 0X
 //   byEmail   : email lower/trim
 //   byDomaine : normaliserDomaine(website)
+// BORNÉ PAR BBOX [latMin, lonMin, latMax, lonMax] : range scan sur lat (index
+// idx_osm_lat), lng filtré en base sur le sous-ensemble — le chargement se limite
+// à la tranche départementale (mémoire) au lieu des ~685 k lignes nationales.
 // LECTURE SEULE, FAIL-SAFE : toute erreur → 5 Map vides, ne throw JAMAIS.
-async function chargerOsmDepuisDb() {
+async function chargerOsmDepuisDb(bbox) {
   const vide = () => ({
     bySiret: new Map(), bySiren: new Map(), byTel: new Map(),
     byEmail: new Map(), byDomaine: new Map()
@@ -79,10 +84,13 @@ async function chargerOsmDepuisDb() {
     else map.set(key, [row])
   }
   try {
+    const [latMin, lonMin, latMax, lonMax] = bbox
     const db = await getDb()
     const r = await db.query(
       'SELECT osm_id, nom, siret, siren, phone, email, website, ' +
-      'facebook, instagram, linkedin, city FROM referentiel_osm'
+      'facebook, instagram, linkedin, city FROM referentiel_osm ' +
+      'WHERE lat >= $latMin AND lat <= $latMax AND lng >= $lonMin AND lng <= $lonMax',
+      { latMin, latMax, lonMin, lonMax }
     )
     const rows = r[0] || []
     const idx = vide()
@@ -195,7 +203,15 @@ export async function rapprocherDepartement(dept) {
     return compteurs
   }
 
-  const idx = await chargerOsmIndexe()
+  // Bbox départementale obligatoire : borne le chargement OSM (mémoire). Absente
+  // de la table → fail-safe (log + compteurs vides, jamais de throw).
+  const bbox = DEPT_BBOX[d]
+  if (!bbox) {
+    console.warn(`[rapprochement-osm] bbox absente pour dept ${d} — rien à faire`)
+    return compteurs
+  }
+
+  const idx = await chargerOsmIndexe(d, bbox)
 
   let societes = []
   try {

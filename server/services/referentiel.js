@@ -327,28 +327,21 @@ export async function enrichReferentielActionnable(siret, fields = {}) {
 export async function upsertReferentiel(fiches) {
   try {
     if (!Array.isArray(fiches) || fiches.length === 0) return
-    // ── [ref-diag] logs de diagnostic temporaires (à retirer) ──
-    const recu = Array.isArray(fiches) ? fiches.length : 'PAS_ARRAY'
-    console.log('[ref-diag] recu', recu, 'fiches')
-    let skipEtab = 0, skipSiret = 0, skipCommune = 0, tentees = 0, iDiag = 0
     const db = await getDb()
     for (const fiche of fiches) {
       try {
         // Établissement servi à l'abonné : matching_etablissements[0], fallback siège.
         const matching = Array.isArray(fiche?.matching_etablissements) ? fiche.matching_etablissements : []
         const etab = matching[0] || fiche?.siege || null
-        if (!etab) { skipEtab++; continue }
+        if (!etab) continue
         // ID de record = SIRET nettoyé → idempotence par établissement. Sinon SKIP.
         const id = cleanRecordId('referentiel_societes', typeof etab.siret === 'string' ? etab.siret : '')
-        if (!id) { skipSiret++; continue }
+        if (!id) continue
         // Département dérivé de la commune INSEE. Vide (DOM / non résolu) → SKIP :
         // jamais de fiche stockée avec un département faux.
         const commune = str(etab.commune)
         const departement = communeToDepartement(commune)
-        // ── [ref-diag] 1re fiche seulement (à retirer) ──
-        if (iDiag === 0) console.log('[ref-diag] fiche#0 commune=', JSON.stringify(etab.commune), 'dept=', JSON.stringify(departement))
-        iDiag++
-        if (!departement) { skipCommune++; continue }
+        if (!departement) continue
         // ── Socle Etalab. Les 6 champs TYPE string sont TOUJOURS des strings ('' si absent). ──
         const body = {
           siren: str(fiche?.siren),
@@ -417,14 +410,11 @@ export async function upsertReferentiel(fiches) {
         if (str(etab.libelle_voie)) body.libelle_voie = str(etab.libelle_voie)
         // source : laissée au DEFAULT DB ('etalab_referentiel'). cached_at /
         // refreshed_at : posés en SurrealQL (time::now()) par upsertRecordRef.
-        tentees++
         await upsertRecordRef(db, 'referentiel_societes', id, body, FILL_IF_EMPTY)
       } catch (e) {
         console.warn('[referentiel-upsert]', String(e?.message || e).slice(0, 80))
       }
     }
-    // ── [ref-diag] bilan (à retirer) ──
-    console.log('[ref-diag] bilan', { recu, skipEtab, skipSiret, skipCommune, tentees })
   } catch (e) {
     console.warn('[referentiel-upsert]', String(e?.message || e).slice(0, 80))
   }

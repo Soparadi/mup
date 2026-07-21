@@ -272,10 +272,11 @@ async function upsertRecordRef(db, table, cleanId, body, fillIfEmpty = []) {
 }
 
 // ── enrichissement additif du référentiel depuis la saisie abonné ──
-// ENRICHIR-SI-EXISTE : remplit les 4 champs actionnables personne morale du
-// référentiel mutualisé (website / societe_email / societe_tel / societe_linkedin)
-// UNIQUEMENT s'ils y sont vides (NONE ou ''), à partir de la saisie/import de
-// l'abonné. ADDITIF STRICT — jamais d'écrasement d'une valeur déjà présente : la
+// ENRICHIR-SI-EXISTE : remplit les 6 champs actionnables personne morale du
+// référentiel mutualisé (website / societe_email / societe_tel / societe_linkedin
+// / societe_facebook / societe_instagram) UNIQUEMENT s'ils y sont vides (NONE ou
+// ''), à partir de la saisie/import de l'abonné. ADDITIF STRICT — jamais
+// d'écrasement d'une valeur déjà présente : la
 // règle est portée PAR CHAMP côté SurrealQL
 //   website = IF website = NONE OR website = '' THEN $website ELSE website END
 // si bien qu'une valeur non vide existante est réécrite à l'identique (no-op réel).
@@ -298,7 +299,7 @@ export async function enrichReferentielActionnable(siret, fields = {}) {
     if (!id) return
     const params = { id }
     const assigns = []
-    for (const k of ['website', 'societe_email', 'societe_tel', 'societe_linkedin']) {
+    for (const k of ['website', 'societe_email', 'societe_tel', 'societe_linkedin', 'societe_facebook', 'societe_instagram']) {
       const v = str(fields?.[k])
       if (!v) continue   // champ vide en entrée → non posé (jamais d'écrasement par du vide)
       // Additif par champ : n'écrit que si l'existant est vide (NONE ou '').

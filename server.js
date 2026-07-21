@@ -21,11 +21,11 @@ import { analyserImport, analyserImportDetaille } from './lib/import.js'
 import { normalizePersonFields } from './lib/person-fields.js'
 import { router as authRouter } from './server/auth/routes.js'
 import { router as stripeRouter, webhookHandler as stripeWebhookHandler } from './server/routes/stripe.js'
-import { requireAuth, requireAuthHtml } from './server/middleware/requireAuth.js'
+import { requireAuth, requireAuthHtml, readSessionToken } from './server/middleware/requireAuth.js'
 import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { requireSuperadmin } from './server/middleware/requireSuperadmin.js'
 import { deriveAppState } from './lib/derive-app-state.js'
-import { runAuthMigration, invalidateSessionCacheByUserId } from './server/auth/surreal-adapter.js'
+import { runAuthMigration, invalidateSessionCacheByUserId, getSession } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
 import { getInseeToken } from './server/services/insee.js'
 import {
@@ -4232,8 +4232,20 @@ app.post('/api/v2/mail/send', async (req, res) => {
 
 import('./lib/oauth-google.js').then(() => {})  // pre-warm import (no-op)
 
+// SEC 1 — dérive l'ownerId de la session vérifiée (cookie mup_session) et non
+// de requireUserId (spoofable via header/query/body). Fail-closed : 401 si pas
+// de session valide. Utilisé par les flux OAuth Google et Microsoft, qui
+// écrivent des mailbox_credentials liées à cet ownerId.
+async function requireSessionOwnerId(req, res) {
+  const token = readSessionToken(req)
+  if (!token) { res.status(401).json({ error: 'Authentification requise' }); return null }
+  const session = await getSession(token)
+  if (!session) { res.status(401).json({ error: 'Session invalide ou expirée' }); return null }
+  return String(session.user_id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+}
+
 app.get('/auth/google', async (req, res) => {
-  const ownerId = requireUserId(req, res)
+  const ownerId = await requireSessionOwnerId(req, res)
   if (!ownerId) return
   try {
     const { isGoogleReady, signState, generateAuthUrl } = await import('./lib/oauth-google.js')
@@ -4319,7 +4331,7 @@ app.get('/auth/google/callback', async (req, res) => {
 })
 
 app.post('/auth/google/disconnect', async (req, res) => {
-  const ownerId = requireUserId(req, res)
+  const ownerId = await requireSessionOwnerId(req, res)
   if (!ownerId) return
   const { email } = req.body || {}
   if (!email) return res.status(400).json({ error: 'email requis' })

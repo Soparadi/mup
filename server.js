@@ -39,7 +39,7 @@ import {
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
 import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
-import { getReferentielContactBySiret, getOsmContactBySiret } from './server/services/referentiel-read.js'
+import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler } from './server/services/referentiel-read.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
 import { runMentionsLegalesJob } from './server/services/mentions-legales.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
@@ -2273,8 +2273,22 @@ app.post('/api/amorce', async (req, res) => {
   const dept = String(req.body?.dept || '').trim()
   res.json({ ok: true })
   // Fire-and-forget différé : lancé APRÈS res.json, sans await.
+  // Enchaînement CHAÎNÉ (pas parallèle — le crawl mentions légales et le
+  // rapprochement OSM partagent le trafic sortant, jamais simultané) :
+  //   1. rapprocherDepartement(dept) : moteur OSM, écrit websites + contacts.
+  //   2. selectSiretsACrawler(dept, N) : SIRET du dept ayant gagné un website
+  //      mais sans contact complet (2e source lit ces websites fraîchement écrits).
+  //   3. runMentionsLegalesJob(sirets) : crawl mentions légales, extrait tél/email
+  //      en fill-if-empty. Plafond N (env CRAWL_ML_BATCH, défaut 50) borne le crawl.
   setTimeout(() => {
-    rapprocherDepartement(dept).catch(e => console.warn('[amorce]', String(e?.message || e).slice(0, 80)))
+    rapprocherDepartement(dept)
+      .then(async () => {
+        const N = parseInt(process.env.CRAWL_ML_BATCH || '50', 10)
+        const sirets = await selectSiretsACrawler(dept, N)
+        if (sirets.length) await runMentionsLegalesJob(sirets)
+        console.log(`[amorce] dept ${dept} — rapprochement OK, ${sirets.length} crawlés`)
+      })
+      .catch(e => console.warn('[amorce]', String(e?.message || e).slice(0, 80)))
   }, 30000)
 })
 

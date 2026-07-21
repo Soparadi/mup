@@ -175,7 +175,7 @@ L'ensemble des données persistées par MovUP est stocké chez SurrealDB Cloud. 
 |---|---|
 | Région de traitement | AWS eu-west-1 (Dublin, Irlande) |
 | Infrastructure sous-jacente | Amazon Web Services Ireland Ltd |
-| Endpoint | `wss://ethereal-nebula-06e6r56hqhrdb6vvo58bn1o314.aws-euw1.surreal.cloud/rpc` |
+| Endpoint | `wss://movup-prod-06fnm71lqlp2tfukdsfg07183o.aws-euw1.surreal.cloud/rpc` |
 | Transferts hors UE | Non en stockage. Personnel SurrealDB UK peut accéder aux données dans le cadre du support. |
 | Base de transfert | Décision d'adéquation Royaume-Uni (Commission européenne, juin 2021) |
 

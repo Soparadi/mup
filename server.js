@@ -39,7 +39,7 @@ import {
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
 import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
-import { getReferentielContactBySiret } from './server/services/referentiel-read.js'
+import { getReferentielContactBySiret, getOsmContactBySiret } from './server/services/referentiel-read.js'
 import { amorcerOverpassDeptNaf } from './server/services/overpass.js'
 import { runMentionsLegalesJob } from './server/services/mentions-legales.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
@@ -2635,19 +2635,35 @@ app.get('/api/sirene/:siret', async (req, res) => {
   }
 })
 
-// POST /api/enrich/:siret — restitution des champs contact société (website /
-// societe_email / societe_tel) depuis referentiel_societes (amorçage Overpass).
-// Restitution PURE : aucun décompte quota, aucune idempotence (différés).
+// POST /api/enrich/:siret — restitution des champs contact société depuis DEUX
+// sources : referentiel_societes (amorçage Overpass, PRIORITAIRE) et referentiel_osm
+// (réserve nationale OSM, fill-if-empty). Fusion champ par champ : valeur société si
+// non vide, sinon valeur OSM. Restitution PURE : aucun décompte quota, aucune
+// idempotence (différés).
 app.post('/api/enrich/:siret', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   const siret = String(req.params.siret || '').replace(/\s+/g, '')
   if (!siret) return res.status(400).json({ error: 'SIRET manquant' })
-  const found = await getReferentielContactBySiret(siret)
-  if (!found) {
-    return res.json({ found: false, website: '', societe_email: '', societe_tel: '' })
+  const [soc, osm] = await Promise.all([
+    getReferentielContactBySiret(siret),
+    getOsmContactBySiret(siret)
+  ])
+  const s = soc || {}
+  const o = osm || {}
+  // Société prioritaire, OSM en fill-if-empty. Société ne porte que website /
+  // societe_email / societe_tel ; facebook / instagram / linkedin viennent d'OSM.
+  const pick = (a, b) => (String(a || '').trim() || String(b || '').trim())
+  const merged = {
+    website: pick(s.website, o.website),
+    societe_email: pick(s.societe_email, o.societe_email),
+    societe_tel: pick(s.societe_tel, o.societe_tel),
+    societe_facebook: pick(s.societe_facebook, o.societe_facebook),
+    societe_instagram: pick(s.societe_instagram, o.societe_instagram),
+    societe_linkedin: pick(s.societe_linkedin, o.societe_linkedin)
   }
-  res.json({ found: true, ...found })
+  const found = Object.values(merged).some(v => v)
+  res.json({ found, ...merged })
 })
 
 app.get('/api/geocode', async (req, res) => {

@@ -3044,17 +3044,17 @@ function maybeFinishSearch(gen) {
     // updateCountDisplay n'écrase plus cette valeur depuis S.loaded.
     S.finished = true;
     // Rapprochement OSM à la demande : UNE fois par recherche, à la convergence.
-    // On envoie les SIRET réellement parcourus (S.buffer) au serveur, qui les
-    // rapproche de la réserve OSM. Fire-and-forget, n'attend rien de la réponse,
-    // échec silencieux.
+    // On envoie le département cherché au serveur, qui borne le chargement OSM à
+    // sa bbox et rapproche la réserve. Fire-and-forget, n'attend rien de la
+    // réponse, échec silencieux.
     if (!S.amorceLancee) {
       S.amorceLancee = true;
-      var _amSirets = S.buffer.map(function(l){ return l.siret; }).filter(Boolean);
-      if (_amSirets.length) {
+      var _amDept = (document.getElementById('sel-dept')?.value || '').trim();
+      if (_amDept) {
         fetch('/api/amorce', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sirets: _amSirets })
+          body: JSON.stringify({ dept: _amDept })
         }).catch(function(){});
       }
     }

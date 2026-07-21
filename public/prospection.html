@@ -3043,17 +3043,18 @@ function maybeFinishSearch(gen) {
     // réellement posés sur la carte (carte = compteur). Flag pour que
     // updateCountDisplay n'écrase plus cette valeur depuis S.loaded.
     S.finished = true;
-    // Amorçage Overpass à la demande : UNE fois par recherche, à la convergence.
-    // Fire-and-forget, n'attend rien de la réponse, échec silencieux.
+    // Rapprochement OSM à la demande : UNE fois par recherche, à la convergence.
+    // On envoie les SIRET réellement parcourus (S.buffer) au serveur, qui les
+    // rapproche de la réserve OSM. Fire-and-forget, n'attend rien de la réponse,
+    // échec silencieux.
     if (!S.amorceLancee) {
       S.amorceLancee = true;
-      var _amDept = (document.getElementById('sel-dept')?.value || '').trim();
-      var _amNaf = (selectedNAFCode || '').trim();
-      if (_amDept && _amNaf) {
+      var _amSirets = S.buffer.map(function(l){ return l.siret; }).filter(Boolean);
+      if (_amSirets.length) {
         fetch('/api/amorce', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dept: _amDept, naf: _amNaf })
+          body: JSON.stringify({ sirets: _amSirets })
         }).catch(function(){});
       }
     }

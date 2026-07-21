@@ -4362,12 +4362,124 @@ app.post('/auth/google/disconnect', async (req, res) => {
   }
 })
 
-// Stub OAuth Microsoft — session 3.
-app.get('/auth/microsoft', (req, res) => {
-  res.status(501).json({ error: 'OAuth Microsoft non configuré — voir session 3 (README-mail.md)' })
+// ── OAuth Microsoft (Track 1 — boîte personnelle Outlook / Microsoft 365) ──
+// Miroir des routes Google. ownerId dérivé de la session vérifiée (SEC 1).
+
+app.get('/auth/microsoft', async (req, res) => {
+  const ownerId = await requireSessionOwnerId(req, res)
+  if (!ownerId) return
+  try {
+    const { isMicrosoftReady, signState, generateAuthUrl } = await import('./lib/oauth-microsoft.js')
+    if (!isMicrosoftReady()) return res.status(503).json({ error: 'OAuth Microsoft non configuré (variables MICROSOFT_CLIENT_ID/SECRET/REDIRECT_URI manquantes)' })
+    const state = signState({ ownerId, companyId: req.query.companyId || null })
+    const url = generateAuthUrl(state)
+    res.redirect(302, url)
+  } catch (err) {
+    console.error('[oauth-microsoft:start]', err.message)
+    res.status(500).json({ error: 'Démarrage OAuth Microsoft impossible' })
+  }
 })
-app.get('/auth/microsoft/callback', (req, res) => {
-  res.status(501).json({ error: 'OAuth Microsoft non configuré — voir session 3 (README-mail.md)' })
+
+app.get('/auth/microsoft/callback', async (req, res) => {
+  try {
+    const { isMicrosoftReady, verifyState, exchangeCode, fetchUserInfo } = await import('./lib/oauth-microsoft.js')
+    const { encryptMailToken, isMailCryptoReady } = await import('./lib/crypto.js')
+    if (!isMicrosoftReady()) return res.status(503).send('OAuth Microsoft non configuré')
+    if (!isMailCryptoReady()) return res.status(503).send('MAIL_ENCRYPTION_KEY/SECRET_KEY manquante')
+
+    const { code, state, error: msErr } = req.query
+    if (msErr) return res.redirect(302, '/mail.html?microsoft_error=' + encodeURIComponent(String(msErr)))
+    if (!code || !state) return res.status(400).send('code/state manquants')
+    const claims = verifyState(String(state))
+    if (!claims) return res.status(401).send('state JWT invalide ou expiré (>10 min)')
+
+    const tokens = await exchangeCode(String(code))
+    if (!tokens.refresh_token) {
+      return res.redirect(302, '/mail.html?microsoft_error=' + encodeURIComponent('Aucun refresh_token reçu — vérifier le scope offline_access et réessayer'))
+    }
+    const userInfo = await fetchUserInfo(tokens)
+    if (!userInfo?.email) return res.status(502).send('Email utilisateur introuvable via Microsoft Graph')
+    const email = userInfo.email
+
+    const db = await getDb()
+    const recordId = `${claims.ownerId}__microsoft__${email.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const now = new Date().toISOString()
+    const payload = {
+      ownerId: claims.ownerId,
+      companyId: claims.companyId || null,
+      provider: 'microsoft',
+      email,
+      userName: userInfo.name || null,
+      givenName: userInfo.given_name || null,
+      accessToken: encryptMailToken(tokens.access_token),
+      refreshToken: encryptMailToken(tokens.refresh_token),
+      tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
+      scope: tokens.scope || null,
+      updatedAt: now
+    }
+    const sel = await db.query('SELECT * FROM type::record("mailbox_credentials", $id)', { id: recordId })
+    if (sel[0]?.[0]) {
+      await db.query('UPDATE type::record("mailbox_credentials", $id) MERGE $body', { id: recordId, body: payload })
+    } else {
+      payload.createdAt = now
+      await db.query('CREATE type::record("mailbox_credentials", $id) CONTENT $body', { id: recordId, body: payload })
+    }
+
+    // Welcome email auto via Resend (idempotent — même logique que Google).
+    // try/catch — un échec d'envoi ne casse pas le flow OAuth.
+    try {
+      if (isResendReady()) {
+        const result = await sendWelcomeEmail(db, {
+          ownerId: claims.ownerId,
+          companyId: claims.companyId || null,
+          userEmail: email,
+          userName: userInfo.given_name || userInfo.name || null
+        })
+        if (result.sent) console.log('[oauth-microsoft:welcome] envoyé pour', email)
+        else if (result.skipped) console.log('[oauth-microsoft:welcome] skip (' + result.reason + ') pour', email)
+      } else {
+        console.warn('[oauth-microsoft:welcome] RESEND_API_KEY absente, welcome non envoyé')
+      }
+    } catch (e) {
+      console.warn('[oauth-microsoft:welcome] erreur (non bloquante) :', e.message)
+    }
+
+    res.redirect(302, '/mail.html?microsoft_connected=1&email=' + encodeURIComponent(email))
+  } catch (err) {
+    console.error('[oauth-microsoft:callback]', err.message)
+    res.redirect(302, '/mail.html?microsoft_error=' + encodeURIComponent(err.message || 'Erreur OAuth Microsoft'))
+  }
+})
+
+app.post('/auth/microsoft/disconnect', async (req, res) => {
+  const ownerId = await requireSessionOwnerId(req, res)
+  if (!ownerId) return
+  const { email } = req.body || {}
+  if (!email) return res.status(400).json({ error: 'email requis' })
+  try {
+    const db = await getDb()
+    const recordId = `${ownerId}__microsoft__${String(email).replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const sel = await db.query('SELECT * FROM type::record("mailbox_credentials", $id)', { id: recordId })
+    const cred = sel[0]?.[0]
+    if (!cred || cred.ownerId !== ownerId) return res.status(404).json({ error: 'Compte introuvable' })
+
+    // Révocation côté Microsoft : no-op (pas d'endpoint programmatique v2).
+    // Appel conservé pour symétrie avec Google ; le DELETE ci-dessous fait foi.
+    try {
+      const { revokeRefreshToken, isMicrosoftReady } = await import('./lib/oauth-microsoft.js')
+      if (isMicrosoftReady() && cred.refreshToken) {
+        await revokeRefreshToken()
+      }
+    } catch (e) {
+      console.warn('[oauth-microsoft:revoke] échec révocation côté Microsoft :', e.message)
+    }
+
+    await db.query('DELETE type::record("mailbox_credentials", $id)', { id: recordId })
+    res.status(204).end()
+  } catch (err) {
+    console.error('[oauth-microsoft:disconnect]', err.message)
+    res.status(500).json({ error: 'Déconnexion impossible' })
+  }
 })
 
 // ── Liste tous les comptes mail connectés du user (mailbox_credentials + mail_settings IMAP)

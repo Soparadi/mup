@@ -39,6 +39,24 @@ export function normaliserDomaine(url) {
   }
 }
 
+// Singleton module-level : la réserve OSM est quasi-statique, on ne relit
+// referentiel_osm qu'UNE fois par process. _idxPromise mémorise le chargement
+// (en cours ou abouti) pour partager un éventuel appel concurrent. Un index
+// VIDE — échec transitoire OU table pas encore peuplée — n'est PAS mis en
+// cache : on réessaiera au prochain appel. Pas de TTL (OSM statique à l'échelle
+// du run). Même signature/contrat que l'ancienne fonction (fail-safe, no-throw).
+let _idxPromise = null
+
+export async function chargerOsmIndexe() {
+  if (_idxPromise) return _idxPromise
+  _idxPromise = chargerOsmDepuisDb()
+  const idx = await _idxPromise
+  const vide = !(idx.bySiret.size || idx.bySiren.size || idx.byTel.size ||
+                 idx.byEmail.size || idx.byDomaine.size)
+  if (vide) _idxPromise = null
+  return idx
+}
+
 // Lit referentiel_osm en UNE passe et construit 5 index JS (Map) pour un
 // rapprochement O(1) par signal. Valeur de chaque Map = LISTE de lignes OSM
 // partageant la clé (plusieurs objets OSM peuvent porter le même téléphone,
@@ -49,7 +67,7 @@ export function normaliserDomaine(url) {
 //   byEmail   : email lower/trim
 //   byDomaine : normaliserDomaine(website)
 // LECTURE SEULE, FAIL-SAFE : toute erreur → 5 Map vides, ne throw JAMAIS.
-export async function chargerOsmIndexe() {
+async function chargerOsmDepuisDb() {
   const vide = () => ({
     bySiret: new Map(), bySiren: new Map(), byTel: new Map(),
     byEmail: new Map(), byDomaine: new Map()
@@ -215,6 +233,66 @@ export async function rapprocherDepartement(dept) {
 
   console.log(
     `[rapprochement-osm] dept ${d} — ${compteurs.traitees} sociétés · ` +
+    `${compteurs.certain} certain · ${compteurs.presume} présumé · ` +
+    `${compteurs.rejet} rejet · ${compteurs.champs_ecrits} champs dispatchés`
+  )
+  return compteurs
+}
+
+// Variante branchée sur la fin de recherche : rapproche le LOT de sociétés
+// désignées par un tableau de SIRET (celles réellement parcourues côté front)
+// plutôt qu'un département entier. Même doctrine (faisceau, certain/présumé,
+// fill-if-empty) et même boucle SÉQUENTIELLE que rapprocherDepartement — seule
+// la sélection change (siret IN $sirets). SIRET nettoyés + dédupliqués en amont.
+// LECTURE SEULE de referentiel_osm. Fail-safe : ne throw jamais.
+export async function rapprocherSirets(sirets) {
+  const liste = Array.isArray(sirets)
+    ? [...new Set(sirets.map(s => str(s).replace(/\s+/g, '')).filter(Boolean))]
+    : []
+  const compteurs = { traitees: 0, certain: 0, presume: 0, rejet: 0, champs_ecrits: 0 }
+  if (!liste.length) {
+    console.warn('[rapprochement-osm] aucun SIRET — rien à faire')
+    return compteurs
+  }
+
+  const idx = await chargerOsmIndexe()
+
+  let societes = []
+  try {
+    const db = await getDb()
+    const r = await db.query(
+      'SELECT siret, siren, raison_sociale, ville, website, societe_email, societe_tel ' +
+      'FROM referentiel_societes WHERE siret IN $sirets',
+      { sirets: liste }
+    )
+    societes = r[0] || []
+  } catch (e) {
+    console.warn('[rapprochement-osm]', String(e?.message || e).slice(0, 80))
+    return compteurs
+  }
+
+  for (const soc of societes) {
+    compteurs.traitees++
+    try {
+      const match = trouverMatch(soc, idx)
+      if (!match) { compteurs.rejet++; continue }
+      if (match.certitude === 'certain') compteurs.certain++
+      else compteurs.presume++
+      const champs = mapperOsmVersContrat(match.osm)
+      // champs_ecrits : nombre de champs NON VIDES dispatchés (l'écriture réelle
+      // est tranchée en fill-if-empty côté DB — ce compteur ne la mesure pas).
+      compteurs.champs_ecrits += Object.values(champs).filter(Boolean).length
+      const siret = str(soc.siret).replace(/\s+/g, '')
+      // SÉQUENTIEL : on attend l'écriture avant la société suivante. Aucune écriture
+      // perdue ; enrichReferentielActionnable avale déjà ses propres échecs (no-throw).
+      await enrichReferentielActionnable(siret, champs)
+    } catch (e) {
+      console.warn('[rapprochement-osm]', String(e?.message || e).slice(0, 80))
+    }
+  }
+
+  console.log(
+    `[rapprochement-osm] ${liste.length} SIRET demandés — ${compteurs.traitees} sociétés · ` +
     `${compteurs.certain} certain · ${compteurs.presume} présumé · ` +
     `${compteurs.rejet} rejet · ${compteurs.champs_ecrits} champs dispatchés`
   )

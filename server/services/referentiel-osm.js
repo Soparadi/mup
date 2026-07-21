@@ -50,7 +50,10 @@ export async function runReferentielOsmMigration() {
     // osm_id clé naturelle → UNIQUE : garantit l'idempotence de l'UPSERT (un objet OSM = un record).
     'DEFINE INDEX IF NOT EXISTS idx_osm_id ON referentiel_osm FIELDS osm_id UNIQUE',
     // SIRET NON unique : jointure à la recherche (plusieurs objets OSM peuvent porter le même SIRET).
-    'DEFINE INDEX IF NOT EXISTS idx_osm_siret ON referentiel_osm FIELDS siret'
+    'DEFINE INDEX IF NOT EXISTS idx_osm_siret ON referentiel_osm FIELDS siret',
+    // lat SEUL (pas composite) : le range scan sur lat borne le chargement par bbox
+    // départementale (mémoire), lng filtré en mémoire sur le sous-ensemble. Idempotent.
+    'DEFINE INDEX IF NOT EXISTS idx_osm_lat ON referentiel_osm FIELDS lat'
   ]
   for (const q of queries) {
     try { await db.query(q) } catch (e) { console.warn('[referentiel-osm-migration]', q.slice(0, 80), '→', e.message) }

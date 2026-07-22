@@ -54,6 +54,13 @@ export async function runReferentielMigration() {
     'DEFINE FIELD IF NOT EXISTS enseignes ON referentiel_societes TYPE option<array<string>>',
     'DEFINE FIELD IF NOT EXISTS enseignes.* ON referentiel_societes TYPE string',
     'DEFINE FIELD IF NOT EXISTS nom_commercial ON referentiel_societes TYPE option<string>',
+    // ── Clé de nom normalisée pour l'appariement du gisement OSM sans SIRET
+    // (nom + ville). Dérivée en normaliserSociete(enseigne || raison_sociale) —
+    // enseigne prioritaire (le tag `name` OSM porte l'enseigne), repli raison
+    // sociale INSEE. INERTE dans ce commit : DEFINE seul, aucune écriture ni
+    // backfill (étapes 2 et 3 cadrées séparément) → NONE sur toutes les lignes
+    // existantes. Additif, jamais existé → IF NOT EXISTS.
+    'DEFINE FIELD IF NOT EXISTS cle_nom ON referentiel_societes TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS date_fermeture ON referentiel_societes TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS tranche_effectif_salarie ON referentiel_societes TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS nature_juridique ON referentiel_societes TYPE option<string>',
@@ -102,6 +109,9 @@ export async function runReferentielMigration() {
     'DEFINE INDEX IF NOT EXISTS idx_ref_naf ON referentiel_societes FIELDS naf',
     'DEFINE INDEX IF NOT EXISTS idx_ref_dept ON referentiel_societes FIELDS departement',
     'DEFINE INDEX IF NOT EXISTS idx_ref_commune ON referentiel_societes FIELDS commune',
+    // Appariement OSM nom + ville : commune (TYPE string obligatoire, jamais NONE)
+    // en tête → borne le scan par commune INSEE avant le match sur cle_nom.
+    'DEFINE INDEX IF NOT EXISTS idx_ref_commune_clenom ON referentiel_societes FIELDS commune, cle_nom',
     // Composite (requête type : ciblage sectoriel par département).
     'DEFINE INDEX IF NOT EXISTS idx_ref_dept_naf ON referentiel_societes FIELDS departement, naf'
   ]

@@ -226,7 +226,8 @@ export async function rapprocherDepartement(dept) {
   try {
     const db = await getDb()
     const r = await db.query(
-      'SELECT siret, siren, raison_sociale, ville, website, societe_email, societe_tel ' +
+      'SELECT siret, siren, raison_sociale, ville, website, societe_email, societe_tel, ' +
+      'cle_nom, code_postal, enseigne, numero_voie, type_voie, libelle_voie ' +
       'FROM referentiel_societes WHERE departement = $d',
       { d }
     )
@@ -286,7 +287,8 @@ export async function rapprocherSirets(sirets) {
   try {
     const db = await getDb()
     const r = await db.query(
-      'SELECT siret, siren, raison_sociale, ville, website, societe_email, societe_tel ' +
+      'SELECT siret, siren, raison_sociale, ville, website, societe_email, societe_tel, ' +
+      'cle_nom, code_postal, enseigne, numero_voie, type_voie, libelle_voie ' +
       'FROM referentiel_societes WHERE siret IN $sirets',
       { sirets: liste }
     )

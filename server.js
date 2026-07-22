@@ -1092,6 +1092,27 @@ app.post('/api/admin/referentiel/backfill-clenom', requireSuperadmin, async (req
   }
 })
 
+// ── POST /api/admin/rapprochement/dept — À RETIRER AVANT LANCEMENT.
+// Déclenche rapprocherDepartement sur UN département, à la main, pour valider le
+// pont adresse (certain_adresse/presume_adresse). Même verrou que /api/admin/comptes
+// et /api/debug/overpass (requireSuperadmin, dev@soparadi.com SEUL, req.authUser posé
+// par le gate global). SYNCHRONE à la requête — contrairement à /api/amorce, PAS de
+// setTimeout et PAS d'enchaînement selectSiretsACrawler/runMentionsLegalesJob : aucun
+// effet de bord crawl. Renvoie l'objet compteurs complet pour comparaison au point de
+// référence. rapprocherDepartement est fill-if-empty (jamais d'écrasement) → relançable
+// sans dégât sur le même dept.
+app.post('/api/admin/rapprochement/dept', requireSuperadmin, async (req, res) => {
+  const dept = String(req.query?.dept ?? req.body?.dept ?? '').trim()
+  if (!dept) return res.status(400).json({ error: 'dept requis' })
+  try {
+    const compteurs = await rapprocherDepartement(dept)
+    res.json(compteurs)
+  } catch (err) {
+    console.error('[admin/rapprochement/dept]', err.message)
+    res.status(500).json({ error: 'Rapprochement département impossible' })
+  }
+})
+
 app.get('/api/pipeline', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return

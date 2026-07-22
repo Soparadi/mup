@@ -54,12 +54,12 @@ export async function chargerOsmIndexe(dept, bbox) {
   _idxByDept.set(dept, promise)
   const idx = await promise
   const vide = !(idx.bySiret.size || idx.bySiren.size || idx.byTel.size ||
-                 idx.byEmail.size || idx.byDomaine.size)
+                 idx.byEmail.size || idx.byDomaine.size || idx.byNomVille.size)
   if (vide) _idxByDept.delete(dept)
   return idx
 }
 
-// Lit referentiel_osm en UNE passe et construit 5 index JS (Map) pour un
+// Lit referentiel_osm en UNE passe et construit 6 index JS (Map) pour un
 // rapprochement O(1) par signal. Valeur de chaque Map = LISTE de lignes OSM
 // partageant la clé (plusieurs objets OSM peuvent porter le même téléphone,
 // domaine, etc.). Clés vides ignorées (jamais d'entrée '').
@@ -68,14 +68,15 @@ export async function chargerOsmIndexe(dept, bbox) {
 //   byTel     : normaliserTel(phone) — forme nationale 0X
 //   byEmail   : email lower/trim
 //   byDomaine : normaliserDomaine(website)
+//   byNomVille: `${normaliserSociete(nom)}|${normText(city)}` — pont nom+adresse
 // BORNÉ PAR BBOX [latMin, lonMin, latMax, lonMax] : range scan sur lat (index
 // idx_osm_lat), lng filtré en base sur le sous-ensemble — le chargement se limite
 // à la tranche départementale (mémoire) au lieu des ~685 k lignes nationales.
-// LECTURE SEULE, FAIL-SAFE : toute erreur → 5 Map vides, ne throw JAMAIS.
+// LECTURE SEULE, FAIL-SAFE : toute erreur → 6 Map vides, ne throw JAMAIS.
 async function chargerOsmDepuisDb(bbox) {
   const vide = () => ({
     bySiret: new Map(), bySiren: new Map(), byTel: new Map(),
-    byEmail: new Map(), byDomaine: new Map()
+    byEmail: new Map(), byDomaine: new Map(), byNomVille: new Map()
   })
   const push = (map, key, row) => {
     if (!key) return
@@ -104,6 +105,13 @@ async function chargerOsmDepuisDb(bbox) {
       push(idx.byTel, normaliserTel(row.phone), row)
       push(idx.byEmail, str(row.email).toLowerCase(), row)
       push(idx.byDomaine, normaliserDomaine(row.website), row)
+      // nom+ville : clé `${enseigne normalisée}|${ville normalisée}`. Symétrie
+      // voulue avec cle_nom côté société (normaliserSociete(enseigne||raison)) —
+      // row.nom OSM = tag `name` = enseigne. Clé construite SEULEMENT si nom ET
+      // ville présents ('' sinon → push l'ignore : "a|" ou "|b" seraient truthy).
+      const nomN = normaliserSociete(row.nom)
+      const cityN = normText(row.city)
+      push(idx.byNomVille, nomN && cityN ? `${nomN}|${cityN}` : '', row)
     }
     return idx
   } catch (e) {

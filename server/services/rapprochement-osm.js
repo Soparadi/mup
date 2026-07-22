@@ -13,7 +13,7 @@
 
 import { getDb } from '../../lib/surreal.js'
 import { normaliserTel } from '../../lib/import.js'
-import { normaliserSociete } from '../../lib/societes.js'
+import { normaliserSociete, normaliserVoie, comparerNumero } from '../../lib/societes.js'
 import { corroborerSiret, normText, DEPT_BBOX } from './overpass.js'
 import { enrichReferentielActionnable } from './referentiel.js'
 
@@ -143,7 +143,7 @@ function mapperOsmVersContrat(osm) {
 //   • sinon ≥2 signaux faibles INDÉPENDANTS concordant sur une MÊME ligne OSM
 //     parmi {domaine, tel, email, nom+ville} → PRÉSUMÉ.
 //   • 1 signal faible isolé → null (REJET, rien écrit).
-function trouverMatch(soc, idx) {
+function trouverMatch(soc, idx, graine = null) {
   const siret = str(soc.siret).replace(/\s+/g, '')
   const siren = str(soc.siren).replace(/\s+/g, '') || (siret ? siret.slice(0, 9) : '')
 
@@ -169,6 +169,11 @@ function trouverMatch(soc, idx) {
       e.signaux.add(signal)
     }
   }
+  // GRAINE ADRESSE (L2) : ligne OSM nom+ville+CP concordante pré-injectée comme UN
+  // signal faible, AVANT les votes domaine/tel/email/nomville. Elle n'atteint
+  // 'presume' que si le faisceau y ajoute un 2e signal DISTINCT — le seuil ≥2 reste
+  // inchangé. graine=null (appel sans 3e arg) → no-op : comportement byte-équivalent.
+  if (graine) voter([graine], 'adresse')
   const domaine = normaliserDomaine(soc.website)
   if (domaine) voter(idx.byDomaine.get(domaine), 'domaine')
   const tel = normaliserTel(soc.societe_tel)
@@ -196,6 +201,45 @@ function trouverMatch(soc, idx) {
   return best ? { osm: best.osm, certitude: 'presume' } : null
 }
 
+// Sonde l'ADRESSE d'une société contre byNomVille (mêmes nom+ville OSM) et affine
+// par CP / voie / numéro. Retourne :
+//   { niveau:'L3', osm } → CERTAIN (CP + voie + numéro concordants) : écrit direct.
+//   { niveau:'L2', osm } → PRÉSUMÉ (CP concordant seul) : injecté AU faisceau (1 signal).
+//   null                 → L1 (nom+ville seuls) ou aucun candidat → rejet.
+// Clé de sonde symétrique de byNomVille : cle_nom persisté, repli à la volée en
+// normaliserSociete(enseigne||raison) si NONE ; ville = libellé (normText), pas INSEE.
+// ABSTENTION : ≥2 candidats L3 aux CONTACTS divergents → null (jamais de faux positif
+// figé à vie ; le faisceau SIRET/SIREN peut encore trancher). PUR (lecture des Map).
+function sonderAdresse(soc, idx) {
+  const cleNomSoc = str(soc.cle_nom) || normaliserSociete(soc.enseigne || soc.raison_sociale)
+  const villeN = normText(soc.ville)
+  if (!cleNomSoc || !villeN) return null
+  const rows = idx.byNomVille.get(`${cleNomSoc}|${villeN}`)
+  if (!rows || !rows.length) return null
+
+  const cpSoc = str(soc.code_postal)
+  const voieSoc = normaliserVoie(soc.type_voie, soc.libelle_voie)
+
+  const l3 = []
+  let l2 = null
+  for (const osm of rows) {
+    // CP concordant = plancher de l'affinage : sans lui, nom+ville seuls = L1 (rejet).
+    if (!cpSoc || cpSoc !== str(osm.postcode)) continue
+    const voieOk = voieSoc && normaliserVoie('', osm.street) === voieSoc
+    if (voieOk && comparerNumero(soc.numero_voie, osm.housenumber)) l3.push(osm)
+    else if (!l2) l2 = osm   // CP seul concordant → 1er candidat présumé mémorisé
+  }
+
+  if (l3.length) {
+    // Empreinte contact PURE (mapperOsmVersContrat, aucun I/O) : deux lignes L3 à
+    // l'adresse exacte mais aux contacts DIFFÉRENTS = ambiguïté → abstention.
+    const empreintes = new Set(l3.map(o => JSON.stringify(mapperOsmVersContrat(o))))
+    if (empreintes.size > 1) return null   // ambigu : jamais de faux positif figé
+    return { niveau: 'L3', osm: l3[0] }
+  }
+  return l2 ? { niveau: 'L2', osm: l2 } : null
+}
+
 // Rapproche toutes les sociétés d'un département avec la réserve OSM et enrichit
 // referentiel_societes en fill-if-empty (jamais d'écrasement). LECTURE SEULE de
 // referentiel_osm. Enrichissement SÉQUENTIEL : on ATTEND chaque écriture avant de
@@ -206,7 +250,7 @@ function trouverMatch(soc, idx) {
 // + log de synthèse. NON BRANCHÉ au boot : piloté à la main sur un département d'abord.
 export async function rapprocherDepartement(dept) {
   const d = str(dept)
-  const compteurs = { traitees: 0, certain: 0, presume: 0, rejet: 0, champs_ecrits: 0 }
+  const compteurs = { traitees: 0, certain: 0, presume: 0, rejet: 0, champs_ecrits: 0, certain_adresse: 0, presume_adresse: 0 }
   if (!d) {
     console.warn('[rapprochement-osm] département vide — rien à faire')
     return compteurs
@@ -240,7 +284,19 @@ export async function rapprocherDepartement(dept) {
   for (const soc of societes) {
     compteurs.traitees++
     try {
-      const match = trouverMatch(soc, idx)
+      // Passe ADRESSE d'abord. L3 = écriture certaine directe (faisceau court-circuité) ;
+      // L2 = graine injectée au faisceau (un signal) ; L1/rien = trouverMatch inchangé.
+      const adr = sonderAdresse(soc, idx)
+      if (adr && adr.niveau === 'L3') {
+        compteurs.certain_adresse++
+        const champsL3 = mapperOsmVersContrat(adr.osm)
+        compteurs.champs_ecrits += Object.values(champsL3).filter(Boolean).length
+        await enrichReferentielActionnable(str(soc.siret).replace(/\s+/g, ''), champsL3)
+        continue   // adresse exacte tranche seule : le faisceau ne tourne pas
+      }
+      const graine = adr && adr.niveau === 'L2' ? adr.osm : null
+      if (graine) compteurs.presume_adresse++
+      const match = trouverMatch(soc, idx, graine)
       if (!match) { compteurs.rejet++; continue }
       if (match.certitude === 'certain') compteurs.certain++
       else compteurs.presume++
@@ -260,7 +316,8 @@ export async function rapprocherDepartement(dept) {
   console.log(
     `[rapprochement-osm] dept ${d} — ${compteurs.traitees} sociétés · ` +
     `${compteurs.certain} certain · ${compteurs.presume} présumé · ` +
-    `${compteurs.rejet} rejet · ${compteurs.champs_ecrits} champs dispatchés`
+    `${compteurs.rejet} rejet · ${compteurs.champs_ecrits} champs dispatchés · ` +
+    `${compteurs.certain_adresse} certain(adr) · ${compteurs.presume_adresse} présumé(adr)`
   )
   return compteurs
 }

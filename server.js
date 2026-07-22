@@ -2185,6 +2185,14 @@ app.get('/api/search', async (req, res) => {
       data.results = data.results.filter(f => keepLead(f, ctx))
       console.log(`[search] page=${req.query.page || 1} brut=${brut} garde=${data.results.length}`)
     }
+    // servedSiret — SIRET de l'établissement servi par fiche (matching[0], repli
+    // siège), normalisé. Fonction PURE (n'utilise que r / Array / String) : hissée
+    // ici pour être partagée par le TRI DE SERVICE et la jointure dev, sans dépendre
+    // du scope de l'un ou l'autre bloc.
+    const servedSiret = r => {
+      const m = Array.isArray(r?.matching_etablissements) ? r.matching_etablissements : []
+      return String((m[0] && m[0].siret) || (r?.siege && r.siege.siret) || '').replace(/\s+/g, '')
+    }
     // ══════════════════════════════════════════════════════════════════════
     // JOINTURE TEMPORAIRE DE DÉVELOPPEMENT — À RETIRER AVANT LANCEMENT.
     // Le paywall repose sur l'ABSENCE de ces champs à la recherche : /api/search
@@ -2198,12 +2206,6 @@ app.get('/api/search', async (req, res) => {
     // avalé, la réponse part sans contacts. À SUPPRIMER avant le paywall.
     if (Array.isArray(data.results) && data.results.length) {
       try {
-        // SIRET de l'établissement servi par fiche (matching[0], repli siège) —
-        // même clé que upsertReferentiel / le record referentiel_societes.
-        const servedSiret = r => {
-          const m = Array.isArray(r?.matching_etablissements) ? r.matching_etablissements : []
-          return String((m[0] && m[0].siret) || (r?.siege && r.siege.siret) || '').replace(/\s+/g, '')
-        }
         const uniq = [...new Set(data.results.map(servedSiret).filter(Boolean))]
         if (uniq.length) {
           const db = await getDb()
@@ -2232,6 +2234,53 @@ app.get('/api/search', async (req, res) => {
       }
     }
     // ═══════════════════════ FIN JOINTURE TEMPORAIRE ═══════════════════════
+    // ── Tri de service — INDÉPENDANT du bloc de fuite ci-dessus ──
+    // Réordonne les fiches par le triplet [rangDirect, site?, linkedin?], où
+    // rangDirect (clé primaire) est le socle de COORDONNÉES DIRECTES lu en base :
+    //   0 = mail ET tél · 1 = mail seul · 2 = tél seul · 3 = ni l'un ni l'autre.
+    // À triplet égal, l'ordre Etalab est préservé (Array.prototype.sort stable, V8).
+    // Lecture PROPRE au tri (getDb + SELECT dédié) : ce bloc survit à la suppression
+    // du bloc de fuite. Fail-open : tout échec laisse data.results dans l'ordre Etalab.
+    // RIEN de nouveau sérialisé — on ne fait que réordonner ; aucun rang / flag /
+    // has_contact / linkedin n'est écrit sur les fiches. Map de tri strictement locale.
+    if (Array.isArray(data.results) && data.results.length) {
+      try {
+        const uniq = [...new Set(data.results.map(servedSiret).filter(Boolean))]
+        const flags = new Map() // siret -> { email:bool, tel:bool, site:bool, linkedin:bool }
+        if (uniq.length) {
+          const db = await getDb()
+          const qr = await db.query(
+            'SELECT siret, societe_email, societe_tel, website, societe_linkedin FROM referentiel_societes WHERE siret IN $sirets',
+            { sirets: uniq }
+          )
+          for (const row of (qr && qr[0]) || []) {
+            const k = typeof row?.siret === 'string' ? row.siret.trim() : ''
+            if (!k) continue
+            const email = typeof row.societe_email === 'string' && row.societe_email.trim() !== ''
+            const tel = typeof row.societe_tel === 'string' && row.societe_tel.trim() !== ''
+            const site = typeof row.website === 'string' && row.website.trim() !== ''
+            const linkedin = typeof row.societe_linkedin === 'string' && row.societe_linkedin.trim() !== ''
+            flags.set(k, { email, tel, site, linkedin })
+          }
+        }
+        // Triplet local par fiche — décoré une fois, jamais recalculé dans le comparateur.
+        // rangDirect vient EXCLUSIVEMENT des coordonnées lues en base (jamais de
+        // matching_etablissements). Siret absent de flags → [3,1,1] (tout en bas).
+        const rankOf = r => {
+          const f = flags.get(servedSiret(r))
+          if (!f) return [3, 1, 1]
+          const rangDirect = (f.email && f.tel) ? 0 : f.email ? 1 : f.tel ? 2 : 3
+          return [rangDirect, f.site ? 0 : 1, f.linkedin ? 0 : 1]
+        }
+        const rk = new Map(data.results.map(r => [r, rankOf(r)]))
+        data.results.sort((a, b) => {
+          const ra = rk.get(a), rb = rk.get(b)
+          return (ra[0] - rb[0]) || (ra[1] - rb[1]) || (ra[2] - rb[2])
+        })
+      } catch (e) {
+        console.warn('[search:sort-service]', String(e?.message || e).slice(0, 80))
+      }
+    }
     res.json(data)
     // Fire-and-forget : alimentation du référentiel entreprises mutualisé
     // (socle Etalab). Lancé APRÈS res.json, sans await — même modèle que

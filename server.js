@@ -1011,6 +1011,74 @@ app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
   }
 })
 
+// ── POST /api/admin/referentiel/backfill-clenom — À RETIRER AVANT LANCEMENT.
+// Backfill one-shot de cle_nom sur le stock referentiel_societes existant
+// (étape 2/3). Même verrou que /api/admin/comptes et /api/debug/overpass
+// (requireSuperadmin, dev@soparadi.com SEUL, req.authUser posé par le gate
+// global). Déclenché À LA MAIN après merge (Railway), JAMAIS au boot (bloquerait
+// le démarrage + rejeu à chaque redéploiement).
+//
+// normaliserSociete est du JS pur (NFD + strip suffixes) inexprimable en SurrealQL
+// (et string::replace non fiable sous 2.6.5, cf. overpass) → lire→normaliser→réécrire
+// par lots. Contrainte mémoire movup-prod (1 GB) : projection LÉGÈRE (id, enseigne,
+// raison_sociale — JAMAIS etablissements[]/dirigeants[]), lot 500, cadence inter-lots.
+//
+// IDEMPOTENCE : curseur = WHERE cle_nom = NONE. On écrit TOUJOURS (même cle = ''),
+// donc une ligne traitée quitte l'ensemble NONE → une reprise saute ce qui est fait
+// et la boucle termine (raison sociale « SARL » seule → '' est un état terminal, pas
+// un NONE qui rebouclerait). Bornage ?batches=N (défaut 20, max 50) pour tenir sous
+// le timeout Railway ; l'appelant relance jusqu'à restant = 0.
+app.post('/api/admin/referentiel/backfill-clenom', requireSuperadmin, async (req, res) => {
+  const BATCH = 500
+  const maxBatches = Math.min(50, Math.max(1, Number(req.query.batches) || 20))
+  // count final optionnel : count() filtré GROUP ALL est sûr (même classe que
+  // /api/debug/overpass), mais ?count=0 permet de le sauter par prudence.
+  const withCount = String(req.query.count ?? '1') !== '0'
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  try {
+    const db = await getDb()
+    let traite = 0
+    let lots = 0
+    for (; lots < maxBatches; lots++) {
+      // Projection LÉGÈRE (pas d'arrays lourds). Curseur cle_nom = NONE, ORDER BY
+      // siret adossé à idx_ref_siret UNIQUE → walk indexé, pas de sort global.
+      const r = await db.query(
+        `SELECT id, enseigne, raison_sociale FROM referentiel_societes
+         WHERE cle_nom = NONE ORDER BY siret LIMIT ${BATCH}`
+      )
+      const rows = r[0] || []
+      if (rows.length === 0) break   // plus rien à traiter
+      for (const row of rows) {
+        // COALESCE enseigne || raison_sociale, normalisé en JS pur.
+        const cle = normaliserSociete(row.enseigne || row.raison_sociale || '')
+        // Idiome dominant ET éprouvé en prod (server.js:263/897/1331…) : type::record
+        // avec l'id extrait via cleanRecordId — strip le préfixe 'referentiel_societes:'
+        // ET les chevrons ⟨⟩ dont SurrealDB entoure un id purement numérique (le SIRET).
+        // Même helper que la création de ces records (referentiel.js:308) → symétrie.
+        const id = cleanRecordId('referentiel_societes', String(row.id))
+        if (!id) continue
+        // Écriture TOUJOURS (même '') → la ligne quitte l'ensemble NONE (terminaison).
+        await db.query('UPDATE type::record("referentiel_societes", $id) SET cle_nom = $cle', { id, cle })
+        traite++
+      }
+      if (rows.length < BATCH) { lots++; break }   // dernier lot partiel : inutile de re-SELECT
+      await sleep(300)   // cadence : ménage le 1 GB partagé avec le trafic live
+    }
+    // restant : count() filtré (PAS un agrégat lourd), optionnel via ?count=0.
+    let restant = null
+    if (withCount) {
+      const c = await db.query(
+        'SELECT count() FROM referentiel_societes WHERE cle_nom = NONE GROUP ALL'
+      )
+      restant = Number(c?.[0]?.[0]?.count) || 0
+    }
+    res.json({ traite, lots, restant })
+  } catch (err) {
+    console.error('[backfill-clenom]', err.message)
+    res.status(500).json({ error: 'Backfill cle_nom impossible' })
+  }
+})
+
 app.get('/api/pipeline', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return

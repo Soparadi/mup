@@ -990,6 +990,18 @@ app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
       }
     }
 
+    // Échantillon cle_nom — contrôle de visu AVANT backfill des restantes.
+    // Projection légère (siret, enseigne, raison_sociale, cle_nom) sur les 10
+    // premières fiches traitées, pour vérifier à l'œil que
+    // cle_nom = normaliserSociete(enseigne || raison_sociale) : enseigne
+    // prioritaire, repli raison sociale. Prédicat STRICT `!= NONE` (pas nonVide)
+    // exprès : on veut VOIR les cle_nom = '' (raison sociale réduite à vide après
+    // strip des suffixes) — les masquer cacherait un éventuel problème sur ces cas.
+    const echClenomR = await db.query(
+      `SELECT siret, enseigne, raison_sociale, cle_nom FROM referentiel_societes WHERE cle_nom != NONE LIMIT 10`
+    )
+    const echantillonClenom = Array.isArray(echClenomR?.[0]) ? echClenomR[0] : []
+
     res.json({
       total: cnt(totalR[0]),
       avec_website: cnt(webR[0]),
@@ -1003,6 +1015,7 @@ app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
         website_sans_email: cnt(gisSansMailR[0]),
         website_sans_tel: cnt(gisSansTelR[0])
       },
+      echantillon_clenom: echantillonClenom,
       ...(couple ? { couple } : {})
     })
   } catch (err) {

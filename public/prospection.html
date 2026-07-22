@@ -1995,6 +1995,22 @@ function plmArrOptions(code, nomVille) {
   return html;
 }
 
+// Communes sans arrondissement INSEE mais à plusieurs codes postaux (Bordeaux,
+// Toulouse, Nantes…) : un code_commune unique sature le seuil Etalab (502 sur gros
+// gisement mono-commune). On les découpe par code postal — chaque CP borne le
+// gisement sous le seuil. Étiquette ville inerte (comme PLM) + une sous-option par
+// CP, value cp:<cp>:<insee> routée en code_postal serveur, zoom sur la commune
+// parente INSEE. Critère générique : codesPostaux.length > 1 (aucune table en dur).
+function cpSubOptions(c) {
+  var cps = c && c.codesPostaux;
+  if (!Array.isArray(cps) || cps.length <= 1) return null;
+  var html = '<option value="" disabled>' + esc(c.nom) + '</option>';
+  cps.slice().sort().forEach(function(cp) {
+    html += '<option value="cp:' + cp + ':' + c.code + '">' + esc(c.nom + ' ' + cp) + '</option>';
+  });
+  return html;
+}
+
 async function populateVilleSelect(dept) {
   var sel = document.getElementById('sel-ville');
   // Ville optionnelle : « Toutes les villes » (value "") = pas de filtre, sélectionnable.
@@ -2007,10 +2023,14 @@ async function populateVilleSelect(dept) {
     var html = '<option value="" disabled selected>Sélectionner</option>'
              + (isPLM ? '' : '<option value="">Toutes les villes</option>');
     communes.forEach(function(c) {
-      // Ville PLM : étiquette non sélectionnable + arrondissements. Sinon option normale.
+      // Priorité : PLM (arrondissements INSEE) testé en premier — Paris/Lyon/Marseille
+      // gardent leurs arrondissements, jamais la branche CP. Puis découpage multi-CP
+      // (étiquette ville inerte + sous-options par code postal). Sinon option normale.
       var plm = plmArrOptions(c.code, c.nom);
-      html += plm !== null ? plm
-                           : '<option value="' + c.code + '">' + esc(c.nom) + '</option>';
+      if (plm !== null) { html += plm; return; }
+      var cp = cpSubOptions(c);
+      html += cp !== null ? cp
+                          : '<option value="' + c.code + '">' + esc(c.nom) + '</option>';
     });
     sel.innerHTML = html;
   }
@@ -2018,7 +2038,7 @@ async function populateVilleSelect(dept) {
   if (DEPT_COMMUNES_CACHE[dept]) { render(DEPT_COMMUNES_CACHE[dept]); return; }
   try {
     var url = 'https://geo.api.gouv.fr/communes?codeDepartement=' + encodeURIComponent(dept)
-            + '&fields=nom,code,population&format=json';
+            + '&fields=nom,code,population,codesPostaux&format=json';
     var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var arr = await r.json();
@@ -2168,6 +2188,9 @@ async function applyMapZoom() {
 
   if (ville) {
     var villeCode = ville;   // sel-ville.value EST le code INSEE (peuplé via geo.api)
+    // Sous-option multi-CP (value cp:<cp>:<insee>) → zoom sur la commune parente INSEE.
+    var cpZoom = /^cp:[^:]+:(.+)$/.exec(ville);
+    if (cpZoom) villeCode = cpZoom[1];
     if (villeCode) {
       var res = await fetchCommuneBounds(villeCode);
       if (res && res.type === 'bounds') {
@@ -2259,6 +2282,11 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     // sel-ville.value EST le code INSEE (peuplé via geo.api) → poussé tel quel en
     // code_commune, filtre serveur exact. Plus de résolution libellé→code côté client.
     var villeCodeFb = (document.getElementById('sel-ville')?.value || '').trim();
+    // Sous-option multi-CP (value cp:<cp>:<insee>) → route en code_postal upstream ;
+    // sinon la value EST le code INSEE → code_commune. Filtre serveur exact.
+    var cpFb = /^cp:([^:]+):(.+)$/.exec(villeCodeFb);
+    var villeCP = cpFb ? cpFb[1] : '';
+    var villeINSEE = cpFb ? '' : villeCodeFb;
     // Labels lisibles pour le tracking serveur (table lead_search)
     var regionEl = document.getElementById('sel-region');
     var regionName = (regionEl && regionEl.options[regionEl.selectedIndex]) ? regionEl.options[regionEl.selectedIndex].text.trim() : '';
@@ -2272,7 +2300,8 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       + (regionName ? '&region_name=' + encodeURIComponent(regionName) : '')
       // Filtres geo natifs recherche-entreprises (poussés upstream)
       + (deptFb ? '&departement=' + encodeURIComponent(deptFb) : '')
-      + (villeCodeFb ? '&code_commune=' + encodeURIComponent(villeCodeFb) : '')
+      + (villeINSEE ? '&code_commune=' + encodeURIComponent(villeINSEE) : '')
+      + (villeCP ? '&code_postal=' + encodeURIComponent(villeCP) : '')
       // Aliases lisibles pour tracking/historique (lus côté serveur, pas upstream)
       + (deptFb ? '&code_departement=' + encodeURIComponent(deptFb) : '')
       + (deptName ? '&department_name=' + encodeURIComponent(deptName) : '')

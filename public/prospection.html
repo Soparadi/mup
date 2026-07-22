@@ -2581,6 +2581,29 @@ function createCard(lead, idx) {
 // si <25 dans la dernière).
 var FETCH_MAX_PAGES = 3;
 
+// Retry borné d'UN fetch upstream (même page, même CP courant via S.cpIdx).
+// Enveloppe UNIQUEMENT l'appel réseau : un 502/429 Etalab n'est pas une fin de
+// gisement. Séquentiel (une seule requête en vol), backoff 800/1600/3200 ms +
+// jitter ±20 %. Sur épuisement des tentatives : relance la dernière erreur —
+// l'appelant décide (loadPage : catch/showError). Miroir front du retry inline
+// de loadMore (duplication assumée : loadMore reste byte-identique à 8ca7f04).
+async function fetchLeadsWithRetry(naf, nafLabel, region, page, pageSize, onlyComplete) {
+  var RETRY_BACKOFF = [800, 1600, 3200];
+  var attempt = 0;
+  while (true) {
+    try {
+      return await fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete);
+    } catch (fe) {
+      if (attempt >= RETRY_BACKOFF.length) throw fe;
+      console.warn('[Prospect] fetch page '+page+' échec ('+fe.message+'), retry '+(attempt+1)+'/'+RETRY_BACKOFF.length);
+      // Backoff séquentiel + jitter ±20 % : désynchronise du rythme Etalab.
+      var backoff = RETRY_BACKOFF[attempt] * (0.8 + Math.random() * 0.4);
+      await sleep(Math.round(backoff));
+      attempt++;
+    }
+  }
+}
+
 async function loadPage(page) {
   if(S.loading) return;
 
@@ -2636,7 +2659,7 @@ async function loadPage(page) {
         var cps = c && c.codesPostaux;
         if (Array.isArray(cps) && cps.length > 1) { S.cpList = cps.slice().sort(); S.cpIdx = 0; }
       })();
-      var firstResp = await fetchLeads(loadNaf, loadNafLabel, loadRegion, 1, PAGE_SIZE, S.onlyComplete);
+      var firstResp = await fetchLeadsWithRetry(loadNaf, loadNafLabel, loadRegion, 1, PAGE_SIZE, S.onlyComplete);
       // ── STALE GUARD: NAF or region changed mid-fetch → discard
       if(loadNaf !== selectedNAFCode || loadRegion !== S.region) {
         console.warn('[Prospect] Stale fetch discarded. Loaded for "'+loadNaf+'" but current is "'+selectedNAFCode+'"');

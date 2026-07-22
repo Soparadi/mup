@@ -88,7 +88,8 @@ async function chargerOsmDepuisDb(bbox) {
     const db = await getDb()
     const r = await db.query(
       'SELECT osm_id, nom, siret, siren, phone, email, website, ' +
-      'facebook, instagram, linkedin, city FROM referentiel_osm ' +
+      'facebook, instagram, linkedin, city, housenumber, street, postcode ' +
+      'FROM referentiel_osm ' +
       'WHERE lat >= $latMin AND lat <= $latMax AND lng >= $lonMin AND lng <= $lonMax',
       { latMin, latMax, lonMin, lonMax }
     )

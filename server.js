@@ -1043,7 +1043,7 @@ app.post('/api/admin/referentiel/backfill-clenom', requireSuperadmin, async (req
       // Projection LÉGÈRE (pas d'arrays lourds). Curseur cle_nom = NONE, ORDER BY
       // siret adossé à idx_ref_siret UNIQUE → walk indexé, pas de sort global.
       const r = await db.query(
-        `SELECT id, enseigne, raison_sociale FROM referentiel_societes
+        `SELECT id, siret, enseigne, raison_sociale FROM referentiel_societes
          WHERE cle_nom = NONE ORDER BY siret LIMIT ${BATCH}`
       )
       const rows = r[0] || []

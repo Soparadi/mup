@@ -2125,6 +2125,16 @@ app.get('/api/search', async (req, res) => {
   if(req.query.page) params.set('page', req.query.page)
   try {
     const r = await fetch('https://recherche-entreprises.api.gouv.fr/search?' + params.toString())
+    // Garde non-ok : sur 429 (rate-limit) ou 5xx, Etalab renvoie un corps d'erreur
+    // SANS `results`. Le parser puis le servir en 200 le fait passer pour une page
+    // vide côté front → armement du fallback resp2 (2e appel Etalab sur une API déjà
+    // saturée). On relaie ici un échec PROPRE (non-2xx) : le front throw sur resp.ok
+    // == false AVANT le test resp2, et laisse le retry cadencé (fetchLeadsWithRetry /
+    // loadMore, backoff + jitter) gérer. Doctrine « ne jamais saturer ».
+    if (!r.ok) {
+      console.warn('[search] Etalab non-ok status=' + r.status + ' page=' + (req.query.page || 1))
+      return res.status(502).json({ error: 'Service temporairement indisponible', upstream_status: r.status })
+    }
     const data = await r.json()
     // Filtre qualité : on retire les fiches non-prospectables (sans dirigeant,
     // cessées, ou nature juridique exclue — SCI/organismes publics/droit

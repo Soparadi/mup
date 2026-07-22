@@ -1997,19 +1997,12 @@ function plmArrOptions(code, nomVille) {
 
 // Communes sans arrondissement INSEE mais à plusieurs codes postaux (Bordeaux,
 // Toulouse, Nantes…) : un code_commune unique sature le seuil Etalab (502 sur gros
-// gisement mono-commune). On les découpe par code postal — chaque CP borne le
-// gisement sous le seuil. Étiquette ville inerte (comme PLM) + une sous-option par
-// CP, value cp:<cp>:<insee> routée en code_postal serveur, zoom sur la commune
-// parente INSEE. Critère générique : codesPostaux.length > 1 (aucune table en dur).
-function cpSubOptions(c) {
-  var cps = c && c.codesPostaux;
-  if (!Array.isArray(cps) || cps.length <= 1) return null;
-  var html = '<option value="" disabled>' + esc(c.nom) + '</option>';
-  cps.slice().sort().forEach(function(cp) {
-    html += '<option value="cp:' + cp + ':' + c.code + '">' + esc(c.nom + ' ' + cp) + '</option>';
-  });
-  return html;
-}
+// gisement mono-commune). Côté menu, RIEN ne change pour l'abonné : une seule
+// entrée Ville (value INSEE). Le découpage par code postal est INVISIBLE — opéré
+// au déroulement par un walker (cpList/cpIdx, cf. loadPage/loadMore/fetchLeads) qui
+// enchaîne en silence une recherche par CP, chaque CP bornant sa tranche sous le
+// seuil. Aucune sous-option dans le menu. codesPostaux reste chargé (geo.api +
+// DEPT_COMMUNES_CACHE) car le walker en a besoin.
 
 async function populateVilleSelect(dept) {
   var sel = document.getElementById('sel-ville');
@@ -2024,13 +2017,12 @@ async function populateVilleSelect(dept) {
              + (isPLM ? '' : '<option value="">Toutes les villes</option>');
     communes.forEach(function(c) {
       // Priorité : PLM (arrondissements INSEE) testé en premier — Paris/Lyon/Marseille
-      // gardent leurs arrondissements, jamais la branche CP. Puis découpage multi-CP
-      // (étiquette ville inerte + sous-options par code postal). Sinon option normale.
+      // gardent leurs arrondissements. Sinon option normale (value INSEE). Une commune
+      // multi-CP (Bordeaux…) reste une entrée Ville unique : son découpage par code
+      // postal est invisible et opéré au déroulement (walker cpList/cpIdx).
       var plm = plmArrOptions(c.code, c.nom);
       if (plm !== null) { html += plm; return; }
-      var cp = cpSubOptions(c);
-      html += cp !== null ? cp
-                          : '<option value="' + c.code + '">' + esc(c.nom) + '</option>';
+      html += '<option value="' + c.code + '">' + esc(c.nom) + '</option>';
     });
     sel.innerHTML = html;
   }
@@ -2287,6 +2279,10 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     var cpFb = /^cp:([^:]+):(.+)$/.exec(villeCodeFb);
     var villeCP = cpFb ? cpFb[1] : '';
     var villeINSEE = cpFb ? '' : villeCodeFb;
+    // Walker multi-CP invisible : la tranche courante (S.cpList[S.cpIdx]) impose le
+    // code postal upstream et neutralise le filtre code_commune. Hors multi-CP
+    // (cpList null : PLM, mono-CP), la value du menu (INSEE) route en code_commune.
+    if (S.cpList && S.cpList[S.cpIdx]) { villeCP = S.cpList[S.cpIdx]; villeINSEE = ''; }
     // Labels lisibles pour le tracking serveur (table lead_search)
     var regionEl = document.getElementById('sel-region');
     var regionName = (regionEl && regionEl.options[regionEl.selectedIndex]) ? regionEl.options[regionEl.selectedIndex].text.trim() : '';
@@ -2624,6 +2620,22 @@ async function loadPage(page) {
     //    fetchées, S.loaded = cartes rendues. INSEE ramène ~1000/fetch (le
     //    scroll révèle le buffer), Etalab 25/fetch (le scroll re-fetch, cadencé).
     if(isFirstPage) {
+      // ── Walker multi-CP invisible : la commune sélectionnée (value INSEE) porte
+      //    >1 code postal → on déroule EN SILENCE une recherche par code postal.
+      //    PLM (arrondissement : INSEE absent de DEPT_COMMUNES_CACHE) et communes
+      //    mono-CP → cpList null → comportement strictement inchangé. Posé AVANT le
+      //    fetch : la page 1 du 1er CP passe déjà par S.cpList[0] dans fetchLeads.
+      S.cpList = null; S.cpIdx = 0;
+      (function initCpWalker() {
+        var vcode = (document.getElementById('sel-ville')?.value || '').trim();
+        var vdept = (document.getElementById('sel-dept')?.value || '').trim();
+        if (!vcode || !vdept) return;
+        var communes = DEPT_COMMUNES_CACHE[vdept];
+        if (!Array.isArray(communes)) return;
+        var c = communes.find(function(x){ return x.code === vcode; });
+        var cps = c && c.codesPostaux;
+        if (Array.isArray(cps) && cps.length > 1) { S.cpList = cps.slice().sort(); S.cpIdx = 0; }
+      })();
       var firstResp = await fetchLeads(loadNaf, loadNafLabel, loadRegion, 1, PAGE_SIZE, S.onlyComplete);
       // ── STALE GUARD: NAF or region changed mid-fetch → discard
       if(loadNaf !== selectedNAFCode || loadRegion !== S.region) {
@@ -2663,7 +2675,11 @@ async function loadPage(page) {
       // Page 1 : une page vide dès le premier fetch = gisement vide (vraie recherche
       // sans résultat) → arrêt immédiat, on n'applique PAS le streak au tout premier
       // fetch (le tolérer ferait boucler une recherche à 0 résultat).
-      S.upstreamExhausted = (firstResp.rawCount === 0) || (S.buffer.length >= S.market);
+      // Multi-CP : jamais de fin sur la page 1 du 1er CP (il en reste à dérouler).
+      // Le terminateur upstreamExhausted n'est posé qu'à l'épuisement du DERNIER CP
+      // (cf. loadMore). Mono-CP/PLM : fin de flux sur page vide ou marché atteint.
+      S.upstreamExhausted = S.cpList ? false
+        : ((firstResp.rawCount === 0) || (S.buffer.length >= S.market));
       // Scéno B1 : invalide toute boucle auto-roll d'une recherche précédente
       // (token gen) et réinitialise la convergence du compteur marché.
       S.autoRoll.gen++; S.autoRoll.active = false; S.autoRoll.ceiling = 0;
@@ -2779,7 +2795,7 @@ function dedupNewBySiren(items) {
 
 async function loadMore() {
   if(S.loading) return;
-  if(S.loaded >= S.market) return;               // tout le marché est rendu
+  if(!S.cpList && S.loaded >= S.market) return;  // mono-CP : marché rendu (multi-CP : fin sur upstreamExhausted)
   // Buffer non épuisé → simple révélation, ZÉRO appel API.
   if(S.loaded < S.buffer.length) {
     renderChunk(PAGE_SIZE);
@@ -2832,6 +2848,13 @@ async function loadMore() {
       return;
     }
     S.upstreamPage = wantPage;   // incrément SEULEMENT sur succès (jamais de page re-tapée)
+    // Multi-CP : le total de chaque CP s'ajoute au marché à l'arrivée de sa page 1
+    // (wantPage===1 = page 1 d'un CP enchaîné par le walker, upstreamPage remis à 0
+    // à l'avance). Le CP initial a déjà alimenté S.market dans loadPage → marché
+    // cumulé sur toutes les tranches, sans jamais toucher au KPI en cours de CP.
+    if (S.cpList && wantPage === 1 && dp && Number.isFinite(Number(dp.total))) {
+      S.market += Number(dp.total);
+    }
     var pageItems = (dp && dp.items) ? dp.items : [];
     // ── BARRIER 2 sur la page upstream
     var keptItems = pageItems.filter(function(it) {
@@ -2851,13 +2874,28 @@ async function loadMore() {
     //     doctrine que le serveur (batchNew===0 = gisement épuisé). Toute page
     //     apportant du neuf REMET le streak à 0 → trou/doublon isolé absorbé.
     //     Garantit la terminaison même si S.market (estimé) n'est jamais atteint.
+    var streamDone = false;
     if(S.buffer.length >= S.market) {
-      S.upstreamExhausted = true;
+      streamDone = true;
     } else if(dp.rawCount === 0 || batchNew === 0) {
       S.emptyStreak++;
-      if(S.emptyStreak >= EMPTY_STREAK_MAX) S.upstreamExhausted = true; // vraie fin
+      if(S.emptyStreak >= EMPTY_STREAK_MAX) streamDone = true;   // fin de la tranche
     } else {
       S.emptyStreak = 0;   // page apportant du neuf → trou/doublon absorbé
+    }
+    if(streamDone) {
+      if(S.cpList && S.cpIdx < S.cpList.length - 1) {
+        // CP courant épuisé, il en reste : on enchaîne EN SILENCE sur le CP suivant.
+        // upstreamPage remis à 0 → le prochain fetch est la page 1 du nouveau CP
+        // (dont le total grossira S.market). Buffer cumulé, dédup SIREN inchangée ;
+        // upstreamExhausted N'EST PAS posé tant qu'il reste un CP.
+        S.cpIdx++;
+        S.upstreamPage = 0;
+        S.emptyStreak = 0;
+      } else {
+        // Mono-CP, PLM, ou DERNIER CP épuisé → vraie fin du déroulement.
+        S.upstreamExhausted = true;
+      }
     }
     // S.market reste figé sur firstResp — on ne touche pas au KPI marché.
     renderChunk(PAGE_SIZE);
@@ -2900,7 +2938,7 @@ async function runAutoRoll() {
   try {
     while (S.autoRoll.active && myGen === S.autoRoll.gen && !document.hidden) {
       var market  = _displayMarket();
-      if (S.loaded >= market)  break;       // marché atteint → fin (déroulement continu, plus de palier)
+      if (!S.cpList && S.loaded >= market)  break;   // mono-CP : marché atteint → fin (multi-CP : fin sur upstreamExhausted)
       if (S.loaded < S.buffer.length) {
         renderChunk(PAGE_SIZE);             // révélation pure du buffer — zéro appel API
         await sleep(AUTOROLL_MS);

@@ -923,6 +923,8 @@ app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
   const vide = (f) => `(${f} = NONE OR ${f} = '')`
   const auMoinsUn =
     `(${nonVide('website')}) OR (${nonVide('societe_tel')}) OR (${nonVide('societe_email')})`
+  const lesTrois =
+    `(${nonVide('website')}) AND (${nonVide('societe_tel')}) AND (${nonVide('societe_email')})`
   const cnt = (rows) => (Array.isArray(rows) && rows[0] && typeof rows[0].count === 'number') ? rows[0].count : 0
   try {
     const db = await getDb()
@@ -1002,6 +1004,24 @@ app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
     )
     const echantillonClenom = Array.isArray(echClenomR?.[0]) ? echClenomR[0] : []
 
+    // Comptage de complétude — LECTURE SEULE, requête count() filtrée isolée
+    // (pas dans le Promise.all ci-dessus, pour ne pas le fragiliser). Les autres
+    // agrégats de complétude (total, par canal, au moins un) sont déjà calculés
+    // plus haut ; seul « les TROIS champs remplis » manque, on l'ajoute ici.
+    const completR = await db.query(
+      `SELECT count() FROM referentiel_societes WHERE ${lesTrois} GROUP ALL`
+    )
+    const completude = {
+      total: cnt(totalR[0]),
+      avec_au_moins_un: cnt(unR[0]),
+      complete: cnt(completR[0]),
+      detail: {
+        avec_website: cnt(webR[0]),
+        avec_tel: cnt(telR[0]),
+        avec_email: cnt(mailR[0])
+      }
+    }
+
     res.json({
       total: cnt(totalR[0]),
       avec_website: cnt(webR[0]),
@@ -1016,6 +1036,7 @@ app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
         website_sans_tel: cnt(gisSansTelR[0])
       },
       echantillon_clenom: echantillonClenom,
+      completude,
       ...(couple ? { couple } : {})
     })
   } catch (err) {

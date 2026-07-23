@@ -296,7 +296,10 @@ La collecte n'a lieu que sur des sites web :
 | Catégorie | Champs | Provenance |
 |---|---|---|
 | Contact professionnel | Email professionnel générique (contact@, info@, commercial@, bonjour@, hello@), téléphone professionnel, URL réseaux sociaux entreprise | Page d'accueil + page mentions légales / contact du site officiel |
+| Contact professionnel (canal subsidiaire) | Donnée de contact professionnel figurant sur la fiche publique Google My Business de l'entreprise | Fiche publique GMB via processor UE DataForSEO (cf. fiche S10 cartographie) — canal mobilisé en dernier ressort |
 | Métadonnées | Horodatage de collecte, source identifiée (URL exacte de la page consultée) | Système |
+
+Le canal subsidiaire DataForSEO ne concerne **que la donnée de contact professionnel figurant sur la fiche publique GMB** de l'entreprise. La requête sortante est **minimisée** : elle se limite au nom de l'entreprise et à la ville (nom entreprise + ville). **Aucune donnée sensible** (catégories particulières art. 9 et 10 RGPD) ni donnée nominative privée n'est transmise dans la requête ni collectée par ce canal.
 
 **Données strictement exclues** (Doctrine 10 — Cinq lignes rouges) :
 
@@ -313,12 +316,13 @@ La collecte n'a lieu que sur des sites web :
 
 - SurrealDB Cloud — stockage du cache mutualisé `company_public` à compter de la V1.0 (AWS eu-west-1 Dublin)
 - Railway Inc. — exécution du moteur à compter de la V1.0 (europe-west4)
+- Dataforseo OÜ — processor UE (Estonie), canal subsidiaire d'accès à la fiche publique Google My Business, mobilisé en dernier ressort lorsque le contact professionnel n'a pu être obtenu par consultation directe du site officiel (cf. fiche S10 de la cartographie CST-MOVUP-001)
 
-**Aucun prestataire tiers de scraping** (cf. LIA-MOVUP-001 v1.1, Doctrine 9 — Souveraineté technique).
+**Aucun prestataire de scraping ni d'agrégation commerciale B2B** ; l'accès aux sources publiques via processor UE sous SCC (Dataforseo OÜ) est admis, cf. cartographie S10 et balance test (LIA-MOVUP-001 v1.1, Doctrine 9 — Souveraineté technique amendée).
 
 ## Transferts hors UE
 
-**Aucun transfert hors UE.**
+Le traitement d'enrichissement est opéré par MovUP **en intra-UE** : le recours à DataForSEO mobilise un **processor établi en Estonie** (Dataforseo OÜ, Union européenne). L'infrastructure sous-traitante US de ce processor, dans sa propre chaîne de sous-traitance, est encadrée par les **clauses contractuelles types** adoptées par la Commission européenne (décision 2021/914 — SCC). Cohérent avec la ligne §5.8 de la balance test (LIA-MOVUP-001 v1.1).
 
 ## Durée de conservation
 
@@ -326,6 +330,15 @@ La collecte n'a lieu que sur des sites web :
 |---|---|---|
 | Données enrichies | 24 mois à compter de la dernière mise à jour | Collecte ou re-vérification |
 | Au-delà | Re-vérification automatique ou purge | Cron quotidien |
+
+**Conservation côté processor DataForSEO** (canal subsidiaire) :
+
+| Donnée (chaîne processor) | Durée |
+|---|---|
+| Résultats SERP | 31 jours |
+| HTML | 7 jours |
+| Pingback / postback | 6 mois |
+| Tâches, résultats, payload | 12 mois |
 
 ## Mesures de sécurité
 

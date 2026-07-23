@@ -77,12 +77,13 @@ export function hasFeature(user, feature) {
 // Plafond d'ajouts au pipeline depuis Leads, par plan effectif.
 // Essai = 30 SEC (aucun reset pendant les 14 jours, compteur cumulatif).
 // Payant = mensuel calendaire (reset 1er du mois UTC, lazy).
-// croisiere = Infinity (pas de limite numérique côté décompte).
+// Grille verrouillée 30 / 60 / 120 : tous les plans ont un plafond numérique
+// côté décompte, croisiere compris (plus d'Infinity).
 export const PLAN_LEAD_LIMITS = {
   essai: 30,
   demarrage: 30,
-  activite: 120,
-  croisiere: Infinity
+  activite: 60,
+  croisiere: 120
 }
 
 // ISO date-only "YYYY-MM-DD" du 1er du mois courant en UTC.

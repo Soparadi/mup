@@ -288,7 +288,7 @@ export async function getReferentielFaisceauBySiret(siret) {
     const s = str(siret).replace(/\s+/g, '')
     if (!s) return null
     const sql =
-      'SELECT siren, siret, raison_sociale, adresse, code_postal, ville, ' +
+      'SELECT siren, siret, raison_sociale, enseigne, adresse, code_postal, ville, ' +
       'numero_voie, type_voie, libelle_voie, website, dirigeant_nom, ' +
       'mentions_legales_checked_at ' +
       'FROM referentiel_societes WHERE siret = $siret LIMIT 1'
@@ -300,6 +300,7 @@ export async function getReferentielFaisceauBySiret(siret) {
       siren: str(row.siren),
       siret: str(row.siret),
       raison_sociale: str(row.raison_sociale),
+      enseigne: str(row.enseigne),
       adresse: str(row.adresse),
       code_postal: str(row.code_postal),
       ville: str(row.ville),

@@ -1108,6 +1108,9 @@ function wireForm(){
     enrichBtn.addEventListener('click', async () => {
       const siret = String((contact && contact.siret) || '').replace(/\s+/g, '');
       if (!siret) return; // SIRET absent → garde silencieuse
+      const origLabel = enrichBtn.textContent; // verrou anti double-clic pendant l'appel
+      enrichBtn.disabled = true;
+      enrichBtn.textContent = 'Enrichissement…';
       try {
         const resp = await fetch('/api/enrich/' + encodeURIComponent(siret), { method: 'POST' });
         if (!resp.ok) return;
@@ -1128,6 +1131,9 @@ function wireForm(){
         else toast('Aucune donnée à ajouter');
       } catch (e) {
         // restitution best-effort : pas de toast d'erreur
+      } finally {
+        enrichBtn.disabled = false;
+        enrichBtn.textContent = origLabel;
       }
     });
   }

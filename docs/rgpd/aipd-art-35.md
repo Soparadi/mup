@@ -218,7 +218,7 @@ Le traitement étant fondé sur l'article 6.1.f (intérêt légitime), aucun con
 
 10 sous-traitants documentés dans CST-MOVUP-001 v1.0. Hébergement européen exclusif (sauf S8 ipapi en cours de substitution).
 
-**Aucun prestataire de scraping ni d'agrégation commerciale B2B ; accès aux sources publiques via processor UE sous SCC (Dataforseo OÜ) admis**, cf. cartographie S10, registre R1 et balance test (LIA-MOVUP-001 v1.2, Doctrine 9 amendée — Souveraineté technique).
+**Aucun prestataire de scraping ni d'agrégation commerciale B2B ; accès aux sources publiques via processor UE sous SCC (Dataforseo OÜ) admis**, cf. cartographie S10, registre art. 30 (traitement T3) et balance test (LIA-MOVUP-001 v1.2, Doctrine 9 amendée — Souveraineté technique).
 
 **Canal subsidiaire DataForSEO (S10)** — accès, en dernier ressort, à la fiche publique Google My Business (GMB) d'une entreprise, mobilisé uniquement lorsque les canaux gratuits d'enrichissement (moteur interne sur le site officiel, mentions légales LCEN) n'ont rien restitué. Le processor Dataforseo OÜ est établi en Estonie (UE) ; le transfert opéré par MovUP est **intra-UE**. Ce canal est encadré par les mesures de réduction du risque suivantes :
 
@@ -230,7 +230,7 @@ Le traitement étant fondé sur l'article 6.1.f (intérêt légitime), aucun con
 
 **Assistance à l'AIPD** : le DPA DataForSEO (**clause 5.5**) engage le processor à **assister le responsable de traitement** dans la réalisation de l'analyse d'impact (art. 35) et, le cas échéant, dans la consultation préalable de l'autorité de contrôle (art. 36) — garantie portée à l'actif de la présente analyse.
 
-Base légale inchangée : le recours à ce canal s'inscrit dans le traitement T3 d'enrichissement, fondé sur l'**intérêt légitime (art. 6.1.f)** déjà établi (LIA-MOVUP-001, cohérent avec le registre R1 et la balance test) ; il n'emporte aucune nouvelle base légale.
+Base légale inchangée : le recours à ce canal s'inscrit dans le traitement T3 d'enrichissement, fondé sur l'**intérêt légitime (art. 6.1.f)** déjà établi (LIA-MOVUP-001, cohérent avec le registre art. 30, traitement T3, et la balance test) ; il n'emporte aucune nouvelle base légale.
 
 **Évaluation** : chaîne de sous-traitance maîtrisée et documentée ; canal subsidiaire encadré (minimisation, subsidiarité, restitution limitée aux champs de société, absence de données sensibles, SCC) et assorti d'une obligation d'assistance à l'AIPD (clause 5.5).
 
@@ -455,7 +455,7 @@ Le **niveau de risque résiduel** (après mesures protectrices) est qualifié de
 - Données SIRENE non mises à jour en temps réel (statut radié/liquidation).
 
 **Mesures existantes** :
-- Consultation du statut SIRENE actif à chaque envoi (Doctrine T2).
+- Consultation du statut SIRENE actif à chaque envoi.
 - Re-vérification 24 mois maximum.
 - Métadonnées source + horodatage par champ.
 

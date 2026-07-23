@@ -13,7 +13,7 @@
 
 import { getDb } from '../../lib/surreal.js'
 import { normaliserTel } from '../../lib/import.js'
-import { normaliserSociete, normaliserVoie, comparerNumero } from '../../lib/societes.js'
+import { normaliserSociete, normaliserVoie, comparerNumero, parserAdresseAgregee } from '../../lib/societes.js'
 import { corroborerSiret, normText, DEPT_BBOX } from './overpass.js'
 import { enrichReferentielActionnable } from './referentiel.js'
 
@@ -220,7 +220,16 @@ function sonderAdresse(soc, idx) {
   if (!rows || !rows.length) return null
 
   const cpSoc = str(soc.code_postal)
-  const voieSoc = normaliserVoie(soc.type_voie, soc.libelle_voie)
+  // Voie + numéro société : d'abord les champs éclatés ; s'ils sont vides (cas
+  // SYSTÉMATIQUE côté Etalab, qui ne fournit jamais type_voie/libelle_voie), repli
+  // sur l'agrégat `adresse` parsé — sans quoi voieSoc reste vide et L3 est mort.
+  let voieSoc = normaliserVoie(soc.type_voie, soc.libelle_voie)
+  let numSoc = soc.numero_voie
+  if (!voieSoc) {
+    const parsee = parserAdresseAgregee(soc.adresse)
+    voieSoc = parsee.voie
+    numSoc = parsee.numero
+  }
 
   const l3 = []
   let l2 = null
@@ -228,7 +237,7 @@ function sonderAdresse(soc, idx) {
     // CP concordant = plancher de l'affinage : sans lui, nom+ville seuls = L1 (rejet).
     if (!cpSoc || cpSoc !== str(osm.postcode)) continue
     const voieOk = voieSoc && normaliserVoie('', osm.street) === voieSoc
-    if (voieOk && comparerNumero(soc.numero_voie, osm.housenumber)) l3.push(osm)
+    if (voieOk && comparerNumero(numSoc, osm.housenumber)) l3.push(osm)
     else if (!l2) l2 = osm   // CP seul concordant → 1er candidat présumé mémorisé
   }
 
@@ -245,10 +254,10 @@ function sonderAdresse(soc, idx) {
         cle_nom: soc.cle_nom, ville: soc.ville,
         adresse_brut: soc.adresse,
         type_voie_brut: soc.type_voie, libelle_voie_brut: soc.libelle_voie,
-        voieSoc,
+        voieSoc,   // éclatée si présente, sinon dérivée de soc.adresse (agrégat)
         street_brut: osm.street, voieOSM,
-        numero_voie_brut: soc.numero_voie, housenumber_brut: osm.housenumber,
-        voieOk, numOk: comparerNumero(soc.numero_voie, osm.housenumber),
+        numero_voie_brut: soc.numero_voie, numSoc, housenumber_brut: osm.housenumber,
+        voieOk, numOk: comparerNumero(numSoc, osm.housenumber),
       }))
     }
   }

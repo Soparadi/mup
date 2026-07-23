@@ -2874,14 +2874,17 @@ app.post('/api/enrich/:siret', async (req, res) => {
   //   • fill-if-empty via enrichReferentielActionnable : website (=url) +
   //     societe_tel (=phone) si non vides. Pas d'email (GMB n'en rend pas).
   // NOTE : le faisceau (getReferentielFaisceauBySiret, referentiel-read.js:290-294)
-  //   NE PORTE PAS d'enseigne → keyword bâti sur raison_sociale seule.
+  //   PORTE l'enseigne → keyword bâti sur l'enseigne en priorité (nom commercial
+  //   recherchable, ex. fiches EI), repli sur raison_sociale si enseigne vide.
   const complet = merged.website && merged.societe_tel && merged.societe_email
   if (!complet) {
     try {
       const faisceau = await getReferentielFaisceauBySiret(siret)
       const ville = String(faisceau?.ville || '').trim()
+      const enseigne = String(faisceau?.enseigne || '').trim()
       const raison = String(faisceau?.raison_sociale || '').trim()
-      const keyword = `${raison} ${ville}`.trim()
+      const nom = enseigne || raison
+      const keyword = `${nom} ${ville}`.trim()
       if (faisceau && keyword) {
         const info = await lookupBusinessInfo({ keyword })
         // Corroboration adresse : address DataForSEO vs faisceau.adresse (agrégée).

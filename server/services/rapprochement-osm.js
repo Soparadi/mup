@@ -210,8 +210,6 @@ function trouverMatch(soc, idx, graine = null) {
 // normaliserSociete(enseigne||raison) si NONE ; ville = libellé (normText), pas INSEE.
 // ABSTENTION : ≥2 candidats L3 aux CONTACTS divergents → null (jamais de faux positif
 // figé à vie ; le faisceau SIRET/SIREN peut encore trancher). PUR (lecture des Map).
-// ── DEBUG TEMPORAIRE — À RETIRER. Cap le nombre de sociétés L2 tracées par run.
-let _dbgAdrL2 = 0
 function sonderAdresse(soc, idx) {
   const cleNomSoc = str(soc.cle_nom) || normaliserSociete(soc.enseigne || soc.raison_sociale)
   const villeN = normText(soc.ville)
@@ -241,27 +239,6 @@ function sonderAdresse(soc, idx) {
     else if (!l2) l2 = osm   // CP seul concordant → 1er candidat présumé mémorisé
   }
 
-  // ── DEBUG TEMPORAIRE — À RETIRER. Société atteignant L2 (CP concordant mais aucun
-  // L3). Re-parcourt les rows CP-concordantes en LECTURE SEULE et dump les 3 leviers
-  // (voieSoc / voieOSM / numéro) pour voir lequel casse L3. Gaté à 10 sociétés/run.
-  if (!l3.length && l2 && _dbgAdrL2 < 10) {
-    _dbgAdrL2++
-    for (const osm of rows) {
-      if (!cpSoc || cpSoc !== str(osm.postcode)) continue
-      const voieOSM = normaliserVoie('', osm.street)
-      const voieOk = !!(voieSoc && voieOSM === voieSoc)
-      console.log('[dbg-adr-L2]', JSON.stringify({
-        cle_nom: soc.cle_nom, ville: soc.ville,
-        adresse_brut: soc.adresse,
-        type_voie_brut: soc.type_voie, libelle_voie_brut: soc.libelle_voie,
-        voieSoc,   // éclatée si présente, sinon dérivée de soc.adresse (agrégat)
-        street_brut: osm.street, voieOSM,
-        numero_voie_brut: soc.numero_voie, numSoc, housenumber_brut: osm.housenumber,
-        voieOk, numOk: comparerNumero(numSoc, osm.housenumber),
-      }))
-    }
-  }
-
   if (l3.length) {
     // Empreinte contact PURE (mapperOsmVersContrat, aucun I/O) : deux lignes L3 à
     // l'adresse exacte mais aux contacts DIFFÉRENTS = ambiguïté → abstention.
@@ -283,7 +260,6 @@ function sonderAdresse(soc, idx) {
 export async function rapprocherDepartement(dept) {
   const d = str(dept)
   const compteurs = { traitees: 0, certain: 0, presume: 0, rejet: 0, champs_ecrits: 0, certain_adresse: 0, presume_adresse: 0 }
-  _dbgAdrL2 = 0   // DEBUG TEMPORAIRE — À RETIRER. Fresh 10 lignes à chaque appel route.
   if (!d) {
     console.warn('[rapprochement-osm] département vide — rien à faire')
     return compteurs

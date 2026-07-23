@@ -8,8 +8,9 @@
 
 **Document** : Balance test intérêt légitime
 **Référence interne** : LIA-MOVUP-001
-**Version** : 1.1
+**Version** : 1.2
 **Date de rédaction** : 25 mai 2026
+**Date de révision** : 23 juillet 2026 (révision exceptionnelle — admission encadrée du processor UE Dataforseo OÜ pour l'accès à la fiche publique Google My Business, cf. Doctrine 9 amendée)
 **Date d'effet** : 1er juin 2026 (lancement commercial MovUP)
 **Prochaine revue** : 1er décembre 2026 (revue semestrielle systématique)
 **Cadre méthodologique** : Lignes directrices CNIL sur l'intérêt légitime + WP29 Opinion 06/2014 + EDPB Guidelines 01/2025
@@ -58,7 +59,9 @@ Personnes physiques exerçant une activité professionnelle indépendante (auto-
 1. **Collecte initiale** depuis SIRENE via deux canaux complémentaires opérés directement par MovUP, sans intermédiaire tiers :
    - API publique recherche-entreprises.api.gouv.fr (service Etalab),
    - API SIRENE INSEE V3 (authentification OAuth2 directe).
-2. **Enrichissement** des fiches via le **moteur de recherche interne MovUP**, opéré entièrement sur l'infrastructure du responsable de traitement (Railway europe-west4), sans appel à un prestataire tiers de scraping ou d'enrichissement commercial. Le moteur consulte uniquement les sites web officiels des entreprises ciblées, à la racine du domaine et sur les pages de mentions légales / contact publiquement accessibles.
+2. **Enrichissement** des fiches par la consultation de sources publiques, **sans recours à aucun prestataire tiers de scraping ni d'agrégation commerciale de données B2B**, via deux canaux complémentaires :
+   - le **moteur de recherche interne MovUP**, opéré entièrement sur l'infrastructure du responsable de traitement (Railway europe-west4), qui consulte uniquement les sites web officiels des entreprises ciblées, à la racine du domaine et sur les pages de mentions légales / contact publiquement accessibles ;
+   - à défaut de résultat par ce premier canal, l'accès à la **fiche publique Google My Business** de l'entreprise via le processor européen **Dataforseo OÜ** (Estonie, UE), sous clauses contractuelles types 2021/914, avec une requête minimisée (nom de l'entreprise + ville) et un appel strictement subsidiaire (cf. Section 9, Doctrine 9 amendée).
 3. **Stockage** dans la base de données MovUP (SurrealDB Cloud, région AWS eu-west-1 Dublin) selon une **architecture à double cache** :
    - cache `company_public` partagé entre abonnés MovUP (données publiques d'entreprise uniquement),
    - cache `company_enrichment_user` privé par abonné (notes commerciales personnelles, jamais partagées).
@@ -98,7 +101,7 @@ Le traitement est **nécessaire** à la poursuite de la finalité au sens où au
 
 - **L'obtention d'un consentement préalable** est techniquement impossible en phase de découverte commerciale : il n'existe aucun canal antérieur à la prise de contact qui permettrait de recueillir un consentement informé.
 - **L'acquisition de leads via achat de fichiers tiers** présenterait un degré d'intrusion supérieur (chaîne de responsabilité opaque, fiabilité du consentement amont incertaine, exposition à des données obtenues dans des conditions inconnues) et est explicitement écartée par la doctrine interne du responsable de traitement.
-- **Le recours à un prestataire tiers de scraping ou d'enrichissement commercial** (de type ScrapingBee, Pappers, Dropcontact, Apollo, Lusha) présenterait des risques de chaîne de sous-traitance opaques, des transferts de données potentiellement hors UE, et une moindre maîtrise de la conformité. So Paradi a délibérément écarté cette option (cf. Section 9, Doctrine 9 — Souveraineté technique).
+- **Le recours à un prestataire tiers de scraping ou d'agrégation commerciale de données B2B** (de type ScrapingBee, Bright Data, Pappers, Apollo, Lusha) présenterait des risques de chaîne de sous-traitance opaques, des transferts de données potentiellement hors UE non maîtrisés, et une moindre maîtrise de la conformité. So Paradi a délibérément écarté cette option (cf. Section 9, Doctrine 9 — Souveraineté technique). En revanche, l'**accès à une source publique déterminée** — la fiche Google My Business publiée par le professionnel lui-même — via un **processor européen sous SCC** (Dataforseo OÜ) ne relève pas de cette agrégation commerciale prohibée : il est assimilé aux autres canaux de sources publiques déjà mobilisés (SIRENE/INSEE, Etalab, BAN, mentions légales LCEN) et admis à ce titre, dans les conditions et limites posées par la Doctrine 9 amendée.
 - **La publicité ciblée payante** (Google Ads, LinkedIn Ads) repose elle-même sur des traitements de profilage et un ciblage publicitaire qui présentent un degré d'intrusion équivalent ou supérieur à la prospection directe, sans permettre la qualification individuelle nécessaire à la conversion B2B.
 - **Le bouche-à-oreille et le réseau personnel** sont par nature non scalables et ne permettent pas l'atteinte de la cible commerciale à l'échelle requise pour la viabilité économique du projet.
 
@@ -123,9 +126,9 @@ Les données traitées sont exclusivement issues de sources publiques profession
 | Nom et prénom du dirigeant (EI uniquement) | SIRENE (INSEE) | Diffusion légale obligatoire | API Etalab + API INSEE V3 directes |
 | Statut actif / radié / liquidation | SIRENE (INSEE) | Diffusion légale obligatoire | API Etalab + API INSEE V3 directes |
 | Coordonnées GPS (géocodage) | API BAN (data.gouv.fr) | Service public ouvert | API BAN directe |
-| Site web de l'entreprise | SIRENE quand renseigné, mentions légales LCEN | Diffusion volontaire professionnelle | Moteur de recherche interne MovUP |
-| Adresse électronique professionnelle générique (contact@, info@, commercial@, bonjour@) | Mentions légales publiées sur sites web professionnels | Diffusion volontaire professionnelle | Moteur de recherche interne MovUP |
-| Téléphone professionnel | Mentions légales publiées sur sites web professionnels | Diffusion volontaire professionnelle | Moteur de recherche interne MovUP |
+| Site web de l'entreprise | SIRENE quand renseigné, mentions légales LCEN, fiche Google My Business | Diffusion volontaire professionnelle | Moteur de recherche interne MovUP ; à défaut, fiche GMB via processor UE (Dataforseo OÜ, SCC) |
+| Adresse électronique professionnelle générique (contact@, info@, commercial@, bonjour@) | Mentions légales publiées sur sites web professionnels, fiche Google My Business | Diffusion volontaire professionnelle | Moteur de recherche interne MovUP ; à défaut, fiche GMB via processor UE (Dataforseo OÜ, SCC) |
+| Téléphone professionnel | Mentions légales publiées sur sites web professionnels, fiche Google My Business | Diffusion volontaire professionnelle | Moteur de recherche interne MovUP ; à défaut, fiche GMB via processor UE (Dataforseo OÜ, SCC) |
 
 ### 3.2 Données exclues du traitement
 
@@ -145,12 +148,13 @@ So Paradi s'engage à **ne pas traiter** dans le cadre de la prospection MovUP :
 - **Recherche-entreprises.api.gouv.fr** : service public Etalab opéré par la DINUM, accès libre et gratuit, conditions générales de réutilisation Etalab 2.0.
 - **API BAN** : service public d'adresse opéré par data.gouv.fr, accès libre et gratuit.
 - **Mentions légales sites professionnels** : la publication de mentions légales conformes au décret n°2007-451 du 25 mars 2007 et à l'article 19 de la LCEN constitue une diffusion volontaire des coordonnées professionnelles à des fins de contact.
+- **Fiche Google My Business (GMB)** : la fiche d'établissement Google My Business est renseignée et publiée volontairement par le professionnel lui-même, à des fins de visibilité et de contact commercial. Sa consultation constitue l'accès à une donnée professionnelle publique, au même titre que les mentions légales. MovUP y accède **uniquement en dernier ressort**, lorsque les canaux gratuits n'ont rien restitué, via l'API Business Data / Google My Business Info du processor européen **Dataforseo OÜ** (Tallinn, Estonie, UE ; Company No. 14502291 ; ISO 27001 ; DPO Nick Chernets, info@dataforseo.com), agissant comme sous-traitant au sens de l'article 28 RGPD sous clauses contractuelles types 2021/914. La requête est strictement minimisée (nom de l'entreprise + ville). Cf. cartographie des sous-traitants (fiche dédiée) et Section 9, Doctrine 9 amendée.
 
-**Aucun prestataire tiers de scraping, d'enrichissement commercial, ou de fourniture de données B2B n'est utilisé** dans le périmètre du présent document (cf. Section 9, Doctrine 9 — Souveraineté technique).
+**Aucun prestataire tiers de scraping ou d'agrégation commerciale de données B2B n'est utilisé** dans le périmètre du présent document. L'accès aux sources publiques via un processor UE sous SCC — en l'espèce Dataforseo OÜ, pour la seule consultation de la fiche Google My Business publiée par le professionnel — est en revanche admis, au même régime que les autres sources publiques (SIRENE, Etalab, BAN, mentions légales LCEN), cf. Section 9, Doctrine 9 amendée.
 
 ### 3.4 Le moteur de recherche interne MovUP
 
-Le moteur de recherche interne MovUP constitue, dans l'architecture cible V1.0 (déploiement programmé fin juin 2026), le **seul outil d'enrichissement complémentaire** mobilisé en aval de la collecte initiale SIRENE / Etalab. À la date d'effet du présent document (1er juin 2026), ce moteur n'est pas encore en service : aucun enrichissement automatisé n'a lieu, les destinataires de la prospection commerciale sont sélectionnés directement par l'utilisateur abonné depuis les résultats des API SIRENE et recherche-entreprises Etalab. Les caractéristiques techniques et doctrinales du moteur, telles qu'elles seront opérantes à compter de la V1.0, sont les suivantes :
+Le moteur de recherche interne MovUP constitue, dans l'architecture cible V1.0 (déploiement programmé fin juin 2026), l'**outil principal d'enrichissement complémentaire** mobilisé en aval de la collecte initiale SIRENE / Etalab. Un canal subsidiaire d'accès à la fiche publique Google My Business, via le processor européen Dataforseo OÜ (sous SCC), n'est mobilisé qu'en dernier ressort lorsque le moteur interne n'a rien restitué (cf. Section 9, Doctrine 9 amendée). À la date d'effet du présent document (1er juin 2026), ce moteur n'est pas encore en service : aucun enrichissement automatisé n'a lieu, les destinataires de la prospection commerciale sont sélectionnés directement par l'utilisateur abonné depuis les résultats des API SIRENE et recherche-entreprises Etalab. Les caractéristiques techniques et doctrinales du moteur, telles qu'elles seront opérantes à compter de la V1.0, sont les suivantes :
 
 **Opérateur** : So Paradi (responsable de traitement), exécution sur infrastructure Railway europe-west4, code source maintenu en interne dans le dépôt Soparadi/mup.
 
@@ -263,7 +267,7 @@ So Paradi a mis en œuvre l'ensemble des mesures protectrices détaillées en Se
 - rate-limiting anti-énumération et anti-flood,
 - chiffrement AES-256-GCM des credentials sensibles,
 - principe **fail-open** sur le filtrage opt-out scraping délibérément assumé en faveur des personnes concernées (toute erreur technique aboutit à l'exclusion du contact, jamais à son inclusion erronée),
-- moteur de recherche interne souverain sans recours à un prestataire tiers de scraping (architecture cible V1.0 — déploiement fin juin 2026),
+- moteur de recherche interne souverain sans recours à un prestataire tiers de scraping ni d'agrégation commerciale B2B ; recours au seul processor UE Dataforseo OÜ (sous SCC), en dernier ressort, pour la consultation de la fiche publique Google My Business (architecture cible V1.0 — déploiement fin juin 2026),
 - filtres défensifs à l'écriture (anti email nominatif, anti réseaux sociaux personnels),
 - expiration automatique 24 mois des données enrichies,
 - séparation stricte entre cache mutualisé public et notes commerciales privées par abonné (architecture cible V1.0 — déploiement fin juin 2026),
@@ -300,6 +304,8 @@ Il n'existe **aucune relation de dépendance, de vulnérabilité, ni de déséqu
 | 7 — Effectivité des droits | Très favorable (tunnel public, propagation instantanée sur base partagée) |
 | 8 — Position des parties | Favorable (B2B entre professionnels autonomes) |
 
+L'introduction, dans l'architecture cible V1.0, du canal subsidiaire d'accès à la fiche publique Google My Business via le processor européen Dataforseo OÜ (sous SCC) **ne modifie pas cette conclusion** : la finalité reste identique (contact professionnel publiquement diffusé par le professionnel lui-même), la donnée demeure professionnelle et non sensible, la collecte est minimisée (requête nom + ville, appel en dernier ressort après échec des canaux gratuits), et le verrou entreprise / personne physique interdit toute restitution d'une coordonnée de personne physique comme contact de la société. La balance demeure favorable (cf. Section 9, Doctrine 9 amendée).
+
 **Conclusion du test de mise en balance** : **les droits et libertés fondamentaux des personnes concernées ne prévalent pas sur l'intérêt légitime poursuivi par So Paradi**, sous réserve du maintien effectif de l'ensemble des mesures protectrices détaillées en Section 5.
 
 Le traitement est en conséquence **licite** au sens de l'article 6.1.f RGPD.
@@ -319,6 +325,7 @@ Cette section documente l'ensemble des mesures techniques et organisationnelles 
 - **Aucune adresse email nominative** admise dans la base (filtre défensif Ligne rouge n°1, application à l'écriture par le moteur de recherche interne).
 - **Quotas commerciaux du produit** limitant mécaniquement le volume traité : 30 prospects actifs sur le plan Démarrage, 120 sur Activité, illimités sur Croisière.
 - **Plafond opérationnel du moteur de recherche interne** : ~500 fiches enrichies par jour à la date d'effet du présent document, paramètre maîtrisé par le responsable de traitement.
+- **Requête minimisée au processor GMB** : lorsqu'il est sollicité en dernier ressort, l'accès à la fiche Google My Business via le processor Dataforseo OÜ n'emporte transmission que du nom de l'entreprise et de la ville (clé de recherche), à l'exclusion de toute autre donnée de la personne concernée.
 
 ### 5.2 Mesures d'information (articles 13 et 14 RGPD)
 
@@ -382,8 +389,8 @@ Cette section documente l'ensemble des mesures techniques et organisationnelles 
 
 ### 5.8 Mesures organisationnelles
 
-- **Souveraineté technique** : pas de recours à un prestataire tiers de scraping ou d'enrichissement commercial (cf. Section 9, Doctrine 9).
-- **Sous-traitants encadrés** par contrats art. 28 RGPD (cf. cartographie sous-traitants — uniquement infrastructure et services techniques essentiels, aucun fournisseur de données B2B).
+- **Souveraineté technique** : pas de recours à un prestataire tiers de scraping ni d'agrégation commerciale de données B2B (ScrapingBee, Bright Data, Pappers, Apollo, Lusha…). Seul est admis l'accès aux sources publiques via un processor UE sous SCC — en l'espèce Dataforseo OÜ, pour la consultation de la fiche Google My Business publiée par le professionnel (cf. Section 9, Doctrine 9 amendée).
+- **Sous-traitants encadrés** par contrats art. 28 RGPD (cf. cartographie sous-traitants — infrastructure, services techniques essentiels et accès à sources publiques via processor UE sous SCC, à l'exclusion de tout agrégateur commercial de données B2B).
 - **Hébergement européen exclusif** (Railway europe-west4, SurrealDB Cloud AWS eu-west-1 Dublin, Resend eu-west-1 Dublin).
 - **Pas de transfert hors UE** à la date d'effet du présent document.
 - **Documentation** : présent document + registre art. 30 + AIPD art. 35 + PHASE_6_RGPD_COMPLETE.md (journal technique).
@@ -515,24 +522,43 @@ Le visible (CTA, wording, formulaires publics) prime sur le caché (CGU, mention
 
 La protection anti-bot des formulaires publics utilise un **honeypot et une question logique** plutôt qu'un CAPTCHA tiers non-UE (type reCAPTCHA Google), afin de limiter les transferts de données hors UE.
 
-### Doctrine 9 — Souveraineté technique : pas de prestataire tiers de scraping ni d'enrichissement commercial
+### Doctrine 9 — Souveraineté technique : exclusion du scraping et de l'agrégation commerciale B2B ; admission encadrée de l'accès aux sources publiques via processor UE sous SCC
 
-L'enrichissement des fiches prospects est assuré **exclusivement par un moteur de recherche interne** opéré sur l'infrastructure du responsable de traitement. So Paradi écarte **par principe** le recours à tout prestataire tiers de scraping ou d'enrichissement commercial, y compris :
+**Principe — la souveraineté reste la règle.** L'enrichissement des fiches prospects est assuré **à titre principal par un moteur de recherche interne** opéré sur l'infrastructure du responsable de traitement. So Paradi écarte **par principe** le recours à tout prestataire tiers de **scraping** ou d'**agrégation commerciale de données B2B**, y compris :
 
 - ScrapingBee, Scrapfly, Bright Data, Apify et tout autre fournisseur de scraping en marque blanche,
 - Pappers, Société.com, Manageo et tout autre agrégateur de données B2B,
 - Dropcontact, Apollo, Lusha, ZoomInfo, Hunter.io et tout autre fournisseur de bases de contacts enrichies,
 - toute API d'enrichissement commercial reposant sur des bases agrégées par des tiers.
 
-Cette doctrine se fonde sur :
+Ces prestataires **demeurent exclus**. Le fondement de cette exclusion est inchangé :
 
 - la maîtrise complète de la chaîne de traitement (article 5.2 accountability),
-- la limitation des transferts de données hors UE (articles 44-49 RGPD),
+- la limitation des transferts de données hors UE non maîtrisés (articles 44-49 RGPD),
 - la prévention des risques de responsabilité conjointe (CJUE C-40/17 Fashion ID),
 - la lisibilité totale du périmètre traité pour les personnes concernées exerçant leur droit d'accès,
 - la cohérence avec la doctrine du responsable de traitement exprimée de manière constante depuis avril 2026.
 
-Toute évolution de cette doctrine (introduction d'un prestataire tiers, quel qu'il soit) impose une **révision préalable du présent document** et une nouvelle balance test.
+**Exception motivée et bornée — l'accès à une source publique via un processor UE sous SCC.** La présente doctrine distingue deux réalités que sa rédaction initiale confondait :
+
+1. l'**agrégation commerciale B2B** — constitution et revente, par un tiers, de bases de contacts dont la chaîne de consentement amont est opaque : **prohibée**, cf. ci-dessus ;
+2. l'**accès à une source publique déterminée** — une donnée professionnelle publiée par le professionnel lui-même — opéré par un simple prestataire technique agissant comme processor : **admis**, au même régime que les autres sources publiques déjà mobilisées (SIRENE/INSEE, Etalab, BAN, Overpass, mentions légales LCEN).
+
+À ce second titre, et **à ce seul titre**, So Paradi admet le recours au processor **Dataforseo OÜ** (Vesivärava tn 50-201, Kesklinna linnaosa, Tallinn, Harju maakond, Estonie 10152 ; Company No. 14502291 ; ISO 27001 ; DPO Nick Chernets, info@dataforseo.com) pour la consultation de la **fiche publique Google My Business** de l'entreprise ciblée, via l'API Business Data / Google My Business Info (live).
+
+Cette exception est **bornée** par les garanties suivantes, cumulatives :
+
+- **Nature de la source** : donnée professionnelle publique, renseignée et diffusée volontairement par le professionnel lui-même sur sa fiche Google My Business à des fins de contact commercial. Il ne s'agit pas d'une base agrégée par un tiers, mais d'une source déterminée et publique.
+- **Rôle du prestataire** : Dataforseo OÜ agit comme **processor** (sous-traitant art. 28 RGPD), non comme fournisseur de données propriétaires ; MovUP demeure **controller**. Le DPA DataForSEO (https://dataforseo.com/wp-content/uploads/2022/09/DataForSEO_DPA.pdf) formalise cette répartition (SCC processor→controller).
+- **Localisation et transferts** : prestataire établi en Estonie (UE). L'infrastructure sous-traitante (Google LLC, Microsoft Azure, US) est encadrée par les clauses contractuelles types UE 2021/914 (4 juin 2021). Aucune donnée sensible n'est transférée — uniquement des *contact information appearing on a SERP*, à l'exclusion de tout numéro de sécurité sociale, mot de passe ou identifiant.
+- **Minimisation** : le paramètre de requête est réduit au strict nécessaire (nom de l'entreprise + ville). Aucune donnée de la personne concernée n'est transmise au processor au-delà de cette clé de recherche.
+- **Subsidiarité** : l'appel au processor n'a lieu **qu'en dernier ressort**, lorsque les canaux gratuits (moteur interne sur site officiel, mentions légales) n'ont rien restitué. Il n'est jamais un canal de premier rang.
+- **Verrou entreprise / personne physique** : aucun téléphone ni email rattaché à une personne physique n'est restitué comme contact de la société. Seules les coordonnées génériques d'établissement sont conservées. Le filtre anti-email nominatif (Ligne rouge n°1) s'applique identiquement aux données issues de la fiche GMB.
+- **Rétention côté processor** : SERP 31 jours, HTML 7 jours, pingback/postback 6 mois, tâches / résultats / payload 12 mois (durées contractuelles DataForSEO).
+
+Cette exception **ne rouvre pas** la porte à l'agrégation commerciale : elle est strictement limitée à l'accès aux sources publiques via un processor UE sous SCC. Tout autre prestataire — et en particulier tout agrégateur ou fournisseur de bases B2B — demeure soumis à l'exclusion de principe.
+
+Toute évolution de cette doctrine (introduction d'un prestataire de scraping ou d'agrégation commerciale, ou extension de l'accès à d'autres sources via un processor tiers) impose une **révision préalable du présent document** et une nouvelle balance test.
 
 ### Doctrine 10 — Cinq lignes rouges du moteur de recherche interne
 
@@ -603,3 +629,4 @@ dpo@movup.io
 *Historique des versions :*
 *— v1.0 (25 mai 2026, matin) : version initiale, mention prématurée de ScrapingBee en V1.1, retirée en v1.1.*
 *— v1.1 (25 mai 2026, après-midi) : Doctrine 9 « Souveraineté technique » intégrée. Doctrine 10 « Cinq lignes rouges du moteur de recherche interne » ajoutée. Moteur de recherche interne MovUP documenté en Section 3.4. Toutes mentions ScrapingBee, Pappers, Dropcontact, Qwant, Brave Search en tant que sous-traitants retirées. V1.0 du moteur de recherche interne (incluant scraper maison cheerio) confirmée comme partie intégrante du lancement 1er juin 2026.*
+*— v1.2 (23 juillet 2026, révision exceptionnelle) : Doctrine 9 amendée — la souveraineté reste la règle et exclut le scraping et l'agrégation commerciale B2B ; une exception motivée et bornée admet l'accès à la fiche publique Google My Business via le processor UE Dataforseo OÜ (sous SCC processor→controller), au même régime que les autres sources publiques. Intégration de ce canal subsidiaire au raisonnement de la balance (Sections 1.4, 2.3, 3.1, 3.3, 3.4, 4.7, 4.10, 5.1, 5.8). La balance demeure favorable.*

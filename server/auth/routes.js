@@ -237,7 +237,7 @@ router.post('/signup', async (req, res) => {
       telephone,
       password_hash: passwordHash,
       email_verified: false,
-      plan: 'demarrage',                        // Décision 1.2 — essai = niveau Démarrage ; trial_status distingue essai/payant
+      plan: 'demarrage',                        // Décision 1.2 — essai = niveau Essentiel ; trial_status distingue essai/payant
       marketing_consent: marketingConsent,      // false par défaut (RGPD)
       trial_status: 'active'                    // datetimes posées en 2ème temps (cf. ci-dessous)
     }

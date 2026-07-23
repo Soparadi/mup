@@ -362,7 +362,7 @@ export async function sendTrialEndingSoon(user) {
     '',
     'Votre essai gratuit de 14 jours touche à sa fin. Dans deux jours, votre espace MovUP passera en lecture seule, jusqu\'à l\'activation de votre abonnement.',
     '',
-    `Pour continuer sans interruption, choisissez votre plan dès maintenant. Tarifs : Démarrage ${PLAN_PRICES_DISPLAY.demarrage.monthly}, Activité ${PLAN_PRICES_DISPLAY.activite.monthly}, Croisière ${PLAN_PRICES_DISPLAY.croisiere.monthly} par mois. Sans engagement.`,
+    `Pour continuer sans interruption, choisissez votre plan dès maintenant. Tarifs : Essentiel ${PLAN_PRICES_DISPLAY.demarrage.monthly}, Régulier ${PLAN_PRICES_DISPLAY.activite.monthly}, Intensif ${PLAN_PRICES_DISPLAY.croisiere.monthly} par mois. Sans engagement.`,
     '',
     `Choisir mon plan : ${ctaUrl}`,
     '',

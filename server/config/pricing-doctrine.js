@@ -9,7 +9,7 @@ export const PLANS_ORDER = ['demarrage', 'activite', 'croisiere']
 export const PLANS = {
   demarrage: {
     slug: 'demarrage',
-    label: 'Démarrage',
+    label: 'Essentiel',
     tagline: 'Vous lancez votre activité. Vous voulez sortir du bouche-à-oreille et trouver vos premiers clients.',
     priceMonthly: 24,
     priceAnnual: 20,
@@ -19,7 +19,7 @@ export const PLANS = {
   },
   activite: {
     slug: 'activite',
-    label: 'Activité',
+    label: 'Régulier',
     tagline: 'Vous prospectez chaque semaine. Vous signez régulièrement. Vous voulez gagner du temps et professionnaliser vos échanges.',
     priceMonthly: 34,
     priceAnnual: 28,
@@ -29,7 +29,7 @@ export const PLANS = {
   },
   croisiere: {
     slug: 'croisiere',
-    label: 'Croisière',
+    label: 'Intensif',
     tagline: 'Vous avez une activité installée. Vous gérez des clients réguliers et vous voulez piloter votre chiffre d’affaires sereinement.',
     priceMonthly: 44,
     priceAnnual: 37,

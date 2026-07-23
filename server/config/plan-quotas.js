@@ -16,7 +16,7 @@
 
 export const PLAN_QUOTAS = {
   essai: {
-    // Mode basique pendant les 14 jours (équivalent Démarrage moins l'export)
+    // Mode basique pendant les 14 jours (équivalent Essentiel moins l'export)
     export_csv: false,
     mailing_sequencer: false,
     advanced_stats: false,
@@ -26,7 +26,7 @@ export const PLAN_QUOTAS = {
     accompaniment_session: false
   },
   demarrage: {
-    export_csv: false, // levier upgrade vers Activité
+    export_csv: false, // levier upgrade vers Régulier
     mailing_sequencer: false,
     advanced_stats: false,
     recurring_invoices: false,

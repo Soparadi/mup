@@ -174,7 +174,7 @@ export async function sendGraceEndingTomorrowEmails() {
         email: u.email,
         prenom: u.prenom,
         nom: u.nom,
-        plan_label: PLAN_LABELS[u.plan] || u.plan || 'Démarrage',
+        plan_label: PLAN_LABELS[u.plan] || u.plan || 'Essentiel',
         grace_until_date: graceUntilIso,
         privacy_url: APP_URL + '/account/privacy'
       })

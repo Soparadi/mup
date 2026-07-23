@@ -445,7 +445,7 @@ export async function webhookHandler(req, res) {
                 email: user.email,
                 prenom: user.prenom,
                 nom: user.nom,
-                plan_label: PLAN_LABELS[user.plan] || user.plan || 'Démarrage',
+                plan_label: PLAN_LABELS[user.plan] || user.plan || 'Essentiel',
                 period_end: toIsoDate(extractCurrentPeriodEnd(subscription))
               })
             } catch (e) { console.warn('[stripe:webhook] email cancel échoué :', e.message) }
@@ -486,7 +486,7 @@ export async function webhookHandler(req, res) {
                 email: user.email,
                 prenom: user.prenom,
                 nom: user.nom,
-                plan_label: PLAN_LABELS[user.plan] || user.plan || 'Démarrage',
+                plan_label: PLAN_LABELS[user.plan] || user.plan || 'Essentiel',
                 grace_until_date: gracePlus7d,
                 privacy_url: appUrl() + '/account/privacy'
               })
@@ -578,7 +578,7 @@ export async function webhookHandler(req, res) {
                 email: user.email,
                 prenom: user.prenom,
                 nom: user.nom,
-                plan_label: PLAN_LABELS[user.plan] || user.plan || 'Démarrage',
+                plan_label: PLAN_LABELS[user.plan] || user.plan || 'Essentiel',
                 portal_url: portal?.url || null
               })
             } catch (e) { console.warn('[stripe:webhook] email payment_failed échoué :', e.message) }

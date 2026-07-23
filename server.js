@@ -15,7 +15,7 @@ import { getDb } from './lib/surreal.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
-import { normaliserSociete } from './lib/societes.js'
+import { normaliserSociete, comparerNumero, parserAdresseAgregee } from './lib/societes.js'
 import { libelleFormeJuridique } from './lib/formes-juridiques.js'
 import { analyserImport, analyserImportDetaille } from './lib/import.js'
 import { normalizePersonFields } from './lib/person-fields.js'
@@ -39,7 +39,8 @@ import {
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
 import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
-import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler } from './server/services/referentiel-read.js'
+import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret } from './server/services/referentiel-read.js'
+import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
 import { runMentionsLegalesJob } from './server/services/mentions-legales.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
@@ -2861,6 +2862,58 @@ app.post('/api/enrich/:siret', async (req, res) => {
     societe_instagram: pick(s.societe_instagram, o.societe_instagram),
     societe_linkedin: pick(s.societe_linkedin, o.societe_linkedin)
   }
+
+  // ── Maillon DataForSEO (Business Info / Google My Business) ──────────────
+  // Complète la fiche société SI un canal contact manque, avec écriture SOUS
+  // corroboration adresse STRICTE. Fail-safe intégral : toute erreur retombe
+  // sur le merge existant (le res.json normal reste servi).
+  //   • Appel SEULEMENT si incomplet : au moins un de website / societe_tel /
+  //     societe_email vide. Trois pleins → pas d'appel.
+  //   • Écriture SEULEMENT si corroboration OK : CP (Etalab présent dans
+  //     l'address DataForSEO) ET rue+numéro (parserAdresseAgregee des deux).
+  //   • fill-if-empty via enrichReferentielActionnable : website (=url) +
+  //     societe_tel (=phone) si non vides. Pas d'email (GMB n'en rend pas).
+  // NOTE : le faisceau (getReferentielFaisceauBySiret, referentiel-read.js:290-294)
+  //   NE PORTE PAS d'enseigne → keyword bâti sur raison_sociale seule.
+  const complet = merged.website && merged.societe_tel && merged.societe_email
+  if (!complet) {
+    try {
+      const faisceau = await getReferentielFaisceauBySiret(siret)
+      const ville = String(faisceau?.ville || '').trim()
+      const raison = String(faisceau?.raison_sociale || '').trim()
+      const keyword = `${raison} ${ville}`.trim()
+      if (faisceau && keyword) {
+        const info = await lookupBusinessInfo({ keyword })
+        // Corroboration adresse : address DataForSEO vs faisceau.adresse (agrégée).
+        if (info.found && info.address && faisceau.adresse) {
+          const cp = String(faisceau.code_postal || '').trim()
+          const refA = parserAdresseAgregee(faisceau.adresse)
+          const dfsA = parserAdresseAgregee(info.address)
+          const cpOk = cp && info.address.includes(cp)
+          const voieOk = refA.voie && dfsA.voie && refA.voie === dfsA.voie
+          const numOk = comparerNumero(refA.numero, dfsA.numero)
+          if (cpOk && voieOk && numOk) {
+            const patch = {}
+            if (!merged.website && info.url) patch.website = info.url
+            if (!merged.societe_tel && info.phone) patch.societe_tel = info.phone
+            // Re-lecture ciblée UNIQUEMENT si une écriture est tentée.
+            if (Object.keys(patch).length) {
+              await enrichReferentielActionnable(siret, patch)
+              const soc2 = await getReferentielContactBySiret(siret)
+              if (soc2) {
+                merged.website = pick(soc2.website, merged.website)
+                merged.societe_tel = pick(soc2.societe_tel, merged.societe_tel)
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Le maillon ne casse jamais la route : on retombe sur le merge existant.
+      console.warn('[enrich:dataforseo]', String(e?.message || e).slice(0, 80))
+    }
+  }
+
   const found = Object.values(merged).some(v => v)
   res.json({ found, ...merged })
 })

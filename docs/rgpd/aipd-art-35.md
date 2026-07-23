@@ -99,7 +99,7 @@ Les autres traitements (T1 comptes, T4 opt-out, T5 facturation, T6 support, T7 l
 |---|---|
 | Responsable de traitement | Benoît Fouquet — EI So Paradi |
 | DPO (cumulé de facto) | Benoît Fouquet — dpo@movup.io |
-| Sous-traitants | 9 sous-traitants documentés dans CST-MOVUP-001 v1.0 |
+| Sous-traitants | 10 sous-traitants documentés dans CST-MOVUP-001 v1.0 |
 | Personnes concernées | Prospects professionnels indépendants francophones |
 | Bénéficiaires | Abonnés MovUP (utilisateurs du service) |
 
@@ -216,11 +216,23 @@ Le traitement étant fondé sur l'article 6.1.f (intérêt légitime), aucun con
 
 ### 2.8 Sous-traitants et chaîne de responsabilité
 
-9 sous-traitants documentés dans CST-MOVUP-001 v1.0. Hébergement européen exclusif (sauf S8 ipapi en cours de substitution).
+10 sous-traitants documentés dans CST-MOVUP-001 v1.0. Hébergement européen exclusif (sauf S8 ipapi en cours de substitution).
 
-**Aucun prestataire tiers de scraping ni d'enrichissement commercial** (Doctrine 9 LIA — Souveraineté technique).
+**Aucun prestataire de scraping ni d'agrégation commerciale B2B ; accès aux sources publiques via processor UE sous SCC (Dataforseo OÜ) admis**, cf. cartographie S10, registre R1 et balance test (LIA-MOVUP-001 v1.2, Doctrine 9 amendée — Souveraineté technique).
 
-**Évaluation** : chaîne de sous-traitance maîtrisée et documentée.
+**Canal subsidiaire DataForSEO (S10)** — accès, en dernier ressort, à la fiche publique Google My Business (GMB) d'une entreprise, mobilisé uniquement lorsque les canaux gratuits d'enrichissement (moteur interne sur le site officiel, mentions légales LCEN) n'ont rien restitué. Le processor Dataforseo OÜ est établi en Estonie (UE) ; le transfert opéré par MovUP est **intra-UE**. Ce canal est encadré par les mesures de réduction du risque suivantes :
+
+1. **Minimisation de la requête sortante** — la clé de recherche transmise au processor se limite au **nom de l'entreprise + ville** ; aucune autre donnée n'est exposée.
+2. **Appel strictement conditionnel** — le canal n'est jamais mobilisé en premier rang ; il n'est déclenché que si les canaux gratuits n'ont restitué aucun contact professionnel.
+3. **Verrou entreprise / personne physique** — aucune coordonnée (téléphone, email) rattachée à une personne physique n'est restituée comme contact de la société ; le filtre anti-email nominatif (Ligne rouge n°1, Doctrine 10 LIA) s'applique identiquement aux données issues de la fiche GMB.
+4. **Aucune donnée sensible transférée** — aucune catégorie particulière (art. 9 et 10 RGPD) n'est transmise dans la requête ni collectée par ce canal (confirmé par le DPA DataForSEO).
+5. **Transfert intra-UE côté MovUP** — l'infrastructure sous-traitante US du processor (Google LLC, Microsoft Azure), dans sa propre chaîne de sous-traitance, est encadrée par les clauses contractuelles types adoptées par la Commission européenne (décision 2021/914 — SCC).
+
+**Assistance à l'AIPD** : le DPA DataForSEO (**clause 5.5**) engage le processor à **assister le responsable de traitement** dans la réalisation de l'analyse d'impact (art. 35) et, le cas échéant, dans la consultation préalable de l'autorité de contrôle (art. 36) — garantie portée à l'actif de la présente analyse.
+
+Base légale inchangée : le recours à ce canal s'inscrit dans le traitement T3 d'enrichissement, fondé sur l'**intérêt légitime (art. 6.1.f)** déjà établi (LIA-MOVUP-001, cohérent avec le registre R1 et la balance test) ; il n'emporte aucune nouvelle base légale.
+
+**Évaluation** : chaîne de sous-traitance maîtrisée et documentée ; canal subsidiaire encadré (minimisation, subsidiarité, verrou entreprise/personne, absence de données sensibles, SCC) et assorti d'une obligation d'assistance à l'AIPD (clause 5.5).
 
 ### 2.9 Transferts hors UE
 
@@ -228,6 +240,7 @@ Le traitement étant fondé sur l'article 6.1.f (intérêt légitime), aucun con
 - **S5 Google** : transferts vers Google LLC US encadrés par CCT + DPF.
 - **S6 Cloudflare** : réseau anycast mondial encadré par CCT + DPF.
 - **S8 ipapi (à substituer)** : seul transfert hors UE non strictement encadré à la date d'effet → substitution par MaxMind GeoLite2 self-hosted en V1.0.x.
+- **S10 Dataforseo OÜ (canal subsidiaire)** : processor établi en Estonie (UE) — le transfert opéré par MovUP est **intra-UE**. L'infrastructure sous-traitante US du processor (Google LLC, Microsoft Azure), dans sa propre chaîne de sous-traitance, est encadrée par CCT 2021/914 (SCC).
 
 **Évaluation** : transferts maîtrisés sauf S8 (action de mitigation programmée).
 

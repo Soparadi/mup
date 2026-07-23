@@ -15,7 +15,7 @@ import { getDb } from './lib/surreal.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
-import { normaliserSociete, comparerNumero, parserAdresseAgregee } from './lib/societes.js'
+import { normaliserSociete, comparerNumero, parserAdresseAgregee, voiesConcordent } from './lib/societes.js'
 import { libelleFormeJuridique } from './lib/formes-juridiques.js'
 import { analyserImport, analyserImportDetaille } from './lib/import.js'
 import { normalizePersonFields } from './lib/person-fields.js'
@@ -2890,7 +2890,7 @@ app.post('/api/enrich/:siret', async (req, res) => {
           const refA = parserAdresseAgregee(faisceau.adresse)
           const dfsA = parserAdresseAgregee(info.address)
           const cpOk = cp && info.address.includes(cp)
-          const voieOk = refA.voie && dfsA.voie && refA.voie === dfsA.voie
+          const voieOk = voiesConcordent(refA.voie, dfsA.voie)
           const numOk = comparerNumero(refA.numero, dfsA.numero)
           if (cpOk && voieOk && numOk) {
             const patch = {}

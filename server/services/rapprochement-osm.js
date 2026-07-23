@@ -243,6 +243,7 @@ function sonderAdresse(soc, idx) {
       const voieOk = !!(voieSoc && voieOSM === voieSoc)
       console.log('[dbg-adr-L2]', JSON.stringify({
         cle_nom: soc.cle_nom, ville: soc.ville,
+        adresse_brut: soc.adresse,
         type_voie_brut: soc.type_voie, libelle_voie_brut: soc.libelle_voie,
         voieSoc,
         street_brut: osm.street, voieOSM,
@@ -294,7 +295,7 @@ export async function rapprocherDepartement(dept) {
     const db = await getDb()
     const r = await db.query(
       'SELECT siret, siren, raison_sociale, ville, website, societe_email, societe_tel, ' +
-      'cle_nom, code_postal, enseigne, numero_voie, type_voie, libelle_voie ' +
+      'cle_nom, code_postal, enseigne, numero_voie, type_voie, libelle_voie, adresse ' +
       'FROM referentiel_societes WHERE departement = $d',
       { d }
     )

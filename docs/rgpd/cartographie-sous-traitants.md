@@ -32,16 +32,16 @@ Ce document est **opposable** : il peut être produit à toute autorité de cont
 
 Il est articulé avec :
 
-- la balance test intérêt légitime (LIA-MOVUP-001 v1.1) — fondement juridique des traitements basés sur l'article 6.1.f,
+- la balance test intérêt légitime (LIA-MOVUP-001 v1.2, Doctrine 9 amendée) — fondement juridique des traitements basés sur l'article 6.1.f,
 - le registre des activités de traitement (RAT-MOVUP-001 v1.0) — liste des 8 activités de traitement,
 - l'analyse d'impact relative à la protection des données (AIPD-MOVUP-001) — analyse de risque,
 - le journal technique `docs/PHASE_6_RGPD_COMPLETE.md` (tag git `v1.0.0-rgpd`) — état du système.
 
 ## Principe directeur — Souveraineté technique et hébergement européen
 
-La cartographie suivante respecte strictement la **Doctrine 9 de la balance test (LIA-MOVUP-001 v1.1) — Souveraineté technique** :
+La cartographie suivante respecte strictement la **Doctrine 9 de la balance test (LIA-MOVUP-001 v1.2, Doctrine 9 amendée) — Souveraineté technique** :
 
-- **Aucun prestataire tiers de scraping** (ScrapingBee, Scrapfly, Bright Data, Apify, etc.) n'est mobilisé.
+- **Aucun prestataire tiers de scraping ni d'agrégation commerciale B2B** (ScrapingBee, Scrapfly, Bright Data, Apify, etc.) n'est mobilisé ; l'accès aux sources publiques via un processor UE sous SCC (Dataforseo OÜ, pour la seule consultation de la fiche publique Google My Business) est en revanche admis, au même titre que les autres sources publiques, cf. [balance test, Doctrine 9 amendée](balance-test-interet-legitime.md).
 - **Aucun agrégateur de données B2B** (Pappers, Société.com, Manageo, etc.) n'est mobilisé.
 - **Aucun fournisseur de bases de contacts enrichies** (Dropcontact, Apollo, Lusha, ZoomInfo, Hunter.io, etc.) n'est mobilisé.
 - **Hébergement européen exclusif** à la date d'effet du présent document (Railway europe-west4, SurrealDB Cloud AWS eu-west-1 Dublin, Resend eu-west-1 Dublin).
@@ -49,7 +49,7 @@ La cartographie suivante respecte strictement la **Doctrine 9 de la balance test
 
 ---
 
-## Vue d'ensemble — Liste des 9 sous-traitants MovUP
+## Vue d'ensemble — Liste des 10 sous-traitants MovUP
 
 | N° | Sous-traitant | Fonction | Localisation | Transfert hors UE | DPA |
 |---|---|---|---|---|---|
@@ -62,8 +62,9 @@ La cartographie suivante respecte strictement la **Doctrine 9 de la balance test
 | S7 | Gandi SAS | Registrar DNS et hébergement email | Paris (France) | Non | Acquis (DPA standard) |
 | S8 | ipapi (Kloudend Inc.) | Géolocalisation IP à l'inscription | États-Unis | Oui (CCT 2021/914) | À vérifier ou substituer |
 | S9 | INSEE / DINUM Etalab | Sources publiques officielles (SIRENE, API recherche-entreprises, API BAN) | Paris (France) | Non | Sans objet (organisme public) |
+| S10 | Dataforseo OÜ | Accès fiche publique GMB (dernier ressort) | Estonie (UE) | Oui (infra US du processor, SCC 2021/914) | Oui (URL DPA) |
 
-**9 sous-traitants** au total. Les fiches détaillées suivent.
+**10 sous-traitants** au total. Les fiches détaillées suivent.
 
 **Le point d'attention** porte sur S8 (ipapi) — fournisseur basé aux États-Unis, dont la pertinence opérationnelle (géolocalisation IP au signup) est à mettre en balance avec le risque de transfert. Voir fiche S8 et recommandation.
 
@@ -668,9 +669,78 @@ Appel transactionnel à chaque requête. Pas de stockage chez le sous-traitant (
 
 ---
 
+# Fiche S10 — Dataforseo OÜ
+
+## Identification
+
+| Champ | Valeur |
+|---|---|
+| Dénomination | Dataforseo OÜ |
+| Forme juridique | Société estonienne (Osaühing / OÜ) — Company No. 14502291 |
+| Entité contractante | Dataforseo OÜ |
+| Adresse | Vesivärava tn 50-201, Kesklinna linnaosa, Tallinn, Harju maakond, Estonie 10152 |
+| Représentant UE | Non requis (société établie en UE) |
+| URL | https://dataforseo.com |
+| Contact DPO | Nick Chernets (Directeur) — info@dataforseo.com |
+| URL DPA | https://dataforseo.com/wp-content/uploads/2022/09/DataForSEO_DPA.pdf |
+
+## Fonction et objet du traitement sous-traité
+
+**Fonction** : accès, en dernier ressort, à la fiche publique Google My Business (GMB) d'une entreprise ciblée.
+
+**Description** : lorsque les canaux gratuits d'enrichissement (moteur de recherche interne MovUP sur le site officiel, mentions légales LCEN) n'ont rien restitué pour une entreprise, MovUP interroge l'API **Business Data / Google My Business Info (live)** de Dataforseo OÜ afin de récupérer les coordonnées de contact professionnel figurant sur la fiche GMB publique de l'établissement. Canal **strictement subsidiaire**, jamais mobilisé en premier rang.
+
+**Activités de traitement concernées** (cf. registre RAT-MOVUP-001) : T3 (enrichissement — cf. registre art. 30).
+
+## Nature et catégories de données traitées
+
+- Donnée de contact professionnel figurant sur une fiche GMB publique (*contact information appearing on a SERP*) : téléphone d'établissement, adresse email générique, site web.
+- **Aucune donnée sensible** (art. 9 RGPD), aucun identifiant national, aucun mot de passe.
+- **Requête sortante minimisée** : nom de l'entreprise + ville uniquement (clé de recherche transmise au processor).
+- **Verrou entreprise / personne physique** : aucune coordonnée rattachée à une personne physique n'est restituée comme contact de la société ; le filtre anti-email nominatif (Ligne rouge n°1) s'applique identiquement aux données issues de la fiche GMB.
+
+## Localisation et transferts
+
+| Élément | Valeur |
+|---|---|
+| Entité contractante | Dataforseo OÜ (Tallinn, Estonie, UE) |
+| Traitement principal | Estonie (UE) — le transfert opéré par MovUP est **intra-UE** |
+| Transferts hors UE | Oui — infrastructure sous-traitante du processor (Google LLC, Microsoft Azure, US), dans la propre chaîne de sous-traitance de Dataforseo OÜ |
+| Base de transfert | Clauses contractuelles types 2021/914 (4 juin 2021) |
+
+## Garanties art. 28 RGPD
+
+- **DPA processor→controller** : MovUP = **controller**, Dataforseo OÜ = **processor**.
+- Certification **ISO 27001**.
+- **Assistance à l'AIPD** (clause 5.5 du DPA).
+- Notification d'incident sans retard injustifié.
+- Assistance à l'exercice des droits des personnes concernées.
+- Sous-traitants ultérieurs : Google LLC + Microsoft Azure (US), encadrés par SCC 2021/914.
+
+## Statut DPA
+
+**Oui (acquis)** — DPA DataForSEO incorporé aux Terms, accepté par acceptation des conditions du service, publié : https://dataforseo.com/wp-content/uploads/2022/09/DataForSEO_DPA.pdf
+
+## Durée du traitement
+
+Durées de conservation côté processor (DataForSEO) :
+
+- SERP : 31 jours
+- HTML : 7 jours
+- pingback / postback : 6 mois
+- tâches / résultats / payload : 12 mois
+
+## Mesures de réversibilité
+
+- Canal **subsidiaire désactivable sans rupture de service** : les canaux gratuits (moteur interne, mentions légales) demeurent la source principale d'enrichissement.
+- Suppression ou retour des données sur demande (clause du DPA).
+- Aucun verrouillage technique.
+
+---
+
 ## Section transversale — Sous-traitants explicitement écartés (Doctrine 9 LIA)
 
-Conformément à la **Doctrine 9 de la balance test LIA-MOVUP-001 v1.1 — Souveraineté technique**, les catégories de sous-traitants suivantes sont **explicitement écartées** et ne figurent pas dans la présente cartographie :
+Conformément à la **Doctrine 9 de la balance test LIA-MOVUP-001 v1.2 (Doctrine 9 amendée) — Souveraineté technique**, les catégories de sous-traitants suivantes sont **explicitement écartées** et ne figurent pas dans la présente cartographie :
 
 ### Prestataires de scraping en marque blanche (écartés)
 
@@ -737,7 +807,7 @@ Conformément à la **Doctrine 9 de la balance test LIA-MOVUP-001 v1.1 — Souve
 
 | Statut | Sous-traitants | Action requise |
 |---|---|---|
-| **Acquis** | Stripe (S3), Google (S5), Cloudflare (S6), Gandi (S7) | Aucune action |
+| **Acquis** | Stripe (S3), Google (S5), Cloudflare (S6), Gandi (S7), Dataforseo OÜ (S10) | Aucune action |
 | **À contre-signer** | Railway (S1), SurrealDB (S2), Resend (S4) | Contre-signature formelle des DPA standards (≤ 2h) |
 | **À substituer ou vérifier** | ipapi (S8) | Remplacement par MaxMind GeoLite2 self-hosted recommandé (≤ 3h) |
 | **Sans objet** | INSEE / Etalab (S9) | Aucune action |
@@ -747,6 +817,7 @@ Conformément à la **Doctrine 9 de la balance test LIA-MOVUP-001 v1.1 — Souve
 | Localisation principale | Sous-traitants | Volume de données |
 |---|---|---|
 | France | Gandi (S7), INSEE/Etalab (S9) | Faible (DNS + sources publiques) |
+| Estonie (UE) | Dataforseo OÜ (S10) — transfert hors UE Oui (infra US du processor, SCC 2021/914) | Faible (accès fiche publique GMB en dernier ressort) |
 | Irlande | Stripe (S3), Resend (S4), Google (S5), Cloudflare (S6), SurrealDB (S2 via AWS Dublin) | Élevé (cœur des traitements) |
 | Belgique (GCP) | Railway (S1) | Élevé (exécution applicative) |
 | Royaume-Uni (adéquation) | SurrealDB Labs (S2 entité) | Faible (administration) |
@@ -825,7 +896,7 @@ Le présent document et ses versions antérieures sont conservés sans limitatio
 
 Le présent document est établi sous la responsabilité de Benoît Fouquet, en sa qualité de responsable de traitement, et engage l'entreprise individuelle So Paradi (SIRET 453 388 456 00031).
 
-L'ensemble des 9 sous-traitants documentés est mobilisé effectivement à la date d'effet du présent document, sous réserve des contre-signatures DPA pendantes et de la substitution recommandée du sous-traitant S8.
+L'ensemble des 10 sous-traitants documentés est mobilisé effectivement à la date d'effet du présent document, sous réserve des contre-signatures DPA pendantes et de la substitution recommandée du sous-traitant S8.
 
 **Fait à Dinan, le 25 mai 2026**
 

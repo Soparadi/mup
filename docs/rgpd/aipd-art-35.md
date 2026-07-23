@@ -224,7 +224,7 @@ Le traitement étant fondé sur l'article 6.1.f (intérêt légitime), aucun con
 
 1. **Minimisation de la requête sortante** — la clé de recherche transmise au processor se limite au **nom de l'entreprise + ville** ; aucune autre donnée n'est exposée.
 2. **Appel strictement conditionnel** — le canal n'est jamais mobilisé en premier rang ; il n'est déclenché que si les canaux gratuits n'ont restitué aucun contact professionnel.
-3. **Verrou entreprise / personne physique** — aucune coordonnée (téléphone, email) rattachée à une personne physique n'est restituée comme contact de la société ; le filtre anti-email nominatif (Ligne rouge n°1, Doctrine 10 LIA) s'applique identiquement aux données issues de la fiche GMB.
+3. **Restitution limitée aux champs de société** — la restitution DataForSEO est limitée par construction aux seuls champs de société (website, societe_tel), en fill-if-empty ; aucune donnée nominative n'est restituée (pas de nom, pas d'email personnel) ; le dirigeant_nom reste validateur de concordance, jamais écrit ni exposé ; la coordonnée publiée par l'exploitant sur sa fiche GMB est traitée comme professionnelle par destination, quelle que soit sa forme.
 4. **Aucune donnée sensible transférée** — aucune catégorie particulière (art. 9 et 10 RGPD) n'est transmise dans la requête ni collectée par ce canal (confirmé par le DPA DataForSEO).
 5. **Transfert intra-UE côté MovUP** — l'infrastructure sous-traitante US du processor (Google LLC, Microsoft Azure), dans sa propre chaîne de sous-traitance, est encadrée par les clauses contractuelles types adoptées par la Commission européenne (décision 2021/914 — SCC).
 
@@ -232,7 +232,7 @@ Le traitement étant fondé sur l'article 6.1.f (intérêt légitime), aucun con
 
 Base légale inchangée : le recours à ce canal s'inscrit dans le traitement T3 d'enrichissement, fondé sur l'**intérêt légitime (art. 6.1.f)** déjà établi (LIA-MOVUP-001, cohérent avec le registre R1 et la balance test) ; il n'emporte aucune nouvelle base légale.
 
-**Évaluation** : chaîne de sous-traitance maîtrisée et documentée ; canal subsidiaire encadré (minimisation, subsidiarité, verrou entreprise/personne, absence de données sensibles, SCC) et assorti d'une obligation d'assistance à l'AIPD (clause 5.5).
+**Évaluation** : chaîne de sous-traitance maîtrisée et documentée ; canal subsidiaire encadré (minimisation, subsidiarité, restitution limitée aux champs de société, absence de données sensibles, SCC) et assorti d'une obligation d'assistance à l'AIPD (clause 5.5).
 
 ### 2.9 Transferts hors UE
 

@@ -34,9 +34,9 @@
   window.__TEM_INITED = true
 
   var PLANS = [
-    { key: 'demarrage', name: 'Démarrage', monthly: 24, annual: 20, annualTotal: 240, color: '#0BBCD4', soft: 'rgba(11,188,212,.12)' },
-    { key: 'activite',  name: 'Activité',  monthly: 34, annual: 28, annualTotal: 340, color: '#1D8348', soft: 'rgba(29,131,72,.12)' },
-    { key: 'croisiere', name: 'Croisière', monthly: 44, annual: 37, annualTotal: 440, color: '#1D8348', soft: 'rgba(29,131,72,.12)' }
+    { key: 'demarrage', name: 'Essentiel', monthly: 24, annual: 20, annualTotal: 240, color: '#0BBCD4', soft: 'rgba(11,188,212,.12)' },
+    { key: 'activite',  name: 'Régulier',  monthly: 34, annual: 28, annualTotal: 340, color: '#1D8348', soft: 'rgba(29,131,72,.12)' },
+    { key: 'croisiere', name: 'Intensif',  monthly: 44, annual: 37, annualTotal: 440, color: '#1D8348', soft: 'rgba(29,131,72,.12)' }
   ]
   var VALID_PLANS = ['demarrage', 'activite', 'croisiere']
 

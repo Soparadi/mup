@@ -2363,10 +2363,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
         lat: etab.latitude ? parseFloat(etab.latitude) : null,
         lng: etab.longitude ? parseFloat(etab.longitude) : null,
         geoStatus: etab.latitude ? 'ok' : 'pending', geoSrc: etab.latitude ? 'api' : null,
-        // JOINTURE TEMPORAIRE DE DÉVELOPPEMENT — contacts société servis par
-        // /api/search (relecture referentiel_societes côté serveur). À retirer
-        // avant lancement (le paywall repose sur l'absence de ces champs ici).
-        phone: r.societe_tel || null, website: r.website || null, email: r.societe_email || null, socials: [],
+        phone: null, website: null, email: null, socials: [],
         priority: 'cold', capital: r.capital ? r.capital + ' \u20AC' : '',
         forme: r.nature_juridique || '', created: r.date_creation || '',
         // Adresse structur\u00E9e (en sus de `addr` agr\u00E9g\u00E9e) \u2014 consomm\u00E9e par

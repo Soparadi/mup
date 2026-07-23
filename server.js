@@ -2321,60 +2321,18 @@ app.get('/api/search', async (req, res) => {
     }
     // servedSiret — SIRET de l'établissement servi par fiche (matching[0], repli
     // siège), normalisé. Fonction PURE (n'utilise que r / Array / String) : hissée
-    // ici pour être partagée par le TRI DE SERVICE et la jointure dev, sans dépendre
-    // du scope de l'un ou l'autre bloc.
+    // ici pour le TRI DE SERVICE, sans dépendre du scope de ce bloc.
     const servedSiret = r => {
       const m = Array.isArray(r?.matching_etablissements) ? r.matching_etablissements : []
       return String((m[0] && m[0].siret) || (r?.siege && r.siege.siret) || '').replace(/\s+/g, '')
     }
-    // ══════════════════════════════════════════════════════════════════════
-    // JOINTURE TEMPORAIRE DE DÉVELOPPEMENT — À RETIRER AVANT LANCEMENT.
-    // Le paywall repose sur l'ABSENCE de ces champs à la recherche : /api/search
-    // sert le socle Etalab brut, et les contacts société (website / societe_tel /
-    // societe_email, écrits par l'amorçage Overpass dans referentiel_societes) ne
-    // sont normalement restitués qu'au clic « Enrichir » via /api/enrich/:siret.
-    // Ce bloc les relit EN LECTURE SEULE et les injecte sur les fiches servies,
-    // pour les rendre visibles sans enrichir en pré-lancement (aucun abonné).
-    // UNE seule requête groupée (siret IN $sirets), jamais une par fiche. Champ
-    // absent si vide (jamais de chaîne vide forcée). Fail-open : tout échec est
-    // avalé, la réponse part sans contacts. À SUPPRIMER avant le paywall.
-    if (Array.isArray(data.results) && data.results.length) {
-      try {
-        const uniq = [...new Set(data.results.map(servedSiret).filter(Boolean))]
-        if (uniq.length) {
-          const db = await getDb()
-          const qr = await db.query(
-            'SELECT siret, website, societe_email, societe_tel FROM referentiel_societes WHERE siret IN $sirets',
-            { sirets: uniq }
-          )
-          const byS = new Map()
-          for (const row of (qr && qr[0]) || []) {
-            const k = typeof row?.siret === 'string' ? row.siret.trim() : ''
-            if (k) byS.set(k, row)
-          }
-          for (const r of data.results) {
-            const row = byS.get(servedSiret(r))
-            if (!row) continue
-            const w = typeof row.website === 'string' ? row.website.trim() : ''
-            const tel = typeof row.societe_tel === 'string' ? row.societe_tel.trim() : ''
-            const em = typeof row.societe_email === 'string' ? row.societe_email.trim() : ''
-            if (w) r.website = w
-            if (tel) r.societe_tel = tel
-            if (em) r.societe_email = em
-          }
-        }
-      } catch (e) {
-        console.warn('[search:join-referentiel-dev]', String(e?.message || e).slice(0, 80))
-      }
-    }
-    // ═══════════════════════ FIN JOINTURE TEMPORAIRE ═══════════════════════
-    // ── Tri de service — INDÉPENDANT du bloc de fuite ci-dessus ──
+    // ── Tri de service — relecture referentiel_societes propre au tri ──
     // Réordonne les fiches par le triplet [rangDirect, site?, linkedin?], où
     // rangDirect (clé primaire) est le socle de COORDONNÉES DIRECTES lu en base :
     //   0 = mail ET tél · 1 = mail seul · 2 = tél seul · 3 = ni l'un ni l'autre.
     // À triplet égal, l'ordre Etalab est préservé (Array.prototype.sort stable, V8).
-    // Lecture PROPRE au tri (getDb + SELECT dédié) : ce bloc survit à la suppression
-    // du bloc de fuite. Fail-open : tout échec laisse data.results dans l'ordre Etalab.
+    // Lecture PROPRE au tri (getDb + SELECT dédié), autonome.
+    // Fail-open : tout échec laisse data.results dans l'ordre Etalab.
     // RIEN de nouveau sérialisé — on ne fait que réordonner ; aucun rang / flag /
     // has_contact / linkedin n'est écrit sur les fiches. Map de tri strictement locale.
     if (Array.isArray(data.results) && data.results.length) {

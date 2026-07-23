@@ -690,7 +690,7 @@ Appel transactionnel à chaque requête. Pas de stockage chez le sous-traitant (
 
 **Description** : lorsque les canaux gratuits d'enrichissement (moteur de recherche interne MovUP sur le site officiel, mentions légales LCEN) n'ont rien restitué pour une entreprise, MovUP interroge l'API **Business Data / Google My Business Info (live)** de Dataforseo OÜ afin de récupérer les coordonnées de contact professionnel figurant sur la fiche GMB publique de l'établissement. Canal **strictement subsidiaire**, jamais mobilisé en premier rang.
 
-**Activités de traitement concernées** (cf. registre RAT-MOVUP-001) : T3 (enrichissement — cf. registre art. 30).
+**Activités de traitement concernées** (cf. registre RAT-MOVUP-001) : traitement R1 (Constitution et enrichissement du référentiel de prospection), cf. registre art. 30.
 
 ## Nature et catégories de données traitées
 

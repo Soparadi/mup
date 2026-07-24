@@ -49,7 +49,8 @@ import {
   getEffectivePlan,
   getLeadLimit,
   getLeadsConsumed,
-  applyMonthlyReset
+  applyMonthlyReset,
+  hasEnriched
 } from './server/config/plan-quotas.js'
 import {
   sendOne as mailServiceSendOne,
@@ -2796,13 +2797,44 @@ app.get('/api/sirene/:siret', async (req, res) => {
 // POST /api/enrich/:siret — restitution des champs contact société depuis DEUX
 // sources : referentiel_societes (amorçage Overpass, PRIORITAIRE) et referentiel_osm
 // (réserve nationale OSM, fill-if-empty). Fusion champ par champ : valeur société si
-// non vide, sinon valeur OSM. Restitution PURE : aucun décompte quota, aucune
-// idempotence (différés).
+// non vide, sinon valeur OSM.
+//
+// GATE QUOTA en tête de route : un utilisateur au plafond n'obtient plus de
+// restitution. L'idempotence SIRET passe AVANT le gate — un SIRET déjà enrichi
+// par ce user a déjà été payé, il reste consultable même au plafond.
 app.post('/api/enrich/:siret', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   const siret = String(req.params.siret || '').replace(/\s+/g, '')
   if (!siret) return res.status(400).json({ error: 'SIRET manquant' })
+
+  const user = req.authUser
+  if (!user) return res.status(401).json({ error: 'unauthorized' })
+  const db = await getDb()
+  // SELECT unique : le record sert au test d'idempotence (hasEnriched, PURE) et,
+  // s'il faut gater, à la lecture du compteur (getLeadsConsumed, qui applique le
+  // reset lazy si le plan est payant). Repli sur un record neutre si absent.
+  const recRes = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
+  const rec = recRes[0]?.[0] || { userId, leadsConsumedThisMonth: 0, lastResetDate: null }
+  if (!hasEnriched(rec, siret)) {
+    const consumed = await getLeadsConsumed(db, userId, rec, user)
+    // getLeadLimit est la SEULE porte VIP (Infinity). Jamais PLAN_LEAD_LIMITS en direct.
+    const limit = getLeadLimit(user)
+    if (consumed >= limit) {
+      // error === 'quota_exceeded' impérativement : trial_expired / grace_expired /
+      // grace_active déclencheraient la modale du wrapper (subscription.js:86,
+      // trial-expired-modal.js:305), qui n'a rien à voir avec un plafond de leads.
+      return res.status(402).json({
+        error: 'quota_exceeded',
+        plan: getEffectivePlan(user),
+        quotaUsed: consumed,
+        quotaLimit: limit === Infinity ? null : limit,
+        quotaPeriod: getEffectivePlan(user) === 'essai' ? 'essai' : 'monthly',
+        upgradeUrl: '/statistiques.html#plan'
+      })
+    }
+  }
+
   const [soc, osm] = await Promise.all([
     getReferentielContactBySiret(siret),
     getOsmContactBySiret(siret)

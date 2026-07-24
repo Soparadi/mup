@@ -4187,8 +4187,8 @@ app.put('/api/user-settings', async (req, res) => {
 })
 
 // ── USER PLAN ── (1 record par user, défaut "gratuit" si absent)
-// PUT en MERGE pour cohabitation Stripe (payment_method écrit séparément du plan choisi)
-// et cohérence cross-pages (Statistiques + prospection.html).
+// LECTURE SEULE côté HTTP : le GET ci-dessous sert les compteurs, le PUT est
+// fermé en 405 (voir la note au-dessus du handler).
 
 // applyMonthlyReset + firstOfMonthIsoUTC déplacés dans
 // server/config/plan-quotas.js (source unique des quotas leads). Importés
@@ -4212,54 +4212,26 @@ app.get('/api/user-plan', async (req, res) => {
   }
 })
 
-app.put('/api/user-plan', async (req, res) => {
-  const userId = requireUserId(req, res)
-  if (!userId) return
-  // Garde F : rejet 422 si le body tente de poser un champ 'plan'.
-  // user.plan est gouverné par Stripe (webhook checkout/subscription) et le
-  // signup uniquement, JAMAIS par cette route. Test de PRÉSENCE de clé
-  // (hasOwnProperty) — un plan:null ou plan:'' est aussi une tentative
-  // d'écriture, à rejeter. Cette route ne porte plus que les compteurs
-  // leadsConsumed/leadsConsumedThisMonth (cf. C1 prospection.html 747d7f1).
-  if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'plan')) {
-    console.warn('[user-plan] rejet body avec champ plan — userId:', userId)
-    return res.status(422).json({
-      error: 'plan_not_accepted',
-      message: 'Le plan ne se modifie pas par cette route. Il est géré par Stripe Checkout / le signup.'
-    })
-  }
-  try {
-    const db = await getDb()
-    const cleanBody = { ...(req.body || {}) }
-    delete cleanBody.id
-    cleanBody.userId = userId
-    cleanBody.updatedAt = new Date().toISOString()
-    const sel = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
-    const exists = sel[0]?.[0]
-    // Logging changement de plan (uniquement si plan_to fourni ET différent du plan_from)
-    const prevPlan = exists?.plan || null
-    const nextPlan = cleanBody.plan
-    if (nextPlan && prevPlan && nextPlan !== prevPlan) {
-      const reason = (cleanBody.history_reason && typeof cleanBody.history_reason === 'string') ? cleanBody.history_reason : 'user_action'
-      delete cleanBody.history_reason
-      await db.query(
-        'CREATE user_plan_history CONTENT { userId: $userId, plan_from: $from, plan_to: $to, changed_at: $now, reason: $reason }',
-        { userId, from: prevPlan, to: nextPlan, now: cleanBody.updatedAt, reason }
-      )
-    } else {
-      delete cleanBody.history_reason
-    }
-    if (exists) {
-      const r = await db.query('UPDATE type::record("user_plan", $id) MERGE $body', { id: userId, body: cleanBody })
-      return res.status(200).json(r[0]?.[0] || r[0] || null)
-    }
-    const r = await db.query('CREATE type::record("user_plan", $id) CONTENT $body', { id: userId, body: cleanBody })
-    res.status(201).json(r[0]?.[0] || r[0] || null)
-  } catch (err) {
-    console.error('[user-plan:put]', err.message)
-    res.status(500).json({ error: 'Mise à jour user plan impossible' })
-  }
-})
+// FERMÉE EN ÉCRITURE. Le MERGE précédent recopiait le body verbatim (seul
+// 'plan' était filtré en 422) : un PUT { leadsConsumedThisMonth: 0 } remettait
+// le compteur de quota à zéro, un lastResetDate posé neutralisait le reset
+// mensuel, un enrichedSirets: [] effaçait l'idempotence d'enrichissement.
+// Trois portes dérobées ouvertes à tout utilisateur authentifié, sur le record
+// qui porte précisément les compteurs que le gate quota doit faire respecter.
+//
+// Aucune liste blanche ici : l'ensemble des champs légitimement posables par le
+// client est VIDE. Cette route n'avait plus aucun appelant en écriture depuis la
+// suppression de la modale plan (étape C2) — la branche saveJSON('mup_user_plan')
+// de statistiques.html n'était elle-même jamais appelée.
+//
+// Les écritures légitimes sur user_plan passent toutes hors HTTP :
+//   - reset mensuel      → applyMonthlyReset (server/config/plan-quotas.js)
+//   - marquage enrichi   → markEnriched      (server/config/plan-quotas.js)
+//   - plan               → webhooks Stripe / signup
+app.put('/api/user-plan', (req, res) => res.status(405).json({
+  error: 'method_not_allowed',
+  message: 'Cette route n\'accepte plus d\'écriture. Les compteurs sont gouvernés par le serveur.'
+}))
 
 // Squelette V1 : retourne toujours allowed:true tant que les paliers ne sont pas validés.
 // Quand PLAN_QUOTAS sera rempli, activer la logique allowed = quotaUsed < quotaLimit ici.

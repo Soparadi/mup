@@ -2248,8 +2248,47 @@ app.get('/api/search', async (req, res) => {
   // par le commit 1828e2d (per_page hardcoded à 10 sur cette branche).
   params.set('per_page', String(Math.min(parseInt(req.query.per_page) || 25, 25)))
   if(req.query.page) params.set('page', req.query.page)
+  // ── Appel Etalab : retry serveur sur 429 + timeout ──
+  // Le 429 vient du rate-limit posé sur l'IP de sortie Railway, PARTAGÉE entre
+  // tous les abonnés : la cadence du front (déjà throttlée) n'y peut rien, on
+  // absorbe donc ici. 3 tentatives max, et UNIQUEMENT sur 429 — tout autre
+  // non-2xx (500/502/503) garde le chemin actuel (garde !r.ok, aucun retry).
+  // Délai : Retry-After s'il est présent et parsable (borné à 5 s), sinon
+  // backoff 1 s puis 2 s. Jitter ±20 % OBLIGATOIRE : sans lui tous les clients
+  // rate-limités retapent en phase et le 429 se reproduit en boucle.
+  // Sur épuisement : même 502 { error, upstream_status: 429 } qu'avant — le
+  // retry front reste la 2e ligne, et S.upstreamPage n'étant incrémentée qu'au
+  // succès, la pagination n'est pas affectée.
+  // Timeout 9 s (AbortSignal) : sans lui un amont qui pend bloque indéfiniment.
+  // Un abort compte comme un échec de tentative, mais n'est PAS un 429 : il ne
+  // lit pas Retry-After et retombe sur le backoff par défaut.
+  const etalabUrl = 'https://recherche-entreprises.api.gouv.fr/search?' + params.toString()
+  const pageLog = req.query.page || 1
+  const jitter = ms => Math.round(ms * (0.8 + Math.random() * 0.4))
   try {
-    const r = await fetch('https://recherche-entreprises.api.gouv.fr/search?' + params.toString())
+    let r = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let aborted = false
+      try {
+        r = await fetch(etalabUrl, { signal: AbortSignal.timeout(9000) })
+      } catch (e) {
+        // Timeout / réseau : dernière tentative -> on laisse remonter au
+        // catch global du handler (502 muet, comportement actuel).
+        if (attempt === 2) throw e
+        aborted = true
+      }
+      if (!aborted && r.status !== 429) break
+      if (attempt === 2) break
+      let delay = attempt === 0 ? 1000 : 2000
+      if (!aborted) {
+        const ra = parseInt(r.headers.get('retry-after'), 10)
+        if (Number.isFinite(ra) && ra > 0) delay = Math.min(ra * 1000, 5000)
+        console.warn('[search] Etalab 429, retry ' + (attempt + 1) + '/2 page=' + pageLog)
+      }
+      await new Promise(resolve => setTimeout(resolve, jitter(delay)))
+    }
+    // Seul capteur de fréquence des 429 réellement subis après absorption.
+    if (r && r.status === 429) console.warn('[search] Etalab 429 épuisé page=' + pageLog)
     // Garde non-ok : sur 429 (rate-limit) ou 5xx, Etalab renvoie un corps d'erreur
     // SANS `results`. Le parser puis le servir en 200 le fait passer pour une page
     // vide côté front → armement du fallback resp2 (2e appel Etalab sur une API déjà

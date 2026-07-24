@@ -242,3 +242,31 @@ export async function markEnriched(db, userId, rawSiret) {
     return { added: false }
   }
 }
+
+// Ce que la restitution enrich vient de livrer justifie-t-il un décompte ?
+// DOCTRINE : seul un canal DIRECT compte — email OU téléphone. Un website, un
+// facebook, un instagram ou un linkedin ne sont pas des coordonnées, ce sont
+// des pistes : les livrer ne consomme rien.
+//
+// À NE PAS CONFONDRE avec le `found` de la route (server.js:2878), qui est vrai
+// dès qu'UN des 6 champs est non vide et sert à piloter l'affichage front
+// (contact-societe.html bail-out sur !found avant de remplir les 6 champs, y
+// compris les réseaux). Les deux conditions coexistent et ne se remplacent pas :
+// found = « ai-je quelque chose à afficher », celle-ci = « ai-je livré une
+// coordonnée ». `found` reste inchangé.
+//
+// « Présent » = chaîne non vide après trim, rien de plus — même règle que le tri
+// de service (server.js:2351-2352). AUCUNE validation de forme : pas de regex
+// email, pas de normalisation téléphone. Un societe_email issu d'OSM n'est pas
+// filtré à l'écriture (overpass.js:376) et peut être mal formé ou nominatif ;
+// arbitrage assumé, on ne durcit pas ici sans décision doctrinale séparée.
+//
+// Fonction PURE : pas de req, pas de db, pas d'await. Reçoit l'objet des champs
+// fusionnés (contrat societe_*), rend un booléen.
+//
+// NOTE : non WIRED dans cette passe. Le branchement sur POST /api/enrich/:siret
+// viendra avec l'incrément.
+export function porteCanalDecomptable(champs) {
+  const nonVide = v => typeof v === 'string' && v.trim() !== ''
+  return nonVide(champs?.societe_email) || nonVide(champs?.societe_tel)
+}

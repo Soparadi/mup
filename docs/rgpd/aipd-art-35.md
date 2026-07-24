@@ -335,7 +335,7 @@ Le **niveau de risque résiduel** (après mesures protectrices) est qualifié de
 
 #### Risque R3 — Détournement des données enrichies par un abonné MovUP
 
-**Description** : un abonné MovUP exporte les fiches enrichies (via export CSV plan Activité/Croisière) et les utilise hors finalité MovUP (revente, prospection abusive, transfert à un tiers).
+**Description** : un abonné MovUP exporte les fiches enrichies (via export CSV plan Régulier/Intensif) et les utilise hors finalité MovUP (revente, prospection abusive, transfert à un tiers).
 
 **Impact potentiel** :
 - Détournement de finalité.
@@ -349,7 +349,7 @@ Le **niveau de risque résiduel** (après mesures protectrices) est qualifié de
 **Mesures existantes** :
 - CGU MovUP encadrant l'usage (à renforcer Phase 6-bis avocat).
 - Quotas commerciaux produits (30/120/illimités prospects actifs) limitant le volume.
-- Export CSV réservé aux plans payants (Activité et Croisière) — pas en plan Démarrage ni en essai.
+- Export CSV réservé aux plans payants (Régulier et Intensif) — pas en plan Essentiel ni en essai.
 - Audit log conservé pour traçabilité.
 
 **Gravité** : 3 (importante — atteinte aux droits des personnes)

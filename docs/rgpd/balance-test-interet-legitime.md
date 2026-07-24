@@ -323,7 +323,7 @@ Cette section documente l'ensemble des mesures techniques et organisationnelles 
 - **IP hashée** dans les logs (pas de stockage en clair).
 - **Aucune donnée sensible** collectée (cf. Section 3.2).
 - **Aucune adresse email nominative** admise dans la base (filtre défensif Ligne rouge n°1, application à l'écriture par le moteur de recherche interne).
-- **Quotas commerciaux du produit** limitant mécaniquement le volume traité : 30 prospects actifs sur le plan Démarrage, 120 sur Activité, illimités sur Croisière.
+- **Quotas commerciaux du produit** limitant mécaniquement le volume traité : 30 prospects actifs sur le plan Essentiel, 120 sur Régulier, illimités sur Intensif.
 - **Plafond opérationnel du moteur de recherche interne** : ~500 fiches enrichies par jour à la date d'effet du présent document, paramètre maîtrisé par le responsable de traitement.
 - **Requête minimisée au processor GMB** : lorsqu'il est sollicité en dernier ressort, l'accès à la fiche Google My Business via le processor Dataforseo OÜ n'emporte transmission que du nom de l'entreprise et de la ville (clé de recherche), à l'exclusion de toute autre donnée de la personne concernée.
 

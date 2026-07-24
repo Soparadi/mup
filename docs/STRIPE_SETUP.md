@@ -15,9 +15,9 @@ Toutes les actions ci-dessous sont à faire dans le Dashboard Stripe.
 
 | Plan | Mensuel | Annuel/mois (-15 %) | Annuel total |
 |---|---|---|---|
-| Démarrage | 19,00 € | 16,00 € | 192,00 € |
-| Activité | 29,00 € | 25,00 € | 300,00 € |
-| Croisière | 39,00 € | 33,00 € | 396,00 € |
+| Essentiel | 19,00 € | 16,00 € | 192,00 € |
+| Régulier | 29,00 € | 25,00 € | 300,00 € |
+| Intensif | 39,00 € | 33,00 € | 396,00 € |
 
 Cible : auto-entrepreneur français en franchise TVA art. 293 B du CGI.
 **Pas de TVA collectée**. Les montants Stripe sont saisis en TTC=HT (le
@@ -27,13 +27,13 @@ Cible : auto-entrepreneur français en franchise TVA art. 293 B du CGI.
 
 ## 2. Création des 6 produits
 
-Dans **Products → Add product**, créer **3 produits** (Démarrage, Activité,
-Croisière). Pour chacun, ajouter **2 prix** (mensuel + annuel) en EUR.
+Dans **Products → Add product**, créer **3 produits** (Essentiel, Régulier,
+Intensif). Pour chacun, ajouter **2 prix** (mensuel + annuel) en EUR.
 
-### Produit 1 — Démarrage
+### Produit 1 — Essentiel
 
-- **Name** : `MovUP Démarrage`
-- **Description** : `Plan Démarrage MovUP — pour lancer son activité.`
+- **Name** : `MovUP Essentiel`
+- **Description** : `Plan Essentiel MovUP — pour lancer son activité.`
 - **Tax behavior** : Inclusive (ou laisser par défaut, sans TVA)
 - **Metadata produit** : `plan=demarrage`
 
@@ -46,10 +46,10 @@ Prix à ajouter :
 
 Noter les `price_id` retournés (commencent par `price_`).
 
-### Produit 2 — Activité
+### Produit 2 — Régulier
 
-- **Name** : `MovUP Activité`
-- **Description** : `Plan Activité MovUP — pour prospecter chaque semaine.`
+- **Name** : `MovUP Régulier`
+- **Description** : `Plan Régulier MovUP — pour prospecter chaque semaine.`
 - **Metadata produit** : `plan=activite`
 
 | Type | Montant | Currency | Billing | Metadata |
@@ -57,10 +57,10 @@ Noter les `price_id` retournés (commencent par `price_`).
 | Recurring | 29,00 | EUR | Monthly | `plan=activite`, `cycle=monthly` |
 | Recurring | 300,00 | EUR | Yearly | `plan=activite`, `cycle=annual` |
 
-### Produit 3 — Croisière
+### Produit 3 — Intensif
 
-- **Name** : `MovUP Croisière`
-- **Description** : `Plan Croisière MovUP — pour piloter une activité installée.`
+- **Name** : `MovUP Intensif`
+- **Description** : `Plan Intensif MovUP — pour piloter une activité installée.`
 - **Metadata produit** : `plan=croisiere`
 
 | Type | Montant | Currency | Billing | Metadata |
@@ -91,12 +91,12 @@ Renseigner les **8 variables** ci-dessous dans **Railway → Project → Variabl
 
 | Variable | Récupéré depuis le produit/prix |
 |---|---|
-| `STRIPE_PRICE_DEMARRAGE_MONTHLY` | Démarrage → prix mensuel 19 € |
-| `STRIPE_PRICE_DEMARRAGE_ANNUAL` | Démarrage → prix annuel 192 € |
-| `STRIPE_PRICE_ACTIVITE_MONTHLY` | Activité → prix mensuel 29 € |
-| `STRIPE_PRICE_ACTIVITE_ANNUAL` | Activité → prix annuel 300 € |
-| `STRIPE_PRICE_CROISIERE_MONTHLY` | Croisière → prix mensuel 39 € |
-| `STRIPE_PRICE_CROISIERE_ANNUAL` | Croisière → prix annuel 396 € |
+| `STRIPE_PRICE_DEMARRAGE_MONTHLY` | Essentiel → prix mensuel 19 € |
+| `STRIPE_PRICE_DEMARRAGE_ANNUAL` | Essentiel → prix annuel 192 € |
+| `STRIPE_PRICE_ACTIVITE_MONTHLY` | Régulier → prix mensuel 29 € |
+| `STRIPE_PRICE_ACTIVITE_ANNUAL` | Régulier → prix annuel 300 € |
+| `STRIPE_PRICE_CROISIERE_MONTHLY` | Intensif → prix mensuel 39 € |
+| `STRIPE_PRICE_CROISIERE_ANNUAL` | Intensif → prix annuel 396 € |
 
 ### Variable optionnelle
 
@@ -158,7 +158,7 @@ Dans **Settings → Billing → Customer Portal → Configure**.
       (l'utilisateur garde l'accès jusqu'à `current_period_end`)
 - [ ] **Pause subscription** — **désactivé** (pas pertinent pour MovUP)
 - [x] **Switch plans** — actif. Sélectionner les **3 produits MovUP**
-      (Démarrage / Activité / Croisière). Permettre changement entre les
+      (Essentiel / Régulier / Intensif). Permettre changement entre les
       6 prix (3 plans × 2 cycles).
 
 ### Cancellation
@@ -197,7 +197,7 @@ s'applique aux deux. Pas de bascule à faire au passage en Live.
    - Les 6 `STRIPE_PRICE_*` → nouveaux IDs Live
 5. Redémarrage Railway automatique sur changement de var.
 6. **Test final Live** : un signup réel avec une vraie carte (paiement
-   minimal de 19 € Démarrage), puis résiliation immédiate via Customer
+   minimal de 19 € Essentiel), puis résiliation immédiate via Customer
    Portal pour vérifier que :
    - `subscription.deleted` est bien reçu côté webhook
    - `trial_status` revient à `expired` en SurrealDB
@@ -234,7 +234,7 @@ vérification automatique en base.
 4. Cliquer **Continuer vers le paiement** → redirection Stripe Checkout.
 5. Renseigner carte Test, valider.
 6. Redirection sur `/account/billing?success=true` → bandeau succès vert,
-   plan Activité affiché, statut Actif.
+   plan Régulier affiché, statut Actif.
 7. Vérifier en SurrealDB :
    ```sql
    SELECT email, plan, plan_billing_cycle, subscription_status,
@@ -248,7 +248,7 @@ vérification automatique en base.
 8. Vérifier que l'email `subscription_activated` est arrivé via Resend.
 9. Tester le Customer Portal : depuis `/account/billing` cliquer
    **Gérer mon abonnement** → portal Stripe ouvert → tester changement
-   de plan vers Croisière → vérifier en base que `plan='croisiere'`.
+   de plan vers Intensif → vérifier en base que `plan='croisiere'`.
 10. Tester résiliation depuis le portail → vérifier en base que
     `subscription_status='canceled'` et `trial_status='expired'` (popup
     bloquant réapparaît au prochain login).
@@ -266,8 +266,10 @@ vérification automatique en base.
 
 ## 8. Vocabulaire et conformité
 
-- **Plan names** : `Démarrage`, `Activité`, `Croisière` (jamais `Starter`,
-  `Pro`, `Business`).
+- **Plan names** : les libellés affichés sont `Essentiel`, `Régulier`,
+  `Intensif` (jamais `Starter`, `Pro`, `Business`, ni les anciens
+  `Démarrage`, `Activité`, `Croisière`). Les slugs techniques restent
+  `demarrage`, `activite`, `croisiere` et ne sont jamais affichés.
 - **Mention TVA** : `TVA non applicable, art. 293 B du CGI` — affichée
   sous le bouton Checkout via `custom_text.submit.message`, et dans les
   emails `subscription_activated`.

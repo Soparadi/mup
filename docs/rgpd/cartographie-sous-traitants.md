@@ -229,7 +229,7 @@ Durée de l'abonnement SurrealDB Cloud.
 
 **Fonction** : traitement des paiements, gestion des abonnements récurrents, facturation, Customer Portal.
 
-**Description** : encaissement des paiements par carte bancaire pour les 3 plans MovUP (Démarrage 24€, Activité 34€, Croisière 44€), gestion du cycle de vie de l'abonnement (création, mise à jour, résiliation, échec de paiement), émission des factures (préfixe MOVUP, séquence à partir de 19), gestion des moyens de paiement par les abonnés via Customer Portal.
+**Description** : encaissement des paiements par carte bancaire pour les 3 plans MovUP (Essentiel 24€, Régulier 34€, Intensif 44€), gestion du cycle de vie de l'abonnement (création, mise à jour, résiliation, échec de paiement), émission des factures (préfixe MOVUP, séquence à partir de 19), gestion des moyens de paiement par les abonnés via Customer Portal.
 
 **Activités de traitement concernées** : T1 (comptes — partiellement via stripe_customer_id), T5 (facturation principale), T8 (archives comptables — données transactionnelles).
 

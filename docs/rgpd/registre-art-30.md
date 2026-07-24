@@ -98,7 +98,7 @@ Abonnés MovUP — personnes physiques exerçant une activité professionnelle i
 Trois statuts coexistent :
 
 - comptes en essai gratuit 14 jours (`trial_active`),
-- comptes payants actifs (`active` sur l'un des trois plans : Démarrage 24€, Activité 34€, Croisière 44€),
+- comptes payants actifs (`active` sur l'un des trois plans : Essentiel 24€, Régulier 34€, Intensif 44€),
 - comptes en période de grâce ou expirés (`grace_active`, `grace_expired`).
 
 ## Catégories de données traitées
@@ -450,7 +450,7 @@ Toute personne physique (qu'elle soit prospect en base, abonné, ou tiers) souha
 
 ## Personnes concernées
 
-Abonnés MovUP ayant souscrit un plan payant (Démarrage 24€, Activité 34€, Croisière 44€) ou ayant été facturés (paiement à l'usage exceptionnel, remboursement).
+Abonnés MovUP ayant souscrit un plan payant (Essentiel 24€, Régulier 34€, Intensif 44€) ou ayant été facturés (paiement à l'usage exceptionnel, remboursement).
 
 ## Catégories de données traitées
 
@@ -498,7 +498,7 @@ Stripe Payments Europe Ltd est établi à Dublin. Stripe Inc. (entité mère US)
 - Idempotence Stripe (table dédiée pour éviter double traitement)
 - 4 événements Stripe whitelistés : `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
 - Customer Portal Stripe pour la gestion des moyens de paiement et résiliations
-- Pré-check SIRET avec autocomplete SIRENE pour les comptes Activité et Croisière
+- Pré-check SIRET avec autocomplete SIRENE pour les comptes Régulier et Intensif
 - Factures émises au format PDF, séquence numérique continue (préfixe MOVUP)
 
 ## Exercice des droits

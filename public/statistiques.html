@@ -484,16 +484,15 @@
     if(key === 'mup_factures')      return await fetch('/api/factures').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
     if(key === 'mup_frais')         return await fetch('/api/frais').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
     if(key === 'mup_user_settings') return await fetch('/api/user-settings').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
-    if(key === 'mup_user_plan')     return await fetch('/api/user-plan').then(function(r){ if(!r.ok){ flagStatsError(); return fallback; } return r.json(); }).catch(function(){ flagStatsError(); return fallback; });
     try{ return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }catch(e){ return fallback; }
   }
   async function saveJSON(key, value){
     if(key === 'mup_user_settings'){
       return fetch('/api/user-settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(value) }).then(function(r){ return r.ok; }).catch(function(){ return false; });
     }
-    if(key === 'mup_user_plan'){
-      return fetch('/api/user-plan', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(value) }).then(function(r){ return r.ok; }).catch(function(){ return false; });
-    }
+    // Branche mup_user_plan retirée : jamais appelée depuis la suppression de la
+    // modale plan (étape C2), et PUT /api/user-plan est fermé en 405 côté serveur.
+    // Les compteurs leadsConsumed* sont lus en GET seul (renderLeadsCard).
     try{ localStorage.setItem(key, JSON.stringify(value)); return true; }catch(e){ return false; }
   }
   function createMupMarker(lat, lng, color){

@@ -37,7 +37,7 @@ import {
   insertOptoutRequest,
   verifyOptoutToken
 } from './server/services/optout.js'
-import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable } from './server/services/referentiel.js'
+import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable, markGisementComplete } from './server/services/referentiel.js'
 import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret } from './server/services/referentiel-read.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
@@ -2305,12 +2305,20 @@ app.get('/api/search', async (req, res) => {
     // étranger). total_results est ré-estimé via le ratio observé sur la page
     // courante — extrapolation acceptable car l'API ne donne pas le compte
     // exact filtré.
+    // Fin de flux du gisement — capturée ICI, exploitée APRÈS res.json (marquage
+    // du cache mutualisé, cf. plus bas). Reste false si Etalab ne rend pas de
+    // tableau `results`, et n'est jamais atteint sur non-2xx (return 502 au-dessus)
+    // ni sur timeout/abandon (throw → catch global) : un gisement partiellement
+    // ramené ne peut donc pas être marqué complet.
+    let gisementEpuise = false
     if (Array.isArray(data.results)) {
       const fetched = data.results.length
       // brut upstream de la page (avant isProspectable/diffusion/blocklist) —
       // exposé au front pour distinguer "page upstream vide" (fin de flux) de
       // "page upstream pleine mais 100%-filtrée serveur" (≠ fin de flux).
       data.raw_count = fetched
+      // Page upstream vide = plus rien après dans CE périmètre de recherche.
+      gisementEpuise = (fetched === 0)
       const kept = data.results.filter(isProspectable)
       data.results = kept
       if (fetched > 0 && typeof data.total_results === 'number') {
@@ -2420,6 +2428,25 @@ app.get('/api/search', async (req, res) => {
     // avale tout échec (try/catch global + log [referentiel-upsert]), donc jamais
     // de promesse rejetée à neutraliser ici.
     upsertReferentiel(data.results)
+    // Fire-and-forget : marqueur de complétude du gisement (cache recherche
+    // mutualisé). Une page upstream VIDE signifie « plus rien après » — mais
+    // seulement dans le périmètre effectivement interrogé. D'où la GARDE GÉO,
+    // NON NÉGOCIABLE : on ne marque que si la recherche portait le DÉPARTEMENT
+    // ENTIER — département unique (le param est traité en CSV plus haut), et
+    // AUCUN filtre plus fin. Avec code_commune, ou sur une tranche du walker
+    // multi-CP côté front (code_postal), une page vide ne clôt que cette
+    // commune / cette tranche : marquer le gisement le déclarerait complet
+    // alors qu'on n'en a ramené qu'un morceau, et le cache mentirait en
+    // silence. Conséquence assumée : seules les recherches département-entier
+    // alimentent le marqueur. Lancé sans await — markGisementComplete est
+    // no-throw (try/catch interne, log [gisement-mark]).
+    if (gisementEpuise
+        && req.query.departement && !String(req.query.departement).includes(',')
+        && !req.query.code_commune
+        && !req.query.code_postal
+        && (req.query.activite_principale || req.query.code_naf)) {
+      markGisementComplete(req.query.activite_principale || req.query.code_naf, req.query.departement)
+    }
     // Fire-and-forget : tracking historique recherches. Lancé APRÈS res.json
     // pour ne jamais bloquer la réponse au front. Échec silencieux côté
     // search-tracker, .catch final pour neutraliser toute promesse rejetée.

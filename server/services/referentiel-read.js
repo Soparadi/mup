@@ -49,7 +49,11 @@ function communesFor(commune) {
 
 // Normalise le NAF au FORMAT STOCKÉ (pointé, ex. 47.78Z). Mirroir strict de
 // server.js:493-496 : insère le point après les 2 premiers caractères si absent.
-function normalizeNaf(naf) {
+// EXPORTÉ (et non dupliqué ailleurs) : markGisementComplete compose la clé du
+// marqueur de gisement avec ce NAF pointé. Deux implémentations divergentes
+// produiraient "4778Z:35" et "47.78Z:35" pour le même gisement — une seule
+// source de vérité pour la normalisation.
+export function normalizeNaf(naf) {
   const n = str(naf)
   if (n.length >= 4 && n.indexOf('.') === -1) return n.substring(0, 2) + '.' + n.substring(2)
   return n

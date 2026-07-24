@@ -17,6 +17,10 @@
 
 import { getDb } from '../../lib/surreal.js'
 import { cleanRecordId } from '../../lib/db.js'
+// Écriture → lecture : acyclique (referentiel-read.js n'importe que surreal.js
+// et optout.js, jamais ce module). normalizeNaf est la SEULE source de vérité du
+// format de clé ; countReferentielFresh fournit le compteur informatif.
+import { countReferentielFresh, normalizeNaf } from './referentiel-read.js'
 
 // ── migration idempotente ──
 export async function runReferentielMigration() {
@@ -430,5 +434,74 @@ export async function upsertReferentiel(fiches) {
     }
   } catch (e) {
     console.warn('[referentiel-upsert]', String(e?.message || e).slice(0, 80))
+  }
+}
+
+// ── marqueur de complétude d'un gisement (cache recherche mutualisé, étape 2) ──
+// Pose « le gisement (naf, departement) a été ramené ENTIER » sur
+// referentiel_gisements. Un record = un couple (naf pointé, département).
+//
+// QUAND l'appeler : UNIQUEMENT quand une page Etalab revient VIDE (raw_count === 0)
+// sur une recherche portant le DÉPARTEMENT ENTIER. La garde géo est chez l'appelant
+// (server.js /api/search) : ni code_commune ni code_postal, département unique. Une
+// page vide sur une recherche commune-scopée ou sur une tranche du walker multi-CP
+// ne signifie QUE « cette tranche est épuisée » — marquer le gisement à partir de là
+// le déclarerait complet alors qu'on n'en a ramené qu'un morceau.
+//
+// CLÉ : `<naf pointé>:<departement>`, déterministe ⇒ l'UPSERT est idempotent (re-marquer
+// écrase le même record). Le NAF passe par normalizeNaf : le format doit être celui du
+// stock referentiel_societes, sans quoi "4778Z:35" et "47.78Z:35" marqueraient deux fois
+// le même gisement (l'index UNIQUE (naf, departement) transformerait la divergence en
+// erreur d'écriture, mais on ne compte pas dessus).
+//
+// refreshed_at = time::now() : c'est la NAISSANCE de la fenêtre de péremption (30 j),
+// calculée en SurrealQL et jamais posée en chaîne ISO (doctrine b219bf7). Aucun autre
+// chemin n'écrit sur referentiel_gisements — la date est posée une fois, au marquage.
+//
+// fiches_count — INFORMATIF, JAMAIS UN ORACLE. Ce n'est pas le nombre de fiches du
+// gisement chez Etalab, et la décision HIT/MISS ne doit reposer que sur
+// complete + refreshed_at. Trois écarts assumés :
+//   • il compte les fiches PROSPECTABLES RETENUES : isProspectable puis keepLead
+//     (server.js) écartent des fiches AVANT upsertReferentiel, elles ne sont pas au stock ;
+//   • il ne compte que les fiches FRAÎCHES (fenêtre REFERENTIEL_TTL_DAYS), sémantique
+//     alignée sur la gate de lecture — une fiche stockée il y a plus de 30 j et non
+//     rafraîchie par cette passe n'y figure pas ;
+//   • il peut être SOUS-ÉVALUÉ d'au plus une page (25) : l'upsertReferentiel de la
+//     dernière page pleine est fire-and-forget et peut encore être en vol quand la page
+//     vide déclenche ce marquage. complete et refreshed_at, eux, restent justes.
+//
+// FIRE-AND-FORGET : appelée sans await APRÈS res.json — ne doit JAMAIS throw ni affecter
+// la réponse déjà servie. Tout échec est avalé + loggé [gisement-mark]. Un marquage raté
+// = pas de marqueur = MISS au prochain coup (on re-ramène) : jamais un HIT sur un
+// gisement partiel.
+export async function markGisementComplete(naf, departement) {
+  try {
+    // Format de clé — NAF pointé, sinon on n'écrit rien (jamais de clé approximative).
+    const nafPointe = normalizeNaf(naf)
+    if (!nafPointe) return
+    // Garde de dernier recours, doublon volontaire de celle de l'appelant : un
+    // département vide ou en CSV (server.js:2354 traite le param en CSV) ne désigne
+    // pas UN gisement → aucun marquage possible.
+    const dept = str(departement)
+    if (!dept || dept.includes(',')) return
+    // Compteur informatif (cf. ci-dessus). countReferentielFresh est fail-safe (→ 0)
+    // et applique lui-même normalizeNaf ; SANS `commune` : on compte le département entier.
+    const n = Math.floor((await countReferentielFresh({ departement: dept, naf: nafPointe })) || 0)
+    const db = await getDb()
+    // UPSERT … SET (jamais CONTENT) : create-safe, et les datetimes restent calculés
+    // en SurrealQL. type::record comme partout ailleurs dans le codebase. Le ':' interne
+    // à $id ne pose pas de problème — la partie id est prise comme chaîne littérale.
+    await db.query(
+      `UPSERT type::record("referentiel_gisements", $id) SET
+         naf = $naf,
+         departement = $dept,
+         complete = true,
+         fiches_count = $n,
+         refreshed_at = time::now()`,
+      { id: `${nafPointe}:${dept}`, naf: nafPointe, dept, n }
+    )
+    console.log(`[gisement-mark] ${nafPointe}:${dept} complet — ${n} fiche(s) au stock`)
+  } catch (e) {
+    console.warn('[gisement-mark]', String(e?.message || e).slice(0, 80))
   }
 }

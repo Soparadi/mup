@@ -154,3 +154,91 @@ export async function getLeadsConsumed(db, userId, rec, user) {
   const fresh = await applyMonthlyReset(db, userId, rec, user)
   return fresh.leadsConsumedThisMonth || 0
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Idempotence de l'enrichissement (clé SIRET, par utilisateur)
+// ──────────────────────────────────────────────────────────────────────────
+// user_plan.enrichedSirets = liste des SIRET déjà enrichis par cet utilisateur.
+// Sert à ne pas re-facturer / re-compter un enrichissement déjà rendu. C'est
+// une préoccupation distincte de leadsConsumedThisMonth (ajouts au pipeline
+// depuis Leads) : les deux compteurs ne se touchent jamais.
+//
+// NOTE : ces trois helpers ne sont WIRED nulle part dans cette passe. Ils sont
+// posés pour les pièces suivantes (branchement sur POST /api/enrich/:siret).
+
+// Forme canonique d'un SIRET pour usage en clé de déduplication : 14 chiffres,
+// séparateurs retirés. Renvoie '' si l'entrée ne donne pas 14 chiffres —
+// fail closed, un SIRET douteux ne rentre pas dans la liste.
+// Plus strict que le nettoyage à la volée des routes (replace(/\s+/g, '')) :
+// ici la valeur est PERSISTÉE et comparée, elle doit être canonique, sinon
+// hasEnriched et markEnriched pourraient diverger sur la même fiche.
+export function normalizeSiret(raw) {
+  const digits = String(raw ?? '').replace(/\D/g, '')
+  return digits.length === 14 ? digits : ''
+}
+
+// Ce SIRET a-t-il déjà été enrichi par cet utilisateur ?
+// Lecture PURE sur un record user_plan déjà chargé (même convention de passage
+// que getLeadsConsumed : l'appelant fournit rec). Aucun accès DB, aucun write.
+// Fail closed : record absent, liste absente ou SIRET non canonique → false.
+export function hasEnriched(rec, rawSiret) {
+  const siret = normalizeSiret(rawSiret)
+  if (!rec || !siret) return false
+  return Array.isArray(rec.enrichedSirets) && rec.enrichedSirets.includes(siret)
+}
+
+// Marque un SIRET comme enrichi pour cet utilisateur, et dit s'il vient d'être
+// ajouté. UNE seule requête : le UPSERT lit l'état d'avant (RETURN BEFORE) et
+// écrit dans la même instruction, donc le « ce SIRET était-il déjà là ? » n'a
+// plus de fenêtre entre lecture et écriture — deux onglets qui enrichissent le
+// même SIRET ne peuvent plus renvoyer added:true tous les deux (le second lit
+// un BEFORE qui contient déjà le SIRET).
+//
+// UPSERT est create-safe sur SurrealDB 3.2.1 (vérifié sur movup-prod, sonde
+// réversible) : record user_plan absent = cas nominal ici, il est créé au vol
+// avec ces 3 champs et rien d'autre. Le garde type::is_array encaisse le NONE
+// du record inexistant.
+//
+// PÉRIMÈTRE STRICT : n'écrit QUE enrichedSirets / userId / updatedAt. Ne touche
+// jamais leadsConsumedThisMonth ni plan — l'enrichissement n'est pas un lead
+// consommé, et le plan reste piloté par Stripe / le signup.
+//
+// Retour : { added: true } si le SIRET n'était PAS présent avant l'UPSERT,
+// { added: false } sinon — et { added: false } en repli sur toute erreur, pour
+// ne jamais faire échouer la restitution enrich appelante.
+//
+// Contrat appelant : userId doit être l'id user_plan déjà normalisé (même
+// valeur que celle passée à getLeadsConsumed / applyMonthlyReset), sans quoi
+// on créerait un record divergent.
+export async function markEnriched(db, userId, rawSiret) {
+  const siret = normalizeSiret(rawSiret)
+  if (!db || !userId || !siret) return { added: false }
+  try {
+    // updatedAt en chaîne ISO, PAS time::now() : tout le reste du code écrit
+    // user_plan.updatedAt comme string (applyMonthlyReset ci-dessus, PUT
+    // /api/user-plan). Un time::now() ferait alterner le type du champ entre
+    // datetime et string au fil des écritures sur le même record.
+    const res = await db.query(
+      `UPSERT type::record("user_plan", $id) SET
+         userId = $id,
+         enrichedSirets = array::union(
+           IF type::is_array(enrichedSirets) THEN enrichedSirets ELSE [] END,
+           [$siret]
+         ),
+         updatedAt = $updatedAt
+       RETURN BEFORE`,
+      { id: userId, siret, updatedAt: new Date().toISOString() }
+    )
+    // En création, RETURN BEFORE rend [null] (et non []) : le garde porte sur
+    // l'élément, pas sur la longueur du tableau.
+    const before = res?.[0]?.[0] || null
+    const avant = Array.isArray(before?.enrichedSirets) ? before.enrichedSirets : []
+    return { added: !avant.includes(siret) }
+  } catch (err) {
+    // Repli défensif : l'échec du marquage ne doit jamais casser la
+    // restitution enrich. On log et on rend le retour le plus conservateur
+    // (added:false = « ne comptez pas ça comme un nouvel enrichissement »).
+    console.error('[markEnriched]', userId, siret, err.message)
+    return { added: false }
+  }
+}

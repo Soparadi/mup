@@ -2808,107 +2808,112 @@ app.post('/api/enrich/:siret', async (req, res) => {
   const siret = String(req.params.siret || '').replace(/\s+/g, '')
   if (!siret) return res.status(400).json({ error: 'SIRET manquant' })
 
-  const user = req.authUser
-  if (!user) return res.status(401).json({ error: 'unauthorized' })
-  const db = await getDb()
-  // SELECT unique : le record sert au test d'idempotence (hasEnriched, PURE) et,
-  // s'il faut gater, à la lecture du compteur (getLeadsConsumed, qui applique le
-  // reset lazy si le plan est payant). Repli sur un record neutre si absent.
-  const recRes = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
-  const rec = recRes[0]?.[0] || { userId, leadsConsumedThisMonth: 0, lastResetDate: null }
-  if (!hasEnriched(rec, siret)) {
-    const consumed = await getLeadsConsumed(db, userId, rec, user)
-    // getLeadLimit est la SEULE porte VIP (Infinity). Jamais PLAN_LEAD_LIMITS en direct.
-    const limit = getLeadLimit(user)
-    if (consumed >= limit) {
-      // error === 'quota_exceeded' impérativement : trial_expired / grace_expired /
-      // grace_active déclencheraient la modale du wrapper (subscription.js:86,
-      // trial-expired-modal.js:305), qui n'a rien à voir avec un plafond de leads.
-      return res.status(402).json({
-        error: 'quota_exceeded',
-        plan: getEffectivePlan(user),
-        quotaUsed: consumed,
-        quotaLimit: limit === Infinity ? null : limit,
-        quotaPeriod: getEffectivePlan(user) === 'essai' ? 'essai' : 'monthly',
-        upgradeUrl: '/statistiques.html#plan'
-      })
+  try {
+    const user = req.authUser
+    if (!user) return res.status(401).json({ error: 'unauthorized' })
+    const db = await getDb()
+    // SELECT unique : le record sert au test d'idempotence (hasEnriched, PURE) et,
+    // s'il faut gater, à la lecture du compteur (getLeadsConsumed, qui applique le
+    // reset lazy si le plan est payant). Repli sur un record neutre si absent.
+    const recRes = await db.query('SELECT * FROM type::record("user_plan", $id)', { id: userId })
+    const rec = recRes[0]?.[0] || { userId, leadsConsumedThisMonth: 0, lastResetDate: null }
+    if (!hasEnriched(rec, siret)) {
+      const consumed = await getLeadsConsumed(db, userId, rec, user)
+      // getLeadLimit est la SEULE porte VIP (Infinity). Jamais PLAN_LEAD_LIMITS en direct.
+      const limit = getLeadLimit(user)
+      if (consumed >= limit) {
+        // error === 'quota_exceeded' impérativement : trial_expired / grace_expired /
+        // grace_active déclencheraient la modale du wrapper (subscription.js:86,
+        // trial-expired-modal.js:305), qui n'a rien à voir avec un plafond de leads.
+        return res.status(402).json({
+          error: 'quota_exceeded',
+          plan: getEffectivePlan(user),
+          quotaUsed: consumed,
+          quotaLimit: limit === Infinity ? null : limit,
+          quotaPeriod: getEffectivePlan(user) === 'essai' ? 'essai' : 'monthly',
+          upgradeUrl: '/statistiques.html#plan'
+        })
+      }
     }
-  }
 
-  const [soc, osm] = await Promise.all([
-    getReferentielContactBySiret(siret),
-    getOsmContactBySiret(siret)
-  ])
-  const s = soc || {}
-  const o = osm || {}
-  // Société prioritaire, OSM en fill-if-empty. Société ne porte que website /
-  // societe_email / societe_tel ; facebook / instagram / linkedin viennent d'OSM.
-  const pick = (a, b) => (String(a || '').trim() || String(b || '').trim())
-  const merged = {
-    website: pick(s.website, o.website),
-    societe_email: pick(s.societe_email, o.societe_email),
-    societe_tel: pick(s.societe_tel, o.societe_tel),
-    societe_facebook: pick(s.societe_facebook, o.societe_facebook),
-    societe_instagram: pick(s.societe_instagram, o.societe_instagram),
-    societe_linkedin: pick(s.societe_linkedin, o.societe_linkedin)
-  }
+    const [soc, osm] = await Promise.all([
+      getReferentielContactBySiret(siret),
+      getOsmContactBySiret(siret)
+    ])
+    const s = soc || {}
+    const o = osm || {}
+    // Société prioritaire, OSM en fill-if-empty. Société ne porte que website /
+    // societe_email / societe_tel ; facebook / instagram / linkedin viennent d'OSM.
+    const pick = (a, b) => (String(a || '').trim() || String(b || '').trim())
+    const merged = {
+      website: pick(s.website, o.website),
+      societe_email: pick(s.societe_email, o.societe_email),
+      societe_tel: pick(s.societe_tel, o.societe_tel),
+      societe_facebook: pick(s.societe_facebook, o.societe_facebook),
+      societe_instagram: pick(s.societe_instagram, o.societe_instagram),
+      societe_linkedin: pick(s.societe_linkedin, o.societe_linkedin)
+    }
 
-  // ── Maillon DataForSEO (Business Info / Google My Business) ──────────────
-  // Complète la fiche société SI un canal contact manque, avec écriture SOUS
-  // corroboration adresse STRICTE. Fail-safe intégral : toute erreur retombe
-  // sur le merge existant (le res.json normal reste servi).
-  //   • Appel SEULEMENT si incomplet : au moins un de website / societe_tel /
-  //     societe_email vide. Trois pleins → pas d'appel.
-  //   • Écriture SEULEMENT si corroboration OK : CP (Etalab présent dans
-  //     l'address DataForSEO) ET rue+numéro (parserAdresseAgregee des deux).
-  //   • fill-if-empty via enrichReferentielActionnable : website (=url) +
-  //     societe_tel (=phone) si non vides. Pas d'email (GMB n'en rend pas).
-  // NOTE : le faisceau (getReferentielFaisceauBySiret, referentiel-read.js:290-294)
-  //   PORTE l'enseigne → keyword bâti sur l'enseigne en priorité (nom commercial
-  //   recherchable, ex. fiches EI), repli sur raison_sociale si enseigne vide.
-  const complet = merged.website && merged.societe_tel && merged.societe_email
-  if (!complet) {
-    try {
-      const faisceau = await getReferentielFaisceauBySiret(siret)
-      const ville = String(faisceau?.ville || '').trim()
-      const enseigne = String(faisceau?.enseigne || '').trim()
-      const raison = String(faisceau?.raison_sociale || '').trim()
-      const nom = enseigne || raison
-      const keyword = `${nom} ${ville}`.trim()
-      if (faisceau && keyword) {
-        const info = await lookupBusinessInfo({ keyword })
-        // Corroboration adresse : address DataForSEO vs faisceau.adresse (agrégée).
-        if (info.found && info.address && faisceau.adresse) {
-          const cp = String(faisceau.code_postal || '').trim()
-          const refA = parserAdresseAgregee(faisceau.adresse)
-          const dfsA = parserAdresseAgregee(info.address)
-          const cpOk = cp && info.address.includes(cp)
-          const voieOk = voiesConcordent(refA.voie, dfsA.voie)
-          const numOk = comparerNumero(refA.numero, dfsA.numero)
-          if (cpOk && voieOk && numOk) {
-            const patch = {}
-            if (!merged.website && info.url) patch.website = info.url
-            if (!merged.societe_tel && info.phone) patch.societe_tel = info.phone
-            // Re-lecture ciblée UNIQUEMENT si une écriture est tentée.
-            if (Object.keys(patch).length) {
-              await enrichReferentielActionnable(siret, patch)
-              const soc2 = await getReferentielContactBySiret(siret)
-              if (soc2) {
-                merged.website = pick(soc2.website, merged.website)
-                merged.societe_tel = pick(soc2.societe_tel, merged.societe_tel)
+    // ── Maillon DataForSEO (Business Info / Google My Business) ──────────────
+    // Complète la fiche société SI un canal contact manque, avec écriture SOUS
+    // corroboration adresse STRICTE. Fail-safe intégral : toute erreur retombe
+    // sur le merge existant (le res.json normal reste servi).
+    //   • Appel SEULEMENT si incomplet : au moins un de website / societe_tel /
+    //     societe_email vide. Trois pleins → pas d'appel.
+    //   • Écriture SEULEMENT si corroboration OK : CP (Etalab présent dans
+    //     l'address DataForSEO) ET rue+numéro (parserAdresseAgregee des deux).
+    //   • fill-if-empty via enrichReferentielActionnable : website (=url) +
+    //     societe_tel (=phone) si non vides. Pas d'email (GMB n'en rend pas).
+    // NOTE : le faisceau (getReferentielFaisceauBySiret, referentiel-read.js:290-294)
+    //   PORTE l'enseigne → keyword bâti sur l'enseigne en priorité (nom commercial
+    //   recherchable, ex. fiches EI), repli sur raison_sociale si enseigne vide.
+    const complet = merged.website && merged.societe_tel && merged.societe_email
+    if (!complet) {
+      try {
+        const faisceau = await getReferentielFaisceauBySiret(siret)
+        const ville = String(faisceau?.ville || '').trim()
+        const enseigne = String(faisceau?.enseigne || '').trim()
+        const raison = String(faisceau?.raison_sociale || '').trim()
+        const nom = enseigne || raison
+        const keyword = `${nom} ${ville}`.trim()
+        if (faisceau && keyword) {
+          const info = await lookupBusinessInfo({ keyword })
+          // Corroboration adresse : address DataForSEO vs faisceau.adresse (agrégée).
+          if (info.found && info.address && faisceau.adresse) {
+            const cp = String(faisceau.code_postal || '').trim()
+            const refA = parserAdresseAgregee(faisceau.adresse)
+            const dfsA = parserAdresseAgregee(info.address)
+            const cpOk = cp && info.address.includes(cp)
+            const voieOk = voiesConcordent(refA.voie, dfsA.voie)
+            const numOk = comparerNumero(refA.numero, dfsA.numero)
+            if (cpOk && voieOk && numOk) {
+              const patch = {}
+              if (!merged.website && info.url) patch.website = info.url
+              if (!merged.societe_tel && info.phone) patch.societe_tel = info.phone
+              // Re-lecture ciblée UNIQUEMENT si une écriture est tentée.
+              if (Object.keys(patch).length) {
+                await enrichReferentielActionnable(siret, patch)
+                const soc2 = await getReferentielContactBySiret(siret)
+                if (soc2) {
+                  merged.website = pick(soc2.website, merged.website)
+                  merged.societe_tel = pick(soc2.societe_tel, merged.societe_tel)
+                }
               }
             }
           }
         }
+      } catch (e) {
+        // Le maillon ne casse jamais la route : on retombe sur le merge existant.
+        console.warn('[enrich:dataforseo]', String(e?.message || e).slice(0, 80))
       }
-    } catch (e) {
-      // Le maillon ne casse jamais la route : on retombe sur le merge existant.
-      console.warn('[enrich:dataforseo]', String(e?.message || e).slice(0, 80))
     }
-  }
 
-  const found = Object.values(merged).some(v => v)
-  res.json({ found, ...merged })
+    const found = Object.values(merged).some(v => v)
+    res.json({ found, ...merged })
+  } catch (err) {
+    console.error('[enrich]', err.message)
+    if (!res.headersSent) res.status(500).json({ error: 'Enrichissement indisponible' })
+  }
 })
 
 app.get('/api/geocode', async (req, res) => {

@@ -14,6 +14,8 @@
 // les routes concernées (ex. GET /api/contacts/export → if (!hasFeature(user,
 // 'export_csv')) return 403).
 
+import { isVip } from '../../lib/vip.js'
+
 export const PLAN_QUOTAS = {
   essai: {
     // Mode basique pendant les 14 jours (équivalent Essentiel moins l'export)
@@ -129,7 +131,12 @@ export function getEffectivePlan(user) {
 }
 
 // Plafond d'ajouts au pipeline pour ce user (selon plan effectif).
+// VIP (ambassadrice / compte dev) : plafond NEUTRALISÉ, lu AVANT toute
+// résolution de plan. Une VIP n'a pas un « plan » différent — elle a un
+// plafond infini. getEffectivePlan reste inchangé : on ne lui invente pas
+// un plan converted.
 export function getLeadLimit(user) {
+  if (isVip(user)) return Infinity
   const plan = getEffectivePlan(user)
   return PLAN_LEAD_LIMITS[plan] ?? PLAN_LEAD_LIMITS.demarrage
 }

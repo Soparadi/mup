@@ -62,7 +62,7 @@ export function normalizeNaf(naf) {
 // Construit la clause WHERE partagée (lecture + count) + ses params bindés.
 // Retourne { clause: '', params: {} } si departement ou naf manquant → l'appelant
 // rend vide (fail-safe MISS, aucune requête tous-azimuts).
-function buildWhere({ departement, naf, commune }) {
+function buildWhere({ departement, naf, commune, codePostal }) {
   const d = str(departement)
   const n = normalizeNaf(naf)
   if (!d || !n) return { clause: '', params: {} }
@@ -70,6 +70,12 @@ function buildWhere({ departement, naf, commune }) {
   const parts = ['departement = $d', 'naf = $n']
   const communes = communesFor(commune)
   if (communes.length) { parts.push('commune IN $communes'); params.communes = communes }
+  // Code postal : colonne `code_postal` distincte du code INSEE `commune`. Le walker
+  // multi-CP envoie un CP par tranche (code_commune vide) → égalité stricte, un seul
+  // CP à la fois. commune et codePostal sont mutuellement exclusifs en pratique, mais
+  // si les deux arrivent les deux clauses s'ajoutent (AND).
+  const cp = str(codePostal)
+  if (cp) { parts.push('code_postal = $cp'); params.cp = cp }
   parts.push(FRESH_CLAUSE)
   return { clause: parts.join(' AND '), params }
 }
@@ -147,9 +153,9 @@ export function referentielRowToFiche(row) {
 // Lit une page de referentiel_societes (fiches FRAÎCHES uniquement), reconstruit
 // les fiches, applique l'opt-out en un seul batch, et rend { results, raw_count }.
 // Tout échec → { results: [], raw_count: 0 } (fail-safe vers MISS, jamais de throw).
-export async function readReferentiel({ departement, naf, commune, page = 1, perPage = 25 } = {}) {
+export async function readReferentiel({ departement, naf, commune, codePostal, page = 1, perPage = 25 } = {}) {
   try {
-    const { clause, params } = buildWhere({ departement, naf, commune })
+    const { clause, params } = buildWhere({ departement, naf, commune, codePostal })
     if (!clause) return { results: [], raw_count: 0 }
 
     const size = Math.max(1, Math.floor(Number(perPage) || 25))
@@ -198,9 +204,9 @@ export async function readReferentiel({ departement, naf, commune, page = 1, per
 // ── C. countReferentielFresh(...) — async, fail-safe ──
 // COUNT des fiches FRAÎCHES sur le même WHERE (hors opt-out). Sert total_results ET
 // la décision HIT/MISS (> 0 ⇒ HIT). Tout échec → 0 (fail-safe vers MISS).
-export async function countReferentielFresh({ departement, naf, commune } = {}) {
+export async function countReferentielFresh({ departement, naf, commune, codePostal } = {}) {
   try {
-    const { clause, params } = buildWhere({ departement, naf, commune })
+    const { clause, params } = buildWhere({ departement, naf, commune, codePostal })
     if (!clause) return 0
     const sql = `SELECT count() FROM referentiel_societes WHERE ${clause} GROUP ALL`
     const db = await getDb()
@@ -348,5 +354,33 @@ export async function selectSiretsACrawler(dept, limit) {
   } catch (e) {
     console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
     return []
+  }
+}
+
+// ── G. isGisementComplete(naf, departement) — async, fail-safe ──
+// Interroge le marqueur de gisement complet (referentiel_gisements) posé par
+// markGisementComplete au signal de fin de recherche. La clé du record est
+// `${nafPointé}:${dept}` — la normalisation NAF est INDISPENSABLE parce que la base
+// stocke la forme POINTÉE (86.90E) et le front envoie la forme SANS point (8690E) ;
+// sans elle la clé ne correspondrait jamais et le marqueur serait toujours manquant.
+// Rend le record UNIQUEMENT s'il est marqué complet ET frais (refreshed_at postérieur
+// à now - 30d) ; sinon null. Toute erreur → null : la dégradation sûre est de taper
+// Etalab, jamais de servir un cache douteux comme s'il faisait autorité.
+export async function isGisementComplete(naf, departement) {
+  try {
+    const n = normalizeNaf(naf)
+    if (!n) return null
+    const d = str(departement)
+    if (!d || d.indexOf(',') !== -1) return null
+    const sql =
+      'SELECT * FROM type::record("referentiel_gisements", $key) ' +
+      `WHERE complete = true AND refreshed_at > time::now() - ${REFERENTIEL_TTL_DAYS}d`
+    const db = await getDb()
+    const r = await db.query(sql, { key: `${n}:${d}` })
+    const row = (r[0] || [])[0]
+    return row || null
+  } catch (e) {
+    console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
+    return null
   }
 }

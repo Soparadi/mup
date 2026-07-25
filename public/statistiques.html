@@ -237,7 +237,7 @@
   <div class="container">
 
     <!-- Plan actuel — affiche le label du plan et un CTA pour ouvrir la modale de changement.
-         Pas d'affichage chiffré tant que PLAN_QUOTAS[plan].leadsMonthly === null. -->
+         Le plafond de leads vient de /api/user-plan (quotaLimit) : undefined → non défini, null → illimité. -->
     <div id="plan-actuel-card" style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
       <div style="display:flex;align-items:center;gap:14px;">
         <div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">Plan actuel</div>
@@ -637,15 +637,15 @@
   }
 
   // ─── PLAN UTILISATEUR (quota leads) ───
-  // VALEURS PROVISOIRES — paliers quota et prix à valider avec Ben avant commercialisation.
-  // Tant que leadsMonthly est null, l'UI affiche "—" (jamais de chiffre fictif).
+  // VALEURS PROVISOIRES — prix à valider avec Ben avant commercialisation.
+  // Le plafond de leads N'EST PLUS porté ici : il est servi par /api/user-plan
+  // (champ quotaLimit, autorité serveur = PLAN_LEAD_LIMITS). null signifie
+  // illimité (VIP), undefined signifie "quota non défini" (fetch échoué).
   // Source de vérité unique pour Statistiques + futurs call sites cross-pages.
-  // Quotas null en attente de chiffres validés doctrine (Phase 3 repricing).
-  // L'UI traite null comme "quota non défini" — pas de blocage actif.
   var PLAN_QUOTAS = {
-    demarrage: { leadsMonthly: null, emailsDaily: null, label: 'Essentiel', priceMonthly: null },
-    activite:  { leadsMonthly: null, emailsDaily: null, label: 'Régulier',  priceMonthly: null },
-    croisiere: { leadsMonthly: null, emailsDaily: null, label: 'Intensif',  priceMonthly: null }
+    demarrage: { emailsDaily: null, label: 'Essentiel', priceMonthly: null },
+    activite:  { emailsDaily: null, label: 'Régulier',  priceMonthly: null },
+    croisiere: { emailsDaily: null, label: 'Intensif',  priceMonthly: null }
   };
   // SOURCE PLAN = window.__USER__.plan (injecté server.js:540 sur pages app —
   // source de vérité unique user.plan post-Phase 1). Fallback 'demarrage'
@@ -655,7 +655,7 @@
   // Plus de PUT init plan='gratuit' (supprime la faille initialisation legacy).
   async function loadUserPlan(){
     var planFromUser = (window.__USER__ && window.__USER__.plan) ? window.__USER__.plan : 'demarrage';
-    var counters = { leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null };
+    var counters = { leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null, quotaLimit: undefined };
     try {
       var r = await fetch('/api/user-plan');
       if(r.ok){
@@ -663,9 +663,10 @@
         counters.leadsConsumed = c.leadsConsumed || 0;
         counters.leadsConsumedThisMonth = c.leadsConsumedThisMonth || 0;
         counters.lastResetDate = c.lastResetDate || null;
+        if('quotaLimit' in c) counters.quotaLimit = c.quotaLimit;
       }
     } catch(e){}
-    return { plan: planFromUser, leadsConsumed: counters.leadsConsumed, leadsConsumedThisMonth: counters.leadsConsumedThisMonth, lastResetDate: counters.lastResetDate };
+    return { plan: planFromUser, leadsConsumed: counters.leadsConsumed, leadsConsumedThisMonth: counters.leadsConsumedThisMonth, lastResetDate: counters.lastResetDate, quotaLimit: counters.quotaLimit };
   }
   async function renderPlanActuel(){
     if(!userPlan) userPlan = await loadUserPlan();
@@ -675,11 +676,15 @@
     var quotaEl = document.getElementById('plan-actuel-quota');
     if(labelEl) labelEl.textContent = cfg.label;
     if(quotaEl){
-      if(cfg.leadsMonthly === null){
+      var quota = userPlan.quotaLimit;
+      if(quota === undefined){
         quotaEl.textContent = 'Quota non défini';
         quotaEl.style.fontStyle = 'italic';
+      } else if(quota === null){
+        quotaEl.textContent = 'Leads illimités';
+        quotaEl.style.fontStyle = '';
       } else {
-        quotaEl.textContent = (userPlan.leadsConsumedThisMonth || 0) + ' / ' + cfg.leadsMonthly + ' leads ce mois';
+        quotaEl.textContent = (userPlan.leadsConsumedThisMonth || 0) + ' / ' + quota + ' leads ce mois';
         quotaEl.style.fontStyle = '';
       }
     }
@@ -721,12 +726,12 @@
     var plan = userPlan.plan || 'demarrage';
     var cfg = PLAN_QUOTAS[plan] || PLAN_QUOTAS.demarrage;
     var consumed = userPlan.leadsConsumedThisMonth || 0;
-    var quota = cfg.leadsMonthly;  // null tant que non validé par Ben → UI affiche "—"
+    var quota = userPlan.quotaLimit;  // undefined = fetch échoué (non défini), null = illimité (VIP), nombre = plafond serveur
     var pillEl = document.getElementById('kpi-plan-pill');
     var card = document.getElementById('kpi-leads-card');
     pillEl.textContent = cfg.label;
     pillEl.className = 'plan-pill ' + plan;
-    document.getElementById('kpi-leads').textContent = (quota === null) ? '—' : consumed;
+    document.getElementById('kpi-leads').textContent = (quota === undefined) ? '—' : consumed;
     var subEl = document.getElementById('kpi-leads-sub');
     var restEl = document.getElementById('kpi-restants');
     var fillEl = document.getElementById('kpi-gauge-fill');
@@ -734,9 +739,12 @@
     var overflow = quota && consumed > quota;
     var overBy = overflow ? consumed - quota : 0;
 
-    // Sous-ligne — quota null → ne rien afficher de chiffré
-    if(quota === null){
+    // Sous-ligne — undefined → non défini, null → illimité, nombre → chiffré
+    if(quota === undefined){
       subEl.textContent = 'Quota non défini';
+      subEl.style.color = '';
+    } else if(quota === null){
+      subEl.textContent = 'Leads illimités';
       subEl.style.color = '';
     } else if(overflow){
       subEl.innerHTML = consumed + ' / ' + quota + ' ce mois · <span style="color:#E24B4A">+' + overBy + ' dépassement test</span>';
@@ -747,10 +755,14 @@
     }
 
     // Texte sous la jauge
-    if(quota === null){
-      restEl.textContent = 'Paliers à définir';
+    if(quota === undefined){
+      restEl.textContent = 'Quota non défini';
       restEl.style.color = '';
       restEl.style.fontStyle = 'italic';
+    } else if(quota === null){
+      restEl.textContent = '';
+      restEl.style.color = '';
+      restEl.style.fontStyle = '';
     } else if(overflow){
       restEl.textContent = 'Mode test · plafond ignoré';
       restEl.style.color = '#E24B4A';

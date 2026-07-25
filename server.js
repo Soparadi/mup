@@ -4321,9 +4321,14 @@ app.get('/api/user-plan', async (req, res) => {
     if (!user) return res.status(401).json({ error: 'unauthorized' })
     const db = await getDb()
     const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("user_plan", $id)', { id: userId }))[0]
-    if (!rec) return res.json({ userId, plan: 'gratuit', leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null })
+    const limit = getLeadLimit(user)
+    if (!rec) return res.json({
+      userId, plan: 'gratuit', leadsConsumed: 0, leadsConsumedThisMonth: 0,
+      lastResetDate: null,
+      quotaLimit: limit === Infinity ? null : limit
+    })
     const fresh = await applyMonthlyReset(db, userId, rec, user)
-    res.json(fresh)
+    res.json({ ...fresh, quotaLimit: limit === Infinity ? null : limit })
   } catch (err) {
     console.error('[user-plan:get]', err.message)
     res.status(500).json({ error: 'Lecture user plan impossible' })

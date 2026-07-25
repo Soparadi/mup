@@ -50,7 +50,10 @@ import {
   getLeadLimit,
   getLeadsConsumed,
   applyMonthlyReset,
-  hasEnriched
+  hasEnriched,
+  markEnriched,
+  consumeLead,
+  porteCanalDecomptable
 } from './server/config/plan-quotas.js'
 import {
   sendOne as mailServiceSendOne,
@@ -2975,6 +2978,18 @@ app.post('/api/enrich/:siret', async (req, res) => {
     }
 
     const found = Object.values(merged).some(v => v)
+    // Décompte : SEULEMENT si on a livré un canal décomptable (email/tél) ET que
+    // ce SIRET n'était pas déjà marqué pour ce user. markEnriched est appelé
+    // APRÈS found && porteCanalDecomptable — jamais avant : marquer un SIRET sans
+    // coordonnée le rendrait « payé » et le ferait skipper le gate à vie. added
+    // (RETURN BEFORE) garantit un incrément unique : un second onglet sur le même
+    // SIRET lit un BEFORE qui contient déjà le SIRET → added:false → pas de double
+    // décompte. Dette connue assumée : course multi-onglet sur SIRET DIFFÉRENTS à
+    // limit-1 → léger dépassement borné, hors périmètre.
+    if (found && porteCanalDecomptable(merged)) {
+      const { added } = await markEnriched(db, userId, siret)
+      if (added) await consumeLead(db, userId)
+    }
     res.json({ found, ...merged })
   } catch (err) {
     console.error('[enrich]', err.message)

@@ -243,6 +243,29 @@ export async function markEnriched(db, userId, rawSiret) {
   }
 }
 
+// Incrémente d'UN le compteur leadsConsumedThisMonth de cet utilisateur.
+// Incrément ATOMIQUE côté SurrealDB (leadsConsumedThisMonth + 1 dans le SET),
+// jamais read-modify-write JS : deux onglets qui décomptent en parallèle ne se
+// marchent pas dessus. Garde type::is_int sur le patron enrichedSirets — un
+// record neuf (champ NONE) ou corrompu repart de 0 au lieu de propager un NaN.
+// UPSERT create-safe (record user_plan absent créé au vol). updatedAt en chaîne
+// ISO comme partout ailleurs (cf markEnriched). Repli défensif : l'échec du
+// décompte ne casse jamais la restitution enrich appelante.
+export async function consumeLead(db, userId) {
+  if (!db || !userId) return
+  try {
+    await db.query(
+      `UPSERT type::record("user_plan", $id) SET
+         userId = $id,
+         leadsConsumedThisMonth = (IF type::is_int(leadsConsumedThisMonth) THEN leadsConsumedThisMonth ELSE 0 END) + 1,
+         updatedAt = $updatedAt`,
+      { id: userId, updatedAt: new Date().toISOString() }
+    )
+  } catch (err) {
+    console.error('[consumeLead]', userId, err.message)
+  }
+}
+
 // Ce que la restitution enrich vient de livrer justifie-t-il un décompte ?
 // DOCTRINE : seul un canal DIRECT compte — email OU téléphone. Un website, un
 // facebook, un instagram ou un linkedin ne sont pas des coordonnées, ce sont

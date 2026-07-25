@@ -54,6 +54,7 @@
   var OVERLAY_ID = 'tem-modal-overlay'
   var BANNER_ID = 'tem-banner'
   var MUT_TOAST_ID = 'tem-mut-toast'
+  var QUOTA_TOAST_ID = 'tem-quota-toast'
   var billingCycle = 'monthly'
 
   function injectStyles() {
@@ -98,13 +99,13 @@
 .tem-banner-actions a.tem-banner-cta{background:#1D1D1F;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px;font-weight:600}\
 .tem-banner-actions a.tem-banner-cta:hover{background:#2A2A2A}\
 @media (max-width:760px){.tem-banner-inner{flex-direction:column;align-items:flex-start;gap:10px;padding:12px 16px}.tem-banner-actions{width:100%;flex-wrap:wrap}}\
-#tem-mut-toast{position:fixed;bottom:24px;right:24px;background:#FFF;border:1px solid #E8E8ED;border-left:4px solid #F59E0B;border-radius:12px;padding:14px 38px 14px 18px;font-family:Geist,-apple-system,sans-serif;color:#1D1D1F;box-shadow:0 12px 32px rgba(0,0,0,.12);z-index:100001;max-width:380px;transform:translateY(120%);transition:transform .22s ease}\
-#tem-mut-toast.show{transform:translateY(0)}\
+#tem-mut-toast,#tem-quota-toast{position:fixed;bottom:24px;right:24px;background:#FFF;border:1px solid #E8E8ED;border-left:4px solid #F59E0B;border-radius:12px;padding:14px 38px 14px 18px;font-family:Geist,-apple-system,sans-serif;color:#1D1D1F;box-shadow:0 12px 32px rgba(0,0,0,.12);z-index:100001;max-width:380px;transform:translateY(120%);transition:transform .22s ease}\
+#tem-mut-toast.show,#tem-quota-toast.show{transform:translateY(0)}\
 .tem-mut-title{display:block;font-size:13px;font-weight:700;margin-bottom:4px}\
 .tem-mut-text{display:block;font-size:13px;line-height:1.5;color:#3A3A3C}\
 #tem-mut-close{position:absolute;top:8px;right:10px;background:none;border:none;color:#6E6E73;font-size:18px;line-height:1;cursor:pointer;font-family:inherit;padding:4px;border-radius:4px}\
 #tem-mut-close:hover{color:#1D1D1F;background:#F5F5F7}\
-@media (max-width:480px){#tem-mut-toast{left:16px;right:16px;bottom:16px;max-width:none}}\
+@media (max-width:480px){#tem-mut-toast,#tem-quota-toast{left:16px;right:16px;bottom:16px;max-width:none}}\
 '
     document.head.appendChild(s)
   }
@@ -273,6 +274,49 @@
     else document.addEventListener('DOMContentLoaded', buildMutToast, { once: true })
   }
 
+  // ── Toast plafond atteint (quota_exceeded sur 402) ─────────────────────
+  // Calque buildMutToast : mêmes styles, même structure, auto-dismiss 6s,
+  // remove + ré-ajout pour reset du timer. Id distinct (QUOTA_TOAST_ID) pour
+  // ne jamais chasser le toast de grâce. Aucun plafond ni prix en dur : tout
+  // vient du corps du 402 (info.quotaUsed, info.quotaPeriod, info.plan,
+  // info.upgradeUrl).
+  function buildQuotaToast(info) {
+    injectStyles()
+    info = info || {}
+    var existing = document.getElementById(QUOTA_TOAST_ID)
+    if (existing) existing.remove()
+    var linkStyle = 'color:#1D1D1F;text-decoration:underline;text-underline-offset:2px;font-weight:600'
+    var text
+    if (info.quotaPeriod === 'essai') {
+      text = 'Vous avez enrichi vos ' + info.quotaUsed + ' contacts d’essai. Abonnez-vous pour continuer.'
+      if (info.upgradeUrl) text += ' <a href="' + info.upgradeUrl + '" style="' + linkStyle + '">Voir les formules</a>'
+    } else if (info.plan !== 'croisiere') {
+      text = 'Vous avez enrichi vos ' + info.quotaUsed + ' contacts du mois. Le compteur repart le 1er.'
+      if (info.upgradeUrl) text += ' <a href="' + info.upgradeUrl + '" style="' + linkStyle + '">Passer au palier supérieur</a>'
+    } else {
+      text = 'Vous avez enrichi vos ' + info.quotaUsed + ' contacts du mois. Le compteur repart le 1er.'
+    }
+    var t = document.createElement('div')
+    t.id = QUOTA_TOAST_ID
+    t.setAttribute('role', 'alertdialog')
+    t.innerHTML = ''
+      + '<span class="tem-mut-title">Plafond atteint</span>'
+      + '<span class="tem-mut-text">' + text + '</span>'
+      + '<button type="button" id="tem-mut-close" aria-label="Fermer">×</button>'
+    document.body.appendChild(t)
+    void t.offsetWidth
+    t.classList.add('show')
+    var dismiss = function () { try { t.remove() } catch (e) {} }
+    var btn = t.querySelector('#tem-mut-close')
+    if (btn) btn.addEventListener('click', dismiss)
+    setTimeout(dismiss, 6000)
+  }
+
+  function showQuotaBlocked(info) {
+    if (document.body) buildQuotaToast(info)
+    else document.addEventListener('DOMContentLoaded', function () { buildQuotaToast(info) }, { once: true })
+  }
+
   // ── Bootcheck (H5b) — discrimine sur data.app_state, source unique H5a ─
   function checkStatus() {
     fetch('/api/user/me', { credentials: 'same-origin' })
@@ -306,6 +350,8 @@
               show(body.error)
             } else if (body.error === 'grace_active') {
               showMutationBlocked()
+            } else if (body.error === 'quota_exceeded') {
+              showQuotaBlocked(body)
             }
           }).catch(function () { /* ignore */ })
         }

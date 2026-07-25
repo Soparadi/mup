@@ -39,7 +39,7 @@ import {
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable, markGisementComplete } from './server/services/referentiel.js'
 import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
-import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret } from './server/services/referentiel-read.js'
+import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
 import { runMentionsLegalesJob } from './server/services/mentions-legales.js'
@@ -2235,6 +2235,66 @@ function communeParam(code) { return PLM_ARRONDISSEMENTS[code] || code }
 
 // ── API proxies ──
 app.get('/api/search', async (req, res) => {
+  // ── Lecture-cache référentiel-first (geste B, branchement) ──
+  // Si le gisement (naf, dept) est marqué COMPLET et FRAIS, on sert la page depuis
+  // referentiel_societes sans jamais taper Etalab. Toutes les fonctions appelées
+  // sont fail-safe (null / 0 / results vides sur erreur) : à la moindre incertitude
+  // on retombe sur le chemin Etalab d'origine. Le try/catch de ceinture garantit
+  // qu'une exception inattendue AVANT res.json dégrade en MISS, jamais en 500.
+  // ABSTENTIONS sur ce chemin (une lecture ne rajeunit jamais ce qu'elle lit, sinon
+  // rien ne périme) : PAS d'upsertReferentiel (rajeunirait refreshed_at, que
+  // readReferentiel filtre à 30 j), aucune écriture sur referentiel_gisements. On NE
+  // rejoue PAS keepLead : le SQL filtre déjà dept/NAF/commune/CP et readReferentiel
+  // applique déjà la blocklist ; le ctx Etalab rejetterait à tort. Le tracking
+  // historique (lead_search) est CONSERVÉ : un HIT reste une recherche à tracer.
+  try {
+    const cDept = String(req.query.departement || '').trim()
+    const cNaf = req.query.activite_principale || req.query.code_naf || ''
+    const cCommune = req.query.code_commune
+    const cCp = req.query.code_postal
+    const cPage = req.query.page
+    const cPerPage = Math.min(parseInt(req.query.per_page) || 25, 25)
+    // Cache tenté UNIQUEMENT sur dept simple (sans virgule) + NAF présents.
+    if (cDept && !cDept.includes(',') && String(cNaf).trim()) {
+      const gisement = await isGisementComplete(cNaf, cDept)
+      if (gisement) {
+        const total = await countReferentielFresh({ departement: cDept, naf: cNaf, commune: cCommune, codePostal: cCp })
+        if (total > 0) {
+          const lecture = await readReferentiel({ departement: cDept, naf: cNaf, commune: cCommune, codePostal: cCp, page: cPage, perPage: cPerPage })
+          const pageNum = Number(cPage) || 1
+          // Garde de sécurité : un gisement marqué mais qui rend une page 1 VIDE ne
+          // doit pas servir une réponse creuse → on laisse Etalab reprendre la main.
+          // Aux pages > 1, une page vide est une fin de flux légitime (raw_count 0).
+          if (lecture.results.length > 0 || pageNum !== 1) {
+            // DETTE ASSUMÉE (non corrigée ici) : total_results compte des LIGNES
+            // (un SIRET par ligne) alors que le front déduplique par SIREN. Sur un
+            // gisement multi-établissements, S.market est donc SURESTIMÉ et le front
+            // paginera jusqu'à la page vide au lieu de s'arrêter au marché réel. La
+            // terminaison reste garantie côté front par raw_count === 0.
+            console.log(`[search-cache] HIT ${cNaf}:${cDept} page=${pageNum} servi=${lecture.results.length} total=${total}`)
+            if (req.userId) {
+              trackLeadSearch({
+                userId: req.userId,
+                nafCode: req.query.activite_principale || req.query.code_naf || req.query.q || '',
+                nafLabel: req.query.naf_label || '',
+                regionCode: req.query.code_region || req.query.region || '',
+                regionName: req.query.region_name || '',
+                departmentCode: req.query.code_departement || req.query.departement || '',
+                departmentName: req.query.department_name || '',
+                cityName: req.query.code_commune || req.query.ville || '',
+                resultsCount: total,
+                fichesCompletesFilter: req.query.fiches_completes === 'true' || req.query.fiches_completes === '1'
+              }).catch(() => {})
+            }
+            res.json({ results: lecture.results, total_results: total, raw_count: lecture.raw_count, page: pageNum, per_page: cPerPage, from_cache: true })
+            return
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[search-cache]', String(e?.message || e).slice(0, 80))
+  }
   const params = new URLSearchParams()
   if(req.query.q) params.set('q', req.query.q)
   if(req.query.region) params.set('region', req.query.region)
@@ -2457,6 +2517,10 @@ app.post('/api/amorce', async (req, res) => {
   const dept = String(req.body?.dept || '').trim()
   const naf = String(req.body?.naf || '').trim()
   const geoFin = req.body?.geoFin === true
+  // fromCache : la recherche a été servie depuis le cache référentiel (from_cache).
+  // Un gisement LU ne doit pas se re-marquer complet (ni rajeunir son marqueur) —
+  // on n'écrit le marqueur qu'au terme d'un vrai déroulement Etalab.
+  const fromCache = req.body?.fromCache === true
   res.json({ ok: true })
   // Fire-and-forget différé : lancé APRÈS res.json, sans await.
   // Enchaînement CHAÎNÉ (pas parallèle — le crawl mentions légales et le
@@ -2467,7 +2531,7 @@ app.post('/api/amorce', async (req, res) => {
   //   3. runMentionsLegalesJob(sirets) : crawl mentions légales, extrait tél/email
   //      en fill-if-empty. Plafond N (env CRAWL_ML_BATCH, défaut 50) borne le crawl.
   setTimeout(() => {
-    if (naf && !geoFin && !dept.includes(',')) markGisementComplete(naf, dept)
+    if (naf && !geoFin && !fromCache && !dept.includes(',')) markGisementComplete(naf, dept)
     rapprocherDepartement(dept)
       .then(async () => {
         const N = parseInt(process.env.CRAWL_ML_BATCH || '50', 10)

@@ -2391,7 +2391,8 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
     return {
       total: total, totalComplete: Math.round(total * 0.3),
       hotCount: Math.round(total * 0.15), items: items,
-      rawCount: (typeof data.raw_count === 'number' ? data.raw_count : (data.results || []).length) // brut upstream de la page (server.js raw_count)
+      rawCount: (typeof data.raw_count === 'number' ? data.raw_count : (data.results || []).length), // brut upstream de la page (server.js raw_count)
+      fromCache: data.from_cache === true // page servie depuis le cache référentiel-first
     };
 
   } catch(err) {
@@ -2676,6 +2677,9 @@ async function loadPage(page) {
       // S.market = total marché (figé, alimente #st-total — NE PAS toucher).
       S.market = (firstResp && Number.isFinite(Number(firstResp.total)))
         ? Number(firstResp.total) : keptItems.length;
+      // Recherche servie depuis le cache référentiel : mémorisé pour que /api/amorce
+      // NE remarque PAS un gisement seulement LU (pas de nouveau déroulement Etalab).
+      S.fromCache = (firstResp && firstResp.fromCache === true);
       S.total          = keptItems.length;   // fiches en buffer (grandit au scroll)
       S.totalEstimated = false;
       S.totalComplete  = (firstResp && firstResp.totalComplete) || 0;
@@ -3141,7 +3145,7 @@ function maybeFinishSearch(gen) {
         fetch('/api/amorce', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dept: _amDept, naf: S.naf, geoFin: !!(document.getElementById('sel-ville')?.value || '').trim() })
+          body: JSON.stringify({ dept: _amDept, naf: S.naf, geoFin: !!(document.getElementById('sel-ville')?.value || '').trim(), fromCache: S.fromCache === true })
         }).catch(function(){});
       }
     }

@@ -674,7 +674,7 @@ app.use('/api', (req, res, next) => {
 const APP_HTML_ROUTES = new Set([
   '/dashboard', '/prospection', '/pipeline', '/agenda', '/mail', '/visio',
   '/carte', '/contacts', '/devis', '/factures', '/frais', '/statistiques',
-  '/superadmin'
+  '/superadmin', '/contact-societe'
 ])
 const APP_HTML_PREFIXES = ['/account']
 

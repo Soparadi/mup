@@ -3141,7 +3141,7 @@ function maybeFinishSearch(gen) {
         fetch('/api/amorce', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dept: _amDept })
+          body: JSON.stringify({ dept: _amDept, naf: S.naf, geoFin: !!(document.getElementById('sel-ville')?.value || '').trim() })
         }).catch(function(){});
       }
     }

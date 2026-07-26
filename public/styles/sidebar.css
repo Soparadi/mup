@@ -10,9 +10,38 @@
    un sélecteur plus spécifique (ex: .sidebar.sidebar--variant).
    ============================================================================ */
 
+/* 0. Largeur — SOURCE DE VÉRITÉ UNIQUE.
+   --sidebar-w-full = largeur dépliée, LE SEUL endroit où vit le clamp.
+   --sidebar-w      = largeur effective, lue partout (barre + footer).
+   Plus aucune largeur de barre en dur nulle part. */
+:root {
+  --sidebar-w-full: clamp(200px, 16vw, 280px);
+  --sidebar-w: var(--sidebar-w-full);
+}
+
+/* Repli manuel — prime sur la media query. */
+body.sidebar-collapsed { --sidebar-w: 64px; }
+
+/* Dépli manuel — l'utilisateur a choisi ; la media query ne le contredit pas.
+   Ce n'est pas une affaire de spécificité : la media query redéfinit
+   --sidebar-w sur :root (html), ici on la redéfinit sur body. Par HÉRITAGE des
+   custom properties, body étant plus proche de l'aside dans l'arbre que html,
+   sa valeur l'emporte pour tous ses descendants. */
+body.sidebar-expanded { --sidebar-w: var(--sidebar-w-full); }
+
+/* Repli automatique sous 1440px : à 1280 avec barre repliée, dashboard n'a
+   besoin que de 1139px, devis 1128, prospection 1229 — les 3 pages critiques
+   passent. Ne s'applique qu'en l'absence de dépli explicite : posé sur :root
+   (html), il est neutralisé par la redéfinition sur body (cf. héritage
+   ci-dessus). */
+@media (max-width: 1440px) {
+  :root { --sidebar-w: 64px; }
+}
+
 /* 1. Conteneur — repris de sidebar.js sans !important, + position sticky */
 aside#sidebar.sidebar {
-  width: clamp(200px, 16vw, 280px);
+  width: var(--sidebar-w);
+  transition: width .2s ease;
   background: var(--surface, #F5F5F7);
   border-right: 1px solid var(--border, #E8E8ED);
   display: flex;
@@ -106,4 +135,60 @@ aside#sidebar .sb-badge {
   color: #fff;
   border-radius: 6px;
   padding: 1px 6px;
+}
+
+/* ============================================================================
+   ÉTAT REPLIÉ — bande d'icônes 64px
+   ----------------------------------------------------------------------------
+   Piloté par body.sidebar-collapsed, posée AVANT le rendu par sidebar.js —
+   y compris en mode auto (media query), pour éviter tout scintillement.
+   Effets : libellés de section + libellés d'items + badges effacés, icônes
+   centrées, bloc utilisateur réduit à son avatar. La navigation reste
+   entièrement atteignable : ce n'est pas une disparition, c'est une bande
+   d'icônes (chaque item porte un title, cf. sidebar.js).
+   !important uniquement là où des styles inline existants doivent céder.
+   ============================================================================ */
+
+/* Libellés de section masqués */
+body.sidebar-collapsed aside#sidebar .sb-label { display: none; }
+
+/* Items : icône centrée, libellé + badge effacés. Le libellé est un nœud
+   texte direct de l'ancre → font-size:0 l'efface ; l'icône (SVG à dimensions
+   fixes) n'est pas affectée. */
+body.sidebar-collapsed aside#sidebar a.sb-item {
+  justify-content: center;
+  gap: 0;
+  font-size: 0;
+}
+body.sidebar-collapsed aside#sidebar a.sb-item .sb-badge { display: none; }
+
+/* Logo centré */
+body.sidebar-collapsed aside#sidebar .sb-logo-link {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Bouton de repli : icône centrée, libellé effacé, chevron inversé */
+body.sidebar-collapsed aside#sidebar #sb-collapse-btn {
+  justify-content: center !important;
+  gap: 0 !important;
+}
+body.sidebar-collapsed aside#sidebar #sb-collapse-label { display: none; }
+body.sidebar-collapsed aside#sidebar #sb-collapse-chevron { transform: rotate(180deg); }
+
+/* Bloc utilisateur : avatar seul (les styles inline du bouton cèdent via
+   !important ; le menu s'élargit pour rester lisible malgré la bande étroite). */
+body.sidebar-collapsed aside#sidebar #sb-user-btn {
+  justify-content: center !important;
+  gap: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+body.sidebar-collapsed aside#sidebar #sb-user-btn > span:not(#sb-user-avatar) {
+  display: none !important;
+}
+body.sidebar-collapsed aside#sidebar #sb-user-menu {
+  min-width: 180px;
+  right: auto;
 }

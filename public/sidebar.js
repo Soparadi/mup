@@ -38,6 +38,44 @@
   var el = document.getElementById('sidebar');
   if (!el) return;
 
+  // ── Barre latérale escamotable ──────────────────────────────────────────
+  // Largeur pilotée en CSS par var(--sidebar-w). Ici on ne gère que la CLASSE
+  // sur <body> qui décide de l'état visuel (bande d'icônes) et sert de repli
+  // de largeur. Source de vérité = localStorage.mup_sidebar_collapsed :
+  //   'true'  → replié explicite      (classe sidebar-collapsed)
+  //   'false' → déplié explicite      (classe sidebar-expanded, prime media query)
+  //   absent  → auto : la media query gouverne (classe sidebar-collapsed posée
+  //             en mode auto étroit pour que les libellés s'effacent aussi).
+  var COLLAPSE_KEY = 'mup_sidebar_collapsed';
+  var AUTO_QUERY = '(max-width: 1440px)';
+  function collapseStored() {
+    try { return localStorage.getItem(COLLAPSE_KEY); } catch (e) { return null; }
+  }
+  function autoCollapsed() {
+    try { return !!(window.matchMedia && window.matchMedia(AUTO_QUERY).matches); }
+    catch (e) { return false; }
+  }
+  // state : 'collapsed' | 'expanded' | 'auto-expanded' (aucune classe).
+  function applyState(state) {
+    var b = document.body;
+    if (!b) return;
+    b.classList.remove('sidebar-collapsed', 'sidebar-expanded');
+    if (state === 'collapsed') b.classList.add('sidebar-collapsed');
+    else if (state === 'expanded') b.classList.add('sidebar-expanded');
+    // 'auto-expanded' → aucune classe, la media query gouverne la largeur.
+  }
+  function initialState() {
+    var s = collapseStored();
+    if (s === 'true') return 'collapsed';
+    if (s === 'false') return 'expanded';
+    return autoCollapsed() ? 'collapsed' : 'auto-expanded';
+  }
+  function isCollapsedNow() {
+    return document.body.classList.contains('sidebar-collapsed');
+  }
+  // AVANT le premier rendu de la barre — sinon la page scintille au chargement.
+  applyState(initialState());
+
   var html = '<a href="/dashboard" class="sb-logo-link" aria-label="Accueil MovUP">'
     + '<img src="/logo-v7-movup-court.svg" alt="MovUP" class="sb-logo-img">'
     + '</a>'
@@ -46,7 +84,7 @@
   for (var i = 0; i < ITEMS.length; i++) {
     var it = ITEMS[i];
     var active = (path === it.href) ? ' active' : '';
-    html += '<a class="sb-item' + active + '" href="' + it.href + '">'
+    html += '<a class="sb-item' + active + '" href="' + it.href + '" title="' + it.label + '">'
       + '<div class="sb-icon" style="' + it.bg + '">'
       + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">' + it.svg + '</svg>'
       + '</div>'
@@ -68,7 +106,7 @@
     ? String(window.__USER__.email).toLowerCase().trim() : '';
   if (suEmail === 'dev@soparadi.com') {
     var suActive = (path === '/superadmin') ? ' active' : '';
-    html += '<a class="sb-item' + suActive + '" href="/superadmin">'
+    html += '<a class="sb-item' + suActive + '" href="/superadmin" title="Superadmin">'
       + '<div class="sb-icon" style="background:rgba(29,29,31,.08);color:#1D1D1F">'
       + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'
       + '</div>'
@@ -81,6 +119,18 @@
   // Wrapper avec margin-top:auto pour garantir position bottom indépendamment du
   // contenu. Pattern Stripe/Linear/Notion : user identity = dernier élément vertical.
   html += '<div id="sb-bottom-stack" style="margin-top:auto;display:flex;flex-direction:column;">';
+
+  // ── Bouton de repli — même patron que #sb-user-btn (bouton + aria-expanded).
+  // aria-expanded = true quand la barre est dépliée. Le chevron pointe « ‹ »
+  // (replier) ; il est inversé en CSS à l'état replié pour pointer « › ».
+  html += '<button id="sb-collapse-btn" type="button" aria-expanded="' + (isCollapsedNow() ? 'false' : 'true') + '" '
+    +   'aria-label="' + (isCollapsedNow() ? 'Déplier la barre latérale' : 'Replier la barre latérale') + '" '
+    +   'style="width:100%;display:flex;align-items:center;gap:9px;padding:8px 10px;margin:0 0 4px;background:transparent;border:1px solid transparent;border-radius:9px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;color:#6E6E73;text-align:left;transition:background .15s,border-color .15s;">'
+    +   '<span class="sb-icon" aria-hidden="true" style="background:rgba(29,29,31,.08);color:#6E6E73;">'
+    +     '<svg id="sb-collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s ease;"><polyline points="15 18 9 12 15 6"/></svg>'
+    +   '</span>'
+    +   '<span id="sb-collapse-label">Replier</span>'
+    + '</button>';
 
   // ── Bloc utilisateur — DERNIER élément de la sidebar, collé en bas absolu.
   // Lit window.__USER__ injecté serveur-side. Avatar 36×36 noir + nom + email
@@ -118,7 +168,9 @@
     + '#sb-user-btn[aria-expanded="true"]{background:#E8E8ED!important;border-color:#D1D1D6!important;}'
     + '#sb-user-menu{display:flex;flex-direction:column;gap:2px;}'
     + '#sb-user-menu[hidden]{display:none!important;}'
-    + '.sb-user-menu-item:hover{background:#F5F5F7!important;}';
+    + '.sb-user-menu-item:hover{background:#F5F5F7!important;}'
+    + '#sb-collapse-btn:hover{background:#EBEBF0!important;color:#1D1D1F!important;}'
+    + '#sb-collapse-btn:focus-visible{outline:none;background:#EBEBF0!important;border-color:#1D1D1F!important;box-shadow:0 0 0 2px rgba(29,29,31,.12);}';
   document.head.appendChild(userStyle);
 
   // ── Hydratation depuis window.__USER__ (injecté serveur-side, pas de fetch) ──
@@ -177,5 +229,33 @@
         .finally(function(){ window.location.href = '/login'; });
     });
   }
+
+  // ── Bouton de repli : bascule + persistance du choix explicite ──
+  var collapseBtn = document.getElementById('sb-collapse-btn');
+  function refreshCollapseBtn() {
+    if (!collapseBtn) return;
+    var collapsed = isCollapsedNow();
+    collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    collapseBtn.setAttribute('aria-label', collapsed ? 'Déplier la barre latérale' : 'Replier la barre latérale');
+  }
+  if (collapseBtn) {
+    collapseBtn.addEventListener('click', function(){
+      var next = !isCollapsedNow();                       // état visé
+      applyState(next ? 'collapsed' : 'expanded');        // choix EXPLICITE
+      try { localStorage.setItem(COLLAPSE_KEY, next ? 'true' : 'false'); } catch (e) {}
+      refreshCollapseBtn();
+    });
+  }
+  // En mode auto (aucun choix explicite), suit la media query au redimensionnement.
+  try {
+    var mq = window.matchMedia(AUTO_QUERY);
+    var onAutoChange = function(){
+      if (collapseStored() !== null) return;              // choix explicite → on n'y touche pas
+      applyState(mq.matches ? 'collapsed' : 'auto-expanded');
+      refreshCollapseBtn();
+    };
+    if (mq.addEventListener) mq.addEventListener('change', onAutoChange);
+    else if (mq.addListener) mq.addListener(onAutoChange);
+  } catch (e) {}
 
 })();

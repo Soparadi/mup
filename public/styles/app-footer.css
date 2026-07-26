@@ -11,15 +11,16 @@ html, body, * {
 /* ================================================================ */
 /* MICRO-FOOTER PAGES APP MOVUP                                     */
 /* Position fixed bas, aligné sur la sidebar dynamique              */
-/* clamp(200px,16vw,280px) — match exactement aside#sidebar.sidebar */
+/* left = var(--sidebar-w) — la même source que aside#sidebar       */
 /* ================================================================ */
 
 .mup-app-footer{
   position: fixed;
   bottom: 0;
-  left: clamp(200px, 16vw, 280px);
+  left: var(--sidebar-w);
   right: 0;
   z-index: 5;
+  transition: left .2s ease;
 
   background: var(--card, #FFFFFF);
   border-top: 1px solid var(--border, #E8E8ED);
@@ -59,13 +60,6 @@ html, body, * {
 
 .mup-app-footer nav a:hover{
   color: var(--text, #1D1D1F);
-}
-
-/* Mobile : sidebar masquée, footer pleine largeur */
-@media (max-width: 1024px){
-  .mup-app-footer{
-    left: 0;
-  }
 }
 
 @media (max-width: 640px){

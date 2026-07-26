@@ -263,3 +263,24 @@ aside#sidebar .sb-badge {
   #sb-drawer-toggle,
   #sb-drawer-scrim { display: none !important; }
 }
+
+/* ============================================================================
+   PLACE RÉSERVÉE AU BOUTON DE TIROIR — ≤ 640px
+   ----------------------------------------------------------------------------
+   Le bouton d'ouverture est fixed en haut à gauche (top:12, hauteur 40) ; sans
+   marge il recouvre le premier élément du contenu. On pousse le contenu de
+   56px = 12 + 40 + 4 de respiration. box-sizing:border-box est global sur les
+   14 pages : le padding rogne la hauteur (100vh / calc) au lieu de s'y ajouter,
+   donc aucun débordement.
+     .shell     → familles A et B : c'est le conteneur qui enveloppe la barre ET
+                  le contenu ; le pousser décale le contenu (la barre est un
+                  tiroir fixed hors flux sous 640px, insensible à ce padding).
+     body > main→ famille C uniquement : pages sans .shell, où main est enfant
+                  direct de body. Le main de la famille A (body > .shell > main)
+                  n'est PAS un enfant direct de body : il est donc exclu, sinon
+                  il cumulerait le padding de .shell et le sien = 112px.
+   ============================================================================ */
+@media (max-width: 640px) {
+  .shell,
+  body > main { padding-top: 56px; }
+}

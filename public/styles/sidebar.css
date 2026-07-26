@@ -10,32 +10,27 @@
    un sélecteur plus spécifique (ex: .sidebar.sidebar--variant).
    ============================================================================ */
 
-/* 0. Largeur — SOURCE DE VÉRITÉ UNIQUE.
+/* 0. Largeur — SOURCE DE VÉRITÉ UNIQUE, 3 états 100 % CSS.
    --sidebar-w-full = largeur dépliée, LE SEUL endroit où vit le clamp.
-   --sidebar-w      = largeur effective, lue partout (barre + footer).
-   Plus aucune largeur de barre en dur nulle part. */
+   --sidebar-w      = largeur effective réservée dans le flux, lue partout
+                      (barre en flux, footer, pipeline). Plus aucune largeur
+                      en dur ailleurs, et plus AUCUN état posé par JS.
+     ≥ 1441px : barre dépliée       → --sidebar-w = clamp(...)
+     641-1440 : bande d'icônes 64px → --sidebar-w = 64px
+     ≤ 640px  : tiroir hors flux    → --sidebar-w = 0 (cf. état « tiroir ») */
 :root {
   --sidebar-w-full: clamp(200px, 16vw, 280px);
   --sidebar-w: var(--sidebar-w-full);
 }
 
-/* Repli manuel — prime sur la media query. */
-body.sidebar-collapsed { --sidebar-w: 64px; }
-
-/* Dépli manuel — l'utilisateur a choisi ; la media query ne le contredit pas.
-   Ce n'est pas une affaire de spécificité : la media query redéfinit
-   --sidebar-w sur :root (html), ici on la redéfinit sur body. Par HÉRITAGE des
-   custom properties, body étant plus proche de l'aside dans l'arbre que html,
-   sa valeur l'emporte pour tous ses descendants. */
-body.sidebar-expanded { --sidebar-w: var(--sidebar-w-full); }
-
-/* Repli automatique sous 1440px : à 1280 avec barre repliée, dashboard n'a
-   besoin que de 1139px, devis 1128, prospection 1229 — les 3 pages critiques
-   passent. Ne s'applique qu'en l'absence de dépli explicite : posé sur :root
-   (html), il est neutralisé par la redéfinition sur body (cf. héritage
-   ci-dessus). */
+/* Bande d'icônes : 641-1440px. Piloté par la seule media query. */
 @media (max-width: 1440px) {
   :root { --sidebar-w: 64px; }
+}
+
+/* Tiroir hors flux : ≤ 640px. Plus déclarée après, l'emporte sous 640. */
+@media (max-width: 640px) {
+  :root { --sidebar-w: 0px; }
 }
 
 /* 1. Conteneur — repris de sidebar.js sans !important, + position sticky */
@@ -143,67 +138,128 @@ aside#sidebar .sb-badge {
 }
 
 /* ============================================================================
-   ÉTAT REPLIÉ — bande d'icônes 64px
+   ÉTAT « BANDE D'ICÔNES » — 641-1440px, 64px
    ----------------------------------------------------------------------------
-   Piloté par body.sidebar-collapsed, posée AVANT le rendu par sidebar.js —
-   y compris en mode auto (media query), pour éviter tout scintillement.
-   Effets : libellés de section + libellés d'items + badges effacés, icônes
-   centrées, bloc utilisateur réduit à son avatar. La navigation reste
-   entièrement atteignable : ce n'est pas une disparition, c'est une bande
-   d'icônes (chaque item porte un title, cf. sidebar.js).
-   !important uniquement là où des styles inline existants doivent céder.
+   Gouverné UNIQUEMENT par la media query — plus aucune classe posée par JS.
+   Borné à 641px min : sous 640px la barre devient un tiroir qui s'ouvre à sa
+   pleine largeur, libellés visibles (cf. état « tiroir ») ; la bande ne doit
+   pas s'y appliquer. Effets : libellés de section + libellés d'items + badges
+   effacés, icônes centrées, bloc utilisateur réduit à son avatar. La
+   navigation reste entièrement atteignable (chaque item porte un title, cf.
+   sidebar.js). !important uniquement là où des styles inline doivent céder.
    ============================================================================ */
+@media (min-width: 641px) and (max-width: 1440px) {
 
-/* Libellés de section masqués */
-body.sidebar-collapsed aside#sidebar .sb-label { display: none; }
+  /* Libellés de section masqués */
+  aside#sidebar .sb-label { display: none; }
 
-/* Items : icône centrée, libellé + badge effacés. Le libellé est un nœud
-   texte direct de l'ancre → font-size:0 l'efface ; l'icône (SVG à dimensions
-   fixes) n'est pas affectée. */
-body.sidebar-collapsed aside#sidebar a.sb-item {
-  justify-content: center;
-  gap: 0;
-  font-size: 0;
-}
-body.sidebar-collapsed aside#sidebar a.sb-item .sb-badge { display: none; }
+  /* Items : icône centrée, libellé + badge effacés. Le libellé est un nœud
+     texte direct de l'ancre → font-size:0 l'efface ; l'icône (SVG à dimensions
+     fixes) n'est pas affectée. */
+  aside#sidebar a.sb-item {
+    justify-content: center;
+    gap: 0;
+    font-size: 0;
+  }
+  aside#sidebar a.sb-item .sb-badge { display: none; }
 
-/* Logo centré */
-body.sidebar-collapsed aside#sidebar .sb-logo-link {
-  justify-content: center;
-  padding-left: 0;
-  padding-right: 0;
+  /* Logo centré */
+  aside#sidebar .sb-logo-link {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Logo : la marque complète déborde des 64px et se fait couper. On bascule
+     sur la marque M seule (quasi carrée), centrée dans la bande et à hauteur
+     réduite (36px < 44px de large disponibles) pour ne pas écraser la bande.
+     Le lien reste inchangé → toujours cliquable vers /dashboard. */
+  aside#sidebar .sb-logo-img--full { display: none; }
+  aside#sidebar .sb-logo-img--mark {
+    display: block;
+    height: 36px;
+  }
+
+  /* Bloc utilisateur : avatar seul (les styles inline du bouton cèdent via
+     !important ; le menu s'élargit pour rester lisible malgré la bande). */
+  aside#sidebar #sb-user-btn {
+    justify-content: center !important;
+    gap: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  aside#sidebar #sb-user-btn > span:not(#sb-user-avatar) {
+    display: none !important;
+  }
+  aside#sidebar #sb-user-menu {
+    min-width: 180px;
+    right: auto;
+  }
 }
 
-/* Logo : la marque complète déborde des 64px et se fait couper. On bascule
-   sur la marque M seule (quasi carrée), centrée dans la bande et à hauteur
-   réduite (36px < 44px de large disponibles) pour ne pas écraser la bande.
-   Le lien reste inchangé → toujours cliquable vers /dashboard. */
-body.sidebar-collapsed aside#sidebar .sb-logo-img--full { display: none; }
-body.sidebar-collapsed aside#sidebar .sb-logo-img--mark {
-  display: block;
-  height: 36px;
+/* ============================================================================
+   ÉTAT « TIROIR » — ≤ 640px
+   ----------------------------------------------------------------------------
+   La barre sort du flux (position:fixed) et coulisse depuis la gauche à sa
+   PLEINE largeur — c'est un tiroir, pas une bande. L'ouverture est pilotée par
+   body.sidebar-open (posée par sidebar.js). Bouton d'ouverture et voile sont
+   injectés dans <body> par sidebar.js ; leurs styles vivent ici, source de
+   vérité unique. z-index au-dessus du contenu et du footer (z-index:5).
+   ============================================================================ */
+@media (max-width: 640px) {
+  aside#sidebar.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: var(--sidebar-w-full);
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 200;
+  }
+  body.sidebar-open aside#sidebar.sidebar {
+    transform: translateX(0);
+  }
+
+  /* Bouton d'ouverture — fixe, en haut à gauche, au-dessus du contenu. */
+  #sb-drawer-toggle {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 150;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: var(--card, #FFFFFF);
+    border: 1px solid var(--border, #E8E8ED);
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .10);
+    color: var(--text, #1D1D1F);
+    cursor: pointer;
+  }
+
+  /* Voile plein écran — ferme au clic (cf. sidebar.js). */
+  #sb-drawer-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 190;
+    background: rgba(0, 0, 0, .4);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .25s ease;
+  }
+  body.sidebar-open #sb-drawer-scrim {
+    opacity: 1;
+    visibility: visible;
+  }
 }
 
-/* Bouton de repli : icône centrée, libellé effacé, chevron inversé */
-body.sidebar-collapsed aside#sidebar #sb-collapse-btn {
-  justify-content: center !important;
-  gap: 0 !important;
-}
-body.sidebar-collapsed aside#sidebar #sb-collapse-label { display: none; }
-body.sidebar-collapsed aside#sidebar #sb-collapse-chevron { transform: rotate(180deg); }
-
-/* Bloc utilisateur : avatar seul (les styles inline du bouton cèdent via
-   !important ; le menu s'élargit pour rester lisible malgré la bande étroite). */
-body.sidebar-collapsed aside#sidebar #sb-user-btn {
-  justify-content: center !important;
-  gap: 0 !important;
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-}
-body.sidebar-collapsed aside#sidebar #sb-user-btn > span:not(#sb-user-avatar) {
-  display: none !important;
-}
-body.sidebar-collapsed aside#sidebar #sb-user-menu {
-  min-width: 180px;
-  right: auto;
+/* Au-dessus de 640px : bouton et voile inertes — le tiroir n'existe pas. */
+@media (min-width: 641px) {
+  #sb-drawer-toggle,
+  #sb-drawer-scrim { display: none !important; }
 }

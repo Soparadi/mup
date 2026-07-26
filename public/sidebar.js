@@ -38,43 +38,12 @@
   var el = document.getElementById('sidebar');
   if (!el) return;
 
-  // ── Barre latérale escamotable ──────────────────────────────────────────
-  // Largeur pilotée en CSS par var(--sidebar-w). Ici on ne gère que la CLASSE
-  // sur <body> qui décide de l'état visuel (bande d'icônes) et sert de repli
-  // de largeur. Source de vérité = localStorage.mup_sidebar_collapsed :
-  //   'true'  → replié explicite      (classe sidebar-collapsed)
-  //   'false' → déplié explicite      (classe sidebar-expanded, prime media query)
-  //   absent  → auto : la media query gouverne (classe sidebar-collapsed posée
-  //             en mode auto étroit pour que les libellés s'effacent aussi).
-  var COLLAPSE_KEY = 'mup_sidebar_collapsed';
-  var AUTO_QUERY = '(max-width: 1440px)';
-  function collapseStored() {
-    try { return localStorage.getItem(COLLAPSE_KEY); } catch (e) { return null; }
-  }
-  function autoCollapsed() {
-    try { return !!(window.matchMedia && window.matchMedia(AUTO_QUERY).matches); }
-    catch (e) { return false; }
-  }
-  // state : 'collapsed' | 'expanded' | 'auto-expanded' (aucune classe).
-  function applyState(state) {
-    var b = document.body;
-    if (!b) return;
-    b.classList.remove('sidebar-collapsed', 'sidebar-expanded');
-    if (state === 'collapsed') b.classList.add('sidebar-collapsed');
-    else if (state === 'expanded') b.classList.add('sidebar-expanded');
-    // 'auto-expanded' → aucune classe, la media query gouverne la largeur.
-  }
-  function initialState() {
-    var s = collapseStored();
-    if (s === 'true') return 'collapsed';
-    if (s === 'false') return 'expanded';
-    return autoCollapsed() ? 'collapsed' : 'auto-expanded';
-  }
-  function isCollapsedNow() {
-    return document.body.classList.contains('sidebar-collapsed');
-  }
-  // AVANT le premier rendu de la barre — sinon la page scintille au chargement.
-  applyState(initialState());
+  // ── Barre latérale ──────────────────────────────────────────────────────
+  // Trois états 100 % CSS (cf. sidebar.css) : barre dépliée ≥1441px, bande
+  // d'icônes 641-1440px, tiroir ≤640px. La largeur est gouvernée par la seule
+  // media query via var(--sidebar-w) ; le JS ne pose PLUS aucun état de repli.
+  // Le seul état piloté ici est l'ouverture du tiroir mobile (body.sidebar-open,
+  // cf. plus bas), sans persistance.
 
   var html = '<a href="/dashboard" class="sb-logo-link" aria-label="Accueil MovUP">'
     + '<img src="/logo-v7-movup-court.svg" alt="MovUP" class="sb-logo-img sb-logo-img--full">'
@@ -121,18 +90,6 @@
   // contenu. Pattern Stripe/Linear/Notion : user identity = dernier élément vertical.
   html += '<div id="sb-bottom-stack" style="margin-top:auto;display:flex;flex-direction:column;">';
 
-  // ── Bouton de repli — même patron que #sb-user-btn (bouton + aria-expanded).
-  // aria-expanded = true quand la barre est dépliée. Le chevron pointe « ‹ »
-  // (replier) ; il est inversé en CSS à l'état replié pour pointer « › ».
-  html += '<button id="sb-collapse-btn" type="button" aria-expanded="' + (isCollapsedNow() ? 'false' : 'true') + '" '
-    +   'aria-label="' + (isCollapsedNow() ? 'Déplier la barre latérale' : 'Replier la barre latérale') + '" '
-    +   'style="width:100%;display:flex;align-items:center;gap:9px;padding:8px 10px;margin:0 0 4px;background:transparent;border:1px solid transparent;border-radius:9px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;color:#6E6E73;text-align:left;transition:background .15s,border-color .15s;">'
-    +   '<span class="sb-icon" aria-hidden="true" style="background:rgba(29,29,31,.08);color:#6E6E73;">'
-    +     '<svg id="sb-collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s ease;"><polyline points="15 18 9 12 15 6"/></svg>'
-    +   '</span>'
-    +   '<span id="sb-collapse-label">Replier</span>'
-    + '</button>';
-
   // ── Bloc utilisateur — DERNIER élément de la sidebar, collé en bas absolu.
   // Lit window.__USER__ injecté serveur-side. Avatar 36×36 noir + nom + email
   // tronqué. TOUT le bouton est cliquable (avatar/nom/email/zone vide), feedback
@@ -169,9 +126,7 @@
     + '#sb-user-btn[aria-expanded="true"]{background:#E8E8ED!important;border-color:#D1D1D6!important;}'
     + '#sb-user-menu{display:flex;flex-direction:column;gap:2px;}'
     + '#sb-user-menu[hidden]{display:none!important;}'
-    + '.sb-user-menu-item:hover{background:#F5F5F7!important;}'
-    + '#sb-collapse-btn:hover{background:#EBEBF0!important;color:#1D1D1F!important;}'
-    + '#sb-collapse-btn:focus-visible{outline:none;background:#EBEBF0!important;border-color:#1D1D1F!important;box-shadow:0 0 0 2px rgba(29,29,31,.12);}';
+    + '.sb-user-menu-item:hover{background:#F5F5F7!important;}';
   document.head.appendChild(userStyle);
 
   // ── Hydratation depuis window.__USER__ (injecté serveur-side, pas de fetch) ──
@@ -231,32 +186,47 @@
     });
   }
 
-  // ── Bouton de repli : bascule + persistance du choix explicite ──
-  var collapseBtn = document.getElementById('sb-collapse-btn');
-  function refreshCollapseBtn() {
-    if (!collapseBtn) return;
-    var collapsed = isCollapsedNow();
-    collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    collapseBtn.setAttribute('aria-label', collapsed ? 'Déplier la barre latérale' : 'Replier la barre latérale');
+  // ── Tiroir mobile (≤640px) : bouton d'ouverture + voile injectés ─────────
+  // Pas d'ancrage HTML commun aux pages : on injecte nous-mêmes dans <body>.
+  // Les éléments restent dans le DOM à toute largeur ; c'est la media query de
+  // sidebar.css qui les masque au-dessus de 640px (display:none). Aucune
+  // persistance : body.sidebar-open n'est jamais mémorisée, le tiroir repart
+  // fermé à chaque page.
+  var OPEN_CLASS = 'sidebar-open';
+
+  var toggle = document.createElement('button');
+  toggle.id = 'sb-drawer-toggle';
+  toggle.type = 'button';
+  toggle.setAttribute('aria-label', 'Ouvrir le menu');
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', 'sidebar');
+  toggle.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+    + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">'
+    + '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/>'
+    + '<line x1="3" y1="18" x2="21" y2="18"/></svg>';
+
+  var scrim = document.createElement('div');
+  scrim.id = 'sb-drawer-scrim';
+
+  document.body.appendChild(toggle);
+  document.body.appendChild(scrim);
+
+  function drawerOpen() { return document.body.classList.contains(OPEN_CLASS); }
+  function setDrawer(open) {
+    document.body.classList.toggle(OPEN_CLASS, open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
-  if (collapseBtn) {
-    collapseBtn.addEventListener('click', function(){
-      var next = !isCollapsedNow();                       // état visé
-      applyState(next ? 'collapsed' : 'expanded');        // choix EXPLICITE
-      try { localStorage.setItem(COLLAPSE_KEY, next ? 'true' : 'false'); } catch (e) {}
-      refreshCollapseBtn();
-    });
-  }
-  // En mode auto (aucun choix explicite), suit la media query au redimensionnement.
-  try {
-    var mq = window.matchMedia(AUTO_QUERY);
-    var onAutoChange = function(){
-      if (collapseStored() !== null) return;              // choix explicite → on n'y touche pas
-      applyState(mq.matches ? 'collapsed' : 'auto-expanded');
-      refreshCollapseBtn();
-    };
-    if (mq.addEventListener) mq.addEventListener('change', onAutoChange);
-    else if (mq.addListener) mq.addListener(onAutoChange);
-  } catch (e) {}
+
+  toggle.addEventListener('click', function(){ setDrawer(!drawerOpen()); });
+  scrim.addEventListener('click', function(){ setDrawer(false); });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && drawerOpen()) setDrawer(false);
+  });
+  // Ferme à la navigation : un clic sur un lien de la barre bascule de page.
+  el.addEventListener('click', function(e){
+    if (e.target && e.target.closest && e.target.closest('a.sb-item, .sb-logo-link')) {
+      setDrawer(false);
+    }
+  });
 
 })();

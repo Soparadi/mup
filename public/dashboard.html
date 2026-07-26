@@ -253,11 +253,6 @@
      2xl 1536px+   (desktops, large monitors)
   ══════════════════════════════════════════ */
 
-  /* ── HAMBURGER / OVERLAY : neutralisés (sidebar fixe permanente) ──
-     Markup conservé mais inerte : forcés en display:none en permanence. */
-  .hamburger{display:none;}
-  .sidebar-overlay{display:none;}
-
   /* ════════════════════════════════
      XS — iPhone SE / small phones (< 480px)
   ════════════════════════════════ */
@@ -444,10 +439,6 @@
 <body>
 
 
-<button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">
-  <span></span><span></span><span></span>
-</button>
-<div class="sidebar-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
 <div class="shell">
 
   <!-- SIDEBAR -->
@@ -1030,17 +1021,6 @@ document.head.appendChild(style);
 renderCalendar();
 </script>
 
-
-<script>
-function toggleSidebar(){
-  document.querySelector('.sidebar').classList.toggle('open');
-  document.getElementById('sb-overlay').classList.toggle('open');
-}
-function closeSidebar(){
-  document.querySelector('.sidebar').classList.remove('open');
-  document.getElementById('sb-overlay').classList.remove('open');
-}
-</script>
 
 <script>
 // IIFE supprimée — corps déplacé dans renderDashboardAgenda() (cf. bloc final).

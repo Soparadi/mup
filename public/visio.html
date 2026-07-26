@@ -24,7 +24,6 @@
   --orange-light:rgba(230,126,0,.15);
   --blue:#0A66C2;
   --red:#A32D2D;
-  --jitsi:#7C3AED;
   --zoom:#2D8CFF;
   --teams:#464BC8;
   --meet:#00805A;
@@ -99,7 +98,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .launch-btn{padding:9px 16px;border-radius:9px;background:var(--surface);display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--text);transition:all .12s;border:1px solid transparent;position:relative}
 .launch-btn:hover{background:var(--surface2);transform:translateY(-1px)}
 .launch-btn .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-.launch-btn.jitsi .dot{background:var(--jitsi);box-shadow:0 0 0 3px rgba(124,58,237,.15)}
 .launch-btn.zoom .dot{background:var(--zoom);box-shadow:0 0 0 3px rgba(45,140,255,.15)}
 .launch-btn.teams .dot{background:var(--teams);box-shadow:0 0 0 3px rgba(70,75,200,.15)}
 .launch-btn.meet .dot{background:var(--meet);box-shadow:0 0 0 3px rgba(0,128,90,.15)}
@@ -226,7 +224,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
   font-size:9.5px;color:rgba(255,255,255,.7);text-align:center;margin-top:4px;
   font-style:italic;
 }
-/* Le video natif s'affiche comme l'iframe Jitsi */
+/* La vidéo native reprend la mise en page de la vidéo embarquée */
 #videoFrame video.testcam-video{
   position:absolute;top:0;left:340px;right:0;bottom:0;
   width:calc(100% - 340px);height:100%;object-fit:cover;
@@ -252,7 +250,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .rdv-card.imminent .time{color:var(--orange)}
 .rdv-card .duration{font-family:var(--mono);font-size:10px;color:var(--muted2)}
 .rdv-card .badge-provider{margin-left:auto;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px}
-.badge-provider.jitsi{background:var(--visio-light);color:var(--visio)}
 .badge-provider.zoom{background:rgba(45,140,255,.12);color:var(--zoom)}
 .badge-provider.teams{background:rgba(70,75,200,.12);color:var(--teams)}
 .badge-provider.meet{background:rgba(0,128,90,.12);color:var(--meet)}
@@ -670,10 +667,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
   <div class="launch-bar">
     <span class="launch-label">Lancer maintenant</span>
     <div class="launch-providers">
-      <button class="launch-btn primary" id="launchJitsi" title="Démarrer une visio Jitsi instantanée">
-        <span class="dot"></span>
-        Jitsi
-      </button>
       <button class="launch-btn test-cam" id="testCameraBtn" title="Préparation avant RDV : caméra, lumière, fond">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
         <span class="test-cam-label">Tester caméra</span>
@@ -829,10 +822,9 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
     <div class="field">
       <label>Provider</label>
       <div class="provider-grid">
-        <div class="provider-opt selected" data-provider="jitsi"><div style="font-size:18px;color:var(--jitsi)">—</div><div class="p-name">Jitsi</div><div class="p-mini">Lien généré</div></div>
         <div class="provider-opt" data-provider="zoom"><div style="font-size:18px;color:var(--zoom)">—</div><div class="p-name">Zoom</div><div class="p-mini">Mon lien</div></div>
         <div class="provider-opt" data-provider="teams"><div style="font-size:18px;color:var(--teams)">—</div><div class="p-name">Teams</div><div class="p-mini">Mon lien</div></div>
-        <div class="provider-opt" data-provider="meet"><div style="font-size:18px;color:var(--meet)">—</div><div class="p-name">Meet</div><div class="p-mini">Mon lien</div></div>
+        <div class="provider-opt selected" data-provider="meet"><div style="font-size:18px;color:var(--meet)">—</div><div class="p-name">Meet</div><div class="p-mini">Mon lien</div></div>
         <div class="provider-opt" data-provider="custom"><div style="font-size:18px;color:var(--muted)">—</div><div class="p-name">Autre</div><div class="p-mini">Lien custom</div></div>
       </div>
     </div>
@@ -952,9 +944,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
       <div class="kbd-row"><div class="keys"><kbd>?</kbd></div><div class="desc">Afficher cette aide</div></div>
       <div class="kbd-row"><div class="keys"><kbd>Échap</kbd></div><div class="desc">Fermer une modale ou terminer le RDV</div></div>
     </div>
-    <div style="margin-top:14px;padding:10px 12px;background:var(--surface);border-radius:9px;font-size:11px;color:var(--muted);line-height:1.5">
-      <strong style="color:var(--text)">Note</strong> · Si la fenêtre Jitsi a le focus, cliquez d'abord en dehors avant d'utiliser les raccourcis.
-    </div>
     <div class="modal-actions">
       <button class="btn-primary" data-close="helpModal">Compris</button>
     </div>
@@ -983,7 +972,6 @@ const LS = {
 };
 
 const PROVIDERS = {
-  jitsi: { embed:true,  label:'Jitsi', color:'#7C3AED', urlGen:(id)=>`https://meet.jit.si/mup-${id}` },
   zoom:  { embed:false, label:'Zoom',  color:'#2D8CFF', pattern:/zoom\.us/ },
   teams: { embed:false, label:'Teams', color:'#464BC8', pattern:/teams\.microsoft|teams\.live/ },
   meet:  { embed:false, label:'Meet',  color:'#00805A', pattern:/meet\.google/ },
@@ -1125,8 +1113,7 @@ const escapeHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<'
 const fmtSize = b => b < 1024 ? b+'B' : b < 1048576 ? (b/1024).toFixed(0)+'Ko' : (b/1048576).toFixed(1)+'Mo';
 
 function detectProvider(link){
-  if(!link) return 'jitsi';
-  if(link.includes('jit.si')) return 'jitsi';
+  if(!link) return 'custom';
   for(const [n,c] of Object.entries(PROVIDERS)){
     if(c.pattern && c.pattern.test(link)) return n;
   }
@@ -1252,16 +1239,6 @@ document.querySelectorAll('input[data-link]').forEach(input=>{
 /* ————————————————————————————————————————————————
    LANCEMENT PROVIDERS
    ———————————————————————————————————————————————— */
-$('launchJitsi').addEventListener('click', ()=>{
-  const id = 'quick_' + uid();
-  selectRdv({
-    id, prospectId:null, prospectName:'Visio Jitsi rapide', societe:'', email:'',
-    date: new Date().toISOString(), duree: 30,
-    provider:'jitsi', link: PROVIDERS.jitsi.urlGen(id),
-    status:'in_progress', sujet:'Visio rapide'
-  });
-});
-
 function launchExternal(provider){
   const link = _state.settings.links?.[provider];
 
@@ -1575,10 +1552,7 @@ function renderVideoFrame(rdv){
   const frame = $('videoFrame');
   const provider = PROVIDERS[rdv.provider];
 
-  if(rdv.provider === 'jitsi' && !rdv.link){
-    rdv.link = PROVIDERS.jitsi.urlGen(rdv.id);
-  }
-
+  // Branche embarquée inatteignable tant qu'aucun provider n'a embed:true — en attente du prochain provider embarqué (Digital Samba).
   if(provider && provider.embed && rdv.link){
     frame.innerHTML = `<iframe src="${rdv.link}" allow="camera; microphone; display-capture; autoplay; clipboard-write" allowfullscreen></iframe>`;
   } else {
@@ -2358,7 +2332,7 @@ $('prospectSelect').addEventListener('change', async e=>{
 });
 
 $('saveRdvBtn').addEventListener('click', async ()=>{
-  const provider = document.querySelector('.provider-opt.selected')?.dataset.provider || 'jitsi';
+  const provider = document.querySelector('.provider-opt.selected')?.dataset.provider || 'meet';
   const date = $('rdvDate').value;
   const time = $('rdvTime').value;
   if(!date || !time){ showToast('Date et heure requises'); return; }
@@ -2368,8 +2342,7 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
 
   const newId = 'rdv_' + uid();
   let link = '';
-  if(provider === 'jitsi') link = PROVIDERS.jitsi.urlGen(newId);
-  else if(['zoom','teams','meet'].includes(provider)){
+  if(['zoom','teams','meet'].includes(provider)){
     link = myLinks[provider] || '';
     if(!link){ showToast(`Renseignez d'abord votre lien ${PROVIDERS[provider].label} en haut`); return; }
   } else link = customLink;
@@ -2445,7 +2418,7 @@ function setTestCameraBtnState(active){
 }
 
 async function openTestCamera(){
-  // Réutilise visioActive comme Jitsi
+  // Réutilise visioActive comme surface de visio
   $('emptyState').style.display = 'none';
   $('visioActive').style.display = 'flex';
 
@@ -2460,18 +2433,7 @@ async function openTestCamera(){
       <div class="briefing-name">Mode préparation</div>
       <div class="briefing-soc">Vérifiez votre caméra, ajustez la lumière, choisissez votre fond.</div>
     </div>
-    <div class="briefing-actions">
-      <button class="briefing-mini cta" id="testCamLaunchJitsiBtn" style="background:var(--visio)">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Lancer Jitsi
-      </button>
-    </div>
   `;
-  const launchBtn = document.getElementById('testCamLaunchJitsiBtn');
-  if(launchBtn) launchBtn.addEventListener('click', function(){
-    closeTestCamera();
-    setTimeout(()=>$('launchJitsi').click(), 80);
-  });
 
   // 2) videoFrame : panneau gauche (étalonnage + fonds) + vidéo à droite + audio meter
   const frame = $('videoFrame');

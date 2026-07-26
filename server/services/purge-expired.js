@@ -49,6 +49,8 @@
 // le user est skipé avec log warning et compté dans skippedCount.
 
 import { getDb } from '../../lib/surreal.js'
+import { decryptMailToken } from '../../lib/crypto.js'
+import { revokeRefreshToken } from '../../lib/oauth-google.js'
 
 // Strip le préfixe 'user:' et les guillemets ⟨⟩ du Record ID SurrealDB
 // pour obtenir la string brute utilisée comme userId par les tables
@@ -56,6 +58,15 @@ import { getDb } from '../../lib/surreal.js'
 // user_plan, etc.). Pattern aligné sur cleanUserId de server/routes/stripe.js.
 function cleanUserId(raw) {
   return String(raw || '').replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+}
+
+// Strip le préfixe 'campaigns:' et les guillemets ⟨⟩ d'un Record ID de campagne.
+// ALIGNÉ SUR LE WEBHOOK RESEND (server.js ~5278) qui écrit campaign_events.
+// campaign_id comme string BRUTE via exactement ce nettoyage. La suppression
+// des events (deleteUserCascade) DOIT comparer avec le même format, sinon la
+// clause ne matche rien et reproduit le défaut d'events orphelins qu'on corrige.
+function cleanCampaignId(raw) {
+  return String(raw || '').replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '')
 }
 
 // 4 tables SCHEMAFULL avec FK record<user> — DELETE pattern :
@@ -68,18 +79,22 @@ const TABLES_SCHEMAFULL = [
   'lead_search'
 ]
 
-// 17 tables SCHEMALESS avec FK string brute userId — DELETE pattern :
+// 16 tables SCHEMALESS avec FK string brute userId — DELETE pattern :
 //   DELETE <table> WHERE userId = $uid
-// ORDRE OBLIGATOIRE : campaign_events AVANT campaigns (FK campaign_id sur
-// events, purger campaigns en premier laisserait events orphelins).
-// La table devis est traitée séparément ci-dessous (filtre comptable).
+// TRAITÉES HORS BOUCLE (voir deleteUserCascade) :
+//   - mailbox_credentials → révocation OAuth Google avant DELETE (par ownerId,
+//     pas userId) ; extraite pour révoquer chaque refresh_token best effort.
+//   - campaign_events → aucun champ user ; lien indirect campaign_id →
+//     campaigns.userId. Extraite et supprimée AVANT campaigns (dont le DELETE
+//     effacerait les ids nécessaires au rattachement des events).
+// campaigns RESTE dans cette boucle (FK userId directe) et est supprimée après
+// ses events. La table devis est traitée séparément ci-dessous (filtre comptable).
 const TABLES_SCHEMALESS = [
   'pipeline',
   'contacts',
   'agenda',
   'mail',
   'mail_settings',
-  'mailbox_credentials',
   'visio_settings',
   'visio_log',
   'visio_draft',
@@ -90,7 +105,6 @@ const TABLES_SCHEMALESS = [
   'user_plan',
   'user_plan_history',
   'domains_resend',
-  'campaign_events',
   'campaigns'
 ]
 
@@ -122,7 +136,83 @@ export async function deleteUserCascade(rawUid) {
     }
   }
 
-  // SCHEMALESS — FK string brute userId
+  // mailbox_credentials — traitée HORS boucle générique. Deux raisons : la FK
+  // est ownerId (pas userId), et un DELETE nu laisserait des refresh_token
+  // Google actifs côté Google. On révoque donc AVANT de supprimer.
+  // IMPÉRATIF RGPD (art. 17) : une révocation qui échoue ne doit JAMAIS empêcher
+  // la suppression d'aboutir. Chaque échec (déchiffrement OU appel Google) est
+  // attrapé INDIVIDUELLEMENT et journalisé, jamais bloquant : un credential en
+  // échec n'interrompt pas le traitement des suivants, et l'utilisateur doit
+  // pouvoir disparaître même si Google est indisponible.
+  // Microsoft : PAS de révocation ici (no-op documenté — la révocation MS ne
+  // prend pas le refresh_token en paramètre, l'app-consent se gère côté tenant),
+  // mais les credentials MS sont supprimés comme les autres par le DELETE final,
+  // qui couvre tous les providers via ownerId.
+  try {
+    const r = await db.query(
+      `SELECT provider, refreshToken FROM mailbox_credentials WHERE ownerId = $uid`,
+      { uid }
+    )
+    const creds = r?.[0] || []
+    for (const cred of creds) {
+      if (cred?.provider !== 'google' || !cred.refreshToken) continue
+      try {
+        const plain = decryptMailToken(cred.refreshToken)
+        // revokeRefreshToken est non-throw et journalise son échec en interne
+        // (motif compris) ; on n'interrompt jamais la cascade sur son retour.
+        await revokeRefreshToken(plain)
+      } catch (e) {
+        console.warn(`[purge] révocation Google échec uid=${uid} :`, e.message)
+      }
+    }
+  } catch (e) {
+    console.warn(`[purge] mailbox_credentials SELECT échec uid=${uid} :`, e.message)
+  }
+  try {
+    const r = await db.query(
+      `DELETE mailbox_credentials WHERE ownerId = $uid RETURN BEFORE`,
+      { uid }
+    )
+    const n = (r?.[0] || []).length
+    if (n > 0) { tablesPurgees.push(`mailbox_credentials:${n}`); recordCount += n }
+  } catch (e) {
+    console.warn(`[purge] mailbox_credentials DELETE échec uid=${uid} :`, e.message)
+  }
+
+  // campaign_events — traitée HORS boucle générique et AVANT campaigns. La table
+  // n'a AUCUN champ user : le seul lien est indirect via campaign_id →
+  // campaigns.userId. On récupère donc d'abord les ids de campagne du user, puis
+  // on supprime les events rattachés. L'ORDRE N'EST PLUS DÉCORATIF, IL EST
+  // NÉCESSAIRE : le DELETE campaigns de la boucle générique ci-dessous efface
+  // ces ids ; sans eux, les events ne seraient plus rattachables et resteraient
+  // orphelins. FORMAT : campaign_id est stocké par le webhook Resend
+  // (server.js ~5278) comme string BRUTE (préfixe `campaigns:` + chevrons ⟨⟩
+  // retirés) ; cleanCampaignId aligne la clause sur ce même format.
+  try {
+    const r = await db.query(
+      `SELECT id FROM campaigns WHERE userId = $uid`,
+      { uid }
+    )
+    const camps = r?.[0] || []
+    let evDeleted = 0
+    for (const c of camps) {
+      const cid = cleanCampaignId(c.id)
+      try {
+        const dr = await db.query(
+          `DELETE campaign_events WHERE campaign_id = $cid RETURN BEFORE`,
+          { cid }
+        )
+        evDeleted += (dr?.[0] || []).length
+      } catch (e) {
+        console.warn(`[purge] campaign_events DELETE échec uid=${uid} camp=${cid} :`, e.message)
+      }
+    }
+    if (evDeleted > 0) { tablesPurgees.push(`campaign_events:${evDeleted}`); recordCount += evDeleted }
+  } catch (e) {
+    console.warn(`[purge] campaigns SELECT (pour events) échec uid=${uid} :`, e.message)
+  }
+
+  // SCHEMALESS — FK string brute userId (campaigns supprimée ici, après ses events)
   for (const t of TABLES_SCHEMALESS) {
     try {
       const r = await db.query(

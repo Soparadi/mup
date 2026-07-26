@@ -73,6 +73,11 @@ aside#sidebar .sb-logo-img {
   display: block;
 }
 
+/* Marque M seule : présente dans le DOM mais masquée à l'état déplié.
+   Les deux <img> coexistent — la bascule se fait par display en CSS, jamais
+   par substitution de src en JS : aucun rechargement, transition fluide. */
+aside#sidebar .sb-logo-img--mark { display: none; }
+
 /* 4. Libellé de section (« Navigation », etc.) */
 aside#sidebar .sb-label {
   font-size: 9px;
@@ -167,6 +172,16 @@ body.sidebar-collapsed aside#sidebar .sb-logo-link {
   justify-content: center;
   padding-left: 0;
   padding-right: 0;
+}
+
+/* Logo : la marque complète déborde des 64px et se fait couper. On bascule
+   sur la marque M seule (quasi carrée), centrée dans la bande et à hauteur
+   réduite (36px < 44px de large disponibles) pour ne pas écraser la bande.
+   Le lien reste inchangé → toujours cliquable vers /dashboard. */
+body.sidebar-collapsed aside#sidebar .sb-logo-img--full { display: none; }
+body.sidebar-collapsed aside#sidebar .sb-logo-img--mark {
+  display: block;
+  height: 36px;
 }
 
 /* Bouton de repli : icône centrée, libellé effacé, chevron inversé */

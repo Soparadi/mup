@@ -77,7 +77,8 @@
   applyState(initialState());
 
   var html = '<a href="/dashboard" class="sb-logo-link" aria-label="Accueil MovUP">'
-    + '<img src="/logo-v7-movup-court.svg" alt="MovUP" class="sb-logo-img">'
+    + '<img src="/logo-v7-movup-court.svg" alt="MovUP" class="sb-logo-img sb-logo-img--full">'
+    + '<img src="/movup-mark.svg" alt="" aria-hidden="true" class="sb-logo-img sb-logo-img--mark">'
     + '</a>'
     + '<div class="sb-label">Navigation</div>';
 

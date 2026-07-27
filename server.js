@@ -537,6 +537,13 @@ app.get('/api/public/search-demo', async (req, res) => {
   const depts = REGION_DEPTS[region]
   if (!depts) return res.status(400).json({ error: 'region inconnue' })
 
+  // Raffinements optionnels (1.1) — département simple, code commune INSEE, code
+  // postal. Servent la lecture-cache (gate + WHERE) et, sur MISS, restreignent la
+  // requête Etalab au département reçu s'il est présent (sinon liste régionale).
+  const departement = String(req.query.departement || '').trim()
+  const codeCommune = String(req.query.code_commune || '').trim()
+  const codePostal = String(req.query.code_postal || '').trim()
+
   let nafDotted = naf
   if (naf.length >= 4 && naf.indexOf('.') === -1) {
     nafDotted = naf.substring(0, 2) + '.' + naf.substring(2)
@@ -545,7 +552,8 @@ app.get('/api/public/search-demo', async (req, res) => {
   const PAGE_SIZE = 25
   const MAX_PAGES = 5
   const MAX_MARKERS = 500
-  const deptCsv = depts.join(',')
+  // MISS : département reçu s'il est présent, sinon la liste régionale (comme avant).
+  const deptCsv = departement || depts.join(',')
 
   function buildUrl(page) {
     const p = new URLSearchParams()
@@ -556,23 +564,26 @@ app.get('/api/public/search-demo', async (req, res) => {
     return 'https://recherche-entreprises.api.gouv.fr/search?' + p.toString()
   }
 
-  // Pour chaque résultat, choisir un établissement physique en région.
+  // Pour chaque résultat, choisir un établissement physique dans le périmètre reçu.
   // Priorité : matching_etablissements (le plus pertinent), fallback siège
-  // si son CP est aussi dans la région.
-  function pickLocalEtab(item) {
+  // si son CP est aussi dans le périmètre reçu.
+  // `allowed` est REQUIS, sans valeur par défaut : .map passe l'index en 2ᵉ
+  // argument et deptMatchCp accepte tout périmètre non-tableau — un défaut
+  // rouvrirait silencieusement le bornage. Les deux sites d'appel sont explicites.
+  function pickLocalEtab(item, allowed) {
     const matching = Array.isArray(item.matching_etablissements) ? item.matching_etablissements : []
     for (let i = 0; i < matching.length; i++) {
       const cp = String(matching[i].code_postal || '')
-      if (deptMatchCp(depts, cp)) return matching[i]
+      if (deptMatchCp(allowed, cp)) return matching[i]
     }
     const siege = item.siege || {}
     const cp = String(siege.code_postal || '')
-    if (deptMatchCp(depts, cp)) return siege
+    if (deptMatchCp(allowed, cp)) return siege
     return null
   }
 
-  function mapItem(item) {
-    const etab = pickLocalEtab(item)
+  function mapItem(item, allowed) {
+    const etab = pickLocalEtab(item, allowed)
     if (!etab) return null
     const lat = etab.latitude != null ? Number(etab.latitude) : null
     const lng = etab.longitude != null ? Number(etab.longitude) : null
@@ -586,6 +597,52 @@ app.get('/api/public/search-demo', async (req, res) => {
       lat,
       lng
     }
+  }
+
+  // ── Lecture-cache référentiel-first (calque /api/search geste B, 85b999c) ──
+  // Si le gisement (naf, departement) est marqué COMPLET et FRAIS, on sert preview +
+  // markers depuis referentiel_societes en UN SEUL aller-retour base (perPage aligné
+  // sur MAX_MARKERS, page 1), contre cinq appels Etalab aujourd'hui. Toutes les
+  // fonctions appelées sont fail-safe (null / 0 / results vides) → à la moindre
+  // incertitude on retombe sur Etalab. Le try/catch de ceinture garantit qu'une
+  // exception AVANT res.json dégrade en MISS (chemin Etalab), jamais en 502.
+  // Démo ANONYME : PAS de trackLeadSearch (absent de ce chemin). ABSTENTIONS : PAS
+  // d'upsertReferentiel, PAS de markGisementComplete (une lecture ne rajeunit jamais
+  // ce qu'elle lit). Les fiches lues ont déjà passé keepLead à l'écriture (D1) → on
+  // n'applique NI isProspectable NI l'extrapolation ratio : total est le count exact.
+  try {
+    // Cache tenté UNIQUEMENT sur département simple (sans virgule) reçu + NAF présent.
+    if (departement && !departement.includes(',')) {
+      const gisement = await isGisementComplete(naf, departement)
+      if (gisement) {
+        const total = await countReferentielFresh({ departement, naf, commune: codeCommune, codePostal })
+        if (total > 0) {
+          // perPage aligné sur le plafond de markers du handler (MAX_MARKERS), page 1 :
+          // un seul aller-retour couvre preview (5) + markers (jusqu'à MAX_MARKERS-5).
+          const lecture = await readReferentiel({ departement, naf, commune: codeCommune, codePostal, page: 1, perPage: MAX_MARKERS })
+          // Garde page-1-vide : un gisement marqué mais rendant une page 1 VIDE (tout
+          // opt-out) ne doit pas servir une réponse creuse → Etalab reprend la main.
+          // La démo ne pagine pas (page toujours 1), d'où la garde réduite à > 0.
+          if (lecture.results.length > 0) {
+            // Dette SIREN assumée, alignée sur le moteur, non corrigée ici : `total`
+            // compte des LIGNES (un SIRET par ligne) alors que l'aperçu est dédupliqué
+            // par entreprise → sur un gisement multi-établissements, total peut dépasser
+            // le nombre d'entreprises distinctes.
+            const mapped = lecture.results.map(it => mapItem(it, [departement])).filter(Boolean)
+            const preview = mapped.slice(0, 5)
+            const markers = mapped.slice(5, 5 + (MAX_MARKERS - preview.length))
+                                  .map(m => ({ lat: m.lat, lng: m.lng }))
+            // total = countReferentielFresh (count exact) → totalCapped false (aucune
+            // borne 10 000, contrairement au total_results Etalab extrapolé du MISS).
+            console.log(`[search-demo-cache] HIT ${nafDotted}:${departement} servi=${lecture.results.length} total=${total}`)
+            res.json({ total, totalCapped: false, preview, markers })
+            return
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[search-demo-cache]', String(e?.message || e).slice(0, 80))
   }
 
   try {
@@ -643,7 +700,7 @@ app.get('/api/public/search-demo', async (req, res) => {
     const ratio = fetchedCount > 0 ? (filteredRaw.length / fetchedCount) : 1
     const totalEstimated = Math.round(totalRaw * ratio)
 
-    const mapped = filteredRaw.map(mapItem).filter(Boolean)
+    const mapped = filteredRaw.map(it => mapItem(it, depts)).filter(Boolean)
     const preview = mapped.slice(0, 5)
     const markers = mapped.slice(5, 5 + (MAX_MARKERS - preview.length))
                           .map(m => ({ lat: m.lat, lng: m.lng }))

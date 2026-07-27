@@ -612,6 +612,27 @@ app.get('/api/public/search-demo', async (req, res) => {
     if (rawDiffusible.length !== raw.length) console.log(`[diffusion] search-demo: ${raw.length - rawDiffusible.length} fiche(s) exclue(s)`)
     raw = rawDiffusible
 
+    // Filtre opt-out RGPD — AU MÊME endroit que la diffusion : sur `raw`, AVANT
+    // que fetchedCount ne soit mesuré, pour que le ratio voie les fiches retirées
+    // des DEUX côtés de la fraction. Collecte siège + matching (doctrine 2396-2398),
+    // drop si UN SEUL SIRET bloqué (keepLead 505-507). Fail-open (helper ne throw pas).
+    const optoutSirets = []
+    for (const r of raw) {
+      if (r?.siege?.siret) optoutSirets.push(r.siege.siret)
+      if (Array.isArray(r?.matching_etablissements)) {
+        for (const e of r.matching_etablissements) if (e?.siret) optoutSirets.push(e.siret)
+      }
+    }
+    const optoutBlocked = optoutSirets.length ? await checkBlocklistBatch(optoutSirets) : new Set()
+    if (optoutBlocked.size) {
+      const rawOptout = raw.filter(r =>
+        !(r?.siege?.siret && optoutBlocked.has(r.siege.siret)) &&
+        !(Array.isArray(r?.matching_etablissements) &&
+          r.matching_etablissements.some(e => e?.siret && optoutBlocked.has(e.siret))))
+      if (rawOptout.length !== raw.length) console.log(`[optout] search-demo: ${raw.length - rawOptout.length} fiche(s) exclue(s)`)
+      raw = rawOptout
+    }
+
     // Filtre qualité : on ne garde que les fiches "prospectables" (dirigeant
     // nommé + état actif + nature juridique pertinente). Le ratio observé sur
     // l'échantillon filtered/fetched sert à extrapoler le total estimé sur la
@@ -2884,6 +2905,13 @@ app.get('/api/sirene/search', async (req, res) => {
 
 // ── INSEE SIRENE enrichment by SIRET ──
 app.get('/api/sirene/:siret', async (req, res) => {
+  // Rempart opt-out RGPD AVANT le fetch INSEE : inutile d'interroger l'API pour
+  // une fiche qu'on ne servira pas. 404 indiscernable de la garde diffusion.
+  const siret = String(req.params.siret || '').replace(/\s+/g, '')
+  if (await checkBlocklistOne(siret)) {
+    console.log(`[optout] sirene refusé ${siret}`)
+    return res.status(404).json({ error: 'not_found' })
+  }
   const token = await getInseeToken()
   if(!token) return res.status(503).json({ error: 'INSEE auth indisponible' })
   try {

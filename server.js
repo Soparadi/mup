@@ -1554,6 +1554,19 @@ app.put('/api/pipeline/:id', async (req, res) => {
     delete cleanBody.id
     cleanBody.userId = userId
     const result = await db.query('UPDATE type::record("pipeline", $id) CONTENT $body', { id, body: cleanBody })
+    // Enrichissement additif du référentiel mutualisé (clé SIRET) — motif calqué
+    // sur PUT /api/contacts/:id, même intention : ce que l'abonné saisit ou enrichit
+    // depuis la carte remonte au référentiel mutualisé. FIRE-AND-FORGET (sans await),
+    // no-op silencieux si le SIRET est absent du référentiel. Additif strict côté DB.
+    // NB : la route contacts étant polymorphe (id préfixé pipeline: → table pipeline),
+    // une écriture par ce chemin fera aussi partir l'appel côté contacts. Sans
+    // conséquence : l'enrichissement est additif et n'écrit que sur les champs vides.
+    enrichReferentielActionnable(cleanBody.siret, {
+      website: cleanBody.website,
+      societe_email: cleanBody.societe_email,
+      societe_tel: cleanBody.societe_tel,
+      societe_linkedin: cleanBody.societe_linkedin
+    })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
     console.error('[pipeline]', err)

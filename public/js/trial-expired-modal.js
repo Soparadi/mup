@@ -33,11 +33,29 @@
   if (window.__TEM_INITED) return
   window.__TEM_INITED = true
 
+  // soft = teinte de la color à 12 % d'opacité (calcul de dessin, pas de doctrine).
+  function softFromColor(hex) {
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
+    return m ? 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',.12)' : 'rgba(29,131,72,.12)'
+  }
+
+  // name, monthly, annual, annualTotal et color viennent de window.__PRICING__
+  // (catalogue injecté serveur-side depuis la doctrine pricing). Repli silencieux
+  // sur les valeurs figées ci-dessous si l'injection est absente, même motif que
+  // preferredPlan. soft reste dérivé de la color reçue.
   var PLANS = [
-    { key: 'demarrage', name: 'Essentiel', monthly: 24, annual: 20, annualTotal: 240, color: '#0BBCD4', soft: 'rgba(11,188,212,.12)' },
-    { key: 'activite',  name: 'Régulier',  monthly: 34, annual: 28, annualTotal: 340, color: '#1D8348', soft: 'rgba(29,131,72,.12)' },
-    { key: 'croisiere', name: 'Intensif',  monthly: 44, annual: 37, annualTotal: 440, color: '#1D8348', soft: 'rgba(29,131,72,.12)' }
-  ]
+    { key: 'demarrage', name: 'Essentiel', monthly: 24, annual: 20, annualTotal: 240, color: '#0BBCD4' },
+    { key: 'activite',  name: 'Régulier',  monthly: 34, annual: 28, annualTotal: 340, color: '#1D8348' },
+    { key: 'croisiere', name: 'Intensif',  monthly: 44, annual: 37, annualTotal: 440, color: '#1D8348' }
+  ].map(function (p) {
+    var src = (window.__PRICING__ && window.__PRICING__[p.key]) || null
+    var name = src && src.label != null ? src.label : p.name
+    var monthly = src && src.priceMonthly != null ? src.priceMonthly : p.monthly
+    var annual = src && src.priceAnnual != null ? src.priceAnnual : p.annual
+    var annualTotal = src && src.priceAnnualTotal != null ? src.priceAnnualTotal : p.annualTotal
+    var color = src && src.color != null ? src.color : p.color
+    return { key: p.key, name: name, monthly: monthly, annual: annual, annualTotal: annualTotal, color: color, soft: softFromColor(color) }
+  })
   var VALID_PLANS = ['demarrage', 'activite', 'croisiere']
 
   // Plan présélectionné (badge "Le plus choisi" + scale 1.02) :

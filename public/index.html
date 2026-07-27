@@ -3948,7 +3948,7 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
           <div class="leads-field">
             <label for="lead-region" class="leads-field-label">Région</label>
             <select class="leads-select" id="lead-region">
-              <option value="">Toutes les régions</option>
+              <option value="" disabled selected>Sélectionner</option>
               <option value="ile-de-france" data-lat="48.8566" data-lng="2.3522" data-zoom="9">Île-de-France</option>
               <option value="auvergne-rhone-alpes" data-lat="45.7640" data-lng="4.8357" data-zoom="7">Auvergne-Rhône-Alpes</option>
               <option value="nouvelle-aquitaine" data-lat="44.8378" data-lng="-0.5792" data-zoom="7">Nouvelle-Aquitaine</option>
@@ -3963,6 +3963,14 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
               <option value="centre-val-de-loire" data-lat="47.7516" data-lng="1.6751" data-zoom="7">Centre-Val de Loire</option>
               <option value="corse" data-lat="42.0396" data-lng="9.0129" data-zoom="8">Corse</option>
             </select>
+          </div>
+          <div class="leads-field">
+            <label for="sel-dept" class="leads-field-label">Département</label>
+            <select class="leads-select" id="sel-dept"></select>
+          </div>
+          <div class="leads-field">
+            <label for="sel-ville" class="leads-field-label">Ville</label>
+            <select class="leads-select" id="sel-ville"></select>
           </div>
           <button class="leads-launch-btn" id="leads-launch-btn" disabled>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -4774,6 +4782,138 @@ const REGION_CODES = {
   'auvergne-rhone-alpes':'84','paca':'93','corse':'94'
 };
 
+// ── Cascade département / ville (repris du moteur prospection.html) ────
+// REGION_DEPTS — copie ; autres exemplaires : prospection.html et server.js. Garder aligné.
+var REGION_DEPTS = {
+  '11':['75','77','78','91','92','93','94','95'],
+  '24':['18','28','36','37','41','45'],
+  '27':['21','25','39','58','70','71','89','90'],
+  '28':['14','27','50','61','76'],
+  '32':['02','59','60','62','80'],
+  '44':['08','10','51','52','54','55','57','67','68','88'],
+  '52':['44','49','53','72','85'],
+  '53':['22','29','35','56'],
+  '75':['16','17','19','23','24','33','40','47','64','79','86','87'],
+  '76':['09','11','12','30','31','32','34','46','48','65','66','81','82'],
+  '84':['01','03','07','15','26','38','42','43','63','69','73','74'],
+  '93':['04','05','06','13','83','84'],
+  '94':['2A','2B']
+};
+// DEPT_NAMES — copie ; autre exemplaire : prospection.html. Garder aligné.
+var DEPT_NAMES = {
+  '01':'Ain','02':'Aisne','03':'Allier','04':'Alpes-de-Haute-Provence','05':'Hautes-Alpes','06':'Alpes-Maritimes',
+  '07':'Ardèche','08':'Ardennes','09':'Ariège','10':'Aube','11':'Aude','12':'Aveyron','13':'Bouches-du-Rhône',
+  '14':'Calvados','15':'Cantal','16':'Charente','17':'Charente-Maritime','18':'Cher','19':'Corrèze',
+  '20':'Corse','2A':'Corse-du-Sud','2B':'Haute-Corse',
+  '21':'Côte-d\'Or','22':'Côtes-d\'Armor','23':'Creuse','24':'Dordogne','25':'Doubs','26':'Drôme',
+  '27':'Eure','28':'Eure-et-Loir','29':'Finistère','30':'Gard','31':'Haute-Garonne','32':'Gers',
+  '33':'Gironde','34':'Hérault','35':'Ille-et-Vilaine','36':'Indre','37':'Indre-et-Loire','38':'Isère',
+  '39':'Jura','40':'Landes','41':'Loir-et-Cher','42':'Loire','43':'Haute-Loire','44':'Loire-Atlantique',
+  '45':'Loiret','46':'Lot','47':'Lot-et-Garonne','48':'Lozère','49':'Maine-et-Loire','50':'Manche',
+  '51':'Marne','52':'Haute-Marne','53':'Mayenne','54':'Meurthe-et-Moselle','55':'Meuse','56':'Morbihan',
+  '57':'Moselle','58':'Nièvre','59':'Nord','60':'Oise','61':'Orne','62':'Pas-de-Calais',
+  '63':'Puy-de-Dôme','64':'Pyrénées-Atlantiques','65':'Hautes-Pyrénées','66':'Pyrénées-Orientales',
+  '67':'Bas-Rhin','68':'Haut-Rhin','69':'Rhône','70':'Haute-Saône','71':'Saône-et-Loire','72':'Sarthe',
+  '73':'Savoie','74':'Haute-Savoie','75':'Paris','76':'Seine-Maritime','77':'Seine-et-Marne',
+  '78':'Yvelines','79':'Deux-Sèvres','80':'Somme','81':'Tarn','82':'Tarn-et-Garonne',
+  '83':'Var','84':'Vaucluse','85':'Vendée','86':'Vienne','87':'Haute-Vienne','88':'Vosges',
+  '89':'Yonne','90':'Territoire de Belfort','91':'Essonne','92':'Hauts-de-Seine',
+  '93':'Seine-Saint-Denis','94':'Val-de-Marne','95':'Val-d\'Oise'
+};
+// REGION_NAMES_BY_CODE — copie ; autre exemplaire : prospection.html (ici REGION_CODES en est l'inverse). Garder aligné.
+var REGION_NAMES_BY_CODE = {
+  '11':'ile-de-france','24':'centre-val-de-loire','27':'bourgogne-franche-comte',
+  '28':'normandie','32':'hauts-de-france','44':'grand-est','52':'pays-de-la-loire',
+  '53':'bretagne','75':'nouvelle-aquitaine','76':'occitanie',
+  '84':'auvergne-rhone-alpes','93':'paca','94':'corse'
+};
+
+// populateDeptSelect — repris tel quel du moteur ; seul le sélecteur région
+// est rebindé (#sel-region → #lead-region, id de la vitrine) pour lire les libellés.
+function populateDeptSelect(regionFilter) {
+  var sel = document.getElementById('sel-dept');
+  var current = sel.value;
+  var html = '<option value="" disabled selected>Sélectionner</option>';
+  var codes = Object.keys(REGION_DEPTS);
+  codes.forEach(function(rc) {
+    var regionSlug = REGION_NAMES_BY_CODE[rc] || '';
+    if(regionFilter && regionSlug !== regionFilter) return;
+    var depts = REGION_DEPTS[rc];
+    var regionLabel = document.querySelector('#lead-region option[value="'+regionSlug+'"]');
+    var groupLabel = regionLabel ? regionLabel.textContent : regionSlug;
+    html += '<optgroup label="'+groupLabel+'">';
+    depts.forEach(function(d) {
+      var name = DEPT_NAMES[d] || d;
+      html += '<option value="'+d+'">'+d+' — '+name+'</option>';
+    });
+    html += '</optgroup>';
+  });
+  sel.innerHTML = html;
+  if(current) { sel.value = current; if(!sel.value) sel.value = ''; }
+}
+
+// onDeptChange — repris du moteur SANS applyMapZoom. Conserve l'auto-select de la
+// région parente (rebindé #lead-region, sans l'état S du moteur). checkLaunchBtn
+// remplace updateHint/hideError : le bouton dépend du département (déclencheur).
+function onDeptChange() {
+  var dept = document.getElementById('sel-dept').value;
+  if(dept) {
+    Object.keys(REGION_DEPTS).forEach(function(rc) {
+      if(REGION_DEPTS[rc].indexOf(dept) !== -1) {
+        var slug = REGION_NAMES_BY_CODE[rc] || '';
+        if(slug) { document.getElementById('lead-region').value = slug; }
+      }
+    });
+  }
+  populateVilleSelect(dept);
+  checkLaunchBtn();
+}
+
+// onRegionChange — cascade : filtre les départements sur la région, remet la
+// ville à zéro, réévalue le bouton.
+function onRegionChange() {
+  populateDeptSelect(regionEl.value);
+  populateVilleSelect('');
+  checkLaunchBtn();
+}
+
+// Cache communes par département (évite de refetch geo.api à chaque changement).
+var DEPT_COMMUNES_CACHE = {};
+
+// populateVilleSelect — repris du moteur SANS plmArrOptions/PLM_ARR_UI, et
+// fields=nom,code,population (sans codesPostaux, inutile sans walker CP).
+// Ville optionnelle. Timeout 5 s, fallback silencieux (« Toutes les villes »).
+async function populateVilleSelect(dept) {
+  var sel = document.getElementById('sel-ville');
+  function render(communes) {
+    var html = '<option value="" disabled selected>Sélectionner</option>'
+             + '<option value="">Toutes les villes</option>';
+    communes.forEach(function(c) {
+      html += '<option value="' + c.code + '">' + escapeHtml(c.nom) + '</option>';
+    });
+    sel.innerHTML = html;
+  }
+  if (!dept) { render([]); return; }
+  if (DEPT_COMMUNES_CACHE[dept]) { render(DEPT_COMMUNES_CACHE[dept]); return; }
+  try {
+    var url = 'https://geo.api.gouv.fr/communes?codeDepartement=' + encodeURIComponent(dept)
+            + '&fields=nom,code,population&format=json';
+    var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var arr = await r.json();
+    if (!Array.isArray(arr)) throw new Error('payload inattendu');
+    var communes = arr.filter(function(c){ return c && c.code && c.nom; })
+                      .sort(function(a,b){ return (b.population || 0) - (a.population || 0); })
+                      .slice(0, 10)
+                      .sort(function(a,b){ return a.nom.localeCompare(b.nom, 'fr'); });
+    DEPT_COMMUNES_CACHE[dept] = communes;
+    render(communes);
+  } catch(e) {
+    console.warn('[Leads] populateVilleSelect geo.api échec, ville libre:', dept, e && e.message);
+    render([]);
+  }
+}
+
 function maskName(name) {
   const s = String(name || '').trim();
   if (!s) return '•••';
@@ -4791,6 +4931,8 @@ function escapeHtml(s) {
 
 // DOM refs (re-déclarés ici car le scope hérité de l'ancien mock a été retiré)
 const regionEl = document.getElementById('lead-region');
+const deptEl = document.getElementById('sel-dept');
+const villeEl = document.getElementById('sel-ville');
 const launchBtn = document.getElementById('leads-launch-btn');
 const leadsList = document.getElementById('leads-list');
 const leadsCount = document.getElementById('leads-count');
@@ -4798,7 +4940,8 @@ const leadsCount = document.getElementById('leads-count');
 // Autocomplete secteur — instance partagée avec prospection.html (composant réutilisable)
 let sectorAC = null;
 function checkLaunchBtn() {
-  const ok = !!(sectorAC && sectorAC.value && regionEl.value);
+  // Bouton actif sur secteur + région + département. La ville reste facultative.
+  const ok = !!(sectorAC && sectorAC.value && regionEl.value && deptEl.value);
   launchBtn.disabled = !ok;
 }
 
@@ -4813,10 +4956,12 @@ document.addEventListener('DOMContentLoaded', function() {
       onClear: checkLaunchBtn
     });
   }
+  populateDeptSelect();   // départements de toutes les régions au chargement
   checkLaunchBtn();
 });
 
-regionEl.addEventListener('change', checkLaunchBtn);
+regionEl.addEventListener('change', onRegionChange);
+deptEl.addEventListener('change', onDeptChange);
 
 launchBtn.addEventListener('click', async () => {
   const secteur = (sectorAC && sectorAC.value) ? sectorAC.value : '';
@@ -4843,7 +4988,11 @@ launchBtn.addEventListener('click', async () => {
 
   let data;
   try {
-    const url = '/api/public/search-demo?naf=' + encodeURIComponent(secteur) + '&region=' + encodeURIComponent(regionCode);
+    // departement (code 2 car.) obligatoire au clic ; code_commune (INSEE) si ville
+    // renseignée. Jamais de code_postal.
+    let url = '/api/public/search-demo?naf=' + encodeURIComponent(secteur) + '&region=' + encodeURIComponent(regionCode);
+    if (deptEl.value) url += '&departement=' + encodeURIComponent(deptEl.value);
+    if (villeEl.value) url += '&code_commune=' + encodeURIComponent(villeEl.value);
     const r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     data = await r.json();

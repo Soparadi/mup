@@ -678,8 +678,8 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
       <div class="info-grid" id="d-info-grid"></div>
     </div>
 
-    <!-- COORDONNÉES SOCIÉTÉ (jeu de champs distinct du contact ; masqué si vide) -->
-    <div class="detail-section" id="d-societe-section" style="display:none">
+    <!-- COORDONNÉES SOCIÉTÉ (jeu de champs distinct du contact ; toujours affiché — un bloc vide invite à Enrichir) -->
+    <div class="detail-section" id="d-societe-section">
       <div class="detail-section-title">Coordonnées société</div>
       <div class="info-grid" id="d-societe-grid"></div>
     </div>
@@ -1399,13 +1399,19 @@ async function openDetail(id) {
   if(valCell) valCell.addEventListener('click', startEditVal);
 
   // Coordonnées société — bloc DISTINCT du contact (jeu de champs séparé
-  // societe_email / societe_tel). Affiché seulement si au moins une coordonnée
-  // société est présente, sinon section masquée (précédent : d-map-section).
-  let socHtml = '';
-  if(c.societe_email) socHtml += `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val"><a href="mailto:${esc(c.societe_email)}">${esc(c.societe_email)}</a></div></div>`;
-  if(c.societe_tel) socHtml += `<div class="info-item"><div class="info-item-label">Téléphone société</div><div class="info-item-val"><a href="tel:${c.societe_tel.replace(/\s/g,'')}">${esc(c.societe_tel)}</a></div></div>`;
-  document.getElementById('d-societe-grid').innerHTML = socHtml;
-  document.getElementById('d-societe-section').style.display = socHtml ? '' : 'none';
+  // societe_email / societe_tel). TOUJOURS affiché : un bloc vide est le signal
+  // qui incite à cliquer sur Enrichir. Champ manquant → libellé visible + valeur
+  // en gris d'attente (.info-item-placeholder), sur le patron d'état vide des
+  // réseaux sociaux de la même fiche.
+  const socEmailVal = c.societe_email
+    ? `<a href="mailto:${esc(c.societe_email)}">${esc(c.societe_email)}</a>`
+    : `<span class="info-item-placeholder">Adresse email</span>`;
+  const socTelVal = c.societe_tel
+    ? `<a href="tel:${c.societe_tel.replace(/\s/g,'')}">${esc(c.societe_tel)}</a>`
+    : `<span class="info-item-placeholder">Numéro de téléphone</span>`;
+  document.getElementById('d-societe-grid').innerHTML =
+    `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val">${socEmailVal}</div></div>`
+    + `<div class="info-item"><div class="info-item-label">Téléphone société</div><div class="info-item-val">${socTelVal}</div></div>`;
 
   // Socials (editable)
   document.getElementById('d-linkedin').value = c.linkedin||'';

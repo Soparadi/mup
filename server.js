@@ -2920,6 +2920,14 @@ app.post('/api/enrich/:siret', async (req, res) => {
   try {
     const user = req.authUser
     if (!user) return res.status(401).json({ error: 'unauthorized' })
+    // Rempart opt-out RGPD en tête : bloque d'un coup l'écriture DataForSEO, le décompte consumeLead et la restitution.
+    if (await checkBlocklistOne(siret)) {
+      console.log(`[optout] enrich refusé ${siret}`)
+      return res.status(403).json({
+        error: 'opt_out',
+        message: "Cette entreprise n'est pas disponible pour prospection."
+      })
+    }
     const db = await getDb()
     // SELECT unique : le record sert au test d'idempotence (hasEnriched, PURE) et,
     // s'il faut gater, à la lecture du compteur (getLeadsConsumed, qui applique le

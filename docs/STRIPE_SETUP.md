@@ -13,11 +13,15 @@ Toutes les actions ci-dessous sont à faire dans le Dashboard Stripe.
 
 ## 1. Pricing figé (à respecter à l'identique)
 
-| Plan | Mensuel | Annuel/mois (-15 %) | Annuel total |
+> **Source de vérité des prix** : `server/config/pricing-doctrine.js`, dont
+> dérivent la configuration Stripe, les courriels et le catalogue injecté.
+> La grille ci-dessous doit rester alignée sur ce fichier.
+
+| Plan | Mensuel | Annuel/mois (2 mois offerts) | Annuel total |
 |---|---|---|---|
-| Essentiel | 19,00 € | 16,00 € | 192,00 € |
-| Régulier | 29,00 € | 25,00 € | 300,00 € |
-| Intensif | 39,00 € | 33,00 € | 396,00 € |
+| Essentiel | 24,00 € | 20,00 € | 240,00 € |
+| Régulier | 34,00 € | 28,00 € | 340,00 € |
+| Intensif | 44,00 € | 37,00 € | 440,00 € |
 
 Cible : auto-entrepreneur français en franchise TVA art. 293 B du CGI.
 **Pas de TVA collectée**. Les montants Stripe sont saisis en TTC=HT (le
@@ -41,8 +45,8 @@ Prix à ajouter :
 
 | Type | Montant | Currency | Billing | Metadata |
 |---|---|---|---|---|
-| Recurring | 19,00 | EUR | Monthly | `plan=demarrage`, `cycle=monthly` |
-| Recurring | 192,00 | EUR | Yearly | `plan=demarrage`, `cycle=annual` |
+| Recurring | 24,00 | EUR | Monthly | `plan=demarrage`, `cycle=monthly` |
+| Recurring | 240,00 | EUR | Yearly | `plan=demarrage`, `cycle=annual` |
 
 Noter les `price_id` retournés (commencent par `price_`).
 
@@ -54,8 +58,8 @@ Noter les `price_id` retournés (commencent par `price_`).
 
 | Type | Montant | Currency | Billing | Metadata |
 |---|---|---|---|---|
-| Recurring | 29,00 | EUR | Monthly | `plan=activite`, `cycle=monthly` |
-| Recurring | 300,00 | EUR | Yearly | `plan=activite`, `cycle=annual` |
+| Recurring | 34,00 | EUR | Monthly | `plan=activite`, `cycle=monthly` |
+| Recurring | 340,00 | EUR | Yearly | `plan=activite`, `cycle=annual` |
 
 ### Produit 3 — Intensif
 
@@ -65,8 +69,8 @@ Noter les `price_id` retournés (commencent par `price_`).
 
 | Type | Montant | Currency | Billing | Metadata |
 |---|---|---|---|---|
-| Recurring | 39,00 | EUR | Monthly | `plan=croisiere`, `cycle=monthly` |
-| Recurring | 396,00 | EUR | Yearly | `plan=croisiere`, `cycle=annual` |
+| Recurring | 44,00 | EUR | Monthly | `plan=croisiere`, `cycle=monthly` |
+| Recurring | 440,00 | EUR | Yearly | `plan=croisiere`, `cycle=annual` |
 
 > **Note metadata** : les metadata Stripe servent à la traçabilité dans le
 > Dashboard. Le code MovUP ne s'en sert pas pour identifier le plan — il
@@ -91,12 +95,12 @@ Renseigner les **8 variables** ci-dessous dans **Railway → Project → Variabl
 
 | Variable | Récupéré depuis le produit/prix |
 |---|---|
-| `STRIPE_PRICE_DEMARRAGE_MONTHLY` | Essentiel → prix mensuel 19 € |
-| `STRIPE_PRICE_DEMARRAGE_ANNUAL` | Essentiel → prix annuel 192 € |
-| `STRIPE_PRICE_ACTIVITE_MONTHLY` | Régulier → prix mensuel 29 € |
-| `STRIPE_PRICE_ACTIVITE_ANNUAL` | Régulier → prix annuel 300 € |
-| `STRIPE_PRICE_CROISIERE_MONTHLY` | Intensif → prix mensuel 39 € |
-| `STRIPE_PRICE_CROISIERE_ANNUAL` | Intensif → prix annuel 396 € |
+| `STRIPE_PRICE_DEMARRAGE_MONTHLY` | Essentiel → prix mensuel 24 € |
+| `STRIPE_PRICE_DEMARRAGE_ANNUAL` | Essentiel → prix annuel 240 € |
+| `STRIPE_PRICE_ACTIVITE_MONTHLY` | Régulier → prix mensuel 34 € |
+| `STRIPE_PRICE_ACTIVITE_ANNUAL` | Régulier → prix annuel 340 € |
+| `STRIPE_PRICE_CROISIERE_MONTHLY` | Intensif → prix mensuel 44 € |
+| `STRIPE_PRICE_CROISIERE_ANNUAL` | Intensif → prix annuel 440 € |
 
 ### Variable optionnelle
 
@@ -197,7 +201,7 @@ s'applique aux deux. Pas de bascule à faire au passage en Live.
    - Les 6 `STRIPE_PRICE_*` → nouveaux IDs Live
 5. Redémarrage Railway automatique sur changement de var.
 6. **Test final Live** : un signup réel avec une vraie carte (paiement
-   minimal de 19 € Essentiel), puis résiliation immédiate via Customer
+   minimal de 24 € Essentiel), puis résiliation immédiate via Customer
    Portal pour vérifier que :
    - `subscription.deleted` est bien reçu côté webhook
    - `trial_status` revient à `expired` en SurrealDB
@@ -268,8 +272,10 @@ vérification automatique en base.
 
 - **Plan names** : les libellés affichés sont `Essentiel`, `Régulier`,
   `Intensif` (jamais `Starter`, `Pro`, `Business`, ni les anciens
-  `Démarrage`, `Activité`, `Croisière`). Les slugs techniques restent
-  `demarrage`, `activite`, `croisiere` et ne sont jamais affichés.
+  `Démarrage`, `Activité`, `Croisière` — ces derniers étaient les noms
+  utilisés avant le 27 juillet 2026, renommés ce jour-là dans le tableau
+  de bord Stripe). Les slugs techniques restent `demarrage`, `activite`,
+  `croisiere` et ne sont jamais affichés.
 - **Mention TVA** : `TVA non applicable, art. 293 B du CGI` — affichée
   sous le bouton Checkout via `custom_text.submit.message`, et dans les
   emails `subscription_activated`.

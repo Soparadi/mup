@@ -4867,6 +4867,7 @@ function onDeptChange() {
   }
   populateVilleSelect(dept);
   checkLaunchBtn();
+  applyMapZoom();   // câblage zoom : niveau dept
 }
 
 // onRegionChange — cascade : filtre les départements sur la région, remet la
@@ -4875,6 +4876,13 @@ function onRegionChange() {
   populateDeptSelect(regionEl.value);
   populateVilleSelect('');
   checkLaunchBtn();
+  applyMapZoom();   // câblage zoom : niveau région
+}
+
+// onVilleChange — zoom seul (repris du moteur, sans updateHint/hideError).
+// La ville ne conditionne pas le bouton (facultative) : pas de checkLaunchBtn.
+function onVilleChange() {
+  applyMapZoom();
 }
 
 // Cache communes par département (évite de refetch geo.api à chaque changement).
@@ -4980,6 +4988,175 @@ function escapeHtml(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// ── Zoom carte à la sélection — repris de prospection.html ────────────
+// Priorité descendante : ville > dept > région > France. Fallback silencieux
+// (geo.api timeout/down → on garde le zoom courant, pas de saut ni d'erreur).
+// Adaptations vitrine, chacune commentée en place ci-dessous.
+
+// ── Cache bounding boxes geo (dept + commune) ─────────────────────────
+// Persistant via localStorage (les contours géo ne changent jamais).
+// Versioning : bumper GEO_CACHE_VERSION purge un cache pollué au prochain load.
+var GEO_BOUNDS_CACHE = null;
+var GEO_CACHE_VERSION = 3;
+function _geoBoundsLoad() {
+  if (GEO_BOUNDS_CACHE !== null) return;
+  try {
+    var v = parseInt(localStorage.getItem('mup_geo_bounds_v') || '0', 10);
+    if (v !== GEO_CACHE_VERSION) {
+      localStorage.removeItem('mup_geo_bounds');
+      localStorage.setItem('mup_geo_bounds_v', String(GEO_CACHE_VERSION));
+      GEO_BOUNDS_CACHE = {};
+      console.info('[Leads] mup_geo_bounds purged (version bump → ' + GEO_CACHE_VERSION + ')');
+      return;
+    }
+    GEO_BOUNDS_CACHE = JSON.parse(localStorage.getItem('mup_geo_bounds') || '{}');
+  } catch(e) { GEO_BOUNDS_CACHE = {}; }
+}
+function _geoBoundsPersist() {
+  try { localStorage.setItem('mup_geo_bounds', JSON.stringify(GEO_BOUNDS_CACHE)); } catch(e){}
+}
+function _geoBoundsGet(key) { _geoBoundsLoad(); return GEO_BOUNDS_CACHE[key]; }
+function _geoBoundsSet(key, val) { _geoBoundsLoad(); GEO_BOUNDS_CACHE[key] = val; _geoBoundsPersist(); }
+
+// ── Fetch zoom département via geo.api.gouv.fr ────────────────────────
+// geo.api ne fournit pas le contour des départements : on récupère le chefLieu
+// puis le centre de cette commune, zoom fixe 9. Retour { type:'center', ... }.
+async function fetchDeptBounds(code) {
+  if (!code) return null;
+  var keyC = 'dept:' + code + ':c';
+  var cachedC = _geoBoundsGet(keyC);
+  if (cachedC) {
+    console.info('[Leads] fetchDeptBounds cache hit:', code);
+    return { type: 'center', center: cachedC };
+  }
+  try {
+    var url1 = 'https://geo.api.gouv.fr/departements/' + encodeURIComponent(code) + '?fields=chefLieu';
+    console.info('[Leads] fetchDeptBounds GET', url1);
+    var r1 = await fetch(url1, { signal: AbortSignal.timeout(5000) });
+    if (!r1.ok) { console.warn('[Leads] fetchDeptBounds dept HTTP', r1.status); return null; }
+    var d = await r1.json();
+    if (!d || !d.chefLieu) { console.warn('[Leads] fetchDeptBounds no chefLieu for', code); return null; }
+    var url2 = 'https://geo.api.gouv.fr/communes/' + encodeURIComponent(d.chefLieu) + '?fields=centre';
+    console.info('[Leads] fetchDeptBounds GET', url2);
+    var r2 = await fetch(url2, { signal: AbortSignal.timeout(5000) });
+    if (!r2.ok) { console.warn('[Leads] fetchDeptBounds chefLieu HTTP', r2.status); return null; }
+    var c = await r2.json();
+    if (!c || !c.centre || !Array.isArray(c.centre.coordinates)) {
+      console.warn('[Leads] fetchDeptBounds no centre for chefLieu', d.chefLieu);
+      return null;
+    }
+    var center = { lat: c.centre.coordinates[1], lng: c.centre.coordinates[0], zoom: 9 };
+    _geoBoundsSet(keyC, center);
+    return { type: 'center', center: center };
+  } catch(e) {
+    console.warn('[Leads] fetchDeptBounds error:', code, e && e.message);
+    return null;
+  }
+}
+
+// ── Fetch bbox commune (contour) ou centre fallback ───────────────────
+async function fetchCommuneBounds(codeINSEE) {
+  if (!codeINSEE) return null;
+  var keyB = 'commune:' + codeINSEE;
+  var keyC = 'commune:' + codeINSEE + ':c';
+  var cachedB = _geoBoundsGet(keyB);
+  if (cachedB) {
+    console.info('[Leads] fetchCommuneBounds cache hit (bounds):', codeINSEE);
+    return { type: 'bounds', bounds: cachedB };
+  }
+  var cachedC = _geoBoundsGet(keyC);
+  if (cachedC) {
+    console.info('[Leads] fetchCommuneBounds cache hit (center):', codeINSEE);
+    return { type: 'center', center: cachedC };
+  }
+  try {
+    var url = 'https://geo.api.gouv.fr/communes/' + encodeURIComponent(codeINSEE) + '?fields=centre,contour';
+    console.info('[Leads] fetchCommuneBounds GET', url);
+    var r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) { console.warn('[Leads] fetchCommuneBounds HTTP', r.status); return null; }
+    var json = await r.json();
+    if (!json) { console.warn('[Leads] fetchCommuneBounds empty body'); return null; }
+    if (json.contour) {
+      var b = L.geoJSON(json.contour).getBounds();
+      if (b && b.isValid()) {
+        var bbox = { sw: [b.getSouth(), b.getWest()], ne: [b.getNorth(), b.getEast()] };
+        _geoBoundsSet(keyB, bbox);
+        return { type: 'bounds', bounds: bbox };
+      }
+    }
+    if (json.centre && Array.isArray(json.centre.coordinates)) {
+      var c = { lat: json.centre.coordinates[1], lng: json.centre.coordinates[0], zoom: 14 };
+      _geoBoundsSet(keyC, c);
+      return { type: 'center', center: c };
+    }
+    console.warn('[Leads] fetchCommuneBounds no contour/centre for', codeINSEE);
+    return null;
+  } catch(e) {
+    console.warn('[Leads] fetchCommuneBounds error:', codeINSEE, e && e.message);
+    return null;
+  }
+}
+
+// ── Orchestrateur zoom carte selon le filtre actif ────────────────────
+// Divergence assumée avec le moteur (animate:false) : ici la carte est le visuel
+// d'accroche, on anime (animate:true) pour rester cohérent avec le recentrage au lancement.
+async function applyMapZoom() {
+  // Adaptation vitrine : map → leadsMap (instance de la vitrine).
+  if (!leadsMap) return;
+  var ville = (document.getElementById('sel-ville')?.value || '').trim();
+  var dept = (document.getElementById('sel-dept')?.value || '').trim();
+  // Adaptation vitrine : rebind #sel-region → #lead-region (id de la vitrine),
+  // sans quoi le niveau région ne s'activerait jamais.
+  var region = (document.getElementById('lead-region')?.value || '').trim();
+  console.info('[Leads] applyMapZoom', { ville: ville, dept: dept, region: region });
+
+  if (ville) {
+    // Adaptation vitrine : branche cp:<cp>:<insee> retirée — la vitrine n'émet
+    // jamais cette forme de value ; sel-ville.value EST le code INSEE.
+    var res = await fetchCommuneBounds(ville);
+    if (res && res.type === 'bounds') {
+      leadsMap.fitBounds([res.bounds.sw, res.bounds.ne], { padding: [40,40], maxZoom: 14, animate: true });
+      return;
+    }
+    if (res && res.type === 'center') {
+      leadsMap.setView([res.center.lat, res.center.lng], res.center.zoom || 14, { animate: true });
+      return;
+    }
+    // fallback échec ville → tente dept ou région ci-dessous
+  }
+
+  if (dept) {
+    var resD = await fetchDeptBounds(dept);
+    if (resD && resD.type === 'bounds') {
+      leadsMap.fitBounds([resD.bounds.sw, resD.bounds.ne], { padding: [40,40], animate: true });
+      return;
+    }
+    if (resD && resD.type === 'center') {
+      leadsMap.setView([resD.center.lat, resD.center.lng], resD.center.zoom || 9, { animate: true });
+      return;
+    }
+  }
+
+  if (region) {
+    // Adaptation vitrine : niveau région lu depuis les data-lat/data-lng/data-zoom
+    // de l'option sélectionnée (déjà en place dans #lead-region), PAS la table
+    // REGIONS du moteur — évite une quatrième copie du référentiel.
+    var regEl = document.getElementById('lead-region');
+    var opt = regEl && regEl.options[regEl.selectedIndex];
+    if (opt) {
+      var rLat = parseFloat(opt.getAttribute('data-lat'));
+      var rLng = parseFloat(opt.getAttribute('data-lng'));
+      var rZoom = parseInt(opt.getAttribute('data-zoom'), 10);
+      if (!isNaN(rLat) && !isNaN(rLng)) {
+        leadsMap.setView([rLat, rLng], isNaN(rZoom) ? 7 : rZoom, { animate: true });
+        return;
+      }
+    }
+  }
+
+  leadsMap.setView([46.5, 2.5], 6, { animate: true });
+}
+
 // Handler launch — démo live API INSEE (5 résultats anonymisés)
 
 // DOM refs (re-déclarés ici car le scope hérité de l'ancien mock a été retiré)
@@ -5015,6 +5192,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 regionEl.addEventListener('change', onRegionChange);
 deptEl.addEventListener('change', onDeptChange);
+villeEl.addEventListener('change', onVilleChange);   // câblage zoom ville (absent jusqu'ici)
 
 launchBtn.addEventListener('click', async () => {
   const secteur = (sectorAC && sectorAC.value) ? sectorAC.value : '';

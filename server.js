@@ -561,6 +561,10 @@ app.get('/api/public/search-demo', async (req, res) => {
     p.set('departement', deptCsv)
     p.set('per_page', String(PAGE_SIZE))
     p.set('page', String(page))
+    // Filtres geo natifs — même patron que /api/search : code_postal en
+    // passthrough, code_commune via communeParam (arrondissements PLM).
+    if (codePostal) p.set('code_postal', codePostal)
+    if (codeCommune) p.set('code_commune', communeParam(codeCommune))
     return 'https://recherche-entreprises.api.gouv.fr/search?' + p.toString()
   }
 

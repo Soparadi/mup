@@ -55,6 +55,7 @@ import {
   consumeLead,
   porteCanalDecomptable
 } from './server/config/plan-quotas.js'
+import { PLANS as PRICING_PLANS, PLANS_ORDER } from './server/config/pricing-doctrine.js'
 import {
   sendOne as mailServiceSendOne,
   getMailStatus as mailServiceStatus,
@@ -860,7 +861,21 @@ app.use(async (req, res, next) => {
       plan_billing_cycle: u.plan_billing_cycle || null
     }
     const json = escapeForScriptTag(JSON.stringify(payload))
-    const tag = '<script>window.__USER__=' + json + ';</script>'
+    // Catalogue tarifaire (doctrine pricing) — donnée distincte du payload
+    // utilisateur, qui lui doit rester strictement aligné sur /api/user/me.
+    const pricing = {}
+    for (const slug of PLANS_ORDER) {
+      const p = PRICING_PLANS[slug]
+      pricing[slug] = {
+        label: p.label,
+        priceMonthly: p.priceMonthly,
+        priceAnnual: p.priceAnnual,
+        priceAnnualTotal: p.priceAnnualTotal,
+        color: p.color
+      }
+    }
+    const pricingJson = escapeForScriptTag(JSON.stringify(pricing))
+    const tag = '<script>window.__USER__=' + json + ';window.__PRICING__=' + pricingJson + ';</script>'
     let injected
     if (html.indexOf('</head>') !== -1) {
       injected = html.replace('</head>', tag + '</head>')

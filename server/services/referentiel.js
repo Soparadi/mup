@@ -18,9 +18,12 @@
 import { getDb } from '../../lib/surreal.js'
 import { cleanRecordId } from '../../lib/db.js'
 // Écriture → lecture : acyclique (referentiel-read.js n'importe que surreal.js
-// et optout.js, jamais ce module). normalizeNaf est la SEULE source de vérité du
-// format de clé ; countReferentielFresh fournit le compteur informatif.
+// et optout.js, jamais ce module). Ce module importe lui aussi optout.js (garde
+// blocklist RGPD ci-dessous) ; optout.js n'importe que surreal.js/crypto, donc
+// toujours aucun cycle. normalizeNaf est la SEULE source de vérité du format de
+// clé ; countReferentielFresh fournit le compteur informatif.
 import { countReferentielFresh, normalizeNaf } from './referentiel-read.js'
+import { checkBlocklistOne, checkBlocklistBatch } from './optout.js'
 
 // ── migration idempotente ──
 export async function runReferentielMigration() {
@@ -311,6 +314,10 @@ export async function enrichReferentielActionnable(siret, fields = {}) {
     const cleanSiret = String(siret || '').replace(/\s+/g, '')
     const id = cleanRecordId('referentiel_societes', cleanSiret)
     if (!id) return
+    if (await checkBlocklistOne(cleanSiret)) {
+      console.log(`[optout] enrich ignoré ${cleanSiret}`)
+      return
+    }
     const params = { id }
     const assigns = []
     for (const k of ['website', 'societe_email', 'societe_tel', 'societe_linkedin', 'societe_facebook', 'societe_instagram']) {
@@ -345,12 +352,29 @@ export async function upsertReferentiel(fiches) {
   try {
     if (!Array.isArray(fiches) || fiches.length === 0) return
     const db = await getDb()
+    // ── Garde RGPD blocklist : UN seul lookup batch pour tout le lot. Passe 1,
+    // collecte des SIRET via la MÊME sélection d'établissement que la boucle
+    // d'écriture (matching[0] || siège). L'expression `.trim()` s'aligne sur le
+    // Set trimmé rendu par checkBlocklistBatch — la comparaison passe 2 réutilise
+    // la valeur identique, jamais une variante re-dérivée. ──
+    const sirets = []
+    for (const fiche of fiches) {
+      const matching = Array.isArray(fiche?.matching_etablissements) ? fiche.matching_etablissements : []
+      const etab = matching[0] || fiche?.siege || null
+      if (!etab) continue
+      const s = (typeof etab.siret === 'string' ? etab.siret : '').trim()
+      if (s) sirets.push(s)
+    }
+    const bloques = sirets.length ? await checkBlocklistBatch(sirets) : new Set()
+    let optoutSkipped = 0
     for (const fiche of fiches) {
       try {
         // Établissement servi à l'abonné : matching_etablissements[0], fallback siège.
         const matching = Array.isArray(fiche?.matching_etablissements) ? fiche.matching_etablissements : []
         const etab = matching[0] || fiche?.siege || null
         if (!etab) continue
+        // Garde RGPD : établissement opt-out → écarté du lot (même expression qu'en passe 1).
+        if (bloques.has((typeof etab.siret === 'string' ? etab.siret : '').trim())) { optoutSkipped++; continue }
         // ID de record = SIRET nettoyé → idempotence par établissement. Sinon SKIP.
         const id = cleanRecordId('referentiel_societes', typeof etab.siret === 'string' ? etab.siret : '')
         if (!id) continue
@@ -432,6 +456,7 @@ export async function upsertReferentiel(fiches) {
         console.warn('[referentiel-upsert]', String(e?.message || e).slice(0, 80))
       }
     }
+    if (optoutSkipped) console.log(`[optout] ${optoutSkipped} fiche(s) écartée(s) du lot referentiel`)
   } catch (e) {
     console.warn('[referentiel-upsert]', String(e?.message || e).slice(0, 80))
   }

@@ -718,7 +718,19 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   border-radius: var(--radius-sm);
   padding: 10px 11px;
   font-size: 12px;
-  border-left: 4px solid var(--stage-prospects);
+  /* Calque de .kcard : hauteur plancher + colonne flex. Combiné au
+     margin-top:auto de .mock-progress, cela épingle la progression en
+     bas et donne à la colonne son rythme régulier. */
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Barre d'étape pleine largeur en haut de fiche — calque de .kcard-bar */
+.mock-card-bar {
+  height: 3px;
+  margin: -10px -11px 8px;
+  border-radius: 8px 8px 0 0;
 }
 
 .mock-card-name {
@@ -729,6 +741,8 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   font-size: 12.5px;
 }
 
+/* Slot secondaire : dans le produit c'est le contact, ici on garde la ville —
+   une vitrine illustre le dessin sans inventer un nom de contact fictif. */
 .mock-card-co {
   font-size: 10.5px;
   color: var(--text-muted);
@@ -744,16 +758,24 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   background: rgba(0,0,0,0.04);
   color: rgba(0,0,0,0.55);
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: 4px;
   margin-bottom: 4px;
 }
 
-/* Pastilles de progression — 9 étapes funnel */
+/* Ligne de source (↳) — calque de .kcard-src */
+.mock-card-src {
+  font-size: 9.5px;
+  color: var(--text-soft);
+  margin-top: 4px;
+}
+
+/* Pastilles de progression — 9 étapes funnel.
+   margin-top:auto : calque de .kcard-progress, épingle la barre en bas. */
 .mock-progress {
   display: flex;
-  gap: 4px;
+  gap: 3px;
   align-items: center;
-  margin: 8px 0 10px;
+  margin: auto 0 2px;
   height: 12px;
 }
 .mock-progress span {
@@ -763,6 +785,14 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   background: rgba(0,0,0,0.08);
   flex-shrink: 0;
 }
+/* Lignes de liaison entre pastilles — calque exact de .prog-line */
+.mock-progress i {
+  flex: 1;
+  min-width: 4px;
+  height: 1.5px;
+  background: var(--border);
+}
+.mock-progress i.done { background: var(--border-2); }
 .mock-progress span[data-on="prospects"] { background: var(--stage-prospects); }
 .mock-progress span[data-on="linkedin"]  { background: var(--stage-linkedin); }
 .mock-progress span[data-on="mailing"]   { background: var(--stage-mailing); }
@@ -801,7 +831,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   background: rgba(0,0,0,0.04);
   color: var(--text-muted);
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: 5px; /* calque de .kcard-days — badge carré doux, pas un pill */
   font-family: var(--font-mono);
   font-size: 10px;
 }
@@ -4064,104 +4094,113 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
           <!-- KPI bar : compteurs colorés + total CA en cours -->
           <div class="mock-kpi-bar">
             <div class="mock-kpi-counts">
-              <span class="mock-kpi-count" data-stage="prospects"><b>5</b> prospects</span>
-              <span class="mock-kpi-count" data-stage="phoning"><b>2</b> phoning</span>
-              <span class="mock-kpi-count" data-stage="rdv"><b>4</b> rdv</span>
-              <span class="mock-kpi-count" data-stage="devis"><b>2</b> devis</span>
+              <span class="mock-kpi-count" data-stage="prospects"><b>2</b> prospects</span>
+              <span class="mock-kpi-count" data-stage="phoning"><b>1</b> phoning</span>
+              <span class="mock-kpi-count" data-stage="rdv"><b>2</b> rdv</span>
             </div>
-            <div class="mock-kpi-total">7 800 € en cours</div>
+            <div class="mock-kpi-total">16 600 € en cours</div>
           </div>
 
           <div class="pipeline-mock-cols">
 
             <div class="mock-col" data-stage="prospects">
               <div class="mock-col-head">Prospects<span class="mock-col-count">2</span></div>
-              <div class="mock-card" style="border-left-color:var(--stage-prospects)">
+              <div class="mock-card">
+                <div class="mock-card-bar" style="background:var(--stage-prospects)"></div>
                 <div class="mock-card-name">Bernard Élec</div>
-                <span class="mock-card-tag">Travaux électriques</span>
                 <div class="mock-card-co">Lyon</div>
-                <div class="mock-progress" aria-label="Étape Prospects">
-                  <span data-on="prospects" data-current="prospects"></span>
-                  <span></span><span></span><span></span><span></span>
-                  <span></span><span></span><span></span><span></span>
-                </div>
+                <span class="mock-card-tag">Travaux électriques</span>
                 <div class="mock-card-foot">
                   <span class="mock-card-amount empty">—</span>
                   <span class="mock-card-day">J+0</span>
                 </div>
-              </div>
-              <div class="mock-card" style="border-left-color:var(--stage-prospects)">
-                <div class="mock-card-name">Atelier Bois</div>
-                <span class="mock-card-tag">Travaux menuiserie</span>
-                <div class="mock-card-co">Brest</div>
+                <div class="mock-card-src">↳ Prospection carte</div>
                 <div class="mock-progress" aria-label="Étape Prospects">
-                  <span data-on="prospects" data-current="prospects"></span>
-                  <span></span><span></span><span></span><span></span>
-                  <span></span><span></span><span></span><span></span>
+                  <span data-on="prospects" data-current="prospects"></span><i></i>
+                  <span></span><i></i><span></span><i></i><span></span><i></i>
+                  <span></span><i></i><span></span><i></i><span></span><i></i><span></span>
                 </div>
+              </div>
+              <div class="mock-card">
+                <div class="mock-card-bar" style="background:var(--stage-prospects)"></div>
+                <div class="mock-card-name">Atelier Bois</div>
+                <div class="mock-card-co">Brest</div>
+                <span class="mock-card-tag">Travaux menuiserie</span>
                 <div class="mock-card-foot">
                   <span class="mock-card-amount empty">—</span>
                   <span class="mock-card-day">J+2</span>
+                </div>
+                <div class="mock-card-src">↳ Import contacts</div>
+                <div class="mock-progress" aria-label="Étape Prospects">
+                  <span data-on="prospects" data-current="prospects"></span><i></i>
+                  <span></span><i></i><span></span><i></i><span></span><i></i>
+                  <span></span><i></i><span></span><i></i><span></span><i></i><span></span>
                 </div>
               </div>
             </div>
 
             <div class="mock-col" data-stage="phoning">
               <div class="mock-col-head">Phoning<span class="mock-col-count">1</span></div>
-              <div class="mock-card" style="border-left-color:var(--stage-phoning)">
+              <div class="mock-card">
+                <div class="mock-card-bar" style="background:var(--stage-phoning)"></div>
                 <div class="mock-card-name">Cabinet J&amp;K</div>
-                <span class="mock-card-tag">Conseil en gestion</span>
                 <div class="mock-card-co">Lille</div>
-                <div class="mock-progress" aria-label="Étape Phoning">
-                  <span data-on="prospects"></span>
-                  <span data-on="linkedin"></span>
-                  <span data-on="mailing"></span>
-                  <span data-on="phoning" data-current="phoning"></span>
-                  <span></span><span></span><span></span><span></span><span></span>
-                </div>
+                <span class="mock-card-tag">Conseil en gestion</span>
                 <div class="mock-card-foot">
                   <span class="mock-card-amount">4,1 k€</span>
                   <span class="mock-card-day">J+3</span>
+                </div>
+                <div class="mock-card-src">↳ Campagne mailing</div>
+                <div class="mock-progress" aria-label="Étape Phoning">
+                  <span data-on="prospects"></span><i class="done"></i>
+                  <span data-on="linkedin"></span><i class="done"></i>
+                  <span data-on="mailing"></span><i class="done"></i>
+                  <span data-on="phoning" data-current="phoning"></span><i></i>
+                  <span></span><i></i><span></span><i></i><span></span><i></i><span></span><i></i><span></span>
                 </div>
               </div>
             </div>
 
             <div class="mock-col" data-stage="rdv">
               <div class="mock-col-head">RDV<span class="mock-col-count">2</span></div>
-              <div class="mock-card" style="border-left-color:var(--stage-rdv)">
+              <div class="mock-card">
+                <div class="mock-card-bar" style="background:var(--stage-rdv)"></div>
                 <div class="mock-card-name">Martin IT</div>
-                <span class="mock-card-tag">Conseil informatique</span>
                 <div class="mock-card-co">Paris</div>
-                <div class="mock-progress" aria-label="Étape RDV">
-                  <span data-on="prospects"></span>
-                  <span data-on="linkedin"></span>
-                  <span data-on="mailing"></span>
-                  <span data-on="phoning"></span>
-                  <span data-on="visio"></span>
-                  <span data-on="rdv" data-current="rdv"></span>
-                  <span></span><span></span><span></span>
-                </div>
+                <span class="mock-card-tag">Conseil informatique</span>
                 <div class="mock-card-foot">
                   <span class="mock-card-amount">8 k€</span>
                   <span class="mock-card-day">J+5</span>
                 </div>
-              </div>
-              <div class="mock-card" style="border-left-color:var(--stage-rdv)">
-                <div class="mock-card-name">Santé+</div>
-                <span class="mock-card-tag">Activités de santé</span>
-                <div class="mock-card-co">Bordeaux</div>
+                <div class="mock-card-src">↳ Recommandation</div>
                 <div class="mock-progress" aria-label="Étape RDV">
-                  <span data-on="prospects"></span>
-                  <span data-on="linkedin"></span>
-                  <span data-on="mailing"></span>
-                  <span data-on="phoning"></span>
-                  <span data-on="visio"></span>
-                  <span data-on="rdv" data-current="rdv"></span>
-                  <span></span><span></span><span></span>
+                  <span data-on="prospects"></span><i class="done"></i>
+                  <span data-on="linkedin"></span><i class="done"></i>
+                  <span data-on="mailing"></span><i class="done"></i>
+                  <span data-on="phoning"></span><i class="done"></i>
+                  <span data-on="visio"></span><i class="done"></i>
+                  <span data-on="rdv" data-current="rdv"></span><i></i>
+                  <span></span><i></i><span></span><i></i><span></span>
                 </div>
+              </div>
+              <div class="mock-card">
+                <div class="mock-card-bar" style="background:var(--stage-rdv)"></div>
+                <div class="mock-card-name">Santé+</div>
+                <div class="mock-card-co">Bordeaux</div>
+                <span class="mock-card-tag">Activités de santé</span>
                 <div class="mock-card-foot">
                   <span class="mock-card-amount">4,5 k€</span>
                   <span class="mock-card-day">J+7</span>
+                </div>
+                <div class="mock-card-src">↳ LinkedIn</div>
+                <div class="mock-progress" aria-label="Étape RDV">
+                  <span data-on="prospects"></span><i class="done"></i>
+                  <span data-on="linkedin"></span><i class="done"></i>
+                  <span data-on="mailing"></span><i class="done"></i>
+                  <span data-on="phoning"></span><i class="done"></i>
+                  <span data-on="visio"></span><i class="done"></i>
+                  <span data-on="rdv" data-current="rdv"></span><i></i>
+                  <span></span><i></i><span></span><i></i><span></span>
                 </div>
               </div>
             </div>

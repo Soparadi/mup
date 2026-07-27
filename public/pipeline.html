@@ -159,6 +159,9 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .info-item-placeholder{color:var(--muted2);font-weight:400}
 .info-item-edit-ico{color:var(--muted2);flex-shrink:0}
 .info-item a{color:var(--blue);text-decoration:none}
+/* Toast — porté à l'identique de contact-societe.html (notification enrich / opt-out) */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;font-weight:600;z-index:300;transition:transform .25s cubic-bezier(.34,1.56,.64,1);box-shadow:0 4px 16px rgba(0,0,0,.18);display:flex;align-items:center;gap:8px}
+.toast.show{transform:translateX(-50%) translateY(0)}
 .info-item a:hover{text-decoration:underline}
 .quick-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .quick-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:14px 8px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s}
@@ -617,6 +620,16 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
           <input class="finput" id="m-instagram" type="url" placeholder="https://instagram.com/…">
         </div>
       </div>
+      <div class="f2">
+        <div class="frow">
+          <div class="flabel">Email société</div>
+          <input class="finput" id="m-societe-email" type="email" placeholder="contact@entreprise.fr">
+        </div>
+        <div class="frow">
+          <div class="flabel">Téléphone société</div>
+          <input class="finput" id="m-societe-tel" placeholder="02 96 00 00 00">
+        </div>
+      </div>
       <div class="frow">
         <div class="flabel">Notes</div>
         <textarea class="finput" id="m-notes" rows="2" style="resize:none" placeholder="Contexte, besoins, prochaine action…"></textarea>
@@ -652,7 +665,7 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
     <div class="focus-header-name" id="d-focus-name">—</div>
     <div class="focus-header-sub" id="d-focus-sub"></div>
     <div class="focus-header-pills" id="d-focus-pills"></div>
-    <button class="d-btn" id="d-enrich" type="button" style="margin-top:14px;background:var(--orange);color:#fff;border:none">
+    <button class="d-btn" id="d-enrich" type="button" onclick="enrichDetail()" style="margin-top:14px;background:var(--orange);color:#fff;border:none">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M19 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L19 14z"/></svg>
       Enrichir
     </button>
@@ -663,6 +676,12 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
     <div class="detail-section">
       <div class="detail-section-title">Informations de contact</div>
       <div class="info-grid" id="d-info-grid"></div>
+    </div>
+
+    <!-- COORDONNÉES SOCIÉTÉ (jeu de champs distinct du contact ; masqué si vide) -->
+    <div class="detail-section" id="d-societe-section" style="display:none">
+      <div class="detail-section-title">Coordonnées société</div>
+      <div class="info-grid" id="d-societe-grid"></div>
     </div>
 
     <!-- RÉSEAUX SOCIAUX -->
@@ -1235,7 +1254,7 @@ function onDrop(e, colId) {
 
 // ── MODAL ──
 let editingId = null;
-const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-linkedin','m-facebook','m-instagram','m-notes'];
+const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-linkedin','m-facebook','m-instagram','m-societe-email','m-societe-tel','m-notes'];
 function openModal(colId) {
   editingId = null;
   MODAL_FIELDS.forEach(fid => document.getElementById(fid).value = '');
@@ -1261,6 +1280,8 @@ function editCard(id) {
   document.getElementById('m-linkedin').value = c.linkedin||'';
   document.getElementById('m-facebook').value = c.facebook||'';
   document.getElementById('m-instagram').value = c.instagram||'';
+  document.getElementById('m-societe-email').value = c.societe_email||'';
+  document.getElementById('m-societe-tel').value = c.societe_tel||'';
   document.getElementById('m-notes').value = c.notes||'';
   document.getElementById('m-col').value = c.col||'prospects';
   document.getElementById('modal-title').textContent = 'Modifier la fiche';
@@ -1284,6 +1305,8 @@ function saveCard() {
     linkedin: document.getElementById('m-linkedin').value.trim(),
     facebook: document.getElementById('m-facebook').value.trim(),
     instagram: document.getElementById('m-instagram').value.trim(),
+    societe_email: document.getElementById('m-societe-email').value.trim(),
+    societe_tel: document.getElementById('m-societe-tel').value.trim(),
     notes: document.getElementById('m-notes').value.trim(),
     col: document.getElementById('m-col').value
   };
@@ -1374,6 +1397,15 @@ async function openDetail(id) {
   document.getElementById('d-info-grid').innerHTML = infoHtml;
   const valCell = document.getElementById('d-val-cell');
   if(valCell) valCell.addEventListener('click', startEditVal);
+
+  // Coordonnées société — bloc DISTINCT du contact (jeu de champs séparé
+  // societe_email / societe_tel). Affiché seulement si au moins une coordonnée
+  // société est présente, sinon section masquée (précédent : d-map-section).
+  let socHtml = '';
+  if(c.societe_email) socHtml += `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val"><a href="mailto:${esc(c.societe_email)}">${esc(c.societe_email)}</a></div></div>`;
+  if(c.societe_tel) socHtml += `<div class="info-item"><div class="info-item-label">Téléphone société</div><div class="info-item-val"><a href="tel:${c.societe_tel.replace(/\s/g,'')}">${esc(c.societe_tel)}</a></div></div>`;
+  document.getElementById('d-societe-grid').innerHTML = socHtml;
+  document.getElementById('d-societe-section').style.display = socHtml ? '' : 'none';
 
   // Socials (editable)
   document.getElementById('d-linkedin').value = c.linkedin||'';
@@ -1870,6 +1902,75 @@ function syncToProspects(c) {
     if(c.instagram !== undefined) p.instagram = c.instagram;
     localStorage.setItem('mup_prospects', JSON.stringify(prospects));
   } catch(e) {}
+}
+
+// Toast — porté à l'identique de contact-societe.html.
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// Enrichissement fiche détail — calque de #c-enrich (contact-societe.html).
+// fillIfEmpty sur l'objet carte : website, réseaux sociaux ET les coordonnées
+// SOCIÉTÉ (societe_email / societe_tel). JAMAIS c.email ni c.tel : ceux-ci sont
+// les coordonnées du CONTACT (personne) — y verser des coordonnées d'entreprise
+// ferait mentir la fiche. Écriture puis save()/syncToProspects/refresh sur le
+// patron de saveSocials. 403 opt-out → toast avec le message du serveur (trou du
+// modèle : sans ça l'abonné ne voit pas le refus). 402 plafond → silencieux,
+// l'intercepteur global (trial-expired-modal.js) affiche déjà la modale.
+// Idempotence portée par le serveur : un re-clic est gratuit et rend
+// « Aucune donnée à ajouter ».
+async function enrichDetail() {
+  if(!currentId) return;
+  const c = cards.find(x=>String(x.id)===String(currentId));
+  if(!c) return;
+  const siret = String(c.siret||'').replace(/\s+/g,'');
+  if(!siret) return; // SIRET absent → garde silencieuse (calque du modèle)
+  const btn = document.getElementById('d-enrich');
+  const origLabel = btn.textContent; // verrou anti double-clic pendant l'appel
+  btn.disabled = true;
+  btn.textContent = 'Enrichissement…';
+  try {
+    const resp = await fetch('/api/enrich/' + encodeURIComponent(siret), { method: 'POST' });
+    if(resp.status === 403) { // opt-out RGPD : le serveur porte le message, l'abonné doit le voir
+      let msg = "Cette entreprise n'est pas disponible pour prospection.";
+      try { const b = await resp.json(); if(b && b.message) msg = b.message; } catch(_){}
+      toast(msg);
+      return;
+    }
+    if(!resp.ok) return; // 402 plafond inclus : silencieux (intercepteur global)
+    const data = await resp.json();
+    if(!data || !data.found) return; // found:false → aucun changement visible
+    let n = 0;
+    const fillIfEmpty = (prop, val) => {
+      if(!String(c[prop]||'').trim() && val) { c[prop] = val; n++; }
+    };
+    fillIfEmpty('website', data.website);
+    fillIfEmpty('linkedin', data.societe_linkedin);
+    fillIfEmpty('facebook', data.societe_facebook);
+    fillIfEmpty('instagram', data.societe_instagram);
+    fillIfEmpty('societe_email', data.societe_email);
+    fillIfEmpty('societe_tel', data.societe_tel);
+    // NE PAS toucher c.email ni c.tel : coordonnées du contact, pas de la société.
+    if(n > 0) {
+      save();
+      syncToProspects(c);
+      openDetail(currentId); // rafraîchit la fiche ouverte (bloc société + socials)
+      renderKanban();
+      toast('Fiche enrichie');
+    } else {
+      toast('Aucune donnée à ajouter');
+    }
+  } catch(e) {
+    // best-effort : pas de toast d'erreur (calque du modèle)
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
 }
 
 function quickAction(type) {
@@ -2953,6 +3054,8 @@ async function createActionFromDetection(type, dateStr, time){
     </div>
   </div>
 </div>
+
+<div class="toast" id="toast"></div>
 
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>

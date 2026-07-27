@@ -736,7 +736,6 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .mock-card-name {
   font-weight: 700;
   color: var(--text);
-  letter-spacing: -0.1px;
   margin-bottom: 2px;
   font-size: 12.5px;
 }
@@ -760,6 +759,12 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   padding: 2px 8px;
   border-radius: 4px;
   margin-bottom: 4px;
+  /* Ligne unique + troncature — relevé exact de .card-naf-pill (pipeline.html) :
+     c'est ce qui casse le rythme des colonnes quand le libellé secteur passe sur 2 lignes. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Ligne de source (↳) — calque de .kcard-src */

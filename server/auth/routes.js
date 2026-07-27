@@ -490,6 +490,7 @@ router.post('/resend-verification', async (req, res) => {
 
 // ── POST /api/auth/reset-password ──
 router.post('/reset-password', async (req, res) => {
+  if (!checkRate(req, res, 'reset-password')) return
   const meta = clientMeta(req)
   const token = String(req.body?.token || '')
   const newPassword = req.body?.new_password

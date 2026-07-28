@@ -24,6 +24,7 @@ import { enrichReferentielActionnable } from './referentiel.js'
 import { getReferentielFaisceauBySiret } from './referentiel-read.js'
 import { normText, corroborerSiret } from './overpass.js'
 import { rechercherUrlSociete } from './recherche-web.js'
+import { parserRobots, evaluerRobots } from './robots-txt.js'
 
 // Overpass/serveurs tiers refusent souvent les requêtes sans User-Agent explicite.
 const USER_AGENT = 'MovUP/1.0 (+https://movup.fr)'
@@ -34,6 +35,21 @@ const FETCH_TIMEOUT_MS = 8000
 const MAX_BYTES = 1_500_000          // cap taille réponse (évite les pages géantes)
 const MIN_INTERVAL_MS = 1500         // délai minimal entre deux appels sortants
 const MAX_RETRIES = 1                // un retry avec backoff sur 429/5xx/réseau
+
+// Bornes robots.txt (RFC 9309). Fetch DÉDIÉ, distinct de doFetch : court, plafonné,
+// sans retry — un robots.txt injoignable ne doit pas monopoliser la file.
+const ROBOTS_TIMEOUT_MS = 3000       // timeout court propre au robots.txt
+const ROBOTS_MAX_BYTES = 500_000     // 500 Ko, plafond RFC 9309 §2.5
+const ROBOTS_TTL_MS = 24 * 3600 * 1000   // TTL cache par hôte : 24 h
+const ROBOTS_CACHE_MAX = 500         // plafond d'entrées, éviction de la plus ancienne
+const ROBOTS_UA_TOKEN = 'MovUP'      // product token seul (jamais l'User-Agent réseau complet)
+// Plafond de crawl-delay honoré. La file est GLOBALE (une seule pour tout le sortant),
+// pas par hôte : honorer un délai ralentit TOUT le sortant, pas seulement l'hôte qui le
+// réclame. Donc — délai ≤ MIN_INTERVAL_MS : sans effet (l'espacement courant suffit) ;
+// entre MIN_INTERVAL_MS et ce plafond : honoré, en dormant le complément avant l'appel
+// vers cet hôte ; au-delà : l'hôte est REFUSÉ (pas ralenti), refus mis en cache comme
+// les autres. On ne paie jamais plus de ce plafond au nom d'un seul site.
+const ROBOTS_CRAWL_DELAY_MAX_MS = 5000
 
 // Bornes crawl.
 const MAX_LEGAL_PAGES = 4            // pages légales fetchées par site (au-delà du home)
@@ -111,11 +127,185 @@ async function doFetch(url) {
   return null
 }
 
+// ---------------------------------------------------------------------------
+// Portillon robots.txt (RFC 9309). Cache par hôte, fetch dédié passant par la MÊME
+// file mono-verrou (jamais en dehors, sous peine de rafale). Un refus = return null,
+// signal identique aux échecs réseau existants — aucun throw, aucun marquage en base.
+// ---------------------------------------------------------------------------
+
+// Cache par hôte. Clé = origin (schéma://hôte:port). Valeur =
+//   { etat: 'REGLES' | 'TOUT_PERMIS' | 'REFUS', parsed, crawlDelaySec, expiresAt }.
+// Les échecs sont cachés eux aussi : sinon chaque URL d'un hôte re-taperait robots.txt.
+const robotsCache = new Map()
+const robotsInflight = new Map()     // dédup des résolutions concurrentes d'un même hôte
+
+function robotsCacheGet(origin) {
+  const e = robotsCache.get(origin)
+  if (!e) return null
+  if (e.expiresAt <= Date.now()) { robotsCache.delete(origin); return null }
+  return e
+}
+
+function robotsCacheSet(origin, entry) {
+  // Ré-insertion en queue (Map = ordre d'insertion) puis éviction de la plus ancienne.
+  if (robotsCache.has(origin)) robotsCache.delete(origin)
+  else if (robotsCache.size >= ROBOTS_CACHE_MAX) {
+    const oldest = robotsCache.keys().next().value
+    if (oldest !== undefined) robotsCache.delete(oldest)
+  }
+  robotsCache.set(origin, entry)
+}
+
+// Fetch robots.txt DÉDIÉ, distinct de doFetch : timeout court, plafond de taille propre,
+// AUCUN retry, même USER_AGENT. Rend { status, text } ; status 0 = réseau/timeout/DNS.
+async function fetchRobots(robotsUrl) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), ROBOTS_TIMEOUT_MS)
+  try {
+    const r = await fetch(robotsUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: ctrl.signal,
+      headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/plain,*/*;q=0.5' }
+    })
+    clearTimeout(timer)
+    if (r.status >= 200 && r.status < 300) {
+      let text = await r.text()
+      if (text.length > ROBOTS_MAX_BYTES) text = text.slice(0, ROBOTS_MAX_BYTES)
+      return { status: r.status, text }
+    }
+    return { status: r.status, text: '' }
+  } catch {
+    clearTimeout(timer)
+    return { status: 0, text: '' }   // réseau / timeout / abort / DNS → FAIL-CLOSED
+  }
+}
+
+// Réponse HTTP → entrée de cache. Statuts (brief) :
+//   2xx → parserRobots ; 4xx (dont 404/410) → TOUT_PERMIS ; 5xx, timeout, réseau, DNS
+//   (status 0) → FAIL-CLOSED = REFUS. Crawl-delay réclamé au-delà du plafond → REFUS.
+function entryDepuisReponse(res) {
+  const expiresAt = Date.now() + ROBOTS_TTL_MS
+  const st = res.status
+  if (st >= 200 && st < 300) {
+    const parsed = parserRobots(res.text)
+    // crawl-delay indépendant du chemin (propre au groupe UA) → évalué une fois.
+    const { crawlDelaySec } = evaluerRobots(parsed, '/', ROBOTS_UA_TOKEN)
+    if (crawlDelaySec != null && crawlDelaySec * 1000 > ROBOTS_CRAWL_DELAY_MAX_MS) {
+      return { etat: 'REFUS', parsed: null, crawlDelaySec, expiresAt }
+    }
+    return { etat: 'REGLES', parsed, crawlDelaySec, expiresAt }
+  }
+  if (st >= 400 && st < 500) {
+    return { etat: 'TOUT_PERMIS', parsed: null, crawlDelaySec: null, expiresAt }
+  }
+  return { etat: 'REFUS', parsed: null, crawlDelaySec: null, expiresAt }
+}
+
+// Charge (ou récupère en vol) le robots d'un hôte, met en cache, journalise. Le fetch
+// passe OBLIGATOIREMENT par schedule(...) : même verrou mono-file que tout le sortant.
+function chargerRobots(origin) {
+  const enCours = robotsInflight.get(origin)
+  if (enCours) return enCours
+  const p = (async () => {
+    const res = await schedule(() => fetchRobots(origin + '/robots.txt'))
+    const entry = entryDepuisReponse(res)
+    robotsCacheSet(origin, entry)
+    console.log('[robots]', 'hôte résolu', origin, entry.etat,
+      entry.crawlDelaySec != null ? `crawl-delay=${entry.crawlDelaySec}s` : '')
+    return entry
+  })()
+  robotsInflight.set(origin, p)
+  // Dérivée du finally neutralisée en rejet (patron de queueTail ligne ~87) : aucune
+  // promesse dérivée ne doit pouvoir rejeter sans gestionnaire.
+  p.finally(() => { if (robotsInflight.get(origin) === p) robotsInflight.delete(origin) })
+    .then(() => {}, () => {})
+  return p
+}
+
+// Chemin (pathname + query) mis en correspondance par robots.txt.
+function cheminDe(url) {
+  try { const u = new URL(url); return (u.pathname || '/') + (u.search || '') } catch { return '/' }
+}
+
+// Décision par état de cache. Product token seul (ROBOTS_UA_TOKEN).
+function deciderDepuisEntry(entry, chemin) {
+  if (entry.etat === 'TOUT_PERMIS') return { autorise: true, crawlDelaySec: null }
+  if (entry.etat === 'REFUS') return { autorise: false, crawlDelaySec: entry.crawlDelaySec }
+  const { autorise } = evaluerRobots(entry.parsed, chemin, ROBOTS_UA_TOKEN)
+  return { autorise, crawlDelaySec: entry.crawlDelaySec }
+}
+
+// Portillon : { autorise, crawlDelaySec } pour une URL. Résout via cache/hôte.
+async function resolveRobots(url) {
+  const origin = safeOrigin(url)
+  // origin inexploitable → refus (fail-closed). Inatteignable en pratique (normalizeUrl
+  // a déjà validé le schéma en amont) ; la garde existe pour que le code dise partout
+  // la même chose : ignorer les règles se résout toujours par le refus.
+  if (!origin) return { autorise: false, crawlDelaySec: null }
+  const entry = robotsCacheGet(origin) || await chargerRobots(origin)
+  return deciderDepuisEntry(entry, cheminDe(url))
+}
+
+// Complément de crawl-delay à dormir AVANT l'appel vers l'hôte, en sus de l'espacement
+// mono-file déjà garanti (MIN_INTERVAL_MS). En deçà du plancher : 0 (sans effet). Le
+// dépassement du plafond est déjà traité en amont (REFUS), donc borné ici de fait.
+function complementCrawl(crawlDelaySec) {
+  const cdMs = (crawlDelaySec != null) ? crawlDelaySec * 1000 : 0
+  return cdMs > MIN_INTERVAL_MS ? cdMs - MIN_INTERVAL_MS : 0
+}
+
 // Sérialise l'appel derrière la file mono-verrou. Exportée pour recherche-web.js.
-export function politeFetchText(url) {
+// Passe d'abord le portillon robots.txt de l'hôte (résolution + cache par hôte). Refus
+// robots → null, exactement comme un échec réseau : signature publique inchangée.
+export async function politeFetchText(url) {
   const u = normalizeUrl(url)
-  if (!u) return Promise.resolve(null)
-  return schedule(() => doFetch(u))
+  if (!u) return null
+
+  // Ceinture : la garantie « aucun throw » doit être structurelle. Une levée interne
+  // = on ignore ce que dit le robots.txt → même issue qu'un 5xx/timeout : fail-closed.
+  let gate
+  try {
+    gate = await resolveRobots(u)
+  } catch (e) {
+    console.log('[robots]', 'refus (exception résolution)', u, String(e?.message || e).slice(0, 80))
+    return null
+  }
+  if (!gate.autorise) { console.log('[robots]', 'refus', u); return null }
+
+  // Fetch principal. Le complément de crawl-delay est dormi DANS la tâche schedulée,
+  // donc SOUS le verrou : il espace réellement l'appel vers cet hôte, sans le sortir
+  // de la file mono-verrou.
+  const complement = complementCrawl(gate.crawlDelaySec)
+  const res = await schedule(async () => {
+    if (complement > 0) await sleep(complement)
+    return doFetch(u)
+  })
+  if (!res) return null
+
+  // Point (b) — redirection inter-hôtes. redirect:'follow' a pu mener vers un autre
+  // hôte (example.com et www.example.com sont deux hôtes distincts au sens robots.txt,
+  // cas fréquent). On re-vérifie le robots de l'hôte d'ARRIVÉE sur le chemin final.
+  // LIMITE ASSUMÉE : la requête vers l'hôte d'arrivée a DÉJÀ eu lieu quand on découvre
+  // son refus — on écarte le contenu, on n'annule pas l'appel. L'empêcher supposerait
+  // redirect:'manual' et un contrôle à chaque saut, ce qui referait doFetch et son
+  // backoff ; le rapport coût-bénéfice ne le justifie pas, l'appel étant unique par
+  // hôte et jamais répété (refus ensuite en cache).
+  if (safeHost(res.finalUrl) !== safeHost(u)) {
+    let gate2
+    try {
+      gate2 = await resolveRobots(res.finalUrl)
+    } catch (e) {
+      console.log('[robots]', 'refus après redirection (exception résolution)', res.finalUrl, String(e?.message || e).slice(0, 80))
+      return null
+    }
+    if (!gate2.autorise) {
+      console.log('[robots]', 'refus après redirection', res.finalUrl)
+      return null
+    }
+  }
+
+  return res
 }
 
 // ---------------------------------------------------------------------------

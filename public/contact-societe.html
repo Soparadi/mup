@@ -783,6 +783,7 @@ async function loadContact(){
     await loadPeople();                        // personnes liées (modèle A)
     populate();
     await autoEnrichOnOpen();                   // restitution silencieuse (lecture seule)
+    await refreshEnrichButtonState();           // état terminal du bouton, après remplissage
   } catch (e) {
     document.getElementById('fiche-name').textContent = 'Erreur de chargement';
     console.error('[contact-societe] loadContact', e);
@@ -823,6 +824,22 @@ async function autoEnrichOnOpen(){
   if (siretEnrichi(siret)) {
     fillIfEmpty('f-societe-email', data.societe_email);
     fillIfEmpty('f-societe-tel', data.societe_tel);
+  }
+}
+
+// État terminal du bouton Enrichir. Autorité = enrichedSirets, jamais le
+// remplissage des champs : un abonné qui efface une valeur ne doit pas se voir
+// proposer de repayer.
+async function refreshEnrichButtonState(){
+  await loadEnrichedSirets();
+  const btn = document.getElementById('c-enrich');
+  if (!btn) return;
+  const siret = String((contact && contact.siret) || '').replace(/\s+/g, '');
+  if (siret && siretEnrichi(siret)) {
+    btn.disabled = true;
+    btn.style.opacity = '.3';
+    btn.style.cursor = 'not-allowed';
+    btn.textContent = 'Déjà enrichi';
   }
 }
 
@@ -1217,11 +1234,16 @@ function wireForm(){
         }
         if (n > 0) toast('Fiche enrichie — pensez à enregistrer');
         else toast('Aucune donnée à ajouter');
+        await refreshEnrichButtonState();       // bascule en terminal si ce SIRET est désormais enrichi
       } catch (e) {
         // restitution best-effort : pas de toast d'erreur
       } finally {
-        enrichBtn.disabled = false;
-        enrichBtn.textContent = origLabel;
+        // La restauration ne réactive pas un bouton passé en terminal (autorité: enrichedSirets).
+        const siretFin = String((contact && contact.siret) || '').replace(/\s+/g, '');
+        if (!(siretFin && siretEnrichi(siretFin))) {
+          enrichBtn.disabled = false;
+          enrichBtn.textContent = origLabel;
+        }
       }
     });
   }

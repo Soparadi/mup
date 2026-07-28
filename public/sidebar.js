@@ -102,7 +102,7 @@
     +     '<span id="sb-user-email" style="font-family:Geist,-apple-system,sans-serif;font-weight:400;font-size:10.5px;color:#6E6E73;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>'
     +   '</span>'
     + '</button>'
-    + '<div id="sb-user-menu" role="menu" hidden style="position:absolute;left:10px;right:10px;bottom:calc(100% - 6px);background-color:#FFFFFF;opacity:1;border:1px solid #E8E8ED;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.10);padding:4px;z-index:99999;">'
+    + '<div id="sb-user-menu" role="menu" hidden style="position:fixed;width:180px;background-color:#FFFFFF;opacity:1;border:1px solid #E8E8ED;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.10);padding:4px;z-index:99999;">'
     +   '<a href="/account/billing" role="menuitem" class="sb-user-menu-item" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;text-decoration:none;color:#1D1D1F;font-family:inherit;font-size:12.5px;font-weight:500;transition:background .12s;">'
     +     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
     +     'Mon compte'
@@ -155,11 +155,32 @@
   // ── Menu déroulant : ouvre vers le haut, ferme au clic outside / Escape ──
   var btn = document.getElementById('sb-user-btn');
   var menu = document.getElementById('sb-user-menu');
+  // Menu fixé au viewport, ancré au bouton : il échappe au clip d'overflow du
+  // rail (overflow-y:auto rend l'axe horizontal clippant) sans qu'on ait à
+  // lever ce clip — donc valable aussi sur les six pages qui le redéclarent
+  // inline. Ouverture vers le haut, coordonnées calculées à chaque ouverture.
+  function positionMenu() {
+    if (!btn || !menu) return;
+    var r = btn.getBoundingClientRect();
+    menu.style.left = Math.round(r.left) + 'px';
+    // -6 : chevauche le haut du bouton de 6px, comme l'ancien calc(100% - 6px).
+    menu.style.bottom = Math.round(window.innerHeight - r.top - 6) + 'px';
+  }
   function setMenuOpen(open) {
     if (!btn || !menu) return;
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) positionMenu();
     menu.hidden = !open;
   }
+  window.addEventListener('resize', function(){ if (menu && !menu.hidden) positionMenu(); });
+  // Fermeture au défilement : le menu est fixé au viewport mais son ancre (le
+  // bouton) défile avec le rail (overflow-y:auto). Plutôt que repositionner à
+  // chaque frame, on ferme — comportement usuel des menus déroulants. Écoute en
+  // CAPTURE sur le document : un scroll de conteneur ne bulle pas jusqu'à
+  // window, une écoute sur window seule serait inopérante.
+  document.addEventListener('scroll', function(){
+    if (menu && !menu.hidden) setMenuOpen(false);
+  }, true);
   if (btn) {
     btn.addEventListener('click', function(e){
       e.stopPropagation();

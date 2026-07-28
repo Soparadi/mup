@@ -51,6 +51,12 @@ export async function requireAuth(req, res, next) {
 // répondre 401 JSON. Utilisée pour protéger les pages HTML app (ne sert
 // jamais le HTML protégé sans cookie session valide).
 export async function requireAuthHtml(req, res, next) {
+  // Ceinture : toute réponse passant par le gate (page servie OU 302 vers
+  // /login) porte X-Robots-Tag: noindex. Le mécanisme reste la balise meta de
+  // /login ; sur une 3xx l'en-tête a un statut ambigu (le robot suit la
+  // redirection), d'où « ceinture » et non « mécanisme ». Couvre aussi
+  // /contacts/:id, seul autre consommateur de ce middleware.
+  res.setHeader('X-Robots-Tag', 'noindex')
   try {
     const token = readSessionToken(req)
     let session = null

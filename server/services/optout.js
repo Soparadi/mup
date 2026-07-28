@@ -32,6 +32,7 @@ export async function runOptoutMigration() {
     'DEFINE FIELD IF NOT EXISTS email_hash ON optout_request TYPE string',
     'DEFINE FIELD IF NOT EXISTS siret ON optout_request TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS siret_hash ON optout_request TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS siren_hash ON optout_request TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS raison ON optout_request TYPE option<string>',
     "DEFINE FIELD IF NOT EXISTS status ON optout_request TYPE string ASSERT $value INSIDE ['pending_verification', 'verified', 'processed', 'rejected', 'expired_unverified']",
     'DEFINE FIELD IF NOT EXISTS verify_token ON optout_request TYPE option<string>',
@@ -46,6 +47,7 @@ export async function runOptoutMigration() {
     'DEFINE FIELD IF NOT EXISTS short_ref ON optout_request TYPE option<string>',
     'DEFINE INDEX IF NOT EXISTS idx_optout_request_email_hash ON optout_request FIELDS email_hash',
     'DEFINE INDEX IF NOT EXISTS idx_optout_request_siret_hash ON optout_request FIELDS siret_hash',
+    'DEFINE INDEX IF NOT EXISTS idx_optout_request_siren_hash ON optout_request FIELDS siren_hash',
     'DEFINE INDEX IF NOT EXISTS idx_optout_request_verify_token ON optout_request FIELDS verify_token UNIQUE',
     'DEFINE INDEX IF NOT EXISTS idx_optout_request_status ON optout_request FIELDS status',
     'DEFINE INDEX IF NOT EXISTS idx_optout_request_created_at ON optout_request FIELDS created_at',
@@ -54,12 +56,14 @@ export async function runOptoutMigration() {
     'DEFINE TABLE IF NOT EXISTS optout_blocklist SCHEMAFULL',
     'DEFINE FIELD IF NOT EXISTS email_hash ON optout_blocklist TYPE string',
     'DEFINE FIELD IF NOT EXISTS siret_hash ON optout_blocklist TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS siren_hash ON optout_blocklist TYPE option<string>',
     "DEFINE FIELD IF NOT EXISTS source ON optout_blocklist TYPE string ASSERT $value INSIDE ['user_request', 'admin_manual', 'legal_order']",
     'DEFINE FIELD IF NOT EXISTS request_id ON optout_blocklist TYPE option<record<optout_request>>',
     'DEFINE FIELD IF NOT EXISTS blocked_at ON optout_blocklist TYPE datetime DEFAULT time::now()',
     'DEFINE FIELD IF NOT EXISTS notes ON optout_blocklist TYPE option<string>',
     'DEFINE INDEX IF NOT EXISTS idx_optout_blocklist_email_hash ON optout_blocklist FIELDS email_hash',
     'DEFINE INDEX IF NOT EXISTS idx_optout_blocklist_siret_hash ON optout_blocklist FIELDS siret_hash',
+    'DEFINE INDEX IF NOT EXISTS idx_optout_blocklist_siren_hash ON optout_blocklist FIELDS siren_hash',
     'DEFINE INDEX IF NOT EXISTS idx_optout_blocklist_source ON optout_blocklist FIELDS source',
     'DEFINE INDEX IF NOT EXISTS idx_optout_blocklist_blocked_at ON optout_blocklist FIELDS blocked_at'
   ]
@@ -82,45 +86,84 @@ export function hashIdentifier(value) {
   return createHash('sha256').update(value.trim()).digest('hex')
 }
 
-// Lookup batch blocklist par SIRET. Retourne le Set des SIRET (valeurs
-// d'origine) présents dans optout_blocklist. Exploite l'index
-// idx_optout_blocklist_siret_hash via clause IN. Chunk par 100 (limite
-// défensive WebSocket). Fail-CLOSED : toute erreur DB → on bloque TOUT le
-// lot (Set = toutes les entrées valides) + log warn. Un droit d'opposition
-// ne peut pas dépendre de la santé de la connexion : dans le doute, on
-// s'abstient. Même doctrine que le portillon robots.txt ; à l'échec, on
-// bloque. (Renverse le fail-open initial du brief 5b.)
+// SIREN (9 chiffres) dérivé d'un SIRET (14 chiffres) : les 9 premiers chiffres
+// après normalisation IDENTIQUE à celle de l'écriture (replace(/\s/g,'')) —
+// sinon le hash du SIREN ne coïnciderait pas avec celui posé à l'insert et la
+// comparaison raterait silencieusement. Le SIREN est dérivable gratuitement
+// aux points d'appel (les 9 premiers chiffres du SIRET) et couvre TOUS les
+// établissements de l'entreprise. Retourne null si l'entrée ne fournit pas au
+// moins 9 caractères — on ne dérive jamais un SIREN tronqué qui matcherait par
+// accident une entrée blocklist mal formée.
+export function sirenFromSiret(siret) {
+  if (!siret || typeof siret !== 'string') return null
+  const clean = siret.replace(/\s/g, '')
+  if (clean.length < 9) return null
+  return clean.slice(0, 9)
+}
+
+// Lookup batch blocklist par SIRET, ÉLARGI au SIREN. Retourne le Set des SIRET
+// (valeurs d'origine) opt-out. Un SIRET du lot est bloqué s'il matche par son
+// hash SIRET OU par le hash de son SIREN dérivé : le SIREN est la clé
+// principale (l'accusé de réception parle de « vos données » sans limite
+// d'établissement), une entrée blocklist posée au seul SIREN bloque donc TOUS
+// les établissements du lot. siret_hash reste interrogé en plus — une entrée
+// ancienne ou posée par voie administrative pourrait n'en porter qu'un.
+// Exploite les index idx_optout_blocklist_siret_hash / _siren_hash via clauses
+// IN. Chunk par 100 (limite défensive WebSocket). Fail-CLOSED : toute erreur DB
+// → on bloque TOUT le lot (Set = toutes les entrées valides) + log warn. Un
+// droit d'opposition ne peut pas dépendre de la santé de la connexion : dans le
+// doute, on s'abstient. Même doctrine que le portillon robots.txt ; à l'échec,
+// on bloque. Les onze appelants passent toujours des SIRET SANS CHANGER : la
+// dérivation du SIREN est faite ici.
 export async function checkBlocklistBatch(sirets) {
   const blocked = new Set()
   if (!Array.isArray(sirets) || sirets.length === 0) return blocked
-  // Dédup + filtrage falsy, et map hash→siret pour remonter aux valeurs
-  // d'origine après le SELECT (qui ne renvoie que les hash).
-  const hashToSiret = new Map()
+  // Dédup + filtrage falsy. On indexe chaque SIRET par son hash SIRET, par le
+  // hash de son SIREN dérivé, et on retient hash SIREN → SIRET(s) du lot (un
+  // même SIREN peut coiffer plusieurs établissements présents dans le lot).
+  const siretHashToSiret = new Map()       // hash(SIRET) → SIRET d'origine
+  const siretHashToSirenHash = new Map()   // hash(SIRET) → hash(SIREN) dérivé
+  const sirenHashToSirets = new Map()      // hash(SIREN) → [SIRET, …] du lot
   for (const s of sirets) {
     if (!s || typeof s !== 'string') continue
     const clean = s.trim()
     if (!clean) continue
-    hashToSiret.set(hashIdentifier(clean), clean)
+    const siretHash = hashIdentifier(clean)
+    siretHashToSiret.set(siretHash, clean)
+    const siren = sirenFromSiret(clean)
+    if (siren) {
+      const sirenHash = hashIdentifier(siren)
+      siretHashToSirenHash.set(siretHash, sirenHash)
+      const list = sirenHashToSirets.get(sirenHash) || []
+      list.push(clean)
+      sirenHashToSirets.set(sirenHash, list)
+    }
   }
-  if (hashToSiret.size === 0) return blocked
-  const hashes = [...hashToSiret.keys()]
+  if (siretHashToSiret.size === 0) return blocked
+  const siretHashes = [...siretHashToSiret.keys()]
   try {
     const db = await getDb()
-    for (let i = 0; i < hashes.length; i += 100) {
-      const chunk = hashes.slice(i, i + 100)
+    for (let i = 0; i < siretHashes.length; i += 100) {
+      const chunk = siretHashes.slice(i, i + 100)
+      const sirenChunk = [...new Set(
+        chunk.map(h => siretHashToSirenHash.get(h)).filter(Boolean)
+      )]
       const result = await db.query(
-        'SELECT siret_hash FROM optout_blocklist WHERE siret_hash IN $hashes',
-        { hashes: chunk }
+        'SELECT siret_hash, siren_hash FROM optout_blocklist'
+        + ' WHERE siret_hash IN $siretHashes OR siren_hash IN $sirenHashes',
+        { siretHashes: chunk, sirenHashes: sirenChunk }
       )
       const rows = result[0] || []
       for (const row of rows) {
-        const siret = hashToSiret.get(row.siret_hash)
-        if (siret) blocked.add(siret)
+        const bySiret = siretHashToSiret.get(row.siret_hash)
+        if (bySiret) blocked.add(bySiret)
+        const bySiren = sirenHashToSirets.get(row.siren_hash)
+        if (bySiren) for (const st of bySiren) blocked.add(st)
       }
     }
   } catch (e) {
     console.warn('[optout] checkBlocklistBatch fail-closed :', e.message)
-    return new Set(hashToSiret.values())
+    return new Set(siretHashToSiret.values())
   }
   return blocked
 }
@@ -169,8 +212,12 @@ export async function insertOptoutRequest({ email, siret, ip, userAgent }) {
   const db = await getDb()
   const emailNorm = String(email || '').toLowerCase().trim()
   const siretNorm = siret ? String(siret).replace(/\s/g, '') : null
+  // Un numéro d'établissement saisi par l'opposant est ÉLARGI à son SIREN,
+  // jamais conservé au seul SIRET : le SIREN est la clé principale.
+  const sirenNorm = siretNorm ? sirenFromSiret(siretNorm) : null
   const emailHash = hashIdentifier(emailNorm)
   const siretHash = siretNorm ? hashIdentifier(siretNorm) : null
+  const sirenHash = sirenNorm ? hashIdentifier(sirenNorm) : null
   const { token, tokenHash } = generateVerifyToken()
   // Référence courte lisible (6 hex aléatoires → MUP-OPT-A3F9C1). Stockée +
   // indexée pour la recherche backend par référence. Collision négligeable
@@ -191,6 +238,12 @@ export async function insertOptoutRequest({ email, siret, ip, userAgent }) {
     fields.push('siret = $siret', 'siret_hash = $siretHash')
     params.siret = siretNorm
     params.siretHash = siretHash
+  }
+  // siren_hash reporté dès qu'un SIRET est fourni (élargissement à l'entreprise).
+  // Pas de champ SIREN clair stocké — minimisation art. 5.1.c, comme le hash.
+  if (sirenHash) {
+    fields.push('siren_hash = $sirenHash')
+    params.sirenHash = sirenHash
   }
   // IP hashée en base (cohérence email_hash/siret_hash, minimisation
   // art. 5.1.c) ; l'IP claire ne sert qu'au rate-limit middleware en amont,
@@ -252,6 +305,20 @@ export async function verifyOptoutToken(token) {
   if (request.siret_hash) {
     blockFields.push('siret_hash = $siretHash')
     blockParams.siretHash = request.siret_hash
+  }
+  // Élargissement systématique au SIREN (clé principale de l'opposition) : le
+  // siren_hash est déjà porté par la demande (insertOptoutRequest), on le
+  // re-dérive du SIRET clair en filet de sécurité pour une demande pending
+  // antérieure à l'introduction du champ. Une opposition posée sur un
+  // établissement vaut ainsi pour l'entreprise entière.
+  let sirenHash = request.siren_hash || null
+  if (!sirenHash && request.siret) {
+    const siren = sirenFromSiret(request.siret)
+    if (siren) sirenHash = hashIdentifier(siren)
+  }
+  if (sirenHash) {
+    blockFields.push('siren_hash = $sirenHash')
+    blockParams.sirenHash = sirenHash
   }
   await db.query(`CREATE optout_blocklist SET ${blockFields.join(', ')}`, blockParams)
 

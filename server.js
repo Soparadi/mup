@@ -3020,6 +3020,62 @@ app.get('/api/sirene/:siret', async (req, res) => {
   }
 })
 
+// GET /api/enrich/:siret — LECTURE SEULE de la fiche contact société.
+//   • route de LECTURE seule : ne décompte JAMAIS, n'écrit JAMAIS, n'appelle
+//     AUCUN tiers (pas de DataForSEO, pas de markEnriched, pas de consumeLead).
+//   • elle sert l'affichage à l'ouverture d'une fiche ; le POST reste le seul
+//     geste PAYANT, celui qui va chercher ce que le référentiel ne connaît pas
+//     encore (maillon DataForSEO / Google My Business).
+//   • le gate quota est volontairement absent : lire ce que le référentiel sait
+//     DÉJÀ ne consomme rien — d'où l'absence de getLeadsConsumed / getLeadLimit.
+// Forme de réponse strictement identique au POST (found + 6 champs), mais SANS
+// le maillon DataForSEO : ce GET ne rend que ce que le référentiel sait déjà, il
+// peut donc rendre MOINS que le POST sur une fiche que GMB aurait complétée.
+app.get('/api/enrich/:siret', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  const siret = String(req.params.siret || '').replace(/\s+/g, '')
+  if (!siret) return res.status(400).json({ error: 'SIRET manquant' })
+
+  try {
+    const user = req.authUser
+    if (!user) return res.status(401).json({ error: 'unauthorized' })
+    // Rempart opt-out RGPD — MÊME code et MÊME corps de réponse que le POST : le
+    // client n'a qu'un seul cas 403 à traiter, GET comme POST.
+    if (await checkBlocklistOne(siret)) {
+      console.log(`[optout] enrich(get) refusé ${siret}`)
+      return res.status(403).json({
+        error: 'opt_out',
+        message: "Cette entreprise n'est pas disponible pour prospection."
+      })
+    }
+
+    const [soc, osm] = await Promise.all([
+      getReferentielContactBySiret(siret),
+      getOsmContactBySiret(siret)
+    ])
+    const s = soc || {}
+    const o = osm || {}
+    // Société prioritaire, OSM en fill-if-empty. Fusion champ par champ, à
+    // l'identique du POST : valeur société si non vide, sinon valeur OSM.
+    const pick = (a, b) => (String(a || '').trim() || String(b || '').trim())
+    const merged = {
+      website: pick(s.website, o.website),
+      societe_email: pick(s.societe_email, o.societe_email),
+      societe_tel: pick(s.societe_tel, o.societe_tel),
+      societe_facebook: pick(s.societe_facebook, o.societe_facebook),
+      societe_instagram: pick(s.societe_instagram, o.societe_instagram),
+      societe_linkedin: pick(s.societe_linkedin, o.societe_linkedin)
+    }
+
+    const found = Object.values(merged).some(v => v)
+    res.json({ found, ...merged })
+  } catch (err) {
+    console.error('[enrich:get]', err.message)
+    if (!res.headersSent) res.status(500).json({ error: 'Enrichissement indisponible' })
+  }
+})
+
 // POST /api/enrich/:siret — restitution des champs contact société depuis DEUX
 // sources : referentiel_societes (amorçage Overpass, PRIORITAIRE) et referentiel_osm
 // (réserve nationale OSM, fill-if-empty). Fusion champ par champ : valeur société si

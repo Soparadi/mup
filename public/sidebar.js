@@ -155,6 +155,21 @@
   // ── Menu déroulant : ouvre vers le haut, ferme au clic outside / Escape ──
   var btn = document.getElementById('sb-user-btn');
   var menu = document.getElementById('sb-user-menu');
+  // Rattaché à <body>, hors du rail. aside#sidebar est position:sticky (et
+  // position:fixed en tiroir mobile) : il crée un CONTEXTE D'EMPILEMENT. Tant
+  // que le menu vivait dedans, son z-index:99999 y restait confiné — le rail a
+  // lui-même z-index:auto — si bien que tout contenu de page du contexte racine
+  // (footer fixe z-index:5, carte Leaflet, grille d'agenda, cartes du dashboard)
+  // passait AU-DESSUS du menu malgré son 99999. position:fixed lui fait échapper
+  // au clip d'overflow du rail, mais pas à cet empilement. Sorti du rail, le menu
+  // n'a plus d'ancêtre à contexte d'empilement et son z-index redevient effectif
+  // au niveau racine — comme #sb-rail-flyout, déjà dans <body> pour la même
+  // raison. Correctif global (un seul fichier), aucune page touchée, sticky non
+  // levé. Les handlers plus bas réfèrent le menu par variable/id : valables après
+  // déplacement. Placé AVANT la création du flyout → le flyout, ajouté après, le
+  // suit dans le DOM ; sans effet, la garde d'exclusion (menu ouvert → pas de
+  // flyout) interdit qu'ils coexistent.
+  if (menu) document.body.appendChild(menu);
   // Menu fixé au viewport, ancré au bouton : il échappe au clip d'overflow du
   // rail (overflow-y:auto rend l'axe horizontal clippant) sans qu'on ait à
   // lever ce clip — donc valable aussi sur les six pages qui le redéclarent

@@ -177,6 +177,57 @@ export async function checkBlocklistOne(siret) {
   return blocked.size > 0
 }
 
+// Lookup batch blocklist par ADRESSE EMAIL — sœur de checkBlocklistBatch pour
+// la clé email_hash. Retourne le Set des emails (valeurs d'origine) opposés.
+// Sert le contrôle par adresse des routes d'enrichissement : une opposition
+// déposée depuis un fournisseur grand public n'a ni siret_hash ni siren_hash
+// (hors résolution domaine du commit 3) — seule son adresse est connue, et
+// c'est justement l'adresse (societe_email) que ces routes révèlent.
+// Normalisation toLowerCase().trim() AVANT hash — IDENTIQUE à l'écriture
+// (insertOptoutRequest : emailNorm = String(email).toLowerCase().trim()), sinon
+// la comparaison raterait silencieusement. FAIL-CLOSED comme sa sœur : toute
+// erreur DB → on bloque TOUT le lot (Set = toutes les entrées valides) + warn.
+export async function checkBlocklistEmailsBatch(emails) {
+  const blocked = new Set()
+  if (!Array.isArray(emails) || emails.length === 0) return blocked
+  const hashToEmail = new Map()
+  for (const e of emails) {
+    if (!e || typeof e !== 'string') continue
+    const clean = e.toLowerCase().trim()
+    if (!clean) continue
+    hashToEmail.set(hashIdentifier(clean), e)
+  }
+  if (hashToEmail.size === 0) return blocked
+  const hashes = [...hashToEmail.keys()]
+  try {
+    const db = await getDb()
+    for (let i = 0; i < hashes.length; i += 100) {
+      const chunk = hashes.slice(i, i + 100)
+      const result = await db.query(
+        'SELECT email_hash FROM optout_blocklist WHERE email_hash IN $hashes',
+        { hashes: chunk }
+      )
+      const rows = result[0] || []
+      for (const row of rows) {
+        const email = hashToEmail.get(row.email_hash)
+        if (email) blocked.add(email)
+      }
+    }
+  } catch (err) {
+    console.warn('[optout] checkBlocklistEmailsBatch fail-closed :', err.message)
+    return new Set(hashToEmail.values())
+  }
+  return blocked
+}
+
+// Lookup unitaire — DRY via checkBlocklistEmailsBatch([email]). true si l'email
+// est opposé. Utilisé au SECOND filtre des routes d'enrichissement (contrôle par
+// adresse), après lecture du référentiel.
+export async function checkBlocklistEmailOne(email) {
+  const blocked = await checkBlocklistEmailsBatch([email])
+  return blocked.size > 0
+}
+
 // ── helpers métier demande opt-out + verify (Phase 6 Étape 8) ──
 
 // Génère un token de vérification magic-link. Calque surreal-adapter.js :

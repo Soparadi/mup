@@ -32,6 +32,7 @@ import {
   runOptoutMigration,
   checkBlocklistBatch,
   checkBlocklistOne,
+  checkBlocklistEmailOne,
   hashIdentifier,
   findPendingRequest,
   insertOptoutRequest,
@@ -3068,6 +3069,24 @@ app.get('/api/enrich/:siret', async (req, res) => {
       societe_linkedin: pick(s.societe_linkedin, o.societe_linkedin)
     }
 
+    // Second filtre opt-out — par ADRESSE. La fiche révèle un societe_email qui
+    // peut être opposé même sans siret_hash/siren_hash : opposition déposée
+    // depuis un fournisseur grand public, qu'aucune résolution domaine (commit 3)
+    // ne relie à une entreprise. merged.societe_email est déjà sous la main
+    // (aucune requête en plus). Réponse STRICTEMENT identique au blocage par
+    // SIRET — l'abonné ignore par quelle clé la fiche est opposée.
+    // LIMITE ASSUMÉE : ce contrôle ne couvre que l'adresse. Un téléphone révélé
+    // sur une fiche dont seule l'adresse est opposée passerait encore, sauf si
+    // le SIREN a pu être résolu au commit 3 — résidu connu, traité par la
+    // reprise manuelle sous un mois annoncée dans l'accusé de réception.
+    if (merged.societe_email && await checkBlocklistEmailOne(merged.societe_email)) {
+      console.log(`[optout] enrich(get) refusé ${siret}`)
+      return res.status(403).json({
+        error: 'opt_out',
+        message: "Cette entreprise n'est pas disponible pour prospection."
+      })
+    }
+
     const found = Object.values(merged).some(v => v)
     res.json({ found, ...merged })
   } catch (err) {
@@ -3142,6 +3161,26 @@ app.post('/api/enrich/:siret', async (req, res) => {
       societe_facebook: pick(s.societe_facebook, o.societe_facebook),
       societe_instagram: pick(s.societe_instagram, o.societe_instagram),
       societe_linkedin: pick(s.societe_linkedin, o.societe_linkedin)
+    }
+
+    // Second filtre opt-out — par ADRESSE (cf. GET). Placé APRÈS la lecture du
+    // référentiel (merged.societe_email sous la main, aucune requête en plus) et
+    // AVANT tout appel payant DataForSEO / toute écriture / tout décompte quota :
+    // un contrôle placé plus tard ferait payer un enrichissement qu'on refuse
+    // ensuite. Capte l'opposition déposée depuis un fournisseur grand public
+    // (ni siret_hash ni siren_hash, hors résolution domaine du commit 3). Réponse
+    // STRICTEMENT identique au blocage par SIRET — même code, même motif, même
+    // journalisation.
+    // LIMITE ASSUMÉE : ce contrôle ne couvre que l'adresse. Un téléphone révélé
+    // sur une fiche dont seule l'adresse est opposée passerait encore, sauf si le
+    // SIREN a pu être résolu au commit 3 — résidu connu, traité par la reprise
+    // manuelle sous un mois annoncée dans l'accusé de réception.
+    if (merged.societe_email && await checkBlocklistEmailOne(merged.societe_email)) {
+      console.log(`[optout] enrich refusé ${siret}`)
+      return res.status(403).json({
+        error: 'opt_out',
+        message: "Cette entreprise n'est pas disponible pour prospection."
+      })
     }
 
     // ── Maillon DataForSEO (Business Info / Google My Business) ──────────────

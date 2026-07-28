@@ -914,6 +914,48 @@ let dragId = null;
 // Source unique de vérité pour les RDV / actions calendrier — table agenda en DB.
 let _agendaForCurrentFiche = [];
 
+// ── Restitution silencieuse à l'ouverture — DOCTRINE (tranchée le 3 juillet) ──
+// Le décompte porte sur l'apport d'un MOYEN DE CONTACT — email ou téléphone —
+// quelle qu'en soit la provenance (référentiel ou tiers). Les afficher
+// gratuitement à l'ouverture contournerait le paywall : ils ne sont donc peints
+// que si le SIRET a DÉJÀ été payé (présent dans enrichedSirets). Le site web et
+// les réseaux sociaux ne sont PAS décomptables et s'affichent librement. Un
+// SIRET déjà payé donne droit à tout : l'abonné ne perd jamais l'accès à ce
+// qu'il a payé — d'où le traitement séparé email/téléphone vs réseaux.
+let enrichedSirets = [];            // SIRET déjà payés par ce user (miroir local)
+let enrichedSiretsReady = null;     // promesse du GET /api/user-plan (une seule fois)
+
+// Miroir client de normalizeSiret (server/config/plan-quotas.js) : 14 chiffres,
+// séparateurs retirés, '' sinon — forme canonique comparable à enrichedSirets.
+function normalizeSiretClient(raw){
+  const digits = String(raw == null ? '' : raw).replace(/\D/g, '');
+  return digits.length === 14 ? digits : '';
+}
+function siretEnrichi(rawSiret){
+  const s = normalizeSiretClient(rawSiret);
+  return !!s && enrichedSirets.includes(s);
+}
+// Miroir client de porteCanalDecomptable : email OU téléphone non vide.
+function porteCanalDecomptableClient(champs){
+  const nonVide = v => typeof v === 'string' && v.trim() !== '';
+  return nonVide(champs && champs.societe_email) || nonVide(champs && champs.societe_tel);
+}
+// Un seul GET /api/user-plan au chargement, mémorisé. enrichedSirets est
+// optionnel (record absent → champ manquant) : repli sur []. Silencieux sur
+// échec → la liste reste vide, email/tél restent fermés (fail closed).
+function loadEnrichedSirets(){
+  if (enrichedSiretsReady) return enrichedSiretsReady;
+  enrichedSiretsReady = (async () => {
+    try {
+      const resp = await fetch('/api/user-plan');
+      if (!resp.ok) return;
+      const plan = await resp.json();
+      if (plan && Array.isArray(plan.enrichedSirets)) enrichedSirets = plan.enrichedSirets;
+    } catch (e) { /* silencieux */ }
+  })();
+  return enrichedSiretsReady;
+}
+
 async function loadAgendaForFiche(ficheId) {
   if (!ficheId) { _agendaForCurrentFiche = []; return; }
   try {
@@ -1359,6 +1401,11 @@ let detailMap = null;
 let detailMarker = null;
 
 async function openDetail(id) {
+  // Ouverture « fraîche » = changement de fiche, pas un simple re-render de la
+  // fiche déjà ouverte (saveNotes, saveRdv, sync agenda…). Seule une ouverture
+  // fraîche déclenche la restitution silencieuse, pour ne pas rappeler
+  // /api/enrich à chaque re-render.
+  const estOuvertureFraiche = String(currentId) !== String(id);
   currentId = id;
   const c = cards.find(x=>String(x.id)===String(id));
   if(!c) return;
@@ -1569,6 +1616,62 @@ async function openDetail(id) {
 
   document.getElementById('detail-overlay').classList.add('open');
   document.getElementById('detail-panel').classList.add('open');
+
+  if(estOuvertureFraiche) autoEnrichOnOpen(c); // restitution silencieuse (lecture seule), sans attendre
+}
+
+// Restitution silencieuse à l'ouverture — cf. doctrine en tête. LECTURE SEULE :
+// GET /api/enrich/:siret ne décompte ni n'écrit. Ne MUTE PAS la carte et
+// N'APPELLE PAS save() : peint uniquement le DOM de la fiche ouverte, en
+// fill-if-empty. Silencieux sur SIRET absent, échec réseau, 403 opt-out ou
+// found:false. Garde de fraîcheur sur currentId : si l'utilisateur a changé de
+// fiche pendant l'appel, on abandonne sans rien peindre.
+// Le site web n'a pas d'emplacement d'affichage sur la fiche détail (seul le
+// modal d'édition le porte) : rien à peindre pour lui ici.
+async function autoEnrichOnOpen(c) {
+  if(!c) return;
+  const openedId = c.id;
+  const siret = String(c.siret||'').replace(/\s+/g,'');
+  if(!siret) return;                  // pas de SIRET → aucun appel
+  await loadEnrichedSirets();          // liste prête avant de statuer sur email/tél
+  let data;
+  try {
+    const resp = await fetch('/api/enrich/' + encodeURIComponent(siret));
+    if(!resp.ok) return;              // 403 opt-out / 402 / 500 → silencieux
+    data = await resp.json();
+  } catch(e) { return; }              // réseau → silencieux
+  if(!data || !data.found) return;    // rien à afficher
+  if(String(currentId) !== String(openedId)) return; // fiche changée → abandon
+  // Réseaux sociaux : non décomptables → peinture libre des inputs + liens.
+  const fillSocialIfEmpty = (inputId, linkId, val) => {
+    if(!val) return;
+    const el = document.getElementById(inputId);
+    if(!el || el.value.trim()) return;
+    el.value = val;
+    const link = document.getElementById(linkId);
+    if(link){ link.href = val; link.style.display = ''; }
+  };
+  fillSocialIfEmpty('d-linkedin', 'd-linkedin-link', data.societe_linkedin);
+  fillSocialIfEmpty('d-facebook', 'd-facebook-link', data.societe_facebook);
+  fillSocialIfEmpty('d-instagram', 'd-instagram-link', data.societe_instagram);
+  // Email + téléphone société : décomptables → repeints seulement si ce SIRET a
+  // déjà été payé. Re-render du bloc société en fill-if-empty (valeur carte
+  // prioritaire, valeur restituée en repli), SANS écrire sur la carte. Sinon on
+  // n'affiche rien : le bouton Enrichir reste le seul chemin.
+  if(siretEnrichi(siret)) {
+    const email = String(c.societe_email||'').trim() || String(data.societe_email||'').trim();
+    const tel = String(c.societe_tel||'').trim() || String(data.societe_tel||'').trim();
+    const emailVal = email
+      ? `<a href="mailto:${esc(email)}">${esc(email)}</a>`
+      : `<span class="info-item-placeholder">Adresse email</span>`;
+    const telVal = tel
+      ? `<a href="tel:${tel.replace(/\s/g,'')}">${esc(tel)}</a>`
+      : `<span class="info-item-placeholder">Numéro de téléphone</span>`;
+    const grid = document.getElementById('d-societe-grid');
+    if(grid) grid.innerHTML =
+      `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val">${emailVal}</div></div>`
+      + `<div class="info-item"><div class="info-item-label">Téléphone société</div><div class="info-item-val">${telVal}</div></div>`;
+  }
 }
 
 function closeDetail() {
@@ -1962,6 +2065,13 @@ async function enrichDetail() {
     fillIfEmpty('societe_email', data.societe_email);
     fillIfEmpty('societe_tel', data.societe_tel);
     // NE PAS toucher c.email ni c.tel : coordonnées du contact, pas de la société.
+    // Ce SIRET vient d'être payé (canal décomptable livré) → l'ajouter au miroir
+    // local, pour que ses email/tél soient repeints sans nouveau geste à la
+    // prochaine ouverture. Même condition que le serveur.
+    if(porteCanalDecomptableClient(data)) {
+      const s = normalizeSiretClient(siret);
+      if(s && !enrichedSirets.includes(s)) enrichedSirets.push(s);
+    }
     if(n > 0) {
       save();
       syncToProspects(c);
@@ -2038,6 +2148,7 @@ function importFromProspects() {
     localStorage.removeItem('mup_pipeline');
     localStorage.setItem('mup_pipeline_v', MOCK_VERSION);
   }
+  loadEnrichedSirets();   // un seul GET /api/user-plan, mémorisé pour la page
   await load();
   migratePipelineFromContacts();
   importFromProspects();

@@ -21,6 +21,8 @@
 
 import { getDb } from '../../lib/surreal.js'
 import { createHash, randomBytes } from 'crypto'
+import { normaliserDomaine } from './rapprochement-osm.js'
+import { DOMAINES_PERSO } from '../../lib/import.js'
 
 // ── migration idempotente ──
 export async function runOptoutMigration() {
@@ -256,6 +258,52 @@ export async function insertOptoutRequest({ email, siret, ip, userAgent }) {
   return { request, token, shortRef }
 }
 
+// Résolution DÉTERMINISTE domaine → SIREN pour l'opposition sans numéro
+// d'établissement (cas nominal RGPD 3, ~6 sur 10). Le domaine de l'adresse
+// professionnelle — la partie après l'arobase — désigne l'entreprise sans
+// interprétation ; on le rapproche du champ website de referentiel_societes.
+// Retourne le SIREN (string 9 chiffres, normalisé comme sirenFromSiret) ou
+// null. RÈGLES :
+//  - fournisseur grand public (DOMAINES_PERSO) → null d'emblée : un gmail /
+//    orange / wanadoo ne désigne aucune entreprise ;
+//  - correspondance EXACTE de domaine uniquement (normaliserDomaine côté JS),
+//    jamais d'approximation sur le nom ni de match partiel. Le pré-filtre DB
+//    string::contains ne fait que borner le transfert (website NON indexé →
+//    full scan, mais événement rare : un clic de vérification) ;
+//  - plusieurs fiches peuvent porter le même domaine (établissements d'une même
+//    entreprise) : SIREN unique → posé ; SIREN divergents → AMBIGU, on
+//    journalise et on ne pose rien plutôt que de choisir au hasard.
+export async function resolveSirenByDomain(email) {
+  const addr = String(email || '').toLowerCase().trim()
+  const at = addr.lastIndexOf('@')
+  if (at < 0 || at === addr.length - 1) return null
+  const domaine = addr.slice(at + 1).trim()
+  if (!domaine || DOMAINES_PERSO.has(domaine)) return null
+
+  const db = await getDb()
+  const rows = (await db.query(
+    'SELECT siren, website FROM referentiel_societes'
+    + " WHERE website IS NOT NONE AND website != ''"
+    + ' AND string::contains(string::lowercase(website), $needle)',
+    { needle: domaine }
+  ))[0] || []
+
+  const sirens = new Set()
+  for (const row of rows) {
+    if (normaliserDomaine(row.website) !== domaine) continue // EXACT seul
+    const siren = sirenFromSiret(String(row.siren || ''))
+    if (siren) sirens.add(siren)
+  }
+  if (sirens.size === 0) return null
+  if (sirens.size > 1) {
+    console.warn(
+      `[optout] résolution domaine AMBIGUË ${domaine} → SIREN divergents (${[...sirens].join(', ')}) : aucune écriture`
+    )
+    return null
+  }
+  return [...sirens][0]
+}
+
 // Consomme un token de vérification : passe la demande en 'verified' puis
 // l'inscrit dans optout_blocklist. Lookup par hash du token. source =
 // 'user_request' (valeur imposée par l'ASSERT du schéma Étape 4 :
@@ -315,6 +363,20 @@ export async function verifyOptoutToken(token) {
   if (!sirenHash && request.siret) {
     const siren = sirenFromSiret(request.siret)
     if (siren) sirenHash = hashIdentifier(siren)
+  }
+  // Cas nominal RGPD 3 : opposition sans numéro d'établissement (ni siret_hash
+  // ni siren_hash). Résolution DÉTERMINISTE du domaine de l'adresse vers le
+  // SIREN via le website du référentiel. FAIL-SAFE ABSOLU : toute erreur laisse
+  // l'opposition enregistrée telle quelle — c'est le droit de la personne, il
+  // ne peut dépendre du succès d'une requête d'agrément. Le contrôle par
+  // adresse (commit 4) prend le relais à défaut de résolution.
+  if (!sirenHash && request.email) {
+    try {
+      const siren = await resolveSirenByDomain(request.email)
+      if (siren) sirenHash = hashIdentifier(siren)
+    } catch (e) {
+      console.warn('[optout] résolution domaine→SIREN échouée (opposition enregistrée) :', e.message)
+    }
   }
   if (sirenHash) {
     blockFields.push('siren_hash = $sirenHash')

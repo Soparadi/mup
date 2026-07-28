@@ -1459,6 +1459,7 @@ async function openDetail(id) {
   document.getElementById('d-societe-grid').innerHTML =
     `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val">${socEmailVal}</div></div>`
     + `<div class="info-item"><div class="info-item-label">Téléphone société</div><div class="info-item-val">${socTelVal}</div></div>`;
+  refreshEnrichButtonState(c.siret); // état terminal du bouton, après le rendu du bloc société
 
   // Socials (editable)
   document.getElementById('d-linkedin').value = c.linkedin||'';
@@ -1671,6 +1672,28 @@ async function autoEnrichOnOpen(c) {
     if(grid) grid.innerHTML =
       `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val">${emailVal}</div></div>`
       + `<div class="info-item"><div class="info-item-label">Téléphone société</div><div class="info-item-val">${telVal}</div></div>`;
+  }
+}
+
+// État terminal du bouton Enrichir. Autorité = enrichedSirets, jamais le
+// remplissage des champs : un abonné qui efface une valeur ne doit pas se voir
+// proposer de repayer. Bouton réutilisé d'une fiche à l'autre → on restaure
+// aussi l'état actif quand le SIRET n'est pas (ou plus) enrichi.
+async function refreshEnrichButtonState(siret){
+  await loadEnrichedSirets();
+  const btn = document.getElementById('d-enrich');
+  if(!btn) return;
+  const s = String(siret||'').replace(/\s+/g,'');
+  if(s && siretEnrichi(s)){
+    btn.disabled = true;
+    btn.style.opacity = '.4';
+    btn.style.cursor = 'not-allowed';
+    btn.textContent = 'Déjà enrichi';
+  } else {
+    btn.disabled = false;
+    btn.style.opacity = '';
+    btn.style.cursor = '';
+    btn.textContent = 'Enrichir';
   }
 }
 
@@ -2081,11 +2104,15 @@ async function enrichDetail() {
     } else {
       toast('Aucune donnée à ajouter');
     }
+    await refreshEnrichButtonState(siret); // bascule en terminal si ce SIRET est désormais enrichi
   } catch(e) {
     // best-effort : pas de toast d'erreur (calque du modèle)
   } finally {
-    btn.disabled = false;
-    btn.textContent = origLabel;
+    // La restauration ne réactive pas un bouton passé en terminal (autorité: enrichedSirets).
+    if(!siretEnrichi(siret)) {
+      btn.disabled = false;
+      btn.textContent = origLabel;
+    }
   }
 }
 

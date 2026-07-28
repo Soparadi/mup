@@ -265,6 +265,34 @@ aside#sidebar .sb-badge {
 }
 
 /* ============================================================================
+   FLYOUT LIBELLÉS AU SURVOL — bande d'icônes 641-1440px
+   ----------------------------------------------------------------------------
+   Injecté dans <body> par sidebar.js, position:fixed piloté en JS depuis le
+   rect de l'item survolé : il échappe au clip overflow-x du rail (même principe
+   que le menu compte). Surimpression stricte, jamais dans le flux : --sidebar-w
+   n'est pas touchée, le contenu ne se décale pas. pointer-events:none pour ne
+   pas capter le curseur. display piloté par JS (none par défaut, block au
+   survol) ; l'affichage ne se déclenche que si bandMq.matches, donc rien hors
+   641-1440px. Les title= natifs subsistent (repli tactile).
+   ============================================================================ */
+#sb-rail-flyout {
+  position: fixed;
+  z-index: 99999;
+  display: none;
+  transform: translateY(-50%);
+  background: var(--text, #1D1D1F);
+  color: #fff;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ============================================================================
    PLACE RÉSERVÉE AU BOUTON DE TIROIR — ≤ 640px
    ----------------------------------------------------------------------------
    Le bouton d'ouverture est fixed en haut à gauche (top:12, hauteur 40) ; sans

@@ -207,6 +207,43 @@
     });
   }
 
+  // ── Révélation des libellés au survol — mode bande (641-1440px) seulement ─
+  // En bande, les items ne montrent qu'une icône (libellé écrasé par
+  // font-size:0). Au survol on affiche le libellé en surimpression À DROITE de
+  // la bande, dans un flyout injecté dans <body>, position:fixed piloté par le
+  // rect de l'item — même principe qu'au menu compte, seul moyen d'échapper au
+  // clip overflow-x du rail. Surimpression STRICTE : --sidebar-w ne bouge pas,
+  // le contenu ne se décale pas. Les title= natifs restent le repli tactile.
+  // Aucun état persistant, aucune classe mémorisée ; le clic reste la nav.
+  var bandMq = window.matchMedia('(min-width: 641px) and (max-width: 1440px)');
+  var flyout = document.createElement('div');
+  flyout.id = 'sb-rail-flyout';
+  flyout.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(flyout);
+
+  function hideFlyout() { flyout.style.display = 'none'; }
+  function showFlyoutFor(item) {
+    if (!bandMq.matches) return;
+    // Menu compte ouvert : il s'ouvre vers le haut depuis le même bord droit ;
+    // un flyout d'item du bas s'y superposerait (même z-index). On s'efface.
+    if (menu && !menu.hidden) return;
+    var label = item.getAttribute('title') || '';
+    if (!label) return;
+    var r = item.getBoundingClientRect();
+    flyout.textContent = label;
+    flyout.style.top = Math.round(r.top + r.height / 2) + 'px';
+    flyout.style.left = Math.round(r.right + 8) + 'px';
+    flyout.style.display = 'block';
+  }
+  el.addEventListener('mouseover', function(e){
+    var item = e.target && e.target.closest ? e.target.closest('a.sb-item') : null;
+    if (item) showFlyoutFor(item); else hideFlyout();
+  });
+  el.addEventListener('mouseleave', hideFlyout);
+  window.addEventListener('scroll', hideFlyout, true);
+  if (bandMq.addEventListener) bandMq.addEventListener('change', hideFlyout);
+  else if (bandMq.addListener) bandMq.addListener(hideFlyout);
+
   // ── Tiroir mobile (≤640px) : bouton d'ouverture + voile injectés ─────────
   // Pas d'ancrage HTML commun aux pages : on injecte nous-mêmes dans <body>.
   // Les éléments restent dans le DOM à toute largeur ; c'est la media query de

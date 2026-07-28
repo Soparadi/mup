@@ -85,9 +85,11 @@ export function hashIdentifier(value) {
 // Lookup batch blocklist par SIRET. Retourne le Set des SIRET (valeurs
 // d'origine) présents dans optout_blocklist. Exploite l'index
 // idx_optout_blocklist_siret_hash via clause IN. Chunk par 100 (limite
-// défensive WebSocket). Fail-open : toute erreur DB → Set vide + log warn
-// (tradeoff acté brief 5b — un bug DB ne doit pas bloquer le scraping,
-// mais doit rester visible dans les logs).
+// défensive WebSocket). Fail-CLOSED : toute erreur DB → on bloque TOUT le
+// lot (Set = toutes les entrées valides) + log warn. Un droit d'opposition
+// ne peut pas dépendre de la santé de la connexion : dans le doute, on
+// s'abstient. Même doctrine que le portillon robots.txt ; à l'échec, on
+// bloque. (Renverse le fail-open initial du brief 5b.)
 export async function checkBlocklistBatch(sirets) {
   const blocked = new Set()
   if (!Array.isArray(sirets) || sirets.length === 0) return blocked
@@ -117,8 +119,8 @@ export async function checkBlocklistBatch(sirets) {
       }
     }
   } catch (e) {
-    console.warn('[optout] checkBlocklistBatch fail-open :', e.message)
-    return new Set()
+    console.warn('[optout] checkBlocklistBatch fail-closed :', e.message)
+    return new Set(hashToSiret.values())
   }
   return blocked
 }

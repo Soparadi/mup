@@ -229,6 +229,14 @@ body{display:flex;min-height:100vh}
 .quick-action.danger{color:var(--red);border-color:rgba(220,38,38,.2)}
 .quick-action.danger:hover{background:rgba(220,38,38,.06);border-color:var(--red)}
 
+/* ── PICKER ÉTAPE PIPELINE ── */
+.pipeline-picker{position:fixed;z-index:120;background:#fff;border:1px solid var(--border);border-radius:var(--radius-xs);box-shadow:0 10px 30px rgba(0,0,0,.14);padding:6px;min-width:200px;display:none}
+.pipeline-picker.open{display:block}
+.pipeline-picker-title{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:6px 8px 5px}
+.pipeline-picker button{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border:none;background:transparent;border-radius:5px;font-family:inherit;font-size:12.5px;color:var(--text);cursor:pointer;text-align:left}
+.pipeline-picker button:hover{background:var(--readonly)}
+.pipeline-picker .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
 /* ── TOAST ── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;font-weight:600;z-index:300;transition:transform .25s cubic-bezier(.34,1.56,.64,1);box-shadow:0 4px 16px rgba(0,0,0,.18);display:flex;align-items:center;gap:8px}
 .toast.show{transform:translateX(-50%) translateY(0)}
@@ -567,6 +575,10 @@ body{display:flex;min-height:100vh}
                   <svg stroke="var(--amber)" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
                   Créer une facture
                 </a>
+                <button class="quick-action" id="qa-pipeline" type="button">
+                  <svg stroke="var(--indigo)" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>
+                  Envoyer au pipeline
+                </button>
                 <button class="quick-action danger" id="qa-delete" type="button">
                   <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                   Supprimer ce contact
@@ -594,6 +606,10 @@ body{display:flex;min-height:100vh}
     </footer>
 
   </main>
+</div>
+
+<div class="pipeline-picker" id="pipeline-picker" role="menu" aria-label="Choisir l'étape du pipeline">
+  <div class="pipeline-picker-title">Envoyer à l'étape</div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1471,6 +1487,139 @@ function toast(msg){
   toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
 }
 
+// ── ENVOYER AU PIPELINE ──
+// Doctrine : un seul objet — le contact. La carte de board partage son id
+// local ; l'envoi réutilise la route de matérialisation existante
+// (POST /api/pipeline avec body.id = id local), le même id sur lequel
+// deleteCard (pipeline.html) supprime les deux tables. L'étape n'est qu'un
+// attribut (col) posé au moment de l'envoi.
+const PIPELINE_COLS = [
+  { id:'prospects', name:'Prospects',   color:'#CC0000' },
+  { id:'linkedin',  name:'LinkedIn',    color:'#0A66C2' },
+  { id:'mailing',   name:'Mailing',     color:'#B84C00' },
+  { id:'phoning',   name:'Phoning',     color:'#4338CA' },
+  { id:'visio',     name:'Visio',       color:'#7C3AED' },
+  { id:'rdv',       name:'RDV',         color:'#0BBCD4' },
+  { id:'devis',     name:'Devis',       color:'#F59E0B' },
+  { id:'nego',      name:'Négociation', color:'#EA580C' },
+  { id:'won',       name:'Gagné',       color:'#1D8348' },
+  { id:'lost',      name:'Disqualifié', color:'#AEAEB2' }
+];
+
+// id local partagé contact <-> carte pipeline (strip d'un éventuel préfixe table).
+function pipelineLocalId(){
+  return String(contactId || '').replace(/^[a-z_]+:/i, '').trim();
+}
+
+// Ce contact est-il déjà matérialisé au board ? Dédup par id local.
+async function contactAlreadyInPipeline(){
+  const lid = pipelineLocalId();
+  if (!lid) return false;
+  try {
+    const resp = await fetch('/api/pipeline');
+    if (!resp.ok) return false;
+    const cards = await resp.json();
+    if (!Array.isArray(cards)) return false;
+    return cards.some(c => {
+      const raw = (c && c.id && typeof c.id === 'object' && c.id.id != null) ? c.id.id : (c && c.id);
+      return String(raw || '').replace(/^pipeline:/, '').replace(/^[a-z_]+:/i, '') === lid;
+    });
+  } catch (_) { return false; }
+}
+
+function buildPipelineCard(col){
+  const c = contact || {};
+  const addr = [c.adresse, c.zip, c.ville].filter(Boolean).join(' ').trim();
+  const now = new Date().toISOString();
+  return {
+    id: pipelineLocalId(),
+    co: c.nom || c.company || c.name || '',
+    forme: c.forme_juridique || '',
+    siren: c.siren || '',
+    siret: String(c.siret || '').replace(/\s+/g, ''),
+    naf: c.code_naf || c.naf || '',
+    sector: c.sector || '',
+    website: c.website || '',
+    val: 0,
+    address: addr || c.address || '',
+    zip: c.zip || '',
+    linkedin: c.societe_linkedin || '',
+    facebook: c.facebook || '',
+    instagram: c.instagram || '',
+    societe_email: c.societe_email || '',
+    societe_tel: c.societe_tel || '',
+    notes: c.note_societe || '',
+    col: col,
+    days: 0,
+    src: 'Fiche contact',
+    source: 'contacts',   // non 'SIRENE' : ni quota ni opt-out (cf. POST /api/pipeline)
+    entity_origine: c.entity_origine || 'mup',
+    contact_id: pipelineLocalId(),
+    created_at: c.created_at || now,
+    updated_at: now
+  };
+}
+
+function closePipelinePicker(){
+  document.getElementById('pipeline-picker').classList.remove('open');
+}
+
+async function sendToPipeline(col){
+  closePipelinePicker();
+  if (!contact || !pipelineLocalId()) { toast('Contact introuvable'); return; }
+  if (await contactAlreadyInPipeline()) { toast('Ce contact est déjà au pipeline'); return; }
+  try {
+    const resp = await fetch('/api/pipeline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildPipelineCard(col))
+    });
+    if (resp.status === 402) return;   // péage : le modal global (trial-expired-modal.js) prend le relais
+    if (!resp.ok) { toast('Envoi impossible'); return; }
+    const c = PIPELINE_COLS.find(x => x.id === col);
+    toast('Envoyé au pipeline — ' + (c ? c.name : col));
+    // Réveille un onglet pipeline ouvert pour qu'il recharge le board.
+    try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch (_) {}
+  } catch (e) {
+    console.error('[contact-societe] sendToPipeline', e);
+    toast('Envoi impossible');
+  }
+}
+
+function wirePipelineSend(){
+  const btn = document.getElementById('qa-pipeline');
+  const picker = document.getElementById('pipeline-picker');
+  if (!btn || !picker) return;
+  PIPELINE_COLS.forEach(col => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.innerHTML = '<span class="dot" style="background:' + col.color + '"></span>' + esc(col.name);
+    b.addEventListener('click', () => sendToPipeline(col.id));
+    picker.appendChild(b);
+  });
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (picker.classList.contains('open')) { closePipelinePicker(); return; }
+    const r = btn.getBoundingClientRect();
+    picker.style.visibility = 'hidden';
+    picker.classList.add('open');
+    let top = r.top - picker.offsetHeight - 6;
+    if (top < 8) top = r.bottom + 6;               // pas la place au-dessus → sous le bouton
+    let left = Math.min(r.left, window.innerWidth - picker.offsetWidth - 8);
+    if (left < 8) left = 8;
+    picker.style.top = top + 'px';
+    picker.style.left = left + 'px';
+    picker.style.visibility = '';
+  });
+  document.addEventListener('click', (e) => {
+    if (!picker.classList.contains('open')) return;
+    if (btn.contains(e.target) || picker.contains(e.target)) return;
+    closePipelinePicker();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePipelinePicker(); });
+}
+
 // ── BOOT ──
 (async function(){
   wireDropdowns();
@@ -1478,6 +1627,7 @@ function toast(msg){
   wireForm();
   wireDelete();
   wirePeople();
+  wirePipelineSend();
   loadEnrichedSirets();   // un seul GET /api/user-plan, mémorisé pour la page
   await loadContact();
 })();

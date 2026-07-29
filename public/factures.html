@@ -894,6 +894,12 @@
       mention_tva: assujetti ? '' : 'TVA non applicable, art. 293 B du CGI'
     };
   }
+  // Arrondi comptable à deux décimales. Appliqué ligne par ligne PUIS au total :
+  // n'arrondir que le total laisserait les décimales tronquées de chaque ligne
+  // s'additionner et diverger d'un centime de la somme des lignes affichées.
+  function round2(n){
+    return Math.round((parseFloat(n) || 0) * 100) / 100;
+  }
   var state = { status:'all', entity:'all', year:'all', currentId:null, clientSiretFilter:null };
 
   // ── GÉOCODAGE BAN ──
@@ -1384,11 +1390,11 @@
     rows.forEach(function(tr){
       var q = parseFloat(tr.querySelector('.ln-qte').value) || 0;
       var p = parseFloat(tr.querySelector('.ln-pu').value) || 0;
-      var t = q * p;
+      var t = round2(q * p);
       tr.querySelector('.ln-total').value = fmtEur(t);
       total += t;
     });
-    document.getElementById('new-total-ht').textContent = fmtEur(total);
+    document.getElementById('new-total-ht').textContent = fmtEur(round2(total));
   }
   document.getElementById('new-add-line').addEventListener('click', function(){ addLineRow(); });
 
@@ -1402,13 +1408,14 @@
       if(!desc) return;
       var q = parseFloat(tr.querySelector('.ln-qte').value) || 0;
       var p = parseFloat(tr.querySelector('.ln-pu').value) || 0;
-      lignes.push({ designation: desc, date: tr.querySelector('.ln-date').value || null, quantite: q, prix_unitaire: p, total: q * p });
+      lignes.push({ designation: desc, date: tr.querySelector('.ln-date').value || null, quantite: q, prix_unitaire: p, total: round2(q * p) });
     });
     if(lignes.length === 0){ alert('Au moins une ligne avec désignation requise'); return; }
-    var totalHt = lignes.reduce(function(s,l){ return s + l.total; }, 0);
+    var totalHt = round2(lignes.reduce(function(s,l){ return s + l.total; }, 0));
     // Régime figé à l'émission depuis le réglage de compte : la facture porte ce
     // qui lui était applicable maintenant, elle ne relira jamais le compte ensuite.
     var regime = regimeFromSettings(accountSettings);
+    var montantTva = regime.tva_applicable ? round2(totalHt * regime.taux_tva / 100) : 0;
     var num = generateNextNumero();
     var nowIso = new Date().toISOString();
     var prefill = document.getElementById('modal-new')._prefill || {};
@@ -1431,8 +1438,8 @@
       total_ht: totalHt,
       tva_applicable: regime.tva_applicable,
       taux_tva: regime.taux_tva,
-      montant_tva: regime.tva_applicable ? (totalHt * regime.taux_tva / 100) : 0,
-      total_ttc: regime.tva_applicable ? (totalHt + totalHt * regime.taux_tva / 100) : totalHt,
+      montant_tva: montantTva,
+      total_ttc: round2(totalHt + montantTva),
       mention_tva: regime.mention_tva,
       paiement_tva_debits: false,
       date_reglement: document.getElementById('new-date-reglement').value || null,
@@ -1515,7 +1522,12 @@
     rows.forEach(function(r){
       if(r.numero && existingNums[r.numero]) return;
       var num = r.numero ? { numero: r.numero, seq: parseInt(String(r.numero).split('-')[0],10)||0 } : generateNextNumero();
-      var qty = parseFloat(r.quantite)||1, pu = parseFloat(r.prix_unitaire)||0, totalHt = parseFloat(r.total_ht)||(qty*pu);
+      var qty = parseFloat(r.quantite)||1, pu = parseFloat(r.prix_unitaire)||0;
+      var totalHt = round2(parseFloat(r.total_ht)||(qty*pu));
+      // Import CSV : facture qu'on émet, aucun taux dans le fichier → régime du
+      // compte, comme la création manuelle (jamais la franchise en dur).
+      var regime = regimeFromSettings(accountSettings);
+      var montantTva = regime.tva_applicable ? round2(totalHt * regime.taux_tva / 100) : 0;
       var nowIso = new Date().toISOString();
       var f = {
         id: 'fac_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
@@ -1526,8 +1538,8 @@
         client: { nom: r.client_nom||'—', adresse: r.client_adresse||'', siret: r.client_siret||'', siren: r.client_siren||'', adresse_livraison:'' },
         nature_operation: r.nature_operation || 'prestation_services',
         lignes: [{ designation: r.designation||'Import CSV', date: r.date_emission||null, quantite: qty, prix_unitaire: pu, total: totalHt }],
-        total_ht: totalHt, tva_applicable:false, taux_tva:0, montant_tva:0, total_ttc: totalHt,
-        mention_tva:'TVA non applicable, art. 293 B du CGI', paiement_tva_debits:false,
+        total_ht: totalHt, tva_applicable: regime.tva_applicable, taux_tva: regime.taux_tva, montant_tva: montantTva, total_ttc: round2(totalHt + montantTva),
+        mention_tva: regime.mention_tva, paiement_tva_debits:false,
         date_reglement: null, statut: r.statut || 'en_attente', date_paiement: null,
         entity_origine: r.entity_origine || 'mup',
         devis_origine_id: null, plateforme_agreee_destinataire:null, format_export:'pdf_simple', pdf_source:null,
@@ -1698,9 +1710,26 @@
       var totalHt = parseFloat(c.total_ht)||0;
       var totalTtc = parseFloat(c.total_ttc)||totalHt;
       if(!totalHt && totalTtc) totalHt = totalTtc; // fallback : pas de HT extrait → TTC seul
-      var taux = parseFloat(c.taux_tva)||0;
-      var tvaApplicable = !!c.tva_applicable;
-      var montantTva = tvaApplicable ? (totalHt * taux / 100) : 0;
+      totalHt = round2(totalHt);
+      // Un PDF importé est une facture émise par un tiers : si le document porte une
+      // info de TVA (taux extrait ou saisi), elle fait foi. Le régime du compte ne
+      // s'applique QU'À DÉFAUT d'extraction.
+      var tvaExtraite = (parseFloat(c.taux_tva_conf)||0) > 0 || (parseFloat(c.taux_tva)||0) > 0;
+      var taux, tvaApplicable, mentionTva;
+      if(tvaExtraite){
+        taux = parseFloat(c.taux_tva)||0;
+        tvaApplicable = !!c.tva_applicable;
+        mentionTva = c.mention_tva || (tvaApplicable ? '' : 'TVA non applicable, art. 293 B du CGI');
+      } else {
+        var regime = regimeFromSettings(accountSettings);
+        taux = regime.taux_tva;
+        tvaApplicable = regime.tva_applicable;
+        mentionTva = regime.mention_tva;
+      }
+      var montantTva = tvaApplicable ? round2(totalHt * taux / 100) : 0;
+      // TTC : le montant extrait du document fait foi ; à défaut d'extraction (régime
+      // du compte appliqué), il se déduit du HT et de la TVA pour rester cohérent.
+      totalTtc = tvaExtraite ? round2(totalTtc) : round2(totalHt + montantTva);
       var nowIso = new Date().toISOString();
       var designation = c.designation && c.designation.trim() ? c.designation.trim() : ('Import PDF — '+ (c.filename||''));
       var f = {
@@ -1713,7 +1742,7 @@
         nature_operation: 'prestation_services',
         lignes: [{ designation: designation, date: c.date_emission||null, quantite: 1, prix_unitaire: totalHt, total: totalHt }],
         total_ht: totalHt, tva_applicable: tvaApplicable, taux_tva: taux, montant_tva: montantTva, total_ttc: totalTtc,
-        mention_tva: c.mention_tva || (tvaApplicable ? '' : 'TVA non applicable, art. 293 B du CGI'),
+        mention_tva: mentionTva,
         paiement_tva_debits: false,
         date_reglement: null, statut: c.statut || 'en_attente', date_paiement: null,
         entity_origine: c.entity_origine || 'mup',

@@ -392,11 +392,18 @@ function statusLabel(s) {
   return map[s] || s;
 }
 
+// Arrondi comptable à deux décimales. Chaque ligne d'abord, puis le total :
+// n'arrondir que le total laisserait les décimales tronquées des lignes
+// s'additionner et diverger d'un centime de la somme des lignes affichées.
+function round2(n){
+  return Math.round((parseFloat(n) || 0) * 100) / 100;
+}
+
 function calcTotals(lines, tva) {
-  const ht = lines.reduce((s,l) => s + (parseFloat(l.qty)||0) * (parseFloat(l.pu)||0), 0);
+  const ht = round2(lines.reduce((s,l) => s + round2((parseFloat(l.qty)||0) * (parseFloat(l.pu)||0)), 0));
   const tvaRate = parseFloat(tva)||0;
-  const tvaAmt = ht * tvaRate / 100;
-  return { ht, tva: tvaAmt, ttc: ht + tvaAmt, rate: tvaRate };
+  const tvaAmt = round2(ht * tvaRate / 100);
+  return { ht, tva: tvaAmt, ttc: round2(ht + tvaAmt), rate: tvaRate };
 }
 
 // ── LISTE ──

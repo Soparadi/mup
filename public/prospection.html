@@ -291,7 +291,15 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 /* ═══════════════════════════════════════════════
    CONTENT AREA — map + results
 ═══════════════════════════════════════════════ */
-.content-area { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+/* flex:1 pour occuper l'espace restant sous le bloc recherche ; min-height =
+   plancher pour que la carte ne se comprime pas sur un petit 15". Mesuré à
+   1512×850 : main = 814px (100vh − 36px de pied), le bloc .search-engine rendu
+   fait 155px + 2×32px de marge = 219px, il reste donc ~595px à .content-area
+   (carte 553px). On plancher à 560px (carte ≈518px = 560 − 42px d'en-tête) :
+   au repos à cette résolution flex:1 donne 595px et le plancher ne mord pas ;
+   sur un viewport plus court le plancher tient et c'est main (overflow-y:auto)
+   qui prend le débordement, la page défile au lieu d'écraser #map. */
+.content-area { display: flex; flex: 1; min-height: 560px; overflow: hidden; }
 
 /* map column */
 .map-col {

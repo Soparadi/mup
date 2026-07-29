@@ -1138,7 +1138,7 @@ function captureFields(){
   c.sector = document.getElementById('f-sector').value.trim();
   c.website = document.getElementById('f-website').value.trim();
   c.societe_email = document.getElementById('f-societe-email').value.trim();
-  c.societe_tel = document.getElementById('f-societe-tel').value.trim();
+  c.societe_tel = window.MUPTel.format(document.getElementById('f-societe-tel').value);
   c.adresse = document.getElementById('f-adresse').value.trim();
   c.zip = document.getElementById('f-zip').value.trim();
   c.ville = document.getElementById('f-ville').value.trim();
@@ -1222,6 +1222,12 @@ function wireForm(){
   // Bouton Enrichir : restitue les champs contact société depuis le référentiel
   // (amorçage Overpass), remplissage-si-vide. Aucun écrasement, aucune sauvegarde
   // auto (poser .value par script ne déclenche pas l'autosave lié à 'input').
+  // Téléphone société : reformatage à la SORTIE du champ (blur), jamais
+  // pendant la frappe — reformater au fil des touches déplacerait le curseur.
+  // La valeur enregistrée reste ce que MUPTel produit (cf. captureFields).
+  const telSoc = document.getElementById('f-societe-tel');
+  if (telSoc) telSoc.addEventListener('blur', () => { telSoc.value = window.MUPTel.format(telSoc.value); });
+
   const enrichBtn = document.getElementById('c-enrich');
   if (enrichBtn) {
     enrichBtn.addEventListener('click', async () => {

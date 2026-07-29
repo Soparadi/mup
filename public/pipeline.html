@@ -1426,7 +1426,7 @@ function saveCard() {
     facebook: document.getElementById('m-facebook').value.trim(),
     instagram: document.getElementById('m-instagram').value.trim(),
     societe_email: document.getElementById('m-societe-email').value.trim(),
-    societe_tel: document.getElementById('m-societe-tel').value.trim(),
+    societe_tel: window.MUPTel.format(document.getElementById('m-societe-tel').value),
     notes: document.getElementById('m-notes').value.trim(),
     col: document.getElementById('m-col').value
   };
@@ -2762,6 +2762,12 @@ function importFromProspects() {
     injectFocusWrap();
     injectNextActionBlock();
     bootstrapFicheEmbed();
+
+    // Téléphone société : reformatage à la SORTIE du champ (blur), jamais
+    // pendant la frappe — reformater au fil des touches déplacerait le
+    // curseur. La valeur enregistrée reste ce que MUPTel produit (cf. saveModal).
+    var telIn = document.getElementById('m-societe-tel');
+    if(telIn) telIn.addEventListener('blur', function(){ this.value = window.MUPTel.format(this.value); });
 
     // Raccourci clavier : F pour toggle focus
     document.addEventListener('keydown', e => {

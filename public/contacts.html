@@ -667,6 +667,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <div class="toast" id="toast"></div>
 
 <script src="/_mup-nom.js"></script>
+<script src="/_mup-tel.js"></script>
 <script>
 // ── STATE ──
 let prospects = [];
@@ -1456,6 +1457,15 @@ dz.addEventListener('drop',e=>{
   handleFiles(e.dataTransfer.files);
 });
 
+// Téléphone : reformatage à la SORTIE du champ (blur), jamais pendant la
+// frappe — reformater au fil des touches déplacerait le curseur et rendrait
+// la saisie pénible. La valeur transmise au serveur reste ce que MUPTel
+// produit (cf. capture dans saveContact).
+(function(){
+  var f = document.getElementById('f-phone');
+  if(f) f.addEventListener('blur', function(){ this.value = window.MUPTel.format(this.value); });
+})();
+
 function newContactId(){ return 'contact_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
 
 // ── CONFIRM IMPORT ──
@@ -1473,7 +1483,7 @@ function confirmImport(){
       nom: company || name,
       contact_nom: name,
       email: document.getElementById('f-email').value.trim(),
-      phone: document.getElementById('f-phone').value.trim(),
+      phone: window.MUPTel.format(document.getElementById('f-phone').value),
       adresse: document.getElementById('f-loc').value.trim(),
       sector: document.getElementById('f-sector').value,
       website: document.getElementById('f-website').value.trim(),

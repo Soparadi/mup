@@ -144,13 +144,56 @@
     if (u.prenom && u.nom) return u.prenom + ' ' + u.nom;
     return u.name || u.prenom || u.nom || (u.email ? u.email.split('@')[0] : '');
   }
-  var u = window.__USER__ || null;
   var avatarEl = document.getElementById('sb-user-avatar');
   var nameEl = document.getElementById('sb-user-name');
   var emailEl = document.getElementById('sb-user-email');
-  if (avatarEl) avatarEl.textContent = userInitials(u);
-  if (nameEl) nameEl.textContent = userDisplayName(u) || '—';
-  if (emailEl) emailEl.textContent = (u && u.email) || '';
+  function fillUser(u) {
+    if (avatarEl) avatarEl.textContent = userInitials(u);
+    if (nameEl) nameEl.textContent = userDisplayName(u) || '—';
+    if (emailEl) emailEl.textContent = (u && u.email) || '';
+  }
+  // Renvoi à la connexion en conservant la destination — même forme que le
+  // handler global auth-401 (/login?redirect=<page courante>). Le flag partagé
+  // window.__AUTH_REDIRECTING__ évite un double renvoi si un fetch parallèle a
+  // déjà déclenché la reconnexion.
+  function goToLogin() {
+    if (window.__AUTH_REDIRECTING__) return;
+    window.__AUTH_REDIRECTING__ = true;
+    var here = window.location.pathname + (window.location.search || '');
+    window.location.href = (!here || here === '/login')
+      ? '/login'
+      : '/login?redirect=' + encodeURIComponent(here);
+  }
+
+  var u = window.__USER__ || null;
+  if (u) {
+    // Cas nominal : payload injecté serveur-side dans le <head>, aucun fetch.
+    fillUser(u);
+  } else {
+    // __USER__ absent = la page a été servie SANS le script d'injection (catch
+    // silencieux du middleware serveur, onglet restauré avec cookie expiré…).
+    // Le « ? » n'est pas un chargement mais un état d'échec : on tente une
+    // réparation via /api/user/me. 401 = session réellement perdue → renvoi à
+    // la connexion. Un échec de transport (réseau, 5xx, parsing) n'est PAS une
+    // session perdue : on ne renvoie pas, on laisse l'avatar vide (jamais « ? »)
+    // et l'abonné continue de travailler sur une page qui fonctionne.
+    // auth-401-handler.js exclut volontairement /api/user/me de sa liste, c'est
+    // donc ici qu'on traite ce 401.
+    fetch('/api/user/me', { credentials: 'same-origin' })
+      .then(function (res) {
+        if (res.status === 401) { goToLogin(); return null; }
+        if (!res.ok) throw new Error('user/me ' + res.status);
+        return res.json();
+      })
+      .then(function (data) { if (data) fillUser(data); })
+      .catch(function (err) {
+        // Échec de transport ≠ session perdue : ne pas renvoyer. Avatar vide
+        // plutôt que « ? », nom neutre, on journalise.
+        if (avatarEl) avatarEl.textContent = '';
+        if (nameEl) nameEl.textContent = '—';
+        console.warn('[sidebar] /api/user/me indisponible', err);
+      });
+  }
 
   // ── Menu déroulant : ouvre vers le haut, ferme au clic outside / Escape ──
   var btn = document.getElementById('sb-user-btn');

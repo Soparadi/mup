@@ -1202,6 +1202,12 @@ function wireForm(){
       enrichBtn.textContent = 'Enrichissement…';
       try {
         const resp = await fetch('/api/enrich/' + encodeURIComponent(siret), { method: 'POST' });
+        if (resp.status === 403) { // opt-out RGPD : le serveur porte le message, l'abonné doit le voir (calque pipeline)
+          let msg = "Cette entreprise n'est pas disponible pour prospection.";
+          try { const b = await resp.json(); if (b && b.message) msg = b.message; } catch (_) {}
+          toast(msg);
+          return; // aucun compteur ne bouge ; le finally rend le bouton à son état normal
+        }
         if (!resp.ok) return;
         const data = await resp.json();
         if (!data || !data.found) return; // found:false → aucun changement visible

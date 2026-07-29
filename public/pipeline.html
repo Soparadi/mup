@@ -849,6 +849,7 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
 </div>
 
 <script src="/_mup-nom.js"></script>
+<script src="/_mup-tel.js"></script>
 <script>
 
 const STAGES = [
@@ -1515,7 +1516,7 @@ async function openDetail(id) {
   // Info grid
   let infoHtml = '';
   if(c.email) infoHtml += `<div class="info-item"><div class="info-item-label">Email</div><div class="info-item-val"><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div></div>`;
-  if(c.tel) infoHtml += `<div class="info-item"><div class="info-item-label">Téléphone</div><div class="info-item-val"><a href="tel:${c.tel.replace(/\s/g,'')}">${esc(c.tel)}</a></div></div>`;
+  if(c.tel) infoHtml += `<div class="info-item"><div class="info-item-label">Téléphone</div><div class="info-item-val"><a href="tel:${window.MUPTel.lien(c.tel)}">${esc(window.MUPTel.format(c.tel))}</a></div></div>`;
   if(c.address) infoHtml += `<div class="info-item"><div class="info-item-label">Localisation</div><div class="info-item-val">${esc(c.address)}</div></div>`;
   const editIco = '<svg class="info-item-edit-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   const valDisplay = c.val
@@ -1536,7 +1537,7 @@ async function openDetail(id) {
     ? `<a href="mailto:${esc(c.societe_email)}">${esc(c.societe_email)}</a>`
     : `<span class="info-item-placeholder">Adresse email</span>`;
   const socTelVal = c.societe_tel
-    ? `<a href="tel:${c.societe_tel.replace(/\s/g,'')}">${esc(c.societe_tel)}</a>`
+    ? `<a href="tel:${window.MUPTel.lien(c.societe_tel)}">${esc(window.MUPTel.format(c.societe_tel))}</a>`
     : `<span class="info-item-placeholder">Numéro de téléphone</span>`;
   document.getElementById('d-societe-grid').innerHTML =
     `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val">${socEmailVal}</div></div>`
@@ -1748,7 +1749,7 @@ async function autoEnrichOnOpen(c) {
       ? `<a href="mailto:${esc(email)}">${esc(email)}</a>`
       : `<span class="info-item-placeholder">Adresse email</span>`;
     const telVal = tel
-      ? `<a href="tel:${tel.replace(/\s/g,'')}">${esc(tel)}</a>`
+      ? `<a href="tel:${window.MUPTel.lien(tel)}">${esc(window.MUPTel.format(tel))}</a>`
       : `<span class="info-item-placeholder">Numéro de téléphone</span>`;
     const grid = document.getElementById('d-societe-grid');
     if(grid) grid.innerHTML =

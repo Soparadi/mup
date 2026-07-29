@@ -1639,6 +1639,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 
 <!-- Composant fiche unifiée (sprint fiche unifiée — Phase 1) -->
 <script src="/_mup-nom.js"></script>
+<script src="/_mup-tel.js"></script>
 <script src="/_mup-card.js"></script>
 <script>
 'use strict';
@@ -3500,7 +3501,10 @@ function exportCSV() {
   var rows = S.buffer.map(function(l) {
     return [
       l.name, l.sector, l.siren, l.siret, l.forme||'', l.capital||'',
-      l.director||'', l.address, l.phone||'', l.website||'', l.email||'',
+      // Numéro espacé en CSV : les espaces forcent le tableur à traiter la
+      // cellule comme du texte (le 0 de tête est préservé, pas transformé en
+      // nombre) et nos imports retirent les séparateurs -> réimport sûr.
+      l.director||'', l.address, l.phone?window.MUPTel.format(l.phone):'', l.website||'', l.email||'',
       l.socials&&l.socials.indexOf('facebook')>=0?'Oui':'Non',
       l.socials&&l.socials.indexOf('instagram')>=0?'Oui':'Non',
       l.socials&&l.socials.indexOf('linkedin')>=0?'Oui':'Non',

@@ -616,6 +616,7 @@ body{display:flex;min-height:100vh}
 
 <script src="/js/person-fields.js"></script>
 <script src="/_mup-nom.js"></script>
+<script src="/_mup-tel.js"></script>
 <script>
 // ── STATE ──
 let contactId = null;
@@ -1104,7 +1105,7 @@ function wireActions(){
       const ini = initials(nom);
       const role = p.poste || '';
       let val = '', href = '#';
-      if (kind === 'call') { val = p.phone || ''; href = p.phone ? 'tel:' + p.phone.replace(/\s/g,'') : '#'; }
+      if (kind === 'call') { val = p.phone ? window.MUPTel.format(p.phone) : ''; href = p.phone ? 'tel:' + window.MUPTel.lien(p.phone) : '#'; }
       if (kind === 'mail') { val = p.email || ''; href = p.email ? 'mailto:' + p.email : '#'; }
       if (kind === 'rdv')  { val = ''; href = '/agenda?contact=' + id; }
       return '<a href="' + href + '" class="dropdown-item">'

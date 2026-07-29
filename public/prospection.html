@@ -292,15 +292,22 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 /* ═══════════════════════════════════════════════
    CONTENT AREA — map + results
 ═══════════════════════════════════════════════ */
-/* flex:1 pour occuper l'espace restant sous le bloc recherche ; min-height =
-   plancher pour que la carte ne se comprime pas sur un petit 15". Mesuré à
-   1512×850 : main = 814px (100vh − 36px de pied), le bloc .search-engine rendu
-   fait 155px + 2×32px de marge = 219px, il reste donc ~595px à .content-area
-   (carte 553px). On plancher à 560px (carte ≈518px = 560 − 42px d'en-tête) :
-   au repos à cette résolution flex:1 donne 595px et le plancher ne mord pas ;
-   sur un viewport plus court le plancher tient et c'est main (overflow-y:auto)
-   qui prend le débordement, la page défile au lieu d'écraser #map. */
-.content-area { display: flex; flex: 1; min-height: 560px; overflow: hidden; }
+/* flex:1 pour occuper l'espace restant sous le bloc recherche ; le plancher
+   empêche #map de se comprimer sur un écran court. Un plancher en pixels fixes
+   ne peut pas convenir : à 640 de haut la place n'existe pas. On l'exprime donc
+   relatif à la hauteur de l'écran.
+
+   Budget de hauteur mesuré à 1280×640 (machine de référence) :
+     640 − 36 (pied fixe)                                  = 604 (main)
+     604 − 239 (bloc recherche, deux rangées car 1280<1330) = 365 dispo
+   Le plancher ne doit JAMAIS dépasser ces 365px, sinon main déborde et la carte
+   est coupée. calc(100vh − 285px) borne au budget : 285 = 36 (pied) + 239 (bloc)
+   + 10 de garde. Il donne 355px à 640 (10px sous le plafond de 365, la carte
+   n'est pas coupée), 565px à 850, 795px à 1080 — généreux sur grand écran. Le
+   plancher ne mord que si le bloc recherche dépasse ~264px (fenêtre vraiment
+   courte) : main (overflow-y:auto) prend alors le débordement, #map garde sa
+   hauteur au lieu d'être écrasée. */
+.content-area { display: flex; flex: 1; min-height: calc(100vh - 285px); overflow: hidden; }
 
 /* map column */
 .map-col {
@@ -308,14 +315,17 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
   display: flex; flex-direction: column;
   border-right: 1px solid var(--border); overflow: hidden; isolation: isolate;
 }
-.map-hdr {
-  /* Bande d'en-tête régulière : même hauteur + padding que .res-context
-     (colonne fiches) → barre du haut continue, textes centrés alignés. */
-  padding: 0 20px; min-height: 42px; border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--card); flex-shrink: 0;
+/* Le bandeau de titre « Carte de prospection » (~40px) a disparu du flux :
+   décoration sur un écran de travail. Le repère passe en surimpression dans la
+   carte (coin haut-gauche), il ne consomme plus de hauteur — c'est ce que le
+   budget 640 récupère. */
+.map-repere {
+  position: absolute; top: 12px; left: 12px; z-index: 1000;
+  font-size: 11px; font-weight: 700; letter-spacing: .3px; color: var(--text);
+  background: rgba(255,255,255,.9); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px 12px; pointer-events: none;
+  box-shadow: 0 2px 12px rgba(0,0,0,.08);
 }
-.map-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
 #map { flex: 1; height: 100%; min-height: 0; }
 /* ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite de la carte ── */
 .kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0}
@@ -362,8 +372,8 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 
 /* context banner */
 .res-context {
-  /* Même hauteur de bande + padding vertical que .map-hdr (colonne carte)
-     → en-tête régulier des deux côtés, textes sur la même ligne (center). */
+  /* Bande de contexte de la colonne fiches : elle rappelle la recherche en
+     cours (fonctionnelle, contrairement à l'ancien bandeau carte retiré). */
   padding: 0 20px; min-height: 42px; background: var(--surface);
   border-bottom: 1px solid var(--border);
   font-size: 11px; color: var(--muted);
@@ -685,12 +695,9 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 
     <!-- carte -->
     <div class="map-col">
-      <div class="map-hdr">
-        <div>
-          <div class="map-title">Carte de prospection</div>
-        </div>
-      </div>
       <div id="map" style="position:relative">
+        <!-- repère en surimpression (remplace l'ancien bandeau de titre) -->
+        <div class="map-repere">Carte de prospection</div>
         <!-- ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite ── -->
         <div class="kpi-group" id="prospection-kpis" aria-label="Indicateurs de prospection">
           <div class="kpi-chip">

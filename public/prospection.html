@@ -354,17 +354,10 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
   display: flex; flex-direction: column;
   border-right: 1px solid var(--border); overflow: hidden; isolation: isolate;
 }
-/* Le bandeau de titre « Carte de prospection » (~40px) a disparu du flux :
-   décoration sur un écran de travail. Le repère passe en surimpression dans la
-   carte (coin haut-gauche), il ne consomme plus de hauteur — c'est ce que le
-   budget 640 récupère. */
-.map-repere {
-  position: absolute; top: 12px; left: 12px; z-index: 1000;
-  font-size: 11px; font-weight: 700; letter-spacing: .3px; color: var(--text);
-  background: rgba(255,255,255,.9); border: 1px solid var(--border);
-  border-radius: 10px; padding: 6px 12px; pointer-events: none;
-  box-shadow: 0 2px 12px rgba(0,0,0,.08);
-}
+/* Le bandeau de titre « Carte de prospection » a disparu du flux : titre
+   décoratif sur un écran de travail qui dit déjà de quoi il s'agit. Le repère
+   en surimpression a été retiré à son tour — coin haut-gauche occupé par le
+   contrôle de zoom Leaflet, haut-droite par les indicateurs. */
 #map { flex: 1; height: 100%; min-height: 0; }
 /* ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite de la carte ── */
 .kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0}
@@ -746,8 +739,6 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
     <!-- carte -->
     <div class="map-col">
       <div id="map" style="position:relative">
-        <!-- repère en surimpression (remplace l'ancien bandeau de titre) -->
-        <div class="map-repere">Carte de prospection</div>
         <!-- ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite ── -->
         <div class="kpi-group" id="prospection-kpis" aria-label="Indicateurs de prospection">
           <div class="kpi-chip">
@@ -3309,11 +3300,15 @@ function collapseSearch(mode) {
       }).join('')
     : '<span class="ss-empty">Recherche en cours…</span>';
   se.classList.add('collapsed');
+  // Le conteneur #map a grandi : Leaflet doit remesurer après le reflow
+  // (patron de carte.html — appel différé, jamais pendant une transition).
+  setTimeout(function(){ map.invalidateSize(); }, 300);
 }
 // Rouvre le bloc complet (toutes les valeurs saisies sont intactes).
 function expandSearch() {
   var se = document.querySelector('.search-engine');
   if (se) se.classList.remove('collapsed');
+  setTimeout(function(){ map.invalidateSize(); }, 300);
 }
 
 function onRegionChange() {

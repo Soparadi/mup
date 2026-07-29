@@ -12,6 +12,7 @@ import nodemailer from 'nodemailer'
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { getDb } from './lib/surreal.js'
+import { startWatchdog } from './lib/watchdog.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
@@ -5673,6 +5674,10 @@ process.on('unhandledRejection', (reason) => {
 })
 
 const server = app.listen(process.env.PORT || 3000, () => console.log('✓ mup running'))
+
+// Sonde active SurrealDB : abat le process après 10 échecs consécutifs pour
+// déclencher la relance Railway (voir lib/watchdog.js).
+startWatchdog(getDb)
 
 // app.listen échoue en asynchrone (port occupé, EACCES…) : sans ce handler,
 // l'erreur remonte en unhandled et le boot part en vrille silencieuse.

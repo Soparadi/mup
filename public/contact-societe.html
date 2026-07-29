@@ -61,6 +61,7 @@ body{display:flex;min-height:100vh}
 .fiche-breadcrumb a{color:var(--muted-dark);text-decoration:none}
 .fiche-breadcrumb a:hover{color:var(--text-on-dark)}
 .fiche-name{font-size:32px;font-weight:700;letter-spacing:-.02em;line-height:1.1;margin-bottom:6px}
+.fiche-sub{font-size:15px;font-weight:500;color:var(--muted-dark);margin-top:-2px;margin-bottom:6px}
 .fiche-meta-line{display:flex;align-items:center;gap:16px;margin-top:12px;flex-wrap:wrap}
 .fiche-meta-item{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted-dark)}
 .fiche-meta-item svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.75;fill:none}
@@ -268,6 +269,7 @@ body{display:flex;min-height:100vh}
             <a href="/contacts">Contacts</a> &nbsp;/&nbsp; <span id="bc-name">—</span>
           </div>
           <h1 class="fiche-name" id="fiche-name">Chargement…</h1>
+          <div class="fiche-sub" id="fiche-sub" style="display:none"></div>
           <div class="fiche-meta-line">
             <label class="etape-select" id="etape-container" data-etape="prospect">
               <span class="etape-label">Étape</span>
@@ -597,6 +599,7 @@ body{display:flex;min-height:100vh}
 <div class="toast" id="toast"></div>
 
 <script src="/js/person-fields.js"></script>
+<script src="/_mup-nom.js"></script>
 <script>
 // ── STATE ──
 let contactId = null;
@@ -839,12 +842,22 @@ async function refreshEnrichButtonState(){
 
 function populate(){
   const c = contact;
-  const nom = c.nom || c.company || c.name || '—';
+  // Titre = enseigne si présente, sinon nom juridique (module partagé). Le nom
+  // juridique s'affiche en sous-titre quand il diffère du titre.
+  const _nom = window.MUPNom
+    ? window.MUPNom.compose({ enseigne: c.enseigne, nomJuridique: c.nom || c.company || c.name })
+    : { titre: c.nom || c.company || c.name || '', sousTitre: '' };
+  const nom = _nom.titre || '—';
 
   // Title navigateur + breadcrumb + nom header
   document.title = nom + ' — Contacts — MovUP';
   document.getElementById('bc-name').textContent = nom;
   document.getElementById('fiche-name').textContent = nom;
+  const subEl = document.getElementById('fiche-sub');
+  if (subEl) {
+    subEl.textContent = _nom.sousTitre;
+    subEl.style.display = _nom.sousTitre ? '' : 'none';
+  }
 
   // Meta line : forme juridique (depuis siren format ?), ville, suivi depuis N jours
   if (c.forme_juridique) {

@@ -666,6 +666,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="/_mup-nom.js"></script>
 <script>
 // ── STATE ──
 let prospects = [];
@@ -1096,10 +1097,16 @@ function renderTable(){
 
   tbody.innerHTML = slice.map(p => {
     const id = esc(String(p.id));
-    const nom = esc(p.nom || '—');
+    // Titre = enseigne si présente, sinon nom juridique (module partagé).
+    // Le nom juridique retombe en 2e rang (méta) quand il diffère du titre.
+    const composed = window.MUPNom
+      ? window.MUPNom.compose({ enseigne: p.enseigne, nomJuridique: p.nom })
+      : { titre: p.nom || '', sousTitre: '' };
+    const nom = esc(composed.titre || '—');
     const ville = esc(p.adresse || '');
     const nbPers = p._nbPers || 1;
     const subParts = [];
+    if(composed.sousTitre) subParts.push(composed.sousTitre);
     if(ville) subParts.push(ville);
     subParts.push(nbPers + ' personne' + (nbPers>1?'s':''));
     const meta = subParts.join(' · ');

@@ -315,7 +315,16 @@ app.get('/api/health', async (req, res) => {
   }
   try {
     const db = await getDb()
-    await db.query('INFO FOR DB;')
+    // Timeout dur : sans borne, la requête peut pendre indéfiniment sur une
+    // socket morte et /api/health ne rend jamais. Railway n'appelle le
+    // healthcheck qu'au déploiement, mais un curl externe qui pend masque un
+    // process HS ; 5 s => même branche 503 que l'échec.
+    let to
+    await Promise.race([
+      db.query('INFO FOR DB;'),
+      new Promise((_, rej) => { to = setTimeout(() => rej(new Error('health query timeout')), 5000) })
+    ])
+    clearTimeout(to)
     status.surreal = 'ok'
     status.surreal_namespace = process.env.SURREAL_NAMESPACE
     status.surreal_database = process.env.SURREAL_DATABASE

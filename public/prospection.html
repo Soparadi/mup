@@ -1581,6 +1581,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 </div>
 
 <!-- Composant fiche unifiée (sprint fiche unifiée — Phase 1) -->
+<script src="/_mup-nom.js"></script>
 <script src="/_mup-card.js"></script>
 <script>
 'use strict';
@@ -2441,8 +2442,10 @@ function addMarker(lead) {
     siret: lead.siret,
     id: lead.id,
     nafLabel: lead.nafLabel || lead.sector || '',
-    title: lead.director || lead.name || '',
-    subtitle: lead.raison_sociale || lead.name || '',
+    // Ligne d'entreprise en titre (composée par MUPNom), dirigeant en sous-titre.
+    enseigne: lead.enseigne || '',
+    company: lead.raison_sociale || lead.name || '',
+    subtitle: lead.director || '',
     address: lead.address || ''
   }, { state: 'lead', popup: true }) : '<div>'+esc(lead.name)+'</div>';
 
@@ -2559,14 +2562,16 @@ function createCard(lead, idx) {
   wrap.style.animationDelay = Math.min(idx, 8) * 0.05 + 's';
   wrap.style.animation = 'fadeUp .3s ease both';
   // Sprint fiche unifiée : MUPCard format minimaliste partagé /prospection + popup
-  // carte (et /pipeline en sprint séparé). Format : badge secteur + nom
-  // dirigeant + raison sociale + adresse + bouton "Ajouter".
+  // carte (et /pipeline en sprint séparé). Format : badge secteur + ligne
+  // d'entreprise (titre) + dirigeant (sous-titre) + adresse + bouton "Ajouter".
   wrap.innerHTML = window.MUPCard ? window.MUPCard.render({
     siret: lead.siret,
     id: lead.id,
     nafLabel: lead.nafLabel || lead.sector || '',
-    title: lead.director || lead.name || '',
-    subtitle: lead.raison_sociale || lead.name || '',
+    // Ligne d'entreprise en titre (composée par MUPNom), dirigeant en sous-titre.
+    enseigne: lead.enseigne || '',
+    company: lead.raison_sociale || lead.name || '',
+    subtitle: lead.director || '',
     address: lead.address || ''
   }, { state: 'lead' }) : '';
   return wrap;

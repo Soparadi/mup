@@ -82,7 +82,13 @@
       html += '<div class="mup-card-tag">' + _esc(String(data.nafLabel).toUpperCase()) + '</div>';
     }
 
+    // Titre = ligne d'entreprise composée (enseigne sinon nom juridique) via le
+    // module partagé MUPNom dès que les champs société sont fournis ; repli sur
+    // data.title / data.name pour rétrocompat. Mise en majuscule conservée.
     var title = data.title || data.name || '';
+    if (window.MUPNom && (data.enseigne || data.company)) {
+      title = window.MUPNom.compose({ enseigne: data.enseigne, nomJuridique: data.company }).titre || title;
+    }
     if (title) {
       html += '<div class="mup-card-title">' + _esc(String(title).toUpperCase()) + '</div>';
     }

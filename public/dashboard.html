@@ -801,6 +801,12 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
 
 <script>
 (async () => {
+  // État d'échec discret, sur le patron de « Météo indisponible » : un seul
+  // libellé muet à la place du ruban, jamais laissé figé sur « Chargement… ».
+  const failNews = () => {
+    const t = document.getElementById('news-track');
+    if (t) t.innerHTML = '<span style="font-size:11px;color:var(--muted);">Actualités indisponibles</span>';
+  };
   try {
     const rss_url = encodeURIComponent('https://www.lemonde.fr/rss/une.xml');
     const res = await fetch(`https://api.allorigins.win/get?url=${rss_url}`);
@@ -846,8 +852,12 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
         requestAnimationFrame(scrollLoop);
       }
       requestAnimationFrame(scrollLoop);
+    } else {
+      // Pas d'exception mais aucune manchette exploitable : sans ce repli le bloc
+      // resterait sur « Chargement… », le catch n'étant jamais franchi.
+      failNews();
     }
-  } catch(e) { console.log('news error', e); }
+  } catch(e) { console.log('news error', e); failNews(); }
 })();
 </script>
 
@@ -879,6 +889,9 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
     setInterval(updateClock, 1000);
   } catch(e) {
     document.getElementById('weather-city').textContent = 'Météo indisponible';
+    // En échec, ne pas laisser le « —° » de chargement ni une icône orpheline.
+    document.getElementById('weather-temp').textContent = '';
+    document.getElementById('weather-icon').innerHTML = '';
   }
 })();
 </script>

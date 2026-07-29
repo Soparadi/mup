@@ -4815,7 +4815,8 @@ app.post('/api/v2/mail/send', async (req, res) => {
 
 // ── OAuth Google (Track 1 — boîte personnelle Gmail) ──
 
-import('./lib/oauth-google.js').then(() => {})  // pre-warm import (no-op)
+import('./lib/oauth-google.js')  // pre-warm import (no-op)
+  .catch((err) => console.error('[oauth-google] pre-warm import échoué:', err?.message))
 
 // SEC 1 — dérive l'ownerId de la session vérifiée (cookie mup_session) et non
 // de requireUserId (spoofable via header/query/body). Fail-closed : 401 si pas

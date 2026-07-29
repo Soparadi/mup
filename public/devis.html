@@ -301,7 +301,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
         <!-- Totaux -->
         <div class="total-box" id="totals-box">
           <div class="total-line"><span>Sous-total HT</span><span id="t-ht">0,00 €</span></div>
-          <div class="total-line"><span id="t-tva-label">TVA (20%)</span><span id="t-tva">0,00 €</span></div>
+          <div class="total-line"><span id="t-tva-label">TVA</span><span id="t-tva">0,00 €</span></div>
           <div class="total-line final"><span>Total TTC</span><span id="t-ttc">0,00 €</span></div>
         </div>
       </div>
@@ -686,7 +686,7 @@ function showToast(msg) {
   renderList();
   // Sélectionner le premier par défaut
   if(docs.length) selectDoc(docs[0].id);
-  else document.getElementById('e-tva').value = accountDefaultTva;
+  else { document.getElementById('e-tva').value = accountDefaultTva; updateTotals(); }
   // Date par défaut
   document.getElementById('e-date').value = new Date().toISOString().split('T')[0];
 })();

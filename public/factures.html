@@ -311,8 +311,23 @@
           <tbody id="new-lignes-body"></tbody>
         </table>
         <button type="button" class="btn-add-line" id="new-add-line">+ Ajouter une ligne</button>
-        <div style="margin-top:10px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:800;">Total HT : <span id="new-total-ht">0,00 €</span></div>
-        <div style="margin-top:8px;font-size:11px;color:var(--muted);font-style:italic;">TVA non applicable, art. 293 B du CGI</div>
+        <div class="field-row" style="margin-top:12px;">
+          <div class="field">
+            <label>TVA</label>
+            <select id="new-tva">
+              <option value="0">Non assujetti — TVA non applicable</option>
+              <option value="5.5">5,5% — Taux réduit</option>
+              <option value="10">10% — Taux intermédiaire</option>
+              <option value="20">20% — Taux normal</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:10px;text-align:right;font-family:var(--mono);font-size:13px;">
+          <div>Total HT : <span id="new-total-ht" style="font-weight:800;">0,00 €</span></div>
+          <div id="new-tva-line" style="margin-top:4px;display:none;"><span id="new-tva-label">TVA</span> : <span id="new-total-tva" style="font-weight:800;">0,00 €</span></div>
+          <div id="new-ttc-line" style="margin-top:4px;font-weight:800;display:none;">Total à payer : <span id="new-total-ttc">0,00 €</span></div>
+        </div>
+        <div id="new-tva-mention" style="margin-top:8px;font-size:11px;color:var(--muted);font-style:italic;">TVA non applicable, art. 293 B du CGI</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1365,6 +1380,9 @@
     document.getElementById('new-livraison-diff').checked = false;
     document.getElementById('new-livraison-wrap').style.display = 'none';
     document.getElementById('new-nature').value = 'prestation_services';
+    // TVA initialisée au régime du compte : 0 si franchise, taux par défaut si assujetti.
+    // Le choix reste modifiable et pilotera les totaux comme le figera à l'émission.
+    document.getElementById('new-tva').value = String(regimeFromSettings(accountSettings).taux_tva);
     // Sélecteur d'entité : peuplé depuis `entites` s'il existe, masqué sinon —
     // un abonné mono-société n'a rien à choisir.
     var entField = document.getElementById('new-entity-field');
@@ -1434,9 +1452,30 @@
       tr.querySelector('.ln-total').value = fmtEur(t);
       total += t;
     });
-    document.getElementById('new-total-ht').textContent = fmtEur(round2(total));
+    var ht = round2(total);
+    document.getElementById('new-total-ht').textContent = fmtEur(ht);
+    // Le sélecteur porte toujours une valeur (0 = franchise) → pas de fallback masquant.
+    var taux = parseFloat(document.getElementById('new-tva').value) || 0;
+    var tvaLine = document.getElementById('new-tva-line');
+    var ttcLine = document.getElementById('new-ttc-line');
+    var mention = document.getElementById('new-tva-mention');
+    if(taux === 0){
+      // Franchise : ni ligne de TVA ni TTC (à payer = HT), on affiche la mention.
+      tvaLine.style.display = 'none';
+      ttcLine.style.display = 'none';
+      mention.style.display = '';
+    } else {
+      var montantTva = round2(ht * taux / 100);
+      document.getElementById('new-tva-label').textContent = 'TVA (' + taux + '%)';
+      document.getElementById('new-total-tva').textContent = fmtEur(montantTva);
+      document.getElementById('new-total-ttc').textContent = fmtEur(round2(ht + montantTva));
+      tvaLine.style.display = '';
+      ttcLine.style.display = '';
+      mention.style.display = 'none';
+    }
   }
   document.getElementById('new-add-line').addEventListener('click', function(){ addLineRow(); });
+  document.getElementById('new-tva').addEventListener('change', refreshNewTotal);
 
   document.getElementById('new-save').addEventListener('click', async function(){
     var clientNom = document.getElementById('new-client-nom').value.trim();
@@ -1452,10 +1491,12 @@
     });
     if(lignes.length === 0){ alert('Au moins une ligne avec désignation requise'); return; }
     var totalHt = round2(lignes.reduce(function(s,l){ return s + l.total; }, 0));
-    // Régime figé à l'émission depuis le réglage de compte : la facture porte ce
-    // qui lui était applicable maintenant, elle ne relira jamais le compte ensuite.
-    var regime = regimeFromSettings(accountSettings);
-    var montantTva = regime.tva_applicable ? round2(totalHt * regime.taux_tva / 100) : 0;
+    // Régime figé à l'émission depuis le sélecteur de la fenêtre (initialisé au
+    // réglage de compte) : la facture porte ce taux, elle ne le recalcule jamais.
+    var tauxTva = parseFloat(document.getElementById('new-tva').value) || 0;
+    var tvaApplicable = tauxTva > 0;
+    var montantTva = tvaApplicable ? round2(totalHt * tauxTva / 100) : 0;
+    var mentionTva = tvaApplicable ? '' : 'TVA non applicable, art. 293 B du CGI';
     var num = generateNextNumero();
     var nowIso = new Date().toISOString();
     var prefill = document.getElementById('modal-new')._prefill || {};
@@ -1479,11 +1520,11 @@
       nature_operation: document.getElementById('new-nature').value,
       lignes: lignes,
       total_ht: totalHt,
-      tva_applicable: regime.tva_applicable,
-      taux_tva: regime.taux_tva,
+      tva_applicable: tvaApplicable,
+      taux_tva: tauxTva,
       montant_tva: montantTva,
       total_ttc: round2(totalHt + montantTva),
-      mention_tva: regime.mention_tva,
+      mention_tva: mentionTva,
       paiement_tva_debits: false,
       date_reglement: document.getElementById('new-date-reglement').value || null,
       statut: 'en_attente',

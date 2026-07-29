@@ -237,6 +237,45 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
   animation: spin .7s linear infinite; display: none;
 }
 
+/* ── REPLI DU BLOC RECHERCHE ──────────────────────────────────────
+   Une fois la recherche lancée, les deux rangées de saisie n'ont plus de
+   raison d'occuper la hauteur : le bloc se replie en une ligne de résumé
+   rappelant les critères retenus. Ouvert par défaut (aucune classe .collapsed
+   au chargement) → il l'est aussi à la réouverture de la page. « Modifier »
+   rouvre le bloc complet en un clic, toutes les valeurs intactes : aucune perte
+   de fonction, tout ce qui est saisissable reste atteignable. */
+.search-summary { display: none; }
+.search-engine.collapsed { padding: 12px 20px; }
+.search-engine.collapsed .search-bar,
+.search-engine.collapsed .sfooter { display: none; }
+.search-engine.collapsed .search-summary {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.ss-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 0; }
+.ss-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: 20px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 12px; max-width: 100%;
+}
+.ss-k {
+  font-size: 9px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted2); flex-shrink: 0;
+}
+.ss-v {
+  font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;
+}
+.ss-empty { font-size: 12.5px; color: var(--muted); }
+.ss-edit {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 36px; padding: 0 16px; border-radius: 10px;
+  border: 1px solid var(--border2); background: var(--card); color: var(--text);
+  font-family: var(--font); font-size: 12.5px; font-weight: 700;
+  cursor: pointer; flex-shrink: 0; transition: border-color .15s, background .15s;
+}
+.ss-edit:hover { border-color: var(--text); background: var(--surface); }
+
 /* ═══════════════════════════════════════════════
    STATS BAR
 ═══════════════════════════════════════════════ */
@@ -657,6 +696,17 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 
     <div class="sfooter">
       <div class="shint" id="hint">Tapez un métier ou un code APE, puis choisissez une région</div>
+    </div>
+
+    <!-- ── RÉSUMÉ REPLIÉ : visible seulement quand .search-engine.collapsed ── -->
+    <div class="search-summary" id="search-summary">
+      <div class="ss-chips" id="ss-chips"></div>
+      <button class="ss-edit" type="button" onclick="expandSearch()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M11 2.5l2.5 2.5L6 12.5 3 13l.5-3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+        Modifier la recherche
+      </button>
     </div>
   </div><!-- /search-engine -->
 
@@ -3208,6 +3258,9 @@ function startSearch() {
   }
   if(!btn.classList.contains('active')) return;
   setBtnLoading();
+  // La recherche est lancée : le bloc se replie en résumé, la carte récupère
+  // les deux rangées de saisie. « Modifier la recherche » le rouvre.
+  collapseSearch('metier');
   document.getElementById('exp-bar').classList.remove('show');
   document.getElementById('stats-bar').classList.remove('show');
   loadPage(1);
@@ -3219,6 +3272,48 @@ function startSearch() {
 
 function retryLastPage() {
   if(S.lastFailPage > 0) loadPage(S.lastFailPage);
+}
+
+// ── Repli / réouverture du bloc de recherche ──────────────────────
+// Libellé affiché d'un <select> (option courante, hors placeholder disabled).
+function _selText(id) {
+  var el = document.getElementById(id);
+  if (!el || !el.options || el.selectedIndex < 0) return '';
+  var o = el.options[el.selectedIndex];
+  return (o && !o.disabled) ? o.textContent.trim() : '';
+}
+// Critères retenus, dans l'ordre de saisie, selon le mode qui a lancé la recherche.
+function _summaryChips(mode) {
+  var chips = [];
+  if (mode === 'id') {
+    var raw = String((document.getElementById('inp-id') || {}).value || '').replace(/\s/g, '');
+    if (raw) chips.push(['Identifiant', raw]);
+  } else {
+    if (S.nafLabel)             chips.push(['Secteur', S.nafLabel]);
+    var reg = _selText('sel-region'); if (reg) chips.push(['Région', reg]);
+    var dep = _selText('sel-dept');   if (dep) chips.push(['Département', dep]);
+    var vil = _selText('sel-ville');  if (vil) chips.push(['Ville', vil]);
+  }
+  return chips;
+}
+// Replie le bloc en ligne de résumé. mode : 'metier' (défaut) ou 'id'.
+function collapseSearch(mode) {
+  var se  = document.querySelector('.search-engine');
+  var box = document.getElementById('ss-chips');
+  if (!se || !box) return;
+  var chips = _summaryChips(mode);
+  box.innerHTML = chips.length
+    ? chips.map(function(c){
+        return '<span class="ss-chip"><span class="ss-k">' + esc(c[0]) +
+               '</span><span class="ss-v" title="' + esc(c[1]) + '">' + esc(c[1]) + '</span></span>';
+      }).join('')
+    : '<span class="ss-empty">Recherche en cours…</span>';
+  se.classList.add('collapsed');
+}
+// Rouvre le bloc complet (toutes les valeurs saisies sont intactes).
+function expandSearch() {
+  var se = document.querySelector('.search-engine');
+  if (se) se.classList.remove('collapsed');
 }
 
 function onRegionChange() {
@@ -5550,6 +5645,8 @@ async function searchById() {
 
   var btn = document.getElementById('btn-id');
   btn.disabled = true;   // anti double-clic pendant le fetch (restauré en fin)
+  // Recherche par identifiant lancée : même repli que le mode métier.
+  collapseSearch('id');
   document.getElementById('skel').classList.add('show');
   document.getElementById('empty').classList.remove('show');
   document.getElementById('res-context').classList.remove('show');

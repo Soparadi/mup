@@ -2357,7 +2357,7 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
 
       items.push({
         id: siret || siren || Math.random().toString(36).substr(2,9),
-        name: name, raison_sociale: raisonSociale, naf: nafEtab || naf, nafLabel: etab.libelle_activite_principale || nafLabel || '',
+        name: name, raison_sociale: raisonSociale, enseigne: enseigne, naf: nafEtab || naf, nafLabel: etab.libelle_activite_principale || nafLabel || '',
         sector: etab.libelle_activite_principale || nafLabel || '',
         siren: siren, siret: siret, director: dir.trim(), address: addr,
         lat: etab.latitude ? parseFloat(etab.latitude) : null,
@@ -3255,6 +3255,9 @@ async function addToPipeline(leadId) {
     // raison_sociale = raison sociale (devis/factures), JAMAIS l'enseigne de
     // lead.name. Repli lead.name pour les leads sans le champ (rétrocompat).
     raison_sociale: lead.raison_sociale || lead.name || '',
+    // enseigne = nom commercial seul (siege.liste_enseignes). Persistée à part
+    // pour composer le titre de fiche partout où l'abonné lit une société.
+    enseigne: lead.enseigne || '',
     naf: lead.naf || '',
     naf_libelle: lead.nafLabel || '',
     forme: lead.forme || '',
@@ -5475,7 +5478,7 @@ function _mapIdResult(r) {
   var raisonSociale = r.nom_raison_sociale || r.nom_complet || '';
   return {
     id: siret || siren || String(Math.abs((siren + siret).split('').reduce(function(a, c){ return a + c.charCodeAt(0); }, 0))),
-    name: enseigne || raisonSociale, raison_sociale: raisonSociale,
+    name: enseigne || raisonSociale, raison_sociale: raisonSociale, enseigne: enseigne,
     naf: nafEtab, nafLabel: etab.libelle_activite_principale || '',
     sector: etab.libelle_activite_principale || '',
     siren: siren, siret: siret, director: dir.trim(), address: addr,

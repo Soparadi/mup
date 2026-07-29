@@ -1383,6 +1383,14 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
 
     const now = new Date().toISOString()
     const raison = body.raison_sociale || ''
+    // Enseigne (nom commercial) persistée à part du nom juridique — sert à
+    // composer le titre de fiche côté abonné (module partagé _mup-nom.js).
+    const enseigne = String(body.enseigne || '').trim()
+    // raison_sociale nettoyée : le nom juridique SEUL. Quand le client s'est
+    // rabattu sur nom_complet (nom_raison_sociale absent), la chaîne embarque
+    // l'enseigne entre parenthèses en fin — on la retire pour ne stocker que le
+    // nom juridique. Repli sur la valeur brute si le nettoyage vide tout.
+    const raisonClean = raison.replace(/\s*\([^()]*\)\s*$/, '').trim() || raison
     // Adresse « voie » (numéro + type + libellé) pour le record société et la
     // face société dupliquée ; adresse « complète » (+ CP + ville) pour la carte.
     let adresse = [body.adresse_numero_voie, body.adresse_type_voie, body.adresse_libelle_voie]
@@ -1432,8 +1440,9 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
       params.sid = societeId
       params.sbody = {
         userId,
-        raison_sociale: raison,
-        cle_normalisee: normaliserSociete(raison),
+        raison_sociale: raisonClean,
+        enseigne,
+        cle_normalisee: normaliserSociete(raisonClean),
         siret,
         siren,
         naf: body.naf || '',
@@ -1470,7 +1479,8 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
         params['cid' + di] = genId('c_')
         params['cbody' + di] = normalizePersonFields({
           userId,
-          nom: raison,
+          nom: raisonClean,
+          enseigne,
           contact_nom: contactNom,
           prenom: d.prenom || '',
           nom_personne: d.nom_personne || '',
@@ -1506,9 +1516,10 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
         : ''
       params.pbody = {
         userId,
-        company: raison,
-        co: raison,
-        name: raison,
+        company: raisonClean,
+        co: raisonClean,
+        name: raisonClean,
+        enseigne,
         siren,
         siret,
         sector: body.naf_libelle || '',

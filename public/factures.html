@@ -879,6 +879,21 @@
   // Initialisés vides ; remplis par bootstrap() au DOMContentLoaded équivalent (init block bas du script)
   var factures = [];
   var pipeline = [];
+  // Régime TVA du compte, lu depuis user_settings à l'init. Sert UNIQUEMENT à figer
+  // le régime sur une facture au moment de l'émission ; jamais relu à l'affichage.
+  var accountSettings = {};
+  // Régime figé { tva_applicable, taux_tva, mention_tva } dérivé du réglage de compte.
+  // Standard 20 % si assujetti et aucun taux par défaut stocké (art. 293 B sinon).
+  function regimeFromSettings(s){
+    s = s || {};
+    var assujetti = !!s.tvaAssujetti;
+    var taux = assujetti ? (parseFloat(s.tauxTvaDefaut) || 20) : 0;
+    return {
+      tva_applicable: assujetti,
+      taux_tva: taux,
+      mention_tva: assujetti ? '' : 'TVA non applicable, art. 293 B du CGI'
+    };
+  }
   var state = { status:'all', entity:'all', year:'all', currentId:null, clientSiretFilter:null };
 
   // ── GÉOCODAGE BAN ──
@@ -1225,10 +1240,16 @@
     html += '</tbody></table>';
     html += '<div class="preview-totals">';
     html += '<div class="preview-totals-row"><span>Total HT</span><span style="font-family:var(--mono)">'+fmtEur(totalHt)+'</span></div>';
-    html += '<div class="preview-totals-row"><span>TVA</span><span style="font-family:var(--mono)">'+fmtEur(f.montant_tva||0)+'</span></div>';
+    // Régime figé sur le document : ligne de TVA en assujetti uniquement, mention
+    // « art. 293 B » en franchise uniquement. Jamais de relecture du compte ici.
+    if(f.tva_applicable){
+      html += '<div class="preview-totals-row"><span>TVA'+(f.taux_tva?' ('+f.taux_tva+'%)':'')+'</span><span style="font-family:var(--mono)">'+fmtEur(f.montant_tva||0)+'</span></div>';
+    }
     html += '<div class="preview-totals-row total"><span>Total TTC</span><span style="font-family:var(--mono)">'+fmtEur(f.total_ttc||totalHt)+'</span></div>';
     html += '</div>';
-    html += '<div class="preview-mention">'+esc(f.mention_tva||'TVA non applicable, art. 293 B du CGI')+'</div>';
+    if(!f.tva_applicable){
+      html += '<div class="preview-mention">'+esc(f.mention_tva||'TVA non applicable, art. 293 B du CGI')+'</div>';
+    }
     if(f.paiement_tva_debits) html += '<div class="preview-mention">TVA acquittée d\'après les débits.</div>';
     html += '</div>';
     box.innerHTML = html;
@@ -1385,6 +1406,9 @@
     });
     if(lignes.length === 0){ alert('Au moins une ligne avec désignation requise'); return; }
     var totalHt = lignes.reduce(function(s,l){ return s + l.total; }, 0);
+    // Régime figé à l'émission depuis le réglage de compte : la facture porte ce
+    // qui lui était applicable maintenant, elle ne relira jamais le compte ensuite.
+    var regime = regimeFromSettings(accountSettings);
     var num = generateNextNumero();
     var nowIso = new Date().toISOString();
     var prefill = document.getElementById('modal-new')._prefill || {};
@@ -1405,11 +1429,11 @@
       nature_operation: document.getElementById('new-nature').value,
       lignes: lignes,
       total_ht: totalHt,
-      tva_applicable: false,
-      taux_tva: 0,
-      montant_tva: 0,
-      total_ttc: totalHt,
-      mention_tva: 'TVA non applicable, art. 293 B du CGI',
+      tva_applicable: regime.tva_applicable,
+      taux_tva: regime.taux_tva,
+      montant_tva: regime.tva_applicable ? (totalHt * regime.taux_tva / 100) : 0,
+      total_ttc: regime.tva_applicable ? (totalHt + totalHt * regime.taux_tva / 100) : totalHt,
+      mention_tva: regime.mention_tva,
       paiement_tva_debits: false,
       date_reglement: document.getElementById('new-date-reglement').value || null,
       statut: 'en_attente',
@@ -1756,6 +1780,9 @@
   // Bootstrap data API d'abord, puis lance les renders
   factures = await loadJSON('mup_factures', []);
   pipeline = await loadJSON('mup_pipeline', []);
+  // Régime de compte lu une fois pour figer les factures émises pendant la session.
+  try { var _sr = await fetch('/api/user-settings'); if(_sr.ok) accountSettings = await _sr.json() || {}; }
+  catch(e){ console.warn('[factures] user-settings load failed', e); }
   buildImportDropdown();
   refreshYearFilter();
   // Migration auto contacts existants (clean adresse + recalc factures_ids/ca_total)

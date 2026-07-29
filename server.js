@@ -4321,11 +4321,18 @@ app.post('/api/factures/from-devis/:devisId', async (req, res) => {
     // Génère le numéro de facture séquentiel
     const { numero, seq, year } = await nextSequenceNumber(db, userId, 'facture')
     const now = new Date().toISOString()
+    // Régime REPORTÉ du devis, jamais recalculé depuis le compte : le devis a été
+    // émis sous un régime (son taux `tva`), la facture le fige à l'identique.
+    const tauxDevis = Number(devis.tva) || 0
+    const tvaApplicable = tauxDevis > 0
     const facturePayload = {
       ...devis,
       userId,
       id: undefined,
       numero, numero_seq: seq, numero_year: year,
+      tva_applicable: tvaApplicable,
+      taux_tva: tauxDevis,
+      mention_tva: tvaApplicable ? '' : 'TVA non applicable, art. 293 B du CGI',
       devis_id: devis.id,
       devis_origine_id: devis.id,
       statut: 'en_attente',

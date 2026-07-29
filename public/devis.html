@@ -335,6 +335,19 @@ let docs = [];
 let currentId = null;
 let filterStat = 'all';
 let lineCount = 0;
+// Taux de TVA par défaut d'un NOUVEAU devis, issu du régime du compte (user_settings) :
+// 0 en franchise, sinon le taux par défaut (standard 20 %). Les devis déjà émis
+// gardent leur propre taux figé — ce défaut ne s'applique qu'à la création.
+let accountDefaultTva = 0;
+async function loadAccountRegime() {
+  try {
+    const r = await fetch('/api/user-settings');
+    if(r.ok){
+      const s = await r.json() || {};
+      accountDefaultTva = s.tvaAssujetti ? (parseFloat(s.tauxTvaDefaut)||20) : 0;
+    }
+  } catch(e){ console.warn('[devis] user-settings load failed', e); }
+}
 
 // API SurrealDB (V1 mono-utilisateur, scoping serveur via env MUP_DEFAULT_USER_ID)
 async function loadDocs() {
@@ -399,7 +412,7 @@ function renderList() {
   const el = document.getElementById('doc-list');
   if(!list.length) { el.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--muted2);font-style:italic;font-size:12.5px">Aucun document</div>'; return; }
   el.innerHTML = list.map(d => {
-    const t = calcTotals(d.lines||[], d.tva||20);
+    const t = calcTotals(d.lines||[], d.tva ?? accountDefaultTva);
     const isActive = d.id === currentId;
     const dateStr = fmtDate(d.date);
     return `<div class="doc-item${isActive?' active':''}" onclick="selectDoc('${d.id}')">
@@ -436,7 +449,7 @@ function loadDocToEditor(d) {
   document.getElementById('e-addr').value = d.addr||'';
   document.getElementById('e-date').value = d.date||'';
   document.getElementById('e-validity').value = d.validity||30;
-  document.getElementById('e-tva').value = d.tva||20;
+  document.getElementById('e-tva').value = d.tva ?? accountDefaultTva;
   document.getElementById('e-status').value = d.status||'draft';
   document.getElementById('e-notes').value = d.notes||'';
   // Lignes
@@ -481,7 +494,8 @@ function getLines() {
 
 function updateTotals() {
   const lines = getLines();
-  const tva = parseFloat(document.getElementById('e-tva').value)||20;
+  // Le select porte toujours une valeur (0 inclus) → pas de fallback masquant la franchise.
+  const tva = parseFloat(document.getElementById('e-tva').value)||0;
   const t = calcTotals(lines, tva);
   document.getElementById('t-ht').textContent = fmt(t.ht);
   document.getElementById('t-tva-label').textContent = tva==0 ? 'TVA non applicable' : `TVA (${tva}%)`;
@@ -491,8 +505,8 @@ function updateTotals() {
 
 // ── APERÇU ──
 function renderPreview(d) {
-  const t = calcTotals(d.lines||[], d.tva||20);
-  const tva = d.tva||20;
+  const t = calcTotals(d.lines||[], d.tva ?? accountDefaultTva);
+  const tva = d.tva ?? accountDefaultTva;
   const validityDate = d.date ? new Date(new Date(d.date).getTime() + (d.validity||30)*24*3600*1000) : null;
   const isInvoice = d.type === 'facture';
 
@@ -585,7 +599,7 @@ function newDoc() {
   const num = '2026-' + String(docs.length + 1).padStart(3,'0');
   const today = new Date().toISOString().split('T')[0];
   const nowIso = new Date().toISOString();
-  const d = { id:'d'+Date.now(), type:'devis', num, name:'', co:'', email:'', addr:'', date:today, validity:30, status:'draft', tva:20, notes:'Paiement à 30 jours à réception de facture. Acompte de 30% à la signature.', lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
+  const d = { id:'d'+Date.now(), type:'devis', num, name:'', co:'', email:'', addr:'', date:today, validity:30, status:'draft', tva:accountDefaultTva, notes:'Paiement à 30 jours à réception de facture. Acompte de 30% à la signature.', lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
   docs.unshift(d);
   saveDocs();
   currentId = d.id;
@@ -659,10 +673,12 @@ function showToast(msg) {
 
 // Init
 (async () => {
+  await loadAccountRegime();
   await loadDocs();
   renderList();
   // Sélectionner le premier par défaut
   if(docs.length) selectDoc(docs[0].id);
+  else document.getElementById('e-tva').value = accountDefaultTva;
   // Date par défaut
   document.getElementById('e-date').value = new Date().toISOString().split('T')[0];
 })();

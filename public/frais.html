@@ -240,7 +240,7 @@
       <button class="btn-icon" id="btn-export" title="Exporter en CSV">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </button>
-      <button class="btn-icon" id="btn-settings" title="Paramètres TVA">
+      <button class="btn-icon" id="btn-settings" title="Société et facturation">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
       <button class="btn-new alt" id="btn-new-rec">
@@ -421,19 +421,20 @@
 <div class="drawer-overlay" id="settings-overlay"></div>
 <div class="drawer" id="settings-drawer" style="width:420px;">
   <div class="drawer-header">
-    <div class="drawer-title">Paramètres fiscaux</div>
+    <div class="drawer-title">Société et facturation</div>
     <button class="drawer-close" id="settings-close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
   </div>
   <div class="drawer-body">
     <div class="field">
-      <label>Statut TVA</label>
-      <select id="set-tva">
-        <option value="false">Non assujetti (auto-entrepreneur sous seuils)</option>
-        <option value="true">Assujetti à la TVA</option>
-      </select>
-      <div class="field-help">Si assujetti, la TVA récupérable est calculée auto selon catégorie.</div>
+      <label>Raison sociale</label>
+      <input type="text" id="set-raison" placeholder="Nom de votre société" />
+      <div class="field-help">Émetteur affiché sur vos factures.</div>
+    </div>
+    <div class="field">
+      <label>Adresse</label>
+      <input type="text" id="set-adresse" placeholder="N°, rue, code postal, ville" />
     </div>
     <div class="field">
       <label>Forme juridique</label>
@@ -449,6 +450,23 @@
     <div class="field">
       <label>SIRET</label>
       <input type="text" id="set-siret" placeholder="12345678901234" maxlength="14" />
+    </div>
+    <div class="field">
+      <label>N° TVA intracommunautaire</label>
+      <input type="text" id="set-tva-intra" placeholder="FR12345678901" />
+    </div>
+    <div class="field">
+      <label>Statut TVA</label>
+      <select id="set-tva">
+        <option value="false">Non assujetti (auto-entrepreneur sous seuils)</option>
+        <option value="true">Assujetti à la TVA</option>
+      </select>
+      <div class="field-help">Si assujetti, la TVA récupérable est calculée auto selon catégorie.</div>
+    </div>
+    <div class="field">
+      <label>Taux de TVA par défaut</label>
+      <input type="number" id="set-taux-tva" min="0" max="100" step="0.1" placeholder="20" />
+      <div class="field-help">Appliqué aux nouveaux devis et factures lorsque vous êtes assujetti.</div>
     </div>
   </div>
   <div class="drawer-footer">
@@ -1173,9 +1191,13 @@
 
   /* ============ SETTINGS ============ */
   function openSettings(){
+    document.getElementById('set-raison').value = settings.raisonSociale || '';
+    document.getElementById('set-adresse').value = settings.adresse || '';
     document.getElementById('set-tva').value = String(!!settings.tvaAssujetti);
     document.getElementById('set-forme').value = settings.formeJuridique || '';
     document.getElementById('set-siret').value = settings.siret || '';
+    document.getElementById('set-tva-intra').value = settings.tvaIntra || '';
+    document.getElementById('set-taux-tva').value = (settings.tauxTvaDefaut != null && settings.tauxTvaDefaut !== '') ? settings.tauxTvaDefaut : '';
     document.getElementById('settings-drawer').classList.add('show');
     document.getElementById('settings-overlay').classList.add('show');
   }
@@ -1188,9 +1210,14 @@
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   document.getElementById('settings-overlay').addEventListener('click', closeSettings);
   document.getElementById('settings-save').addEventListener('click', async function(){
+    settings.raisonSociale = document.getElementById('set-raison').value.trim();
+    settings.adresse = document.getElementById('set-adresse').value.trim();
     settings.tvaAssujetti = (document.getElementById('set-tva').value === 'true');
     settings.formeJuridique = document.getElementById('set-forme').value;
     settings.siret = document.getElementById('set-siret').value.trim();
+    settings.tvaIntra = document.getElementById('set-tva-intra').value.trim();
+    var tauxRaw = document.getElementById('set-taux-tva').value.trim();
+    settings.tauxTvaDefaut = (tauxRaw === '') ? null : (parseFloat(tauxRaw) || 0);
     await saveJSON('mup_user_settings', settings);
     frais.forEach(enrichFrais);
     await saveJSON('mup_frais', frais);

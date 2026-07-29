@@ -898,7 +898,7 @@
   // n'arrondir que le total laisserait les décimales tronquées de chaque ligne
   // s'additionner et diverger d'un centime de la somme des lignes affichées.
   function round2(n){
-    return Math.round((parseFloat(n) || 0) * 100) / 100;
+    return Math.round(((parseFloat(n) || 0) + Number.EPSILON) * 100) / 100;
   }
   var state = { status:'all', entity:'all', year:'all', currentId:null, clientSiretFilter:null };
 
@@ -1686,12 +1686,18 @@
         var i = parseInt(this.dataset.pdfI, 10);
         var f = this.dataset.pdfF;
         candidates[i][f] = this.value;
+        // Un taux saisi (même « 0 ») est une décision de l'abonné, pas une absence
+        // d'extraction : marquer la confiance pour que le 0 % explicite fasse foi.
+        if(f === 'taux_tva') candidates[i].taux_tva_conf = String(this.value).trim() === '' ? 0 : 1;
         revalidateConfirmBtn();
       });
       inp.addEventListener('change', function(){
         var i = parseInt(this.dataset.pdfI, 10);
         var f = this.dataset.pdfF;
         candidates[i][f] = this.value;
+        // Un taux saisi (même « 0 ») est une décision de l'abonné, pas une absence
+        // d'extraction : marquer la confiance pour que le 0 % explicite fasse foi.
+        if(f === 'taux_tva') candidates[i].taux_tva_conf = String(this.value).trim() === '' ? 0 : 1;
         revalidateConfirmBtn();
       });
     });

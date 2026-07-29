@@ -396,7 +396,7 @@ function statusLabel(s) {
 // n'arrondir que le total laisserait les décimales tronquées des lignes
 // s'additionner et diverger d'un centime de la somme des lignes affichées.
 function round2(n){
-  return Math.round((parseFloat(n) || 0) * 100) / 100;
+  return Math.round(((parseFloat(n) || 0) + Number.EPSILON) * 100) / 100;
 }
 
 function calcTotals(lines, tva) {

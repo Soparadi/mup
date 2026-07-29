@@ -56,6 +56,23 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .btn-add-card{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:9px;border:none;background:var(--text);color:#fff;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
 .btn-add-card:hover{background:#000}
 
+/* ── REPLI DE LA TOPBAR (patron de prospection.html) ──────────────
+   Une fois un filtre ou un tri appliqué, la rangée indicateurs + recherche + tri
+   n'a plus à occuper la hauteur : elle se replie en une ligne de résumé rappelant
+   les critères retenus. Ouverte par défaut (aucune classe .collapsed au chargement)
+   → elle l'est aussi à la réouverture de la page, état non persisté. « Modifier »
+   rouvre le bloc complet en un clic, toutes les valeurs saisies intactes. */
+.topbar-summary{display:none}
+.topbar.collapsed .topbar-row2{display:none}
+.topbar.collapsed .topbar-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ss-chips{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;min-width:0}
+.ss-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:20px;background:var(--surface);border:1px solid var(--border);font-size:12px;max-width:100%}
+.ss-k{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);flex-shrink:0}
+.ss-v{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+.ss-empty{font-size:12.5px;color:var(--muted)}
+.ss-edit{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 14px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;transition:border-color .15s,background .15s}
+.ss-edit:hover{border-color:var(--text);background:var(--surface)}
+
 /* ── KANBAN ── */
 .kanban-wrap{flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;padding:16px 20px 20px;display:flex;gap:12px;align-items:stretch}
 .kanban-wrap::-webkit-scrollbar{height:6px}
@@ -525,6 +542,14 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
           <option value="name">Nom A→Z</option>
         </select>
       </div>
+    </div>
+    <!-- ── RÉSUMÉ REPLIÉ : visible seulement quand .topbar.collapsed ── -->
+    <div class="topbar-summary" id="topbar-summary">
+      <div class="ss-chips" id="pipeline-ss-chips"></div>
+      <button class="ss-edit" type="button" onclick="expandTopbar()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11 2.5l2.5 2.5L6 12.5 3 13l.5-3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        Modifier
+      </button>
     </div>
   </div>
 
@@ -1162,7 +1187,10 @@ function totalInProgress() {
 }
 
 let pipelineSearchQuery = '';
+let pipelineSearchRaw = '';
 let pipelineColFilter = null;
+let pipelineSortBy = 'recent';
+let pipelineSortApplied = false;
 
 function updatePipelineKpiChips(){
   const cols = ['prospects','phoning','visio','rdv','devis'];
@@ -1178,6 +1206,46 @@ function filterByCol(col){
     el.classList.toggle('active', el.getAttribute('data-col') === pipelineColFilter);
   });
   renderKanban();
+  refreshTopbarCollapse();
+}
+
+// ── Repli / réouverture de la topbar (patron de prospection.html) ──────
+// Critères retenus, dans l'ordre : filtre colonne, recherche, tri.
+function _pipelineSummaryChips(){
+  var chips = [];
+  if(pipelineColFilter){
+    var col = COLS.find(function(x){ return x.id === pipelineColFilter; });
+    chips.push(['Filtre', col ? col.name : pipelineColFilter]);
+  }
+  if(pipelineSearchRaw) chips.push(['Recherche', pipelineSearchRaw]);
+  if(pipelineSortApplied){
+    var labels = { recent:'Plus récent', value:'Valeur ↓', name:'Nom A→Z' };
+    chips.push(['Tri', labels[pipelineSortBy] || pipelineSortBy]);
+  }
+  return chips;
+}
+// Replie la topbar en ligne de résumé (les valeurs saisies restent intactes,
+// simplement masquées). Rappelée après chaque filtre/tri : replie s'il reste un
+// critère actif, rouvre sinon — jamais de résumé vide.
+function refreshTopbarCollapse(){
+  var chips = _pipelineSummaryChips();
+  if(chips.length) collapseTopbar(chips); else expandTopbar();
+}
+function collapseTopbar(chips){
+  var tb  = document.querySelector('.topbar');
+  var box = document.getElementById('pipeline-ss-chips');
+  if(!tb || !box) return;
+  chips = chips || _pipelineSummaryChips();
+  box.innerHTML = chips.map(function(c){
+    return '<span class="ss-chip"><span class="ss-k">' + esc(c[0]) +
+           '</span><span class="ss-v" title="' + esc(c[1]) + '">' + esc(c[1]) + '</span></span>';
+  }).join('');
+  tb.classList.add('collapsed');
+}
+// Rouvre le bloc complet (toutes les valeurs saisies sont intactes).
+function expandTopbar(){
+  var tb = document.querySelector('.topbar');
+  if(tb) tb.classList.remove('collapsed');
 }
 
 function normalize(s){
@@ -1195,7 +1263,10 @@ function cardMatchesQuery(c, q){
 }
 
 function filterCards(query){
-  pipelineSearchQuery = normalize(String(query||'').trim());
+  pipelineSearchRaw = String(query||'').trim();
+  pipelineSearchQuery = normalize(pipelineSearchRaw);
+  // Pas de repli ici : la saisie est continue, replier masquerait le champ
+  // en cours de frappe. La recherche apparaît en résumé si un filtre/tri replie.
   renderKanban();
 }
 
@@ -2161,7 +2232,10 @@ function sortCards(by) {
   if(by==='value') cards.sort((a,b)=>(b.val||0)-(a.val||0));
   else if(by==='name') cards.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   else cards.sort((a,b)=>(b.days||0)-(a.days||0));
+  pipelineSortBy = by;
+  pipelineSortApplied = true;
   save(); renderKanban();
+  refreshTopbarCollapse();
 }
 
 // ── IMPORT DEPUIS PROSPECTS ──

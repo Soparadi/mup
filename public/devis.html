@@ -344,7 +344,8 @@ async function loadAccountRegime() {
     const r = await fetch('/api/user-settings');
     if(r.ok){
       const s = await r.json() || {};
-      accountDefaultTva = s.tvaAssujetti ? (parseFloat(s.tauxTvaDefaut)||20) : 0;
+      // ?? et non || : un taux enregistré à 0 est un choix de l'abonné, pas une absence.
+      accountDefaultTva = s.tvaAssujetti ? (s.tauxTvaDefaut ?? 20) : 0;
     }
   } catch(e){ console.warn('[devis] user-settings load failed', e); }
 }

@@ -287,14 +287,9 @@
               <option value="mixte">Mixte</option>
             </select>
           </div>
-          <div class="field">
+          <div class="field" id="new-entity-field" style="display:none;">
             <label>Entité émettrice</label>
-            <select id="new-entity">
-              <option value="ei">EI</option>
-              <option value="graphic_factor">Graphic Factor</option>
-              <option value="nouvellevagues">Nouvelles Vagues</option>
-              <option value="mup">MovUP</option>
-            </select>
+            <select id="new-entity"></select>
           </div>
         </div>
         <div class="field-row">
@@ -868,6 +863,27 @@
   var ENTITY_LABELS = { ei:'EI', graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues', mup:'MovUP' };
   var STATUTS = { 'payée':'Payée', 'en_attente':'En attente', 'en_retard':'En retard' };
 
+  // Défaut historique d'entity_origine (étiquette de marque interne : filtre, stats,
+  // carte) conservé tel quel. Distinct de l'émetteur affiché, qui vient du compte.
+  var DEFAULT_ENTITY = 'mup';
+
+  // Émetteur d'une facture : composé depuis le compte (user_settings), jamais d'une
+  // marque en dur. Multi-entités = tableau `entites` dans user_settings ; en son
+  // absence, une seule entité dérivée des champs société du compte.
+  function accountEntites(){ return Array.isArray(accountSettings.entites) ? accountSettings.entites : []; }
+  function hasEntites(){ return accountEntites().length > 0; }
+  function findEntite(key){ return accountEntites().find(function(e){ return e && e.entity_origine === key; }) || null; }
+  function emetteurForEntity(key){
+    var e = findEntite(key);
+    if(e) return { nom: e.nom || '', adresse: e.adresse || '', siret: e.siret || '', tva_intra: e.tva_intra || '' };
+    return {
+      nom: accountSettings.raisonSociale || '',
+      adresse: accountSettings.adresse || '',
+      siret: accountSettings.siret || '',
+      tva_intra: accountSettings.tvaIntra || ''
+    };
+  }
+
   var IMPORT_DRIVERS = {
     csv:     { label:'CSV / Excel',   active:true,  handler:openCSVImport },
     pdf:     { label:'PDF',           active:true,  handler:openPDFImport },
@@ -887,7 +903,8 @@
   function regimeFromSettings(s){
     s = s || {};
     var assujetti = !!s.tvaAssujetti;
-    var taux = assujetti ? (parseFloat(s.tauxTvaDefaut) || 20) : 0;
+    // ?? et non || : un taux enregistré à 0 est un choix de l'abonné, pas une absence.
+    var taux = assujetti ? (s.tauxTvaDefaut ?? 20) : 0;
     return {
       tva_applicable: assujetti,
       taux_tva: taux,
@@ -1228,7 +1245,15 @@
     var totalHt = (f.total_ht != null) ? f.total_ht : lignes.reduce(function(s,l){ return s + (parseFloat(l.total)||0); }, 0);
     var html = '<div class="preview-doc">';
     html += '<div class="preview-header">';
-    html += '<div class="preview-emetteur"><strong>'+esc(emetteur.nom || ENTITY_LABELS[f.entity_origine] || '—')+'</strong>'+(emetteur.adresse?esc(emetteur.adresse):'')+(emetteur.siret?'<br>SIRET '+esc(emetteur.siret):'')+(emetteur.tva_intra?'<br>TVA '+esc(emetteur.tva_intra):'')+'</div>';
+    // Émetteur stocké s'il porte une raison sociale ; sinon recomposé à la volée
+    // depuis le compte, pour qu'une facture émise avant la saisie des réglages se
+    // complète dès qu'ils le sont. Toujours vide → renvoi discret vers les réglages.
+    var em = emetteur.nom ? emetteur : emetteurForEntity(f.entity_origine);
+    if(em.nom){
+      html += '<div class="preview-emetteur"><strong>'+esc(em.nom)+'</strong>'+(em.adresse?esc(em.adresse):'')+(em.siret?'<br>SIRET '+esc(em.siret):'')+(em.tva_intra?'<br>TVA '+esc(em.tva_intra):'')+'</div>';
+    } else {
+      html += '<div class="preview-emetteur"><a href="/frais?reglages=1" style="color:var(--muted);text-decoration:none;border-bottom:1px dashed var(--border);">Émetteur non renseigné — compléter votre société</a></div>';
+    }
     html += '<div class="preview-num"><h2>FACTURE</h2><div class="num-val">N° '+esc(f.numero||'—')+'</div><div class="num-val" style="margin-top:2px">'+(f.date_emission?new Date(f.date_emission).toLocaleDateString('fr-FR'):'—')+'</div></div>';
     html += '</div>';
     html += '<div class="preview-section-title">Client</div>';
@@ -1340,7 +1365,21 @@
     document.getElementById('new-livraison-diff').checked = false;
     document.getElementById('new-livraison-wrap').style.display = 'none';
     document.getElementById('new-nature').value = 'prestation_services';
-    document.getElementById('new-entity').value = 'mup';
+    // Sélecteur d'entité : peuplé depuis `entites` s'il existe, masqué sinon —
+    // un abonné mono-société n'a rien à choisir.
+    var entField = document.getElementById('new-entity-field');
+    var entSel = document.getElementById('new-entity');
+    if(hasEntites()){
+      var wanted = (prefill && prefill.entity_origine) || accountEntites()[0].entity_origine;
+      entSel.innerHTML = accountEntites().map(function(e){
+        var k = e.entity_origine || '';
+        return '<option value="'+esc(k)+'"'+(k===wanted?' selected':'')+'>'+esc(e.nom || k)+'</option>';
+      }).join('');
+      entField.style.display = '';
+    } else {
+      entSel.innerHTML = '';
+      entField.style.display = 'none';
+    }
     document.getElementById('new-date-prestation').value = todayISO();
     var d = new Date(); d.setDate(d.getDate() + 30);
     document.getElementById('new-date-reglement').value = d.toISOString().slice(0,10);
@@ -1356,7 +1395,8 @@
       if(prefill.client_siren) document.getElementById('new-client-siren').value = prefill.client_siren;
       if(prefill.client_siret) document.getElementById('new-client-siret').value = prefill.client_siret;
       if(prefill.client_adresse) document.getElementById('new-client-adresse').value = prefill.client_adresse;
-      if(prefill.entity_origine) document.getElementById('new-entity').value = prefill.entity_origine;
+      // entity_origine du prefill : déjà pris en compte à la construction du sélecteur
+      // ci-dessus (cas multi-entités) et relu au save (cas mono-entité).
       if(Array.isArray(prefill.lignes) && prefill.lignes.length){
         document.getElementById('new-lignes-body').innerHTML = '';
         prefill.lignes.forEach(addLineRow);
@@ -1419,13 +1459,16 @@
     var num = generateNextNumero();
     var nowIso = new Date().toISOString();
     var prefill = document.getElementById('modal-new')._prefill || {};
+    // Entité : le sélecteur fait foi s'il est affiché (multi-entités), sinon le
+    // défaut historique (éventuellement issu du prefill). L'émetteur en découle.
+    var entityKey = hasEntites() ? document.getElementById('new-entity').value : (prefill.entity_origine || DEFAULT_ENTITY);
     var f = {
       id: 'fac_' + Date.now(),
       numero: num.numero,
       numero_seq: num.seq,
       date_emission: todayISO(),
       date_prestation: document.getElementById('new-date-prestation').value || null,
-      emetteur: { nom: ENTITY_LABELS[document.getElementById('new-entity').value] || '', adresse:'', siret:'', tva_intra:'' },
+      emetteur: emetteurForEntity(entityKey),
       client: {
         nom: clientNom,
         adresse: document.getElementById('new-client-adresse').value.trim(),
@@ -1445,7 +1488,7 @@
       date_reglement: document.getElementById('new-date-reglement').value || null,
       statut: 'en_attente',
       date_paiement: null,
-      entity_origine: document.getElementById('new-entity').value,
+      entity_origine: entityKey,
       devis_origine_id: prefill.devis_origine_id || null,
       plateforme_agreee_destinataire: null,
       format_export: 'pdf_simple',
@@ -1534,7 +1577,7 @@
         numero: num.numero, numero_seq: num.seq,
         date_emission: r.date_emission || todayISO(),
         date_prestation: r.date_emission || todayISO(),
-        emetteur: { nom: ENTITY_LABELS[r.entity_origine] || '', adresse:'', siret:'', tva_intra:'' },
+        emetteur: emetteurForEntity(r.entity_origine || DEFAULT_ENTITY),
         client: { nom: r.client_nom||'—', adresse: r.client_adresse||'', siret: r.client_siret||'', siren: r.client_siren||'', adresse_livraison:'' },
         nature_operation: r.nature_operation || 'prestation_services',
         lignes: [{ designation: r.designation||'Import CSV', date: r.date_emission||null, quantite: qty, prix_unitaire: pu, total: totalHt }],
@@ -1663,20 +1706,22 @@
            + '<textarea data-pdf-i="'+i+'" data-pdf-f="client_adresse" rows="2" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--font);resize:vertical;">'+esc(c.client_adresse||'')+'</textarea></div>';
       html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Désignation'+confDot(c.designation_conf||0)+'</label>'
            + '<textarea data-pdf-i="'+i+'" data-pdf-f="designation" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;min-height:50px;font-family:var(--font);">'+esc(c.designation||'')+'</textarea></div>';
-      c.statut = c.statut || 'en_attente'; c.entity_origine = c.entity_origine || 'mup';
+      c.statut = c.statut || 'en_attente'; c.entity_origine = c.entity_origine || DEFAULT_ENTITY;
       var sel = function(val, cur){ return val === cur ? ' selected' : ''; };
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">';
+      // Sélecteur d'entité peuplé depuis `entites`, masqué pour un compte mono-société.
+      var showEnt = hasEntites();
+      html += '<div style="display:grid;grid-template-columns:'+(showEnt?'1fr 1fr':'1fr')+';gap:8px;margin-top:8px;">';
       html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Statut</label>'
            + '<select data-pdf-i="'+i+'" data-pdf-f="statut" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'
            + '<option value="en_attente"'+sel('en_attente',c.statut)+'>En attente</option>'
            + '<option value="payée"'+sel('payée',c.statut)+'>Payée</option>'
            + '<option value="en_retard"'+sel('en_retard',c.statut)+'>En retard</option></select></div>';
-      html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Entité</label>'
-           + '<select data-pdf-i="'+i+'" data-pdf-f="entity_origine" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'
-           + '<option value="ei"'+sel('ei',c.entity_origine)+'>EI</option>'
-           + '<option value="mup"'+sel('mup',c.entity_origine)+'>MovUP</option>'
-           + '<option value="graphic_factor"'+sel('graphic_factor',c.entity_origine)+'>Graphic Factor</option>'
-           + '<option value="nouvellevagues"'+sel('nouvellevagues',c.entity_origine)+'>Nouvelles Vagues</option></select></div>';
+      if(showEnt){
+        var entOpts = accountEntites().map(function(e){ var k = e.entity_origine || ''; return '<option value="'+esc(k)+'"'+sel(k,c.entity_origine)+'>'+esc(e.nom || k)+'</option>'; }).join('');
+        html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Entité</label>'
+             + '<select data-pdf-i="'+i+'" data-pdf-f="entity_origine" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'
+             + entOpts + '</select></div>';
+      }
       html += '</div>';
       html += '</div>';
     });
@@ -1743,7 +1788,7 @@
         numero: num.numero, numero_seq: num.seq,
         date_emission: c.date_emission || todayISO(),
         date_prestation: c.date_emission || todayISO(),
-        emetteur: { nom:'', adresse:'', siret:'', tva_intra:'' },
+        emetteur: emetteurForEntity(c.entity_origine || DEFAULT_ENTITY),
         client: { nom: c.client_nom||'—', adresse: c.client_adresse||'', siret: c.client_siret||'', siren: c.client_siren||'', adresse_livraison:'' },
         nature_operation: 'prestation_services',
         lignes: [{ designation: designation, date: c.date_emission||null, quantite: 1, prix_unitaire: totalHt, total: totalHt }],

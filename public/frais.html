@@ -1295,6 +1295,8 @@
     if(settings.tvaAssujetti === undefined) settings.tvaAssujetti = false;
     await generateRecurrentOccurrences();
     renderAll();
+    // Renvoi depuis une autre page (ex. facture sans émetteur) : ouvre le tiroir.
+    if(new URLSearchParams(window.location.search).get('reglages') === '1') openSettings();
   })();
 })();
 </script>

@@ -5655,4 +5655,50 @@ app.use((req, res) => {
   }
 })()
 
-app.listen(process.env.PORT || 3000, () => console.log('✓ mup running'))
+// ── Filet de sécurité process ──────────────────────────────────────────────
+// Un process vivant mais incapable de servir n'est jamais relancé par Railway :
+// ON_FAILURE ne se déclenche que sur exit non nul, et le healthcheck n'est
+// consulté qu'au déploiement. On rend donc le process explicitement mortel sur
+// erreur fatale, pour que la restartPolicy le relève.
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] uncaughtException:', err?.message)
+  console.error(err?.stack || err)
+  process.exit(1)
+})
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason))
+  console.error('[fatal] unhandledRejection:', err.message)
+  console.error(err.stack || err)
+  process.exit(1)
+})
+
+const server = app.listen(process.env.PORT || 3000, () => console.log('✓ mup running'))
+
+// app.listen échoue en asynchrone (port occupé, EACCES…) : sans ce handler,
+// l'erreur remonte en unhandled et le boot part en vrille silencieuse.
+server.on('error', (err) => {
+  console.error('[fatal] server.listen error:', err?.message)
+  console.error(err?.stack || err)
+  process.exit(1)
+})
+
+// Arrêt propre sur signal (déploiement, scale-down). Délai de garde : si
+// server.close pend sur des connexions vivantes, on sort quand même.
+let shuttingDown = false
+function gracefulShutdown(signal){
+  if(shuttingDown) return
+  shuttingDown = true
+  console.log(`[shutdown] ${signal} reçu, fermeture du serveur…`)
+  const guard = setTimeout(() => {
+    console.error('[shutdown] délai de garde dépassé, sortie forcée')
+    process.exit(0)
+  }, 10000)
+  guard.unref()
+  server.close(() => {
+    clearTimeout(guard)
+    console.log('[shutdown] serveur fermé proprement')
+    process.exit(0)
+  })
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))

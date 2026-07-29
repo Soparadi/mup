@@ -14,7 +14,7 @@
 // les routes concernées (ex. GET /api/contacts/export → if (!hasFeature(user,
 // 'export_csv')) return 403).
 
-import { isVip } from '../../lib/vip.js'
+import { isOwner } from '../../lib/vip.js'
 
 export const PLAN_QUOTAS = {
   essai: {
@@ -120,6 +120,12 @@ export async function applyMonthlyReset(db, userId, rec, user) {
 
 // Résolution du plan effectif d'un utilisateur. Factorise la règle déjà
 // présente dans hasFeature() ci-dessus (et autres sites). Source unique.
+// - drapeau bypass (VIP non-propriétaire) → 'croisiere' : plan offert, plafond
+//   chiffré à 120/mois. C'est LE levier qui sépare le bypass du propriétaire :
+//   comme applyMonthlyReset et getLeadLimit clefent tous deux sur ce plan effectif,
+//   un bypass n'est plus 'essai' → le reset mensuel s'applique (120/mois, pas à vie)
+//   et le plafond vaut PLAN_LEAD_LIMITS.croisiere. Le propriétaire, lui, garde son
+//   Infinity court-circuité en amont dans getLeadLimit (isOwner), pas ici.
 // - trial_status === 'converted' → user.plan (demarrage/activite/croisiere)
 // - sinon (essai actif / expiré / null pre-migration) → 'essai'
 // Note grâce 7j : un user en grace_active garde trial_status='converted'
@@ -127,16 +133,17 @@ export async function applyMonthlyReset(db, userId, rec, user) {
 // les mutations en 402 en amont, donc pas de doublon nécessaire.
 export function getEffectivePlan(user) {
   if (!user) return 'essai'
+  if (user.bypass === true) return 'croisiere'
   return user.trial_status === 'converted' ? (user.plan || 'demarrage') : 'essai'
 }
 
 // Plafond d'ajouts au pipeline pour ce user (selon plan effectif).
-// VIP (ambassadrice / compte dev) : plafond NEUTRALISÉ, lu AVANT toute
-// résolution de plan. Une VIP n'a pas un « plan » différent — elle a un
-// plafond infini. getEffectivePlan reste inchangé : on ne lui invente pas
-// un plan converted.
+// PROPRIÉTAIRE SEUL (adresse en dur) : plafond NEUTRALISÉ à Infinity, lu AVANT
+// toute résolution de plan. Le drapeau bypass ne passe PLUS par cette porte —
+// il n'a pas un plafond infini mais le plan croisiere offert (120/mois), résolu
+// par getEffectivePlan comme n'importe quel plan chiffré.
 export function getLeadLimit(user) {
-  if (isVip(user)) return Infinity
+  if (isOwner(user)) return Infinity
   const plan = getEffectivePlan(user)
   return PLAN_LEAD_LIMITS[plan] ?? PLAN_LEAD_LIMITS.demarrage
 }

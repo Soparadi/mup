@@ -29,6 +29,13 @@ import { readSessionToken, SESSION_COOKIE } from '../middleware/requireAuth.js'
 
 export const router = express.Router()
 
+// ── Version des conditions acceptées à l'inscription ──
+// Reprend le numéro de version porté par les pages /cgu et /cgv
+// (public/cgu.html, public/cgv.html : « Version 1.0 »). À incrémenter
+// à chaque révision des conditions pour tracer quelle version chaque
+// abonné a acceptée.
+const CGU_VERSION = '1.0'
+
 // ── argon2id paramètres OWASP 2024 ──
 const ARGON_OPTS = {
   type: argon2.argon2id,
@@ -195,6 +202,12 @@ router.post('/signup', async (req, res) => {
   const marketingConsent = rawConsent === true || rawConsent === 'true' || rawConsent === 1 || rawConsent === '1'
   const marketingConsentAt = marketingConsent ? new Date().toISOString() : null
 
+  // Acceptation CGU/CGV + confidentialité : OBLIGATOIRE. Case non pré-cochée
+  // côté front. On accepte true/'true'/1/'1'. Preuve contractuelle tracée en base.
+  const rawCgu = req.body?.cgu_accepted
+  const cguAccepted = rawCgu === true || rawCgu === 'true' || rawCgu === 1 || rawCgu === '1'
+  const cguAcceptedAt = cguAccepted ? new Date().toISOString() : null
+
   // Intention de plan captée au signup (?plan=… sur l'URL, transmis via input
   // caché). SIGNAL MARKETING uniquement — ne contrôle ni quotas ni accès.
   // Validation stricte case-sensitive : seules les 3 valeurs autorisées passent,
@@ -212,6 +225,8 @@ router.post('/signup', async (req, res) => {
   const telephone = normalizePhoneFR(telephoneRaw)
   if (!telephone) return res.status(400).json({ error: 'Téléphone invalide', field: 'telephone' })
   if (!isStrongPassword(password)) return res.status(400).json({ error: 'Mot de passe trop court (10 caractères minimum)', field: 'password' })
+  // Garde serveur, pas simple formalité front : un appel direct sans la case échoue.
+  if (!cguAccepted) return res.status(400).json({ error: 'Vous devez accepter les conditions générales pour créer un compte', field: 'cgu_accepted' })
 
   try {
     if (await getUserByEmail(email)) {
@@ -239,6 +254,9 @@ router.post('/signup', async (req, res) => {
       email_verified: false,
       plan: 'demarrage',                        // Décision 1.2 — essai = niveau Essentiel ; trial_status distingue essai/payant
       marketing_consent: marketingConsent,      // false par défaut (RGPD)
+      cgu_accepted: cguAccepted,                 // toujours true ici (garde 400 ci-dessus)
+      cgu_accepted_at: cguAcceptedAt,            // horodatage ISO de l'acceptation
+      cgu_version: CGU_VERSION,                   // version des conditions acceptées
       trial_status: 'active'                    // datetimes posées en 2ème temps (cf. ci-dessous)
     }
     if (geoData && typeof geoData === 'object') userBody.geo_data = geoData
@@ -282,6 +300,8 @@ router.post('/signup', async (req, res) => {
       metadata: {
         prenom, nom, telephone,
         marketing_consent: marketingConsent,
+        cgu_accepted: cguAccepted,
+        cgu_version: CGU_VERSION,
         intended_plan: intendedPlan,
         geo_country: geoData?.country_code || null,
         geo_city: geoData?.city || null

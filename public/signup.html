@@ -96,6 +96,8 @@
   .checkbox-label{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:12.5px;line-height:1.5;color:var(--muted)}
   .checkbox-label input[type="checkbox"]{margin-top:2px;width:16px;height:16px;cursor:pointer;accent-color:#F97316;flex-shrink:0}
   .checkbox-text{flex:1}
+  .checkbox-text a{color:var(--text);text-decoration:underline;text-underline-offset:2px}
+  .checkbox-text a:hover{color:#000}
 
   .auth-foot{text-align:center;margin-top:20px;font-size:13px;color:var(--muted)}
   .auth-foot a{color:var(--text);font-weight:600;text-decoration:none}
@@ -178,11 +180,15 @@
           <div class="field-err" id="err-password2"></div>
         </div>
 
-        <p class="legal">
-          En créant votre compte, vous acceptez les
-          <a href="https://movup.io/cgu">CGU</a> et la
-          <a href="https://movup.io/confidentialite">politique de confidentialité</a>.
-        </p>
+        <div class="field-checkbox">
+          <label class="checkbox-label" for="cgu_accepted">
+            <input type="checkbox" id="cgu_accepted" name="cgu_accepted" value="1" required>
+            <span class="checkbox-text">J'accepte les
+              <a href="https://movup.io/cgu" target="_blank" rel="noopener">conditions générales d'utilisation</a>
+              et <a href="https://movup.io/cgv" target="_blank" rel="noopener">de vente</a>
+              ainsi que la <a href="https://movup.io/confidentialite" target="_blank" rel="noopener">politique de confidentialité</a>.</span>
+          </label>
+        </div>
 
         <div class="field-checkbox">
           <label class="checkbox-label" for="marketing_consent">
@@ -256,6 +262,8 @@
   }
   var pwStrength = document.getElementById('pw-strength')
   var pwLabel = document.getElementById('pw-label')
+  // Acceptation CGU/CGV + confidentialité — case OBLIGATOIRE, non pré-cochée.
+  var cguCheckbox = document.getElementById('cgu_accepted')
 
   // SVG œil ouvert / fermé
   var EYE_OPEN = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'
@@ -308,6 +316,8 @@
       ok=false
       if(showErrors) setErr('password2','Les mots de passe ne correspondent pas.')
     } else setErr('password2','')
+    // Acceptation CGU obligatoire — gate le bouton comme les champs requis.
+    if(!cguCheckbox.checked){ ok=false }
     return { ok: ok, values: v, score: s }
   }
 
@@ -372,6 +382,9 @@
     })
   })
 
+  // Cocher/décocher les CGU réévalue l'état du bouton.
+  cguCheckbox.addEventListener('change', refreshSubmit)
+
   function setAlert(type, msg){
     alertBox.className = 'alert alert-' + type
     alertBox.textContent = msg
@@ -400,6 +413,7 @@
         email: v.values.email,
         telephone: v.values.telephone,
         password: v.values.password,
+        cgu_accepted: !!cguCheckbox.checked,
         marketing_consent: !!document.getElementById('marketing_consent').checked,
         intended_plan: planInput && planInput.value ? planInput.value : null
       })

@@ -36,6 +36,12 @@ DEFINE FIELD OVERWRITE geo_data ON user TYPE option<object> FLEXIBLE;
 -- envoyée). Évite "Expected bool but found NONE" au prochain UPDATE.
 DEFINE FIELD OVERWRITE marketing_consent ON user TYPE option<bool>;
 DEFINE FIELD IF NOT EXISTS marketing_consent_at ON user TYPE option<datetime>;
+-- Acceptation CGU/CGV + confidentialité (case OBLIGATOIRE non pré-cochée au
+-- signup — preuve contractuelle). option<...> sans DEFAULT : les comptes créés
+-- avant l'ajout restent à NONE, aucune acceptation rétroactive attribuée.
+DEFINE FIELD IF NOT EXISTS cgu_accepted ON user TYPE option<bool>;
+DEFINE FIELD IF NOT EXISTS cgu_accepted_at ON user TYPE option<datetime>;
+DEFINE FIELD IF NOT EXISTS cgu_version ON user TYPE option<string>;
 -- Intention de plan captée au signup via ?plan=… sur l'URL.
 -- SIGNAL MARKETING — utilisé uniquement pour analytics et relances commerciales.
 -- NE PAS UTILISER pour gérer les droits d'accès, les quotas ou le paywall :

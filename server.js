@@ -2364,9 +2364,21 @@ const PLM_ARRONDISSEMENTS = {
   '13055': Array.from({ length: 16 }, (_, i) => String(13201 + i)).join(','), // Marseille 13201–13216
 }
 function communeParam(code) { return PLM_ARRONDISSEMENTS[code] || code }
+// Départements à arrondissements municipaux, DÉRIVÉS des clés PLM_ARRONDISSEMENTS
+// (75056→75, 69123→69, 13055→13). Même principe qu'au front : pas de nouvelle liste.
+const PLM_DEPTS = new Set(Object.keys(PLM_ARRONDISSEMENTS).map(c => c.slice(0, 2)))
 
 // ── API proxies ──
 app.get('/api/search', async (req, res) => {
+  // Garde départements à arrondissements : sans code_commune, la requête viserait
+  // le département entier (gros gisement, centaines de pages). On exige une
+  // ville/arrondissement. Placée en tête : bloque aussi le chemin lecture-cache.
+  const plmDept = String(req.query.departement || '').trim()
+  const plmCommune = String(req.query.code_commune || '').trim()
+  if (PLM_DEPTS.has(plmDept) && !plmCommune) {
+    res.status(400).json({ error: 'Choisissez une ville ou un arrondissement pour lancer la recherche sur ce département.' })
+    return
+  }
   // ── Lecture-cache référentiel-first (geste B, branchement) ──
   // Si le gisement (naf, dept) est marqué COMPLET et FRAIS, on sert la page depuis
   // referentiel_societes sans jamais taper Etalab. Toutes les fonctions appelées

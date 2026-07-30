@@ -2040,6 +2040,10 @@ var PLM_ARR_UI = {
   '69123': { ville: 'Lyon',      start: 69381, n: 9  },
   '13055': { ville: 'Marseille', start: 13201, n: 16 },
 };
+// Départements à arrondissements municipaux, DÉRIVÉS des clés PLM_ARR_UI
+// (75056→75, 69123→69, 13055→13). Source unique de vérité : pas de nouvelle
+// liste en dur. Sur ces départements, la ville devient obligatoire (§updateHint).
+var PLM_DEPTS = Object.keys(PLM_ARR_UI).map(function(c){ return c.slice(0, 2); });
 function plmArrOptions(code, nomVille) {
   var m = PLM_ARR_UI[code];
   if (!m) return null;
@@ -2113,6 +2117,7 @@ async function populateVilleSelect(dept) {
 
 function onVilleChange() {
   hideError();    // changer de ville nettoie le bandeau
+  updateHint();   // réactive le bouton dès qu'une ville/arrondissement est choisi (dept PLM)
   applyMapZoom();
 }
 
@@ -3139,14 +3144,23 @@ function updateHint() {
   var btn  = document.getElementById('btn-go');
   var hint = document.getElementById('hint');
   var _dept = (document.getElementById('sel-dept')?.value || '').trim();
+  var _ville = (document.getElementById('sel-ville')?.value || '').trim();
+  // Départements à arrondissements (75/69/13) : la ville devient obligatoire —
+  // sans elle la recherche partirait sur le département entier (gros gisement).
+  var _needVille = PLM_DEPTS.indexOf(_dept) !== -1 && !_ville;
   // Button is only active if NAF locked AND region AND department chosen
-  if(S.nafLocked && S.naf && S.region && _dept) {
+  // (+ ville pour les départements à arrondissements).
+  if(S.nafLocked && S.naf && S.region && _dept && !_needVille) {
     btn.classList.add('active');
     // Ligne de confirmation verte « ✓ CODE — Label · Région » retirée :
     // redondante avec le pill secteur + les champs région/dept déjà remplis.
     // Le bouton actif suffit comme signal « prêt à lancer ».
     hint.textContent = '';
     hint.style.color = '';
+  } else if(S.nafLocked && S.naf && S.region && _dept && _needVille) {
+    btn.classList.remove('active');
+    hint.textContent = 'Choisissez une ville ou un arrondissement pour lancer la recherche';
+    hint.style.color = 'var(--black)';
   } else if(S.nafLocked && S.naf && S.region) {
     btn.classList.remove('active');
     hint.textContent = 'Choisissez un département pour lancer la recherche';
@@ -3246,6 +3260,12 @@ function startSearch() {
   var _dept = (document.getElementById('sel-dept')?.value || '').trim();
   if(!_dept) {
     showError('Choisissez un département pour lancer la recherche.');
+    return;
+  }
+  // Départements à arrondissements : ville obligatoire (miroir de updateHint).
+  var _ville = (document.getElementById('sel-ville')?.value || '').trim();
+  if(PLM_DEPTS.indexOf(_dept) !== -1 && !_ville) {
+    showError('Choisissez une ville ou un arrondissement pour lancer la recherche sur ce département.');
     return;
   }
   if(!btn.classList.contains('active')) return;

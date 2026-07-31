@@ -430,6 +430,25 @@
     .cal-header{height:64px!important;padding:18px 22px!important;}
   }
 
+  /* ════════════════════════════════
+     PHONE (≤640px) — bandes horizontales défilables plutôt que rognées.
+     Indice de défilement par géométrie (peek d'une cellule au bord droit),
+     pas de masque dégradé (mentirait une fois défilé à fond).
+  ════════════════════════════════ */
+  @media (max-width: 640px) {
+    /* Bande (a) — indicateurs : le groupe défile en interne. max-width borne la
+       boîte, sinon flex-shrink:0 (l.171) la laisse à sa largeur de contenu et
+       overflow-x reste inerte. */
+    .kpi-group { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+    .kpi-chip { scroll-snap-align: start; }
+
+    /* Bande (b) — funnel Pipeline : plancher de largeur des cellules (les pistes
+       1fr passent à un min de 92px) => la grille déborde SA propre boîte et
+       défile dans #dash-funnel, sans déborder .card. */
+    #dash-funnel { overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+    #dash-funnel > div { min-width: 92px; scroll-snap-align: start; }
+  }
+
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">

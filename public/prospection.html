@@ -360,9 +360,9 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
    contrôle de zoom Leaflet, haut-droite par les indicateurs. */
 #map { flex: 1; height: 100%; min-height: 0; }
 /* ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite de la carte ── */
-.kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0}
-#prospection-kpis{position:absolute;top:12px;right:12px;z-index:1000;box-shadow:0 2px 12px rgba(0,0,0,.08)}
-.kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-right:1px solid var(--border);transition:background .12s;flex-shrink:0}
+.kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;flex-shrink:0}
+#prospection-kpis{z-index:1000;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-right:1px solid var(--border);transition:background .12s;flex-shrink:0;scroll-snap-align:start}
 .kpi-chip:last-child{border-right:none}
 .kpi-chip:hover{background:var(--surface2)}
 .kpi-num{font-size:22px;font-weight:900;line-height:1;letter-spacing:-.5px}
@@ -604,14 +604,11 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
   /* 3 — Fiches en une colonne (deux colonnes en base, l.447). */
   #cards { grid-template-columns: 1fr; }
 
-  /* 4 — #prospection-kpis reste en surimpression dans #map (aucun nœud déplacé).
-     Rendu lisible sur place : borné à la largeur de la carte (left:12 + right:12
-     => la boîte absolue ne prend plus sa largeur de contenu mais map−24),
-     défilable en interne (overflow-x:auto lève le overflow:hidden de .kpi-group,
-     l.363) sur le patron du Dashboard (dashboard.html:442). Plancher de largeur
-     sur les pastilles. Bornée DANS #map, elle n'est plus rognée par
-     .map-col{overflow:hidden}. */
-  #prospection-kpis { left: 12px; right: 12px; max-width: calc(100% - 24px); overflow-x: auto; touch-action: pan-x; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+  /* 4 — #prospection-kpis a quitté la carte (commit pivot) : en-tête de la
+     colonne fiches, en flux. Défilement horizontal passé en règle de base
+     (permanent). Reliquats redondants (touch-action, plancher) nettoyés au
+     commit suivant. */
+  #prospection-kpis { overflow-x: auto; touch-action: pan-x; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
   .kpi-chip { min-width: 128px; scroll-snap-align: start; }
 }
 </style>
@@ -784,25 +781,6 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
     <!-- carte -->
     <div class="map-col">
       <div id="map" style="position:relative">
-        <!-- ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite ── -->
-        <div class="kpi-group" id="prospection-kpis" aria-label="Indicateurs de prospection">
-          <div class="kpi-chip">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <div><div class="kpi-num" id="kpi-prospects-count" style="color:#B84C00">0</div><div class="kpi-lbl">Prospects trouvés</div></div>
-          </div>
-          <div class="kpi-chip">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
-            <div><div class="kpi-num" id="kpi-pipeline-count" style="color:#1D8348">0</div><div class="kpi-lbl">Pipeline</div></div>
-          </div>
-          <div class="kpi-chip">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M19 20H6a2 2 0 0 0-2 2"/><path d="M8 8h7M8 12h7"/></svg>
-            <div><div class="kpi-num" id="kpi-contacts-count" style="color:#4338CA">0</div><div class="kpi-lbl">Contacts entreprises</div></div>
-          </div>
-          <div class="kpi-chip">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-            <div><div class="kpi-num" id="kpi-session-adds" style="color:#7C3AED">0</div><div class="kpi-lbl">Contacts ajoutés</div></div>
-          </div>
-        </div>
       </div>
       <div class="geo-bar" id="geo-bar" style="width:0%"></div>
     </div>
@@ -820,6 +798,26 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
         <strong id="ctx-label"></strong>
         —&nbsp;<span id="ctx-geo-label">Région&nbsp;:</span>
         <strong id="ctx-region"></strong>
+      </div>
+      <!-- Barre d'indicateurs : sortie de la carte, elle devient l'en-tête de la
+           colonne fiches, au format vitrine « Aperçu · N résultat » (index.html:4064). -->
+      <div class="kpi-group" id="prospection-kpis" aria-label="Indicateurs de prospection">
+        <div class="kpi-chip">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <div><div class="kpi-num" id="kpi-prospects-count" style="color:#B84C00">0</div><div class="kpi-lbl">Prospects trouvés</div></div>
+        </div>
+        <div class="kpi-chip">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+          <div><div class="kpi-num" id="kpi-pipeline-count" style="color:#1D8348">0</div><div class="kpi-lbl">Pipeline</div></div>
+        </div>
+        <div class="kpi-chip">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M19 20H6a2 2 0 0 0-2 2"/><path d="M8 8h7M8 12h7"/></svg>
+          <div><div class="kpi-num" id="kpi-contacts-count" style="color:#4338CA">0</div><div class="kpi-lbl">Contacts entreprises</div></div>
+        </div>
+        <div class="kpi-chip">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          <div><div class="kpi-num" id="kpi-session-adds" style="color:#7C3AED">0</div><div class="kpi-lbl">Contacts ajoutés</div></div>
+        </div>
       </div>
       <div class="res-panel" id="res-panel">
         <!-- skeleton -->
@@ -1771,18 +1769,6 @@ var S = {
 // MAP INIT
 // ════════════════════════════════════════════════════════════════
 var map = L.map('map', { center:[46.5,2.5], zoom:6, zoomControl:true, scrollWheelZoom:true });
-// La barre d'indicateurs #prospection-kpis est un enfant du conteneur Leaflet. Sans les
-// deux appels ci-dessous, Leaflet confisque tout geste posé sur elle : touch-action:none
-// sur le conteneur, touchstart écouté sur toute sa surface, preventDefault au mouvement —
-// le défilement horizontal de la barre (bloc ≤640) est alors totalement inerte. Ce ne sont
-// pas des précautions superflues : disableScrollPropagation coupe le wheel→zoom,
-// disableClickPropagation coupe le mousedown/touchstart→drag. Elles rendent aussi la barre
-// inerte pour la carte au-dessus de 640 (assumé : une puce d'UI ne doit pas piloter la carte).
-var kpiBar = document.getElementById('prospection-kpis');
-if (kpiBar) {
-  L.DomEvent.disableScrollPropagation(kpiBar);
-  L.DomEvent.disableClickPropagation(kpiBar);
-}
 // CartoDB Positron : style gris/blanc minimaliste, gratuit, illimité, sans
 // clé API. Compromis : certains labels pays/régions restent en anglais
 // (Stadia Alidade Smooth lang=fr exige une clé, OSM France est trop saturé).

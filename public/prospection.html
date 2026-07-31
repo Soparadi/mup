@@ -611,7 +611,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
      l.363) sur le patron du Dashboard (dashboard.html:442). Plancher de largeur
      sur les pastilles. Bornée DANS #map, elle n'est plus rognée par
      .map-col{overflow:hidden}. */
-  #prospection-kpis { left: 12px; right: 12px; max-width: calc(100% - 24px); overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+  #prospection-kpis { left: 12px; right: 12px; max-width: calc(100% - 24px); overflow-x: auto; touch-action: pan-x; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
   .kpi-chip { min-width: 128px; scroll-snap-align: start; }
 }
 </style>
@@ -1771,6 +1771,18 @@ var S = {
 // MAP INIT
 // ════════════════════════════════════════════════════════════════
 var map = L.map('map', { center:[46.5,2.5], zoom:6, zoomControl:true, scrollWheelZoom:true });
+// La barre d'indicateurs #prospection-kpis est un enfant du conteneur Leaflet. Sans les
+// deux appels ci-dessous, Leaflet confisque tout geste posé sur elle : touch-action:none
+// sur le conteneur, touchstart écouté sur toute sa surface, preventDefault au mouvement —
+// le défilement horizontal de la barre (bloc ≤640) est alors totalement inerte. Ce ne sont
+// pas des précautions superflues : disableScrollPropagation coupe le wheel→zoom,
+// disableClickPropagation coupe le mousedown/touchstart→drag. Elles rendent aussi la barre
+// inerte pour la carte au-dessus de 640 (assumé : une puce d'UI ne doit pas piloter la carte).
+var kpiBar = document.getElementById('prospection-kpis');
+if (kpiBar) {
+  L.DomEvent.disableScrollPropagation(kpiBar);
+  L.DomEvent.disableClickPropagation(kpiBar);
+}
 // CartoDB Positron : style gris/blanc minimaliste, gratuit, illimité, sans
 // clé API. Compromis : certains labels pays/régions restent en anglais
 // (Stadia Alidade Smooth lang=fr exige une clé, OSM France est trop saturé).

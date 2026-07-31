@@ -447,6 +447,13 @@
        défile dans #dash-funnel, sans déborder .card. */
     #dash-funnel { overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
     #dash-funnel > div { min-width: 92px; scroll-snap-align: start; }
+
+    /* Bande (c) — Facturation : même patron que le funnel. La rangée n'avait aucun
+       hook CSS => class="billing-row" ajoutée sur son <div> (seule ligne existante
+       modifiée du lot). min-width:100px garde « CA EN ATTENTE » / « TICKET MOYEN »
+       sur une ligne. */
+    .billing-row { overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+    .billing-row > div { min-width: 100px; scroll-snap-align: start; }
   }
 
 </style>
@@ -562,7 +569,7 @@
         <div><div class="card-title">Facturation 2026</div></div>
         <span class="card-action">Tout voir <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);padding:14px 22px;gap:10px;">
+      <div class="billing-row" style="display:grid;grid-template-columns:repeat(6,1fr);padding:14px 22px;gap:10px;">
         <div>
           <div style="font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);">CA réalisé</div>
           <div id="fact-kpi-realized" style="font-size:18px;font-weight:900;letter-spacing:-.3px;color:#1D9E75;margin-top:3px;font-family:var(--font);">0 €</div>

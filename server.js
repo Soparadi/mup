@@ -416,6 +416,25 @@ function isProspectable(item, allowInactive = false) {
   return true
 }
 
+// ── isServedAddressActive — l'ADRESSE servie est-elle ouverte ? ──────────────
+// isProspectable teste l'ENTREPRISE (etat_administratif racine = unité légale) ;
+// ce test-ci porte sur l'ÉTABLISSEMENT retenu par pickLocalEtab — l'adresse
+// réellement servie à l'abonné, qui peut être fermée alors que l'unité légale
+// reste active. Miroir STRICT du filtre d'ÉCRITURE (referentiel.js,
+// upsertReferentiel : etatAdm = état de l'étab servi, repli fiche, skip si ≠ 'A')
+// — on masque à la lecture exactement ce qu'on n'écrit plus. Le repli sur l'état
+// de la fiche est identique à l'écriture : quand l'étab ne porte pas d'état,
+// l'unité légale (déjà filtrée par isProspectable) fait foi ; le test ne mord
+// donc QUE sur une adresse explicitement fermée d'une entreprise active.
+// allowInactive : même exemption qu'isProspectable — une recherche par
+// identifiant volontaire VOIT l'adresse fermée, elle ne la masque pas.
+function isServedAddressActive(etab, fiche, allowInactive = false) {
+  if (allowInactive) return true
+  const trim = v => (typeof v === 'string' ? v.trim() : '')
+  const etatAdm = trim(etab?.etat_administratif) || trim(fiche?.etat_administratif)
+  return etatAdm === 'A'
+}
+
 // ── Filtre diffusion INSEE (Phase 6 Étape 15 — droit d'opposition SIRENE) ──
 // L'INSEE permet aux entrepreneurs individuels de s'opposer à la diffusion de
 // leurs données SIRENE (loi République numérique 2016 art.1 ; art. L.1 CRPA).
@@ -515,6 +534,10 @@ function keepLead(fiche, ctx) {
   if (!isFullyDiffusible(fiche, 'etalab')) return false
   const L = pickLocalEtab(fiche, ctx.allowedDepts)
   if (L.drop) return false
+  // Adresse fermée → drop. On teste l'établissement RETENU (celui servi), pas
+  // l'unité légale : isProspectable a déjà couvert l'entreprise. Miroir de
+  // l'écriture ; exempté en recherche par identifiant (ctx.allowInactive).
+  if (!isServedAddressActive(L.etab, fiche, ctx.allowInactive)) return false
   // NAF : exclut UNIQUEMENT sur inégalité stricte (naf étab vide = garder).
   if (ctx.naf && L.naf && L.naf !== ctx.naf) return false
   // blocklist : un quelconque SIRET de la fiche opt-out → drop
@@ -2544,7 +2567,19 @@ app.get('/api/search', async (req, res) => {
       // exposé au front pour distinguer "page upstream vide" (fin de flux) de
       // "page upstream pleine mais 100%-filtrée serveur" (≠ fin de flux).
       data.raw_count = fetched
-      const kept = data.results.filter(f => isProspectable(f, isIdentifierSearch))
+      // Le ratio extrapole le total ANNONCÉ ; il doit compter les fiches
+      // RÉELLEMENT servies. isProspectable teste l'entreprise ; on lui ADJOINT
+      // le même test d'adresse que keepLead (établissement retenu ouvert), pour
+      // que le total baisse dans la même proportion que les fiches servies. On
+      // n'introduit PAS ici la déduplication (pipeline abonné) ni la blocklist :
+      // le total mesure le MARCHÉ disponible, pas ce qu'il reste à traiter — l'y
+      // mêler ferait fondre le marché à mesure que l'abonné remplit son pipeline.
+      const ratioDepts = req.query.departement ? String(req.query.departement).split(',') : []
+      const kept = data.results.filter(f => {
+        if (!isProspectable(f, isIdentifierSearch)) return false
+        const L = pickLocalEtab(f, ratioDepts)
+        return isServedAddressActive(L.etab, f, isIdentifierSearch)
+      })
       data.results = kept
       if (fetched > 0 && typeof data.total_results === 'number') {
         const ratio = kept.length / fetched

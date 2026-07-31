@@ -1642,6 +1642,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 <script src="/_mup-tel.js"></script>
 <script src="/_mup-card.js"></script>
 <script src="/js/sector-appellations.js"></script>
+<script src="/js/sector-search.js"></script>
 <script>
 'use strict';
 /*
@@ -3551,53 +3552,11 @@ var NAF_LABELS = {};
 var _acIdx = -1;
 var _acList = [];
 
-// Table d'appellations metier deplacee dans /js/sector-appellations.js (source unique).
-var SYNONYMS = window.SectorAppellations || {};
-
-function _norm(s) {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
-}
-// Variantes pluriel/singulier basique : ajoute la version inverse du 's' final.
-function _wordVariants(w) {
-  var v = [w];
-  if (w.length > 4 && w.charAt(w.length-1) === 's') v.push(w.slice(0, -1));
-  if (w.length > 3 && w.charAt(w.length-1) !== 's') v.push(w + 's');
-  return v;
-}
-// Match tol\u00e9rant : le mot requ\u00eate pr\u00e9fixe un mot de libell\u00e9 (jamais l'inverse,
-// sinon \u00ab c \u00bb de clinique matcherait \u00ab c \u00bb de n.c.a.), mots de libell\u00e9 < 2 chars
-// ignor\u00e9s, + variantes plural + pr\u00e9fixe commun \u2265 5 chars (radical m\u00e9tier :
-// platrier\u2194platrerie, coiffeur\u2194coiffure).
-function _wordsMatch(qWord, lWord) {
-  var qV = _wordVariants(qWord), lV = _wordVariants(lWord);
-  for (var i = 0; i < qV.length; i++) {
-    for (var j = 0; j < lV.length; j++) {
-      if (lV[j].length < 2) continue;
-      if (lV[j].startsWith(qV[i])) return true;
-    }
-  }
-  if (qWord.length >= 5 && lWord.length >= 5 && qWord.slice(0,5) === lWord.slice(0,5)) return true;
-  return false;
-}
-function _score(q, item) {
-  var qn=_norm(q), code=item.code.toLowerCase(), lb=item.ln;
-  if(code===qn || code.replace(/[^a-z0-9]/g,'')=== qn.replace(/[^a-z0-9]/g,'')) return 100;
-  if(code.startsWith(qn)) return 95;
-  var syns=SYNONYMS[qn]||[];
-  if(syns.indexOf(item.code)>=0) return 90;
-  for(var k in SYNONYMS){ if(SYNONYMS[k].indexOf(item.code)>=0 && k.indexOf(qn)>=0 && qn.length>=3) return 75; }
-  var words=lb.split(' '), qw=qn.split(' ').filter(function(w){return w.length>=2;});
-  if(qw.length>0 && qw.every(function(w){return words.some(function(x){return _wordsMatch(w, x);});})) return 80;
-  if(lb.indexOf(qn)>=0 && qn.length>=3) return 70;
-  var pc=qw.filter(function(w){return words.some(function(x){return _wordsMatch(w,x);})&&w.length>=3;}).length;
-  if(pc>0) return 40+pc*10;
-  return 0;
-}
-function _hl(text, q) {
-  var n=_norm(text), qn=_norm(q), i=n.indexOf(qn);
-  if(i<0) return esc(text);
-  return esc(text.slice(0,i))+'<span class="acd-hl">'+esc(text.slice(i,i+qn.length))+'</span>'+esc(text.slice(i+qn.length));
-}
+// Moteur de recherche floue deplace dans /js/sector-search.js (implementation unique,
+// reference partagee avec la vitrine). Alias locaux vers le calcul du module :
+// _norm (utilise par buildIndex) et _hl (utilise par _renderItem).
+var _norm = window.SectorSearch.norm;
+var _hl   = window.SectorSearch.hl;
 function buildIndex() {
   NAF_INDEX = [];
   document.querySelectorAll('#sector-select option[value]').forEach(function(o){
@@ -3607,24 +3566,8 @@ function buildIndex() {
     NAF_LABELS[o.value] = label;
   });
 }
-function searchNAF(q) {
-  if(!q||q.trim().length<2) return [];
-  return NAF_INDEX
-    .map(function(x){ return Object.assign({},x,{sc:_score(q,x)}); })
-    .filter(function(x){ return x.sc>0; })
-    .sort(function(a,b){ return b.sc-a.sc; })
-    .slice(0,12);
-}
-function fallbackLabelSearch(q) {
-  var qn = _norm(q);
-  var results = [];
-  NAF_INDEX.forEach(function(item) {
-    if (item.ln.includes(qn) && qn.length >= 3) {
-      results.push(Object.assign({}, item, {sc: 50}));
-    }
-  });
-  return results.slice(0, 8);
-}
+function searchNAF(q) { return window.SectorSearch.searchNAF(q, NAF_INDEX); }
+function fallbackLabelSearch(q) { return window.SectorSearch.fallbackLabelSearch(q, NAF_INDEX); }
 function renderAC(q,results) {
   var dd=document.getElementById('acd');
   if(!results.length){ dd.innerHTML='<div class="acd-empty">Aucun résultat pour "'+esc(q)+'"</div>'; dd.classList.add('open'); return; }

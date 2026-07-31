@@ -22,15 +22,10 @@
 (function () {
   'use strict'
 
-  // Dictionnaire d'appellations : SOURCE UNIQUE partagee /js/sector-appellations.js
-  // (charge avant ce module par la page). La table inline a ete deplacee la-bas.
-  var SYNONYMS = (window.SectorAppellations) || {}
-
-  function _norm(s) {
-    return String(s).toLowerCase().normalize('NFD')
-      .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ').trim()
-  }
+  // Moteur de calcul (norm, score, highlight, recherche) : IMPLÉMENTATION UNIQUE
+  // partagée /js/sector-search.js (chargé avant ce module, après les appellations).
+  // La table d'appellations vit dans /js/sector-appellations.js.
+  var _norm = window.SectorSearch.norm
 
   function _esc(s) {
     if (!s) return ''
@@ -38,31 +33,7 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   }
 
-  function _hl(text, q) {
-    var n = _norm(text), qn = _norm(q), i = n.indexOf(qn)
-    if (i < 0) return _esc(text)
-    return _esc(text.slice(0, i))
-      + '<span class="acd-hl">' + _esc(text.slice(i, i + qn.length)) + '</span>'
-      + _esc(text.slice(i + qn.length))
-  }
-
-  function _score(q, item) {
-    var qn = _norm(q), code = item.code.toLowerCase(), lb = item.ln
-    if (code === qn || code.replace(/[^a-z0-9]/g, '') === qn.replace(/[^a-z0-9]/g, '')) return 100
-    if (code.indexOf(qn) === 0) return 95
-    var syns = SYNONYMS[qn] || []
-    if (syns.indexOf(item.code) >= 0) return 90
-    for (var k in SYNONYMS) {
-      if (SYNONYMS[k].indexOf(item.code) >= 0 && k.indexOf(qn) >= 0 && qn.length >= 3) return 75
-    }
-    var words = lb.split(' ')
-    var qw = qn.split(' ').filter(function (w) { return w.length >= 2 })
-    if (qw.length > 0 && qw.every(function (w) { return words.some(function (x) { return x.indexOf(w) === 0 }) })) return 80
-    if (lb.indexOf(qn) >= 0 && qn.length >= 3) return 70
-    var pc = qw.filter(function (w) { return lb.indexOf(w) >= 0 && w.length >= 3 }).length
-    if (pc > 0) return 40 + pc * 10
-    return 0
-  }
+  var _hl = window.SectorSearch.hl
 
   function init(opts) {
     var sourceSelect = document.getElementById(opts.sourceSelectId)
@@ -89,23 +60,11 @@
     var acList = []
 
     function searchNAF(q) {
-      if (!q || q.trim().length < 2) return []
-      return INDEX
-        .map(function (x) { return Object.assign({}, x, { sc: _score(q, x) }) })
-        .filter(function (x) { return x.sc > 0 })
-        .sort(function (a, b) { return b.sc - a.sc })
-        .slice(0, 12)
+      return window.SectorSearch.searchNAF(q, INDEX)
     }
 
     function fallbackLabelSearch(q) {
-      var qn = _norm(q)
-      var results = []
-      INDEX.forEach(function (item) {
-        if (item.ln.indexOf(qn) >= 0 && qn.length >= 3) {
-          results.push(Object.assign({}, item, { sc: 50 }))
-        }
-      })
-      return results.slice(0, 8)
+      return window.SectorSearch.fallbackLabelSearch(q, INDEX)
     }
 
     function _renderItem(r, q) {

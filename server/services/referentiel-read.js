@@ -26,6 +26,17 @@ import { checkBlocklistBatch } from './optout.js'
 export const REFERENTIEL_TTL_DAYS = 30
 const FRESH_CLAUSE = `refreshed_at > time::now() - ${REFERENTIEL_TTL_DAYS}d`
 
+// Filtre d'activité : on ne SERT et ne COMPTE que les établissements ACTIFS.
+// Égalité STRICTE 'A' — la mesure l'a établi : aucune ligne du stock ne porte
+// d'état absent (NONE/'' inexistant sur referentiel_societes), donc `= 'A'` ne
+// laisse échapper aucune fiche active. etat_administratif porte l'ÉTAT DE
+// L'ÉTABLISSEMENT servi (upsert stocke l'étab d'abord, cf. referentiel.js:403).
+// Les fiches fermées RESTENT en base (mémoire négative — évite de les redemander
+// à la source) mais sont écartées à la lecture. Comme cette clause vit dans
+// buildWhere, elle alimente d'un seul geste readReferentiel ET countReferentielFresh :
+// recherche en cache, comptage/total, démo publique et porte de complétude (fiches_count).
+const ACTIVE_CLAUSE = "etat_administratif = 'A'"
+
 // Coercition string sûre (calque referentiel.js) : jamais null/undefined, toujours trimée.
 const str = v => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v).trim()))
 
@@ -67,7 +78,7 @@ function buildWhere({ departement, naf, commune, codePostal }) {
   const n = normalizeNaf(naf)
   if (!d || !n) return { clause: '', params: {} }
   const params = { d, n }
-  const parts = ['departement = $d', 'naf = $n']
+  const parts = ['departement = $d', 'naf = $n', ACTIVE_CLAUSE]
   const communes = communesFor(commune)
   if (communes.length) { parts.push('commune IN $communes'); params.communes = communes }
   // Code postal : colonne `code_postal` distincte du code INSEE `commune`. Le walker

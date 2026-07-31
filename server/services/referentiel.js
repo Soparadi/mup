@@ -367,6 +367,7 @@ export async function upsertReferentiel(fiches) {
     }
     const bloques = sirets.length ? await checkBlocklistBatch(sirets) : new Set()
     let optoutSkipped = 0
+    let fermeSkipped = 0
     for (const fiche of fiches) {
       try {
         // Établissement servi à l'abonné : matching_etablissements[0], fallback siège.
@@ -402,6 +403,14 @@ export async function upsertReferentiel(fiches) {
         if (str(etab.libelle_commune)) body.ville = str(etab.libelle_commune)
         const etatAdm = str(etab.etat_administratif) || str(fiche?.etat_administratif)
         if (etatAdm) body.etat_administratif = etatAdm
+        // Filtre d'activité à l'ÉCRITURE — miroir strict de la clause de lecture
+        // (buildWhere, égalité stricte 'A') : on ne fait JAMAIS entrer un établissement
+        // fermé au référentiel. On teste l'état de l'établissement SERVI (etatAdm ci-dessus,
+        // celui-là même qui serait stocké). L'état servi est toujours présent (mesuré : aucune
+        // ligne à état absent), le skip ne perd donc aucune fiche active ; et une fiche non-'A'
+        // écrite ne serait de toute façon jamais relue (la gate de lecture ne sert que 'A').
+        // Le filtre de lecture protège l'existant, celui-ci ferme la source pour l'avenir.
+        if (etatAdm !== 'A') { fermeSkipped++; continue }
         // lat/lng option<number> : Number + garde Number.isFinite, sinon OMIS (jamais NaN).
         const lat = Number(etab.latitude)
         const lng = Number(etab.longitude)
@@ -457,6 +466,7 @@ export async function upsertReferentiel(fiches) {
       }
     }
     if (optoutSkipped) console.log(`[optout] ${optoutSkipped} fiche(s) écartée(s) du lot referentiel`)
+    if (fermeSkipped) console.log(`[referentiel-upsert] ${fermeSkipped} établissement(s) fermé(s) écarté(s) à l'écriture`)
   } catch (e) {
     console.warn('[referentiel-upsert]', String(e?.message || e).slice(0, 80))
   }

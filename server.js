@@ -400,9 +400,14 @@ function hasNamedDirigeant(item) {
   return false
 }
 
-function isProspectable(item) {
+// allowInactive : consultation CIBLÉE (recherche par identifiant SIRET/SIREN saisi
+// volontairement). Une recherche de masse FILTRE l'activité ; une consultation ciblée
+// INFORME — elle ne doit pas MASQUER un établissement fermé délibérément recherché.
+// L'état reste porté par la fiche (etat_administratif) pour signalement en aval.
+// N'assouplit QUE le filtre d'activité ; diffusion RGPD et opt-out restent appliqués.
+function isProspectable(item, allowInactive = false) {
   if (!item) return false
-  if (item.etat_administratif !== 'A') return false
+  if (!allowInactive && item.etat_administratif !== 'A') return false
   const nat = typeof item.nature_juridique === 'string' ? item.nature_juridique : ''
   if (nat && EXCLUDED_NATURE_JURIDIQUE_PREFIXES.some(p => nat.startsWith(p))) return false
   // hasNamedDirigeant N'EST PLUS bloquant : un établissement sans dirigeant
@@ -506,7 +511,7 @@ function pickLocalEtab(fiche, allowedDepts) {
 // /api/search-count, il rendait ctx.ville divergent entre les deux endpoints
 // (« marché N / 0 chargée »). Retiré → parité stricte rétablie.
 function keepLead(fiche, ctx) {
-  if (!isProspectable(fiche)) return false
+  if (!isProspectable(fiche, ctx.allowInactive)) return false
   if (!isFullyDiffusible(fiche, 'etalab')) return false
   const L = pickLocalEtab(fiche, ctx.allowedDepts)
   if (L.drop) return false
@@ -1363,6 +1368,18 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
     // 3. Re-fetch dirigeants + identité INSEE, HORS transaction (réseau lent).
     //    Dégradé gracieux assuré par le helper : vide si 429/erreur, jamais throw.
     const dd = await refetchDirigeants(siren)
+    // Filtre d'activité — matérialisation vers le suivi. L'état (unité légale) vient
+    // d'être refetché juste au-dessus ; on le TESTE ici, avant toute écriture. Un
+    // établissement fermé ne doit pas entrer au suivi : état CONNU et ≠ 'A' → 409,
+    // aucune société / carte créée. État INCONNU ('' : refetch dégradé sur 429/réseau)
+    // → on laisse passer (le dégradé gracieux du helper est préservé, jamais de blocage
+    // sur incertitude). Test volontairement AVANT getDb : rien n'est touché en base.
+    if (dd.etat_administratif && dd.etat_administratif !== 'A') {
+      return res.status(409).json({
+        error: 'etablissement_ferme',
+        message: "Cette entreprise n'est plus en activité et ne peut pas être ajoutée au suivi."
+      })
+    }
 
     const db = await getDb()
     // 4. Dédup société par SIREN (une société = une unité légale ; deux
@@ -2507,6 +2524,15 @@ app.get('/api/search', async (req, res) => {
       return res.status(502).json({ error: 'Service temporairement indisponible', upstream_status: r.status })
     }
     const data = await r.json()
+    // Recherche par IDENTIFIANT (searchById : SIRET 14 ou SIREN 9 chiffres saisi
+    // volontairement, sans dept/NAF/région). Consultation CIBLÉE → on n'applique PAS
+    // le filtre d'activité : un établissement fermé délibérément recherché doit être
+    // VU, pas masqué (l'état voyage sur la fiche pour signalement). Opt-out RGPD et
+    // filtre diffusion restent, eux, pleinement appliqués (via keepLead ci-dessous).
+    const qNorm = String(req.query.q || '').replace(/\s+/g, '')
+    const isIdentifierSearch = /^(\d{9}|\d{14})$/.test(qNorm) &&
+      !req.query.departement && !req.query.activite_principale &&
+      !req.query.code_naf && !req.query.region
     // Filtre qualité : on retire les fiches non-prospectables (sans dirigeant,
     // cessées, ou nature juridique exclue — SCI/organismes publics/droit
     // étranger). total_results est ré-estimé via le ratio observé sur la page
@@ -2518,7 +2544,7 @@ app.get('/api/search', async (req, res) => {
       // exposé au front pour distinguer "page upstream vide" (fin de flux) de
       // "page upstream pleine mais 100%-filtrée serveur" (≠ fin de flux).
       data.raw_count = fetched
-      const kept = data.results.filter(isProspectable)
+      const kept = data.results.filter(f => isProspectable(f, isIdentifierSearch))
       data.results = kept
       if (fetched > 0 && typeof data.total_results === 'number') {
         const ratio = kept.length / fetched
@@ -2561,7 +2587,8 @@ app.get('/api/search', async (req, res) => {
         allowedDepts: req.query.departement ? String(req.query.departement).split(',') : [],
         naf: String(req.query.code_naf || req.query.activite_principale || '').replace(/\./g, ''),
         existing,
-        blocked
+        blocked,
+        allowInactive: isIdentifierSearch
       }
       data.results = data.results.filter(f => keepLead(f, ctx))
       console.log(`[search] page=${req.query.page || 1} brut=${brut} garde=${data.results.length}`)

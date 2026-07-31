@@ -573,6 +573,46 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 @media (max-width: 640px) {
   .sip input { font-size: 16px; }
   #sel-region, #sel-dept, #sel-ville { font-size: 16px; }
+
+  /* 1 — Formulaire en colonne unique (ordre vitrine : Secteur → Région →
+     Département → Ville → Lancer → identifiant, déjà l'ordre du DOM).
+     Le palier 1330 laisserait la grille à « 1fr 1fr auto » (l.232) : on force
+     une colonne. width:100% car .search-bar centre son enfant
+     (justify-content:center, l.96) — sans ça la grille garderait sa largeur
+     de contenu au lieu de remplir. La carte de formulaire perd sa gouttière
+     desktop (calc(100% - 96px)) et resserre son padding : elle n'enveloppe
+     que le formulaire (carte/fiches sont dans .content-area, sibling). */
+  .search-engine { width: 100%; padding: 18px 16px; }
+  .search-grid { grid-template-columns: 1fr; width: 100%; }
+  .btn-go { width: 100%; }
+  /* .id-block reste inchangé (flex : champ + bouton 44px). Le champ prend la
+     largeur restante à côté du bouton ; le width:140px (l.212) est levé. */
+  .id-field { width: auto; flex: 1; }
+
+  /* 2 — Carte au-dessus, fiches en dessous. .content-area passe de flex-row en
+     colonne. On purge les height:100% (qui s'effondrent quand le parent perd sa
+     hauteur définie) : la carte reçoit une hauteur explicite ; les fiches
+     coulent dans le défilement de main (overflow:visible + height:auto) au lieu
+     d'ouvrir un second défilement imbriqué. 320px = valeur de la vitrine
+     (index.html:1457), suffisante sous le formulaire déjà empilé. */
+  .content-area { flex-direction: column; }
+  .map-col { flex: 0 0 auto; height: 320px; border-right: none; border-bottom: 1px solid var(--border); }
+  #map { height: 320px; }
+  .res-col { flex: 0 0 auto; height: auto; overflow: visible; }
+  .res-panel { height: auto; overflow: visible; }
+
+  /* 3 — Fiches en une colonne (deux colonnes en base, l.447). */
+  #cards { grid-template-columns: 1fr; }
+
+  /* 4 — #prospection-kpis reste en surimpression dans #map (aucun nœud déplacé).
+     Rendu lisible sur place : borné à la largeur de la carte (left:12 + right:12
+     => la boîte absolue ne prend plus sa largeur de contenu mais map−24),
+     défilable en interne (overflow-x:auto lève le overflow:hidden de .kpi-group,
+     l.363) sur le patron du Dashboard (dashboard.html:442). Plancher de largeur
+     sur les pastilles. Bornée DANS #map, elle n'est plus rognée par
+     .map-col{overflow:hidden}. */
+  #prospection-kpis { left: 12px; right: 12px; max-width: calc(100% - 24px); overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+  .kpi-chip { min-width: 128px; scroll-snap-align: start; }
 }
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">

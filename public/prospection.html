@@ -19,7 +19,7 @@
    DESIGN TOKENS — aligned with Homepage
 ═══════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; overflow: hidden; background: #F5F5F7; margin: 0; }
+html, body { min-height: 100%; background: #F5F5F7; margin: 0; }
 html { scroll-behavior: smooth; }
 :root {
   --app-footer-h:36px;
@@ -65,7 +65,7 @@ body {
 ═══════════════════════════════════════════════ */
 .shell { display: flex; width: 100%; min-height: 100vh; }
 .shell > aside#sidebar { flex-shrink: 0; }
-.shell > main, .shell > .main-content, .shell > :not(aside) { flex: 1; min-width: 0; overflow: hidden; }
+.shell > main, .shell > .main-content, .shell > :not(aside) { flex: 1; min-width: 0; }
 
 /* ═══════════════════════════════════════════════
    SIDEBAR
@@ -78,7 +78,7 @@ body {
 .sb-icon { width: 22px; height: 22px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; flex-shrink: 0; }
 .sb-badge { margin-left: auto; font-size: 9px; font-weight: 800; font-family: var(--mono); background: var(--text); color: #fff; border-radius: 6px; padding: 1px 6px; }
 
-main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex; flex-direction: column; overflow-y: auto; flex: 1; min-width: 0; }
+main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display: flex; flex-direction: column; flex: 1; min-width: 0; }
 
 /* ═══════════════════════════════════════════════
    SEARCH ENGINE
@@ -331,28 +331,17 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 /* ═══════════════════════════════════════════════
    CONTENT AREA — map + results
 ═══════════════════════════════════════════════ */
-/* flex:1 pour occuper l'espace restant sous le bloc recherche ; le plancher
-   empêche #map de se comprimer sur un écran court. Un plancher en pixels fixes
-   ne peut pas convenir : à 640 de haut la place n'existe pas. On l'exprime donc
-   relatif à la hauteur de l'écran.
-
-   Budget de hauteur mesuré à 1280×640 (machine de référence) :
-     640 − 36 (pied fixe)                                  = 604 (main)
-     604 − 239 (bloc recherche, deux rangées car 1280<1330) = 365 dispo
-   Le plancher ne doit JAMAIS dépasser ces 365px, sinon main déborde et la carte
-   est coupée. calc(100vh − 285px) borne au budget : 285 = 36 (pied) + 239 (bloc)
-   + 10 de garde. Il donne 355px à 640 (10px sous le plafond de 365, la carte
-   n'est pas coupée), 565px à 850, 795px à 1080 — généreux sur grand écran. Le
-   plancher ne mord que si le bloc recherche dépasse ~264px (fenêtre vraiment
-   courte) : main (overflow-y:auto) prend alors le débordement, #map garde sa
-   hauteur au lieu d'être écrasée. */
-.content-area { display: flex; flex: 1; min-height: calc(100vh - 285px); overflow: hidden; }
+/* Empilement en colonne à toutes les largeurs (patron vitrine : formulaire →
+   carte → barre → fiches). Plus de budget de hauteur ni d'overflow interne :
+   la page défile, .content-area suit son contenu. La carte reçoit une hauteur
+   explicite (.map-col), les fiches coulent (.res-col / .res-panel). */
+.content-area { display: flex; flex-direction: column; overflow: visible; }
 
 /* map column */
 .map-col {
-  flex: 2; height: 100%;
+  flex: 0 0 auto; height: 480px;
   display: flex; flex-direction: column;
-  border-right: 1px solid var(--border); overflow: hidden; isolation: isolate;
+  border-bottom: 1px solid var(--border); overflow: hidden; isolation: isolate;
 }
 /* Le bandeau de titre « Carte de prospection » a disparu du flux : titre
    décoratif sur un écran de travail qui dit déjà de quoi il s'agit. Le repère
@@ -374,7 +363,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
 }
 
 /* results column */
-.res-col { flex: 1; height: 100%; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
+.res-col { display: flex; flex-direction: column; background: var(--bg); }
 .res-hdr {
   padding: 12px 16px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
@@ -398,7 +387,7 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
   font-family: var(--mono); font-size: 11px; font-weight: 700;
   color: var(--muted); white-space: nowrap;
 }
-.res-panel { overflow-y: auto; flex: 1; position: relative; min-height: 0; padding-bottom: 50px; }
+.res-panel { position: relative; padding-bottom: 50px; }
 .res-panel::-webkit-scrollbar { width: 4px; }
 .res-panel::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
@@ -589,17 +578,10 @@ main { padding-top: 0; height: calc(100vh - var(--app-footer-h)); display: flex;
      largeur restante à côté du bouton ; le width:140px (l.212) est levé. */
   .id-field { width: auto; flex: 1; }
 
-  /* 2 — Carte au-dessus, fiches en dessous. .content-area passe de flex-row en
-     colonne. On purge les height:100% (qui s'effondrent quand le parent perd sa
-     hauteur définie) : la carte reçoit une hauteur explicite ; les fiches
-     coulent dans le défilement de main (overflow:visible + height:auto) au lieu
-     d'ouvrir un second défilement imbriqué. 320px = valeur de la vitrine
-     (index.html:1457), suffisante sous le formulaire déjà empilé. */
-  .content-area { flex-direction: column; }
-  .map-col { flex: 0 0 auto; height: 320px; border-right: none; border-bottom: 1px solid var(--border); }
-  #map { height: 320px; }
-  .res-col { flex: 0 0 auto; height: auto; overflow: visible; }
-  .res-panel { height: auto; overflow: visible; }
+  /* 2 — Carte plus courte sur téléphone (320 vs 480 en base). Empilement,
+     border-bottom et height:auto/overflow:visible des fiches sont désormais
+     dans les règles de base (généralisés à toutes les largeurs). */
+  .map-col { height: 320px; }
 
   /* 3 — Fiches en une colonne (deux colonnes en base, l.447). */
   #cards { grid-template-columns: 1fr; }
@@ -2838,7 +2820,9 @@ async function loadPage(page) {
 
       // Premier paquet rendu (cards déjà vidé en tête de loadPage), scroll en haut.
       renderChunk(PAGE_SIZE);
-      document.getElementById('res-panel').scrollTop = 0;
+      // La page défile désormais : on remonte le document (retour sec, 'instant'
+      // pour ne pas subir le scroll-behavior:smooth de html sur une recherche).
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
       // Scéno B1 : le compteur tourne seul — amorce l'auto-déroulement du 1er palier.
       if(S.buffer.length) nudgeAutoRoll();
 
@@ -3755,7 +3739,8 @@ async function searchById() {
     // Rendu direct dans #cards, hors renderChunk/loadPage → aucune barrière NAF.
     var cardsEl = document.getElementById('cards');
     for (var i = 0; i < items.length; i++) cardsEl.appendChild(createCard(items[i], i));
-    document.getElementById('res-panel').scrollTop = 0;
+    // La page défile désormais : on remonte le document (retour sec, 'instant').
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     document.getElementById('stats-bar').classList.add('show');
 
     // Entête « Résultats pour : <id> <raison sociale> — Région : <commune> », en
@@ -3875,13 +3860,14 @@ else buildIndex();
   else boot();
 })();
 
-// ── Scroll infini : déclenche loadMore() à ~80% du panneau résultats ──
+// ── Scroll infini : déclenche le nudge à ~80% du DOCUMENT (la page défile) ──
 (function attachInfiniteScroll(){
-  var panel = document.getElementById('res-panel');
-  if(!panel) return;
-  panel.addEventListener('scroll', function() {
-    if(panel.scrollTop + panel.clientHeight >= panel.scrollHeight * 0.8) nudgeAutoRoll();
-  });
+  // Plus de panneau interne : on écoute le défileur de document, pas #res-panel.
+  // Seuil 80 % inchangé — simple nudge, la boucle runAutoRoll reste auto-portée.
+  window.addEventListener('scroll', function() {
+    var el = document.scrollingElement || document.documentElement;
+    if(el.scrollTop + el.clientHeight >= el.scrollHeight * 0.8) nudgeAutoRoll();
+  }, { passive: true });
 })();
 
 </script>

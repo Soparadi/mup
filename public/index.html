@@ -4739,6 +4739,7 @@ document.querySelectorAll('.billing-toggle button').forEach(btn => {
 /* ───────────────── LEAFLET MAP + LEADS ───────────────── */
 let leadsMap = null;
 let leadMarkers = [];
+let leadsHomeView = null;
 
 function initLeadsMap() {
   if (leadsMap) return;
@@ -4757,6 +4758,9 @@ function initLeadsMap() {
     scrollWheelZoom: false,
     dragging: true
   });
+
+  // Vue d'ouverture, mémorisée pour le repli silencieux
+  leadsHomeView = { center: leadsMap.getCenter(), zoom: leadsMap.getZoom() };
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     subdomains: 'abcd',
@@ -5178,6 +5182,23 @@ const launchBtn = document.getElementById('leads-launch-btn');
 const leadsList = document.getElementById('leads-list');
 const leadsCount = document.getElementById('leads-count');
 
+// État initial du bloc de résultats, capturé au chargement : le repli
+// silencieux le restaure à l'identique plutôt que de le reconstruire.
+const leadsCountInitialHTML = leadsCount.innerHTML;
+const leadsListInitialHTML = leadsList.innerHTML;
+
+// Repli silencieux : remet la démonstration dans son état d'ouverture —
+// bloc de résultats, compteur, vue et marqueurs de la carte. Aucune trace.
+function resetDemoToInitial() {
+  leadsCount.innerHTML = leadsCountInitialHTML;
+  leadsList.innerHTML = leadsListInitialHTML;
+  if (leadsMap) {
+    leadMarkers.forEach(m => leadsMap.removeLayer(m));
+    leadMarkers = [];
+    if (leadsHomeView) leadsMap.setView(leadsHomeView.center, leadsHomeView.zoom, { animate: false });
+  }
+}
+
 // Autocomplete secteur — instance partagée avec prospection.html (composant réutilisable)
 let sectorAC = null;
 function checkLaunchBtn() {
@@ -5205,7 +5226,7 @@ regionEl.addEventListener('change', onRegionChange);
 deptEl.addEventListener('change', onDeptChange);
 villeEl.addEventListener('change', onVilleChange);   // câblage zoom ville (absent jusqu'ici)
 
-async function runDemoSearch({ naf, region, dept, commune }) {
+async function runDemoSearch({ naf, region, dept, commune }, { silent = false } = {}) {
   initLeadsMap();
   if (!leadsMap) return;
 
@@ -5229,24 +5250,28 @@ async function runDemoSearch({ naf, region, dept, commune }) {
     let url = '/api/public/search-demo?naf=' + encodeURIComponent(naf) + '&region=' + encodeURIComponent(region);
     if (dept) url += '&departement=' + encodeURIComponent(dept);
     if (commune) url += '&code_commune=' + encodeURIComponent(commune);
-    const r = await fetch(url);
+    // Borne l'appel à six secondes : sans quoi il peut pendre en laissant
+    // le chargement affiché. Vaut pour le clic manuel comme pour le mode auto.
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     data = await r.json();
   } catch (e) {
+    if (silent) { resetDemoToInitial(); return; }
     leadsCount.textContent = '0 résultat';
     leadsList.innerHTML = '<div class="leads-empty"><div class="leads-empty-title">Recherche indisponible</div><div class="leads-empty-sub">Réessayez dans un instant</div></div>';
     return;
   }
 
-  renderDemoResults(data);
+  renderDemoResults(data, { silent });
 }
 
-function renderDemoResults(data) {
+function renderDemoResults(data, { silent = false } = {}) {
   const preview = Array.isArray(data.preview) ? data.preview : [];
   const lockedMarkers = Array.isArray(data.markers) ? data.markers : [];
   const total = Number(data.total || preview.length + lockedMarkers.length);
 
   if (preview.length === 0) {
+    if (silent) { resetDemoToInitial(); return; }
     leadsCount.textContent = '0 résultat';
     leadsList.innerHTML = '<div class="leads-empty"><div class="leads-empty-title">Aucun résultat</div><div class="leads-empty-sub">Essayez un autre secteur ou une autre région</div></div>';
     return;

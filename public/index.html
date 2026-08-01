@@ -5205,13 +5205,7 @@ regionEl.addEventListener('change', onRegionChange);
 deptEl.addEventListener('change', onDeptChange);
 villeEl.addEventListener('change', onVilleChange);   // câblage zoom ville (absent jusqu'ici)
 
-launchBtn.addEventListener('click', async () => {
-  const secteur = (sectorAC && sectorAC.value) ? sectorAC.value : '';
-  const regionSlug = regionEl.value;
-  if (!secteur || !regionSlug) return;
-  const regionCode = REGION_CODES[regionSlug];
-  if (!regionCode) return;
-
+async function runDemoSearch({ naf, region, dept, commune }) {
   initLeadsMap();
   if (!leadsMap) return;
 
@@ -5232,9 +5226,9 @@ launchBtn.addEventListener('click', async () => {
   try {
     // departement (code 2 car.) obligatoire au clic ; code_commune (INSEE) si ville
     // renseignée. Jamais de code_postal.
-    let url = '/api/public/search-demo?naf=' + encodeURIComponent(secteur) + '&region=' + encodeURIComponent(regionCode);
-    if (deptEl.value) url += '&departement=' + encodeURIComponent(deptEl.value);
-    if (villeEl.value) url += '&code_commune=' + encodeURIComponent(villeEl.value);
+    let url = '/api/public/search-demo?naf=' + encodeURIComponent(naf) + '&region=' + encodeURIComponent(region);
+    if (dept) url += '&departement=' + encodeURIComponent(dept);
+    if (commune) url += '&code_commune=' + encodeURIComponent(commune);
     const r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     data = await r.json();
@@ -5244,6 +5238,10 @@ launchBtn.addEventListener('click', async () => {
     return;
   }
 
+  renderDemoResults(data);
+}
+
+function renderDemoResults(data) {
   const preview = Array.isArray(data.preview) ? data.preview : [];
   const lockedMarkers = Array.isArray(data.markers) ? data.markers : [];
   const total = Number(data.total || preview.length + lockedMarkers.length);
@@ -5324,6 +5322,15 @@ launchBtn.addEventListener('click', async () => {
       +   '<div class="lead-card-meta">' + ville + '</div>'
       + '</div>';
   }).join('');
+}
+
+launchBtn.addEventListener('click', () => {
+  const secteur = (sectorAC && sectorAC.value) ? sectorAC.value : '';
+  const regionSlug = regionEl.value;
+  if (!secteur || !regionSlug) return;
+  const regionCode = REGION_CODES[regionSlug];
+  if (!regionCode) return;
+  runDemoSearch({ naf: secteur, region: regionCode, dept: deptEl.value, commune: villeEl.value });
 });
 
 

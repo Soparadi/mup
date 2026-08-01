@@ -1637,72 +1637,6 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   font-family: var(--font-mono);
 }
 
-/* Quizz */
-.quizz {
-  max-width: 760px;
-  margin: 0 auto 56px;
-  padding: 32px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-}
-
-.quizz-q {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-  margin-bottom: 18px;
-  text-align: center;
-}
-
-.quizz-options {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.quizz-opt {
-  padding: 14px 10px;
-  background: var(--card);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  cursor: pointer;
-  transition: all .2s var(--ease-out);
-  position: relative;
-  text-align: center;
-}
-
-.quizz-opt:hover { border-color: var(--border-2); }
-
-.quizz-opt.selected {
-  border-color: var(--text);
-  background: var(--text);
-  color: #fff;
-}
-
-.quizz-opt.selected[data-plan="demarrage"] { background: var(--color-rdv); border-color: var(--color-rdv); color: #fff; }
-.quizz-opt.selected[data-plan="activite"] { background: var(--color-gagne); border-color: var(--color-gagne); color: #fff; }
-.quizz-opt.selected[data-plan="croisiere"] { background: var(--text); border-color: var(--text); color: #fff; }
-
-.quizz-reset {
-  margin-top: 16px;
-  text-align: center;
-}
-
-.quizz-reset button {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-@media (max-width: 768px) {
-  .quizz-options { grid-template-columns: 1fr; gap: 6px; }
-}
-
 /* Plans grid */
 .plans-grid {
   display: grid;
@@ -2423,11 +2357,6 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   .movup-pricing .page-title { font-size: 32px; }
 }
 
-.plan.plan-recommended {
-  outline: 2px solid #1D8348;
-  outline-offset: 4px;
-  transition: outline .3s ease;
-}
 @media (max-width: 640px) {
   .home-drawer a.btn-primary { color: #fff; }
   .home-drawer a.btn-primary:hover { background: #1D1D1F; color: #fff; }
@@ -4425,21 +4354,6 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
     <p class="page-subtitle">Trois formules pour trois rythmes de prospection.</p>
   </header>
 
-  <!-- ═══════════════════════════════════════════
-       QUIZZ — Aide à la sélection du plan
-     ═══════════════════════════════════════════ -->
-  <section class="quizz reveal" id="quizz-plan" aria-label="Quizz de recommandation de plan">
-    <div class="quizz-q">Combien de temps consacrez-vous à la prospection commerciale chaque semaine ?</div>
-    <div class="quizz-options" role="radiogroup" aria-label="Temps de prospection hebdomadaire">
-      <button type="button" class="quizz-opt" data-plan="demarrage" role="radio" aria-checked="false">Moins de 2h</button>
-      <button type="button" class="quizz-opt" data-plan="activite" role="radio" aria-checked="false">2 à 5h</button>
-      <button type="button" class="quizz-opt" data-plan="croisiere" role="radio" aria-checked="false">Plus de 5h</button>
-    </div>
-    <div class="quizz-reset" id="quizz-reset" style="display:none;">
-      <button type="button" onclick="resetQuizz()">Effacer la sélection</button>
-    </div>
-  </section>
-
   <!-- Toggle Mensuel / Annuel -->
   <section class="billing-toggle" aria-label="Choix de facturation">
     <div class="toggle-wrapper" role="group">
@@ -4786,35 +4700,6 @@ document.querySelectorAll('.billing-toggle button').forEach(btn => {
     });
   });
 });
-
-/* ───────────────── QUIZZ PLAN ───────────────── */
-const quizzOpts = document.querySelectorAll('.quizz-opt');
-const quizzReset = document.getElementById('quizz-reset');
-const plans = document.querySelectorAll('.plan');
-quizzOpts.forEach(opt => {
-  opt.addEventListener('click', () => {
-    const recommended = opt.dataset.plan;
-    quizzOpts.forEach(o => o.classList.remove('selected'));
-    opt.classList.add('selected');
-    quizzOpts.forEach(o => o.setAttribute('aria-checked', 'false'));
-    opt.setAttribute('aria-checked', 'true');
-    try { sessionStorage.setItem('intended_plan', recommended); } catch (e) { /* mode privé strict — fail silencieux */ }
-    plans.forEach(p => p.classList.remove('plan-recommended'));
-    const target = document.querySelector('.plan[data-plan="' + recommended + '"]');
-    if (target) {
-      target.classList.add('plan-recommended');
-      setTimeout(() => target.classList.remove('plan-recommended'), 4000);
-    }
-    if (quizzReset) quizzReset.style.display = 'block';
-  });
-});
-function resetQuizz() {
-  quizzOpts.forEach(o => o.classList.remove('selected'));
-  quizzOpts.forEach(o => o.setAttribute('aria-checked', 'false'));
-  try { sessionStorage.removeItem('intended_plan'); } catch (e) { /* ignore */ }
-  plans.forEach(p => p.classList.remove('plan-recommended'));
-  if (quizzReset) quizzReset.style.display = 'none';
-}
 
 /* ───────────────── LEAFLET MAP + LEADS ───────────────── */
 let leadsMap = null;
@@ -5433,7 +5318,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 window.openLeadModal = openLeadModal;
-window.resetQuizz = resetQuizz;
 </script>
 
 

@@ -80,15 +80,28 @@ body {
 
 main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display: flex; flex-direction: column; flex: 1; min-width: 0; }
 
+/* CADRE UNIQUE — patron .hero-leads-tool (index.html) : un seul conteneur
+   blanc, bordure, rayon, ombre, overflow:hidden ; marge latérale + verticale
+   laissant voir le fond #F5F5F7. Il porte la gouttière et le centrage
+   autrefois sur .search-engine. Empilement assuré par .content-area (commit 1). */
+.prospect-frame {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 28px;                 /* = --radius-xl vitrine */
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 12px 40px rgba(0,0,0,.06), 0 32px 80px rgba(0,0,0,.08);
+  max-width: 1300px;
+  width: calc(100% - 96px);
+  margin: 24px auto;
+}
+
 /* ═══════════════════════════════════════════════
    SEARCH ENGINE
 ═══════════════════════════════════════════════ */
 .search-engine {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 20px; padding: 28px 32px 24px;
-  max-width: 1300px; margin: 0 auto;
-  width: calc(100% - 96px);
-  box-shadow: 0 4px 24px rgba(0,0,0,.06);
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 28px 32px 24px;
 }
 /* Simple enveloppe centrée : toute la disposition est portée par la grille,
    comme .leads-config sur la vitrine. Plus de flex-wrap ici — c'était lui qui
@@ -349,8 +362,7 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
    contrôle de zoom Leaflet, haut-droite par les indicateurs. */
 #map { flex: 1; height: 100%; min-height: 0; }
 /* ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite de la carte ── */
-.kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;flex-shrink:0}
-#prospection-kpis{z-index:1000;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.kpi-group{display:flex;align-items:stretch;background:var(--surface);border-bottom:1px solid var(--border);overflow:hidden;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;flex-shrink:0}
 .kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-right:1px solid var(--border);transition:background .12s;flex-shrink:0;scroll-snap-align:start}
 .kpi-chip:last-child{border-right:none}
 .kpi-chip:hover{background:var(--surface2)}
@@ -571,7 +583,8 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
      de contenu au lieu de remplir. La carte de formulaire perd sa gouttière
      desktop (calc(100% - 96px)) et resserre son padding : elle n'enveloppe
      que le formulaire (carte/fiches sont dans .content-area, sibling). */
-  .search-engine { width: 100%; padding: 18px 16px; border: none; border-radius: 0; box-shadow: none; }
+  .prospect-frame { width: 100%; margin: 0; border: none; border-radius: 0; box-shadow: none; }
+  .search-engine { padding: 18px 16px; }
   .search-grid { grid-template-columns: 1fr; width: 100%; }
   .btn-go { width: 100%; }
   /* .id-block reste inchangé (flex : champ + bouton 44px). Le champ prend la
@@ -606,6 +619,9 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
   <aside class="sidebar" id="sidebar"></aside>
 
 <main>
+
+  <!-- ── CADRE UNIQUE (patron .hero-leads-tool) : formulaire + carte + barre + fiches ── -->
+  <div class="prospect-frame">
 
   <!-- ── SEARCH ENGINE ── -->
   <div class="search-engine">
@@ -823,6 +839,8 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
     </div>
 
   </div><!-- /content-area -->
+
+  </div><!-- /prospect-frame -->
 
   <div class="exp-bar" id="exp-bar" style="display:none">
     <div class="exp-txt">

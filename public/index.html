@@ -1391,6 +1391,17 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 }
 .leads-results-count .lc-total { color: var(--c-generer); font-weight: 700; }
 
+/* Révélation progressive (mode démonstration auto) : opacité portée par
+   l'icône elle-même — Leaflet n'y pose que le transform de position, jamais
+   d'opacité, donc pas de !important ; l'échelle est portée par le cercle
+   interne pour ne pas écraser ce transform de position. */
+.lead-marker,
+.lead-marker-locked { transition: opacity .34s ease; }
+.lead-marker > div,
+.lead-marker-locked > div { transition: transform .34s ease; transform-origin: center; }
+.lead-reveal-pending { opacity: 0; }
+.lead-reveal-pending > div { transform: scale(0.35); }
+
 /* Tooltip Leaflet style discret pour markers verrouillés */
 .lead-marker-locked-tip {
   background: #1D1D1F !important;
@@ -4740,6 +4751,13 @@ document.querySelectorAll('.billing-toggle button').forEach(btn => {
 let leadsMap = null;
 let leadMarkers = [];
 let leadsHomeView = null;
+// Minuteries de la révélation progressive (mode auto). Vidées à chaque nouvelle
+// recherche pour ne pas laisser une pose en attente peindre un point orphelin.
+let demoRevealTimers = [];
+function cancelDemoReveal() {
+  demoRevealTimers.forEach(id => clearTimeout(id));
+  demoRevealTimers = [];
+}
 
 function initLeadsMap() {
   if (leadsMap) return;
@@ -5190,6 +5208,7 @@ const leadsListInitialHTML = leadsList.innerHTML;
 // Repli silencieux : remet la démonstration dans son état d'ouverture —
 // bloc de résultats, compteur, vue et marqueurs de la carte. Aucune trace.
 function resetDemoToInitial() {
+  cancelDemoReveal();
   leadsCount.innerHTML = leadsCountInitialHTML;
   leadsList.innerHTML = leadsListInitialHTML;
   if (leadsMap) {
@@ -5238,6 +5257,7 @@ async function runDemoSearch({ naf, region, dept, commune }, { silent = false } 
   // Prépa UI : loader + reset markers
   leadsCount.textContent = 'Chargement…';
   leadsList.innerHTML = '<div class="leads-empty"><div class="leads-empty-title">Recherche en cours</div><div class="leads-empty-sub">Connexion à la base SIRENE</div></div>';
+  cancelDemoReveal();   // une recherche en chasse une autre : coupe la révélation en cours
   leadMarkers.forEach(m => leadsMap.removeLayer(m));
   leadMarkers = [];
 
@@ -5274,6 +5294,9 @@ function renderDemoResults(data, { silent = false } = {}) {
   const preview = Array.isArray(data.preview) ? data.preview : [];
   const lockedMarkers = Array.isArray(data.markers) ? data.markers : [];
   const total = Number(data.total || preview.length + lockedMarkers.length);
+  // Révélation progressive au déclenchement automatique seulement (silent).
+  // Au clic manuel, pose immédiate comme aujourd'hui.
+  const animate = silent;
 
   if (preview.length === 0) {
     if (silent) { resetDemoToInitial(); return; }
@@ -5285,13 +5308,14 @@ function renderDemoResults(data, { silent = false } = {}) {
   // ── 1. Markers preview (les 5 visibles) — opaques, taille standard, pas de popup
   const previewIcon = L.divIcon({
     className: 'lead-marker',
-    html: '<div style="width:14px;height:14px;border-radius:50%;background:#1D1D1F;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.30);"></div>',
+    html: '<div style="width:14px;height:14px;border-radius:50%;background:var(--stage-prospects);border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.30);"></div>',
     iconSize: [14, 14],
     iconAnchor: [7, 7]
   });
   preview.forEach(lead => {
     if (!Number.isFinite(lead.lat) || !Number.isFinite(lead.lng)) return;
     const m = L.marker([lead.lat, lead.lng], { icon: previewIcon, interactive: false }).addTo(leadsMap);
+    if (animate && m._icon) m._icon.classList.add('lead-reveal-pending');
     leadMarkers.push(m);
   });
 
@@ -5299,13 +5323,14 @@ function renderDemoResults(data, { silent = false } = {}) {
   //      tooltip survol, clic → popup signup
   const lockedIcon = L.divIcon({
     className: 'lead-marker-locked',
-    html: '<div style="width:10px;height:10px;border-radius:50%;background:#BCBCC0;opacity:0.55;border:1.5px solid #fff;"></div>',
+    html: '<div style="width:10px;height:10px;border-radius:50%;background:var(--stage-prospects);opacity:0.55;border:1.5px solid #fff;"></div>',
     iconSize: [10, 10],
     iconAnchor: [5, 5]
   });
   lockedMarkers.forEach(pt => {
     if (!Number.isFinite(pt.lat) || !Number.isFinite(pt.lng)) return;
     const m = L.marker([pt.lat, pt.lng], { icon: lockedIcon }).addTo(leadsMap);
+    if (animate && m._icon) m._icon.classList.add('lead-reveal-pending');
     m.bindTooltip('Connectez-vous pour voir', {
       direction: 'top', offset: [0, -4], className: 'lead-marker-locked-tip', opacity: 1
     });
@@ -5313,13 +5338,31 @@ function renderDemoResults(data, { silent = false } = {}) {
     leadMarkers.push(m);
   });
 
+  // Révélation progressive : au déclenchement auto, les points posés en attente
+  // (classe lead-reveal-pending) sont dévoilés un à un. La durée totale est
+  // répartie sur l'ensemble — intervalle = 3 s / nombre d'intervalles — de sorte
+  // que le dernier point tombe à 3 s exactement après le premier, quel que soit
+  // leur nombre. Au clic manuel (animate faux), rien n'est en attente : pose
+  // immédiate.
+  if (animate && leadMarkers.length) {
+    const REVEAL_TOTAL_MS = 3000;
+    const pending = leadMarkers.slice();
+    const step = pending.length > 1 ? REVEAL_TOTAL_MS / (pending.length - 1) : 0;
+    pending.forEach((m, i) => {
+      const id = setTimeout(() => {
+        if (m._icon) m._icon.classList.remove('lead-reveal-pending');
+      }, Math.round(i * step));
+      demoRevealTimers.push(id);
+    });
+  }
+
   // ── 3. Centrage : fitBounds sur l'ensemble (preview + verrouillés)
   const allCoords = preview
     .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng))
     .map(p => [p.lat, p.lng])
     .concat(lockedMarkers.map(p => [p.lat, p.lng]));
   if (allCoords.length >= 2) {
-    leadsMap.fitBounds(L.latLngBounds(allCoords), { padding: [40, 40], maxZoom: 11 });
+    leadsMap.fitBounds(L.latLngBounds(allCoords), { padding: [40, 40], maxZoom: 14 });
   } else if (allCoords.length === 1) {
     leadsMap.setView(allCoords[0], 11, { animate: true });
   }

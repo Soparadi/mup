@@ -2433,6 +2433,10 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   .home-drawer a.btn-primary:hover { background: #1D1D1F; color: #fff; }
   .sip input { font-size: 16px; }
   .leads-select { font-size: 16px; }
+  /* Libère la piste 1fr, dont le plancher min-content était fixé par la largeur intrinsèque de la démonstration (≈ 532 px). */
+  .section-grid > * { min-width: 0; }
+  /* Borne la boîte, sans quoi son overflow-x:auto reste inerte et il n'y a rien à faire défiler. */
+  .pipeline-mock-cols { max-width: 100%; min-width: 0; }
 }
 </style>
 </head>

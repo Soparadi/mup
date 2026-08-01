@@ -5320,18 +5320,48 @@ function renderDemoResults(data, { silent = false } = {}) {
   });
 
   // ── 2. Markers verrouillés (tous les autres) — translucides, plus petits,
-  //      tooltip survol, clic → popup signup
+  //      tooltip survol, clic → popup signup.
+  //      Fusion maison : sur une même adresse (à Paris 1er, cinq domiciliations
+  //      empilent la moitié du lot), les points se posaient l'un sur l'autre et
+  //      disparaissaient. On regroupe par coordonnée arrondie à quatre décimales
+  //      (~11 m) ; un groupe d'un seul point reste un point, un groupe multiple
+  //      devient une pastille portant son nombre. Les cinq aperçus (bloc 1) ne
+  //      fusionnent jamais — c'est ce qui les distingue.
   const lockedIcon = L.divIcon({
     className: 'lead-marker-locked',
     html: '<div style="width:10px;height:10px;border-radius:50%;background:var(--stage-prospects);opacity:0.55;border:1.5px solid #fff;"></div>',
     iconSize: [10, 10],
     iconAnchor: [5, 5]
   });
+  const lockedGroups = new Map();
   lockedMarkers.forEach(pt => {
     if (!Number.isFinite(pt.lat) || !Number.isFinite(pt.lng)) return;
-    const m = L.marker([pt.lat, pt.lng], { icon: lockedIcon }).addTo(leadsMap);
+    const key = pt.lat.toFixed(4) + '|' + pt.lng.toFixed(4);
+    const g = lockedGroups.get(key);
+    if (g) g.count++;
+    else lockedGroups.set(key, { lat: pt.lat, lng: pt.lng, count: 1 });
+  });
+  lockedGroups.forEach(g => {
+    let icon, tip;
+    if (g.count === 1) {
+      icon = lockedIcon;
+      tip = 'Connectez-vous pour voir';
+    } else {
+      // Pastille : même mécanisme d'icône (L.divIcon) que les points, couleur
+      // d'étape héritée, nombre et liseré blancs. Trois tailles sur le patron
+      // de Prospection : < 10, < 50, au-delà.
+      const sz = g.count < 10 ? 32 : g.count < 50 ? 38 : 44;
+      icon = L.divIcon({
+        className: 'lead-marker-locked',
+        html: '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:var(--stage-prospects);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-sans);font-size:11px;font-weight:700;color:#fff;">' + g.count + '</div>',
+        iconSize: [sz, sz],
+        iconAnchor: [sz / 2, sz / 2]
+      });
+      tip = 'Connectez-vous pour voir les ' + g.count + ' sociétés';
+    }
+    const m = L.marker([g.lat, g.lng], { icon }).addTo(leadsMap);
     if (animate && m._icon) m._icon.classList.add('lead-reveal-pending');
-    m.bindTooltip('Connectez-vous pour voir', {
+    m.bindTooltip(tip, {
       direction: 'top', offset: [0, -4], className: 'lead-marker-locked-tip', opacity: 1
     });
     m.on('click', (ev) => { L.DomEvent.stop(ev); openLeadModal(); });

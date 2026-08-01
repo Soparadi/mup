@@ -5220,6 +5220,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   populateDeptSelect();   // départements de toutes les régions au chargement
   checkLaunchBtn();
+
+  // Démonstration auto : différée pour ne pas retarder le premier rendu.
+  // requestIdleCallback si le navigateur le connaît, sinon repli setTimeout court.
+  if (window.requestIdleCallback) requestIdleCallback(function () { autoRunDemo(); }, { timeout: 1500 });
+  else setTimeout(function () { autoRunDemo(); }, 200);
 });
 
 regionEl.addEventListener('change', onRegionChange);
@@ -5357,6 +5362,62 @@ launchBtn.addEventListener('click', () => {
   if (!regionCode) return;
   runDemoSearch({ naf: secteur, region: regionCode, dept: deptEl.value, commune: villeEl.value });
 });
+
+// ── Démonstration jouée d'elle-même au chargement ──────────────────────────
+// Remplit le formulaire (production de films, Paris 1er) via les mêmes
+// handlers que la saisie manuelle, puis lance runDemoSearch en mode silencieux.
+// Cible arrêtée : la garde PLM impose l'arrondissement, jamais le département 75
+// entier. Si une étape échoue, on abandonne sans rien lancer ni peindre.
+const DEMO_AUTO = { regionSlug: 'ile-de-france', dept: '75', commune: '75101', naf: '5911A', nafLabel: 'Production de films' };
+let demoAutoStarted = false;
+
+// Attend qu'une <option> de la valeur donnée existe dans le sélecteur, dans la
+// limite du délai (le remplissage des villes passe par un appel réseau externe).
+function waitForOption(sel, value, timeoutMs) {
+  return new Promise(function (resolve) {
+    const deadline = Date.now() + timeoutMs;
+    (function poll() {
+      if (sel.querySelector('option[value="' + value + '"]')) { resolve(true); return; }
+      if (Date.now() >= deadline) { resolve(false); return; }
+      setTimeout(poll, 80);
+    })();
+  });
+}
+
+async function autoRunDemo() {
+  if (demoAutoStarted) return;   // une seule fois par chargement
+  demoAutoStarted = true;
+
+  // Autocomplétion indisponible → abandon avant toute modification de la page.
+  if (!sectorAC) return;
+
+  // a. région → change (peuple les départements)
+  if (!regionEl.querySelector('option[value="' + DEMO_AUTO.regionSlug + '"]')) return;
+  regionEl.value = DEMO_AUTO.regionSlug;
+  if (regionEl.value !== DEMO_AUTO.regionSlug) return;
+  regionEl.dispatchEvent(new Event('change'));
+
+  // b. département 75 → change (déclenche le remplissage ASYNCHRONE des villes)
+  if (!deptEl.querySelector('option[value="' + DEMO_AUTO.dept + '"]')) return;
+  deptEl.value = DEMO_AUTO.dept;
+  if (deptEl.value !== DEMO_AUTO.dept) return;
+  deptEl.dispatchEvent(new Event('change'));
+
+  // c. attendre l'arrondissement 75101 (plafond 3 s), puis le poser
+  const villeReady = await waitForOption(villeEl, DEMO_AUTO.commune, 3000);
+  if (!villeReady) return;   // option de ville absente → abandon silencieux
+  villeEl.value = DEMO_AUTO.commune;
+  if (villeEl.value !== DEMO_AUTO.commune) return;
+
+  // d. secteur via l'autocomplétion (code + libellé du dictionnaire)
+  sectorAC.pick(DEMO_AUTO.naf, DEMO_AUTO.nafLabel);
+
+  // e. lancement silencieux
+  runDemoSearch(
+    { naf: DEMO_AUTO.naf, region: REGION_CODES[DEMO_AUTO.regionSlug], dept: DEMO_AUTO.dept, commune: DEMO_AUTO.commune },
+    { silent: true }
+  );
+}
 
 
 /* MODAL */

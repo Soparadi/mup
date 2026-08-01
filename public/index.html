@@ -1225,6 +1225,57 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .quotidien-item-title { font-size: 15px; font-weight: 700; letter-spacing: -.012em; color: var(--text); }
 .quotidien-item-desc { font-size: 13px; line-height: 1.55; color: var(--text-muted); }
 
+/* ──────────────────────────────────────────────────────────────
+   CADRE À ONGLETS — Tournée · Pipeline · Quotidien
+   ────────────────────────────────────────────────────────────── */
+.showcase-header { text-align: center; max-width: 720px; margin: 0 auto 40px; }
+.showcase-header .section-title { margin-left: auto; margin-right: auto; max-width: none; margin-bottom: 0; }
+
+.showcase-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 auto 40px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.showcase-tabs::-webkit-scrollbar { display: none; }
+
+.showcase-tab {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color .18s var(--ease-out), background .18s var(--ease-out), border-color .18s var(--ease-out);
+}
+.showcase-tab:hover { color: var(--text); border-color: var(--border-2); }
+.showcase-tab.active { background: var(--text); border-color: var(--text); color: #fff; }
+
+.showcase-panel { display: none; }
+.showcase-panel.active { display: block; }
+
+.showcase-panel-text {
+  text-align: center;
+  font-size: clamp(16px, 1.4vw, 19px);
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 56ch;
+  margin: 0 auto 36px;
+}
+
 .leads-tool {
   background: var(--card);
   border: 1px solid var(--border);
@@ -4037,25 +4088,66 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
 
 
 <!-- ──────────────────────────────────────────────────────────
-     SECTION 1 — PIPELINE
+     APERÇU — Cadre à onglets (Tournée · Pipeline · Quotidien)
      ────────────────────────────────────────────────────────── -->
-<section class="section" id="pipeline">
+<section class="section" id="apercu">
   <div class="container">
-    <div class="section-grid">
-      <div class="reveal">
-        <div class="section-eyebrow">
-          <span>Pipeline</span>
-        </div>
-        <h2 class="section-title">
-          Voir ses contacts.<br/>
-          <em>Les transformer en clients.</em>
-        </h2>
-        <p class="section-lead">
-          Un suivi visuel en colonnes, où chaque contact avance étape par étape vers la signature. Vous faites glisser la fiche, vous décidez du rythme, vous signez. Vos colonnes s'adaptent à votre cycle de vente. Le montant total de votre activité commerciale s'affiche en temps réel, et vos statistiques restent fiables à chaque étape.
-        </p>
-      </div>
+    <div class="showcase-header reveal">
+      <h2 class="section-title">
+        Du premier contact à la facture.<br/>
+        <em>Dans un seul outil.</em>
+      </h2>
+    </div>
 
-      <div class="reveal reveal-d2">
+    <div class="showcase-tabs" role="tablist" aria-label="Aperçu du produit">
+      <button class="showcase-tab active" role="tab" aria-selected="true" id="tab-tournee" aria-controls="panel-tournee" data-tab="tournee">Tournée</button>
+      <button class="showcase-tab" role="tab" aria-selected="false" id="tab-pipeline" aria-controls="panel-pipeline" data-tab="pipeline">Pipeline</button>
+      <button class="showcase-tab" role="tab" aria-selected="false" id="tab-quotidien" aria-controls="panel-quotidien" data-tab="quotidien">Quotidien</button>
+    </div>
+
+    <!-- TOURNÉE -->
+    <div class="showcase-panel active" role="tabpanel" id="panel-tournee" aria-labelledby="tab-tournee" data-panel="tournee">
+      <p class="showcase-panel-text">Vos clients et prospects sur une carte de France. Optimisez vos trajets : un déplacement, plusieurs rendez-vous.</p>
+        <div class="carte-mock">
+          <div class="carte-map" aria-label="Carte de France stylisée avec punaises">
+            <!-- Hexagone France simplifié (placeholder visuel, pas une carte réelle) -->
+            <svg class="fr-shape" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M 78 8 L 122 12 L 158 32 L 178 78 L 192 122 L 178 168 L 152 198 L 118 212 L 78 208 L 42 188 L 22 152 L 14 108 L 22 64 L 44 28 Z" />
+            </svg>
+            <!-- Punaises positionnées en % sur la zone carte -->
+            <span class="carte-pin carte-pin--prospect" style="left:30%; top:45%"></span>
+            <span class="carte-pin carte-pin--prospect" style="left:24%; top:62%"></span>
+            <span class="carte-pin carte-pin--prospect" style="left:18%; top:38%"></span>
+            <span class="carte-pin carte-pin--phoning" style="left:48%; top:28%"></span>
+            <span class="carte-pin carte-pin--phoning" style="left:54%; top:50%"></span>
+            <span class="carte-pin carte-pin--phoning" style="left:62%; top:72%"></span>
+            <span class="carte-pin carte-pin--phoning" style="left:38%; top:78%"></span>
+            <span class="carte-pin carte-pin--rdv" style="left:72%; top:42%"></span>
+            <span class="carte-pin carte-pin--rdv" style="left:80%; top:58%"></span>
+            <span class="carte-pin carte-pin--rdv" style="left:66%; top:30%"></span>
+            <span class="carte-pin carte-pin--rdv" style="left:88%; top:38%"></span>
+            <span class="carte-pin carte-pin--rdv" style="left:42%; top:88%"></span>
+            <span class="carte-pin carte-pin--prospect" style="left:74%; top:88%"></span>
+          </div>
+
+          <aside class="carte-tournee">
+            <div class="carte-tournee-head">Tournée</div>
+            <div class="carte-tournee-date">Mardi 12 mai</div>
+            <div class="carte-tournee-meta">4 RDV, Bretagne</div>
+            <ul class="carte-tournee-list">
+              <li><span class="ct-name">Atelier Bois</span><span class="ct-time">9h</span><span class="ct-place">Brest</span></li>
+              <li><span class="ct-name">Cabinet J&amp;K</span><span class="ct-time">11h</span><span class="ct-place">Rennes</span></li>
+              <li><span class="ct-name">Bernard Élec</span><span class="ct-time">14h</span><span class="ct-place">Vannes</span></li>
+              <li><span class="ct-name">Santé+</span><span class="ct-time">16h</span><span class="ct-place">Nantes</span></li>
+            </ul>
+            <div class="carte-tournee-foot">142 km, 5h</div>
+          </aside>
+        </div>
+    </div>
+
+    <!-- PIPELINE -->
+    <div class="showcase-panel" role="tabpanel" id="panel-pipeline" aria-labelledby="tab-pipeline" data-panel="pipeline">
+      <p class="showcase-panel-text">Suivez la progression de chaque contact jusqu'à la signature. Le montant en jeu s'affiche en temps réel.</p>
         <div class="pipeline-mock">
 
           <!-- KPI bar : compteurs colorés + total CA en cours -->
@@ -4175,85 +4267,11 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
           </div>
         </div>
       </div>
-    </div>
-  </div>
-</section>
 
-<!-- ──────────────────────────────────────────────────────────
-     SECTION — CARTE
-     ────────────────────────────────────────────────────────── -->
-<section class="section" id="carte">
-  <div class="container">
-    <div class="section-grid reverse">
-      <div class="reveal">
-        <div class="section-eyebrow"><span>Carte</span></div>
-        <h2 class="section-title">
-          Vos prospects.<br/>
-          <em>Sur une carte.</em>
-        </h2>
-        <p class="section-lead">
-          Visualisez vos contacts sur une carte de France. Filtrez par secteur, ville, étape du suivi. Préparez vos tournées commerciales en regroupant vos rendez-vous par zone, et gagnez des heures de route.
-        </p>
-      </div>
-
-      <div class="reveal reveal-d2">
-        <div class="carte-mock">
-          <div class="carte-map" aria-label="Carte de France stylisée avec punaises">
-            <!-- Hexagone France simplifié (placeholder visuel, pas une carte réelle) -->
-            <svg class="fr-shape" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M 78 8 L 122 12 L 158 32 L 178 78 L 192 122 L 178 168 L 152 198 L 118 212 L 78 208 L 42 188 L 22 152 L 14 108 L 22 64 L 44 28 Z" />
-            </svg>
-            <!-- Punaises positionnées en % sur la zone carte -->
-            <span class="carte-pin carte-pin--prospect" style="left:30%; top:45%"></span>
-            <span class="carte-pin carte-pin--prospect" style="left:24%; top:62%"></span>
-            <span class="carte-pin carte-pin--prospect" style="left:18%; top:38%"></span>
-            <span class="carte-pin carte-pin--phoning" style="left:48%; top:28%"></span>
-            <span class="carte-pin carte-pin--phoning" style="left:54%; top:50%"></span>
-            <span class="carte-pin carte-pin--phoning" style="left:62%; top:72%"></span>
-            <span class="carte-pin carte-pin--phoning" style="left:38%; top:78%"></span>
-            <span class="carte-pin carte-pin--rdv" style="left:72%; top:42%"></span>
-            <span class="carte-pin carte-pin--rdv" style="left:80%; top:58%"></span>
-            <span class="carte-pin carte-pin--rdv" style="left:66%; top:30%"></span>
-            <span class="carte-pin carte-pin--rdv" style="left:88%; top:38%"></span>
-            <span class="carte-pin carte-pin--rdv" style="left:42%; top:88%"></span>
-            <span class="carte-pin carte-pin--prospect" style="left:74%; top:88%"></span>
-          </div>
-
-          <aside class="carte-tournee">
-            <div class="carte-tournee-head">Tournée</div>
-            <div class="carte-tournee-date">Mardi 12 mai</div>
-            <div class="carte-tournee-meta">4 RDV, Bretagne</div>
-            <ul class="carte-tournee-list">
-              <li><span class="ct-name">Atelier Bois</span><span class="ct-time">9h</span><span class="ct-place">Brest</span></li>
-              <li><span class="ct-name">Cabinet J&amp;K</span><span class="ct-time">11h</span><span class="ct-place">Rennes</span></li>
-              <li><span class="ct-name">Bernard Élec</span><span class="ct-time">14h</span><span class="ct-place">Vannes</span></li>
-              <li><span class="ct-name">Santé+</span><span class="ct-time">16h</span><span class="ct-place">Nantes</span></li>
-            </ul>
-            <div class="carte-tournee-foot">142 km, 5h</div>
-          </aside>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ──────────────────────────────────────────────────────────
-     SECTION — QUOTIDIEN
-     ────────────────────────────────────────────────────────── -->
-<section class="section" id="quotidien">
-  <div class="container">
-    <div class="quotidien-header reveal">
-      <div class="section-eyebrow"><span>Quotidien</span></div>
-      <h2 class="section-title">
-        Tout votre quotidien commercial.<br/>
-        <em>Au même endroit.</em>
-      </h2>
-      <p class="section-lead">
-        Vos rendez-vous, vos échanges, vos devis, vos factures, vos statistiques. MovUP réunit ce que vous utilisiez sur 5 outils différents.
-      </p>
-    </div>
-
-    <div class="quotidien-grid reveal reveal-d1">
+    <!-- QUOTIDIEN -->
+    <div class="showcase-panel" role="tabpanel" id="panel-quotidien" aria-labelledby="tab-quotidien" data-panel="quotidien">
+      <p class="showcase-panel-text">Agenda, courriel, visioconférence, devis, factures, statistiques. Tout au même endroit.</p>
+      <div class="quotidien-grid">
       <div class="quotidien-item">
         <span class="quotidien-item-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
@@ -4293,6 +4311,7 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
         <div class="quotidien-item-title">Statistiques</div>
         <p class="quotidien-item-desc">Pilotez votre activité en temps réel. Montant signé, taux de conversion, cycle moyen de signature.</p>
       </div>
+    </div>
     </div>
   </div>
 </section>
@@ -4682,6 +4701,21 @@ const observer = new IntersectionObserver((entries) => {
 }, { rootMargin: '0px 0px -80px 0px', threshold: 0.05 });
 
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+/* ───────────────── CADRE À ONGLETS (Tournée · Pipeline · Quotidien) ───────────────── */
+document.querySelectorAll('.showcase-tab').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var name = btn.dataset.tab;
+    document.querySelectorAll('.showcase-tab').forEach(function (b) {
+      var on = b === btn;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('.showcase-panel').forEach(function (p) {
+      p.classList.toggle('active', p.dataset.panel === name);
+    });
+  });
+});
 
 /* ───────────────── FAQ TOGGLE ───────────────── */
 function toggleFaq(btn) {

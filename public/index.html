@@ -1309,6 +1309,11 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 
 .showcase-panel { display: none; }
 .showcase-panel.active { display: block; }
+/* Le conteneur des panneaux reprend la hauteur du cadre de démonstration du
+   héros, mesurée et suivie par un ResizeObserver qui pose --demo-height. Sans
+   cette variable (JavaScript indisponible), min-height retombe sur auto, soit
+   la hauteur naturelle du contenu — aucun nombre en dur. */
+.showcase-panels { min-height: var(--demo-height, auto); }
 
 .showcase-panel-text {
   text-align: center;
@@ -4184,6 +4189,10 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
     </div>
     </div>
 
+    <!-- Conteneur des panneaux : reprend la hauteur du cadre de démonstration du
+         héros via la variable --demo-height (posée par ResizeObserver). Sans
+         JavaScript, la variable est absente et la hauteur redevient naturelle. -->
+    <div class="showcase-panels">
     <!-- TOURNÉE -->
     <div class="showcase-panel active" role="tabpanel" id="panel-tournee" aria-labelledby="tab-tournee" data-panel="tournee">
       <p class="showcase-panel-text">Vos clients et prospects sur une carte de France. Optimisez vos trajets : un déplacement, plusieurs rendez-vous.</p>
@@ -4390,6 +4399,7 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
         <div class="quotidien-item-title">Statistiques</div>
         <p class="quotidien-item-desc">Pilotez votre activité en temps réel. Montant signé, taux de conversion, cycle moyen de signature.</p>
       </div>
+    </div>
     </div>
     </div>
   </div>
@@ -4795,6 +4805,28 @@ document.querySelectorAll('.showcase-tab').forEach(function (btn) {
     });
   });
 });
+
+/* ───────────────── HAUTEUR DU CADRE À ONGLETS ─────────────────
+   Le conteneur des panneaux reprend la hauteur du cadre de démonstration du
+   héros. Un ResizeObserver suit la boîte du cadre — il couvre donc à la fois le
+   redimensionnement de la fenêtre et un changement de contenu — et écrit sa
+   hauteur (border-box) dans --demo-height, que .showcase-panels consomme en
+   min-height. Pas d'écouteur de resize de fenêtre en doublon. Si ResizeObserver
+   est indisponible, aucune variable n'est posée et la section garde sa hauteur
+   naturelle. */
+(function () {
+  var demo = document.querySelector('.hero-leads-tool');
+  var panels = document.querySelector('.showcase-panels');
+  if (!demo || !panels || typeof ResizeObserver === 'undefined') return;
+  var ro = new ResizeObserver(function (entries) {
+    for (var i = 0; i < entries.length; i++) {
+      var box = entries[i].borderBoxSize && entries[i].borderBoxSize[0];
+      var h = box ? box.blockSize : entries[i].contentRect.height;
+      panels.style.setProperty('--demo-height', h + 'px');
+    }
+  });
+  ro.observe(demo);
+})();
 
 /* ───────────────── FAQ TOGGLE ───────────────── */
 function toggleFaq(btn) {

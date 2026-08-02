@@ -1096,7 +1096,12 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   align-items: stretch;
   min-height: 360px;
 }
-@media (max-width: 1080px) {
+/* Seuil aligné sur celui du cadre de démonstration du héros (880 px) : les deux
+   cadres de la page doivent basculer en une seule colonne ensemble. Sinon, entre
+   881 et 1080, la démonstration serait dépliée et la maquette encore empilée, le
+   panneau dépasserait le cadre et le saut d'onglet reviendrait. Ce nombre n'est
+   pas arbitraire, ne le désynchronise pas du seuil du héros. */
+@media (max-width: 880px) {
   .carte-mock { grid-template-columns: 1fr; }
 }
 .carte-map {

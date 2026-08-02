@@ -5374,66 +5374,101 @@ function renderDemoResults(data, { silent = false } = {}) {
     return;
   }
 
-  // ── 1. Markers preview (les 5 visibles) — opaques, taille standard, pas de popup
+  // ── 1+2. Regroupement unifié par DISTANCE RÉELLE (plus par arrondi de coordonnée).
+  //      Aperçus (les 5 lisibles) et points verrouillés (tous les autres) entrent
+  //      dans le MÊME regroupement. Un aperçu partageant l'emplacement d'un groupe
+  //      y est ABSORBÉ : la pastille compte un de plus et porte la marque de la
+  //      fiche ouverte — l'anneau blanc épais + l'ombre portée de previewIcon,
+  //      signature déjà employée par l'aperçu opaque, reprise telle quelle. Un
+  //      aperçu SEUL, sans groupe à son emplacement, garde son point opaque : c'est
+  //      lui qui dit « fiche lisible ici ».
+  //      Le seuil de 20 m fusionne les points qu'un arrondi à quatre décimales
+  //      séparait (des paires distantes de moins de 15 m tombaient de part et
+  //      d'autre d'une case) sans agréger d'adresses distinctes (la plus proche
+  //      paire réellement séparée est à ~24 m). Comparaison deux à deux sur ~190
+  //      points : sans coût, aucune optimisation nécessaire.
+  const GROUP_DIST_M = 20;
+  const metersBetween = (aLat, aLng, bLat, bLng) => {
+    const toRad = Math.PI / 180, Rm = 6371000;
+    const dLat = (bLat - aLat) * toRad;
+    const dLng = (bLng - aLng) * toRad * Math.cos((aLat + bLat) * 0.5 * toRad);
+    return Math.sqrt(dLat * dLat + dLng * dLng) * Rm;
+  };
+  // Représentant du groupe = premier point verrouillé rencontré. Aucune coordonnée
+  // n'est déplacée : la pastille se pose sur un point réel, jamais sur un barycentre.
+  // Verrouillés d'abord, aperçus ensuite — ainsi un aperçu absorbé ne déplace pas
+  // le représentant, et un aperçu isolé forme son propre groupe.
+  const groups = [];
+  const assignToGroup = (pt, isPreview) => {
+    for (const g of groups) {
+      if (metersBetween(g.lat, g.lng, pt.lat, pt.lng) <= GROUP_DIST_M) {
+        g.count++;
+        if (isPreview) g.hasPreview = true;
+        return;
+      }
+    }
+    groups.push({ lat: pt.lat, lng: pt.lng, count: 1, hasPreview: !!isPreview });
+  };
+  lockedMarkers.forEach(pt => {
+    if (!Number.isFinite(pt.lat) || !Number.isFinite(pt.lng)) return;
+    assignToGroup(pt, false);
+  });
+  preview.forEach(pt => {
+    if (!Number.isFinite(pt.lat) || !Number.isFinite(pt.lng)) return;
+    assignToGroup(pt, true);
+  });
+
+  // Icônes de base : aperçu opaque (fiche ouverte), point verrouillé translucide.
   const previewIcon = L.divIcon({
     className: 'lead-marker',
     html: '<div style="width:14px;height:14px;border-radius:50%;background:var(--stage-prospects);border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.30);"></div>',
     iconSize: [14, 14],
     iconAnchor: [7, 7]
   });
-  preview.forEach(lead => {
-    if (!Number.isFinite(lead.lat) || !Number.isFinite(lead.lng)) return;
-    const m = L.marker([lead.lat, lead.lng], { icon: previewIcon, interactive: false }).addTo(leadsMap);
-    if (animate && m._icon) m._icon.classList.add('lead-reveal-pending');
-    leadMarkers.push(m);
-  });
-
-  // ── 2. Markers verrouillés (tous les autres) — translucides, plus petits,
-  //      tooltip survol, clic → popup signup.
-  //      Fusion maison : sur une même adresse (à Paris 1er, cinq domiciliations
-  //      empilent la moitié du lot), les points se posaient l'un sur l'autre et
-  //      disparaissaient. On regroupe par coordonnée arrondie à quatre décimales
-  //      (~11 m) ; un groupe d'un seul point reste un point, un groupe multiple
-  //      devient une pastille portant son nombre. Les cinq aperçus (bloc 1) ne
-  //      fusionnent jamais — c'est ce qui les distingue.
   const lockedIcon = L.divIcon({
     className: 'lead-marker-locked',
     html: '<div style="width:10px;height:10px;border-radius:50%;background:var(--stage-prospects);opacity:0.55;border:1.5px solid #fff;"></div>',
     iconSize: [10, 10],
     iconAnchor: [5, 5]
   });
-  const lockedGroups = new Map();
-  lockedMarkers.forEach(pt => {
-    if (!Number.isFinite(pt.lat) || !Number.isFinite(pt.lng)) return;
-    const key = pt.lat.toFixed(4) + '|' + pt.lng.toFixed(4);
-    const g = lockedGroups.get(key);
-    if (g) g.count++;
-    else lockedGroups.set(key, { lat: pt.lat, lng: pt.lng, count: 1 });
-  });
-  lockedGroups.forEach(g => {
-    let icon, tip;
-    if (g.count === 1) {
-      icon = lockedIcon;
+
+  groups.forEach(g => {
+    let opts, tip = null, clickable = true;
+    if (g.count === 1 && g.hasPreview) {
+      // Aperçu seul : rendu opaque conservé, non interactif, pas de popup.
+      opts = { icon: previewIcon, interactive: false };
+      clickable = false;
+    } else if (g.count === 1) {
+      // Point verrouillé isolé.
+      opts = { icon: lockedIcon };
       tip = 'Connectez-vous pour voir';
     } else {
-      // Pastille : même mécanisme d'icône (L.divIcon) que les points, couleur
-      // d'étape héritée, nombre et liseré blancs. Trois tailles sur le patron
-      // de Prospection : < 10, < 50, au-delà.
+      // Pastille : trois tailles sur le patron de Prospection (< 10, < 50, au-delà).
+      // Si un aperçu y est absorbé (hasPreview), elle porte la marque de la fiche
+      // ouverte — anneau blanc épais + ombre portée, empruntés tels quels à
+      // previewIcon ci-dessus ; sinon le liseré blanc simple de 2 px.
       const sz = g.count < 10 ? 32 : g.count < 50 ? 38 : 44;
-      icon = L.divIcon({
+      const ring = g.hasPreview
+        ? 'border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.30);'
+        : 'border:2px solid #fff;';
+      opts = { icon: L.divIcon({
         className: 'lead-marker-locked',
-        html: '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:var(--stage-prospects);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-sans);font-size:11px;font-weight:700;color:#fff;">' + g.count + '</div>',
+        html: '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:var(--stage-prospects);' + ring + 'display:flex;align-items:center;justify-content:center;font-family:var(--font-sans);font-size:11px;font-weight:700;color:#fff;">' + g.count + '</div>',
         iconSize: [sz, sz],
         iconAnchor: [sz / 2, sz / 2]
-      });
+      }) };
       tip = 'Connectez-vous pour voir les ' + g.count + ' sociétés';
     }
-    const m = L.marker([g.lat, g.lng], { icon }).addTo(leadsMap);
+    const m = L.marker([g.lat, g.lng], opts).addTo(leadsMap);
     if (animate && m._icon) m._icon.classList.add('lead-reveal-pending');
-    m.bindTooltip(tip, {
-      direction: 'top', offset: [0, -4], className: 'lead-marker-locked-tip', opacity: 1
-    });
-    m.on('click', (ev) => { L.DomEvent.stop(ev); openLeadModal(); });
+    if (tip) {
+      m.bindTooltip(tip, {
+        direction: 'top', offset: [0, -4], className: 'lead-marker-locked-tip', opacity: 1
+      });
+    }
+    if (clickable) {
+      m.on('click', (ev) => { L.DomEvent.stop(ev); openLeadModal(); });
+    }
     leadMarkers.push(m);
   });
 

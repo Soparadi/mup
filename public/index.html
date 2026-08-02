@@ -1236,6 +1236,40 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 /* ──────────────────────────────────────────────────────────────
    CADRE À ONGLETS — Tournée · Pipeline · Quotidien
    ────────────────────────────────────────────────────────────── */
+/* La bande sombre porte désormais la séparation : le remplissage haut
+   de la section se resserre (le vide n'a plus à séparer), et overflow-x
+   clip empêche le débordement pleine largeur de créer un défilement. */
+#apercu { padding-top: 40px; overflow-x: clip; }
+
+/* Bande sombre en tête de section — pleine largeur de FENÊTRE par marges
+   négatives, contenu re-gouttièré à 24px donc centré exactement comme avant.
+   Élément englobant plutôt que pseudo-élément : sa hauteur suit le titre et
+   les onglets, donc « s'arrête sous les onglets » tient à toutes les largeurs
+   sans hauteur codée en dur. */
+.showcase-band {
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  padding: 48px 24px 36px;
+  margin-bottom: 44px;
+  background: #000;
+}
+.showcase-band .section-title { color: var(--bg); }
+.showcase-band .showcase-tabs { margin-bottom: 0; }
+.showcase-band .showcase-tab {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.26);
+  color: rgba(255, 255, 255, 0.74);
+}
+.showcase-band .showcase-tab:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+.showcase-band .showcase-tab.active {
+  background: var(--bg);
+  border-color: var(--bg);
+  color: var(--text);
+}
+
 .showcase-header { text-align: center; max-width: 720px; margin: 0 auto 40px; }
 .showcase-header .section-title { margin-left: auto; margin-right: auto; max-width: none; margin-bottom: 0; }
 
@@ -4135,6 +4169,7 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
      ────────────────────────────────────────────────────────── -->
 <section class="section" id="apercu">
   <div class="container">
+    <div class="showcase-band">
     <div class="showcase-header reveal">
       <h2 class="section-title">
         Du premier contact à la facture.<br/>
@@ -4146,6 +4181,7 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
       <button class="showcase-tab active" role="tab" aria-selected="true" id="tab-tournee" aria-controls="panel-tournee" data-tab="tournee">Rendez-vous</button>
       <button class="showcase-tab" role="tab" aria-selected="false" id="tab-pipeline" aria-controls="panel-pipeline" data-tab="pipeline">Pipeline</button>
       <button class="showcase-tab" role="tab" aria-selected="false" id="tab-quotidien" aria-controls="panel-quotidien" data-tab="quotidien">Quotidien</button>
+    </div>
     </div>
 
     <!-- TOURNÉE -->

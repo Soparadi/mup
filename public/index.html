@@ -4828,19 +4828,77 @@ const observer = new IntersectionObserver((entries) => {
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
 /* ───────────────── CADRE À ONGLETS (Tournée · Pipeline · Quotidien) ───────────────── */
-document.querySelectorAll('.showcase-tab').forEach(function (btn) {
-  btn.addEventListener('click', function () {
-    var name = btn.dataset.tab;
-    document.querySelectorAll('.showcase-tab').forEach(function (b) {
-      var on = b === btn;
-      b.classList.toggle('active', on);
-      b.setAttribute('aria-selected', on ? 'true' : 'false');
-    });
-    document.querySelectorAll('.showcase-panel').forEach(function (p) {
-      p.classList.toggle('active', p.dataset.panel === name);
+/* Bascule pure : classes, aria-selected, panneau actif. Ne sait rien de qui
+   l'appelle (clic humain ou cycle) — c'est l'appelant qui porte l'arrêt. */
+function activateTab(name) {
+  document.querySelectorAll('.showcase-tab').forEach(function (b) {
+    var on = b.dataset.tab === name;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('.showcase-panel').forEach(function (p) {
+    p.classList.toggle('active', p.dataset.panel === name);
+  });
+}
+
+/* Défilement automatique des trois onglets.
+   Durées dérivées du compte de signes des paragraphes d'intro, proportionnées :
+   un paragraphe coupé en cours de lecture irrite plus qu'un cycle lent.
+   Tournée 9,5 s · Pipeline 9 s · Quotidien 8 s → tour complet 26,5 s. */
+(function () {
+  var ORDER = ['tournee', 'pipeline', 'quotidien'];
+  var DWELL = { tournee: 9500, pipeline: 9000, quotidien: 8000 };
+
+  var index = 0;      // onglet affiché (tournee est actif au chargement)
+  var timer = null;
+  var stopped = false;
+
+  // Arrêt DÉFINITIF, posé dans l'appelant. clearTimeout annule le minuteur en
+  // attente : aucune bascule ne peut plus survenir après le geste.
+  function stopCycle() {
+    if (stopped) return;
+    stopped = true;
+    if (timer) { clearTimeout(timer); timer = null; }
+  }
+
+  function scheduleNext() {
+    timer = setTimeout(function () {
+      index = (index + 1) % ORDER.length;
+      activateTab(ORDER[index]);
+      scheduleNext();
+    }, DWELL[ORDER[index]]);
+  }
+
+  // Le premier geste humain arrête le cycle : clic sur un onglet OU focus
+  // arrivant sur la barre — un utilisateur au clavier ne doit pas voir la
+  // sélection glisser sous lui. La bascule du clic reste gérée à part.
+  document.querySelectorAll('.showcase-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      activateTab(btn.dataset.tab);
+      stopCycle();
     });
   });
-});
+  var tablist = document.querySelector('.showcase-tabs');
+  if (tablist) tablist.addEventListener('focusin', stopCycle);
+
+  // Mouvement réduit : le minuteur ne démarre pas. Le premier onglet reste
+  // affiché, les deux autres restent accessibles au clic (écouteurs ci-dessus).
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  // Démarrage à l'entrée du cadre dans le champ de vision, par un SECOND
+  // observateur qui se retire après son premier déclenchement. Configuration de
+  // seuil reprise à l'identique de l'observateur d'apparition.
+  var frame = document.querySelector('.showcase-panels');
+  if (!frame || typeof IntersectionObserver === 'undefined') return;
+  var starter = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return;
+      starter.disconnect();
+      if (!stopped) scheduleNext();
+    });
+  }, { rootMargin: '0px 0px -80px 0px', threshold: 0.05 });
+  starter.observe(frame);
+})();
 
 /* ───────────────── HAUTEUR DU CADRE À ONGLETS ─────────────────
    Les trois cadres visibles des panneaux (.carte-mock, .pipeline-mock,

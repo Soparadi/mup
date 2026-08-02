@@ -1323,7 +1323,16 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .showcase-tab.active { background: var(--text); border-color: var(--text); color: #fff; }
 
 .showcase-panel { display: none; }
-.showcase-panel.active { display: block; }
+.showcase-panel.active { display: block; animation: showcase-panel-in 0.2s var(--ease-out); }
+/* Fondu à l'apparition : seul l'ENTRANT se fond, depuis une opacité nulle. Le
+   panneau SORTANT perd .active dans le même tick JS, repasse à display:none et
+   disparaît d'un coup — jamais deux panneaux affichés, donc la hauteur du cadre
+   ne double pas et la page ne saute pas. opacity:0 ne vit que dans la keyframe :
+   un navigateur qui ignore les animations affiche le panneau plein (bascule
+   sèche), jamais invisible ni bloqué. Sous mouvement réduit, la règle globale
+   (animation-duration: 0.01ms) rend le fondu instantané — voir @media plus bas.
+   200 ms : au-delà, le fondu mangerait une part visible des 3 s d'affichage. */
+@keyframes showcase-panel-in { from { opacity: 0; } }
 /* La hauteur du cadre de démonstration du héros ne vit plus sur le conteneur des
    panneaux mais sur les trois cadres visibles eux-mêmes (.carte-mock,
    .pipeline-mock, .quotidien-grid), via --demo-height. Un ResizeObserver mesure

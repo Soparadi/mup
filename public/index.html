@@ -4842,12 +4842,14 @@ function activateTab(name) {
 }
 
 /* Défilement automatique des trois onglets.
-   Durées dérivées du compte de signes des paragraphes d'intro, proportionnées :
-   un paragraphe coupé en cours de lecture irrite plus qu'un cycle lent.
-   Tournée 9,5 s · Pipeline 9 s · Quotidien 8 s → tour complet 26,5 s. */
+   Le cycle ne vise pas le temps de lecture du paragraphe mais le temps de
+   RECONNAISSANCE : montrer que trois vues existent. Le visiteur qui veut lire
+   clique, ce qui arrête le cycle. Trois secondes par onglet, égales — sous ce
+   seuil, la proportion au compte de signes ne vaudrait que six dixièmes
+   d'écart, imperceptible. Tour complet 9 s. */
 (function () {
   var ORDER = ['tournee', 'pipeline', 'quotidien'];
-  var DWELL = { tournee: 9500, pipeline: 9000, quotidien: 8000 };
+  var DWELL = 3000;
 
   var index = 0;      // onglet affiché (tournee est actif au chargement)
   var timer = null;
@@ -4866,7 +4868,7 @@ function activateTab(name) {
       index = (index + 1) % ORDER.length;
       activateTab(ORDER[index]);
       scheduleNext();
-    }, DWELL[ORDER[index]]);
+    }, DWELL);
   }
 
   // Le premier geste humain arrête le cycle : clic sur un onglet OU focus

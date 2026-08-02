@@ -1346,14 +1346,16 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .leads-launch-btn:disabled { background: var(--text-soft); cursor: not-allowed; }
 
 .leads-canvas {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  min-height: 480px;
+  /* Empilement vertical : carte pleine largeur en haut, barre d'indicateurs
+     sous la carte sur toute la largeur du cadre, fiches en dessous (patron
+     .content-area de prospection.html). */
+  display: flex;
+  flex-direction: column;
 }
 
 .leads-map-wrap {
   position: relative;
-  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   background: var(--surface);
   overflow: hidden;
   min-height: 480px;
@@ -1371,25 +1373,22 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   flex-direction: column;
 }
 
-.leads-results-header {
-  padding: 14px 22px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* ── BARRE D'INDICATEURS DE PROSPECTION ──────────────────────────────
+   Règles .kpi-* reprises octet pour octet de prospection.html. index nomme
+   deux tokens autrement (--surface-2 / --text-muted) ; on redéclare les alias
+   --surface2 / --muted sur le conteneur pour que les règles copiées telles
+   quelles rendent à l'identique. */
+#prospection-kpis { --surface2:#EBEBF0; --muted:#6E6E73; }
+.kpi-group{display:flex;align-items:stretch;background:var(--surface);border-bottom:1px solid var(--border);overflow:hidden;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;flex-shrink:0}
+.kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-right:1px solid var(--border);transition:background .12s;flex-shrink:0;scroll-snap-align:start}
+.kpi-chip:last-child{border-right:none}
+.kpi-chip:hover{background:var(--surface2)}
+.kpi-num{font-size:22px;font-weight:900;line-height:1;letter-spacing:-.5px}
+.kpi-lbl{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+@media (max-width: 640px) {
+  #prospection-kpis { overflow-x: auto; touch-action: pan-x; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+  .kpi-chip { min-width: 128px; scroll-snap-align: start; }
 }
-
-.leads-results-title {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.leads-results-count {
-  font-size: 11.5px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-.leads-results-count .lc-total { color: var(--c-generer); font-weight: 700; }
 
 /* Révélation progressive (mode démonstration auto) : opacité portée par
    l'icône elle-même — Leaflet n'y pose que le transform de position, jamais
@@ -4057,11 +4056,32 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
             <div id="leads-map"></div>
           </div>
 
-          <div class="leads-results">
-            <div class="leads-results-header">
-              <div class="leads-results-title">Aperçu</div>
-              <div class="leads-results-count" id="leads-count">0 résultat</div>
+          <!-- ── BARRE D'INDICATEURS DE PROSPECTION ── reprise à l'identique de
+               prospection.html : balisage, classes, libellés, icônes et couleurs
+               de chiffre au mot près. Sous la carte, pleine largeur du cadre.
+               « Prospects trouvés » monte au rythme des points révélés ; les trois
+               autres restent à zéro et annoncent les étapes qui suivent la
+               recherche (valeurs en dur, pas d'appel, pas de route). -->
+          <div class="kpi-group" id="prospection-kpis" aria-label="Indicateurs de prospection">
+            <div class="kpi-chip">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B84C00" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <div><div class="kpi-num" id="kpi-prospects-count" style="color:#B84C00">0</div><div class="kpi-lbl">Prospects trouvés</div></div>
             </div>
+            <div class="kpi-chip">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+              <div><div class="kpi-num" id="kpi-pipeline-count" style="color:#1D8348">0</div><div class="kpi-lbl">Pipeline</div></div>
+            </div>
+            <div class="kpi-chip">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M19 20H6a2 2 0 0 0-2 2"/><path d="M8 8h7M8 12h7"/></svg>
+              <div><div class="kpi-num" id="kpi-contacts-count" style="color:#4338CA">0</div><div class="kpi-lbl">Contacts entreprises</div></div>
+            </div>
+            <div class="kpi-chip">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              <div><div class="kpi-num" id="kpi-session-adds" style="color:#7C3AED">0</div><div class="kpi-lbl">Contacts ajoutés</div></div>
+            </div>
+          </div>
+
+          <div class="leads-results">
             <div class="leads-list" id="leads-list">
               <div class="leads-empty">
                 <div class="leads-empty-icon">
@@ -5198,18 +5218,18 @@ const deptEl = document.getElementById('sel-dept');
 const villeEl = document.getElementById('sel-ville');
 const launchBtn = document.getElementById('leads-launch-btn');
 const leadsList = document.getElementById('leads-list');
-const leadsCount = document.getElementById('leads-count');
+const kpiProspects = document.getElementById('kpi-prospects-count');
 
 // État initial du bloc de résultats, capturé au chargement : le repli
-// silencieux le restaure à l'identique plutôt que de le reconstruire.
-const leadsCountInitialHTML = leadsCount.innerHTML;
+// silencieux le restaure à l'identique plutôt que de le reconstruire. Le
+// compteur « Prospects trouvés » repart, lui, de zéro (valeur en dur du chip).
 const leadsListInitialHTML = leadsList.innerHTML;
 
 // Repli silencieux : remet la démonstration dans son état d'ouverture —
 // bloc de résultats, compteur, vue et marqueurs de la carte. Aucune trace.
 function resetDemoToInitial() {
   cancelDemoReveal();
-  leadsCount.innerHTML = leadsCountInitialHTML;
+  kpiProspects.textContent = '0';
   leadsList.innerHTML = leadsListInitialHTML;
   if (leadsMap) {
     leadMarkers.forEach(m => leadsMap.removeLayer(m));
@@ -5254,8 +5274,9 @@ async function runDemoSearch({ naf, region, dept, commune }, { silent = false } 
   initLeadsMap();
   if (!leadsMap) return;
 
-  // Prépa UI : loader + reset markers
-  leadsCount.textContent = 'Chargement…';
+  // Prépa UI : loader + reset markers. Le compteur revient à zéro : il repartira
+  // au rythme de la révélation une fois les points posés.
+  kpiProspects.textContent = '0';
   leadsList.innerHTML = '<div class="leads-empty"><div class="leads-empty-title">Recherche en cours</div><div class="leads-empty-sub">Connexion à la base SIRENE</div></div>';
   cancelDemoReveal();   // une recherche en chasse une autre : coupe la révélation en cours
   leadMarkers.forEach(m => leadsMap.removeLayer(m));
@@ -5282,7 +5303,7 @@ async function runDemoSearch({ naf, region, dept, commune }, { silent = false } 
     data = await r.json();
   } catch (e) {
     if (silent) { resetDemoToInitial(); return; }
-    leadsCount.textContent = '0 résultat';
+    kpiProspects.textContent = '0';
     leadsList.innerHTML = '<div class="leads-empty"><div class="leads-empty-title">Recherche indisponible</div><div class="leads-empty-sub">Réessayez dans un instant</div></div>';
     return;
   }
@@ -5300,7 +5321,7 @@ function renderDemoResults(data, { silent = false } = {}) {
 
   if (preview.length === 0) {
     if (silent) { resetDemoToInitial(); return; }
-    leadsCount.textContent = '0 résultat';
+    kpiProspects.textContent = '0';
     leadsList.innerHTML = '<div class="leads-empty"><div class="leads-empty-title">Aucun résultat</div><div class="leads-empty-sub">Essayez un autre secteur ou une autre région</div></div>';
     return;
   }
@@ -5377,13 +5398,26 @@ function renderDemoResults(data, { silent = false } = {}) {
   if (animate && leadMarkers.length) {
     const REVEAL_TOTAL_MS = 3000;
     const pending = leadMarkers.slice();
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const step = pending.length > 1 ? REVEAL_TOTAL_MS / (pending.length - 1) : 0;
     pending.forEach((m, i) => {
       const id = setTimeout(() => {
         if (m._icon) m._icon.classList.remove('lead-reveal-pending');
+        // Compteur « Prospects trouvés » sur la MÊME horloge que la révélation :
+        // chaque point dévoilé porte le compteur à sa fraction du total ; le
+        // dernier (à 3 s) le pose exactement sur le total. Pas de second minuteur.
+        if (!reduceMotion) {
+          kpiProspects.textContent =
+            Math.round(total * (i + 1) / pending.length).toLocaleString('fr-FR');
+        }
       }, Math.round(i * step));
       demoRevealTimers.push(id);
     });
+    // Mouvement réduit : pas de décompte, le compteur affiche d'emblée le total.
+    if (reduceMotion) kpiProspects.textContent = total.toLocaleString('fr-FR');
+  } else {
+    // Clic manuel (pose immédiate des points) : valeur finale directe.
+    kpiProspects.textContent = total.toLocaleString('fr-FR');
   }
 
   // ── 3. Centrage : fitBounds sur l'ensemble (preview + verrouillés)
@@ -5400,15 +5434,6 @@ function renderDemoResults(data, { silent = false } = {}) {
     }
   } else if (allCoords.length === 1) {
     leadsMap.setView(allCoords[0], 11, { animate: true });
-  }
-
-  // ── 4. Header compteur — total disponible uniquement, en accent
-  const visible = preview.length;
-  const totalLabel = data.totalCapped ? '10 000+' : String(total);
-  if (total > visible) {
-    leadsCount.innerHTML = '<span class="lc-total">' + totalLabel + ' disponible' + (total > 1 ? 's' : '') + '</span>';
-  } else {
-    leadsCount.textContent = visible + ' résultat' + (visible > 1 ? 's' : '');
   }
 
   // ── 6. Cards anonymisées (preview uniquement)

@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>
+/* Rendre toujours le haut de page à chaque rechargement : on neutralise la
+   restauration de défilement du navigateur. Exécuté ici, avant tout contenu et
+   toute feuille de style, pour devancer la restauration automatique. On garde
+   le retour à la position visée quand l'adresse porte une ancre (/#apercu…). */
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+if (!location.hash) window.scrollTo(0, 0);
+</script>
 <title>MovUP — Chercher. Trouver. Signer.</title>
 <meta name="description" content="Une base de plus de 5 millions d'entreprises actives, filtrée par métier et par zone : ciblez, suivez, signez depuis une seule interface." />
 <meta name="keywords" content="prospection auto-entrepreneur, prospection commerciale française, logiciel indépendant, NAF SIRENE, devis facture" />

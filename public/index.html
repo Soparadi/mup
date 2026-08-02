@@ -1070,6 +1070,9 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   flex-direction: column;
   gap: 12px;
   border: 1px solid var(--border);
+  /* Cadre visible du panneau Pipeline : porte la hauteur du cadre de
+     démonstration du héros. Sans --demo-height, hauteur naturelle du contenu. */
+  min-height: var(--demo-height, auto);
 }
 
 .pipeline-mock-cols {
@@ -1094,7 +1097,9 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   grid-template-columns: 1fr 220px;
   gap: 16px;
   align-items: stretch;
-  min-height: 360px;
+  /* Cadre visible du panneau Tournée : porte la hauteur du cadre de démonstration
+     du héros. Sans --demo-height, retombe sur son minimum de contenu (360 px). */
+  min-height: var(--demo-height, 360px);
 }
 /* Seuil aligné sur celui du cadre de démonstration du héros (880 px) : les deux
    cadres de la page doivent basculer en une seule colonne ensemble. Sinon, entre
@@ -1205,6 +1210,11 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   gap: 24px;
   max-width: 1100px;
   margin: 0 auto;
+  /* Cadre du panneau Quotidien : porte la hauteur du cadre de démonstration du
+     héros comme les deux autres. Grille nue (ni contour ni fond) : le vide sous
+     les cartes est assumé à cette étape, on ne l'étire ni ne le comble. Sans
+     --demo-height, hauteur naturelle du contenu. */
+  min-height: var(--demo-height, auto);
 }
 @media (max-width: 1024px) {
   .quotidien-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1314,11 +1324,12 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 
 .showcase-panel { display: none; }
 .showcase-panel.active { display: block; }
-/* Le conteneur des panneaux reprend la hauteur du cadre de démonstration du
-   héros, mesurée et suivie par un ResizeObserver qui pose --demo-height. Sans
-   cette variable (JavaScript indisponible), min-height retombe sur auto, soit
-   la hauteur naturelle du contenu — aucun nombre en dur. */
-.showcase-panels { min-height: var(--demo-height, auto); }
+/* La hauteur du cadre de démonstration du héros ne vit plus sur le conteneur des
+   panneaux mais sur les trois cadres visibles eux-mêmes (.carte-mock,
+   .pipeline-mock, .quotidien-grid), via --demo-height. Un ResizeObserver mesure
+   le cadre du héros et pose la variable sur .showcase-panels, d'où elle descend
+   par héritage jusqu'aux trois cadres. Sans elle (JavaScript indisponible),
+   chaque min-height retombe sur sa valeur naturelle — aucun nombre en dur. */
 
 .showcase-panel-text {
   text-align: center;
@@ -1327,6 +1338,19 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   color: var(--text-muted);
   max-width: 56ch;
   margin: 0 auto 36px;
+}
+/* Sous ~475 px, les intros les plus longues (Rendez-vous, Pipeline) passent à
+   trois lignes alors que celle du Quotidien tient sur deux. Comme la hauteur
+   constante vit désormais sur le cadre et non sur le conteneur, cette ligne
+   d'écart n'est plus absorbée : le panneau Quotidien serait plus court et la
+   section suivante remonterait au changement d'onglet. On réserve donc trois
+   lignes — hauteur exprimée en lignes (3lh), qui suit la taille du texte, pas en
+   pixels. Le paragraphe reste calé en haut : rien n'est centré ni comblé. Au
+   crossover mesuré (l'intro la plus longue repasse à deux lignes entre 472 et
+   476 px), la réservation s'arrête ; au-delà les trois intros tiennent sur deux
+   lignes et sont déjà égales — aucune ligne vide ajoutée. */
+@media (max-width: 475px) {
+  .showcase-panel-text { min-height: 3lh; }
 }
 
 .leads-tool {
@@ -4194,9 +4218,10 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
     </div>
     </div>
 
-    <!-- Conteneur des panneaux : reprend la hauteur du cadre de démonstration du
-         héros via la variable --demo-height (posée par ResizeObserver). Sans
-         JavaScript, la variable est absente et la hauteur redevient naturelle. -->
+    <!-- Conteneur des panneaux : ne porte plus de hauteur. Il sert seulement de
+         point d'ancrage à --demo-height (posée par ResizeObserver), variable qui
+         descend par héritage jusqu'aux trois cadres visibles (.carte-mock,
+         .pipeline-mock, .quotidien-grid) qui, eux, la consomment en min-height. -->
     <div class="showcase-panels">
     <!-- TOURNÉE -->
     <div class="showcase-panel active" role="tabpanel" id="panel-tournee" aria-labelledby="tab-tournee" data-panel="tournee">
@@ -4812,12 +4837,14 @@ document.querySelectorAll('.showcase-tab').forEach(function (btn) {
 });
 
 /* ───────────────── HAUTEUR DU CADRE À ONGLETS ─────────────────
-   Le conteneur des panneaux reprend la hauteur du cadre de démonstration du
-   héros. Un ResizeObserver suit la boîte du cadre — il couvre donc à la fois le
+   Les trois cadres visibles des panneaux (.carte-mock, .pipeline-mock,
+   .quotidien-grid) reprennent la hauteur du cadre de démonstration du héros. Un
+   ResizeObserver suit la boîte du cadre — il couvre donc à la fois le
    redimensionnement de la fenêtre et un changement de contenu — et écrit sa
-   hauteur (border-box) dans --demo-height, que .showcase-panels consomme en
-   min-height. Pas d'écouteur de resize de fenêtre en doublon. Si ResizeObserver
-   est indisponible, aucune variable n'est posée et la section garde sa hauteur
+   hauteur (border-box) dans --demo-height sur .showcase-panels, d'où la variable
+   descend par héritage jusqu'aux trois cadres qui la consomment en min-height.
+   Pas d'écouteur de resize de fenêtre en doublon. Si ResizeObserver est
+   indisponible, aucune variable n'est posée et chaque cadre garde sa hauteur
    naturelle. */
 (function () {
   var demo = document.querySelector('.hero-leads-tool');

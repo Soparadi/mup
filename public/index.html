@@ -3865,6 +3865,20 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
         <figure class="tour-slide" id="tour-9" data-name="Factures"><div class="tour-shot"></div></figure>
         <figure class="tour-slide" id="tour-10" data-name="Frais"><div class="tour-shot"></div></figure>
         <figure class="tour-slide" id="tour-11" data-name="Statistiques"><div class="tour-shot"></div></figure>
+        <!-- Second jeu, double d'affichage : mêmes capsules, dans le même ordre,
+             pour que la piste défile en avant au bouclage sans jamais reculer. Ni
+             id ni rôle propre — retiré de l'arbre d'accessibilité par aria-hidden. -->
+        <figure class="tour-slide" data-name="Prospection" aria-hidden="true"><div class="tour-shot"></div></figure>
+        <figure class="tour-slide" data-name="Pipeline" aria-hidden="true"><div class="tour-shot"></div></figure>
+        <figure class="tour-slide" data-name="Contacts" aria-hidden="true"><div class="tour-shot"></div></figure>
+        <figure class="tour-slide" data-name="Agenda" aria-hidden="true"><div class="tour-shot"></div></figure>
+        <figure class="tour-slide" data-name="Carte" aria-hidden="true"><div class="tour-shot"></div></figure>
+        <figure class="tour-slide" data-name="Mail" aria-hidden="true"><div class="tour-shot"></div></figure>
+        <figure class="tour-slide" data-name="Visio" aria-hidden="true"><div class="tour-shot"></div></figure>
+        <figure class="tour-slide" data-name="Devis" aria-hidden="true"><div class="tour-shot"></div></figure>
+        <figure class="tour-slide" data-name="Factures" aria-hidden="true"><div class="tour-shot"></div></figure>
+        <figure class="tour-slide" data-name="Frais" aria-hidden="true"><div class="tour-shot"></div></figure>
+        <figure class="tour-slide" data-name="Statistiques" aria-hidden="true"><div class="tour-shot"></div></figure>
       </div>
     </div>
   </div>
@@ -4224,8 +4238,9 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   var track = document.getElementById('tour-track');
   if (!track) return;
   var slides = Array.prototype.slice.call(track.querySelectorAll('.tour-slide'));
-  var N = slides.length;
+  var N = slides.length;              // vingt-deux : deux jeux identiques bout à bout
   if (!N) return;
+  var half = N / 2;                   // onze — longueur d'un jeu, pour les libellés et la correction
   var names = slides.map(function (s) { return s.dataset.name || ''; });
 
   var prevBtn = document.getElementById('tour-prev');
@@ -4242,7 +4257,7 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   // Récrit les trois libellés autour de la capsule i. Nav circulaire : aux
   // extrémités, précédent et suivant bouclent, la géométrie reste pleine.
   function setLabels(i) {
-    var p = ((i - 1) % N + N) % N, n = (i + 1) % N;
+    var p = ((i - 1) % half + half) % half, n = (i + 1) % half;
     if (prevBtn) prevBtn.textContent = names[p];
     if (curBtn) curBtn.textContent = names[i];
     if (nextBtn) nextBtn.textContent = names[n];
@@ -4251,12 +4266,16 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   // SEULE fonction de bascule, appelée à l'identique par le cycle et par les
   // pastilles ; elle ne sait rien de qui l'appelle. Défile jusqu'à la capsule i
   // puis récrit les libellés. Sec sous mouvement réduit, lissé sinon.
+  // scrollLeft qui centre la capsule i dans la piste.
+  function slideLeft(i) {
+    var el = slides[i];
+    return el.offsetLeft - (track.clientWidth - el.clientWidth) / 2;
+  }
+
   function activateSlide(i) {
     index = ((i % N) + N) % N;
-    var el = slides[index];
-    var left = el.offsetLeft - (track.clientWidth - el.clientWidth) / 2;
-    track.scrollTo({ left: left, behavior: reduce ? 'auto' : 'smooth' });
-    setLabels(index);
+    track.scrollTo({ left: slideLeft(index), behavior: reduce ? 'auto' : 'smooth' });
+    setLabels(index % half);
   }
 
   // Arrêt DÉFINITIF, posé dans l'appelant. clearTimeout annule le minuteur en
@@ -4267,8 +4286,19 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     if (timer) { clearTimeout(timer); timer = null; }
   }
 
+  // Le cycle avance toujours de +1, sans jamais reculer : la piste traverse le
+  // premier jeu, puis entre dans le second. Quand l'indice atteint la douzième
+  // capsule (première du second jeu), on recule scrollLeft d'exactement une
+  // longueur de jeu, sans animation : la capsule affichée est identique, la
+  // correction est invisible, et l'indice revient dans le premier jeu avant de
+  // repartir en avant. C'est le SEUL instant où scrollLeft décroît.
   function scheduleNext() {
     timer = setTimeout(function () {
+      if (index >= half) {
+        var setLength = slideLeft(half) - slideLeft(0);
+        track.scrollTo({ left: track.scrollLeft - setLength, behavior: 'auto' });
+        index -= half;
+      }
       activateSlide(index + 1);
       scheduleNext();
     }, DWELL);

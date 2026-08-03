@@ -936,7 +936,6 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   gap: 24px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
-  touch-action: pan-x;
   /* Remplissage latéral pour que la première et la dernière capsule se
      centrent. */
   padding-inline: calc((100vw - var(--tour-w)) / 2);
@@ -4249,7 +4248,9 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   // puis récrit les libellés. Sec sous mouvement réduit, lissé sinon.
   function activateSlide(i) {
     index = ((i % N) + N) % N;
-    slides[index].scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', inline: 'center', block: 'nearest' });
+    var el = slides[index];
+    var left = el.offsetLeft - (track.clientWidth - el.clientWidth) / 2;
+    track.scrollTo({ left: left, behavior: reduce ? 'auto' : 'smooth' });
     setLabels(index);
   }
 
@@ -4282,8 +4283,8 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   });
 
   // Peinture initiale des libellés, sans défiler : la capsule 0 est déjà centrée
-  // au scroll 0 par le remplissage latéral, et scrollIntoView ferait sauter la
-  // page vers le rail au chargement.
+  // au scroll 0 par le remplissage latéral, et un défilement au chargement
+  // ferait sauter la page vers le rail.
   setLabels(0);
 
   // Mouvement réduit : le minuteur ne démarre pas. Le rail reste manipulable au

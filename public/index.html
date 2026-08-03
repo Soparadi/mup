@@ -2132,6 +2132,11 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   .leads-select { font-size: 16px; }
   /* Libère la piste 1fr, dont le plancher min-content était fixé par la largeur intrinsèque de la démonstration (≈ 532 px). */
   .section-grid > * { min-width: 0; }
+  /* Téléphone : la capsule quitte --demo-height (posée par le ResizeObserver,
+     qui plancherait la boîte) pour le rapport 2/3 mesuré sur capture d'iPhone
+     (525 px utiles sur une capsule de 350). min-height: 0 lève le plancher,
+     sans quoi aspect-ratio reste sans effet. La bande 641-880 garde l'homothétie. */
+  .tour-shot { min-height: 0; aspect-ratio: 2 / 3; }
 }
 </style>
 </head>

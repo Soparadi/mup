@@ -4274,39 +4274,16 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     }, DWELL);
   }
 
-  // Le premier geste humain arrête le cycle, mais seule une INTENTION
-  // HORIZONTALE compte : clic sur une pastille (précédent/suivant naviguent,
-  // le centre non), focus arrivant sur la barre, et défilement horizontal du
-  // rail. La capsule couvrant presque l'écran au téléphone, tout défilement
-  // vertical de page part de la piste ; l'arrêter au moindre contact tuait le
-  // cycle. On ne stoppe donc qu'au glissement horizontal (doigt) ou à la
-  // molette horizontale.
+  // Seul un clic sur une pastille arrête le cycle : précédent et suivant
+  // naviguent puis stoppent, le centre stoppe sans naviguer, et le focus
+  // arrivant sur la barre fait de même au clavier. Aucun défilement du rail —
+  // au doigt, à la molette ou au trackpad, dans quelque direction que ce soit —
+  // n'arrête le cycle.
   if (prevBtn) prevBtn.addEventListener('click', function () { activateSlide(index - 1); stopCycle(); });
   if (nextBtn) nextBtn.addEventListener('click', function () { activateSlide(index + 1); stopCycle(); });
   if (curBtn) curBtn.addEventListener('click', stopCycle);
   var bar = document.querySelector('.showcase-tabs');
   if (bar) bar.addEventListener('focusin', stopCycle);
-
-  // touchstart ne mémorise que le point de départ, sans rien arrêter.
-  // touchmove n'arrête que si le déplacement horizontal domine le vertical et
-  // dépasse 10 px. Les deux restent passifs.
-  var touchX = 0, touchY = 0;
-  track.addEventListener('touchstart', function (e) {
-    var t = e.changedTouches[0];
-    touchX = t.clientX;
-    touchY = t.clientY;
-  }, { passive: true });
-  track.addEventListener('touchmove', function (e) {
-    var t = e.changedTouches[0];
-    var dx = t.clientX - touchX;
-    var dy = t.clientY - touchY;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) stopCycle();
-  }, { passive: true });
-
-  // wheel : n'arrête qu'au défilement à dominante horizontale.
-  track.addEventListener('wheel', function (e) {
-    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) stopCycle();
-  }, { passive: true });
 
   // Peinture initiale des libellés, sans défiler : la capsule 0 est déjà centrée
   // au scroll 0 par le remplissage latéral, et un défilement au chargement

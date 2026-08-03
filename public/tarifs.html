@@ -79,8 +79,6 @@ body.marketing-page {
   --text-light: #C4C4C4;
   --border: #E8E8E8;
   /* Couleurs métiers — alignées sur les --stage-* déjà définies dans :root */
-  --color-mailing: #B84C00;
-  --color-phoning: #4338CA;
   --color-visio: #7C3AED;
   --color-rdv: #0BBCD4;
   --color-devis: #F59E0B;
@@ -185,10 +183,10 @@ body.marketing-page {
 .movup-pricing .plan-popular {
   background: var(--bg-soft); color: var(--text-primary);
   border: 1px solid var(--border); border-left: 5px solid var(--color-gagne);
-  transform: scale(1.025); box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.05);
 }
 .movup-pricing .plan-popular:hover {
-  transform: scale(1.025) translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08);
 }
 .movup-pricing .plan-popular::before {
   content: "Le plus choisi";
@@ -197,8 +195,6 @@ body.marketing-page {
   font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
   padding: 5px 14px; border-radius: 999px; white-space: nowrap;
 }
-.movup-pricing .plan-popular .plan-divider { background: var(--border); }
-
 .movup-pricing .plan-label {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 12px; border-radius: 999px;
@@ -221,37 +217,44 @@ body.marketing-page {
   font-size: 15px; color: var(--text-secondary); line-height: 1.55;
   min-height: 90px; margin-bottom: 28px;
 }
-.movup-pricing .plan-divider { height: 1px; background: var(--border); margin: 0 0 24px; }
-.movup-pricing .plan-features { list-style: none; margin-bottom: 32px; flex-grow: 1; padding: 0; }
-.movup-pricing .plan-features li {
-  display: flex; align-items: flex-start; gap: 12px;
-  font-size: 15px; color: var(--text-primary); padding: 9px 0; line-height: 1.45;
+.movup-pricing .plan-quota {
+  font-size: 15px; color: var(--text-secondary); line-height: 1.3; margin-bottom: 24px;
+}
+.movup-pricing .plan-quota strong {
+  font-size: 28px; font-weight: 700; color: var(--text-primary);
+  letter-spacing: -0.02em; margin-right: 7px;
 }
 .movup-pricing .check-icon {
   flex-shrink: 0; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.movup-pricing .plan[data-plan="demarrage"] .check-icon { background: var(--bg-rdv); }
-.movup-pricing .plan[data-plan="activite"] .check-icon { background: var(--bg-gagne); }
-.movup-pricing .plan[data-plan="croisiere"] .check-icon { background: var(--bg-gagne); }
 
-.movup-pricing .mini-pipeline {
-  display: flex; align-items: center; gap: 4px;
-  margin-top: 16px; padding: 14px 0 18px; border-top: 1px solid var(--border);
+/* Bloc fonctionnel unique — dit une seule fois ce que MovUP fait */
+.movup-pricing .feature-block {
+  background: var(--bg-soft); border: 1px solid var(--border);
+  border-radius: 16px; padding: 32px 36px; margin-bottom: 44px;
 }
-.movup-pricing .pipeline-dot {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-  transition: transform 0.25s ease;
+.movup-pricing .feature-block-title {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-muted);
+  text-align: center; margin-bottom: 26px;
 }
-.movup-pricing .pipeline-line { flex-grow: 1; height: 2px; border-radius: 1px; }
-.movup-pricing .plan:hover .pipeline-dot { transform: scale(1.15); }
+.movup-pricing .feature-list {
+  list-style: none; padding: 0; margin: 0;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 40px;
+}
+.movup-pricing .feature-list li {
+  display: flex; align-items: flex-start; gap: 12px;
+  font-size: 15px; color: var(--text-primary); line-height: 1.45;
+}
+.movup-pricing .feature-list .check-icon { background: var(--bg-gagne); }
 
 .movup-pricing .plan-cta {
   width: 100%; padding: 15px 20px; border: 1px solid var(--text-primary);
   background: var(--text-primary); color: #FFFFFF;
   font-family: inherit; font-size: 14px; font-weight: 500;
   border-radius: 10px; cursor: pointer; transition: background 0.15s ease;
-  text-decoration: none; text-align: center; display: block; margin-top: 8px;
+  text-decoration: none; text-align: center; display: block; margin-top: auto;
 }
 .movup-pricing .plan-cta:hover { background: #2A2A2A; }
 
@@ -297,6 +300,8 @@ body.marketing-page {
 @media (max-width: 640px) {
   .movup-pricing { padding: 48px 18px 80px; }
   .movup-pricing .page-title { font-size: 32px; }
+  .movup-pricing .feature-block { padding: 24px 22px; }
+  .movup-pricing .feature-list { grid-template-columns: 1fr; }
 }
 
 .quizz-block{
@@ -408,6 +413,26 @@ body.marketing-page {
     <div id="quizz-result" class="quizz-result" aria-live="polite"></div>
   </div>
 
+  <!-- Bloc fonctionnel unique — tout ce que MovUP fait, dit une seule fois, au-dessus des trois cartes -->
+  <section class="feature-block" aria-label="Ce que MovUP fait, quelle que soit la formule">
+    <h3 class="feature-block-title">Toutes les formules incluent</h3>
+    <ul class="feature-list">
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Recherche de prospects par métier et par région</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Pipeline commercial en colonnes, par glisser-déposer</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Prochaine action datée sur chaque fiche</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Carte de vos rendez-vous et de vos contacts</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Devis et factures illimités</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Notes de frais en photo</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Boîte mail connectée à votre compte</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Visio en un clic depuis MovUP</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Campagnes de prospection par email</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Analyse des pertes, étape par étape</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Import et fusion de vos contacts (CSV, vCard, Excel)</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Chiffre d'affaires suivi en temps réel</li>
+      <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Export CSV de vos prospects et de vos frais</li>
+    </ul>
+  </section>
+
   <!-- Toggle Mensuel / Annuel -->
   <section class="billing-toggle" aria-label="Choix de facturation">
     <div class="toggle-wrapper" role="group">
@@ -425,29 +450,9 @@ body.marketing-page {
         <span class="plan-price" data-monthly="24" data-annual="20" data-annual-total="240">24&nbsp;€</span>
         <span class="plan-period">/mois</span>
       </div>
+      <p class="plan-quota"><strong>30</strong> contacts enrichis par mois</p>
       <p class="plan-billing" data-billing-text>Sans engagement</p>
       <p class="plan-tagline">Vous lancez votre activité. Vous voulez sortir du bouche-à-oreille et trouver vos premiers clients.</p>
-      <div class="plan-divider"></div>
-      <ul class="plan-features">
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Trouvez vos prospects par métier et région</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Suivez chaque échange dans un tableau clair</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>N'oubliez plus aucune relance</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Visualisez vos rendez-vous sur une carte</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Devis et factures sans limite</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Gardez vos notes de frais en photo</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#0BBCD4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Une boîte mail connectée à votre compte</li>
-      </ul>
-      <div class="mini-pipeline" aria-hidden="true">
-        <span class="pipeline-dot" style="background: var(--color-mailing)"></span>
-        <span class="pipeline-line" style="background: var(--color-phoning)"></span>
-        <span class="pipeline-dot" style="background: var(--color-phoning)"></span>
-        <span class="pipeline-line" style="background: var(--color-rdv)"></span>
-        <span class="pipeline-dot" style="background: var(--color-rdv)"></span>
-        <span class="pipeline-line" style="background: var(--border)"></span>
-        <span class="pipeline-dot" style="background: var(--text-light)"></span>
-        <span class="pipeline-line" style="background: var(--border)"></span>
-        <span class="pipeline-dot" style="background: var(--text-light)"></span>
-      </div>
       <a href="/signup?plan=demarrage" class="plan-cta">Commencer l’essai gratuit</a>
     </article>
 
@@ -457,29 +462,9 @@ body.marketing-page {
         <span class="plan-price" data-monthly="34" data-annual="28" data-annual-total="340">34&nbsp;€</span>
         <span class="plan-period">/mois</span>
       </div>
+      <p class="plan-quota"><strong>60</strong> contacts enrichis par mois</p>
       <p class="plan-billing" data-billing-text>Sans engagement</p>
       <p class="plan-tagline">Vous prospectez chaque semaine. Vous signez régulièrement. Vous voulez gagner du temps et professionnaliser vos échanges.</p>
-      <div class="plan-divider"></div>
-      <ul class="plan-features">
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Exportez vos données quand vous voulez</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Mettez vos relances en pilote automatique</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Lancez une visio en un clic depuis MovUP</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Envoyez vos campagnes de prospection par email</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Personnalisez vos modèles de devis</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Voyez où vous perdez vos prospects</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Importez et fusionnez vos contacts existants</li>
-      </ul>
-      <div class="mini-pipeline" aria-hidden="true">
-        <span class="pipeline-dot" style="background: var(--color-mailing)"></span>
-        <span class="pipeline-line" style="background: var(--color-phoning)"></span>
-        <span class="pipeline-dot" style="background: var(--color-phoning)"></span>
-        <span class="pipeline-line" style="background: var(--color-visio)"></span>
-        <span class="pipeline-dot" style="background: var(--color-visio)"></span>
-        <span class="pipeline-line" style="background: var(--color-rdv)"></span>
-        <span class="pipeline-dot" style="background: var(--color-rdv)"></span>
-        <span class="pipeline-line" style="background: var(--color-devis)"></span>
-        <span class="pipeline-dot" style="background: var(--color-devis)"></span>
-      </div>
       <a href="/signup?plan=activite" class="plan-cta">Commencer l’essai gratuit</a>
     </article>
 
@@ -489,29 +474,9 @@ body.marketing-page {
         <span class="plan-price" data-monthly="44" data-annual="37" data-annual-total="440">44&nbsp;€</span>
         <span class="plan-period">/mois</span>
       </div>
+      <p class="plan-quota"><strong>120</strong> contacts enrichis par mois</p>
       <p class="plan-billing" data-billing-text>Sans engagement</p>
       <p class="plan-tagline">Vous avez une activité installée. Vous gérez des clients réguliers et vous voulez piloter votre chiffre d'affaires sereinement.</p>
-      <div class="plan-divider"></div>
-      <ul class="plan-features">
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Facturez vos clients récurrents automatiquement</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Relancez les impayés sans y penser</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Suivez votre chiffre d'affaires en temps réel</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Anticipez votre chiffre d'affaires des 3 mois à venir</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Transmettez à votre comptable en un fichier mensuel</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Imprimez vos devis à votre logo et vos couleurs</li>
-        <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Une session d'accompagnement de 30 minutes offerte</li>
-      </ul>
-      <div class="mini-pipeline" aria-hidden="true">
-        <span class="pipeline-dot" style="background: var(--color-mailing)"></span>
-        <span class="pipeline-line" style="background: var(--color-phoning)"></span>
-        <span class="pipeline-dot" style="background: var(--color-phoning)"></span>
-        <span class="pipeline-line" style="background: var(--color-visio)"></span>
-        <span class="pipeline-dot" style="background: var(--color-visio)"></span>
-        <span class="pipeline-line" style="background: var(--color-devis)"></span>
-        <span class="pipeline-dot" style="background: var(--color-devis)"></span>
-        <span class="pipeline-line" style="background: var(--color-gagne)"></span>
-        <span class="pipeline-dot" style="background: var(--color-gagne); box-shadow: 0 0 0 3px var(--bg-gagne)"></span>
-      </div>
       <a href="/signup?plan=croisiere" class="plan-cta">Commencer l’essai gratuit</a>
     </article>
 

@@ -5599,7 +5599,15 @@ app.post('/api/v2/webhooks/resend', async (req, res) => {
           c = await lookup()
         }
         if (c) campaignId = String(c.id).replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '')
-        else console.warn('[webhook:resend] campaign_id introuvable après retries pour email_id', emailId)
+      }
+
+      // Aucune campagne rattachée après les quatre tentatives : c'est le cas
+      // NORMAL d'un courriel transactionnel (activation, bienvenue…), qui
+      // n'appartient à aucune campagne par construction. On s'arrête sans
+      // créer d'accusé orphelin rattaché à rien.
+      if (!campaignId) {
+        console.log('[webhook:resend] envoi transactionnel sans campagne —', eventType, 'ignoré')
+        return
       }
 
       // Insert event

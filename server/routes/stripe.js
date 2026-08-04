@@ -423,12 +423,19 @@ export async function webhookHandler(req, res) {
           const prevCancel = user.cancel_at_period_end === true
           const newCancel = subscription.cancel_at_period_end === true
 
-          await updateUserFields(userId, {
-            subscription_status: subscription.status || 'active',
+          const nextStatus = subscription.status || 'active'
+          const updatedFields = {
+            subscription_status: nextStatus,
             plan: newPlan,
             plan_billing_cycle: newCycle,
             cancel_at_period_end: newCancel
-          }, extractCurrentPeriodEnd(subscription))
+          }
+          // Régularisation d'un impayé : dès que Stripe repasse l'abonnement à
+          // 'active', on DÉSARME la coupure J+14 en vidant past_due_since (NONE).
+          // Sans ça, l'horodatage résiduel rearmerait la lecture seule après
+          // paiement. null → SET past_due_since = NONE (cf. updateUserFields).
+          if (nextStatus === 'active') updatedFields.past_due_since = null
+          await updateUserFields(userId, updatedFields, extractCurrentPeriodEnd(subscription))
 
           // Invalidation cache session : plan / cycle peuvent changer via
           // Customer Portal Stripe — la lecture suivante de window.__USER__
@@ -581,7 +588,12 @@ export async function webhookHandler(req, res) {
             return
           }
           const userId = cleanUserId(user.id)
-          await updateUserFields(userId, { subscription_status: 'past_due' })
+          // past_due_since horodate l'entrée en impayé : point de départ de la
+          // coupure lecture seule à J+14 (deriveAppState). Non écrasé s'il est
+          // déjà posé — la date d'origine du 1er échec fait foi.
+          const pdFields = { subscription_status: 'past_due' }
+          if (!user.past_due_since) pdFields.past_due_since = new Date().toISOString()
+          await updateUserFields(userId, pdFields)
 
           // Invalidation cache session : billing.html doit voir l'état
           // 'past_due' immédiatement pour afficher le bandeau "Action requise".

@@ -37,7 +37,7 @@ export async function requireActiveSubscription(req, res, next) {
 
   // Source unique de vérité (H5a) : lib/derive-app-state.js. La fonction
   // pure retourne uniquement un label parmi 'trial_active' | 'trial_expired'
-  // | 'grace_active' | 'grace_expired' | 'active'.
+  // | 'grace_active' | 'grace_expired' | 'past_due_locked' | 'active'.
   const label = deriveAppState(user)
 
   // Bascule DB best-effort (effet de bord local conservé pré/post-H5a) :
@@ -82,6 +82,11 @@ export async function requireActiveSubscription(req, res, next) {
         error: 'grace_expired',
         message: 'Votre période de récupération est terminée. Réabonnez-vous pour retrouver l\'accès à votre compte.',
         period_end: user.current_period_end || null
+      })
+    case 'past_due_locked':
+      return res.status(402).json({
+        error: 'past_due_locked',
+        message: 'Votre paiement n\'a pas abouti. Votre compte est en lecture seule jusqu\'à la régularisation.'
       })
     case 'trial_expired':
       return res.status(402).json({

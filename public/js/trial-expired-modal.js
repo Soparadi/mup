@@ -4,6 +4,9 @@
 //     fermable (cards plans + lien export RGPD + déconnexion).
 //   - grace_active → bandeau β non-bloquant (état dégradé voulu, lecture
 //     seule 7j post-résiliation). L'utilisateur continue à consulter.
+//   - past_due_locked → bandeau non-bloquant impayé (lecture seule à J+14
+//     d'un paiement en échec, calque du bandeau β). Aucun mur : régulariser
+//     doit rester possible. L'utilisateur continue à consulter.
 //   - active / trial_active → rien.
 //
 // VERROU DOCTRINAIRE (D4 H5b) : dans le popup grace_expired, le lien
@@ -73,6 +76,7 @@
   var STYLE_ID = 'tem-modal-style'
   var OVERLAY_ID = 'tem-modal-overlay'
   var BANNER_ID = 'tem-banner'
+  var PASTDUE_BANNER_ID = 'tem-pastdue-banner'
   var MUT_TOAST_ID = 'tem-mut-toast'
   var QUOTA_TOAST_ID = 'tem-quota-toast'
   var billingCycle = 'monthly'
@@ -111,7 +115,7 @@
 .tem-foot a,.tem-foot button{color:#6E6E73;background:none;border:none;text-decoration:underline;text-underline-offset:2px;cursor:pointer;font-family:inherit;font-size:inherit;padding:0}\
 .tem-foot a:hover,.tem-foot button:hover{color:#0A0A0A}\
 @media (max-width:480px){.tem-foot{flex-direction:column;gap:10px;text-align:center}}\
-#tem-banner{position:fixed;top:0;left:0;right:0;z-index:99998;background:#FFF7E6;border-bottom:2px solid #F59E0B;font-family:Geist,-apple-system,sans-serif;color:#1D1D1F}\
+#tem-banner,#tem-pastdue-banner{position:fixed;top:0;left:0;right:0;z-index:99998;background:#FFF7E6;border-bottom:2px solid #F59E0B;font-family:Geist,-apple-system,sans-serif;color:#1D1D1F}\
 .tem-banner-inner{max-width:1200px;margin:0 auto;padding:11px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px;font-size:13.5px;line-height:1.45}\
 .tem-banner-msg strong{font-weight:700}\
 .tem-banner-msg .tem-banner-sep{margin:0 8px;color:#9A6500}\
@@ -303,6 +307,35 @@
     else document.addEventListener('DOMContentLoaded', buildBanner, { once: true })
   }
 
+  // ── Bandeau impayé (past_due_locked) — calque EXACT du bandeau β grâce ──
+  // Non bloquant : un impayé n'est pas un résilié, il continue de consulter
+  // en lecture seule et doit pouvoir régulariser sans mur. AUCUN voile.
+  // Le CTA mène à /account/billing (« Gérer mon abonnement » → portail Stripe).
+  function buildPastDueBanner() {
+    if (document.getElementById(PASTDUE_BANNER_ID)) return
+    injectStyles()
+    var div = document.createElement('div')
+    div.id = PASTDUE_BANNER_ID
+    div.setAttribute('role', 'status')
+    div.innerHTML = ''
+      + '<div class="tem-banner-inner">'
+      +   '<span class="tem-banner-msg">'
+      +     '<strong>Votre paiement n’a pas abouti</strong>'
+      +     '<span class="tem-banner-sep">·</span>'
+      +     'votre compte est en lecture seule'
+      +   '</span>'
+      +   '<span class="tem-banner-actions">'
+      +     '<a class="tem-banner-cta" href="/account/billing">Mettre à jour ma carte</a>'
+      +   '</span>'
+      + '</div>'
+    document.body.insertBefore(div, document.body.firstChild)
+  }
+
+  function showPastDueBanner() {
+    if (document.body) buildPastDueBanner()
+    else document.addEventListener('DOMContentLoaded', buildPastDueBanner, { once: true })
+  }
+
   // ── Toast mutation bloquée (D3 H5b) — grace_active sur 402 ─────────────
   // Petit, fermable, auto-dismiss 6s (calque pattern auth-401 toast).
   // Re-affiché à chaque mutation tentée (remove + ré-ajout pour reset du
@@ -389,6 +422,8 @@
           show(data.app_state)
         } else if (data.app_state === 'grace_active') {
           showBanner()
+        } else if (data.app_state === 'past_due_locked') {
+          showPastDueBanner()
         }
         // 'active' et 'trial_active' : aucune UI.
       })
@@ -409,6 +444,8 @@
               show(body.error)
             } else if (body.error === 'grace_active') {
               showMutationBlocked()
+            } else if (body.error === 'past_due_locked') {
+              showPastDueBanner()
             } else if (body.error === 'quota_exceeded') {
               showQuotaBlocked(body)
             }

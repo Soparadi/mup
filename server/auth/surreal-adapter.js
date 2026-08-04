@@ -335,7 +335,12 @@ export async function logAuditEvent({ userId, event, ip, userAgent, metadata }) 
   }
 }
 
-// ── bootstrap : applique migrations/001_auth_tables.surql au démarrage ──
+// ── bootstrap schéma : joué au démarrage du serveur (server.js) ──
+// ATTENTION : cette liste est la SEULE autorité de schéma appliquée au runtime.
+// migrations/001_auth_tables.surql en est une COPIE documentaire, JAMAIS lue au
+// boot. Toute évolution de schéma doit être répercutée ICI en priorité, sinon un
+// champ écrit par le code sur une table SCHEMAFULL fait échouer la requête
+// entière (cf. cgu_accepted, oublié ici et resté cassant jusqu'à ce correctif).
 
 export async function runAuthMigration() {
   const db = await getDb()
@@ -376,6 +381,14 @@ export async function runAuthMigration() {
     // pas envoyée). Évite "Expected bool but found NONE" au prochain UPDATE.
     'DEFINE FIELD OVERWRITE marketing_consent ON user TYPE option<bool>',
     'DEFINE FIELD IF NOT EXISTS marketing_consent_at ON user TYPE option<datetime>',
+    // Acceptation CGU/CGV + confidentialité (case OBLIGATOIRE non pré-cochée au
+    // signup — preuve contractuelle). cgu_accepted_at écrit en chaîne ISO sur
+    // CREATE CONTENT, exactement comme marketing_consent_at ci-dessus (déjà en
+    // prod) : même déclaration option<datetime>. option<...> sans DEFAULT : les
+    // comptes créés avant l'ajout restent à NONE, aucune acceptation rétroactive.
+    'DEFINE FIELD IF NOT EXISTS cgu_accepted ON user TYPE option<bool>',
+    'DEFINE FIELD IF NOT EXISTS cgu_accepted_at ON user TYPE option<datetime>',
+    'DEFINE FIELD IF NOT EXISTS cgu_version ON user TYPE option<string>',
     // Intention de plan captée au signup via ?plan=… sur l'URL.
     // SIGNAL MARKETING — utilisé uniquement pour analytics et relances commerciales.
     // NE PAS UTILISER pour gérer les droits d'accès, les quotas ou le paywall :

@@ -55,7 +55,8 @@ import {
   hasEnriched,
   markEnriched,
   consumeLead,
-  porteCanalDecomptable
+  porteCanalDecomptable,
+  PLAN_LEAD_LIMITS
 } from './server/config/plan-quotas.js'
 import { PLANS as PRICING_PLANS, PLANS_ORDER } from './server/config/pricing-doctrine.js'
 import {
@@ -917,7 +918,11 @@ app.use(async (req, res, next) => {
         priceMonthly: p.priceMonthly,
         priceAnnual: p.priceAnnual,
         priceAnnualTotal: p.priceAnnualTotal,
-        color: p.color
+        color: p.color,
+        // Quota leads mensuel — même source unique que la vitrine (PLAN_LEAD_LIMITS,
+        // grille figée 30/60/120). Lecture directe car catalogue statique, non lié à
+        // un user : le portillon VIP (getLeadLimit → Infinity) ne s'applique pas ici.
+        leadQuota: PLAN_LEAD_LIMITS[slug]
       }
     }
     const pricingJson = escapeForScriptTag(JSON.stringify(pricing))

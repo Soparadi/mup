@@ -39,14 +39,15 @@
     return m ? 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',.12)' : 'rgba(29,131,72,.12)'
   }
 
-  // name, monthly, annual, annualTotal et color viennent de window.__PRICING__
-  // (catalogue injecté serveur-side depuis la doctrine pricing). Repli silencieux
-  // sur les valeurs figées ci-dessous si l'injection est absente, même motif que
-  // preferredPlan. soft reste dérivé de la color reçue.
+  // name, monthly, annual, annualTotal, color et quota viennent de
+  // window.__PRICING__ (catalogue injecté serveur-side depuis la doctrine
+  // pricing ; quota = PLAN_LEAD_LIMITS, source unique 30/60/120). Repli
+  // silencieux sur les valeurs figées ci-dessous si l'injection est absente,
+  // même motif que preferredPlan. soft reste dérivé de la color reçue.
   var PLANS = [
-    { key: 'demarrage', name: 'Essentiel', monthly: 24, annual: 20, annualTotal: 240, color: '#0BBCD4' },
-    { key: 'activite',  name: 'Régulier',  monthly: 34, annual: 28, annualTotal: 340, color: '#1D8348' },
-    { key: 'croisiere', name: 'Intensif',  monthly: 44, annual: 37, annualTotal: 440, color: '#1D8348' }
+    { key: 'demarrage', name: 'Essentiel', monthly: 24, annual: 20, annualTotal: 240, color: '#0BBCD4', quota: 30 },
+    { key: 'activite',  name: 'Régulier',  monthly: 34, annual: 28, annualTotal: 340, color: '#1D8348', quota: 60 },
+    { key: 'croisiere', name: 'Intensif',  monthly: 44, annual: 37, annualTotal: 440, color: '#1D8348', quota: 120 }
   ].map(function (p) {
     var src = (window.__PRICING__ && window.__PRICING__[p.key]) || null
     var name = src && src.label != null ? src.label : p.name
@@ -54,11 +55,12 @@
     var annual = src && src.priceAnnual != null ? src.priceAnnual : p.annual
     var annualTotal = src && src.priceAnnualTotal != null ? src.priceAnnualTotal : p.annualTotal
     var color = src && src.color != null ? src.color : p.color
-    return { key: p.key, name: name, monthly: monthly, annual: annual, annualTotal: annualTotal, color: color, soft: softFromColor(color) }
+    var quota = src && src.leadQuota != null ? src.leadQuota : p.quota
+    return { key: p.key, name: name, monthly: monthly, annual: annual, annualTotal: annualTotal, color: color, quota: quota, soft: softFromColor(color) }
   })
   var VALID_PLANS = ['demarrage', 'activite', 'croisiere']
 
-  // Plan présélectionné (badge "Le plus choisi" + scale 1.02) :
+  // Plan présélectionné (emphase visuelle : fond, scale 1.02) :
   //   - intended_plan du user (lu via window.__USER__ injecté serveur-side)
   //     si présent et valide
   //   - fallback 'activite' (plan central, le plus représentatif)
@@ -96,11 +98,12 @@
 @media (max-width:760px){.tem-grid{grid-template-columns:1fr;max-width:380px;margin-left:auto;margin-right:auto}}\
 .tem-plan{background:#fff;border:1px solid #E8E8E8;border-radius:14px;padding:24px 22px;border-left:5px solid;display:flex;flex-direction:column;position:relative}\
 .tem-plan.tem-popular{background:#F6F6F4;transform:scale(1.02)}\
-.tem-plan.tem-popular::before{content:"Le plus choisi";position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#1D8348;color:#fff;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:4px 12px;border-radius:999px;white-space:nowrap}\
 .tem-label{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin-bottom:14px;align-self:flex-start}\
 .tem-dot{width:6px;height:6px;border-radius:50%;background:currentColor}\
 .tem-price{font-size:42px;font-weight:600;letter-spacing:-.045em;line-height:1;margin-bottom:2px}\
 .tem-period{font-size:13px;color:#9A9A9A;margin-left:4px}\
+.tem-quota{font-size:13px;color:#6E6E73;line-height:1.3;margin:10px 0 0}\
+.tem-quota strong{font-weight:700;color:#0A0A0A}\
 .tem-billing{font-size:12px;color:#9A9A9A;margin-bottom:18px;min-height:14px}\
 .tem-cta{display:block;width:100%;padding:12px 18px;background:#0A0A0A;color:#fff;border:1px solid #0A0A0A;border-radius:9px;font-family:inherit;font-size:13px;font-weight:600;text-decoration:none;text-align:center;cursor:pointer;margin-top:auto;transition:background .15s}\
 .tem-cta:hover{background:#2A2A2A}\
@@ -144,6 +147,7 @@
       +     '<span class="tem-dot"></span>' + p.name
       +   '</span>'
       +   '<div><span class="tem-price" style="color:' + (p.key === 'croisiere' ? '#0A0A0A' : p.color) + '">' + price + ' €</span><span class="tem-period">/mois</span></div>'
+      +   '<p class="tem-quota"><strong>' + p.quota + '</strong> contacts enrichis par mois</p>'
       +   '<div class="tem-billing">' + billing + '</div>'
       +   '<a class="tem-cta" href="/api/stripe/quick-checkout?plan=' + p.key + '&cycle=' + cycle + '">Choisir ' + p.name + '</a>'
       + '</article>'

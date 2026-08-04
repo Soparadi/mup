@@ -414,6 +414,17 @@ export async function purgeExpiredUsers() {
 const TRIAL_PURGE_DAYS = 30
 const TRIAL_PURGE_MS = TRIAL_PURGE_DAYS * 24 * 3600 * 1000
 
+// Délai plein garanti entre l'avertissement et la suppression. La suppression
+// s'ancre sur DEUX dates à la fois — fin d'essai + 30 j ET avertissement + 7 j.
+// Cette double ancre garantit, quel que soit le nombre de journées de cron
+// manquées : AUCUN compte sans terme (la fenêtre d'avertissement est rattrapante,
+// donc tout essai finit par être prévenu → le drapeau finit posé → la purge
+// devient éligible) et AUCUN départ sans préavis (7 j pleins comptés depuis
+// l'envoi effectif, même pour un averti tardif). Chemin nominal inchangé :
+// averti à J+23, les deux échéances tombent ensemble à J+30.
+const WARNING_LEAD_DAYS = 7
+const WARNING_LEAD_MS = WARNING_LEAD_DAYS * 24 * 3600 * 1000
+
 // Garde unitaire jumelle de purgeOneUser — re-vérifie juste avant le DELETE
 // (anti-race : quelqu'un a pu s'abonner entre le SELECT et l'exécution ici).
 // Revérifie : absence d'abonnement, essai non converti, échéance dépassée,
@@ -465,11 +476,19 @@ async function purgeOneTrialUser(db, user) {
     console.warn('[purge:trial] user', uid, 'converti entre SELECT et DELETE, skip')
     return { userId: uid, email: user.email, skipped: true, reason: 'trial_converted' }
   }
-  // Échéance recalculée hors fenêtre (trial_ends_at absent ou < 30 j).
+  // Double ancre — les deux échéances doivent être franchies (cf. WARNING_LEAD_MS).
+  // (1) fin d'essai + 30 j.
   const endsAtMs = new Date(recheck.trial_ends_at).getTime()
   if (!Number.isFinite(endsAtMs) || (endsAtMs + TRIAL_PURGE_MS) >= Date.now()) {
     console.warn('[purge:trial] user', uid, 'trial_ends_at recalculé hors fenêtre, skip')
     return { userId: uid, email: user.email, skipped: true, reason: 'trial_ends_at_changed' }
+  }
+  // (2) avertissement + 7 j — garantit 7 j pleins depuis l'envoi effectif, même
+  // à un averti tardif (fenêtre rattrapante). Jumelle du filtre SQL.
+  const warnedAtMs = new Date(recheck.trial_purge_warning_sent_at).getTime()
+  if (!Number.isFinite(warnedAtMs) || (warnedAtMs + WARNING_LEAD_MS) >= Date.now()) {
+    console.warn('[purge:trial] user', uid, 'avertissement trop récent (< 7 j), skip')
+    return { userId: uid, email: user.email, skipped: true, reason: 'warning_too_recent' }
   }
 
   // Cascade factorisée — identique à celle des résiliés (réemployable telle
@@ -497,9 +516,14 @@ export async function purgeExpiredTrials() {
   //                                       superadmin). Complété par isVip côté
   //                                       garde unitaire (couvre le propriétaire).
   //   trial_purge_warning_sent_at IS NOT NONE → JAMAIS de suppression sans
-  //                                       avertissement préalable (fenêtre de
-  //                                       24 h : un cron manqué supprimerait en
-  //                                       silence). Redoublé par la garde unitaire.
+  //                                       avertissement préalable. Redoublé par
+  //                                       la garde unitaire.
+  //   trial_purge_warning_sent_at + 7d < now  → DOUBLE ANCRE : la suppression
+  //                                       exige AUSSI 7 j pleins depuis l'envoi
+  //                                       de l'avertissement, pas seulement 30 j
+  //                                       depuis la fin d'essai. Un averti tardif
+  //                                       (cron manqué, fenêtre rattrapante)
+  //                                       obtient toujours son préavis complet.
   let candidates = []
   try {
     const r = await db.query(
@@ -509,7 +533,8 @@ export async function purgeExpiredTrials() {
          AND trial_ends_at IS NOT NONE
          AND trial_ends_at + 30d < time::now()
          AND bypass != true
-         AND trial_purge_warning_sent_at IS NOT NONE`
+         AND trial_purge_warning_sent_at IS NOT NONE
+         AND trial_purge_warning_sent_at + 7d < time::now()`
     )
     candidates = r?.[0] || []
   } catch (e) {

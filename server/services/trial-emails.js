@@ -190,53 +190,56 @@ export async function sendGraceEndingTomorrowEmails() {
 }
 
 // Sélection des essais jamais convertis à avertir — 7 j avant la purge J+30,
-// soit une fin d'essai (trial_ends_at) vieille de ~23 j. Calque de
-// findCanceledUsersInWindow, mais sur le scope « jamais abonné » :
+// soit une fin d'essai (trial_ends_at) vieille de 23 j ou plus. Scope « jamais
+// abonné », fenêtre RATTRAPANTE (borne basse ouverte) :
 //   subscription_status IS NONE          → n'a jamais payé (écarte résiliés,
 //                                           impayés, actifs).
 //   trial_status active OU expired       → le cron bascule les inactifs en
 //                                           'expired' à l'échéance (expireTrial
 //                                           Automatically) ; ne viser que l'un
 //                                           en manquerait la moitié.
-//   trial_ends_at ∈ [from, to)           → la fenêtre centrée sur J+23.
-//   trial_purge_warning_sent_at IS NONE  → idempotence (flag posé après envoi).
+//   trial_ends_at + 23d <= now           → éligible dès J+23, SANS borne haute :
+//                                           un compte manqué par un cron sauté
+//                                           reste éligible les jours suivants,
+//                                           jusqu'à être enfin prévenu (le drapeau
+//                                           IS NONE ci-dessous garantit l'unicité).
+//   trial_purge_warning_sent_at IS NONE  → idempotence (flag posé après envoi) —
+//                                           borne l'ouverture : un averti sort.
 //   bypass != true                       → écarte le contournement (drapeau
 //                                           superadmin ; isVip couvre en plus le
 //                                           propriétaire par email côté boucle).
-async function findUnconvertedTrialsInWindow(from, to) {
+async function findUnconvertedTrialsToWarn() {
   const db = await getDb()
   try {
     const r = await db.query(
       `SELECT id, email, prenom, nom, bypass, trial_ends_at FROM user
        WHERE subscription_status IS NONE
          AND (trial_status = 'active' OR trial_status = 'expired')
-         AND trial_ends_at >= $from AND trial_ends_at < $to
+         AND trial_ends_at IS NOT NONE
+         AND trial_ends_at + 23d <= time::now()
          AND trial_purge_warning_sent_at IS NONE
-         AND bypass != true`,
-      { from: from.toISOString(), to: to.toISOString() }
+         AND bypass != true`
     )
     return r?.[0] || []
   } catch (e) {
-    console.warn('[trial-emails] findUnconvertedTrialsInWindow échoué :', e.message)
+    console.warn('[trial-emails] findUnconvertedTrialsToWarn échoué :', e.message)
     return []
   }
 }
 
 // Avertissement de suppression J-7 pour les essais jamais convertis (chantier D,
-// Sujet 2). Calque strict de sendGraceEndingTomorrowEmails : fenêtre ±12h (cron
-// quotidien), flag posé APRÈS envoi réussi, échec d'envoi → flag non posé →
-// retry au prochain run tant que l'user reste dans la fenêtre.
+// Sujet 2). Flag posé APRÈS envoi réussi, échec d'envoi → flag non posé → retry
+// au prochain run. La sélection est RATTRAPANTE (borne basse ouverte) : plus de
+// fenêtre de 24 h à traverser — un compte manqué par un cron sauté est repris
+// le lendemain, jusqu'à envoi. C'est la date de CET envoi qui ancre ensuite la
+// suppression (purgeExpiredTrials, warning + 7d), garantissant 7 j pleins même
+// à un averti tardif.
 //
 // CONTOURNEMENT : isVip(u) écarte les comptes VIP (propriétaire par email OU
 // drapeau bypass) — la boucle de purge ne les supprime jamais, les avertir
 // serait mentir. Même helper que purgeExpiredTrials / deriveAppState.
 export async function sendTrialDataDeletionWarningEmails() {
-  const TWENTY_THREE_J = 23 * 24 * 3600 * 1000
-  const HALF = 12 * 3600 * 1000
-  const now = Date.now()
-  const from = new Date(now - TWENTY_THREE_J - HALF)
-  const to = new Date(now - TWENTY_THREE_J + HALF)
-  const users = await findUnconvertedTrialsInWindow(from, to)
+  const users = await findUnconvertedTrialsToWarn()
   if (!users.length) return { sent: 0, total: 0 }
   let sent = 0
   let skipped = 0

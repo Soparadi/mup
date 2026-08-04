@@ -23,7 +23,7 @@ import {
   deleteVerificationTokens, markTokenUsed,
   setEmailVerified, updatePassword, logAuditEvent
 } from './surreal-adapter.js'
-import { sendWelcomeVerify, sendWelcome, sendPasswordReset } from '../services/email.js'
+import { sendWelcomeVerify, sendWelcome, sendPasswordReset, sendEmailChangeVerify, sendEmailChangeNotice } from '../services/email.js'
 import { getLocationFromIp } from '../services/geolocation.js'
 import { readSessionToken, SESSION_COOKIE, requireAuth } from '../middleware/requireAuth.js'
 
@@ -616,6 +616,72 @@ router.post('/reconfirm-password', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('[auth:reconfirm-password]', e.message)
     res.status(500).json({ error: 'Vérification impossible' })
+  }
+})
+
+// ── POST /api/auth/request-email-change ──
+// Demande de changement d'adresse par un utilisateur connecté. Exige l'accord
+// step-up du commit 1 (mot de passe reconfirmé < 15 min) : sans accord frais,
+// 403 code 'reauth_required' que la page reconnaît pour redemander le mot de
+// passe. N'ÉCRIT RIEN sur le compte — pose seulement un jeton email_change (1h)
+// portant l'adresse visée et envoie deux courriels. Débit limité (5 / 15 min).
+router.post('/request-email-change', requireAuth, async (req, res) => {
+  if (!checkRate(req, res, 'request-email-change')) return
+  if (!hasFreshReauth(req)) {
+    return res.status(403).json({ error: 'Confirmation du mot de passe requise', code: 'reauth_required' })
+  }
+  const meta = clientMeta(req)
+  const user = req.authUser
+  if (!user) return res.status(401).json({ error: 'Non authentifié' })
+
+  // Même normalisation que l'inscription (minuscule + trim), plus le retrait de
+  // tous les espaces, puis la MÊME règle de format qu'à l'inscription.
+  const newEmail = String(req.body?.new_email || '').toLowerCase().replace(/\s+/g, '')
+  if (!isValidEmail(newEmail)) {
+    return res.status(400).json({ error: 'Adresse invalide', field: 'new_email' })
+  }
+  const currentEmail = String(user.email || '').toLowerCase().trim()
+  if (newEmail === currentEmail) {
+    return res.status(400).json({ error: 'Cette adresse est déjà celle de votre compte', field: 'new_email' })
+  }
+
+  // Réponse identique que l'adresse soit libre ou déjà prise — anti-énumération.
+  const genericResponse = {
+    ok: true,
+    message: 'Si cette adresse est disponible, un lien de confirmation vient de lui être envoyé. Votre adresse actuelle reste inchangée jusqu\'à confirmation.'
+  }
+
+  try {
+    const userIdStr = req.userId
+    // Adresse déjà portée par un compte : MÊME réponse que le succès, sans créer
+    // de jeton, sans envoi, sans audit (l'audit dans cette seule branche leak
+    // par observation différentielle). Jamais révéler l'existence d'un compte.
+    const taken = await getUserByEmail(newEmail)
+    if (taken) return res.json(genericResponse)
+
+    // Une seule demande vivante à la fois : purge les jetons email_change en
+    // attente de cet utilisateur avant d'en poser un nouveau.
+    await deleteVerificationTokens(userIdStr, 'email_change')
+    const { token } = await createVerificationToken(userIdStr, 'email_change', { newEmail })
+
+    // Deux envois au mieux — un échec est journalisé et ne fait pas échouer la
+    // demande, comme les autres envois du dépôt.
+    try {
+      await sendEmailChangeVerify({ email: newEmail, prenom: user.prenom, nom: user.nom, name: user.name }, token)
+    } catch (e) {
+      console.error('[request-email-change] envoi nouvelle adresse échoué', e.message)
+    }
+    try {
+      await sendEmailChangeNotice({ email: currentEmail, prenom: user.prenom, nom: user.nom, name: user.name })
+    } catch (e) {
+      console.error('[request-email-change] avertissement ancienne adresse échoué', e.message)
+    }
+
+    await logAuditEvent({ userId: userIdStr, event: 'email_change_requested', ip: meta.ip, userAgent: meta.userAgent })
+    res.json(genericResponse)
+  } catch (e) {
+    console.error('[auth:request-email-change]', e.message)
+    res.status(500).json({ error: 'Demande impossible' })
   }
 })
 

@@ -183,6 +183,82 @@ export async function sendPasswordReset(user, token) {
   return { id: result.data?.id || null }
 }
 
+// ── sendEmailChangeVerify ──
+// Envoyé à la NOUVELLE adresse. Porte le lien de confirmation : cliquer prouve
+// que l'adresse appartient bien au demandeur, et déclenche la bascule. Calqué
+// sur sendPasswordReset (même charte, lien valable 1h).
+//   user : { email: NOUVELLE adresse, prenom, nom, name } ; token : brut.
+export async function sendEmailChangeVerify(user, token) {
+  if (!user?.email) throw new Error('user.email requis')
+  if (!token) throw new Error('token requis')
+  const confirmUrl = `${appUrl()}/api/auth/confirm-email-change?token=${encodeURIComponent(token)}`
+  const salutation = buildSalutation(user)
+  const tpl = await loadTemplate('email-change-verify.html')
+  const html = applyVars(tpl, { salutation, confirm_url: confirmUrl })
+  const text = [
+    `${salutation},`,
+    '',
+    'Une demande de changement d\'adresse a été reçue pour votre compte MovUP. Cliquez ci-dessous pour confirmer que cette adresse est bien la vôtre : elle deviendra alors votre identifiant de connexion. Ce lien est valable une heure.',
+    confirmUrl,
+    '',
+    'Tant que vous n\'avez pas confirmé, votre adresse actuelle reste inchangée.',
+    '',
+    'Bien à vous,',
+    'L\'équipe MovUP'
+  ].join('\n')
+
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: [user.email],
+    replyTo: FROM,
+    subject: 'Confirmez votre nouvelle adresse MovUP',
+    html,
+    text,
+    tags: [{ name: 'kind', value: 'email_change_verify' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}
+
+// ── sendEmailChangeNotice ──
+// Envoyé à l'ANCIENNE adresse pour l'avertir. Purement informatif : aucun lien
+// de bascule, et la NOUVELLE adresse n'y figure JAMAIS (minimisation + on ne
+// révèle pas la cible à un éventuel session-hijacker). Le bouton mène à la page
+// de mot de passe oublié, geste correctif si la demande n'émane pas du titulaire.
+//   user : { email: ANCIENNE adresse, prenom, nom, name }.
+export async function sendEmailChangeNotice(user) {
+  if (!user?.email) throw new Error('user.email requis')
+  const salutation = buildSalutation(user)
+  const resetUrl = `${appUrl()}/forgot-password`
+  const tpl = await loadTemplate('email-change-notice.html')
+  const html = applyVars(tpl, { salutation, reset_url: resetUrl })
+  const text = [
+    `${salutation},`,
+    '',
+    'Une demande a été reçue pour remplacer l\'adresse de votre compte MovUP par une autre. Le changement ne prendra effet qu\'après confirmation depuis cette nouvelle adresse.',
+    '',
+    'Si vous n\'êtes pas à l\'origine de cette demande, modifiez votre mot de passe sans attendre : quelqu\'un dispose peut-être d\'un accès à votre session.',
+    resetUrl,
+    '',
+    'Bien à vous,',
+    'L\'équipe MovUP'
+  ].join('\n')
+
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: [user.email],
+    replyTo: FROM,
+    subject: 'Un changement d\'adresse a été demandé sur votre compte MovUP',
+    html,
+    text,
+    tags: [{ name: 'kind', value: 'email_change_notice' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}
+
 // ── Emails Stripe (souscription) ──
 // Tous suivent le même pattern : load template, applyVars, r.emails.send.
 

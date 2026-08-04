@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MovUP — Mon compte</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#FFFFFF;--surface:#F5F5F7;--surface-2:#EBEBF0;
+    --card:#FFFFFF;--border:#E8E8ED;--border-2:#C7C7CC;
+    --text:#1D1D1F;--muted:#6E6E73;--soft:#AEAEB2;
+    --rdv:#0BBCD4;--gagne:#1D8348;--orange:#F59E0B;--red:#CC0000;
+    --bg-rdv:rgba(11,188,212,.12);
+    --bg-gagne:rgba(29,131,72,.12);
+    --bg-orange:rgba(245,158,11,.12);
+    --bg-red:rgba(204,0,0,.08);
+    --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
+    --font-serif:'Instrument Serif',Georgia,serif;
+  }
+  body{background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:stretch}
+  .account-shell{flex:1;min-width:0;overflow-y:auto;padding:48px 20px}
+  .page{width:100%;max-width:640px;margin:0 auto}
+  h1{font-size:30px;font-weight:800;letter-spacing:-.6px;color:var(--text);margin-bottom:8px;line-height:1.15;text-align:center}
+  h1 em{font-family:var(--font-serif);font-style:italic;font-weight:400}
+  .lead{font-size:15px;color:var(--muted);text-align:center;margin:0 auto 28px;max-width:520px;line-height:1.55}
+
+  .alert{padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+  .alert-success{background:var(--bg-gagne);color:var(--gagne);border:1px solid rgba(29,131,72,.2)}
+  .alert-info{background:var(--bg-rdv);color:var(--rdv);border:1px solid rgba(11,188,212,.2)}
+  .alert-warn{background:var(--bg-orange);color:var(--orange);border:1px solid rgba(245,158,11,.25)}
+  .alert-error{background:var(--bg-red);color:var(--red);border:1px solid rgba(204,0,0,.2)}
+  .alert.hidden{display:none}
+
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px 30px;margin-bottom:18px}
+  .card-title{font-size:16px;font-weight:800;letter-spacing:-.2px;color:var(--text);margin-bottom:16px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid var(--border);font-size:13.5px}
+  .row:first-of-type{border-top:none;padding-top:0}
+  .row .lbl{color:var(--muted)}
+  .row .val{font-weight:600;color:var(--text);text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .skeleton{height:13px;background:var(--surface-2);border-radius:4px;width:60%;display:inline-block}
+
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+  .field input{font-family:var(--font);font-size:14px;padding:11px 12px;border:1px solid var(--border-2);border-radius:9px;background:#fff;color:var(--text);outline:none;transition:border-color .12s,box-shadow .12s;width:100%}
+  .field input:focus{border-color:var(--text);box-shadow:0 0 0 3px rgba(29,29,31,.08)}
+  .field input.error{border-color:var(--red);box-shadow:0 0 0 3px rgba(204,0,0,.08)}
+  .help{font-size:12px;color:var(--muted);line-height:1.5;margin-top:8px}
+  .field-err{font-size:12px;color:var(--red);line-height:1.4;margin-top:8px;min-height:0}
+  .field-err.hidden{display:none}
+  .subgroup{margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
+  .subgroup.hidden{display:none}
+
+  .actions{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:14px;font-weight:700;padding:12px 22px;border-radius:10px;border:1px solid transparent;cursor:pointer;text-decoration:none;transition:background .15s;width:100%}
+  .btn-dark{background:var(--text);color:#fff;border-color:var(--text)}
+  .btn-dark:hover:not(:disabled){background:#000}
+  .btn-dark:disabled{opacity:.5;cursor:not-allowed}
+
+  .footer{text-align:center;margin-top:24px;font-size:12.5px;color:var(--muted)}
+  .footer a{color:var(--text);font-weight:600;text-decoration:none}
+  .footer a:hover{text-decoration:underline}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+<link rel="stylesheet" href="/styles/sidebar.css">
+<link rel="stylesheet" href="/styles/app-footer.css">
+</head>
+<body>
+<aside class="sidebar" id="sidebar"></aside>
+<div class="account-shell">
+<main class="page">
+  <h1>Mon <em>compte.</em></h1>
+  <p class="lead">Votre adresse de connexion et vos informations.</p>
+
+  <div id="banner" class="alert hidden" role="status"></div>
+
+  <section class="card" id="info-card">
+    <h2 class="card-title">Vos informations</h2>
+    <div class="row">
+      <span class="lbl">Adresse de connexion</span>
+      <span class="val" id="v-email"><span class="skeleton"></span></span>
+    </div>
+    <div class="row">
+      <span class="lbl">Prénom</span>
+      <span class="val" id="v-prenom"><span class="skeleton"></span></span>
+    </div>
+    <div class="row">
+      <span class="lbl">Nom</span>
+      <span class="val" id="v-nom"><span class="skeleton"></span></span>
+    </div>
+    <div class="row">
+      <span class="lbl">Téléphone</span>
+      <span class="val" id="v-telephone"><span class="skeleton"></span></span>
+    </div>
+  </section>
+
+  <section class="card" id="change-card">
+    <h2 class="card-title">Changer d'adresse</h2>
+
+    <div id="change-form">
+      <div class="field">
+        <label for="new-email">Nouvelle adresse</label>
+        <input id="new-email" name="new-email" type="email" autocomplete="email" maxlength="160" placeholder="vous@exemple.fr">
+      </div>
+      <p class="help">Un lien de confirmation sera envoyé à cette adresse. Votre adresse actuelle reste inchangée tant que vous n'avez pas cliqué.</p>
+      <p class="field-err hidden" id="change-err" role="alert"></p>
+
+      <div class="subgroup hidden" id="reauth-group">
+        <div class="field">
+          <label for="reauth-pw">Confirmez votre mot de passe</label>
+          <input id="reauth-pw" name="reauth-pw" type="password" autocomplete="current-password">
+        </div>
+        <p class="field-err hidden" id="reauth-err" role="alert"></p>
+      </div>
+
+      <div class="actions">
+        <button type="button" id="btn-continue" class="btn btn-dark">Continuer</button>
+        <button type="button" id="btn-confirm" class="btn btn-dark hidden" style="display:none">Confirmer</button>
+      </div>
+    </div>
+
+    <div id="change-done" class="alert alert-success" style="display:none" role="status"></div>
+  </section>
+
+  <p class="footer">
+    <a href="/dashboard">Retour à l'application</a>
+  </p>
+</main>
+
+<script>
+(function(){
+  var banner = document.getElementById('banner')
+  function setBanner(type, msg) {
+    banner.className = 'alert alert-' + type
+    banner.textContent = msg
+    banner.classList.remove('hidden')
+  }
+
+  // ── Carte lecture seule : mêmes champs que billing.html, lus depuis /api/user/me.
+  function setVal(id, value) {
+    var el = document.getElementById(id)
+    if (el) el.textContent = (value && String(value).trim()) ? value : '—'
+  }
+  fetch('/api/user/me', { credentials: 'same-origin' })
+    .then(function(r){ return r.ok ? r.json() : null })
+    .then(function(u){
+      if (!u) { setBanner('error', 'Session expirée. Veuillez vous reconnecter.'); return }
+      setVal('v-email', u.email)
+      setVal('v-prenom', u.prenom)
+      setVal('v-nom', u.nom)
+      setVal('v-telephone', u.telephone)
+    })
+    .catch(function(){ setBanner('error', 'Erreur réseau, réessayez.') })
+
+  // ── Carte « Changer d'adresse » ──
+  var emailInput = document.getElementById('new-email')
+  var changeErr = document.getElementById('change-err')
+  var reauthGroup = document.getElementById('reauth-group')
+  var reauthInput = document.getElementById('reauth-pw')
+  var reauthErr = document.getElementById('reauth-err')
+  var btnContinue = document.getElementById('btn-continue')
+  var btnConfirm = document.getElementById('btn-confirm')
+  var changeForm = document.getElementById('change-form')
+  var changeDone = document.getElementById('change-done')
+
+  function showErr(el, msg) {
+    el.textContent = msg
+    el.classList.remove('hidden')
+  }
+  function clearErr(el) {
+    el.textContent = ''
+    el.classList.add('hidden')
+  }
+  function busy(btn, on, label) {
+    btn.disabled = on
+    btn.innerHTML = on ? '<span class="spinner"></span> Envoi…' : label
+  }
+  function revealConfirm() {
+    reauthGroup.classList.remove('hidden')
+    btnConfirm.classList.remove('hidden')
+    btnConfirm.style.display = ''
+    btnContinue.style.display = 'none'
+    reauthInput.focus()
+  }
+  function onSuccess(message) {
+    // La carte est remplacée par le message rendu par le serveur ; le champ disparaît.
+    changeForm.style.display = 'none'
+    changeDone.textContent = message
+    changeDone.style.display = ''
+  }
+
+  // Envoie la demande de changement. La nouvelle adresse est conservée en
+  // fermeture : après reconfirmation du mot de passe, on rejoue cet appel sans
+  // que la personne resaisisse quoi que ce soit.
+  function requestChange(newEmail) {
+    busy(btnContinue, true, 'Continuer')
+    clearErr(changeErr)
+    return fetch('/api/auth/request-email-change', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_email: newEmail })
+    })
+      .then(function(r){ return r.json().then(function(d){ return { status: r.status, ok: r.ok, data: d } }) })
+      .then(function(res){
+        if (res.ok && res.data && res.data.ok) {
+          onSuccess(res.data.message || 'Un lien de confirmation vient de vous être envoyé.')
+          return
+        }
+        // Le serveur exige la reconfirmation du mot de passe : on révèle le champ.
+        if (res.status === 403 && res.data && res.data.code === 'reauth_required') {
+          busy(btnContinue, false, 'Continuer')
+          revealConfirm()
+          return
+        }
+        // Tout autre échec (format, adresse identique, débit dépassé) : message serveur.
+        busy(btnContinue, false, 'Continuer')
+        showErr(changeErr, (res.data && res.data.error) || 'Demande impossible. Réessayez.')
+      })
+      .catch(function(){
+        busy(btnContinue, false, 'Continuer')
+        showErr(changeErr, 'Erreur réseau. Réessayez.')
+      })
+  }
+
+  btnContinue.addEventListener('click', function(){
+    var newEmail = String(emailInput.value || '').trim()
+    clearErr(changeErr)
+    emailInput.classList.remove('error')
+    if (!newEmail) {
+      emailInput.classList.add('error')
+      showErr(changeErr, 'Renseignez une adresse.')
+      return
+    }
+    requestChange(newEmail)
+  })
+
+  btnConfirm.addEventListener('click', function(){
+    var pw = reauthInput.value || ''
+    clearErr(reauthErr)
+    reauthInput.classList.remove('error')
+    if (!pw) {
+      reauthInput.classList.add('error')
+      showErr(reauthErr, 'Renseignez votre mot de passe.')
+      return
+    }
+    busy(btnConfirm, true, 'Confirmer')
+    fetch('/api/auth/reconfirm-password', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw })
+    })
+      .then(function(r){ return r.json().then(function(d){ return { status: r.status, ok: r.ok, data: d } }) })
+      .then(function(res){
+        if (res.ok && res.data && res.data.ok) {
+          // Accord obtenu : on rejoue la demande avec l'adresse déjà saisie.
+          reauthInput.value = ''
+          busy(btnConfirm, false, 'Confirmer')
+          requestChange(String(emailInput.value || '').trim())
+          return
+        }
+        busy(btnConfirm, false, 'Confirmer')
+        reauthInput.classList.add('error')
+        showErr(reauthErr, (res.data && res.data.error) || 'Vérification impossible. Réessayez.')
+      })
+      .catch(function(){
+        busy(btnConfirm, false, 'Confirmer')
+        showErr(reauthErr, 'Erreur réseau. Réessayez.')
+      })
+  })
+})()
+</script>
+</div>
+<script src="/sidebar.js"></script>
+<script src="/js/trial-expired-modal.js" defer></script>
+<script src="/js/auth-401-handler.js" defer></script>
+<footer class="mup-app-footer">
+  <div class="mup-app-footer__inner">
+    <span>© 2026 <strong>MovUP</strong></span>
+    <nav>
+      <a href="/mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a>
+      <a href="/confidentialite.html" target="_blank" rel="noopener">Confidentialité</a>
+      <a href="/cgv.html" target="_blank" rel="noopener">CGV</a>
+      <a href="/dpa.html" target="_blank" rel="noopener">DPA</a>
+      <a href="/cookies.html" target="_blank" rel="noopener">Cookies</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

@@ -8,8 +8,9 @@
 //   await expireTrialAutomatically()    // bascule active → expired pour les inactifs
 
 import { getDb } from '../../lib/surreal.js'
-import { sendSubscriptionGraceEndingTomorrow, sendTrialEndingSoon, sendTrialEndingToday } from './email.js'
+import { sendSubscriptionGraceEndingTomorrow, sendTrialDataDeletionWarning, sendTrialEndingSoon, sendTrialEndingToday } from './email.js'
 import { PLAN_LABELS } from '../../lib/stripe-config.js'
+import { isVip } from '../../lib/vip.js'
 
 const APP_URL = (process.env.APP_URL || 'https://movup.io').replace(/\/+$/, '')
 
@@ -186,4 +187,72 @@ export async function sendGraceEndingTomorrowEmails() {
     }
   }
   return { sent, total: users.length, errors }
+}
+
+// Sélection des essais jamais convertis à avertir — 7 j avant la purge J+30,
+// soit une fin d'essai (trial_ends_at) vieille de ~23 j. Calque de
+// findCanceledUsersInWindow, mais sur le scope « jamais abonné » :
+//   subscription_status IS NONE          → n'a jamais payé (écarte résiliés,
+//                                           impayés, actifs).
+//   trial_status active OU expired       → le cron bascule les inactifs en
+//                                           'expired' à l'échéance (expireTrial
+//                                           Automatically) ; ne viser que l'un
+//                                           en manquerait la moitié.
+//   trial_ends_at ∈ [from, to)           → la fenêtre centrée sur J+23.
+//   trial_purge_warning_sent_at IS NONE  → idempotence (flag posé après envoi).
+//   bypass != true                       → écarte le contournement (drapeau
+//                                           superadmin ; isVip couvre en plus le
+//                                           propriétaire par email côté boucle).
+async function findUnconvertedTrialsInWindow(from, to) {
+  const db = await getDb()
+  try {
+    const r = await db.query(
+      `SELECT id, email, prenom, nom, bypass, trial_ends_at FROM user
+       WHERE subscription_status IS NONE
+         AND (trial_status = 'active' OR trial_status = 'expired')
+         AND trial_ends_at >= $from AND trial_ends_at < $to
+         AND trial_purge_warning_sent_at IS NONE
+         AND bypass != true`,
+      { from: from.toISOString(), to: to.toISOString() }
+    )
+    return r?.[0] || []
+  } catch (e) {
+    console.warn('[trial-emails] findUnconvertedTrialsInWindow échoué :', e.message)
+    return []
+  }
+}
+
+// Avertissement de suppression J-7 pour les essais jamais convertis (chantier D,
+// Sujet 2). Calque strict de sendGraceEndingTomorrowEmails : fenêtre ±12h (cron
+// quotidien), flag posé APRÈS envoi réussi, échec d'envoi → flag non posé →
+// retry au prochain run tant que l'user reste dans la fenêtre.
+//
+// CONTOURNEMENT : isVip(u) écarte les comptes VIP (propriétaire par email OU
+// drapeau bypass) — la boucle de purge ne les supprime jamais, les avertir
+// serait mentir. Même helper que purgeExpiredTrials / deriveAppState.
+export async function sendTrialDataDeletionWarningEmails() {
+  const TWENTY_THREE_J = 23 * 24 * 3600 * 1000
+  const HALF = 12 * 3600 * 1000
+  const now = Date.now()
+  const from = new Date(now - TWENTY_THREE_J - HALF)
+  const to = new Date(now - TWENTY_THREE_J + HALF)
+  const users = await findUnconvertedTrialsInWindow(from, to)
+  if (!users.length) return { sent: 0, total: 0 }
+  let sent = 0
+  let skipped = 0
+  const errors = []
+  for (const u of users) {
+    // Garde de sûreté : le filtre SQL bypass != true ne capte pas le
+    // propriétaire par email. isVip tranche les deux populations.
+    if (isVip(u)) { skipped++; continue }
+    try {
+      await sendTrialDataDeletionWarning({ prenom: u.prenom, nom: u.nom, email: u.email })
+      await markEmailSent(u.id, 'trial_purge_warning_sent_at')
+      sent++
+    } catch (e) {
+      console.warn('[trial-emails] avertissement purge envoi échec :', u.email, e.message)
+      errors.push({ email: u.email, error: e.message })
+    }
+  }
+  return { sent, skipped, total: users.length, errors }
 }

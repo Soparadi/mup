@@ -431,6 +431,9 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS trial_email_j0_sent_at ON user TYPE option<datetime>',
     'DEFINE FIELD IF NOT EXISTS trial_email_j12_sent_at ON user TYPE option<datetime>',
     'DEFINE FIELD IF NOT EXISTS grace_j_minus_1_sent_at ON user TYPE option<datetime>',
+    // Idempotence de l'avertissement de suppression d'un essai jamais converti,
+    // envoyé J+23 (7 j avant la purge J+30). Posé une seule fois à l'envoi réussi.
+    'DEFINE FIELD IF NOT EXISTS trial_purge_warning_sent_at ON user TYPE option<datetime>',
     // Flag idempotence email bienvenue (post-vérification email). Posé une seule fois
     // à l'envoi réussi de sendWelcome, lu en amont pour bloquer tout double-envoi
     // (cas re-clic du lien verify : on laisse entrer la session mais on ne rejoue pas l'email).

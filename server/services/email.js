@@ -368,6 +368,21 @@ export async function sendSubscriptionGraceEndingTomorrow({ email, prenom, nom, 
   })
 }
 
+// Avertissement de suppression d'un essai jamais converti — déclenché par le
+// cron (trial-emails.js) à J+23 (7 j avant la purge J+30, purgeExpiredTrials).
+// Calque de sendSubscriptionGraceEndingTomorrow : même wrapper, même mécanique.
+// Aucune date à formater (le délai « sept jours » est fixe dans le gabarit).
+export async function sendTrialDataDeletionWarning({ email, prenom, nom }) {
+  return sendStripeTransactional('trial-data-deletion-warning.html', {
+    salutation: buildSalutation({ prenom, nom }),
+    billing_url: appUrl() + '/account/billing'
+  }, {
+    to: email,
+    subject: 'Vos données MovUP seront supprimées dans sept jours',
+    kind: 'trial_data_deletion_warning'
+  })
+}
+
 export async function sendPaymentFailed({ email, prenom, nom, plan_label, portal_url }) {
   return sendStripeTransactional('payment-failed.html', {
     salutation: buildSalutation({ prenom, nom }),

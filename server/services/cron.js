@@ -17,7 +17,8 @@ import {
   sendTrialEndingSoonEmails,
   sendTrialEndingTodayEmails,
   expireTrialAutomatically,
-  sendGraceEndingTomorrowEmails
+  sendGraceEndingTomorrowEmails,
+  sendTrialDataDeletionWarningEmails
 } from './trial-emails.js'
 import { purgeExpiredUsers, purgeExpiredTrials, deleteUserCascade } from './purge-expired.js'
 import { sendAccountDeletionConfirmed } from './email.js'
@@ -70,6 +71,7 @@ async function runTrialJobs() {
   console.log('[cron] Trial jobs déclenchés à', new Date().toISOString())
   await runStep('j2', sendTrialEndingSoonEmails)
   await runStep('j0', sendTrialEndingTodayEmails)
+  await runStep('trial_purge_warn', sendTrialDataDeletionWarningEmails)
   await runStep('expire', expireTrialAutomatically)
   await runStep('grace_j1', sendGraceEndingTomorrowEmails)
   await runStep('account_deletion', runAccountDeletions)

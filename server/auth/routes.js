@@ -200,13 +200,11 @@ router.post('/signup', async (req, res) => {
   // Consentement marketing : strictement opt-in. On accepte true/'true'/1/'1'.
   const rawConsent = req.body?.marketing_consent
   const marketingConsent = rawConsent === true || rawConsent === 'true' || rawConsent === 1 || rawConsent === '1'
-  const marketingConsentAt = marketingConsent ? new Date().toISOString() : null
 
   // Acceptation CGU/CGV + confidentialité : OBLIGATOIRE. Case non pré-cochée
   // côté front. On accepte true/'true'/1/'1'. Preuve contractuelle tracée en base.
   const rawCgu = req.body?.cgu_accepted
   const cguAccepted = rawCgu === true || rawCgu === 'true' || rawCgu === 1 || rawCgu === '1'
-  const cguAcceptedAt = cguAccepted ? new Date().toISOString() : null
 
   // Intention de plan captée au signup (?plan=… sur l'URL, transmis via input
   // caché). SIGNAL MARKETING uniquement — ne contrôle ni quotas ni accès.
@@ -217,7 +215,6 @@ router.post('/signup', async (req, res) => {
   const intendedPlan = (typeof rawIntendedPlan === 'string' && VALID_INTENDED_PLANS.includes(rawIntendedPlan))
     ? rawIntendedPlan
     : null
-  const intendedPlanAt = intendedPlan ? new Date().toISOString() : null
 
   if (!prenom) return res.status(400).json({ error: 'Prénom requis', field: 'prenom' })
   if (!nom) return res.status(400).json({ error: 'Nom requis', field: 'nom' })
@@ -255,36 +252,45 @@ router.post('/signup', async (req, res) => {
       plan: 'demarrage',                        // Décision 1.2 — essai = niveau Essentiel ; trial_status distingue essai/payant
       marketing_consent: marketingConsent,      // false par défaut (RGPD)
       cgu_accepted: cguAccepted,                 // toujours true ici (garde 400 ci-dessus)
-      cgu_accepted_at: cguAcceptedAt,            // horodatage ISO de l'acceptation
       cgu_version: CGU_VERSION,                   // version des conditions acceptées
-      trial_status: 'active'                    // datetimes posées en 2ème temps (cf. ci-dessous)
+      trial_status: 'active'                    // datetimes (dont cgu_accepted_at) posées en 2ème temps (cf. ci-dessous)
     }
     if (geoData && typeof geoData === 'object') userBody.geo_data = geoData
-    if (marketingConsentAt) userBody.marketing_consent_at = marketingConsentAt
     if (intendedPlan) userBody.intended_plan = intendedPlan
-    if (intendedPlanAt) userBody.intended_plan_at = intendedPlanAt
 
     const user = await createUser(userBody)
     if (!user) return res.status(500).json({ error: 'Création du compte impossible' })
 
     const userIdStr = String(user.id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
 
-    // Datetimes trial calculées côté SurrealQL pour rester en datetime natif
-    // (cf. fix b219bf7 — l'API binding ne coerce pas les strings ISO).
-    // Échec silencieux : si l'UPDATE plante, l'utilisateur est créé sans dates
-    // trial mais peut quand même utiliser l'app (le middleware traite trial_status
+    // Datetimes calculées côté SurrealQL pour rester en datetime natif : sur
+    // CREATE ... CONTENT l'API binding ne coerce PAS une string ISO vers
+    // datetime (le CREATE échoue en entier). Même correctif que les dates
+    // trial ci-dessous. La sémantique est identique pour les trois horodatages
+    // de consentement : l'instant de l'acceptation = l'instant de la création,
+    // donc time::now() est exact.
+    //   - cgu_accepted_at    : toujours posé (acceptation OBLIGATOIRE, garde 400)
+    //   - marketing_consent_at : seulement si la case opt-in est cochée
+    //   - intended_plan_at   : seulement si un ?plan=… valide a été capté
+    // Échec silencieux : si l'UPDATE plante, l'utilisateur est créé sans ces
+    // dates mais peut quand même utiliser l'app (le middleware traite trial_status
     // === undefined comme passant).
     try {
       const { getDb } = await import('../../lib/surreal.js')
       const dbInst = await getDb()
+      const setClauses = [
+        'trial_started_at = time::now()',
+        'trial_ends_at = time::now() + 14d',
+        'cgu_accepted_at = time::now()'
+      ]
+      if (marketingConsent) setClauses.push('marketing_consent_at = time::now()')
+      if (intendedPlan) setClauses.push('intended_plan_at = time::now()')
       await dbInst.query(
-        `UPDATE type::record('user', $id) SET
-          trial_started_at = time::now(),
-          trial_ends_at = time::now() + 14d`,
+        `UPDATE type::record('user', $id) SET ${setClauses.join(', ')}`,
         { id: userIdStr }
       )
     } catch (e) {
-      console.warn('[signup] trial dates UPDATE échoué :', e.message)
+      console.warn('[signup] datetimes UPDATE échoué :', e.message)
     }
 
     const { token } = await createVerificationToken(userIdStr, 'email_verify')

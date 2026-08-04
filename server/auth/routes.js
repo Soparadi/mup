@@ -25,7 +25,7 @@ import {
 } from './surreal-adapter.js'
 import { sendWelcomeVerify, sendWelcome, sendPasswordReset } from '../services/email.js'
 import { getLocationFromIp } from '../services/geolocation.js'
-import { readSessionToken, SESSION_COOKIE } from '../middleware/requireAuth.js'
+import { readSessionToken, SESSION_COOKIE, requireAuth } from '../middleware/requireAuth.js'
 
 export const router = express.Router()
 
@@ -75,6 +75,53 @@ setInterval(() => {
     const fresh = arr.filter(t => now - t < RATE_WINDOW_MS)
     if (fresh.length === 0) rateBuckets.delete(k)
     else rateBuckets.set(k, fresh)
+  }
+}, 5 * 60 * 1000).unref()
+
+// ── Accord step-up : ré-confirmation par mot de passe (15 min) ────────
+// Une action sensible (changement d'adresse à venir) exige qu'un utilisateur
+// DÉJÀ connecté reprouve son mot de passe. Le succès pose un accord de courte
+// durée, RÉUTILISABLE dans la fenêtre (pas à usage unique), porté par le token
+// de session — même clé que le SESSION_CACHE de l'adaptateur.
+//
+// Mécanisme retenu : marque en mémoire process (Map token→échéance), PAS un
+// verification_token. Raisons :
+//   - Un verification_token exigerait d'élargir la liste fermée des types (3
+//     endroits) juste pour un accord éphémère jamais envoyé par email — le
+//     commit 2 réserve cet élargissement au seul type email_change.
+//   - L'accord suit la session : à la rotation (login/reset) le nouveau token
+//     n'a pas d'accord, l'ancien est purgé. Rien à révoquer à la main.
+//   - Process-local, comme rateBuckets et SESSION_CACHE : un redémarrage
+//     l'efface, l'utilisateur ressaisit son mot de passe — coût acceptable,
+//     jamais bloquant. Cohérent avec l'instance unique Railway.
+const REAUTH_TTL_MS = 15 * 60 * 1000
+const reauthGrants = new Map()     // sessionToken → expiresAt (ms epoch)
+
+function grantReauth(sessionToken) {
+  if (!sessionToken) return
+  reauthGrants.set(sessionToken, Date.now() + REAUTH_TTL_MS)
+}
+
+// Lecture seule : une action sensible vérifie la fraîcheur de l'accord sans le
+// consommer (fenêtre 15 min réutilisable). Exportée pour les commits suivants ;
+// aucune action ne l'appelle encore.
+export function hasFreshReauth(req) {
+  const token = readSessionToken(req)
+  if (!token) return false
+  const exp = reauthGrants.get(token)
+  if (!exp) return false
+  if (Date.now() > exp) {
+    reauthGrants.delete(token)
+    return false
+  }
+  return true
+}
+
+// GC légère (miroir de celle des rateBuckets) : purge les accords expirés.
+setInterval(() => {
+  const now = Date.now()
+  for (const [token, exp] of reauthGrants.entries()) {
+    if (now > exp) reauthGrants.delete(token)
   }
 }, 5 * 60 * 1000).unref()
 
@@ -536,6 +583,39 @@ router.post('/reset-password', async (req, res) => {
   } catch (e) {
     console.error('[auth:reset-password]', e.message)
     res.status(500).json({ error: 'Réinitialisation impossible' })
+  }
+})
+
+// ── POST /api/auth/reconfirm-password ──
+// Ré-authentification "step-up" : un utilisateur DÉJÀ connecté (requireAuth)
+// reprouve son mot de passe et obtient l'accord court (15 min) réutilisable par
+// les actions sensibles. Débit limité comme /login (5 / 15 min / IP). Un échec
+// écrit un événement d'audit.
+// Cette brique n'est branchée sur AUCUNE action : elle existe et est testable,
+// rien ne l'appelle encore.
+router.post('/reconfirm-password', requireAuth, async (req, res) => {
+  if (!checkRate(req, res, 'reconfirm-password')) return
+  const meta = clientMeta(req)
+  const password = req.body?.password
+  const user = req.authUser
+  if (!user || !user.password_hash) {
+    return res.status(401).json({ error: 'Non authentifié' })
+  }
+  if (typeof password !== 'string' || !password) {
+    return res.status(400).json({ error: 'Mot de passe requis' })
+  }
+  try {
+    const ok = await argon2.verify(user.password_hash, password).catch(() => false)
+    if (!ok) {
+      await logAuditEvent({ userId: req.userId, event: 'reauth_failed', ip: meta.ip, userAgent: meta.userAgent })
+      return res.status(401).json({ error: 'Mot de passe incorrect' })
+    }
+    grantReauth(readSessionToken(req))
+    await logAuditEvent({ userId: req.userId, event: 'reauth_success', ip: meta.ip, userAgent: meta.userAgent })
+    res.json({ ok: true, expires_in: REAUTH_TTL_MS / 1000 })
+  } catch (e) {
+    console.error('[auth:reconfirm-password]', e.message)
+    res.status(500).json({ error: 'Vérification impossible' })
   }
 })
 

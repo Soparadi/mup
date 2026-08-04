@@ -125,7 +125,7 @@ export async function sendWelcome(user) {
     '',
     'Votre espace MovUP est prêt. Tout est réuni au même endroit : recherche de clients, suivi, carte, agenda, rendez-vous, mail, visio, devis et factures. Un seul espace, une seule logique. De la première recherche au client signé.',
     '',
-    'L\'essai gratuit vous permet de disposer de 14 jours, dans la limite de 30 fiches qualifiées.',
+    'L\'essai gratuit vous permet de disposer de 14 jours, dans la limite de 30 contacts enrichis.',
     '',
     `Commencer ma première recherche : ${ctaUrl}`,
     '',

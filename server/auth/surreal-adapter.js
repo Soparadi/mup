@@ -201,8 +201,8 @@ export async function deleteAllSessionsForUser(userId) {
 
 // ── verification_token ──
 
-export async function createVerificationToken(userId, type) {
-  if (!['email_verify', 'password_reset'].includes(type)) {
+export async function createVerificationToken(userId, type, { newEmail } = {}) {
+  if (!['email_verify', 'password_reset', 'email_change'].includes(type)) {
     throw new Error('verification token type invalide')
   }
   const db = await getDb()
@@ -210,13 +210,27 @@ export async function createVerificationToken(userId, type) {
   const tokenHash = hashToken(token)
   const cleanUserId = normalizeId('user', userId)
   // Durée fixe par type — inlinée côté SurrealQL pour rester en datetime natif.
+  // email_verify : 24h. password_reset ET email_change : 1h — le nouveau type
+  // hérite de la branche "else" existante, pas de paramètre de durée ajouté.
   const ttl = type === 'email_verify' ? VERIFY_TTL_MS : RESET_TTL_MS
   const durationLit = type === 'email_verify' ? '24h' : '1h'
   const expiresAt = new Date(Date.now() + ttl).toISOString()
-  await db.query(
-    `CREATE verification_token SET user_id = type::record("user", $uid), token = $tok, type = $type, expires_at = time::now() + ${durationLit}`,
-    { uid: cleanUserId, tok: tokenHash, type }
-  )
+  // Champs posés dynamiquement : un champ absent doit rester ABSENT de la
+  // requête (jamais posé à NULL — piège SCHEMAFULL). new_email n'est écrit que
+  // si l'appelant le fournit ; les deux types existants n'en passent aucun et
+  // produisent exactement la même requête qu'avant.
+  const sets = [
+    'user_id = type::record("user", $uid)',
+    'token = $tok',
+    'type = $type',
+    `expires_at = time::now() + ${durationLit}`
+  ]
+  const params = { uid: cleanUserId, tok: tokenHash, type }
+  if (newEmail) {
+    sets.push('new_email = $newEmail')
+    params.newEmail = String(newEmail).toLowerCase().trim()
+  }
+  await db.query(`CREATE verification_token SET ${sets.join(', ')}`, params)
   return { token, expiresAt }
 }
 
@@ -236,6 +250,10 @@ export async function getVerificationToken(token, type) {
     id: row.id,
     user_id: typeof row.user_id === 'object' ? String(row.user_id) : row.user_id,
     type: row.type,
+    // Porteur de l'adresse visée pour un jeton email_change (NONE → null pour
+    // les autres types). Relu à la confirmation ; l'adaptateur n'étant pas
+    // touché plus loin, le champ est exposé ici dès sa création.
+    new_email: row.new_email ?? null,
     expires_at: row.expires_at
   }
 }
@@ -263,6 +281,7 @@ export async function getVerificationTokenAny(token, type) {
     id: row.id,
     user_id: typeof row.user_id === 'object' ? String(row.user_id) : row.user_id,
     type: row.type,
+    new_email: row.new_email ?? null,
     used: row.used === true,
     expires_at: row.expires_at
   }
@@ -274,7 +293,7 @@ export async function getVerificationTokenAny(token, type) {
 // valides simultanément, n'importe lequel active le compte).
 // Garde même contrat de validation que createVerificationToken.
 export async function deleteVerificationTokens(userId, type) {
-  if (!['email_verify', 'password_reset'].includes(type)) {
+  if (!['email_verify', 'password_reset', 'email_change'].includes(type)) {
     throw new Error('verification token type invalide')
   }
   if (!userId) return
@@ -446,9 +465,17 @@ export async function runAuthMigration() {
     'DEFINE TABLE IF NOT EXISTS verification_token SCHEMAFULL',
     'DEFINE FIELD IF NOT EXISTS user_id ON verification_token TYPE record<user>',
     'DEFINE FIELD IF NOT EXISTS token ON verification_token TYPE string',
-    'DEFINE FIELD IF NOT EXISTS type ON verification_token TYPE string ASSERT $value IN ["email_verify", "password_reset"]',
+    // OVERWRITE obligatoire : le champ existe déjà en prod, IF NOT EXISTS ne
+    // réappliquerait PAS l'ASSERT élargi (le type email_change serait accepté
+    // par le code mais rejeté par le schéma au premier CREATE). email_change
+    // rejoint la liste close aux côtés de email_verify et password_reset.
+    'DEFINE FIELD OVERWRITE type ON verification_token TYPE string ASSERT $value IN ["email_verify", "password_reset", "email_change"]',
     'DEFINE FIELD IF NOT EXISTS expires_at ON verification_token TYPE datetime',
     'DEFINE FIELD IF NOT EXISTS used ON verification_token TYPE bool DEFAULT false',
+    // Porteur de la nouvelle adresse visée par un jeton email_change. Chaîne
+    // facultative : les jetons email_verify / password_reset ne le posent
+    // jamais et restent à NONE.
+    'DEFINE FIELD IF NOT EXISTS new_email ON verification_token TYPE option<string>',
     'DEFINE INDEX IF NOT EXISTS vtoken_unique ON verification_token FIELDS token UNIQUE',
     'DEFINE TABLE IF NOT EXISTS audit_log SCHEMAFULL',
     'DEFINE FIELD IF NOT EXISTS user_id ON audit_log TYPE option<record<user>>',

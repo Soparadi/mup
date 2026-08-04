@@ -75,9 +75,11 @@ async function markEmailSent(userId, sentFlag) {
 
 // Envoi unique J-2 (fenêtre 24h autour de NOW + 2j).
 export async function sendTrialEndingSoonEmails() {
-  const now = new Date()
-  const from = new Date(now.getTime() + 47 * 3600 * 1000)
-  const to = new Date(now.getTime() + 49 * 3600 * 1000)
+  const TWO_J = 2 * 24 * 3600 * 1000
+  const HALF = 12 * 3600 * 1000
+  const now = Date.now()
+  const from = new Date(now + TWO_J - HALF)
+  const to = new Date(now + TWO_J + HALF)
   const users = await findUsersInWindow(from, to, 'trial_email_j2_sent_at')
   if (!users.length) return { sent: 0, total: 0 }
   let sent = 0
@@ -97,9 +99,10 @@ export async function sendTrialEndingSoonEmails() {
 
 // Envoi unique J-0 (fenêtre 24h autour de NOW).
 export async function sendTrialEndingTodayEmails() {
-  const now = new Date()
-  const from = new Date(now.getTime() - 1 * 3600 * 1000)
-  const to = new Date(now.getTime() + 1 * 3600 * 1000)
+  const HALF = 12 * 3600 * 1000
+  const now = Date.now()
+  const from = new Date(now - HALF)
+  const to = new Date(now + HALF)
   const users = await findUsersInWindow(from, to, 'trial_email_j0_sent_at')
   if (!users.length) return { sent: 0, total: 0 }
   let sent = 0

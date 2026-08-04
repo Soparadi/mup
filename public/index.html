@@ -2101,35 +2101,49 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   max-width: 720px; margin-left: auto; margin-right: auto;
 }
 
-.movup-pricing .why-section { margin: 96px auto 0; max-width: 1100px; }
-.movup-pricing .why-title {
+.why-section {
+  /* Variables reprises de .movup-pricing : la section vit désormais hors de ce conteneur */
+  --text-secondary: #5A5A5A;
+  --bg-card: #FFFFFF;
+  --border: #E8E8E8;
+  --bg-rdv: rgba(11,188,212,0.12);
+  --bg-visio: rgba(124,58,237,0.12);
+  --bg-gagne: rgba(29,131,72,0.12);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--section-pad-y) 32px;
+  background: #FFFFFF;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #0A0A0A;
+}
+.why-title {
   text-align: center; font-size: 36px; font-weight: 600;
   letter-spacing: -0.025em; margin-bottom: 12px; line-height: 1.15;
 }
-.movup-pricing .why-title em { font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400; }
-.movup-pricing .why-subtitle {
+.why-title em { font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400; }
+.why-subtitle {
   text-align: center; font-size: 16px; color: var(--text-secondary);
   max-width: 540px; margin: 0 auto 56px;
 }
-.movup-pricing .why-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.movup-pricing .why-grid > * { min-width: 0; }
-.movup-pricing .why-card {
+.why-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 1100px; margin: 0 auto; }
+.why-grid > * { min-width: 0; }
+.why-card {
   background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
   padding: 32px 28px; transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.movup-pricing .why-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-.movup-pricing .why-icon {
+.why-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+.why-icon {
   width: 40px; height: 40px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center; margin-bottom: 20px;
 }
-.movup-pricing .why-icon-rdv { background: var(--bg-rdv); }
-.movup-pricing .why-icon-visio { background: var(--bg-visio); }
-.movup-pricing .why-icon-gagne { background: var(--bg-gagne); }
-.movup-pricing .why-card-title { font-size: 17px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.005em; }
-.movup-pricing .why-card-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.55; }
+.why-icon-rdv { background: var(--bg-rdv); }
+.why-icon-visio { background: var(--bg-visio); }
+.why-icon-gagne { background: var(--bg-gagne); }
+.why-card-title { font-size: 17px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.005em; }
+.why-card-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.55; }
 
 @media (max-width: 980px) {
-  .movup-pricing .plans-grid, .movup-pricing .why-grid {
+  .movup-pricing .plans-grid, .why-grid {
     grid-template-columns: 1fr; max-width: 480px; margin-left: auto; margin-right: auto;
   }
   .movup-pricing .page-title { font-size: 40px; }
@@ -3951,6 +3965,34 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
   </div>
 </section>
 
+  <!-- Pourquoi MovUP -->
+  <section class="why-section" aria-label="Pourquoi MovUP">
+    <h2 class="why-title">D'où viennent vos prospects.<br/> <em>Et où vont vos données.</em></h2>
+    <div class="why-grid">
+      <article class="why-card">
+        <div class="why-icon why-icon-gagne">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 12L8 17L21 4" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3 class="why-card-title">Vos prospects viennent des registres officiels</h3>
+        <p class="why-card-desc">SIRENE, adresses géocodées par la Base Adresse Nationale, 732 secteurs d'activité. Mis à jour en continu.</p>
+      </article>
+      <article class="why-card">
+        <div class="why-icon why-icon-rdv">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7V12C2 17.5 6 22 12 22C18 22 22 17.5 22 12V7L12 2Z" stroke="#0BBCD4" stroke-width="2" stroke-linejoin="round"/><path d="M9 12L11 14L15 10" stroke="#0BBCD4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3 class="why-card-title">Vos données restent en Europe</h3>
+        <p class="why-card-desc">Hébergement européen, sauvegardes chiffrées quotidiennes, conformité au RGPD.</p>
+      </article>
+      <article class="why-card">
+        <div class="why-icon why-icon-visio">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2V8M12 16V22M2 12H8M16 12H22" stroke="#7C3AED" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="#7C3AED" stroke-width="2"/></svg>
+        </div>
+        <h3 class="why-card-title">Pensé pour une personne</h3>
+        <p class="why-card-desc">Un compte, un utilisateur, prêt à l'emploi. Vous prospectez, vous signez.</p>
+      </article>
+    </div>
+  </section>
+
 <!-- ──────────────────────────────────────────────────────────
      SECTION TARIFS — Essentiel 24€ · Régulier 34€ · Intensif 44€
      ────────────────────────────────────────────────────────── -->
@@ -3979,34 +4021,6 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
       <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Chiffre d'affaires suivi en temps réel</li>
       <li><span class="check-icon"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><path d="M3.5 9.5L7.5 13.5L14.5 5.5" stroke="#1D8348" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Export CSV de vos prospects et de vos frais</li>
     </ul>
-  </section>
-
-  <!-- Pourquoi MovUP -->
-  <section class="why-section" aria-label="Pourquoi MovUP">
-    <h2 class="why-title">D'où viennent vos prospects.<br/> <em>Et où vont vos données.</em></h2>
-    <div class="why-grid">
-      <article class="why-card">
-        <div class="why-icon why-icon-gagne">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 12L8 17L21 4" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <h3 class="why-card-title">Vos prospects viennent des registres officiels</h3>
-        <p class="why-card-desc">SIRENE, adresses géocodées par la Base Adresse Nationale, 732 secteurs d'activité. Mis à jour en continu.</p>
-      </article>
-      <article class="why-card">
-        <div class="why-icon why-icon-rdv">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7V12C2 17.5 6 22 12 22C18 22 22 17.5 22 12V7L12 2Z" stroke="#0BBCD4" stroke-width="2" stroke-linejoin="round"/><path d="M9 12L11 14L15 10" stroke="#0BBCD4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <h3 class="why-card-title">Vos données restent en Europe</h3>
-        <p class="why-card-desc">Hébergement européen, sauvegardes chiffrées quotidiennes, conformité au RGPD.</p>
-      </article>
-      <article class="why-card">
-        <div class="why-icon why-icon-visio">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2V8M12 16V22M2 12H8M16 12H22" stroke="#7C3AED" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="#7C3AED" stroke-width="2"/></svg>
-        </div>
-        <h3 class="why-card-title">Pensé pour une personne</h3>
-        <p class="why-card-desc">Un compte, un utilisateur, prêt à l'emploi. Vous prospectez, vous signez.</p>
-      </article>
-    </div>
   </section>
 
   <!-- Toggle Mensuel / Annuel -->

@@ -348,7 +348,7 @@ export async function sendRelanceJ12(user) {
 export async function sendTrialEndingSoon(user) {
   if (!user?.email) throw new Error('user.email requis')
   const salutation = buildSalutation(user)
-  const ctaUrl = appUrl() + '/tarifs'
+  const ctaUrl = appUrl() + '/account/billing'
   const tpl = await loadTemplate('trial-ending-soon.html')
   const html = applyVars(tpl, {
     salutation,
@@ -393,7 +393,7 @@ export async function sendTrialEndingSoon(user) {
 export async function sendTrialEndingToday(user) {
   if (!user?.email) throw new Error('user.email requis')
   const salutation = buildSalutation(user)
-  const ctaUrl = appUrl() + '/tarifs'
+  const ctaUrl = appUrl() + '/account/billing'
   const tpl = await loadTemplate('trial-ending-today.html')
   const html = applyVars(tpl, {
     salutation,

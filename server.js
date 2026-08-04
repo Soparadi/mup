@@ -3242,7 +3242,7 @@ app.post('/api/enrich/:siret', async (req, res) => {
           quotaUsed: consumed,
           quotaLimit: limit === Infinity ? null : limit,
           quotaPeriod: getEffectivePlan(user) === 'essai' ? 'essai' : 'monthly',
-          upgradeUrl: '/statistiques.html#plan'
+          upgradeUrl: '/account/billing'
         })
       }
     }
@@ -4745,7 +4745,7 @@ app.post('/api/user-plan/check-quota', async (req, res) => {
       quotaUsed: consumed,
       quotaLimit: limit === Infinity ? null : limit,
       quotaPeriod: plan === 'essai' ? 'essai' : 'monthly',
-      upgradeUrl: '/statistiques.html#plan'
+      upgradeUrl: '/account/billing'
     })
   } catch (err) {
     console.error('[user-plan:check-quota]', err.message)

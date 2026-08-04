@@ -421,11 +421,13 @@ const TRIAL_PURGE_MS = TRIAL_PURGE_DAYS * 24 * 3600 * 1000
 async function purgeOneTrialUser(db, user) {
   const uid = cleanUserId(user.id)
 
-  // Re-lecture du record complet (email + bypass nécessaires à isVip).
+  // Re-lecture du record complet (email + bypass nécessaires à isVip ;
+  // trial_purge_warning_sent_at pour la garde « jamais sans avertissement »).
   let recheck
   try {
     const r = await db.query(
-      `SELECT email, bypass, subscription_status, trial_status, trial_ends_at
+      `SELECT email, bypass, subscription_status, trial_status, trial_ends_at,
+              trial_purge_warning_sent_at
        FROM type::record('user', $uid)`,
       { uid }
     )
@@ -440,6 +442,18 @@ async function purgeOneTrialUser(db, user) {
   if (isVip(recheck)) {
     console.warn('[purge:trial] user', uid, 'en contournement (VIP), skip')
     return { userId: uid, email: user.email, skipped: true, reason: 'bypass' }
+  }
+  // JAMAIS de suppression sans avertissement préalable — deuxième couche,
+  // jumelle du filtre SQL. La fenêtre d'avertissement (trial-emails.js) ne
+  // dure que 24 h : un cron manqué la ferait traverser sans envoi, puis
+  // supprimer en silence 7 j plus tard. On l'interdit ici.
+  // CONSÉQUENCE ASSUMÉE : un compte que l'avertissement a manqué n'est PAS
+  // supprimé à J+30 — il attend d'avoir été prévenu. (La fenêtre étant fixe
+  // à J+23 ±12 h, elle ne le rattrape pas d'elle-même : voir rapport, geste
+  // minimal proposé hors de ce commit.)
+  if (!recheck.trial_purge_warning_sent_at) {
+    console.warn('[purge:trial] user', uid, 'jamais averti, skip (attend l\'avertissement)')
+    return { userId: uid, email: user.email, skipped: true, reason: 'not_warned' }
   }
   // Un abonnement a été souscrit entre SELECT et DELETE → plus un essai nu.
   if (recheck.subscription_status != null) {
@@ -482,6 +496,10 @@ export async function purgeExpiredTrials() {
   //   bypass != true                   → écarte le contournement (drapeau
   //                                       superadmin). Complété par isVip côté
   //                                       garde unitaire (couvre le propriétaire).
+  //   trial_purge_warning_sent_at IS NOT NONE → JAMAIS de suppression sans
+  //                                       avertissement préalable (fenêtre de
+  //                                       24 h : un cron manqué supprimerait en
+  //                                       silence). Redoublé par la garde unitaire.
   let candidates = []
   try {
     const r = await db.query(
@@ -490,7 +508,8 @@ export async function purgeExpiredTrials() {
          AND trial_status != 'converted'
          AND trial_ends_at IS NOT NONE
          AND trial_ends_at + 30d < time::now()
-         AND bypass != true`
+         AND bypass != true
+         AND trial_purge_warning_sent_at IS NOT NONE`
     )
     candidates = r?.[0] || []
   } catch (e) {

@@ -335,8 +335,19 @@ export async function logAuditEvent({ userId, event, ip, userAgent, metadata }) 
 // champ écrit par le code sur une table SCHEMAFULL fait échouer la requête
 // entière (cf. cgu_accepted, oublié ici et resté cassant jusqu'à ce correctif).
 
+// Compteur des définitions de schéma ayant échoué au DERNIER passage de
+// runAuthMigration. Process-local, écrasé à chaque appel (un seul au boot).
+// Exposé par /api/health : cinq jours d'inscriptions impossibles étaient passés
+// inaperçus faute d'une trace lisible de ces échecs autrefois isolés en warn.
+let schemaFailureCount = 0
+
+export function getSchemaFailureCount() {
+  return schemaFailureCount
+}
+
 export async function runAuthMigration() {
   const db = await getDb()
+  schemaFailureCount = 0
   const queries = [
     'DEFINE TABLE IF NOT EXISTS user SCHEMAFULL',
     'DEFINE FIELD IF NOT EXISTS email ON user TYPE string ASSERT string::is_email($value)',
@@ -488,6 +499,15 @@ export async function runAuthMigration() {
     'DEFINE FIELD OVERWRITE raison_sociale ON user TYPE option<string>'
   ]
   for (const q of queries) {
-    try { await db.query(q) } catch (e) { console.warn('[auth-migration]', q.slice(0, 80), '→', e.message) }
+    try {
+      await db.query(q)
+    } catch (e) {
+      // Le boot NE DOIT PAS échouer sur une définition ratée (on continue la
+      // boucle), mais chaque échec est compté et journalisé au niveau ERREUR
+      // avec la requête complète — plus un simple avertissement noyé.
+      schemaFailureCount++
+      console.error('[auth-migration] échec définition schéma :', q, '→', e.message)
+    }
   }
+  return schemaFailureCount
 }

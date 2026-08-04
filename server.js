@@ -26,7 +26,7 @@ import { requireAuth, requireAuthHtml, readSessionToken } from './server/middlew
 import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { requireSuperadmin } from './server/middleware/requireSuperadmin.js'
 import { deriveAppState } from './lib/derive-app-state.js'
-import { runAuthMigration, invalidateSessionCacheByUserId, getSession } from './server/auth/surreal-adapter.js'
+import { runAuthMigration, invalidateSessionCacheByUserId, getSession, getSchemaFailureCount } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
 import { getInseeToken } from './server/services/insee.js'
 import {
@@ -312,6 +312,13 @@ app.get('/api/health', async (req, res) => {
   const status = {
     server: 'ok',
     timestamp: new Date().toISOString(),
+    // Référence du commit déployé, posée par Railway au runtime. Repli explicite
+    // si absente (dev local, ou service non relié à un dépôt) : vérifier qu'un
+    // déploiement est en ligne ne demande plus de guetter une chaîne dans le HTML.
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown',
+    // Nombre de définitions de schéma ayant échoué au démarrage (runAuthMigration).
+    // Le boot ne casse pas dessus : on rend visible, on ne fait pas échouer.
+    schema_failures: getSchemaFailureCount(),
     surreal: 'unknown'
   }
   try {

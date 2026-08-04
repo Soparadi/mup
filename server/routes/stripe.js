@@ -110,6 +110,26 @@ async function updateUserFields(userId, fields, currentPeriodEndUnix) {
   }
 }
 
+// ── updateStripeCustomerEmail ──
+// Propage une nouvelle adresse au client Stripe, AU MIEUX. Appelée seulement
+// après la bascule du compte (l'adresse est déjà changée en base) et seulement
+// si le compte porte un stripe_customer_id : à n'invoquer que dans ce cas.
+// Un échec est journalisé et retourne false SANS jamais rien annuler — le
+// compte est déjà basculé quand on l'appelle. Aucune exception ne remonte.
+// Exportée pour /api/auth/confirm-email-change (aucune fonction de mise à jour
+// du client Stripe n'existait jusqu'ici dans le dépôt).
+export async function updateStripeCustomerEmail(customerId, email) {
+  if (!customerId || !email) return false
+  try {
+    const stripe = getStripe()
+    await stripe.customers.update(String(customerId), { email: String(email) })
+    return true
+  } catch (e) {
+    console.error('[stripe] mise à jour email client échouée', e.message)
+    return false
+  }
+}
+
 export const router = express.Router()
 
 // ── POST /api/stripe/create-portal-session ──

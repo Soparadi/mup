@@ -21,7 +21,8 @@ import {
   createSession, deleteSessionByToken, deleteAllSessionsForUser,
   createVerificationToken, getVerificationToken, getVerificationTokenAny,
   deleteVerificationTokens, markTokenUsed,
-  setEmailVerified, updatePassword, logAuditEvent
+  setEmailVerified, updatePassword, logAuditEvent,
+  invalidateSessionCacheByUserId
 } from './surreal-adapter.js'
 import { sendWelcomeVerify, sendWelcome, sendPasswordReset, sendEmailChangeVerify, sendEmailChangeNotice } from '../services/email.js'
 import { getLocationFromIp } from '../services/geolocation.js'
@@ -682,6 +683,104 @@ router.post('/request-email-change', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('[auth:request-email-change]', e.message)
     res.status(500).json({ error: 'Demande impossible' })
+  }
+})
+
+// ── GET /api/auth/confirm-email-change ──
+// Confirmation du changement d'adresse depuis le lien reçu à la NOUVELLE adresse.
+// PAS de requireAuth : ce lien s'ouvre depuis la boîte de la nouvelle adresse,
+// souvent sur un autre appareil où personne n'est connecté. Le jeton porte
+// l'identité — c'est lui la preuve, il suffit seul.
+//   - Lit le jeton email_change ; getVerificationToken écarte déjà le jeton
+//     expiré, employé, ou d'un autre type (→ null) : dans tous ces cas, message
+//     « lien expiré ou déjà employé ».
+//   - REVÉRIFIE l'unicité de l'adresse au moment de la bascule : quelqu'un a pu
+//     la prendre pendant l'heure écoulée → message « adresse prise ». L'index
+//     UNIQUE sert de dernier filet (bascule concurrente → server_error propre).
+//   - Bascule le compte, marque le jeton employé, VIDE LE CACHE de session de
+//     l'utilisateur pour que l'affichage suive dans les 30 s.
+//   - NE CRÉE AUCUNE SESSION et n'en casse aucune : une session en cours porte
+//     l'identifiant, pas l'adresse, elle reste valide ; sinon la personne se
+//     connectera avec sa nouvelle adresse. Un lien de courriel ne vaut pas
+//     connexion.
+//   - Événement d'audit à la bascule, puis propagation best-effort au client
+//     Stripe (n'échoue jamais le changement, déjà acté).
+router.get('/confirm-email-change', async (req, res) => {
+  const meta = clientMeta(req)
+  const token = String(req.query?.token || '')
+  if (!token) {
+    return res.redirect('/email-change?status=error&reason=invalid_or_expired')
+  }
+  try {
+    // Filtre used + expiré + type email_change → null si l'un ou l'autre.
+    const vt = await getVerificationToken(token, 'email_change')
+    if (!vt) {
+      return res.redirect('/email-change?status=error&reason=invalid_or_expired')
+    }
+
+    // Adresse visée portée par le jeton. Un jeton sans adresse exploitable est
+    // corrompu : échec serveur propre plutôt que d'écrire une adresse vide.
+    const newEmail = String(vt.new_email || '').toLowerCase().trim()
+    if (!isValidEmail(newEmail)) {
+      console.error('[confirm-email-change] jeton sans adresse valide', vt.id)
+      return res.redirect('/email-change?status=error&reason=server_error')
+    }
+
+    const userIdStr = String(vt.user_id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+
+    // Revérif d'unicité AU MOMENT de la bascule : l'adresse a pu être prise par
+    // un autre compte pendant l'heure de validité du lien. Échec propre.
+    const taken = await getUserByEmail(newEmail)
+    if (taken) {
+      return res.redirect('/email-change?status=error&reason=address_taken')
+    }
+
+    // Identifiant Stripe lu AVANT la bascule (pour la propagation en fin de
+    // parcours). Sert aussi à confirmer que le compte existe toujours.
+    const user = await getUserById(userIdStr)
+    if (!user) {
+      return res.redirect('/email-change?status=error&reason=server_error')
+    }
+    const stripeCustomerId = user.stripe_customer_id || null
+
+    // Bascule : écrit la nouvelle adresse. L'index UNIQUE sur email est le
+    // dernier filet si une prise concurrente s'est glissée après la revérif —
+    // l'UPDATE échoue alors, on tombe dans le catch (server_error propre).
+    const { getDb } = await import('../../lib/surreal.js')
+    const dbInst = await getDb()
+    await dbInst.query(
+      'UPDATE type::record("user", $id) MERGE { email: $email }',
+      { id: userIdStr, email: newEmail }
+    )
+
+    // Jeton employé (usage unique) puis cache de session vidé : l'affichage de
+    // toute session ouverte suit la nouvelle adresse dans les 30 s.
+    await markTokenUsed(vt.id)
+    invalidateSessionCacheByUserId(userIdStr)
+
+    await logAuditEvent({
+      userId: userIdStr, event: 'email_change_confirmed',
+      ip: meta.ip, userAgent: meta.userAgent,
+      metadata: { new_email: newEmail }
+    })
+
+    // Propagation Stripe, AU MIEUX : seulement si le compte porte un identifiant
+    // client. Le compte est DÉJÀ basculé — un échec est journalisé (dans la
+    // fonction) et ne fait pas échouer le changement.
+    if (stripeCustomerId) {
+      try {
+        const { updateStripeCustomerEmail } = await import('../routes/stripe.js')
+        await updateStripeCustomerEmail(stripeCustomerId, newEmail)
+      } catch (e) {
+        console.error('[confirm-email-change] propagation Stripe échouée', e.message)
+      }
+    }
+
+    // AUCUNE session créée ni posée : un lien de courriel ne vaut pas connexion.
+    return res.redirect('/email-change?status=success')
+  } catch (e) {
+    console.error('[auth:confirm-email-change]', e.message)
+    return res.redirect('/email-change?status=error&reason=server_error')
   }
 })
 

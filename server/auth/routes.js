@@ -184,6 +184,58 @@ function setSessionCookie(res, token, expiresAt) {
   res.setHeader('Set-Cookie', parts.join('; '))
 }
 
+// ── Marqueur d'attente de vérification ──
+// Posé au signup (cookie HttpOnly, PAS une session : Doctrine A). Seule la
+// route de sondage /verify-status le lit, pour répondre vrai/faux à la page
+// d'attente. Échéance calée sur celle du jeton de vérification qu'il
+// accompagne (24h) ; effacé plus tôt dès la vérification faite (cf. /verify).
+const PENDING_COOKIE = 'mup_pending'
+const PENDING_MAX_AGE = 24 * 60 * 60   // 24h, comme le jeton email_verify
+
+function setPendingCookie(res, userIdStr) {
+  const isProd = process.env.NODE_ENV === 'production'
+  const parts = [
+    `${PENDING_COOKIE}=${encodeURIComponent(userIdStr)}`,
+    'HttpOnly',
+    'Path=/',
+    'SameSite=Lax',
+    `Max-Age=${PENDING_MAX_AGE}`
+  ]
+  if (isProd) parts.push('Secure')
+  res.setHeader('Set-Cookie', parts.join('; '))
+}
+
+// Efface le marqueur d'attente. res.append (et non setHeader) : la vérification
+// pose AUSSI le cookie de session au même moment — les deux Set-Cookie doivent
+// coexister sur la réponse.
+function clearPendingCookie(res) {
+  const isProd = process.env.NODE_ENV === 'production'
+  const parts = [
+    `${PENDING_COOKIE}=`,
+    'HttpOnly',
+    'Path=/',
+    'SameSite=Lax',
+    'Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+  ]
+  if (isProd) parts.push('Secure')
+  res.append('Set-Cookie', parts.join('; '))
+}
+
+// Parse minimaliste de l'en-tête Cookie (miroir de requireAuth.js, évite la
+// dépendance cookie-parser). Utilisé par la route de sondage.
+function parseCookieHeader(header) {
+  const out = {}
+  if (!header) return out
+  for (const part of String(header).split(';')) {
+    const eq = part.indexOf('=')
+    if (eq < 0) continue
+    const k = part.slice(0, eq).trim()
+    if (!k) continue
+    out[k] = decodeURIComponent(part.slice(eq + 1).trim())
+  }
+  return out
+}
+
 function clearSessionCookie(res) {
   const isProd = process.env.NODE_ENV === 'production'
   const parts = [
@@ -367,6 +419,11 @@ router.post('/signup', async (req, res) => {
       console.log('[signup] intended_plan capté :', intendedPlan)
     }
 
+    // Marqueur d'attente : permet à /verify-pending de savoir quand la
+    // vérification a eu lieu, sans session (Doctrine A) et sans interroger par
+    // adresse. Voir GET /verify-status.
+    setPendingCookie(res, userIdStr)
+
     res.status(201).json({
       ok: true,
       message: 'Compte créé. Vérifiez votre boîte mail pour activer votre accès.',
@@ -453,6 +510,7 @@ router.get('/verify', async (req, res) => {
       await deleteAllSessionsForUser(userIdStr)
       const { token: sessionToken, expiresAt } = await createSession(userIdStr, meta)
       setSessionCookie(res, sessionToken, expiresAt)
+      clearPendingCookie(res)   // marqueur d'attente devenu inutile
       return res.redirect('/dashboard')
     }
 
@@ -484,6 +542,7 @@ router.get('/verify', async (req, res) => {
     await deleteAllSessionsForUser(userIdStr)
     const { token: sessionToken, expiresAt } = await createSession(userIdStr, meta)
     setSessionCookie(res, sessionToken, expiresAt)
+    clearPendingCookie(res)   // marqueur d'attente devenu inutile
 
     await logAuditEvent({ userId: userIdStr, event: 'email_verified', ip: meta.ip, userAgent: meta.userAgent })
     // Premier clic : entrée directe dans l'action (recherche). Le dashboard
@@ -493,6 +552,25 @@ router.get('/verify', async (req, res) => {
   } catch (e) {
     console.error('[auth:verify]', e.message)
     res.redirect('/verify?status=error&reason=server_error')
+  }
+})
+
+// ── GET /api/auth/verify-status ──
+// Sondage du parcours d'attente (public/verify-pending.html). Lit UNIQUEMENT
+// le marqueur mup_pending posé au signup (cookie HttpOnly, pas une session) et
+// rend { verified: true|false }. Ne prend AUCUNE adresse en paramètre :
+// interroger par email permettrait de tester l'existence d'un compte. Sans
+// marqueur — ou marqueur inconnu — rend false. Ne révèle rien d'autre.
+router.get('/verify-status', async (req, res) => {
+  try {
+    const pending = parseCookieHeader(req.headers?.cookie)[PENDING_COOKIE]
+    if (!pending) return res.json({ verified: false })
+    const user = await getUserById(pending)
+    if (!user) return res.json({ verified: false })
+    return res.json({ verified: user.email_verified === true })
+  } catch (e) {
+    console.error('[auth:verify-status]', e.message)
+    return res.json({ verified: false })
   }
 })
 

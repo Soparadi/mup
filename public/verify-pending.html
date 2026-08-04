@@ -34,6 +34,8 @@
   .resend-msg{font-size:12.5px;line-height:1.55;margin:0;min-height:18px}
   .resend-msg.success{color:#1D8348}
   .resend-msg.error{color:#CC0000}
+  .btn-enter{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:13.5px;font-weight:700;padding:11px 20px;border-radius:10px;border:1px solid var(--text);cursor:pointer;background:var(--text);color:#fff;text-decoration:none;margin-top:8px}
+  .btn-enter:hover{background:#000}
 </style>
 </head>
 <body>
@@ -41,13 +43,13 @@
   <a href="/" class="auth-brand" aria-label="Accueil MovUP">
     <img src="/logo-v7-movup-court.svg" alt="MovUP" class="auth-brand-logo">
   </a>
-  <div class="card">
+  <div class="card" id="verify-card">
     <div class="icon-wrap" aria-hidden="true">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22 6 12 13 2 6"></polyline></svg>
     </div>
     <h1>Vérifiez votre adresse email</h1>
-    <p class="lead">Votre compte est créé. Un email vient de vous être envoyé à l’adresse indiquée.</p>
-    <p class="lead">Cliquez sur le lien qu’il contient pour activer votre accès et commencer.</p>
+    <p class="lead" id="lead-sent">Votre compte est créé. Un email vient d’être envoyé à l’adresse indiquée.</p>
+    <p class="lead">Cliquez sur le lien qu’il contient pour ouvrir votre accès. Il confirme que cette adresse est bien la vôtre : c’est elle qui recevra vos factures et vous permettra de récupérer votre mot de passe.</p>
     <p class="hint">Vous n’avez pas reçu l’email ? Vérifiez vos spams, il peut prendre quelques minutes à arriver.</p>
     <p class="resend-trigger"><a href="#" id="show-resend">Vous n’avez pas reçu l’email ? Renvoyer</a></p>
     <form class="resend-form" id="resend-form" hidden novalidate>
@@ -111,6 +113,68 @@
       btn.disabled = false
     })
   })
+})()
+
+;(function(){
+  // ── Adresse transmise par le formulaire d'inscription via sessionStorage ──
+  // Jamais par l'URL : elle finirait dans l'historique et les en-têtes Referer.
+  // On la lit, on pré-remplit le champ de renvoi, on personnalise la phrase
+  // (domaine en gras), puis on EFFACE la clé aussitôt. Absence de clé —
+  // arrivée directe — la phrase reste « à l'adresse indiquée ».
+  var email = null
+  try { email = sessionStorage.getItem('pending_verify_email') } catch (e) { /* mode privé */ }
+  try { sessionStorage.removeItem('pending_verify_email') } catch (e) { /* ignore */ }
+
+  var at = email ? email.lastIndexOf('@') : -1
+  if (email && at > 0 && at < email.length - 1) {
+    var resendInput = document.getElementById('resend-email')
+    if (resendInput) resendInput.value = email
+
+    var lead = document.getElementById('lead-sent')
+    if (lead) {
+      // textContent + createElement : l'adresse est saisie par l'utilisateur,
+      // jamais injectée en innerHTML.
+      lead.textContent = 'Votre compte est créé. Un email vient d’être envoyé à ' + email.slice(0, at + 1)
+      var strong = document.createElement('strong')
+      strong.textContent = email.slice(at + 1)
+      lead.appendChild(strong)
+      lead.appendChild(document.createTextNode('.'))
+    }
+  }
+
+  // ── Sondage : la page se réveille dès la vérification faite ──
+  // Toutes les 5s, on demande au serveur si l'adresse est confirmée. La route
+  // lit le marqueur posé à l'inscription (cookie, pas une session) et ne rend
+  // que vrai/faux — elle ne reçoit AUCUNE adresse. Arrêt après 10 minutes.
+  var card = document.getElementById('verify-card')
+  var DEADLINE = Date.now() + 10 * 60 * 1000
+  var timer = null
+
+  function showConfirmed(){
+    if (!card) return
+    card.innerHTML =
+      '<div class="icon-wrap" aria-hidden="true">' +
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>' +
+      '</div>' +
+      '<h1>Adresse confirmée</h1>' +
+      '<p class="lead">Votre accès est ouvert.</p>' +
+      '<a class="btn-enter" href="/login">Entrer</a>'
+  }
+
+  function poll(){
+    if (Date.now() > DEADLINE) { if (timer) { clearInterval(timer); timer = null } return }
+    fetch('/api/auth/verify-status', { method: 'GET', credentials: 'same-origin' })
+      .then(function(r){ return r.json() })
+      .then(function(data){
+        if (data && data.verified === true) {
+          if (timer) { clearInterval(timer); timer = null }
+          showConfirmed()
+        }
+      })
+      .catch(function(){ /* réseau : nouvelle tentative au prochain tick */ })
+  }
+
+  timer = setInterval(poll, 5000)
 })()
 </script>
 </body>

@@ -128,10 +128,14 @@
     document.head.appendChild(s)
   }
 
-  function buildPlanCard(p) {
+  // cycle : 'monthly' | 'annual'. Défaut = billingCycle (état de la modale)
+  // pour préserver le comportement d'origine ; paramétrable pour que la grille
+  // exposée sur window porte son propre cycle sans toucher à la modale.
+  function buildPlanCard(p, cycle) {
+    cycle = cycle || billingCycle
     var isPopular = (p.key === preferredPlan)
-    var price = billingCycle === 'annual' ? p.annual : p.monthly
-    var billing = billingCycle === 'annual'
+    var price = cycle === 'annual' ? p.annual : p.monthly
+    var billing = cycle === 'annual'
       ? 'Soit ' + p.annualTotal + ' € facturés en une fois, sans engagement'
       : 'Sans engagement'
     return ''
@@ -141,15 +145,48 @@
       +   '</span>'
       +   '<div><span class="tem-price" style="color:' + (p.key === 'croisiere' ? '#0A0A0A' : p.color) + '">' + price + ' €</span><span class="tem-period">/mois</span></div>'
       +   '<div class="tem-billing">' + billing + '</div>'
-      +   '<a class="tem-cta" href="/api/stripe/quick-checkout?plan=' + p.key + '&cycle=' + billingCycle + '">Choisir ' + p.name + '</a>'
+      +   '<a class="tem-cta" href="/api/stripe/quick-checkout?plan=' + p.key + '&cycle=' + cycle + '">Choisir ' + p.name + '</a>'
       + '</article>'
   }
 
   function rebuildGrid() {
     var grid = document.getElementById('tem-grid')
     if (!grid) return
-    grid.innerHTML = PLANS.map(buildPlanCard).join('')
+    grid.innerHTML = PLANS.map(function (p) { return buildPlanCard(p) }).join('')
   }
+
+  // ── Point d'entrée public window.MovupPlans (chantier B) ───────────────
+  // Monte la grille de formules — toggle mensuel/annuel + trois cartes — dans
+  // un conteneur arbitraire (la page /account/billing), en réutilisant la MÊME
+  // fabrique buildPlanCard et le MÊME catalogue PLANS que la modale : prix et
+  // libellés n'ont qu'une source. Cycle local au montage, indépendant de
+  // billingCycle → n'altère jamais l'état de la modale.
+  function mountPlanGrid(container) {
+    if (!container) return
+    injectStyles()
+    var localCycle = 'monthly'
+    container.innerHTML = ''
+      + '<div class="tem-toggle-wrap"><div class="tem-toggle" role="group">'
+      +   '<button type="button" class="tem-tbtn active" data-billing="monthly">Mensuel</button>'
+      +   '<button type="button" class="tem-tbtn" data-billing="annual">Annuel<span class="tem-disc">−15 %</span></button>'
+      + '</div></div>'
+      + '<div class="tem-grid" data-mup-grid></div>'
+    var grid = container.querySelector('[data-mup-grid]')
+    function paint() {
+      grid.innerHTML = PLANS.map(function (p) { return buildPlanCard(p, localCycle) }).join('')
+    }
+    paint()
+    container.querySelectorAll('.tem-tbtn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        localCycle = btn.getAttribute('data-billing')
+        container.querySelectorAll('.tem-tbtn').forEach(function (b) { b.classList.remove('active') })
+        btn.classList.add('active')
+        paint()
+      })
+    })
+  }
+
+  window.MovupPlans = { mount: mountPlanGrid }
 
   // Wordings du modal bloquant par état. trial_expired = wording historique
   // préservé tel quel (zéro régression pré-H5b). grace_expired = nouveau,

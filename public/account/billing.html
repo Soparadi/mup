@@ -66,6 +66,8 @@
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   .skeleton{height:13px;background:var(--surface-2);border-radius:4px;width:60%;display:inline-block}
+  .plans-title{font-size:20px;font-weight:800;letter-spacing:-.3px;color:var(--text);text-align:center;margin-bottom:6px}
+  .plans-note{font-size:12.5px;color:var(--muted);text-align:center;margin:0 auto 20px;max-width:480px;line-height:1.5}
 </style>
 <link rel="stylesheet" href="/styles/sidebar.css">
 <link rel="stylesheet" href="/styles/app-footer.css">
@@ -100,6 +102,12 @@
     <div class="actions">
       <button type="button" id="btn-portal" class="btn btn-dark">Gérer mon abonnement</button>
     </div>
+  </section>
+
+  <section class="card" id="plans-section" style="display:none">
+    <h2 class="plans-title">Choisir votre formule</h2>
+    <p class="plans-note">Sans engagement, résiliation à tout moment. TVA non applicable, art. 293 B du CGI.</p>
+    <div id="plans-mount"></div>
   </section>
 
   <p class="footer">
@@ -149,13 +157,6 @@
         setBanner('error', 'Session expirée. Veuillez vous reconnecter.')
         return
       }
-      // Pas d'abonnement payant et pas de stripe_customer_id : rediriger
-      // vers /tarifs pour souscrire.
-      var hasStripe = !!u.stripe_customer_id || !!u.subscription_status
-      if (!hasStripe && u.trial_status !== 'converted') {
-        window.location.replace('/tarifs')
-        return
-      }
 
       var planLabel = PLAN_LABELS[u.plan] || (u.plan || '—')
       var cycleLabel = CYCLE_LABELS[u.plan_billing_cycle] || (u.plan_billing_cycle || '—')
@@ -171,6 +172,21 @@
         setBanner('warn', 'Paiement en attente. Mettez à jour votre carte depuis « Gérer mon abonnement » pour éviter une interruption.')
       } else if (statusKey === 'canceled') {
         setBanner('info', 'Abonnement résilié. Réactivable à tout moment depuis « Gérer mon abonnement ».')
+      }
+
+      // Surface de souscription (chantier B) : la page présente les trois
+      // formules à tout compte SANS abonnement en cours. Un abonné actif ou en
+      // essai Stripe ('trialing') n'a rien à souscrire → il garde sa carte
+      // d'état et son bouton de portail, aucune carte. Tous les autres — essai
+      // actif, essai expiré, compte neuf, grâce, résilié — voient les formules.
+      var sub = u.subscription_status
+      if (sub !== 'active' && sub !== 'trialing') {
+        var plansSection = document.getElementById('plans-section')
+        var plansMount = document.getElementById('plans-mount')
+        if (plansSection && plansMount && window.MovupPlans && typeof window.MovupPlans.mount === 'function') {
+          window.MovupPlans.mount(plansMount)
+          plansSection.style.display = ''
+        }
       }
     })
     .catch(function(){ setBanner('error', 'Erreur réseau, réessayez.') })

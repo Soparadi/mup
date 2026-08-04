@@ -5,7 +5,9 @@
 // Endpoints :
 //   POST /api/auth/signup          body { prenom, nom, email, telephone, password }
 //   POST /api/auth/login           body { email, password }
-//   GET  /api/auth/verify          query token=xxx → redirect /login?verified=1 ou /verify?error=xxx
+//   GET  /api/auth/verify          query token=xxx → pose la session et part dans l'app
+//                                  (/prospection au 1er clic, /dashboard au re-clic) ;
+//                                  en cas d'erreur → /verify?status=error&reason=xxx
 //   POST /api/auth/forgot-password body { email }
 //   POST /api/auth/reset-password  body { token, new_password }
 //   POST /api/auth/logout          (cookie)

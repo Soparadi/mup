@@ -24,8 +24,10 @@ Toutes les actions ci-dessous sont à faire dans le Dashboard Stripe.
 | Intensif | 44,00 € | 37,00 € | 440,00 € |
 
 Cible : auto-entrepreneur français en franchise TVA art. 293 B du CGI.
-**Pas de TVA collectée**. Les montants Stripe sont saisis en TTC=HT (le
-`tax_id_collection` est activé pour la conformité facture).
+**Pas de TVA collectée**. Les montants Stripe sont saisis en TTC=HT. Le
+`tax_id_collection` de Checkout est **désactivé** (`enabled: false`) : aucun
+numéro d'identification fiscale n'est demandé au paiement — le SIRET est capté
+plus tard, au 1er devis.
 
 ---
 
@@ -204,7 +206,8 @@ s'applique aux deux. Pas de bascule à faire au passage en Live.
    minimal de 24 € Essentiel), puis résiliation immédiate via Customer
    Portal pour vérifier que :
    - `subscription.deleted` est bien reçu côté webhook
-   - `trial_status` revient à `expired` en SurrealDB
+   - `subscription_status` passe à `canceled` en SurrealDB — `trial_status`
+     n'est **pas** modifié, il reste `converted`
    - Email `subscription_canceled` envoyé via Resend
 
 ### Rollback
@@ -223,23 +226,29 @@ vérification automatique en base.
 
 ### Données de test
 
-- **SIRET valide** : `542065479` (LVMH) — pré-remplit raison sociale + adresse
 - **Carte Test Stripe** : `4242 4242 4242 4242`
 - **Date** : n'importe quelle date future
 - **CVC** : `123`
 - **Code postal** : `75001`
+- **Adresse de facturation** : saisie sur Stripe Checkout (nom + adresse,
+  `billing_address_collection:'required'`). Aucun SIRET n'est demandé au
+  paiement — il est capté plus tard, au 1er devis.
 
 ### Flow
 
 1. Sur `/signup` créer un compte test (email jetable, ex.
-   `movup-test-{timestamp}@example.com`).
-2. Aller sur `/account/upgrade?plan=activite`.
-3. Saisir SIRET `542065479` → vérifier auto-remplissage raison sociale + adresse.
-4. Cliquer **Continuer vers le paiement** → redirection Stripe Checkout.
-5. Renseigner carte Test, valider.
-6. Redirection sur `/account/billing?success=true` → bandeau succès vert,
-   plan Régulier affiché, statut Actif.
-7. Vérifier en SurrealDB :
+   `movup-test-{timestamp}@example.com`), puis **vérifier l'email** pour
+   ouvrir l'accès — l'essai démarre.
+2. Ouvrir le point d'entrée réel :
+   `GET /api/stripe/quick-checkout?plan=activite&cycle=monthly` — le lien que
+   portent la modale d'essai expiré et le plafond leads. Il n'existe **pas** de
+   page `/account/upgrade` ni de formulaire SIRET pré-paiement.
+3. Redirection directe vers Stripe Checkout (aucun formulaire intermédiaire).
+4. Renseigner l'**adresse de facturation** (collectée par Stripe) puis la carte
+   Test `4242 4242 4242 4242`, valider.
+5. Redirection sur `/account/billing?success=true&session_id=…` → bandeau
+   succès vert, plan Régulier affiché, statut Actif.
+6. Vérifier en SurrealDB :
    ```sql
    SELECT email, plan, plan_billing_cycle, subscription_status,
           trial_status, current_period_end, stripe_customer_id, stripe_subscription_id
@@ -249,13 +258,15 @@ vérification automatique en base.
    `subscription_status='active'`, `trial_status='converted'`,
    `current_period_end` à +1 mois, `stripe_customer_id` et
    `stripe_subscription_id` renseignés.
-8. Vérifier que l'email `subscription_activated` est arrivé via Resend.
-9. Tester le Customer Portal : depuis `/account/billing` cliquer
+7. Vérifier que l'email `subscription_activated` est arrivé via Resend.
+8. Tester le Customer Portal : depuis `/account/billing` cliquer
    **Gérer mon abonnement** → portal Stripe ouvert → tester changement
    de plan vers Intensif → vérifier en base que `plan='croisiere'`.
-10. Tester résiliation depuis le portail → vérifier en base que
-    `subscription_status='canceled'` et `trial_status='expired'` (popup
-    bloquant réapparaît au prochain login).
+9. Tester résiliation depuis le portail → vérifier en base que
+   `subscription_status='canceled'` et `stripe_subscription_id=null`.
+   `trial_status` **ne change pas** : il reste `converted`. L'accès est régi
+   par `subscription_status='canceled'` + grâce 7 j (`current_period_end` + 7 j),
+   pas par `trial_status`. Le popup bloquant réapparaît une fois la grâce expirée.
 
 ### Tests carte d'échec (optionnel)
 
@@ -289,24 +300,25 @@ vérification automatique en base.
 ## 9. Architecture du flow Stripe (référence)
 
 ```
-1. /account/upgrade
-   ↓ user remplit SIRET + adresse + plan
-   ↓ POST /api/stripe/create-checkout-session
-2. Server :
-   - persist siret/raison_sociale/billing_address en SurrealDB user
+1. Modale (essai expiré / plafond leads) ou /tarifs
+   ↓ user choisit un plan + un cycle
+   ↓ lien GET /api/stripe/quick-checkout?plan=…&cycle=…
+2. Server (requireAuth) :
+   - refuse si déjà active/trialing → redirect /account/billing
    - crée Customer Stripe si stripe_customer_id absent
-   - crée session Checkout (mode subscription, locale fr, custom_text 293B)
-   - retourne { url }
-3. Front : window.location = url
-4. User paye sur Stripe Checkout (carte + 3DS si requis)
-5. Stripe → success_url = /account/billing?success=true
-6. Stripe → POST webhook /api/stripe/webhook (event checkout.session.completed)
+   - crée session Checkout (mode subscription, locale fr, custom_text 293B,
+     billing_address_collection:'required', customer_update address/name auto,
+     tax_id_collection désactivé)
+   - redirect 303 vers session.url
+3. User paye sur Stripe Checkout (adresse de facturation + carte + 3DS si requis)
+4. Stripe → success_url = /account/billing?success=true&session_id={CHECKOUT_SESSION_ID}
+5. Stripe → POST webhook /api/stripe/webhook (event checkout.session.completed)
    - signature vérifiée (raw body)
    - idempotence vérifiée (stripe_events_processed)
    - UPDATE user : trial_status='converted', plan, cycle, subscription_status='active',
      current_period_end, stripe_subscription_id
    - email subscription_activated via Resend
-7. /account/billing
+6. /account/billing
    - GET /api/user/me retourne le nouveau statut
    - bouton Gérer mon abonnement → POST /api/stripe/create-portal-session
    - redirect Customer Portal

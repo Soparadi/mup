@@ -19,7 +19,7 @@ import {
   expireTrialAutomatically,
   sendGraceEndingTomorrowEmails
 } from './trial-emails.js'
-import { purgeExpiredUsers, deleteUserCascade } from './purge-expired.js'
+import { purgeExpiredUsers, purgeExpiredTrials, deleteUserCascade } from './purge-expired.js'
 import { sendAccountDeletionConfirmed } from './email.js'
 
 const SCHEDULE = process.env.CRON_TRIAL_SCHEDULE || '0 8 * * *'
@@ -74,6 +74,7 @@ async function runTrialJobs() {
   await runStep('grace_j1', sendGraceEndingTomorrowEmails)
   await runStep('account_deletion', runAccountDeletions)
   await runStep('purge', purgeExpiredUsers)
+  await runStep('purge_trial', purgeExpiredTrials)
 }
 
 // Suppression compte art. 17 (Phase 6 Étape 13) — exécute la cascade pour

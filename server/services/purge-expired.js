@@ -51,6 +51,7 @@
 import { getDb } from '../../lib/surreal.js'
 import { decryptMailToken } from '../../lib/crypto.js'
 import { revokeRefreshToken } from '../../lib/oauth-google.js'
+import { isVip } from '../../lib/vip.js'
 
 // Strip le préfixe 'user:' et les guillemets ⟨⟩ du Record ID SurrealDB
 // pour obtenir la string brute utilisée comme userId par les tables
@@ -375,6 +376,164 @@ export async function purgeExpiredUsers() {
       details.push(res)
     } catch (e) {
       console.warn('[purge] user purgeOne échec :', user.email, e.message)
+      errors.push({ userId: cleanUserId(user.id), email: user.email, error: e.message })
+    }
+  }
+
+  return {
+    purgedCount,
+    skippedCount,
+    totalRecordsDeleted,
+    candidates: candidates.length,
+    errors,
+    details
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECONDE BOUCLE — essais jamais convertis (décision chantier D, Sujet 2).
+//
+// La boucle purgeExpiredUsers ci-dessus ne vise QUE les abonnements résiliés
+// (subscription_status='canceled'), ancrée sur current_period_end + 37 j. Un
+// compte dont l'essai s'achève sans souscription n'a ni statut d'abonnement ni
+// période payée : il sortait de toute boucle et restait sans terme. Cette
+// boucle-ci l'ancre sur trial_ends_at + 30 j.
+//
+// EXCLUSION CONTOURNEMENT : les comptes VIP (propriétaire par email OU drapeau
+// bypass posé au tableau superadmin) portent souvent aucun abonnement + un
+// essai expiré — ils entreraient donc dans la sélection. On les écarte avec le
+// MÊME helper que deriveAppState : isVip (lib/vip.js). Le filtre SQL bypass !=
+// true dégrossit ; la garde unitaire applique isVip sur le record complet, ce
+// qui couvre AUSSI le propriétaire par email (bypass éventuellement non posé).
+//
+// RÉUTILISE la cascade deleteUserCascade telle quelle (agnostique de Stripe).
+// NE RÉUTILISE PAS purgeOneUser : sa re-vérification exige subscription_status
+// ='canceled' (l.298) et recalcule current_period_end + 37d (l.303) — elle
+// écarterait systématiquement un essai. purgeOneTrialUser en est la jumelle.
+
+const TRIAL_PURGE_DAYS = 30
+const TRIAL_PURGE_MS = TRIAL_PURGE_DAYS * 24 * 3600 * 1000
+
+// Garde unitaire jumelle de purgeOneUser — re-vérifie juste avant le DELETE
+// (anti-race : quelqu'un a pu s'abonner entre le SELECT et l'exécution ici).
+// Revérifie : absence d'abonnement, essai non converti, échéance dépassée,
+// absence de contournement. Puis délègue à deleteUserCascade.
+async function purgeOneTrialUser(db, user) {
+  const uid = cleanUserId(user.id)
+
+  // Re-lecture du record complet (email + bypass nécessaires à isVip).
+  let recheck
+  try {
+    const r = await db.query(
+      `SELECT email, bypass, subscription_status, trial_status, trial_ends_at
+       FROM type::record('user', $uid)`,
+      { uid }
+    )
+    recheck = r?.[0]?.[0]
+  } catch (e) {
+    return { userId: uid, email: user.email, skipped: true, reason: 'recheck_failed: ' + e.message }
+  }
+  if (!recheck) {
+    return { userId: uid, email: user.email, skipped: true, reason: 'user_not_found_at_recheck' }
+  }
+  // Contournement — MÊME règle que deriveAppState (propriétaire OU bypass).
+  if (isVip(recheck)) {
+    console.warn('[purge:trial] user', uid, 'en contournement (VIP), skip')
+    return { userId: uid, email: user.email, skipped: true, reason: 'bypass' }
+  }
+  // Un abonnement a été souscrit entre SELECT et DELETE → plus un essai nu.
+  if (recheck.subscription_status != null) {
+    console.warn('[purge:trial] user', uid, 'a désormais un abonnement (status=' + recheck.subscription_status + '), skip')
+    return { userId: uid, email: user.email, skipped: true, reason: 'subscription_status_changed:' + recheck.subscription_status }
+  }
+  // Converti entre-temps (checkout sans passage par subscription_status ?).
+  if (recheck.trial_status === 'converted') {
+    console.warn('[purge:trial] user', uid, 'converti entre SELECT et DELETE, skip')
+    return { userId: uid, email: user.email, skipped: true, reason: 'trial_converted' }
+  }
+  // Échéance recalculée hors fenêtre (trial_ends_at absent ou < 30 j).
+  const endsAtMs = new Date(recheck.trial_ends_at).getTime()
+  if (!Number.isFinite(endsAtMs) || (endsAtMs + TRIAL_PURGE_MS) >= Date.now()) {
+    console.warn('[purge:trial] user', uid, 'trial_ends_at recalculé hors fenêtre, skip')
+    return { userId: uid, email: user.email, skipped: true, reason: 'trial_ends_at_changed' }
+  }
+
+  // Cascade factorisée — identique à celle des résiliés (réemployable telle
+  // quelle, elle ne suppose aucun abonnement Stripe).
+  const cascade = await deleteUserCascade(uid)
+  if (!cascade.userDeleted) {
+    return { userId: uid, email: user.email, error: cascade.error, tablesPurgees: cascade.tablesPurgees, recordCount: cascade.recordCount }
+  }
+  return { userId: uid, email: user.email, tablesPurgees: cascade.tablesPurgees, recordCount: cascade.recordCount }
+}
+
+// Job principal — jumeau de purgeExpiredUsers, ancré sur la fin d'essai.
+// Journalise purgedCount / skippedCount / totalRecordsDeleted sur le même motif.
+export async function purgeExpiredTrials() {
+  const db = await getDb()
+
+  // Sélection candidats :
+  //   subscription_status IS NONE      → jamais passé au paiement (écarte
+  //                                       active/past_due/canceled/unpaid/…).
+  //   trial_status != 'converted'      → écarte les convertis (double garde ;
+  //                                       NONE et 'expired'/'active' passent).
+  //   trial_ends_at IS NOT NONE        → exige l'ancre de calcul (sinon ambigu).
+  //   trial_ends_at + 30d < time::now() → échéance : 30 j après la fin d'essai.
+  //   bypass != true                   → écarte le contournement (drapeau
+  //                                       superadmin). Complété par isVip côté
+  //                                       garde unitaire (couvre le propriétaire).
+  let candidates = []
+  try {
+    const r = await db.query(
+      `SELECT id, email, trial_ends_at FROM user
+       WHERE subscription_status IS NONE
+         AND trial_status != 'converted'
+         AND trial_ends_at IS NOT NONE
+         AND trial_ends_at + 30d < time::now()
+         AND bypass != true`
+    )
+    candidates = r?.[0] || []
+  } catch (e) {
+    console.warn('[purge:trial] SELECT candidates échoué :', e.message)
+    return {
+      purgedCount: 0,
+      skippedCount: 0,
+      totalRecordsDeleted: 0,
+      candidates: 0,
+      errors: [{ stage: 'select', message: e.message }]
+    }
+  }
+
+  if (!candidates.length) {
+    return {
+      purgedCount: 0,
+      skippedCount: 0,
+      totalRecordsDeleted: 0,
+      candidates: 0
+    }
+  }
+
+  // Boucle séquentielle (pas de parallel, on ne hammer pas la DB cloud).
+  let purgedCount = 0
+  let skippedCount = 0
+  let totalRecordsDeleted = 0
+  const errors = []
+  const details = []
+
+  for (const user of candidates) {
+    try {
+      const res = await purgeOneTrialUser(db, user)
+      if (res.skipped) {
+        skippedCount++
+      } else if (res.error) {
+        errors.push({ userId: res.userId, email: res.email, error: res.error })
+      } else {
+        purgedCount++
+        totalRecordsDeleted += res.recordCount || 0
+      }
+      details.push(res)
+    } catch (e) {
+      console.warn('[purge:trial] user purgeOne échec :', user.email, e.message)
       errors.push({ userId: cleanUserId(user.id), email: user.email, error: e.message })
     }
   }

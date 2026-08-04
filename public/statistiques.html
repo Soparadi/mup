@@ -684,7 +684,7 @@
         quotaEl.textContent = 'Contacts enrichis illimités';
         quotaEl.style.fontStyle = '';
       } else {
-        quotaEl.textContent = (userPlan.leadsConsumedThisMonth || 0) + ' / ' + quota + ' contacts enrichis ce mois';
+        quotaEl.textContent = (userPlan.leadsConsumedThisMonth || 0) + ' / ' + quota + ' contacts enrichis' + (isTrialAccount() ? '' : ' ce mois');
         quotaEl.style.fontStyle = '';
       }
     }
@@ -721,6 +721,18 @@
     var d = new Date(); d.setMonth(d.getMonth()+1, 1);
     return d.toLocaleDateString('fr-FR',{month:'long'});
   }
+  // Un compte est en essai tant que window.__USER__.trial_status n'est pas
+  // 'converted'. On ne retire les mentions de périodicité et de reset mensuel
+  // que sur preuve positive de NON-conversion : sans window.__USER__ (page
+  // servie sans injection), la fonction retourne true, donc les libellés
+  // perdent leurs mentions mensuelles — repli conservateur qui ne promet
+  // jamais à tort un rechargement. Court-circuit && → aucune erreur si absent.
+  // NB : le drapeau de contournement VIP (bypass) n'est pas dans le payload
+  // injecté ; un VIP non converti est donc traité ici comme un essai.
+  function isTrialAccount(){
+    var u = window.__USER__;
+    return !(u && u.trial_status === 'converted');
+  }
   async function renderLeadsCard(){
     userPlan = await loadUserPlan();
     var plan = userPlan.plan || 'demarrage';
@@ -747,10 +759,10 @@
       subEl.textContent = 'Contacts enrichis illimités';
       subEl.style.color = '';
     } else if(overflow){
-      subEl.innerHTML = consumed + ' / ' + quota + ' ce mois · <span style="color:#E24B4A">+' + overBy + ' dépassement test</span>';
+      subEl.innerHTML = consumed + ' / ' + quota + (isTrialAccount() ? '' : ' ce mois') + ' · <span style="color:#E24B4A">+' + overBy + ' dépassement test</span>';
       subEl.style.color = '';
     } else {
-      subEl.textContent = consumed + ' / ' + quota + ' ce mois';
+      subEl.textContent = consumed + ' / ' + quota + (isTrialAccount() ? '' : ' ce mois');
       subEl.style.color = '';
     }
 
@@ -769,7 +781,7 @@
       restEl.style.fontStyle = 'italic';
     } else {
       var rest = Math.max(0, quota - consumed);
-      restEl.textContent = rest + ' restants ce mois · reset le 1er ' + nextMonthLabel();
+      restEl.textContent = isTrialAccount() ? (rest + ' restants') : (rest + ' restants ce mois · reset le 1er ' + nextMonthLabel());
       restEl.style.color = '';
       restEl.style.fontStyle = '';
     }

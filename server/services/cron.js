@@ -31,10 +31,16 @@ const TIMEZONE = process.env.CRON_TIMEZONE || 'Europe/Paris'
 async function logCronAudit(event, metadata) {
   try {
     const db = await getDb()
-    await db.query(
-      'CREATE audit_log CONTENT { event: $event, ip: NONE, user_agent: $ua, metadata: $meta }',
-      { event, ua: 'cron', meta: metadata || null }
-    )
+    // Même règle que logAuditEvent : un champ absent reste ABSENT de la requête.
+    // Poser `null` sur un option<...> SCHEMAFULL fait rejeter le CREATE entier ;
+    // les champs non posés (dont ip) deviennent NONE d'eux-mêmes.
+    const fields = ['event = $event', "user_agent = 'cron'"]
+    const params = { event }
+    if (metadata && typeof metadata === 'object') {
+      fields.push('metadata = $meta')
+      params.meta = metadata
+    }
+    await db.query(`CREATE audit_log SET ${fields.join(', ')}`, params)
   } catch (e) {
     console.warn('[cron] logAudit échoué :', e.message)
   }

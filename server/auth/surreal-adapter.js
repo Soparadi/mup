@@ -300,36 +300,29 @@ export async function markTokenUsed(tokenRecordId) {
 export async function logAuditEvent({ userId, event, ip, userAgent, metadata }) {
   try {
     const db = await getDb()
-    const body = { event }
+    // Un champ absent doit être ABSENT de la requête : sur une table SCHEMAFULL,
+    // SurrealDB traite le `null` JS comme une VALEUR explicite qui ne matche pas
+    // `option<T>` (none | T) et rejette le CREATE entier. On ne pose donc que les
+    // champs réellement présents ; les option<...> non posés deviennent NONE.
+    const fields = ['event = $event']
+    const params = { event }
     if (userId) {
-      const cleanId = normalizeId('user', userId)
-      body.user_id = `user:${cleanId}`
+      fields.push('user_id = type::record("user", $uid)')
+      params.uid = normalizeId('user', userId)
     }
-    if (ip) body.ip = String(ip).slice(0, 64)
-    if (userAgent) body.user_agent = String(userAgent).slice(0, 256)
-    if (metadata && typeof metadata === 'object') body.metadata = metadata
-    if (body.user_id) {
-      await db.query(
-        'CREATE audit_log CONTENT { event: $event, user_id: type::record("user", $uid), ip: $ip, user_agent: $ua, metadata: $meta }',
-        {
-          event: body.event,
-          uid: normalizeId('user', userId),
-          ip: body.ip || null,
-          ua: body.user_agent || null,
-          meta: body.metadata || null
-        }
-      )
-    } else {
-      await db.query(
-        'CREATE audit_log CONTENT { event: $event, ip: $ip, user_agent: $ua, metadata: $meta }',
-        {
-          event: body.event,
-          ip: body.ip || null,
-          ua: body.user_agent || null,
-          meta: body.metadata || null
-        }
-      )
+    if (ip) {
+      fields.push('ip = $ip')
+      params.ip = String(ip).slice(0, 64)
     }
+    if (userAgent) {
+      fields.push('user_agent = $ua')
+      params.ua = String(userAgent).slice(0, 256)
+    }
+    if (metadata && typeof metadata === 'object') {
+      fields.push('metadata = $meta')
+      params.meta = metadata
+    }
+    await db.query(`CREATE audit_log SET ${fields.join(', ')}`, params)
   } catch (e) {
     console.warn('[audit_log]', e.message)
   }

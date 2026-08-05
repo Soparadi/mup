@@ -52,8 +52,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 #pipeline-search-input{width:100%;padding:8px 12px 8px 34px;border:1.5px solid var(--border);border-radius:12px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--surface);outline:none;transition:border-color .12s}
 #pipeline-search-input:focus{border-color:var(--text);background:var(--card)}
 .topbar-actions{display:flex;gap:8px}
-.btn-add-card{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:9px;border:none;background:var(--text);color:#fff;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
-.btn-add-card:hover{background:#000}
 
 /* ── REPLI DE LA TOPBAR (patron de prospection.html) ──────────────
    Une fois un filtre appliqué, la rangée indicateurs + recherche
@@ -167,8 +165,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .d-btn.primary{background:var(--text);color:#fff;border-color:var(--text)}
 .d-btn.primary:hover{background:#000}
 .col-select{border:1.5px solid var(--border);border-radius:9px;padding:8px 12px;font-family:var(--font);font-size:13px;color:var(--text);background:var(--surface);width:100%;outline:none;cursor:pointer}
-.detail-close{position:absolute;top:16px;right:16px;width:28px;height:28px;border-radius:8px;border:none;background:var(--surface2);cursor:pointer;font-size:16px;color:var(--muted);display:flex;align-items:center;justify-content:center}
-.detail-close:hover{background:var(--border2);color:var(--text)}
 .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .info-item{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border-radius:9px;background:var(--surface)}
 .info-item-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)}
@@ -280,18 +276,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    qui coexiste avec le side-panel classique 380px
    ═══════════════════════════════════════════════════════ */
 
-/* Bouton toggle mode focus dans la topbar */
-.btn-focus-toggle{
-  display:inline-flex;align-items:center;gap:5px;
-  padding:7px 12px;border-radius:9px;
-  border:1.5px solid var(--border);background:var(--card);
-  color:var(--muted);font-family:var(--font);font-size:11.5px;font-weight:600;
-  cursor:pointer;transition:all .15s;
-}
-.btn-focus-toggle:hover{color:var(--text);border-color:var(--border2)}
-.btn-focus-toggle.active{background:var(--text);color:#fff;border-color:var(--text)}
-.btn-focus-toggle svg{width:12px;height:12px}
-
 /* ── MODE FOCUS : masque le Kanban global et remplace par colonne isolée ── */
 body.focus-mode .kanban-wrap{display:none!important}
 body.focus-mode .detail-overlay{display:none!important}
@@ -325,9 +309,6 @@ body.focus-mode .detail-panel{
   background:var(--card);
   padding:0!important;
 }
-body.focus-mode .detail-close{
-  top:20px!important;right:20px!important;z-index:100;
-}
 body.focus-mode .detail-hdr{
   background:var(--text);color:#fff;
   padding:28px 40px 24px!important;border-bottom:none!important;
@@ -336,13 +317,10 @@ body.focus-mode .detail-hdr .detail-name{color:#fff;font-size:26px;margin-bottom
 body.focus-mode .detail-hdr .detail-co{color:rgba(255,255,255,.7);font-size:14px;margin-bottom:14px}
 body.focus-mode .detail-hdr .detail-badges{gap:8px}
 body.focus-mode .detail-hdr .detail-badge{background:rgba(255,255,255,.1)!important;color:rgba(255,255,255,.9)!important;padding:4px 12px;font-size:11px}
-body.focus-mode .detail-close{background:rgba(255,255,255,.08)!important;color:rgba(255,255,255,.7)!important;border:1px solid rgba(255,255,255,.1)!important}
-body.focus-mode .detail-close:hover{background:rgba(255,255,255,.15)!important;color:#fff!important}
 
 /* Focus header black — visuel uniformisé avec leads cards */
 .focus-header-black{display:block;background:#1D1D1F;color:#fff;padding:20px 24px;position:relative}
 .detail-hdr{display:none!important}
-.detail-close{display:none!important}
 .focus-header-cat{display:inline-flex;align-items:center;gap:8px;font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.7);margin-bottom:12px}
 .focus-header-icon{color:rgba(255,255,255,0.7)}
 .focus-close-btn{position:absolute;top:16px;right:16px;width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.1);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.12s}
@@ -398,83 +376,6 @@ body.focus-mode .tl-txt{font-size:13px}
 
 /* Déplacer select plus gros */
 body.focus-mode .col-select{padding:10px 14px;font-size:13.5px;border-radius:10px}
-
-/* ── NOUVELLES SECTIONS MODE FOCUS ── */
-/* Prochaine action actionnable */
-body.focus-mode #focus-next-action{display:block}
-#focus-next-action{display:none;margin-bottom:20px}
-.next-action-card{
-  padding:16px 18px;
-  display:flex;align-items:center;gap:14px;
-  background:rgba(0,102,224,.06);
-  border:1px solid rgba(0,102,224,.15);
-  border-radius:10px;
-  margin-bottom:8px;
-}
-.next-action-card.empty{
-  background:var(--surface);border:1px dashed var(--border2);
-  justify-content:center;padding:24px 18px;color:var(--muted);
-  font-size:13px;font-weight:500;
-}
-.next-action-icon{
-  width:42px;height:42px;border-radius:10px;
-  background:var(--card);color:#0066E0;
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-}
-.next-action-icon svg{width:18px;height:18px}
-.next-action-body{flex:1;min-width:0}
-.next-action-label{font-size:9.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
-.next-action-text{font-size:14.5px;font-weight:700;color:var(--text);letter-spacing:-.01em}
-.next-action-date{font-size:12px;color:var(--muted);font-family:var(--mono);letter-spacing:0;flex-shrink:0;text-align:right}
-.next-action-date strong{color:var(--text);font-weight:800;font-size:13px}
-
-.next-action-controls{
-  display:flex;gap:6px;
-  padding:10px 18px;
-  background:rgba(0,102,224,.04);
-  border:1px solid rgba(0,102,224,.15);
-  border-top:none;
-  border-radius:0 0 10px 10px;
-  margin-top:-8px;
-}
-.next-action-btn{
-  flex:1;padding:8px 12px;
-  background:var(--card);border:1px solid var(--border);
-  border-radius:7px;
-  font-family:var(--font);font-size:12px;font-weight:600;
-  color:var(--muted);cursor:pointer;transition:all .12s;
-  display:inline-flex;align-items:center;justify-content:center;gap:5px;
-}
-.next-action-btn:hover{color:var(--text);border-color:var(--border2)}
-.next-action-btn svg{width:12px;height:12px}
-.next-action-btn.primary{background:#0066E0;color:#fff;border-color:#0066E0}
-.next-action-btn.primary:hover{background:#0053BB}
-.next-action-btn.danger:hover{color:var(--red);border-color:rgba(204,0,0,.3)}
-
-/* Activité cliquable en mode focus */
-body.focus-mode #focus-activity-grid{display:grid}
-#focus-activity-grid{display:none;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
-.act-card-big{
-  background:var(--surface);border-radius:10px;padding:14px 16px;
-  cursor:pointer;transition:all .15s;
-  border:1px solid transparent;
-  display:flex;flex-direction:column;gap:4px;position:relative;
-  font-family:var(--font);
-}
-.act-card-big:hover{background:var(--surface2);transform:translateY(-1px);border-color:var(--border)}
-.act-card-big.active{background:var(--card);border-color:currentColor;box-shadow:0 0 0 3px rgba(0,0,0,.02)}
-.act-card-big-row{display:flex;align-items:center;justify-content:space-between}
-.act-card-big-icon svg{width:15px;height:15px;stroke-width:2.2}
-.act-card-big-val{font-size:24px;font-weight:800;letter-spacing:-.03em;line-height:1}
-.act-card-big-label{font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:6px}
-.act-card-big.mailing .act-card-big-icon,.act-card-big.mailing .act-card-big-val{color:#B84C00}
-.act-card-big.phoning .act-card-big-icon,.act-card-big.phoning .act-card-big-val{color:var(--red)}
-.act-card-big.visio .act-card-big-icon,.act-card-big.visio .act-card-big-val{color:#0066E0}
-.act-card-big.rdv .act-card-big-icon,.act-card-big.rdv .act-card-big-val{color:#4338CA}
-
-/* État par défaut (sans mode focus) : side-panel classique 380px intact */
-body:not(.focus-mode) #focus-next-action,
-body:not(.focus-mode) #focus-activity-grid{display:none!important}
 
 /* Animation douce de bascule */
 .kanban-wrap,.focus-wrap,.detail-panel{transition:opacity .2s ease}
@@ -662,7 +563,6 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
 <!-- FICHE DÉTAIL -->
 <div class="detail-overlay" id="detail-overlay" onclick="closeDetail()"></div>
 <div class="detail-panel" id="detail-panel">
-  <button class="detail-close" onclick="closeDetail()">×</button>
   <div class="detail-hdr">
     <div class="detail-name" id="d-name"></div>
     <div class="detail-co" id="d-co"></div>
@@ -684,7 +584,7 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
     <div class="focus-header-pills" id="d-focus-pills"></div>
     <button class="d-btn" id="d-enrich" type="button" onclick="enrichDetail()" style="margin-top:14px;background:var(--orange);color:#fff;border:none">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M19 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L19 14z"/></svg>
-      Enrichir
+      <span id="d-enrich-label">Enrichir</span>
     </button>
   </div>
   <div class="detail-body">
@@ -708,17 +608,17 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
         <div style="display:flex;align-items:center;gap:8px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           <input id="d-linkedin" placeholder="LinkedIn URL" style="flex:1;border:none;border-bottom:1px solid var(--border);background:none;font-family:var(--font);font-size:12px;color:var(--text);padding:4px 0;outline:none" onblur="saveSocials()">
-          <a id="d-linkedin-link" href="#" target="_blank" style="display:none;color:var(--blue)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+          <a id="d-linkedin-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--blue)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
           <input id="d-facebook" placeholder="Facebook URL" style="flex:1;border:none;border-bottom:1px solid var(--border);background:none;font-family:var(--font);font-size:12px;color:var(--text);padding:4px 0;outline:none" onblur="saveSocials()">
-          <a id="d-facebook-link" href="#" target="_blank" style="display:none;color:var(--blue)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+          <a id="d-facebook-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--blue)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
           <input id="d-instagram" placeholder="Instagram URL" style="flex:1;border:none;border-bottom:1px solid var(--border);background:none;font-family:var(--font);font-size:12px;color:var(--text);padding:4px 0;outline:none" onblur="saveSocials()">
-          <a id="d-instagram-link" href="#" target="_blank" style="display:none;color:var(--blue)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+          <a id="d-instagram-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--blue)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
         </div>
       </div>
     </div>
@@ -1144,6 +1044,25 @@ function migrateCard(c){
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+// Liens sociaux de la fiche. La valeur vient d'un champ libre ou d'un
+// enrichissement : elle n'est posée en href que si elle est bien une adresse
+// http(s). Tout le reste — javascript:, data:, une saisie sans schéma — laisse
+// le lien masqué plutôt que de devenir cliquable. rel="noopener" pour ne pas
+// livrer window.opener à la page ouverte.
+function poserLienSocial(linkId, url){
+  const link = document.getElementById(linkId);
+  if(!link) return;
+  const v = String(url || '').trim();
+  if(v && /^https?:\/\//i.test(v)){
+    link.href = v;
+    link.rel = 'noopener';
+    link.style.display = '';
+  } else {
+    link.href = '#';
+    link.style.display = 'none';
+  }
+}
+
 function createMupMarker(lat, lng, color){
   return L.divIcon({
     className: 'mup-marker',
@@ -1495,7 +1414,7 @@ let detailMarker = null;
 
 async function openDetail(id) {
   // Ouverture « fraîche » = changement de fiche, pas un simple re-render de la
-  // fiche déjà ouverte (saveNotes, saveRdv, sync agenda…). Seule une ouverture
+  // fiche déjà ouverte (saveNote, saveRdv, sync agenda…). Seule une ouverture
   // fraîche déclenche la restitution silencieuse, pour ne pas rappeler
   // /api/enrich à chaque re-render.
   const estOuvertureFraiche = String(currentId) !== String(id);
@@ -1563,9 +1482,9 @@ async function openDetail(id) {
   document.getElementById('d-linkedin').value = c.linkedin||'';
   document.getElementById('d-facebook').value = c.facebook||'';
   document.getElementById('d-instagram').value = c.instagram||'';
-  var liLink=document.getElementById('d-linkedin-link'); liLink.href=c.linkedin||'#'; liLink.style.display=c.linkedin?'':'none';
-  var fbLink=document.getElementById('d-facebook-link'); fbLink.href=c.facebook||'#'; fbLink.style.display=c.facebook?'':'none';
-  var igLink=document.getElementById('d-instagram-link'); igLink.href=c.instagram||'#'; igLink.style.display=c.instagram?'':'none';
+  poserLienSocial('d-linkedin-link', c.linkedin);
+  poserLienSocial('d-facebook-link', c.facebook);
+  poserLienSocial('d-instagram-link', c.instagram);
 
   // Move select
   document.getElementById('d-move').value = c.col||'prospects';
@@ -1747,8 +1666,7 @@ async function autoEnrichOnOpen(c) {
     const el = document.getElementById(inputId);
     if(!el || el.value.trim()) return;
     el.value = val;
-    const link = document.getElementById(linkId);
-    if(link){ link.href = val; link.style.display = ''; }
+    poserLienSocial(linkId, val);
   };
   fillSocialIfEmpty('d-linkedin', 'd-linkedin-link', data.societe_linkedin);
   fillSocialIfEmpty('d-facebook', 'd-facebook-link', data.societe_facebook);
@@ -1773,6 +1691,13 @@ async function autoEnrichOnOpen(c) {
   }
 }
 
+// Libellé du bouton Enrichir. Écrire dans #d-enrich-label et non sur le bouton :
+// btn.textContent effaçait l'icône, que rien ne reposait ensuite.
+function poserLibelleEnrich(txt){
+  const lbl = document.getElementById('d-enrich-label');
+  if(lbl) lbl.textContent = txt;
+}
+
 // État terminal du bouton Enrichir. Autorité = enrichedSirets, jamais le
 // remplissage des champs : un abonné qui efface une valeur ne doit pas se voir
 // proposer de repayer. Bouton réutilisé d'une fiche à l'autre → on restaure
@@ -1786,12 +1711,12 @@ async function refreshEnrichButtonState(siret){
     btn.disabled = true;
     btn.style.opacity = '.4';
     btn.style.cursor = 'not-allowed';
-    btn.textContent = 'Déjà enrichi';
+    poserLibelleEnrich('Déjà enrichi');
   } else {
     btn.disabled = false;
     btn.style.opacity = '';
     btn.style.cursor = '';
-    btn.textContent = 'Enrichir';
+    poserLibelleEnrich('Enrichir');
   }
 }
 
@@ -1804,14 +1729,6 @@ function closeDetail() {
   if(window.MUP_FICHE_EMBED && window.parent !== window){
     try { window.parent.postMessage({ type:'mup-fiche-close' }, '*'); } catch(e){}
   }
-}
-
-function saveNotes() {
-  if(!currentId) return;
-  const el = document.getElementById('d-notes');
-  if(!el) return;
-  const c = cards.find(x=>x.id===currentId);
-  if(c) { c.notes = el.value.trim(); save(); syncToProspects(c); }
 }
 
 function formatNoteDate(isoDate) {
@@ -2055,6 +1972,11 @@ async function saveRdv() {
     return;
   }
 
+  // L'heure choisie est retenue sur la fiche : elle est relue à l'ouverture
+  // (cf. remplissage de #rdv-time-input). Sans cette écriture le champ
+  // retombait sur 14:00 à chaque réouverture, quelle que soit l'heure du RDV.
+  c.rdvTime = time;
+
   // Refresh cache local fiche pour render immédiat (calendrier dots + focus mode)
   await loadAgendaForFiche(currentId);
 
@@ -2109,9 +2031,9 @@ function saveSocials() {
   c.facebook = document.getElementById('d-facebook').value.trim();
   c.instagram = document.getElementById('d-instagram').value.trim();
   // Update link icons
-  var liLink=document.getElementById('d-linkedin-link'); liLink.href=c.linkedin||'#'; liLink.style.display=c.linkedin?'':'none';
-  var fbLink=document.getElementById('d-facebook-link'); fbLink.href=c.facebook||'#'; fbLink.style.display=c.facebook?'':'none';
-  var igLink=document.getElementById('d-instagram-link'); igLink.href=c.instagram||'#'; igLink.style.display=c.instagram?'':'none';
+  poserLienSocial('d-linkedin-link', c.linkedin);
+  poserLienSocial('d-facebook-link', c.facebook);
+  poserLienSocial('d-instagram-link', c.instagram);
   save();
   syncToProspects(c);
 }
@@ -2162,9 +2084,10 @@ async function enrichDetail() {
   const siret = String(c.siret||'').replace(/\s+/g,'');
   if(!siret) return; // SIRET absent → garde silencieuse (calque du modèle)
   const btn = document.getElementById('d-enrich');
-  const origLabel = btn.textContent; // verrou anti double-clic pendant l'appel
+  const lblEl = document.getElementById('d-enrich-label');
+  const origLabel = lblEl ? lblEl.textContent : 'Enrichir'; // verrou anti double-clic pendant l'appel
   btn.disabled = true;
-  btn.textContent = 'Enrichissement…';
+  poserLibelleEnrich('Enrichissement…');
   try {
     const resp = await fetch('/api/enrich/' + encodeURIComponent(siret), { method: 'POST' });
     if(resp.status === 403) { // opt-out RGPD : le serveur porte le message, l'abonné doit le voir
@@ -2210,7 +2133,7 @@ async function enrichDetail() {
     // La restauration ne réactive pas un bouton passé en terminal (autorité: enrichedSirets).
     if(!siretEnrichi(siret)) {
       btn.disabled = false;
-      btn.textContent = origLabel;
+      poserLibelleEnrich(origLabel);
     }
   }
 }
@@ -2286,18 +2209,6 @@ function importFromProspects() {
   let focusMode = false;
   let focusColumnId = null;
 
-  // ── BOUTON TOGGLE dans la topbar ──
-  function injectFocusToggle(){
-    const topbarActions = document.querySelector('.topbar-actions');
-    if(!topbarActions) return;
-    const btn = document.createElement('button');
-    btn.className = 'btn-focus-toggle';
-    btn.id = 'btn-focus-toggle';
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M22 12h-3M5 12H2"/></svg> Mode focus';
-    btn.onclick = toggleFocusMode;
-    topbarActions.insertBefore(btn, topbarActions.firstChild);
-  }
-
   // ── WRAPPER HTML de la colonne focus ──
   function injectFocusWrap(){
     const shell = document.querySelector('.shell');
@@ -2330,63 +2241,11 @@ function importFromProspects() {
     document.getElementById('focus-back-link').onclick = exitFocusMode;
   }
 
-  // ── INJECTION bloc "Prochaine action" dans detail-body ──
-  function injectNextActionBlock(){
-    const detailBody = document.querySelector('.detail-body');
-    if(!detailBody) return;
-    
-    // Bloc prochaine action (inséré en premier, avant infos contact)
-    const nextAction = document.createElement('div');
-    nextAction.id = 'focus-next-action';
-    nextAction.innerHTML = `
-      <div class="detail-section-title" style="margin-bottom:10px">Prochaine action</div>
-      <div id="focus-next-action-content"></div>
-    `;
-    detailBody.insertBefore(nextAction, detailBody.firstChild);
-    
-    // Bloc activité cliquable (filtre timeline)
-    const activity = document.createElement('div');
-    activity.innerHTML = `
-      <div class="detail-section-title" style="margin-bottom:10px">Activité</div>
-      <div id="focus-activity-grid"></div>
-    `;
-    // On insère juste après le next-action
-    nextAction.parentNode.insertBefore(activity, nextAction.nextSibling);
-  }
-
-  // ── BASCULE ON/OFF ──
-  function toggleFocusMode(){
-    if(focusMode){
-      exitFocusMode();
-    } else {
-      // Si une fiche est ouverte, on bascule dessus
-      if(window.currentId){
-        const card = window.cards?.find(c => String(c.id) === String(window.currentId));
-        if(card) enterFocusMode(card.col, window.currentId);
-        else enterFocusMode();
-      } else {
-        enterFocusMode();
-      }
-    }
-  }
-
-  function enterFocusMode(columnId, prospectId){
-    focusMode = true;
-    focusColumnId = columnId;
-    document.body.classList.add('focus-mode');
-    document.getElementById('btn-focus-toggle')?.classList.add('active');
-    
-    if(columnId) renderFocusColumn(columnId);
-    if(prospectId && !document.getElementById('detail-panel').classList.contains('open')){
-      window.openDetail(prospectId);
-    }
-  }
-
+  // Sortie du mode agrandi : appelée par le fil d'Ariane et par Échap.
   function exitFocusMode(){
     focusMode = false;
     focusColumnId = null;
     document.body.classList.remove('focus-mode');
-    document.getElementById('btn-focus-toggle')?.classList.remove('active');
     // Ferme aussi le detail-panel
     if(window.closeDetail) window.closeDetail();
   }
@@ -2432,8 +2291,6 @@ function importFromProspects() {
       document.querySelectorAll('#focus-col-body .kcard').forEach(k => k.classList.remove('selected'));
       div.classList.add('selected');
       if(window.openDetail) window.openDetail(c.id);
-      // Après l'ouverture, on enrichit la fiche avec next-action + activité
-      setTimeout(() => enrichFicheWithActions(c), 50);
     };
     return div;
   }
@@ -2442,155 +2299,6 @@ function importFromProspects() {
     if(!s) return '';
     return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   }
-
-  // ── ENRICHISSEMENT de la fiche avec next-action + activité cliquable ──
-  function enrichFicheWithActions(c){
-    if(!focusMode) return;
-    
-    // Compte les actions par type (à partir de la timeline JSON stockée)
-    const timeline = c.timeline || [];
-    const counts = { mail: 0, appel: 0, visio: 0, rdv: 0 };
-    timeline.forEach(t => {
-      if(counts[t.type] !== undefined) counts[t.type]++;
-    });
-    
-    // Prochaine action : premier event upcoming dans la table agenda pour cette fiche.
-    // _agendaForCurrentFiche est déjà chargé par openDetail() en amont.
-    const todayKey = (function(){ const t = new Date(); t.setHours(0,0,0,0); return t.getTime(); })();
-    const upcoming = (_agendaForCurrentFiche || [])
-      .filter(function(ev){
-        if(!ev || !ev.date) return false;
-        const t = new Date(ev.date + 'T00:00:00').getTime();
-        return !isNaN(t) && t >= todayKey;
-      })
-      .sort(function(a,b){
-        const da = a.date + 'T' + (a.start || '00:00');
-        const db = b.date + 'T' + (b.start || '00:00');
-        return da < db ? -1 : (da > db ? 1 : 0);
-      });
-    const rdv = upcoming[0] || null;
-    const nextContent = document.getElementById('focus-next-action-content');
-    if(nextContent){
-      if(rdv && rdv.date){
-        const rdvDate = new Date(rdv.date + 'T' + (rdv.start || '00:00'));
-        const dateStr = rdvDate.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
-        const timeStr = rdv.start || rdvDate.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
-        nextContent.innerHTML = `
-          <div class="next-action-card">
-            <div class="next-action-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-            </div>
-            <div class="next-action-body">
-              <div class="next-action-label">À venir</div>
-              <div class="next-action-text">${escapeHtml(rdv.title || 'Rendez-vous')}</div>
-            </div>
-            <div class="next-action-date">${dateStr} · <strong>${timeStr}</strong></div>
-          </div>
-          <div class="next-action-controls">
-            <button class="next-action-btn primary" onclick="window.focusActionDone()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Terminée
-            </button>
-            <button class="next-action-btn" onclick="window.focusActionEdit()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              Modifier
-            </button>
-            <button class="next-action-btn" onclick="window.focusActionPostpone()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-              Reporter
-            </button>
-            <button class="next-action-btn danger" onclick="window.focusActionCancel()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-              Annuler
-            </button>
-          </div>
-        `;
-      } else {
-        nextContent.innerHTML = `
-          <div class="next-action-card empty">
-            Aucune action planifiée — utilisez les actions rapides ci-dessous
-          </div>
-        `;
-      }
-    }
-    
-    // Activité cliquable (filtre timeline)
-    const activityGrid = document.getElementById('focus-activity-grid');
-    if(activityGrid){
-      activityGrid.innerHTML = `
-        <button class="act-card-big mailing" data-type="mail">
-          <div class="act-card-big-row">
-            <div class="act-card-big-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
-            <div class="act-card-big-val">${counts.mail}</div>
-          </div>
-          <div class="act-card-big-label">Mail</div>
-        </button>
-        <button class="act-card-big phoning" data-type="appel">
-          <div class="act-card-big-row">
-            <div class="act-card-big-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg></div>
-            <div class="act-card-big-val">${counts.appel}</div>
-          </div>
-          <div class="act-card-big-label">Téléphone</div>
-        </button>
-        <button class="act-card-big visio" data-type="visio">
-          <div class="act-card-big-row">
-            <div class="act-card-big-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg></div>
-            <div class="act-card-big-val">${counts.visio}</div>
-          </div>
-          <div class="act-card-big-label">Visio</div>
-        </button>
-        <button class="act-card-big rdv" data-type="rdv">
-          <div class="act-card-big-row">
-            <div class="act-card-big-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
-            <div class="act-card-big-val">${counts.rdv}</div>
-          </div>
-          <div class="act-card-big-label">Rendez-vous</div>
-        </button>
-      `;
-      
-      // Handlers filtre timeline
-      activityGrid.querySelectorAll('.act-card-big').forEach(btn => {
-        btn.onclick = () => {
-          const type = btn.dataset.type;
-          const isActive = btn.classList.contains('active');
-          activityGrid.querySelectorAll('.act-card-big').forEach(b => b.classList.remove('active'));
-          if(!isActive){
-            btn.classList.add('active');
-            filterTimeline(type);
-          } else {
-            filterTimeline(null);
-          }
-        };
-      });
-    }
-  }
-
-  function filterTimeline(type){
-    document.querySelectorAll('#d-timeline .tl-item').forEach(item => {
-      if(!type){
-        item.style.display = '';
-      } else {
-        const hasType = item.classList.contains('type-' + type);
-        item.style.display = hasType ? '' : 'none';
-      }
-    });
-  }
-
-  // ── ACTIONS sur la prochaine action ──
-  window.focusActionDone = function(){
-    alert('Cette fonctionnalité sera bientôt disponible.');
-  };
-  window.focusActionEdit = function(){
-    alert('Édition de l\'action\n(TODO: ouvrir modal d\'édition date/heure/note)');
-  };
-  window.focusActionPostpone = function(){
-    alert('Reporter : +1 jour / +1 semaine / date custom\n(TODO: menu rapide)');
-  };
-  window.focusActionCancel = function(){
-    if(confirm('Annuler cette action planifiée ?')){
-      alert('Action annulée (TODO: integration saveCard)');
-    }
-  };
 
   // ── HASH URL helpers : persistance fiche ouverte (drawer / fullscreen) ──
   function syncHashFromState(){
@@ -2643,7 +2351,6 @@ function importFromProspects() {
         focusColumnId = c.col;
         renderFocusColumn(c.col);
       }
-      setTimeout(() => enrichFicheWithActions(c), 100);
     }
     syncHashFromState();
   };
@@ -2651,14 +2358,15 @@ function importFromProspects() {
   // ── TOGGLE FULLSCREEN : bascule drawer ↔ mode focus plein écran ──
   window.toggleFullscreen = function(){
     const isFocus = document.body.classList.toggle('focus-mode');
+    // L'état JS suit le DOM : sans cette ligne focusMode restait à false, et le
+    // raccourci Échap — qui le teste — ne refermait jamais le mode agrandi.
+    focusMode = isFocus;
+    if(!isFocus) focusColumnId = null;
     if(isFocus && window.currentId){
       const c = window.cards?.find(x => String(x.id) === String(window.currentId));
-      if(c){
-        if(c.col !== focusColumnId){
-          focusColumnId = c.col;
-          renderFocusColumn(c.col);
-        }
-        setTimeout(() => enrichFicheWithActions(c), 100);
+      if(c && c.col !== focusColumnId){
+        focusColumnId = c.col;
+        renderFocusColumn(c.col);
       }
     }
     syncHashFromState();
@@ -2765,7 +2473,6 @@ function importFromProspects() {
   // ── INIT après chargement DOM ──
   function init(){
     injectFocusWrap();
-    injectNextActionBlock();
     bootstrapFicheEmbed();
 
     // Téléphone société : reformatage à la SORTIE du champ (blur), jamais
@@ -2774,7 +2481,8 @@ function importFromProspects() {
     var telIn = document.getElementById('m-societe-tel');
     if(telIn) telIn.addEventListener('blur', function(){ this.value = window.MUPTel.format(this.value); });
 
-    // Raccourci clavier : F pour toggle focus
+    // Échap referme le mode agrandi. Le test porte sur focusMode, que
+    // toggleFullscreen tient désormais à jour.
     document.addEventListener('keydown', e => {
       if(e.key === 'Escape' && focusMode){
         exitFocusMode();

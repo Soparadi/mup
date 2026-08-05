@@ -1323,7 +1323,7 @@ function renderCard(c, color) {
     <div class="kcard-bar" style="background:${color}"></div>
     <div class="kcard-actions">
       <button class="kcard-btn" onclick="event.stopPropagation();editCard('${c.id}')" title="Modifier"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-      <button class="kcard-btn" onclick="event.stopPropagation();deleteCard('${c.id}')" title="Supprimer"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
+      <button class="kcard-btn" onclick="event.stopPropagation();confirmDeleteCard('${c.id}')" title="Supprimer"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
     </div>
     <div class="kcard-name">${esc(_nomC.titre)}</div>
     <div class="kcard-co">${esc(_nomC.sousTitre)}</div>
@@ -1452,21 +1452,32 @@ function saveCard() {
   // Notifie les autres onglets (Contacts notamment) d'un changement
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
 }
+// La corbeille d'une carte supprime la fiche dans DEUX tables, pipeline et
+// contacts. Geste irréversible : on le fait confirmer, et on le dit.
+function confirmDeleteCard(id) {
+  if(confirm('Supprimer cette fiche ? Elle sera retirée du pipeline et des contacts.')) {
+    deleteCard(id);
+  }
+}
 async function deleteCard(id) {
   // Suppression globale : pipeline + contacts. Une fiche peut exister dans
   // l'une, l'autre ou les deux (créée manuellement /contacts vs via /prospection
-  // → addToPipeline). 404 acceptable sur la table où la fiche n'existe pas.
-  let pipelineOk = false, contactsOk = false, networkError = false;
+  // → addToPipeline). 404 acceptable sur la table où la fiche n'existe pas :
+  // le serveur a répondu, le record n'y est plus.
+  let pipelineOk = false, contactsOk = false;
   try {
     const r1 = await fetch(`/api/pipeline/${id}`, { method: 'DELETE' });
-    pipelineOk = r1.ok;
-  } catch (e) { networkError = true; }
+    pipelineOk = r1.ok || r1.status === 404;
+  } catch (e) { /* pipelineOk reste false */ }
   try {
     const r2 = await fetch(`/api/contacts/${id}`, { method: 'DELETE' });
-    contactsOk = r2.ok;
-  } catch (e) { networkError = true; }
-  if (networkError && !pipelineOk && !contactsOk) {
-    alert('Erreur réseau lors de la suppression. Réessayer.');
+    contactsOk = r2.ok || r2.status === 404;
+  } catch (e) { /* contactsOk reste false */ }
+  // Le retrait local n'a lieu que sur confirmation des DEUX tables. Sinon la
+  // fiche disparaîtrait de l'écran tout en restant sur le serveur, et
+  // reviendrait au prochain chargement.
+  if (!pipelineOk || !contactsOk) {
+    alert('Suppression non confirmée par le serveur. La fiche est conservée.');
     return;
   }
   cards = cards.filter(c=>String(c.id)!==String(id));
@@ -3186,6 +3197,37 @@ function openActionConfirmPopup(detected){
   };
 }
 
+// Note en cours de frappe : openDetail() reconstruit #d-notes-input, donc tout
+// re-render perd la saisie. Ces deux helpers l'encadrent. Appelés par
+// createActionFromDetection et par la resynchro agenda (focus fenêtre,
+// visibilitychange, storage), qui re-render sans que l'abonné ait rien demandé.
+function preserveNoteDraft(){
+  const el = document.getElementById('d-notes-input');
+  if(!el) return null;
+  return {
+    value: el.value,
+    rawVersion: el.dataset.rawVersion || '',
+    crVersion: el.dataset.crVersion || '',
+    viewMode: el.dataset.viewMode || 'raw',
+    selectionStart: el.selectionStart,
+    selectionEnd: el.selectionEnd,
+    avaitFocus: document.activeElement === el
+  };
+}
+function restoreNoteDraft(p){
+  if(!p) return;
+  const el = document.getElementById('d-notes-input');
+  if(!el) return;
+  el.value = p.value;
+  el.dataset.rawVersion = p.rawVersion;
+  el.dataset.crVersion = p.crVersion;
+  el.dataset.viewMode = p.viewMode;
+  if(p.avaitFocus){
+    el.focus();
+    try { el.setSelectionRange(p.selectionStart, p.selectionEnd); } catch(_){}
+  }
+}
+
 async function createActionFromDetection(type, dateStr, time){
   const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
@@ -3205,6 +3247,8 @@ async function createActionFromDetection(type, dateStr, time){
     notes: '',
     ficheId: String(c.id)
   };
+  // L'event agenda est la seule chose créée ici. S'il n'est pas créé, la note
+  // « RDV planifié » mentirait : rien n'a été planifié. On sort sans l'écrire.
   try {
     const resp = await fetch('/api/agenda', {
       method: 'POST',
@@ -3213,9 +3257,13 @@ async function createActionFromDetection(type, dateStr, time){
     });
     if (!resp.ok) {
       console.warn('[createActionFromDetection] POST agenda failed', resp.status);
+      toast('Action non enregistrée dans l\'agenda');
+      return;
     }
   } catch (e) {
     console.warn('[createActionFromDetection] network error', e && e.message);
+    toast('Action non enregistrée dans l\'agenda');
+    return;
   }
   await loadAgendaForFiche(currentId);
 
@@ -3233,26 +3281,12 @@ async function createActionFromDetection(type, dateStr, time){
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
 
   // Préserver le texte de la note en cours de saisie avant le re-render
-  const noteInput = document.getElementById('d-notes-input');
-  const preserved = noteInput ? {
-    value: noteInput.value,
-    rawVersion: noteInput.dataset.rawVersion || '',
-    crVersion: noteInput.dataset.crVersion || '',
-    viewMode: noteInput.dataset.viewMode || 'raw'
-  } : null;
+  const preserved = preserveNoteDraft();
 
   if(typeof openDetail === 'function') openDetail(currentId);
 
   // Restaurer après re-render
-  if(preserved){
-    const newInput = document.getElementById('d-notes-input');
-    if(newInput){
-      newInput.value = preserved.value;
-      newInput.dataset.rawVersion = preserved.rawVersion;
-      newInput.dataset.crVersion = preserved.crVersion;
-      newInput.dataset.viewMode = preserved.viewMode;
-    }
-  }
+  restoreNoteDraft(preserved);
 }
 
 </script>
@@ -3296,9 +3330,15 @@ async function createActionFromDetection(type, dateStr, time){
   // Cross-tab agenda sync : si une fiche est ouverte (currentId non null),
   // ré-appelle openDetail() qui re-trigger loadAgendaForFiche() en interne.
   // Si aucune fiche ouverte → no-op gratuit.
+  // La resynchro se déclenche aussi sur reprise de focus de la fenêtre : une
+  // note en cours de frappe ne doit pas être effacée par le re-render.
   attachAgendaSync({
     reloadFn: async function () {
-      if (currentId && typeof openDetail === 'function') await openDetail(currentId);
+      if (currentId && typeof openDetail === 'function') {
+        const brouillon = preserveNoteDraft();
+        await openDetail(currentId);
+        restoreNoteDraft(brouillon);
+      }
     }
   });
 

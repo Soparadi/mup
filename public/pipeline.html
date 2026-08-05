@@ -990,6 +990,9 @@ async function loadAgendaForFiche(ficheId) {
   }
 }
 
+// Rend true si les fiches viennent du serveur, false si elles viennent du
+// cache. Un repli sur le cache se dit : sans ça l'abonné lit un pipeline
+// peut-être périmé en le croyant à jour.
 async function load() {
   try {
     const res = await fetch('/api/pipeline');
@@ -999,8 +1002,10 @@ async function load() {
       card.id = card.id.replace(/^pipeline:/, '');
       return migrateCard(card);
     });
+    return true;
   } catch (err) {
     console.error('[load] Erreur API:', err);
+    toast('Serveur injoignable — affichage des données locales');
     // Fallback localStorage
     const s = localStorage.getItem('mup_pipeline');
     if(s) {
@@ -1013,10 +1018,16 @@ async function load() {
     } else {
       cards = MOCK.map(migrateCard);
     }
+    return false;
   }
 }
+// Rend true si le serveur a confirmé chaque fiche, false sinon. Le cache
+// localStorage n'est écrit que sur confirmation : un cache écrit après un
+// échec ferait croire à l'abonné que sa modification est enregistrée, et la
+// lui rejouerait telle quelle au rechargement suivant.
 async function save() {
   let rejected402 = false;
+  let echec = false;
   for (const card of cards) {
     if (card.id) {
       try {
@@ -1040,6 +1051,7 @@ async function save() {
         }
       } catch (err) {
         console.error('[save] Erreur pour carte', card.id, err);
+        echec = true;
       }
     }
   }
@@ -1048,12 +1060,18 @@ async function save() {
     // Le toast/modal est deja affiche par l'intercepteur 402 global (trial-expired-modal.js).
     await load();
     renderKanban();
-    return;
+    return false;
   }
-  // localStorage = cache lecture / tampon hors-ligne : ecrit sur succes serveur ou
-  // sur erreur reseau/5xx (offline), jamais sur l'etat optimiste refuse (402).
+  if (echec) {
+    // Réseau ou 5xx : le serveur n'a pas la modification. On le dit, et on
+    // n'écrit pas le cache.
+    toast('Modification non enregistrée');
+    return false;
+  }
+  // localStorage = cache de lecture : ecrit sur confirmation serveur uniquement.
   localStorage.setItem('mup_pipeline', JSON.stringify(cards));
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch (_) {}
+  return true;
 }
 
 function migratePipelineFromContacts(){
@@ -2109,6 +2127,7 @@ function syncToProspects(c) {
 let toastTimer;
 function toast(msg){
   const el = document.getElementById('toast');
+  if(!el) return; // load() peut toaster avant que #toast soit analysé
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(toastTimer);

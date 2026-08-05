@@ -56,7 +56,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .btn-add-card:hover{background:#000}
 
 /* ── REPLI DE LA TOPBAR (patron de prospection.html) ──────────────
-   Une fois un filtre ou un tri appliqué, la rangée indicateurs + recherche + tri
+   Une fois un filtre appliqué, la rangée indicateurs + recherche
    n'a plus à occuper la hauteur : elle se replie en une ligne de résumé rappelant
    les critères retenus. Ouverte par défaut (aucune classe .collapsed au chargement)
    → elle l'est aussi à la réouverture de la page, état non persisté. « Modifier »
@@ -532,14 +532,6 @@ body:not(.focus-mode) #focus-activity-grid{display:none!important}
       <div class="pipeline-search-wrap">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted2);pointer-events:none"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input id="pipeline-search-input" type="text" placeholder="Rechercher un client, une catégorie, un secteur…" oninput="filterCards(this.value)">
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
-        <span style="font-size:11px;color:var(--muted)">Trier par</span>
-        <select style="border:1.5px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11.5px;font-family:var(--font);color:var(--text);background:var(--card);cursor:pointer;outline:none" onchange="sortCards(this.value)">
-          <option value="recent">Plus récent</option>
-          <option value="value">Valeur ↓</option>
-          <option value="name">Nom A→Z</option>
-        </select>
       </div>
     </div>
     <!-- ── RÉSUMÉ REPLIÉ : visible seulement quand .topbar.collapsed ── -->
@@ -1189,8 +1181,6 @@ function totalInProgress() {
 let pipelineSearchQuery = '';
 let pipelineSearchRaw = '';
 let pipelineColFilter = null;
-let pipelineSortBy = 'recent';
-let pipelineSortApplied = false;
 
 function updatePipelineKpiChips(){
   const cols = ['prospects','phoning','visio','rdv','devis'];
@@ -1210,7 +1200,7 @@ function filterByCol(col){
 }
 
 // ── Repli / réouverture de la topbar (patron de prospection.html) ──────
-// Critères retenus, dans l'ordre : filtre colonne, recherche, tri.
+// Critères retenus, dans l'ordre : filtre colonne, recherche.
 function _pipelineSummaryChips(){
   var chips = [];
   if(pipelineColFilter){
@@ -1218,14 +1208,10 @@ function _pipelineSummaryChips(){
     chips.push(['Filtre', col ? col.name : pipelineColFilter]);
   }
   if(pipelineSearchRaw) chips.push(['Recherche', pipelineSearchRaw]);
-  if(pipelineSortApplied){
-    var labels = { recent:'Plus récent', value:'Valeur ↓', name:'Nom A→Z' };
-    chips.push(['Tri', labels[pipelineSortBy] || pipelineSortBy]);
-  }
   return chips;
 }
 // Replie la topbar en ligne de résumé (les valeurs saisies restent intactes,
-// simplement masquées). Rappelée après chaque filtre/tri : replie s'il reste un
+// simplement masquées). Rappelée après chaque filtre : replie s'il reste un
 // critère actif, rouvre sinon — jamais de résumé vide.
 function refreshTopbarCollapse(){
   var chips = _pipelineSummaryChips();
@@ -1266,7 +1252,7 @@ function filterCards(query){
   pipelineSearchRaw = String(query||'').trim();
   pipelineSearchQuery = normalize(pipelineSearchRaw);
   // Pas de repli ici : la saisie est continue, replier masquerait le champ
-  // en cours de frappe. La recherche apparaît en résumé si un filtre/tri replie.
+  // en cours de frappe. La recherche apparaît en résumé si un filtre replie.
   renderKanban();
 }
 
@@ -2226,17 +2212,6 @@ function logActivity(id, txt) {
   const now = new Date();
   c.activity.push({ txt, date: now.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) });
   save();
-}
-
-// ── TRI ──
-function sortCards(by) {
-  if(by==='value') cards.sort((a,b)=>(b.val||0)-(a.val||0));
-  else if(by==='name') cards.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  else cards.sort((a,b)=>(b.days||0)-(a.days||0));
-  pipelineSortBy = by;
-  pipelineSortApplied = true;
-  save(); renderKanban();
-  refreshTopbarCollapse();
 }
 
 // ── IMPORT DEPUIS PROSPECTS ──

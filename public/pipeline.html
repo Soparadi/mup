@@ -966,7 +966,7 @@ async function save() {
   if (echec) {
     // Réseau ou 5xx : le serveur n'a pas la modification. On le dit, et on
     // n'écrit pas le cache.
-    toast('Modification non enregistrée');
+    toast('Modification non enregistrée — réessayez');
     return false;
   }
   // localStorage = cache de lecture : ecrit sur confirmation serveur uniquement.
@@ -2085,7 +2085,10 @@ function toast(msg){
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+  // 3400 ms et non 2400 : un message d'échec doit rester lisible par quelqu'un
+  // qui regardait ailleurs au moment où il paraît. Durée unique pour toute la
+  // page — rien ne justifie d'en donner moins aux autres messages.
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3400);
 }
 
 // Enrichissement fiche détail — calque de #c-enrich (contact-societe.html).

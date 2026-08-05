@@ -769,11 +769,12 @@ function advanceCardColumn(card, targetColId) {
   const currentIdx = stageIndex(card.col);
   const targetIdx = stageIndex(targetColId);
   if(targetIdx <= currentIdx) return false;
+  noterEtapeVie(card, targetColId);
   card.col = targetColId;
   const targetName = STAGES.find(s => s.id === targetColId)?.name || targetColId;
   const now = new Date();
   const timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  logActivity(card.id, 'Déplacé vers ' + targetName + ' à ' + timeStr);
+  logActivity(card.id, 'Déplacé vers ' + targetName + ' à ' + timeStr, 'move', targetColId);
   return true;
 }
 
@@ -999,12 +1000,14 @@ function migratePipelineFromContacts(){
         source: 'facture_import',
         contact_id: c.id,
         created_at: c.created_at || new Date().toISOString(),
+        wonAt: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }));
       changed = true;
     } else {
       var f = cards[idx];
       if(f.col !== 'won' || (f.value || f.val || 0) !== (c.ca_total || 0) || f.source !== 'facture_import'){
+        noterEtapeVie(f, 'won');
         f.col = 'won';
         f.value = c.ca_total || 0;
         f.val = c.ca_total || 0;
@@ -1043,6 +1046,27 @@ function migrateCard(c){
 }
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Dates de vie d'une fiche. À appeler AVANT l'écriture de card.col :
+// lostFromCol retient l'étape quittée, que l'affectation effacerait. Ces trois
+// champs sont la source qui manquait à l'analyse des pertes et à la durée de
+// cycle, qui les lisaient sans que rien ne les écrive.
+function noterEtapeVie(card, nouvelleCol){
+  if(!card || !nouvelleCol || card.col === nouvelleCol) return;
+  if(nouvelleCol === 'won') card.wonAt = new Date().toISOString();
+  if(nouvelleCol === 'lost') card.lostFromCol = card.col || null;
+}
+
+// J+N compté depuis la création. Calculé à l'affichage et non stocké : un
+// compteur écrit sur la fiche se fige au jour de sa dernière sauvegarde.
+function joursDepuisCreation(c){
+  const src = c && (c.createdAt || c.created_at);
+  if(!src) return 0;
+  const t = new Date(src).getTime();
+  if(isNaN(t)) return 0;
+  const j = Math.floor((Date.now() - t) / 86400000);
+  return j > 0 ? j : 0;
+}
 
 // Liens sociaux de la fiche. La valeur vient d'un champ libre ou d'un
 // enrichissement : elle n'est posée en href que si elle est bien une adresse
@@ -1249,7 +1273,7 @@ function renderCard(c, color) {
     ${(c.sector||c.naf_label||c.naf)?`<div class="card-naf-pill">${esc(c.sector||c.naf_label||c.naf)}</div>`:''}
     <div class="kcard-foot">
       <div class="kcard-val">${valFmt||'0,00 €'}</div>
-      <div class="kcard-days">J+${c.days||0}</div>
+      <div class="kcard-days">J+${joursDepuisCreation(c)}</div>
     </div>
     ${c.src?`<div class="kcard-src">↳ ${esc(c.src)}</div>`:''}
     ${renderProgress(c)}
@@ -1285,12 +1309,13 @@ function onDrop(e, colId) {
   if(!dragId) return;
   const card = cards.find(c => String(c.id) === String(dragId));
   if(card) {
+    noterEtapeVie(card, colId);
     card.col = colId;
     save();
     renderKanban();
     var now = new Date();
     var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-    logActivity(dragId, 'Déplacé vers ' + COLS.find(c=>c.id===colId)?.name+' à '+timeStr);
+    logActivity(dragId, 'Déplacé vers ' + COLS.find(c=>c.id===colId)?.name+' à '+timeStr, 'move', colId);
   }
   dragId = null;
 }
@@ -1355,17 +1380,19 @@ function saveCard() {
   };
   if(editingId) {
     const c = cards.find(x=>x.id===editingId);
-    if(c) Object.assign(c, fields);
+    if(c) { noterEtapeVie(c, fields.col); Object.assign(c, fields); }
   } else {
-    cards.push({
+    const nouvelle = {
       id: String('c'+Date.now()),
       ...fields,
-      days: 0,
+      createdAt: new Date().toISOString(),
       src: 'Manuel',
       entity_origine: 'mup',
       activity: [],
       noteEntries: []
-    });
+    };
+    if(nouvelle.col === 'won') nouvelle.wonAt = nouvelle.createdAt;
+    cards.push(nouvelle);
   }
   save(); closeModal(); renderKanban();
   // Notifie les autres onglets (Contacts notamment) d'un changement
@@ -1437,7 +1464,7 @@ async function openDetail(id) {
   document.getElementById('d-badges').innerHTML = `
     <span class="detail-badge" style="background:${col?.color}22;color:${col?.color}">${col?.name||''}</span>
     <span class="detail-badge" style="background:var(--surface2);color:var(--muted)">${val}</span>
-    <span class="detail-badge" style="background:var(--surface2);color:var(--muted2)">J+${c.days||0}</span>
+    <span class="detail-badge" style="background:var(--surface2);color:var(--muted2)">J+${joursDepuisCreation(c)}</span>
     ${c.src?`<span class="detail-badge" style="background:var(--surface2);color:var(--muted2)">↳ ${esc(c.src)}</span>`:''}
   `;
 
@@ -1445,7 +1472,7 @@ async function openDetail(id) {
   document.getElementById('d-focus-cat').textContent = c.sector || c.naf_label || c.naf || '—';
   document.getElementById('d-focus-name').textContent = _nomD.titre || '—';
   document.getElementById('d-focus-sub').textContent = _nomD.sousTitre;
-  document.getElementById('d-focus-pills').innerHTML = `<span class="pill pill-phoning">${esc(col?.name || 'Prospects')}</span><span class="pill pill-neutral">—</span><span class="pill pill-day">J+${c.days || 0}</span>`;
+  document.getElementById('d-focus-pills').innerHTML = `<span class="pill pill-phoning">${esc(col?.name || 'Prospects')}</span><span class="pill pill-neutral">—</span><span class="pill pill-day">J+${joursDepuisCreation(c)}</span>`;
 
   // Info grid
   let infoHtml = '';
@@ -2143,7 +2170,7 @@ function quickAction(type) {
   const c = cards.find(x=>x.id===currentId);
   if(!c) return;
   const labels = { mailing:'Mailing envoyé', phoning:'Appel effectué', rdv:'RDV planifié' };
-  logActivity(currentId, labels[type]||type);
+  logActivity(currentId, labels[type]||type, type, null);
   // Auto-advance colonne (no-regress, ne sort pas de lost/won)
   if(advanceCardColumn(c, type)) {
     save(); renderKanban();
@@ -2154,16 +2181,26 @@ function quickAction(type) {
 function moveCard(colId) {
   if(!currentId) return;
   const c = cards.find(x=>x.id===currentId);
-  if(c) { c.col=colId; var now = new Date(); var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); logActivity(currentId,'Déplacé vers '+COLS.find(x=>x.id===colId)?.name+' à '+timeStr); save(); renderKanban(); }
+  if(c) { noterEtapeVie(c, colId); c.col=colId; var now = new Date(); var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); logActivity(currentId,'Déplacé vers '+COLS.find(x=>x.id===colId)?.name+' à '+timeStr, 'move', colId); save(); renderKanban(); }
 }
 function editCurrentCard() { closeDetail(); editCard(currentId); }
 function deleteCurrentCard() { if(confirm('Supprimer cette fiche ?')) { deleteCard(currentId); } }
-function logActivity(id, txt) {
+// Une entrée d'activité porte désormais de quoi être relue par une machine :
+// type (nature du geste), toCol (colonne d'arrivée d'un déplacement, sinon
+// null) et ts en ISO. txt et date restent : ils sont ce que l'écran affiche,
+// et les entrées déjà écrites ne les ont pas perdus.
+function logActivity(id, txt, type, toCol) {
   const c = cards.find(x=>String(x.id)===String(id));
   if(!c) return;
   if(!c.activity) c.activity=[];
   const now = new Date();
-  c.activity.push({ txt, date: now.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) });
+  c.activity.push({
+    txt,
+    date: now.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}),
+    type: type || 'note',
+    toCol: toCol || null,
+    ts: now.toISOString()
+  });
   save();
 }
 
@@ -2175,7 +2212,7 @@ function importFromProspects() {
     const prospects = JSON.parse(raw);
     prospects.forEach(p => {
       if(!cards.find(c=>String(c.id)===String(p.id))) {
-        cards.push({ id:String(p.id), name:p.name||p.contact_name||p.nom||'', co:p.company||p.co||p.partner_name||'', email:p.email||p.email_from||'', tel:p.phone||p.tel||p.mobile||'', address:p.location||p.address||p.city||p.ville||'', val:0, col:'prospects', notes:p.notes||p.description||'', days:0, src:p.source||'Prospects', linkedin:p.linkedin||'', facebook:p.facebook||'', instagram:p.instagram||'', activity:[] });
+        cards.push({ id:String(p.id), name:p.name||p.contact_name||p.nom||'', co:p.company||p.co||p.partner_name||'', email:p.email||p.email_from||'', tel:p.phone||p.tel||p.mobile||'', address:p.location||p.address||p.city||p.ville||'', val:0, col:'prospects', notes:p.notes||p.description||'', createdAt:new Date().toISOString(), src:p.source||'Prospects', linkedin:p.linkedin||'', facebook:p.facebook||'', instagram:p.instagram||'', activity:[] });
       }
     });
     save(); renderKanban();
@@ -2283,7 +2320,7 @@ function importFromProspects() {
       <div class="kcard-co">${escapeHtml(c.co ? c.name : '')}</div>
       <div class="kcard-foot">
         <span class="kcard-val">${val}</span>
-        <span class="kcard-days">J+${c.days || 0}</span>
+        <span class="kcard-days">J+${joursDepuisCreation(c)}</span>
       </div>
     `;
     div.onclick = () => {
@@ -2431,7 +2468,7 @@ function importFromProspects() {
         instagram: ct.instagram || '',
         col: ct.col || 'leads',
         val: 0,
-        days: 0,
+        createdAt: ct.createdAt || ct.created_at || new Date().toISOString(),
         src: ct.source || 'contacts',
         activity: ct.activity || [],
         noteEntries: ct.noteEntries || []

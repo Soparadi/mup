@@ -41,12 +41,13 @@ import {
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable, markGisementComplete } from './server/services/referentiel.js'
 import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
+import { runActualitesMigration } from './server/services/actualites.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
 import { runMentionsLegalesJob } from './server/services/mentions-legales.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
-import { startCronJobs } from './server/services/cron.js'
+import { startCronJobs, startActualitesCron } from './server/services/cron.js'
 import {
   getEffectivePlan,
   getLeadLimit,
@@ -5750,6 +5751,14 @@ app.use((req, res) => {
   } catch (e) {
     console.error('[boot] referentiel_osm migration failed:', e.message)
   }
+  // Actualités — table actualites (clé guid), alimentée par le cron toutes les
+  // quinze minutes et lue par /api/public/actualites. Vide au boot.
+  try {
+    await runActualitesMigration()
+    console.log('[boot] actualites table ready (+ 2 indexes)')
+  } catch (e) {
+    console.error('[boot] actualites migration failed:', e.message)
+  }
   // Cron trial — node-cron in-process déclenché à 8h Europe/Paris.
   // Skip si NODE_ENV !== 'production' (évite spam emails en dev) ou
   // si CRON_ENABLED === 'false' (override Railway).
@@ -5761,6 +5770,15 @@ app.use((req, res) => {
     }
   } else {
     console.log('[boot] cron skipped (NODE_ENV !== production)')
+  }
+  // Cron actualités — HORS du garde NODE_ENV ci-dessus, volontairement : ce
+  // garde protège des envois de courriels en dev, or un ramassage de flux
+  // n'envoie rien. Seul CRON_ENABLED === 'false' l'arrête (le skip est décidé
+  // dans startActualitesCron, comme pour le cron trial).
+  try {
+    startActualitesCron()
+  } catch (e) {
+    console.error('[boot] cron actualités startup failed:', e.message)
   }
 })()
 

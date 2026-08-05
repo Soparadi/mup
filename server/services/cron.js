@@ -1,6 +1,8 @@
-// Cron in-process pour les emails de relance trial + auto-expire.
-// Démarré une fois au boot de server.js si NODE_ENV=production et
-// CRON_ENABLED !== 'false'. Schedule par défaut : 8h00 Europe/Paris quotidien.
+// Cron in-process. Deux horloges indépendantes :
+//   • trial — emails de relance + auto-expire, démarré au boot de server.js si
+//     NODE_ENV=production et CRON_ENABLED !== 'false'. Défaut : 8h Europe/Paris.
+//   • actualités — ramassage du flux France 24, toutes les quinze minutes,
+//     démarré sous CRON_ENABLED seul (voir startActualitesCron plus bas).
 //
 // Idempotence : garantie par les flags DB trial_email_j*_sent_at posés par
 // trial-emails.js après chaque envoi. Le cron peut tourner plusieurs fois
@@ -22,9 +24,11 @@ import {
 } from './trial-emails.js'
 import { purgeExpiredUsers, purgeExpiredTrials, deleteUserCascade } from './purge-expired.js'
 import { sendAccountDeletionConfirmed } from './email.js'
+import { ramasserActualites } from './actualites.js'
 
 const SCHEDULE = process.env.CRON_TRIAL_SCHEDULE || '0 8 * * *'
 const TIMEZONE = process.env.CRON_TIMEZONE || 'Europe/Paris'
+const ACTUALITES_SCHEDULE = process.env.CRON_ACTUALITES_SCHEDULE || '*/15 * * * *'
 
 // Helper d'audit cron — pattern aligné sur logAuditEvent de surreal-adapter
 // mais inline ici pour éviter une dépendance croisée. Échec silencieux :
@@ -49,18 +53,23 @@ async function logCronAudit(event, metadata) {
 
 // Wrapper try/catch par fonction : si une étape plante, les autres continuent.
 // Retourne le résumé pour log audit.
-async function runStep(name, fn) {
+//
+// prefixe — préfixe de l'event d'audit. Défaut 'cron:trial:' : les huit étapes
+// existantes gardent mot pour mot l'event qu'elles écrivaient déjà. Le ramassage
+// d'actualités, lui, passe 'cron:actualites:' — deux horloges, deux familles
+// d'events, aucun mélange à la relecture de l'audit.
+async function runStep(name, fn, prefixe = 'cron:trial:') {
   const startedAt = Date.now()
   try {
     const result = await fn()
     const ms = Date.now() - startedAt
     console.log(`[cron] ${name} terminé en ${ms}ms :`, JSON.stringify(result))
-    await logCronAudit(`cron:trial:${name}`, { ...result, duration_ms: ms })
+    await logCronAudit(`${prefixe}${name}`, { ...result, duration_ms: ms })
     return result
   } catch (e) {
     const ms = Date.now() - startedAt
     console.error(`[cron] ${name} planté en ${ms}ms :`, e.message)
-    await logCronAudit(`cron:trial:${name}`, { error: e.message, duration_ms: ms })
+    await logCronAudit(`${prefixe}${name}`, { error: e.message, duration_ms: ms })
     return { error: e.message }
   }
 }
@@ -114,7 +123,14 @@ async function runAccountDeletions() {
   return { processed, total: users.length }
 }
 
+// Ramassage du flux d'actualités. Une seule étape, sous le même wrapper que les
+// huit autres (audit + durée), mais sous son propre préfixe d'event.
+async function runActualitesJob() {
+  await runStep('ramassage', ramasserActualites, 'cron:actualites:')
+}
+
 let started = false
+let actualitesStarted = false
 
 // Démarre le cron quotidien. Idempotent : 2e appel = no-op (évite double
 // register en cas de hot reload). Skip si CRON_ENABLED === 'false'.
@@ -134,4 +150,31 @@ export function startCronJobs() {
   cron.schedule(SCHEDULE, runTrialJobs, { timezone: TIMEZONE })
   started = true
   console.log(`[cron] Trial cron jobs démarrés (schedule: ${SCHEDULE}, timezone: ${TIMEZONE})`)
+}
+
+// Démarre le cron d'actualités. Idempotent, comme startCronJobs, et skip sous
+// CRON_ENABLED === 'false'.
+//
+// DIFFÉRENCE ASSUMÉE avec le cron trial : PAS de garde NODE_ENV. Le garde de
+// production existe parce que le cron trial ENVOIE DES COURRIELS — le lancer en
+// dev inonderait de vraies boîtes de vrais abonnés. Un ramassage d'actualités
+// n'envoie rien, ne touche à aucun compte, n'écrit que dans sa propre table :
+// il n'y a rien à protéger d'un lancement hors production, et le faire tourner
+// en dev est même la seule façon d'y voir un bandeau garni.
+export function startActualitesCron() {
+  if (actualitesStarted) {
+    console.warn('[cron] startActualitesCron déjà appelé, skip')
+    return
+  }
+  if (process.env.CRON_ENABLED === 'false') {
+    console.log('[cron] CRON_ENABLED=false, cron actualités désactivé')
+    return
+  }
+  if (!cron.validate(ACTUALITES_SCHEDULE)) {
+    console.error('[cron] Schedule actualités invalide :', ACTUALITES_SCHEDULE, '— cron NON démarré')
+    return
+  }
+  cron.schedule(ACTUALITES_SCHEDULE, runActualitesJob, { timezone: TIMEZONE })
+  actualitesStarted = true
+  console.log(`[cron] Actualités cron démarré (schedule: ${ACTUALITES_SCHEDULE}, timezone: ${TIMEZONE})`)
 }

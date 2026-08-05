@@ -41,7 +41,7 @@ import {
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable, markGisementComplete } from './server/services/referentiel.js'
 import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
-import { runActualitesMigration } from './server/services/actualites.js'
+import { runActualitesMigration, lireActualites } from './server/services/actualites.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
@@ -761,6 +761,39 @@ app.get('/api/public/search-demo', async (req, res) => {
     res.json({ total: totalEstimated, totalCapped, preview, markers })
   } catch (e) {
     console.error('[public:search-demo]', e.message)
+    res.status(502).json({ error: 'Service temporairement indisponible' })
+  }
+})
+
+// Bandeau d'actualités du tableau de bord. Publique et déclarée ICI, AVANT le
+// portillon d'authentification, sur le modèle de /api/public/search-demo : le
+// bandeau s'affiche aussi sur des pages non authentifiées, et une manchette de
+// presse n'est le secret de personne.
+//
+// Ne rend que ce que le bandeau affiche : titre, lien, date, source. Jamais la
+// description — elle est stockée, elle n'a pas d'usage à l'écran aujourd'hui, et
+// on n'expose pas un champ « au cas où ».
+const ACTUALITES_AFFICHEES = 12
+
+app.get('/api/public/actualites', async (req, res) => {
+  try {
+    const rows = await lireActualites(ACTUALITES_AFFICHEES)
+    const items = rows.map(r => {
+      // published_at revient en datetime natif : rendu en ISO, jamais l'objet brut.
+      // Passage par getTime() plutôt que toISOString() direct — celui-ci lève sur
+      // une date invalide, et une ligne douteuse ne doit pas coûter 502 aux onze
+      // autres manchettes.
+      const t = r.published_at ? new Date(r.published_at).getTime() : NaN
+      return {
+        titre: String(r.title || ''),
+        lien: String(r.link || ''),
+        date: Number.isFinite(t) ? new Date(t).toISOString() : null,
+        source: String(r.source || '')
+      }
+    })
+    res.json({ items })
+  } catch (e) {
+    console.error('[public:actualites]', e.message)
     res.status(502).json({ error: 'Service temporairement indisponible' })
   }
 })

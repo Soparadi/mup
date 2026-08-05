@@ -1383,10 +1383,27 @@ async function renderDashboardAgenda() {
 // (fire-and-forget, exactement comme avant).
 renderDashboardAgenda();
 
-// Cross-tab sync : invalide _agendaCache puis re-déclenche renderDashboardAgenda
+// Cross-tab sync : invalide les deux caches puis re-déclenche
+// renderDashboardAgenda. _pipelineCache manquait à l'appel — le tableau de
+// bord lit les fiches autant que les évènements (KPI, entonnoir, colonne du
+// jour), et servait pendant 30 s un pipeline que l'autre onglet venait de
+// changer.
 attachAgendaSync({
-  invalidateCacheFn: function () { _agendaCache = null; _agendaCacheTime = 0; },
+  invalidateCacheFn: function () {
+    _agendaCache = null; _agendaCacheTime = 0;
+    _pipelineCache = null; _pipelineCacheTime = 0;
+  },
   reloadFn: async function () { await renderDashboardAgenda(); }
+});
+
+// Un changement de pipeline (fiche créée, déplacée, supprimée) doit repeindre
+// le tableau de bord au même titre qu'un changement d'agenda. attachAgendaSync
+// n'écoute que mup_agenda.
+window.addEventListener('storage', function (e) {
+  if (e && e.key === 'mup_pipeline') {
+    _pipelineCache = null; _pipelineCacheTime = 0;
+    renderDashboardAgenda();
+  }
 });
 </script>
 <footer class="mup-app-footer">

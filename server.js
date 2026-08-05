@@ -1697,6 +1697,15 @@ app.delete('/api/pipeline/:id', async (req, res) => {
       return res.status(404).json({ error: 'Carte introuvable' })
     }
     await db.query('DELETE type::record("pipeline", $id)', { id })
+    // Cascade : les évènements agenda créés depuis cette fiche portent son
+    // ficheId. Sans ce geste ils survivaient à la fiche et restaient au
+    // calendrier en pointant vers un prospect disparu. Le WHERE userId porte
+    // le contrôle d'appartenance, en plus de celui déjà fait sur la fiche
+    // elle-même juste au-dessus.
+    await db.query(
+      'DELETE agenda WHERE userId = $userId AND ficheId = $ficheId',
+      { userId, ficheId: String(id) }
+    )
     res.json({ ok: true })
   } catch (err) {
     console.error('[pipeline]', err)

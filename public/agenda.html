@@ -906,6 +906,11 @@ fetchWeather();
 // Rafraîchissement temps réel quand mup_pipeline ou mup_agenda changent
 window.addEventListener('storage', function(e){
   if(!e.key || e.key === 'mup_pipeline' || e.key === 'mup_agenda'){
+    // Purger AVANT de recharger : _loadPipeline et _loadAgenda servent leur
+    // cache pendant 30 s. Sans cette purge, l'écouteur rechargeait les mêmes
+    // données périmées et le signal de l'autre onglet ne changeait rien.
+    _pipelineCache = null; _pipelineCacheTime = 0;
+    _agendaCache = null; _agendaCacheTime = 0;
     loadEvents().then(function(){
       if(typeof renderCal === 'function') renderCal();
       if(typeof renderDay === 'function') renderDay();

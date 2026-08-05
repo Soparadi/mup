@@ -14,6 +14,16 @@ html, body, * {
 /* left = var(--sidebar-w) — la même source que aside#sidebar       */
 /* ================================================================ */
 
+/* Hauteur du pied — SOURCE UNIQUE, aucune page ne la redéclare.
+   Le pied étant en position fixed, il ne pousse rien : chaque page
+   consomme cette variable pour réserver la place correspondante.
+
+   38,25px = 1 (border-top) + 10 (padding) + 17,25 (11,5px × 1.5)
+             + 10 (padding). Voir l'override ≤640px en bas de fichier. */
+:root{
+  --app-footer-h: 38.25px;
+}
+
 .mup-app-footer{
   position: fixed;
   bottom: 0;
@@ -27,6 +37,10 @@ html, body, * {
   padding: 10px 24px;
 
   font-size: 11.5px;
+  /* Déclaré, jamais hérité : sans cette ligne le pied prend le
+     line-height du body de chaque page (1.6, 1.55, 1.5 ou normal
+     selon les fichiers) et sa hauteur varie d'une page à l'autre. */
+  line-height: 1.5;
   color: var(--muted, #7A7A7A);
   font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -67,6 +81,15 @@ html, body, * {
 }
 
 @media (max-width: 640px){
+  /* L'inner passe en colonne : le pied fait au moins deux rangées.
+     78,5px = 1 + 8 + 16,5 (© MovUP) + 4 (gap inner)
+              + 16,5 + 8 + 16,5 (nav sur deux lignes) + 8.
+     Dimensionné sur le cas téléphone où les huit liens ne tiennent
+     pas sur une ligne ; entre 548 et 640px la réserve dépasse de
+     24,5px — du blanc, jamais du contenu masqué. */
+  :root{
+    --app-footer-h: 78.5px;
+  }
   .mup-app-footer{
     padding: 8px 14px;
     font-size: 11px;

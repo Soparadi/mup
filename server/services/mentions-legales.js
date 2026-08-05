@@ -88,9 +88,16 @@ function schedule(task) {
   return p
 }
 
+// Valeurs par défaut du GET poli — CELLES DE TOUJOURS. Tout appelant qui ne passe
+// pas d'option retrouve exactement le comportement d'avant l'ajout des options :
+// en-tête Accept orienté page web, et filtre de content-type qui n'accepte que du
+// HTML/texte. Un appelant qui vise un autre type (flux XML) les remplace toutes deux.
+const ACCEPT_DEFAUT = 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5'
+const CONTENT_TYPE_RE_DEFAUT = /text\/html|application\/xhtml|text\/plain/i
+
 // Un GET poli et borné. Rend { text, finalUrl } ou null (jamais de throw).
 // finalUrl = URL après redirections (pour host / bonus même-domaine).
-async function doFetch(url) {
+async function doFetch(url, accept, contentTypeRe) {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
@@ -101,7 +108,7 @@ async function doFetch(url) {
         signal: ctrl.signal,
         headers: {
           'User-Agent': USER_AGENT,
-          'Accept': 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5'
+          'Accept': accept
         }
       })
       clearTimeout(timer)
@@ -113,7 +120,7 @@ async function doFetch(url) {
         return null
       }
       const ct = r.headers.get('content-type') || ''
-      if (ct && !/text\/html|application\/xhtml|text\/plain/i.test(ct)) return null
+      if (ct && !contentTypeRe.test(ct)) return null
       let text = await r.text()
       if (text.length > MAX_BYTES) text = text.slice(0, MAX_BYTES)
       return { text, finalUrl: r.url || url }
@@ -255,10 +262,23 @@ function complementCrawl(crawlDelaySec) {
   return cdMs > MIN_INTERVAL_MS ? cdMs - MIN_INTERVAL_MS : 0
 }
 
-// Sérialise l'appel derrière la file mono-verrou. Exportée pour recherche-web.js.
-// Passe d'abord le portillon robots.txt de l'hôte (résolution + cache par hôte). Refus
-// robots → null, exactement comme un échec réseau : signature publique inchangée.
-export async function politeFetchText(url) {
+// Sérialise l'appel derrière la file mono-verrou. Exportée pour recherche-web.js et
+// actualites.js. Passe d'abord le portillon robots.txt de l'hôte (résolution + cache
+// par hôte). Refus robots → null, exactement comme un échec réseau.
+//
+// options (toutes facultatives, défauts = comportement historique à l'identique) :
+//   • accept        — valeur de l'en-tête Accept (défaut : ACCEPT_DEFAUT).
+//   • contentTypeRe — filtre appliqué au content-type de la réponse (défaut :
+//     CONTENT_TYPE_RE_DEFAUT). RegExp SANS drapeau /g : .test sur une regex globale
+//     est apatride entre appels seulement si lastIndex n'est jamais avancé.
+//
+// Ce qui n'est PAS paramétrable, et reste donc commun à tous les appelants : le verrou
+// mono-file, le portillon robots, le timeout, le plafond de taille et les reprises.
+// Un appelant ne peut ni doubler la file ni s'exonérer du robots.txt.
+export async function politeFetchText(url, options = {}) {
+  const accept = options.accept || ACCEPT_DEFAUT
+  const contentTypeRe = options.contentTypeRe || CONTENT_TYPE_RE_DEFAUT
+
   const u = normalizeUrl(url)
   if (!u) return null
 
@@ -279,7 +299,7 @@ export async function politeFetchText(url) {
   const complement = complementCrawl(gate.crawlDelaySec)
   const res = await schedule(async () => {
     if (complement > 0) await sleep(complement)
-    return doFetch(u)
+    return doFetch(u, accept, contentTypeRe)
   })
   if (!res) return null
 

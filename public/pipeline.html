@@ -1398,31 +1398,25 @@ function saveCard() {
   // Notifie les autres onglets (Contacts notamment) d'un changement
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
 }
-// La corbeille d'une carte supprime la fiche dans DEUX tables, pipeline et
-// contacts. Geste irréversible : on le fait confirmer, et on le dit.
+// La corbeille du Kanban enlève la fiche DU PIPELINE. Elle ne supprime pas le
+// contact : ce sont deux gestes distincts, et le second appartient à Contacts.
 function confirmDeleteCard(id) {
-  if(confirm('Supprimer cette fiche ? Elle sera retirée du pipeline et des contacts.')) {
+  if(confirm('Voulez-vous enlever cette fiche du pipeline ?')) {
     deleteCard(id);
   }
 }
 async function deleteCard(id) {
-  // Suppression globale : pipeline + contacts. Une fiche peut exister dans
-  // l'une, l'autre ou les deux (créée manuellement /contacts vs via /prospection
-  // → addToPipeline). 404 acceptable sur la table où la fiche n'existe pas :
-  // le serveur a répondu, le record n'y est plus.
-  let pipelineOk = false, contactsOk = false;
+  // Une seule table touchée : pipeline. 404 vaut confirmation — le serveur a
+  // répondu, le record n'y est plus.
+  let pipelineOk = false;
   try {
-    const r1 = await fetch(`/api/pipeline/${id}`, { method: 'DELETE' });
-    pipelineOk = r1.ok || r1.status === 404;
+    const r = await fetch(`/api/pipeline/${id}`, { method: 'DELETE' });
+    pipelineOk = r.ok || r.status === 404;
   } catch (e) { /* pipelineOk reste false */ }
-  try {
-    const r2 = await fetch(`/api/contacts/${id}`, { method: 'DELETE' });
-    contactsOk = r2.ok || r2.status === 404;
-  } catch (e) { /* contactsOk reste false */ }
-  // Le retrait local n'a lieu que sur confirmation des DEUX tables. Sinon la
-  // fiche disparaîtrait de l'écran tout en restant sur le serveur, et
-  // reviendrait au prochain chargement.
-  if (!pipelineOk || !contactsOk) {
+  // Le retrait local est conditionné à cette seule réponse. Sur 500 ou coupure
+  // réseau la carte reste à l'écran : sinon elle disparaîtrait tout en restant
+  // sur le serveur, et reviendrait au prochain chargement.
+  if (!pipelineOk) {
     alert('Suppression non confirmée par le serveur. La fiche est conservée.');
     return;
   }
@@ -2184,7 +2178,9 @@ function moveCard(colId) {
   if(c) { noterEtapeVie(c, colId); c.col=colId; var now = new Date(); var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); logActivity(currentId,'Déplacé vers '+COLS.find(x=>x.id===colId)?.name+' à '+timeStr, 'move', colId); save(); renderKanban(); }
 }
 function editCurrentCard() { closeDetail(); editCard(currentId); }
-function deleteCurrentCard() { if(confirm('Supprimer cette fiche ?')) { deleteCard(currentId); } }
+// Même geste que la corbeille du Kanban, donc même libellé : « Supprimer cette
+// fiche ? » annonçait plus que ce qui se passe.
+function deleteCurrentCard() { if(confirm('Voulez-vous enlever cette fiche du pipeline ?')) { deleteCard(currentId); } }
 // Une entrée d'activité porte désormais de quoi être relue par une machine :
 // type (nature du geste), toCol (colonne d'arrivée d'un déplacement, sinon
 // null) et ts en ISO. txt et date restent : ils sont ce que l'écran affiche,

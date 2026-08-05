@@ -194,7 +194,7 @@ async function ecrireActualite(db, item) {
 async function purger(db) {
   await db.query(
     `LET $garder = (SELECT VALUE id FROM actualites ORDER BY published_at DESC LIMIT ${MAX_CONSERVEES});
-     DELETE actualites WHERE id NOT INSIDE $garder;`
+     DELETE actualites WHERE id NOT IN $garder;`
   )
 }
 
@@ -233,7 +233,16 @@ export async function ramasserActualites() {
 
     // Purge APRÈS écriture : le stock est au maximum de MAX_CONSERVEES + le lot
     // du jour pendant l'intervalle, jamais durablement.
-    if (resultat.ecrits > 0) await purger(db)
+    // Une purge qui échoue ne perd rien d'écrit, mais laisse le stock enfler :
+    // elle compte donc dans erreurs, sinon le ramassage se déclare sans faute.
+    if (resultat.ecrits > 0) {
+      try {
+        await purger(db)
+      } catch (e) {
+        resultat.erreurs++
+        console.warn('[actualites] purge —', String(e?.message || e).slice(0, 120))
+      }
+    }
 
     console.log(`[actualites] lus=${resultat.lus} écrits=${resultat.ecrits} erreurs=${resultat.erreurs}`)
   } catch (e) {

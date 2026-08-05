@@ -971,9 +971,20 @@ function renderSchedule(){
   function fmtMontant(n){ return (n||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
   function escTxt(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+  // Une fiche née du + du Pipeline stocke ses coordonnées sous lat/lng ;
+  // celles venues des factures sous latitude/longitude. Sans ce repli les
+  // premières n'apparaissaient jamais sur la carte.
+  function coordContact(ct){
+    if(!ct) return null;
+    var lat = parseFloat(ct.lat || ct.latitude);
+    var lng = parseFloat(ct.lng || ct.longitude);
+    return (isNaN(lat) || isNaN(lng)) ? null : [lat, lng];
+  }
+
   var contactMarkers = {};
   contacts.forEach(function(contact){
-    if(!contact.latitude || !contact.longitude) return;
+    var coord = coordContact(contact);
+    if(!coord) return;
     var couleur = COULEURS_ENTITE[contact.entity_origine] || '#666';
     var icon = L.divIcon({
       className: 'contact-marker',
@@ -981,7 +992,7 @@ function renderSchedule(){
       iconSize: [20, 20],
       iconAnchor: [10, 10]
     });
-    var marker = L.marker([contact.latitude, contact.longitude], { icon: icon }).addTo(map);
+    var marker = L.marker(coord, { icon: icon }).addTo(map);
     var nbFact = (contact.factures_ids || []).length;
     var stages = ['#6E6E73','#CC0000','#0A66C2','#B84C00','#4338CA','#7C3AED','#0BBCD4','#F59E0B','#EA580C','#1D8348'];
     var dotsHtml = '';
@@ -1007,8 +1018,9 @@ function renderSchedule(){
   if(m){
     var siret = decodeURIComponent(m[1]);
     var target = contacts.find(function(c){ return c.siret === siret; });
-    if(target && target.latitude && target.longitude){
-      map.setView([target.latitude, target.longitude], 14);
+    var coordTarget = coordContact(target);
+    if(coordTarget){
+      map.setView(coordTarget, 14);
       var mk = contactMarkers[siret];
       if(mk) setTimeout(function(){ mk.openPopup(); }, 300);
     }

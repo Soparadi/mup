@@ -881,9 +881,13 @@ function populate(){
   }
 
   // Meta line : forme juridique (depuis siren format ?), ville, suivi depuis N jours
-  if (c.forme_juridique) {
+  // Une fiche née du + du Pipeline porte `forme`, `notes` et `linkedin` ;
+  // celle née d'ici porte `forme_juridique`, `note_societe` et
+  // `societe_linkedin`. Aucune écriture ne change de nom : on lit les deux.
+  const formeAff = c.forme_juridique || c.forme || '';
+  if (formeAff) {
     document.getElementById('meta-forme').style.display = '';
-    document.getElementById('meta-forme-text').textContent = c.forme_juridique;
+    document.getElementById('meta-forme-text').textContent = formeAff;
   }
   // Ville : extraite du champ adresse (heuristique simple), ou zip
   const ville = c.ville || c.zip || '';
@@ -904,7 +908,7 @@ function populate(){
 
   // Champs informations
   document.getElementById('f-nom').value = c.nom || c.company || c.name || '';
-  document.getElementById('f-forme').value = c.forme_juridique || '';
+  document.getElementById('f-forme').value = c.forme_juridique || c.forme || '';
   document.getElementById('f-siren').value = c.siren || '';
   document.getElementById('f-siret').value = siretFormat(c.siret);
   document.getElementById('f-naf').value = c.code_naf || c.naf || '';
@@ -932,8 +936,8 @@ function populate(){
   document.getElementById('f-ville').value = fVille;
   // f-linkedin = LinkedIn SOCIÉTÉ (/company/) ; le LinkedIn personne (/in/) vit
   // dans le bloc personne (pf-linkedin). On lit donc societe_linkedin, pas c.linkedin.
-  document.getElementById('f-linkedin').value = c.societe_linkedin || '';
-  document.getElementById('f-note-societe').value = c.note_societe || '';
+  document.getElementById('f-linkedin').value = c.societe_linkedin || c.linkedin || '';
+  document.getElementById('f-note-societe').value = c.note_societe || c.notes || '';
   document.getElementById('f-facebook').value = c.facebook || '';
   document.getElementById('f-instagram').value = c.instagram || '';
 
@@ -1545,7 +1549,7 @@ function buildPipelineCard(col){
   return {
     id: pipelineLocalId(),
     co: c.nom || c.company || c.name || '',
-    forme: c.forme_juridique || '',
+    forme: c.forme_juridique || c.forme || '',
     siren: c.siren || '',
     siret: String(c.siret || '').replace(/\s+/g, ''),
     naf: c.code_naf || c.naf || '',
@@ -1554,12 +1558,12 @@ function buildPipelineCard(col){
     val: 0,
     address: addr || c.address || '',
     zip: c.zip || '',
-    linkedin: c.societe_linkedin || '',
+    linkedin: c.societe_linkedin || c.linkedin || '',
     facebook: c.facebook || '',
     instagram: c.instagram || '',
     societe_email: c.societe_email || '',
     societe_tel: c.societe_tel || '',
-    notes: c.note_societe || '',
+    notes: c.note_societe || c.notes || '',
     col: col,
     days: 0,
     src: 'Fiche contact',

@@ -1670,11 +1670,15 @@ app.put('/api/pipeline/:id', async (req, res) => {
     // NB : la route contacts étant polymorphe (id préfixé pipeline: → table pipeline),
     // une écriture par ce chemin fera aussi partir l'appel côté contacts. Sans
     // conséquence : l'enrichissement est additif et n'écrit que sur les champs vides.
+    // Le LinkedIn d'une carte est stocké sous `linkedin` — jamais sous
+    // `societe_linkedin`, que seule la fiche société écrit. On lisait donc une
+    // clé toujours absente, et aucun LinkedIn saisi depuis une carte ne
+    // remontait au référentiel. L'ancienne clé reste en repli.
     enrichReferentielActionnable(cleanBody.siret, {
       website: cleanBody.website,
       societe_email: cleanBody.societe_email,
       societe_tel: cleanBody.societe_tel,
-      societe_linkedin: cleanBody.societe_linkedin
+      societe_linkedin: cleanBody.linkedin || cleanBody.societe_linkedin
     })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {

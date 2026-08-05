@@ -980,7 +980,10 @@ function loadCampaignRecipients(){
   var col = document.getElementById('cm-pipeline-col').value;
   var cards = window.__pipelineCards || [];
   var filtered = col ? cards.filter(function(c){ return (c.col || '') === col; }) : cards;
-  var recipients = filtered.map(function(c){ var email = c.email || c.mail || c.contactEmail; if(!email) return null;
+  // societe_email en repli : une fiche créée par le + du Pipeline ne remplit
+  // que ce champ-là. Sans ce repli elle n'était jamais destinataire d'une
+  // campagne, alors qu'elle porte bien une adresse.
+  var recipients = filtered.map(function(c){ var email = c.email || c.societe_email || c.mail || c.contactEmail; if(!email) return null;
     return { email, prenom: (c.contactFirstName || c.firstName || (c.name || '').split(' ')[0] || '').trim(), entreprise: (c.co || c.company || '').trim(), secteur: (c.naf || c.sector || '').trim(), ville: (c.city || '').trim() };
   }).filter(Boolean);
   window.__currentRecipients = recipients;

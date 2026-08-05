@@ -962,7 +962,10 @@
     var wrap = document.getElementById('suggest-prospect-wrap');
     if(rdvsOfDay.length === 1){
       var rdv = rdvsOfDay[0];
-      var card = pipeline.find(function(c){ return c.id === (rdv.cardId || rdv.prospectId); });
+      // ficheId en repli : c'est sous ce nom que l'agenda relie un évènement à
+      // sa fiche. Sans lui, aucun RDV créé depuis le Pipeline n'était reconnu
+      // et la suggestion ne s'affichait jamais.
+      var card = pipeline.find(function(c){ return String(c.id) === String(rdv.cardId || rdv.ficheId || rdv.prospectId); });
       if(card && document.getElementById('f-card').value === ''){
         wrap.innerHTML = '<div class="suggest-prospect"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>RDV avec <strong>'+(card.name || card.co || '—')+'</strong> ce jour-là</span><div class="suggest-actions"><button class="suggest-yes" data-link="'+card.id+'">Lier</button><button class="suggest-no" data-dismiss>Ignorer</button></div></div>';
         wrap.querySelector('[data-link]').addEventListener('click', function(){ document.getElementById('f-card').value = this.dataset.link; wrap.innerHTML = ''; });

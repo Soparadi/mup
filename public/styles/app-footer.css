@@ -14,14 +14,35 @@ html, body, * {
 /* left = var(--sidebar-w) — la même source que aside#sidebar       */
 /* ================================================================ */
 
-/* Hauteur du pied — SOURCE UNIQUE, aucune page ne la redéclare.
-   Le pied étant en position fixed, il ne pousse rien : chaque page
-   consomme cette variable pour réserver la place correspondante.
+/* Grandeurs primitives du pied.
 
-   38,25px = 1 (border-top) + 10 (padding) + 17,25 (11,5px × 1.5)
-             + 10 (padding). Voir l'override ≤640px en bas de fichier. */
+   Elles ne sont pas là pour la lecture : ce sont les règles plus bas
+   qui les consomment. Une valeur ne s'écrit donc qu'une fois, et
+   --app-footer-h se recalcule seule quand l'une d'elles bouge.
+
+   --app-footer-h est la SOURCE UNIQUE de la réserve d'espace. Le pied
+   est en position fixed, il ne pousse rien : les seize pages app la
+   lisent pour réserver la place correspondante, en soustraction de
+   hauteur (calc(100vh - …)) ou en padding-bottom. Aucune page ne la
+   redéclare. */
 :root{
-  --app-footer-h: 38.25px;
+  --app-footer-bd:          1px;      /* border-top                  */
+  --app-footer-pad-y:      10px;      /* marge haute = marge basse   */
+  --app-footer-pad-x:      24px;      /* marges latérales            */
+  --app-footer-fs:       11.5px;      /* corps de texte              */
+  --app-footer-lh:          1.5;      /* interlignage, sans unité    */
+  --app-footer-gap-row:     8px;      /* gouttière de l'inner        */
+  --app-footer-gap-col:    16px;
+  --app-footer-nav-gap-row:18px;      /* gouttière du nav            */
+  --app-footer-nav-gap-col:18px;
+
+  /* Une seule rangée : bordure + les deux marges + une ligne.
+     1 + 2×10 + 11,5×1.5 = 38,25px. */
+  --app-footer-h: calc(
+      var(--app-footer-bd)
+    + var(--app-footer-pad-y) * 2
+    + var(--app-footer-fs) * var(--app-footer-lh)
+  );
 }
 
 .mup-app-footer{
@@ -33,14 +54,14 @@ html, body, * {
   transition: left .2s ease;
 
   background: var(--card, #FFFFFF);
-  border-top: 1px solid var(--border, #E8E8ED);
-  padding: 10px 24px;
+  border-top: var(--app-footer-bd) solid var(--border, #E8E8ED);
+  padding: var(--app-footer-pad-y) var(--app-footer-pad-x);
 
-  font-size: 11.5px;
+  font-size: var(--app-footer-fs);
   /* Déclaré, jamais hérité : sans cette ligne le pied prend le
      line-height du body de chaque page (1.6, 1.55, 1.5 ou normal
      selon les fichiers) et sa hauteur varie d'une page à l'autre. */
-  line-height: 1.5;
+  line-height: var(--app-footer-lh);
   color: var(--muted, #7A7A7A);
   font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -52,7 +73,7 @@ html, body, * {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 16px;
+  gap: var(--app-footer-gap-row) var(--app-footer-gap-col);
 }
 
 .mup-app-footer__inner strong{
@@ -62,7 +83,7 @@ html, body, * {
 
 .mup-app-footer nav{
   display: flex;
-  gap: 18px;
+  gap: var(--app-footer-nav-gap-row) var(--app-footer-nav-gap-col);
   flex-wrap: wrap;
   height: auto;
   position: static;
@@ -81,25 +102,35 @@ html, body, * {
 }
 
 @media (max-width: 640px){
-  /* L'inner passe en colonne : le pied fait au moins deux rangées.
-     78,5px = 1 + 8 + 16,5 (© MovUP) + 4 (gap inner)
-              + 16,5 + 8 + 16,5 (nav sur deux lignes) + 8.
-     Dimensionné sur le cas téléphone où les huit liens ne tiennent
-     pas sur une ligne ; entre 548 et 640px la réserve dépasse de
-     24,5px — du blanc, jamais du contenu masqué. */
+  /* Les primitives changent, les règles ci-dessus ne bougent pas :
+     elles lisent déjà ces variables. */
   :root{
-    --app-footer-h: 78.5px;
-  }
-  .mup-app-footer{
-    padding: 8px 14px;
-    font-size: 11px;
+    --app-footer-pad-y:       8px;
+    --app-footer-pad-x:      14px;
+    --app-footer-fs:         11px;
+    --app-footer-gap-row:     4px;
+    --app-footer-gap-col:     4px;
+    --app-footer-nav-gap-row: 8px;
+    --app-footer-nav-gap-col:14px;
+
+    /* L'inner passe en colonne et les huit liens ne tiennent pas sur
+       une ligne : trois rangées de texte, la gouttière de l'inner
+       entre le © et le nav, celle du nav entre ses deux lignes.
+       1 + 2×8 + 3×11×1.5 + 4 + 8 = 78,5px.
+
+       Dimensionné sur le cas téléphone ; entre 548 et 640px le nav
+       tient sur une ligne et la réserve dépasse de 24,5px — du blanc,
+       jamais du contenu masqué. */
+    --app-footer-h: calc(
+        var(--app-footer-bd)
+      + var(--app-footer-pad-y) * 2
+      + var(--app-footer-fs) * var(--app-footer-lh) * 3
+      + var(--app-footer-gap-row)
+      + var(--app-footer-nav-gap-row)
+    );
   }
   .mup-app-footer__inner{
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
-  }
-  .mup-app-footer nav{
-    gap: 8px 14px;
   }
 }

@@ -1087,6 +1087,48 @@ function poserLienSocial(linkId, url){
   }
 }
 
+// SIRET en groupes lisibles (819 851 593 00031) — porté à l'identique de
+// contact-societe.html. Une valeur qui ne fait pas 14 chiffres ressort telle
+// quelle : on affiche ce qui est enregistré, on ne le corrige pas.
+function siretFormat(s){
+  return s ? String(s).replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4') : '';
+}
+
+// Une case de la grille d'informations, en lecture seule. Rien n'est peint pour
+// une valeur vide : une case sans contenu n'apprend rien.
+function caseInfo(label, valeur){
+  const v = String(valeur||'').trim();
+  return v ? `<div class="info-item"><div class="info-item-label">${esc(label)}</div><div class="info-item-val">${esc(v)}</div></div>` : '';
+}
+
+// Bloc « Coordonnées société ». Peint depuis un seul endroit parce qu'il a deux
+// appelants (le rendu de la fiche, puis la restitution silencieuse quand le
+// SIRET est déjà payé) : sans ça le second effacerait ce que le premier a posé.
+// Le SITE n'est PAS décomptable — il se peint toujours, au même titre que les
+// réseaux sociaux, alors que l'email et le téléphone société restent derrière
+// enrichedSirets. L'adresse reste lisible même sans schéma ; seule la flèche
+// sortante apparaît, et uniquement pour du http(s) (filtrage de poserLienSocial).
+function peindreGrilleSociete(site, email, tel){
+  const grid = document.getElementById('d-societe-grid');
+  if(!grid) return;
+  const siteTxt = String(site||'').trim();
+  const siteVal = siteTxt
+    ? `<span>${esc(siteTxt)}</span>`
+    : `<span class="info-item-placeholder">Adresse du site</span>`;
+  const lienIco = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+  const emailVal = String(email||'').trim()
+    ? `<a href="mailto:${esc(email)}">${esc(email)}</a>`
+    : `<span class="info-item-placeholder">Adresse email</span>`;
+  const telVal = String(tel||'').trim()
+    ? `<a href="tel:${window.MUPTel.lien(tel)}">${esc(window.MUPTel.format(tel))}</a>`
+    : `<span class="info-item-placeholder">Numéro de téléphone</span>`;
+  grid.innerHTML =
+    `<div class="info-item"><div class="info-item-label">Site web</div><div class="info-item-val">${siteVal}<a id="d-website-link" href="#" target="_blank" rel="noopener" style="display:none;margin-left:6px;vertical-align:-2px">${lienIco}</a></div></div>`
+    + `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val">${emailVal}</div></div>`
+    + `<div class="info-item"><div class="info-item-label">Téléphone société</div><div class="info-item-val">${telVal}</div></div>`;
+  poserLienSocial('d-website-link', siteTxt); // href seulement si http(s), sinon lien masqué
+}
+
 function createMupMarker(lat, lng, color){
   return L.divIcon({
     className: 'mup-marker',
@@ -1473,6 +1515,16 @@ async function openDetail(id) {
   if(c.email) infoHtml += `<div class="info-item"><div class="info-item-label">Email</div><div class="info-item-val"><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div></div>`;
   if(c.tel) infoHtml += `<div class="info-item"><div class="info-item-label">Téléphone</div><div class="info-item-val"><a href="tel:${window.MUPTel.lien(c.tel)}">${esc(window.MUPTel.format(c.tel))}</a></div></div>`;
   if(c.address) infoHtml += `<div class="info-item"><div class="info-item-label">Localisation</div><div class="info-item-val">${esc(c.address)}</div></div>`;
+  // Code postal : champ enregistré à part, que la ligne Localisation ne lit pas
+  // (elle n'affiche que c.address). On le montre donc — sauf quand l'adresse le
+  // contient déjà en toutes lettres, où une case de plus le répéterait.
+  const zipTxt = String(c.zip||'').trim();
+  if(zipTxt && !String(c.address||'').includes(zipTxt)) infoHtml += caseInfo('Code postal', zipTxt);
+  // Identité juridique : enregistrée par la fenêtre « Modifier », relue ici en
+  // lecture seule. SIRET groupé comme sur la fiche société.
+  infoHtml += caseInfo('Forme juridique', c.forme);
+  infoHtml += caseInfo('SIREN', c.siren);
+  infoHtml += caseInfo('SIRET', siretFormat(c.siret));
   const editIco = '<svg class="info-item-edit-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   const valDisplay = c.val
     ? `<strong>${esc(fmtVal(c.val))}</strong>`
@@ -1484,19 +1536,11 @@ async function openDetail(id) {
   if(valCell) valCell.addEventListener('click', startEditVal);
 
   // Coordonnées société — bloc DISTINCT du contact (jeu de champs séparé
-  // societe_email / societe_tel). TOUJOURS affiché : un bloc vide est le signal
-  // qui incite à cliquer sur Enrichir. Champ manquant → libellé visible + valeur
-  // en gris d'attente (.info-item-placeholder), sur le patron d'état vide des
-  // réseaux sociaux de la même fiche.
-  const socEmailVal = c.societe_email
-    ? `<a href="mailto:${esc(c.societe_email)}">${esc(c.societe_email)}</a>`
-    : `<span class="info-item-placeholder">Adresse email</span>`;
-  const socTelVal = c.societe_tel
-    ? `<a href="tel:${window.MUPTel.lien(c.societe_tel)}">${esc(window.MUPTel.format(c.societe_tel))}</a>`
-    : `<span class="info-item-placeholder">Numéro de téléphone</span>`;
-  document.getElementById('d-societe-grid').innerHTML =
-    `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val">${socEmailVal}</div></div>`
-    + `<div class="info-item"><div class="info-item-label">Téléphone société</div><div class="info-item-val">${socTelVal}</div></div>`;
+  // website / societe_email / societe_tel). TOUJOURS affiché : un bloc vide est
+  // le signal qui incite à cliquer sur Enrichir. Champ manquant → libellé
+  // visible + valeur en gris d'attente (.info-item-placeholder), sur le patron
+  // d'état vide des réseaux sociaux de la même fiche.
+  peindreGrilleSociete(c.website, c.societe_email, c.societe_tel);
   refreshEnrichButtonState(c.siret); // état terminal du bouton, après le rendu du bloc société
 
   // Socials (editable)
@@ -1665,8 +1709,8 @@ async function openDetail(id) {
 // fill-if-empty. Silencieux sur SIRET absent, échec réseau, 403 opt-out ou
 // found:false. Garde de fraîcheur sur currentId : si l'utilisateur a changé de
 // fiche pendant l'appel, on abandonne sans rien peindre.
-// Le site web n'a pas d'emplacement d'affichage sur la fiche détail (seul le
-// modal d'édition le porte) : rien à peindre pour lui ici.
+// Le site affiché reste celui de la carte : la restitution ne le repeint pas,
+// elle se contente de ne pas l'effacer en re-rendant le bloc société.
 async function autoEnrichOnOpen(c) {
   if(!c) return;
   const openedId = c.id;
@@ -1696,19 +1740,12 @@ async function autoEnrichOnOpen(c) {
   // déjà été payé. Re-render du bloc société en fill-if-empty (valeur carte
   // prioritaire, valeur restituée en repli), SANS écrire sur la carte. Sinon on
   // n'affiche rien : le bouton Enrichir reste le seul chemin.
+  // Le site repart de la carte à l'identique : ce re-render ne doit pas coûter
+  // au passage la case que le rendu de la fiche vient de peindre.
   if(siretEnrichi(siret)) {
     const email = String(c.societe_email||'').trim() || String(data.societe_email||'').trim();
     const tel = String(c.societe_tel||'').trim() || String(data.societe_tel||'').trim();
-    const emailVal = email
-      ? `<a href="mailto:${esc(email)}">${esc(email)}</a>`
-      : `<span class="info-item-placeholder">Adresse email</span>`;
-    const telVal = tel
-      ? `<a href="tel:${window.MUPTel.lien(tel)}">${esc(window.MUPTel.format(tel))}</a>`
-      : `<span class="info-item-placeholder">Numéro de téléphone</span>`;
-    const grid = document.getElementById('d-societe-grid');
-    if(grid) grid.innerHTML =
-      `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val">${emailVal}</div></div>`
-      + `<div class="info-item"><div class="info-item-label">Téléphone société</div><div class="info-item-val">${telVal}</div></div>`;
+    peindreGrilleSociete(c.website, email, tel);
   }
 }
 

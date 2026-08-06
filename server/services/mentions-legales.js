@@ -668,11 +668,23 @@ async function markChecked(siret) {
 }
 
 // ---------------------------------------------------------------------------
-// enrichirMentionsLegales(siret) — orchestration d'un SIRET (maillons 1→4).
+// enrichirMentionsLegales(siret, options) — orchestration d'un SIRET (maillons 1→4).
 // Aucun throw remontant. Journalise un audit RGPD par SIRET.
+//
+// options (toutes facultatives ; SANS options = comportement historique à
+// l'octet près, c'est ainsi que la passe de fond appelle) :
+//   • forcerTtl       — contourne la garde d'idempotence des 30 jours. Pour un
+//     appel à la demande, déclenché par un humain qui regarde une fiche : le TTL
+//     protège la passe de fond du re-crawl en masse, il n'a pas à faire écran à
+//     une demande unitaire.
+//   • sansRechercheWeb — saute le maillon 1.b (recherche web). Inutile quand le
+//     site est déjà en base : 1.a a déjà de quoi travailler, et 1.b coûterait
+//     jusqu'à MAX_CANDIDATS sites de plus dans la file.
 // ---------------------------------------------------------------------------
 
-export async function enrichirMentionsLegales(siret) {
+export async function enrichirMentionsLegales(siret, options = {}) {
+  const forcerTtl = options.forcerTtl === true
+  const sansRechercheWeb = options.sansRechercheWeb === true
   const s = String(siret || '').replace(/\s+/g, '')
   const result = { siret: s, source: null, confidence: null, signals: [], written: false, skipped: null }
   try {
@@ -682,7 +694,8 @@ export async function enrichirMentionsLegales(siret) {
     if (!faisceau || !faisceau.siret) { result.skipped = 'hors_referentiel'; return result }
 
     // Idempotence : SIRET vérifié il y a moins de TTL_DAYS → on saute (pas de marquage).
-    if (isFresh(faisceau.mentions_legales_checked_at, TTL_DAYS)) { result.skipped = 'ttl'; return result }
+    // forcerTtl passe outre — appel unitaire à la demande, cf. en-tête.
+    if (!forcerTtl && isFresh(faisceau.mentions_legales_checked_at, TTL_DAYS)) { result.skipped = 'ttl'; return result }
 
     let analyse = null
     let sourceUrl = null
@@ -695,7 +708,8 @@ export async function enrichirMentionsLegales(siret) {
 
     // Maillon 1.b — recherche web si rien de concluant en base. On vérifie CHAQUE
     // candidat au maillon 4 (jamais confiance au rang) ; 1er qui recoupe = retenu.
-    if (!analyse) {
+    // sansRechercheWeb saute le maillon entier : l'appelant sait déjà quel site lire.
+    if (!analyse && !sansRechercheWeb) {
       const candidats = await rechercherUrlSociete({
         raison_sociale: faisceau.raison_sociale,
         ville: faisceau.ville,

@@ -80,6 +80,8 @@ import {
   listMailboxCredentials,
   listGoogleMessages,
   listImapMessages,
+  getImapMessageBody,
+  getGoogleMessageBody,
   getImapAccount,
   classifyMailError,
   sendWelcomeEmail
@@ -6068,6 +6070,33 @@ app.get('/api/v2/mail/inbox-preview', async (req, res) => {
     throw unsupportedProviderError(account.provider)
   } catch (err) {
     sendMailReadError(res, err, '[v2/mail:inbox-preview]')
+  }
+})
+
+// Corps d'UN message, chargé au clic. Rend du texte, jamais du HTML : la page
+// l'affiche comme du texte et n'a donc rien à assainir. Aucune écriture en base,
+// la lecture reste volatile.
+app.get('/api/v2/mail/message', async (req, res) => {
+  const ownerId = requireUserId(req, res)
+  if (!ownerId) return
+  const { email, id, folder } = req.query
+  if (!id) return res.status(400).json({ error: 'Identifiant de message requis' })
+  const wantedFolder = folder === 'sent' ? 'sent' : 'inbox'
+  try {
+    const db = await getDb()
+    const account = await resolveMailAccount(db, ownerId, email)
+    if (!account) {
+      return res.status(409).json({ code: 'no_account', error: 'Aucune boîte mail connectée.' })
+    }
+    if (account.provider === 'google') {
+      return res.json(await getGoogleMessageBody(db, ownerId, account.email, String(id)))
+    }
+    if (account.provider === 'imap') {
+      return res.json(await getImapMessageBody(db, ownerId, { folder: wantedFolder, uid: String(id) }))
+    }
+    throw unsupportedProviderError(account.provider)
+  } catch (err) {
+    sendMailReadError(res, err, '[v2/mail:message]')
   }
 })
 

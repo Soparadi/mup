@@ -44,6 +44,8 @@ import { runReferentielOsmMigration } from './server/services/referentiel-osm.js
 import { runActualitesMigration, lireActualites } from './server/services/actualites.js'
 import { runReferentielAtoutFranceMigration } from './server/services/referentiel-atout-france.js'
 import { chargerAtoutFrance } from './server/services/atout-france.js'
+import { runReferentielRgeMigration } from './server/services/referentiel-rge.js'
+import { chargerRge } from './server/services/rge.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
@@ -1346,6 +1348,52 @@ app.post('/api/admin/atout-france/charger', requireSuperadmin, async (req, res) 
   } catch (err) {
     console.error('[atout-france/charger]', err.message)
     res.status(500).json({ error: 'Chargement Atout France impossible' })
+  }
+})
+
+// ── POST /api/admin/rge/charger — déclencheur MANUEL du chargement des
+// qualifications RGE de l'ADEME dans referentiel_rge. Même verrou que
+// /api/admin/atout-france/charger (requireSuperadmin, dev@soparadi.com SEUL,
+// req.authUser posé par le gate global).
+//
+// PAS DE CRON dans ce lot, délibérément : la source est refinalisée chaque nuit,
+// mais on regarde d'abord ce qui atterrit — et surtout si `_id` est stable d'une
+// republication à l'autre — avant d'automatiser quoi que ce soit. Déclenché à la
+// main après merge (Railway), JAMAIS au boot.
+//
+// BORNÉ par ?pages=N — pages de 10 000 lignes (plafond dur de l'API ADEME),
+// défaut 4 (40 000 lignes), maximum 17 (le jeu entier, 162 259 lignes). Le
+// bornage est appliqué DANS le service.
+//
+// REPRISE PAR ?curseur=… — et c'est toute la différence avec Atout France. Là-bas
+// le fichier se télécharge d'un bloc et le service garde son curseur en mémoire
+// une demi-heure ; ici la source EST paginée et fournit elle-même le point de
+// reprise, que le service rend dans `curseur_suivant`. L'appelant le repasse tel
+// quel à l'appel suivant, jusqu'à `termine: true`. Aucun état côté serveur : un
+// redémarrage en cours de chargement ne perd rien, à condition d'avoir gardé le
+// dernier curseur rendu. Le service le journalise page par page pour cette
+// raison — si CETTE réponse HTTP se perd (timeout de proxy sur un appel long),
+// le curseur se relit dans les logs Railway.
+//
+// Le curseur est refusé s'il n'a pas la forme « <entier>,<entier> » : il n'est
+// jamais interprété comme une URL, l'adresse de l'API étant en dur dans le
+// service. Un curseur mal formé rend un compte à zéro, sans repartir en silence
+// de la première page.
+//
+// `termine: false` ne veut PAS dire « échec » : c'est l'état normal tant qu'il
+// reste des pages. Seul un `curseur_suivant: null` AVEC `termine: false` signale
+// que rien n'a pu être lu.
+//
+// chargerRge n'écrit QUE referentiel_rge — aucune écriture dans
+// referentiel_societes, aucun rapprochement — et ne throw jamais : elle rend son
+// compte rendu même en échec. Le 500 ci-dessous ne couvre que l'imprévu.
+app.post('/api/admin/rge/charger', requireSuperadmin, async (req, res) => {
+  try {
+    const compte = await chargerRge({ pages: req.query.pages, curseur: req.query.curseur })
+    res.json(compte)
+  } catch (err) {
+    console.error('[rge/charger]', err.message)
+    res.status(500).json({ error: 'Chargement RGE impossible' })
   }
 })
 
@@ -5977,6 +6025,17 @@ app.use((req, res) => {
     console.log('[boot] referentiel_atout_france table ready (+ 3 indexes)')
   } catch (e) {
     console.error('[boot] referentiel_atout_france migration failed:', e.message)
+  }
+  // Référentiel RGE — table referentiel_rge (clé = `_id` de la source ADEME),
+  // qualifications « Reconnu Garant de l'Environnement ». Séparée de
+  // referentiel_societes, jointe par SIREN et non par SIRET (un quart des
+  // entreprises est enregistré chez l'ADEME sous un autre établissement).
+  // Vide au boot : alimentation par POST /api/admin/rge/charger.
+  try {
+    await runReferentielRgeMigration()
+    console.log('[boot] referentiel_rge table ready (+ 4 indexes)')
+  } catch (e) {
+    console.error('[boot] referentiel_rge migration failed:', e.message)
   }
   // Cron trial — node-cron in-process déclenché à 8h Europe/Paris.
   // Skip si NODE_ENV !== 'production' (évite spam emails en dev) ou

@@ -148,6 +148,60 @@ td.muted{color:var(--muted)}
   opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;
 }
 .vip-toast.show{opacity:1}
+
+/* ── EN CE MOMENT ── */
+/* Aucun composant neuf : la .card et les .calyear-* de la série hebdomadaire,
+   remployées en plus court. Une seule couleur de barre, var(--accent), celle
+   que .calyear-bar-fill porte déjà. */
+.vivant-haut{display:flex;align-items:flex-start;gap:28px;margin-bottom:18px;flex-wrap:wrap;}
+.vivant-nombre{min-width:160px;}
+.vivant-valeur{font-size:44px;font-weight:900;line-height:1;letter-spacing:-1px;}
+.vivant-legende{font-size:11.5px;color:var(--muted);font-weight:500;letter-spacing:.2px;margin-top:6px;}
+.vivant-pages{flex:1;min-width:220px;display:flex;flex-direction:column;gap:5px;}
+.vivant-page{display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:12.5px;}
+.vivant-page span{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.vivant-page b{font-weight:700;font-variant-numeric:tabular-nums;flex:none;}
+/* Trente colonnes ne se lisent pas légendées : ni pastille chiffrée ni
+   étiquette sous la piste, la lecture se fait à l'infobulle. */
+.calyear-chart.vivant-chart{height:66px;gap:3px;margin-bottom:0;}
+/* Minute hors mémoire (le process a redémarré) : effacée, pas mise à zéro.
+   Une ignorance ne doit pas se lire comme un creux d'audience. */
+.vivant-chart .calyear-bar-col.inconnue{opacity:.3;}
+
+/* ── PANNEAU LATÉRAL — LA FICHE ── */
+/* Vit hors du conteneur rafraîchi : le direct ne peut ni le fermer ni écraser
+   ce qu'il porte. */
+/* Voile : rgba(0,0,0,.4), la valeur des modales de contacts et pipeline. */
+.panneau-fond{position:fixed;inset:0;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;}
+.panneau-fond.ouvert{opacity:1;pointer-events:auto;}
+.panneau{
+  position:fixed;top:0;right:0;bottom:0;width:min(560px,100vw);z-index:61;
+  background:var(--card);border-left:1px solid var(--border);box-shadow:var(--shadow-sm);
+  display:flex;flex-direction:column;transform:translateX(101%);transition:transform .22s;
+}
+.panneau.ouvert{transform:translateX(0);}
+.panneau-entete{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  padding:20px 22px;border-bottom:1px solid var(--border);background:var(--surface);
+}
+.panneau-titre{font-size:16px;font-weight:800;letter-spacing:-.3px;word-break:break-all;}
+.panneau-sous{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.3px;margin-top:3px;}
+.panneau-fermer{
+  flex:none;width:28px;height:28px;border-radius:8px;cursor:pointer;
+  border:1px solid var(--border2);background:var(--card);color:var(--muted);
+  font-family:var(--font);font-size:15px;line-height:1;
+}
+.panneau-fermer:hover{color:var(--text);}
+.panneau-fermer:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.panneau-corps{flex:1;overflow-y:auto;padding:18px 22px 48px;display:flex;flex-direction:column;gap:18px;}
+/* Titre de section : la graisse et l'espacement de .kpi-label, déjà en place. */
+.fiche-section h4{font-size:9.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+/* Paires libellé-valeur : le tableau des comptes, resserré et sans en-tête. */
+table.accounts.fiche td{padding:7px 0;}
+table.accounts.fiche td:first-child{width:46%;padding-right:14px;}
+table.accounts.fiche td:last-child{font-weight:500;word-break:break-word;white-space:pre-line;}
+/* Une ligne de compte s'ouvre ; le bouton VIP qu'elle porte, lui, ne l'ouvre pas. */
+table.accounts tbody tr[data-email]{cursor:pointer;}
 </style>
 <link rel="stylesheet" href="/styles/app-footer.css">
 <link rel="stylesheet" href="/styles/cookies-banner.css">
@@ -193,6 +247,18 @@ td.muted{color:var(--muted)}
   </div>
 </footer>
 
+<div class="panneau-fond" id="panneau-fond"></div>
+<aside class="panneau" id="panneau" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Fiche du compte">
+  <div class="panneau-entete">
+    <div>
+      <div class="panneau-titre" id="panneau-titre"></div>
+      <div class="panneau-sous" id="panneau-sous"></div>
+    </div>
+    <button type="button" class="panneau-fermer" id="panneau-fermer" aria-label="Fermer la fiche">✕</button>
+  </div>
+  <div class="panneau-corps" id="panneau-corps"></div>
+</aside>
+
 <script src="/sidebar.js"></script>
 <script defer src="/scripts/cookies-banner.js"></script>
 <script>
@@ -205,12 +271,43 @@ td.muted{color:var(--muted)}
       .replace(/"/g, '&quot;');
   }
 
+  // ── FORMATS ───────────────────────────────────────────────────────────
   // Date FR lisible (jj/mm/aaaa) ; vide si null/invalide.
   function fmtDate(v) {
     if (!v) return '';
     var d = new Date(v);
     if (isNaN(d.getTime())) return '';
     return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
+  // Horodatage : la date ET l'heure, pour les champs où le moment compte —
+  // une venue, un envoi d'e-mail, un consentement recueilli.
+  function fmtDateHeure(v) {
+    if (!v) return '';
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    return fmtDate(v) + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Heure seule, à la seconde : le fil des dernières vues tient dans la
+  // minute, une date y serait du bruit.
+  function fmtHeure(v) {
+    if (!v) return '';
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  // Téléphone en groupes de deux chiffres, convention MovUP. Un indicatif
+  // +33 est ramené à la forme nationale avant regroupement ; ce qui n'est pas
+  // un numéro reconnaissable est rendu tel quel plutôt que mutilé.
+  function fmtTel(v) {
+    var brut = String(v == null ? '' : v).trim();
+    var chiffres = brut.replace(/[^\d+]/g, '');
+    if (chiffres.indexOf('+33') === 0) chiffres = '0' + chiffres.slice(3);
+    chiffres = chiffres.replace(/\D/g, '');
+    if (!chiffres) return brut;
+    return chiffres.match(/\d{1,2}/g).join(' ');
   }
 
   function num(v) {
@@ -221,6 +318,13 @@ td.muted{color:var(--muted)}
   function cellText(v) {
     var s = (v == null ? '' : String(v)).trim();
     return s ? esc(s) : '<span class="dash">—</span>';
+  }
+
+  function n(v) { return String(Number(v) || 0); }
+
+  function setTexte(id, txt) {
+    var el = document.getElementById(id);
+    if (el && el.textContent !== txt) el.textContent = txt;
   }
 
   function noticeForbidden() {
@@ -247,39 +351,181 @@ td.muted{color:var(--muted)}
       + '</div>';
   }
 
+  // ── EN CE MOMENT ───────────────────────────────────────────────────────
+  // Le direct. Le squelette est posé UNE FOIS au chargement — trente colonnes
+  // de barres, un nombre, une liste de pages, un fil de vues — et le
+  // rafraîchissement n'écrit ensuite que des valeurs dans des nœuds déjà là.
+  // Réécrire le conteneur ferait clignoter la page et perdrait la position de
+  // lecture toutes les dix secondes.
+  var MINUTES = 30;
+
+  function squeletteVivant() {
+    var cols = '';
+    for (var i = 0; i < MINUTES; i++) {
+      cols += '<div class="calyear-bar-col" id="min-col-' + i + '">'
+        + '<div class="calyear-bar-track">'
+        + '<div class="calyear-bar-fill empty" id="min-fill-' + i + '" style="height:2px;"></div>'
+        + '</div></div>';
+    }
+    return '<div class="card">'
+      + '<div class="card-header-light">'
+      + '<div><h3>En ce moment</h3>'
+      + '<div class="card-subtitle" id="vivant-sous"></div></div>'
+      + '<div class="card-subtitle" id="vivant-couverture"></div>'
+      + '</div>'
+      + '<div class="card-body">'
+      + '<div class="vivant-haut">'
+      + '<div class="vivant-nombre">'
+      + '<div class="vivant-valeur" id="vivant-valeur"></div>'
+      + '<div class="vivant-legende" id="vivant-legende">personne sur le site en ce moment</div>'
+      + '</div>'
+      + '<div class="vivant-pages" id="vivant-pages"></div>'
+      + '</div>'
+      + '<div class="calyear-chart vivant-chart" id="vivant-minutes">' + cols + '</div>'
+      + '</div>'
+      + '</div>'
+      + '<div class="card">'
+      + '<div class="card-header-light">'
+      + '<div><h3>Dernières vues</h3>'
+      + '<div class="card-subtitle">Heure et page, la plus récente en tête — aucun identifiant de visiteur</div></div>'
+      + '</div>'
+      + '<div class="card-body"><div class="table-wrap"><table class="accounts">'
+      + '<thead><tr><th>Heure</th><th>Page</th></tr></thead>'
+      + '<tbody id="fil-corps"></tbody></table></div></div>'
+      + '</div>';
+  }
+
+  // Signatures : les listes ne sont réécrites que lorsqu'elles changent
+  // vraiment. Une liste identique réinjectée dix fois par minute ferait
+  // sauter la sélection du texte sous le curseur pour rien.
+  var sigPages = null, sigFil = null;
+
+  function majVivant(kpi) {
+    var v = kpi && kpi.vivant;
+    var valeur = document.getElementById('vivant-valeur');
+    if (!v || !valeur) return;
+
+    var ici = Number(v.a_l_instant) || 0;
+    // Personne : la phrase en toutes lettres, jamais un zéro seul — un « 0 »
+    // en gros caractères se lit comme une panne de mesure.
+    valeur.textContent = ici > 0 ? String(ici) : '';
+    valeur.style.display = ici > 0 ? '' : 'none';
+    setTexte('vivant-legende', ici > 0
+      ? (ici > 1 ? 'visiteurs sur le site en ce moment' : 'visiteur sur le site en ce moment')
+      : 'personne sur le site en ce moment');
+
+    // Les pages où ils sont.
+    var pages = Array.isArray(v.pages) ? v.pages : [];
+    var sig = pages.map(function (p) { return p.chemin + ':' + p.visiteurs; }).join('|');
+    if (sig !== sigPages) {
+      sigPages = sig;
+      document.getElementById('vivant-pages').innerHTML = pages.map(function (p) {
+        return '<div class="vivant-page"><span>' + esc(p.chemin) + '</span><b>' + n(p.visiteurs) + '</b></div>';
+      }).join('');
+    }
+
+    // La crête des trente dernières minutes. Les minutes que la mémoire ne
+    // couvre pas sont effacées et signalées à l'infobulle : le process a
+    // redémarré, elles ne valent pas zéro, elles sont inconnues.
+    var parMinute = Array.isArray(v.par_minute) ? v.par_minute : [];
+    var couvertes = Number(v.minutes_couvertes) || 0;
+    var max = 0;
+    for (var k = 0; k < MINUTES; k++) { var x = Number(parMinute[k]) || 0; if (x > max) max = x; }
+    for (var i = 0; i < MINUTES; i++) {
+      var fill = document.getElementById('min-fill-' + i);
+      var col = document.getElementById('min-col-' + i);
+      if (!fill || !col) continue;
+      var vues = Number(parMinute[i]) || 0;
+      var connue = i >= (MINUTES - couvertes);
+      fill.style.height = (max > 0 && vues > 0 ? Math.max(6, Math.round(vues / max * 100)) : 2) + '%';
+      fill.className = 'calyear-bar-fill' + (vues > 0 ? '' : ' empty');
+      col.className = 'calyear-bar-col' + (connue ? '' : ' inconnue');
+      var recul = MINUTES - 1 - i;
+      var quand = recul === 0 ? 'cette minute' : 'il y a ' + recul + ' min';
+      col.title = connue
+        ? (quand + ' — ' + vues + ' vue' + (vues > 1 ? 's' : ''))
+        : (quand + ' — hors mémoire, le compteur a redémarré depuis');
+    }
+    setTexte('vivant-couverture', couvertes >= MINUTES
+      ? 'trente dernières minutes'
+      : 'trente dernières minutes — ' + couvertes + ' en mémoire');
+
+    // La journée en cours, telle que le serveur la voit maintenant.
+    var jc = kpi.audience && kpi.audience.jour_courant;
+    setTexte('vivant-sous', jc
+      ? ('Aujourd’hui : ' + n(jc.visiteurs) + ' visiteur' + (Number(jc.visiteurs) > 1 ? 's' : '')
+         + ', ' + n(jc.vues) + ' vue' + (Number(jc.vues) > 1 ? 's' : '')
+         + (jc.partielle ? ' — journée en cours' : ''))
+      : 'Aucune visite enregistrée aujourd’hui');
+
+    // Le fil des vingt dernières vues.
+    var dernieres = Array.isArray(v.dernieres) ? v.dernieres : [];
+    var sigD = dernieres.map(function (d) { return d.heure + d.chemin; }).join('|');
+    if (sigD !== sigFil) {
+      sigFil = sigD;
+      document.getElementById('fil-corps').innerHTML = dernieres.length
+        ? dernieres.map(function (d) {
+            return '<tr><td class="muted">' + esc(fmtHeure(d.heure)) + '</td>'
+              + '<td>' + esc(d.chemin) + '</td></tr>';
+          }).join('')
+        : '<tr><td class="muted" colspan="2">Aucune vue depuis le démarrage du serveur.</td></tr>';
+    }
+  }
+
   // ── CARTES CHIFFRÉES ───────────────────────────────────────────────────
   // Les cinq indicateurs viennent de GET /api/admin/kpi, qui les calcule côté
   // serveur. La page ne les dérive plus du tableau : elle ne pourrait pas en
   // retirer le compte propriétaire sans le connaître, et c'est précisément ce
   // que le serveur fait — les cinq chiffres l'excluent, sa part est rendue à
   // part sous `proprietaire` et affichée sous les cartes.
-  function kpiCard(label, value, sub) {
-    return '<div class="kpi-card k-closing">'
-      + '<div class="kpi-label">' + esc(label) + '</div>'
-      + '<div class="kpi-value">' + esc(value) + '</div>'
-      + '<div class="kpi-sub">' + esc(sub) + '</div>'
-      + '</div>';
+  var CARTES = [
+    { id: 'comptes', label: 'Comptes',
+      valeur: function (c) { return n(c.comptes); },
+      sub: function () { return 'inscrits au total'; } },
+    { id: 'essais', label: 'Essais en cours',
+      valeur: function (c) { return n(c.essais); },
+      sub: function (c) { return n(c.essais_convertis) + ' convertis'; } },
+    { id: 'abonnes', label: 'Abonnés',
+      valeur: function (c) { return n(c.abonnes); },
+      sub: function (c) { return n(c.abonnes_pct) + ' % des comptes'; } },
+    { id: 'fiches', label: 'Fiches',
+      valeur: function (c) { return n(c.fiches); },
+      sub: function (c) { return n(c.leads) + ' leads consommés'; } },
+    { id: 'vip', label: 'VIP',
+      valeur: function (c) { return n(c.vip); },
+      sub: function () { return 'hors mur d’abonnement'; } }
+  ];
+
+  function noteProprietaire(kpi) {
+    var p = kpi.proprietaire || {};
+    if (!p.present) return '';
+    return 'Compte propriétaire exclu des cinq chiffres — ' + p.email + ' : '
+      + n(p.fiches) + ' fiche' + (Number(p.fiches) > 1 ? 's' : '')
+      + ', ' + n(p.leads) + ' lead' + (Number(p.leads) > 1 ? 's' : '') + '.';
   }
 
   function renderKpis(kpi) {
     var c = kpi.cartes || {};
-    var p = kpi.proprietaire || {};
-    var n = function (v) { return String(Number(v) || 0); };
-
-    var html = '<div class="grid-kpi">'
-      + kpiCard('Comptes', n(c.comptes), 'inscrits au total')
-      + kpiCard('Essais en cours', n(c.essais), n(c.essais_convertis) + ' convertis')
-      + kpiCard('Abonnés', n(c.abonnes), n(c.abonnes_pct) + ' % des comptes')
-      + kpiCard('Fiches', n(c.fiches), n(c.leads) + ' leads consommés')
-      + kpiCard('VIP', n(c.vip), 'hors mur d’abonnement')
-      + '</div>';
-
-    if (p.present) {
-      html += '<div class="kpi-note">Compte propriétaire exclu des cinq chiffres — '
-        + esc(p.email) + ' : ' + n(p.fiches) + ' fiche' + (Number(p.fiches) > 1 ? 's' : '')
-        + ', ' + n(p.leads) + ' lead' + (Number(p.leads) > 1 ? 's' : '') + '.</div>';
+    var html = '<div class="grid-kpi">';
+    for (var i = 0; i < CARTES.length; i++) {
+      var carte = CARTES[i];
+      html += '<div class="kpi-card k-closing">'
+        + '<div class="kpi-label">' + esc(carte.label) + '</div>'
+        + '<div class="kpi-value" id="kpi-' + carte.id + '">' + esc(carte.valeur(c)) + '</div>'
+        + '<div class="kpi-sub" id="kpi-' + carte.id + '-sub">' + esc(carte.sub(c)) + '</div>'
+        + '</div>';
     }
-    return html;
+    html += '</div>';
+    return html + '<div class="kpi-note" id="kpi-note">' + esc(noteProprietaire(kpi)) + '</div>';
+  }
+
+  function majKpis(kpi) {
+    var c = kpi.cartes || {};
+    for (var i = 0; i < CARTES.length; i++) {
+      setTexte('kpi-' + CARTES[i].id, CARTES[i].valeur(c));
+      setTexte('kpi-' + CARTES[i].id + '-sub', CARTES[i].sub(c));
+    }
+    setTexte('kpi-note', noteProprietaire(kpi));
   }
 
   // ── SÉRIE HEBDOMADAIRE ─────────────────────────────────────────────────
@@ -287,7 +533,7 @@ td.muted{color:var(--muted)}
   // page ne fait plus d'arithmétique de calendrier, elle affiche des bornes
   // déjà posées (AAAA-MM-JJ). Deux séries par colonne :
   //
-  //   • VISITEURS — la série principale dès que l'audience est agrégée. La
+  //   • VISITEURS — la série principale dès que l'audience est mesurée. La
   //     grandeur est le VISITEUR-JOUR : le jeton d'unicité change de sel chaque
   //     nuit, donc un même visiteur revenu trois jours compte trois fois sur la
   //     semaine. C'est indépassable par construction, et l'intitulé le dit
@@ -300,6 +546,10 @@ td.muted{color:var(--muted)}
   // inscriptions à côté de centaines de visiteurs seraient une barre plate. Le
   // maximum de chaque série est porté par sa propre pastille, sans quoi deux
   // hauteurs égales se liraient comme deux quantités égales.
+  //
+  // PEINTE AU CHARGEMENT, pas au rafraîchissement : douze semaines ne bougent
+  // pas en dix secondes, et redessiner les barres relancerait leur transition
+  // sous les yeux du lecteur. Le direct, lui, est au-dessus.
   function moisJour(iso) {
     return String(iso || '').slice(8, 10) + '/' + String(iso || '').slice(5, 7);
   }
@@ -310,9 +560,8 @@ td.muted{color:var(--muted)}
     var mesuree = !!audience.disponible;
     if (!semaines.length) return '';
 
-    // Série principale : les visiteurs si l'audience est agrégée, sinon les
-    // inscriptions — la page reste lisible le jour de la mise en service, avant
-    // que le cron n'ait rempli visite_jour une première fois.
+    // Série principale : les visiteurs si l'audience est mesurée, sinon les
+    // inscriptions — la page reste lisible avant la première visite.
     var clePrim = mesuree ? 'visiteurs' : 'inscriptions';
     var cleSec = mesuree ? 'inscriptions' : null;
 
@@ -342,7 +591,8 @@ td.muted{color:var(--muted)}
 
       var infobulle = 'Semaine du ' + moisJour(s.debut) + ' au ' + moisJour(s.fin)
         + (mesuree ? ' — ' + s.visiteurs + ' visiteurs-jours, ' + s.vues + ' vues' : '')
-        + ' — ' + s.inscriptions + ' inscription' + (s.inscriptions > 1 ? 's' : '');
+        + ' — ' + s.inscriptions + ' inscription' + (s.inscriptions > 1 ? 's' : '')
+        + (s.partielle ? ' — semaine en cours, journée du jour incomplète' : '');
 
       var barres;
       if (vide) {
@@ -375,21 +625,21 @@ td.muted{color:var(--muted)}
         + ' — ' + (Number(audience.visiteurs_total) || 0) + ' depuis le ' + esc(moisJour(audience.depuis))
         + '/' + String(audience.depuis || '').slice(0, 4);
     } else {
-      sousTitre = totalPrim + ' inscriptions sur 12 semaines — audience pas encore agrégée';
+      sousTitre = totalPrim + ' inscriptions sur 12 semaines — audience pas encore mesurée';
     }
-
-    var instant = Number(audience.a_l_instant) || 0;
 
     return '<div class="card">'
       + '<div class="card-header-light">'
       + '<div><h3>' + (mesuree ? 'Audience et inscriptions' : 'Inscriptions') + '</h3>'
       + '<div class="card-subtitle">' + esc(sousTitre) + '</div></div>'
-      + '<div class="card-subtitle">' + instant + ' visiteur' + (instant > 1 ? 's' : '') + ' à l’instant</div>'
       + '</div>'
       + '<div class="card-body">' + legende + '<div class="calyear-chart">' + cols + '</div></div>'
       + '</div>';
   }
 
+  // ── TABLEAU DES COMPTES ────────────────────────────────────────────────
+  // Chargé UNE fois : le rafraîchissement du direct ne le rappelle pas. Chaque
+  // ligne porte son adresse et s'ouvre au clic sur la fiche complète.
   function renderTable(rows) {
     var head = '<thead><tr>'
       + '<th>Email</th>'
@@ -408,7 +658,7 @@ td.muted{color:var(--muted)}
     var body = '<tbody>';
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i] || {};
-      body += '<tr>'
+      body += '<tr data-email="' + esc(r.email || '') + '">'
         + '<td class="email">' + cellText(r.email) + '</td>'
         + '<td>' + cellText(r.prenom) + '</td>'
         + '<td><span class="tag">' + esc(r.plan || 'gratuit') + '</span></td>'
@@ -430,6 +680,253 @@ td.muted{color:var(--muted)}
     return '<div class="table-wrap"><table class="accounts">' + head + body + '</table></div>';
   }
 
+  // ── LA FICHE ───────────────────────────────────────────────────────────
+  // Sections déclarées : clé du groupe rendu par la route, intitulé, puis les
+  // champs (clé, libellé, forme). La route renvoie chaque valeur sous
+  // enveloppe { present, valeur } — un champ jamais renseigné n'est PAS un
+  // champ vidé, et les deux ne s'affichent pas pareil.
+  var SECTIONS = [
+    ['identite', 'Identité', [
+      ['prenom', 'Prénom'],
+      ['nom', 'Nom'],
+      ['name', 'Nom complet'],
+      ['email', 'Adresse e-mail'],
+      ['email_verified', 'Adresse vérifiée', 'ouinon'],
+      ['created_at', 'Compte créé le', 'horodatage']
+    ]],
+    ['contact', 'Contact', [
+      ['telephone', 'Téléphone', 'tel'],
+      ['adresse', 'Adresse'],
+      ['code_postal', 'Code postal'],
+      ['ville', 'Ville'],
+      ['lat', 'Latitude'],
+      ['lng', 'Longitude']
+    ]],
+    ['entreprise', 'Entreprise', [
+      ['siret', 'SIRET'],
+      ['raison_sociale', 'Raison sociale'],
+      ['code_naf', 'Code NAF'],
+      ['billing_address', 'Adresse de facturation', 'objet']
+    ]],
+    ['origine', 'Origine — captée à l’inscription', [
+      ['ville', 'Ville'],
+      ['region', 'Région'],
+      ['pays', 'Pays'],
+      ['code_pays', 'Code pays'],
+      ['code_postal', 'Code postal'],
+      ['captee_le', 'Captée le', 'horodatage']
+    ]],
+    ['consentements', 'Consentements', [
+      ['marketing_consent', 'Prospection commerciale', 'ouinon'],
+      ['marketing_consent_at', 'Recueilli le', 'horodatage'],
+      ['cgu_accepted', 'CGU acceptées', 'ouinon'],
+      ['cgu_accepted_at', 'Acceptées le', 'horodatage'],
+      ['cgu_version', 'Version acceptée']
+    ]],
+    ['abonnement', 'Abonnement', [
+      ['plan', 'Plan'],
+      ['intended_plan', 'Plan visé à l’inscription'],
+      ['intended_plan_at', 'Visé le', 'horodatage'],
+      ['trial_started_at', 'Essai commencé le', 'horodatage'],
+      ['trial_ends_at', 'Essai terminé le', 'date'],
+      ['trial_status', 'Statut d’essai'],
+      ['subscription_status', 'Statut d’abonnement'],
+      ['current_period_end', 'Fin de période', 'date'],
+      ['plan_billing_cycle', 'Périodicité'],
+      ['cancel_at_period_end', 'Résilié en fin de période', 'ouinon'],
+      ['past_due_since', 'Impayé depuis le', 'horodatage'],
+      ['stripe_customer_id', 'Client Stripe'],
+      ['stripe_subscription_id', 'Abonnement Stripe'],
+      ['bypass', 'Statut VIP', 'ouinon']
+    ]],
+    ['cycle_de_vie', 'Cycle de vie', [
+      ['welcome_email_sent_at', 'Bienvenue envoyée le', 'horodatage'],
+      ['trial_email_j0_sent_at', 'Relance essai J0', 'horodatage'],
+      ['trial_email_j2_sent_at', 'Relance essai J2', 'horodatage'],
+      ['trial_email_j12_sent_at', 'Relance essai J12', 'horodatage'],
+      ['grace_j_minus_1_sent_at', 'Avis de fin de grâce', 'horodatage'],
+      ['trial_purge_warning_sent_at', 'Avis avant purge', 'horodatage'],
+      ['deletion_requested_at', 'Suppression demandée le', 'horodatage'],
+      ['deletion_scheduled_at', 'Suppression prévue le', 'date'],
+      ['last_seen_at', 'Dernière venue', 'horodatage']
+    ]]
+  ];
+
+  var TIRET = '<span class="dash">—</span>';
+
+  // Objet rendu lisible : une adresse dans l'ordre où on l'écrit, tout autre
+  // objet en paires clé/valeur (la cellule est en white-space:pre-line).
+  function fmtObjet(o) {
+    if (!o || typeof o !== 'object') return String(o == null ? '' : o);
+    var ORDRE = ['line1', 'line2', 'postal_code', 'city', 'state', 'country'];
+    var estAdresse = ORDRE.some(function (k) { return o[k] != null; });
+    var plein = function (x) { return x != null && String(x).trim() !== ''; };
+    if (estAdresse) {
+      return ORDRE.map(function (k) { return o[k]; }).filter(plein).join(', ');
+    }
+    return Object.keys(o).filter(function (k) { return plein(o[k]); })
+      .map(function (k) { return k + ' : ' + o[k]; }).join('\n');
+  }
+
+  // Une valeur sous enveloppe → du HTML. Trois états à distinguer :
+  //   • absent  — jamais renseigné : un tiret discret ;
+  //   • vide    — posé puis effacé : dit en toutes lettres, sans quoi il se
+  //               confondrait avec le précédent ;
+  //   • présent — mis en forme selon le type déclaré.
+  // `source` marque une valeur reprise de user_plan faute d'être posée sur le
+  // compte : le repli reste visible plutôt que silencieux.
+  function valeurHtml(c, type) {
+    if (!c || !c.present) return TIRET;
+    var v = c.valeur;
+    var rendu;
+    if (typeof v === 'string' && v.trim() === '') {
+      rendu = '<span class="dash">(vide)</span>';
+    } else if (type === 'ouinon') {
+      rendu = v === true ? 'oui' : (v === false ? 'non' : esc(v));
+    } else if (type === 'date') {
+      rendu = fmtDate(v) ? esc(fmtDate(v)) : esc(v);
+    } else if (type === 'horodatage') {
+      rendu = fmtDateHeure(v) ? esc(fmtDateHeure(v)) : esc(v);
+    } else if (type === 'tel') {
+      rendu = esc(fmtTel(v));
+    } else if (type === 'objet') {
+      var t = fmtObjet(v);
+      rendu = t ? esc(t) : TIRET;
+    } else {
+      rendu = esc(v);
+    }
+    if (c.source) rendu += ' <span class="dash">(' + esc(c.source) + ')</span>';
+    return rendu;
+  }
+
+  function ligneFiche(libelle, html) {
+    return '<tr><td class="muted">' + esc(libelle) + '</td><td>' + html + '</td></tr>';
+  }
+
+  function sectionFiche(titre, lignes) {
+    return '<div class="fiche-section"><h4>' + esc(titre) + '</h4>'
+      + '<table class="accounts fiche"><tbody>' + lignes + '</tbody></table></div>';
+  }
+
+  function ecartTexte(jours) {
+    var j = Number(jours);
+    if (!Number.isFinite(j)) return '';
+    if (j <= 0) return 'aujourd’hui';
+    if (j === 1) return 'hier';
+    return 'il y a ' + j + ' jours';
+  }
+
+  function renderFiche(f) {
+    var html = '';
+
+    for (var i = 0; i < SECTIONS.length; i++) {
+      var cle = SECTIONS[i][0], titre = SECTIONS[i][1], champs = SECTIONS[i][2];
+      var groupe = f[cle] || {};
+      var lignes = '';
+      for (var k = 0; k < champs.length; k++) {
+        lignes += ligneFiche(champs[k][1], valeurHtml(groupe[champs[k][0]], champs[k][2]));
+      }
+      html += sectionFiche(titre, lignes);
+    }
+
+    // ── Activité ──
+    // Dérivée par le serveur des tables de travail du compte, jamais de son
+    // enregistrement : ce sont des comptes de lignes, pas des champs.
+    var a = f.activite || {};
+    var lignesA = ''
+      + ligneFiche('Recherches lancées', esc(n(a.recherches)))
+      + ligneFiche('Fiches pipeline', esc(n(a.fiches_pipeline)))
+      + ligneFiche('Contacts', esc(n(a.contacts)))
+      + ligneFiche('Sociétés', esc(n(a.societes)))
+      + ligneFiche('Devis', esc(n(a.devis)))
+      + ligneFiche('Factures', esc(n(a.factures)))
+      + ligneFiche('SIRET enrichis', esc(n(a.sirets_enrichis)))
+      + ligneFiche('Leads consommés ce mois', esc(n(a.leads_consommes)))
+      + ligneFiche('Dernière trace', a.derniere_trace
+          ? esc(a.derniere_trace.quoi + ' — ' + fmtDateHeure(a.derniere_trace.quand)
+                + ' (' + ecartTexte(a.derniere_trace.ecart_jours) + ')')
+          : TIRET);
+    html += sectionFiche('Activité', lignesA);
+
+    // ── Ses dernières recherches ──
+    var rech = Array.isArray(f.recherches) ? f.recherches : [];
+    var lignesR = '';
+    if (!rech.length) {
+      lignesR = '<tr><td class="muted" colspan="2">Aucune recherche.</td></tr>';
+    } else {
+      for (var r = 0; r < rech.length; r++) {
+        var s = rech[r];
+        var quoi = (s.metier || '') + (s.zone ? ' · ' + s.zone : '');
+        lignesR += '<tr><td class="muted">' + esc(fmtDateHeure(s.date) || '—') + '</td>'
+          + '<td>' + esc(quoi || '—') + '<br><span class="dash">'
+          + esc(n(s.resultats) + ' résultat' + (Number(s.resultats) > 1 ? 's' : '')) + '</span></td></tr>';
+      }
+    }
+    html += sectionFiche('Ses dernières recherches (20 au plus)', lignesR);
+
+    return html;
+  }
+
+  // ── PANNEAU ────────────────────────────────────────────────────────────
+  // Hors du conteneur rafraîchi : le direct ne le ferme pas et n'écrase pas
+  // ce qu'il porte.
+  var panneau = document.getElementById('panneau');
+  var fond = document.getElementById('panneau-fond');
+  var corpsPanneau = document.getElementById('panneau-corps');
+  var origineFocus = null;
+
+  function ouvrirFiche(email) {
+    if (!email) return;
+    origineFocus = document.activeElement;
+    setTexte('panneau-titre', email);
+    setTexte('panneau-sous', 'Chargement de la fiche…');
+    corpsPanneau.innerHTML = '';
+    panneau.classList.add('ouvert');
+    fond.classList.add('ouvert');
+    panneau.setAttribute('aria-hidden', 'false');
+    document.getElementById('panneau-fermer').focus();
+
+    fetch('/api/admin/comptes/' + encodeURIComponent(email), { credentials: 'same-origin' })
+      .then(function (res) {
+        if (res.status === 404) return { absent: true };
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then(function (f) {
+        if (!f) {
+          setTexte('panneau-sous', 'Fiche indisponible');
+          corpsPanneau.innerHTML = noticeError('La fiche de ce compte n\'a pas pu être lue.');
+          return;
+        }
+        if (f.absent) {
+          setTexte('panneau-sous', 'Compte introuvable');
+          corpsPanneau.innerHTML = noticeError('Aucun compte ne porte cette adresse.');
+          return;
+        }
+        setTexte('panneau-sous', 'Fiche complète — lecture seule');
+        corpsPanneau.innerHTML = renderFiche(f);
+      })
+      .catch(function () {
+        setTexte('panneau-sous', 'Fiche indisponible');
+        corpsPanneau.innerHTML = noticeError('La fiche de ce compte n\'a pas pu être lue.');
+      });
+  }
+
+  function fermerFiche() {
+    if (!panneau.classList.contains('ouvert')) return;
+    panneau.classList.remove('ouvert');
+    fond.classList.remove('ouvert');
+    panneau.setAttribute('aria-hidden', 'true');
+    if (origineFocus && origineFocus.focus) origineFocus.focus();
+    origineFocus = null;
+  }
+
+  document.getElementById('panneau-fermer').addEventListener('click', fermerFiche);
+  fond.addEventListener('click', fermerFiche);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' || e.key === 'Esc') fermerFiche();
+  });
+
   // Retour discret (succès/échec) sans recharger le tableau.
   var toastEl = null, toastTimer = null;
   function toast(msg) {
@@ -444,13 +941,22 @@ td.muted{color:var(--muted)}
     toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
   }
 
-  // Délégation : le tableau est ré-injecté via innerHTML, mais l'écouteur posé
-  // sur le conteneur persistant capte les clics sur n'importe quel toggle.
+  // Délégation : le tableau est injecté via innerHTML, mais l'écouteur posé sur
+  // le conteneur persistant capte les clics quel qu'en soit le moment.
+  //
+  // DEUX GESTES SUR LA MÊME LIGNE, et le premier a la priorité. Le bouton VIP
+  // bascule un statut et n'ouvre PAS la fiche : sans cette sortie anticipée,
+  // chaque bascule ferait surgir un panneau que personne n'a demandé.
+  //
   // POST { email, bypass: !état } ; on ne bascule l'affichage qu'au succès.
   // Sur 403 / échec : message neutre, l'état visuel reste inchangé.
   content.addEventListener('click', function (e) {
     var btn = e.target.closest ? e.target.closest('.vip-toggle') : null;
-    if (!btn) return;
+    if (!btn) {
+      var ligne = e.target.closest ? e.target.closest('tr[data-email]') : null;
+      if (ligne) ouvrirFiche(ligne.getAttribute('data-email'));
+      return;
+    }
     var email = btn.getAttribute('data-email');
     if (!email) return;
     var next = btn.getAttribute('aria-checked') !== 'true';
@@ -476,10 +982,43 @@ td.muted{color:var(--muted)}
       .finally(function () { btn.disabled = false; });
   });
 
-  // Deux appels, deux rôles : /comptes porte le tableau, /kpi porte les cartes
-  // et la série. Le second est FACULTATIF — s'il échoue, la page rend le
-  // tableau seul plutôt que rien. C'est l'inventaire des comptes qui est la
-  // raison d'être de cette page ; les indicateurs sont ce qui la surmonte.
+  // ── LE DIRECT ──────────────────────────────────────────────────────────
+  // Toutes les dix secondes, sur /kpi SEUL : l'inventaire des comptes ne
+  // change pas à cette cadence et son rechargement coûterait trois requêtes
+  // de plus pour rien.
+  //
+  // UN ÉCHEC PONCTUEL NE CASSE RIEN. Le corps n'est pas remplacé par un encart
+  // d'erreur : les dernières valeurs restent affichées et le prochain tour
+  // reprend. Une coupure réseau de dix secondes ne doit pas effacer le tableau
+  // qu'on est en train de lire.
+  //
+  // L'HORLOGE S'ARRÊTE quand l'onglet passe en arrière-plan et reprend au
+  // retour, par une lecture immédiate — un onglet oublié une nuit ne doit pas
+  // avoir battu huit mille fois.
+  var horloge = null;
+
+  function tic() {
+    if (document.hidden) return;
+    fetch('/api/admin/kpi', { credentials: 'same-origin' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (kpi) { if (kpi) { majKpis(kpi); majVivant(kpi); } })
+      .catch(function () { /* les dernières valeurs restent en place */ });
+  }
+
+  function demarrerHorloge() { if (!horloge) horloge = setInterval(tic, 10000); }
+  function arreterHorloge() { if (horloge) { clearInterval(horloge); horloge = null; } }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { arreterHorloge(); return; }
+    tic();
+    demarrerHorloge();
+  });
+
+  // Deux appels, deux rôles : /comptes porte le tableau, /kpi porte le direct,
+  // les cartes et la série. Le second est FACULTATIF — s'il échoue, la page
+  // rend le tableau seul plutôt que rien, et le direct ne démarre pas faute de
+  // squelette où écrire. C'est l'inventaire des comptes qui est la raison
+  // d'être de cette page ; les indicateurs sont ce qui la surmonte.
   var kpiOptionnel = fetch('/api/admin/kpi', { credentials: 'same-origin' })
     .then(function (res) { return res.ok ? res.json() : null; })
     .catch(function () { return null; });
@@ -505,8 +1044,11 @@ td.muted{color:var(--muted)}
       if (!Array.isArray(rows) || rows.length === 0) { content.innerHTML = noticeEmpty(); return; }
       var sub = document.getElementById('page-subtitle');
       if (sub) sub.textContent = rows.length + ' compte' + (rows.length > 1 ? 's' : '') + ' — lecture seule';
-      var entete = data.kpi ? (renderKpis(data.kpi) + renderSemaines(data.kpi)) : '';
+      var entete = data.kpi
+        ? (squeletteVivant() + renderKpis(data.kpi) + renderSemaines(data.kpi))
+        : '';
       content.innerHTML = entete + renderTable(rows);
+      if (data.kpi) { majVivant(data.kpi); demarrerHorloge(); }
     })
     .catch(function () {
       content.innerHTML = noticeError();

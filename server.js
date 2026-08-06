@@ -47,6 +47,7 @@ import { chargerAtoutFrance } from './server/services/atout-france.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
+import { rapprocherDepartementAtoutFrance } from './server/services/rapprochement-atout-france.js'
 import { runMentionsLegalesJob, enrichirMentionsLegales } from './server/services/mentions-legales.js'
 import { hostBlacklisted } from './server/services/recherche-web.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
@@ -2839,14 +2840,34 @@ app.post('/api/amorce', async (req, res) => {
   // Enchaînement CHAÎNÉ (pas parallèle — le crawl mentions légales et le
   // rapprochement OSM partagent le trafic sortant, jamais simultané) :
   //   1. rapprocherDepartement(dept) : moteur OSM, écrit websites + contacts.
-  //   2. selectSiretsACrawler(dept, N) : SIRET du dept ayant gagné un website
+  //   2. rapprocherDepartementAtoutFrance(dept) : moteur Atout France, écrit des
+  //      websites sur les seules fiches des trois NAF d'hébergement.
+  //   3. selectSiretsACrawler(dept, N) : SIRET du dept ayant gagné un website
   //      mais sans contact complet (2e source lit ces websites fraîchement écrits).
-  //   3. runMentionsLegalesJob(sirets) : crawl mentions légales, extrait tél/email
+  //   4. runMentionsLegalesJob(sirets) : crawl mentions légales, extrait tél/email
   //      en fill-if-empty. Plafond N (env CRAWL_ML_BATCH, défaut 50) borne le crawl.
+  //
+  // L'ORDRE DES DEUX RAPPROCHEMENTS N'EST PAS INTERCHANGEABLE, deux fois :
+  //   · Atout France AVANT selectSiretsACrawler, parce que cette sélection ne
+  //     retient que les fiches ayant DÉJÀ un website (referentiel-read.js). Placé
+  //     après, il écrirait des sites que le crawl ne lirait qu'à la recherche
+  //     SUIVANTE sur le même département.
+  //   · Atout France APRÈS l'OSM, parce que les deux écrivent en
+  //     remplissage-si-vide — le premier arrivé gagne — et que l'OSM apparie par
+  //     identifiant dans l'écrasante majorité de ses cas, là où Atout France
+  //     apparie sur l'adresse et le nom. La source la plus sûre passe d'abord.
   setTimeout(() => {
     if (naf && !geoFin && !fromCache && !dept.includes(',')) markGisementComplete(naf, dept)
     rapprocherDepartement(dept)
       .then(async () => {
+        // `{ blanc: false }` OBLIGATOIRE et EXPLICITE : le défaut du module est le
+        // mode à blanc, et l'omettre ne ferait rien, en silence. Le module ne
+        // throw jamais et rend son compte rendu — rien à garder ici.
+        const af = await rapprocherDepartementAtoutFrance(dept, { blanc: false })
+        console.log(
+          `[amorce] dept ${dept} — Atout France : ${af.fiches} fiches · ` +
+          `A=${af.a} A2=${af.a2} B=${af.b} · ${af.ecrits} écrits · ${af.duree_ms}ms`
+        )
         const N = parseInt(process.env.CRAWL_ML_BATCH || '50', 10)
         const sirets = await selectSiretsACrawler(dept, N)
         if (sirets.length) await runMentionsLegalesJob(sirets)

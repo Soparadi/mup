@@ -46,6 +46,9 @@ main{flex:1;overflow-y:auto;height:calc(100vh - var(--app-footer-h));}
 .kpi-label{font-size:9.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px;line-height:1;}
 .kpi-value{font-size:32px;font-weight:900;line-height:1;letter-spacing:-.8px;font-family:var(--font);margin-top:6px;}
 .kpi-sub{font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:3px;letter-spacing:.2px;}
+/* Le compte propriétaire est retiré des cinq cartes : sa part est rendue ici,
+   à côté d'elles, pour qu'elle soit soustraite et non escamotée. */
+.kpi-note{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.2px;margin-top:-8px;}
 
 /* ── CARTE ── */
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:0;overflow:hidden;}
@@ -59,9 +62,19 @@ main{flex:1;overflow-y:auto;height:calc(100vh - var(--app-footer-h));}
 .calyear-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;position:relative;}
 .calyear-bar-amount{font-size:10px;font-weight:700;font-family:var(--mono);color:var(--text);min-height:14px;letter-spacing:-.2px;text-align:center;line-height:1;}
 .calyear-bar-amount.empty{color:var(--muted2);font-weight:500;}
-.calyear-bar-track{flex:1;width:100%;display:flex;align-items:flex-end;background:var(--surface);border-radius:5px 5px 0 0;overflow:hidden;}
-.calyear-bar-fill{width:100%;background:var(--accent);border-radius:5px 5px 0 0;transition:height .4s;min-height:2px;}
+/* La piste accueille UNE ou DEUX barres selon que l'audience est mesurée ou
+   non. Les remplissages sont donc en flex:1 et non en width:100% : la même
+   règle sert aux deux cas, sans variante à maintenir. */
+.calyear-bar-track{flex:1;width:100%;display:flex;align-items:flex-end;gap:2px;background:var(--surface);border-radius:5px 5px 0 0;overflow:hidden;}
+.calyear-bar-fill{flex:1;min-width:0;background:var(--accent);border-radius:5px 5px 0 0;transition:height .4s;min-height:2px;}
 .calyear-bar-fill.empty{background:var(--surface2);min-height:2px;}
+.calyear-bar-fill.secondaire{background:var(--blue);}
+/* Légende — deux séries dans la même colonne ne se lisent pas sans elle. */
+.legende{display:flex;align-items:center;gap:14px;font-size:11px;color:var(--muted);font-weight:500;margin-bottom:12px;}
+.legende span{display:inline-flex;align-items:center;gap:5px;}
+.legende i{width:9px;height:9px;border-radius:2px;display:inline-block;}
+.legende i.primaire{background:var(--accent);}
+.legende i.secondaire{background:var(--blue);}
 .calyear-bar-label{font-size:9.5px;font-weight:700;font-family:var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);text-align:center;line-height:1;}
 .calyear-bar-col.is-current .calyear-bar-label{color:var(--text);font-weight:800;}
 
@@ -235,11 +248,11 @@ td.muted{color:var(--muted)}
   }
 
   // ── CARTES CHIFFRÉES ───────────────────────────────────────────────────
-  // Les cinq indicateurs se dérivent du seul corps renvoyé par
-  // /api/admin/comptes (server.js:1050-1062) : aucun appel supplémentaire,
-  // aucune donnée qui n'y figure pas. Statuts d'abonnement et d'essai tels
-  // qu'ils sont écrits côté serveur (active / trialing / past_due / canceled,
-  // active / converted / expired).
+  // Les cinq indicateurs viennent de GET /api/admin/kpi, qui les calcule côté
+  // serveur. La page ne les dérive plus du tableau : elle ne pourrait pas en
+  // retirer le compte propriétaire sans le connaître, et c'est précisément ce
+  // que le serveur fait — les cinq chiffres l'excluent, sa part est rendue à
+  // part sous `proprietaire` et affichée sous les cartes.
   function kpiCard(label, value, sub) {
     return '<div class="kpi-card k-closing">'
       + '<div class="kpi-label">' + esc(label) + '</div>'
@@ -248,97 +261,132 @@ td.muted{color:var(--muted)}
       + '</div>';
   }
 
-  function renderKpis(rows) {
-    var total = rows.length;
-    var abonnes = 0, essais = 0, convertis = 0, vip = 0, fiches = 0, leads = 0;
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i] || {};
-      if (r.subscription_status === 'active') abonnes++;
-      if (r.trial_status === 'active') essais++;
-      if (r.trial_status === 'converted') convertis++;
-      if (r.bypass) vip++;
-      fiches += Number(r.fiches) || 0;
-      leads += Number(r.leads) || 0;
-    }
-    var pct = total ? Math.round(abonnes / total * 100) : 0;
+  function renderKpis(kpi) {
+    var c = kpi.cartes || {};
+    var p = kpi.proprietaire || {};
+    var n = function (v) { return String(Number(v) || 0); };
 
-    return '<div class="grid-kpi">'
-      + kpiCard('Comptes', String(total), 'inscrits au total')
-      + kpiCard('Essais en cours', String(essais), convertis + ' convertis')
-      + kpiCard('Abonnés', String(abonnes), pct + ' % des comptes')
-      + kpiCard('Fiches', String(fiches), leads + ' leads consommés')
-      + kpiCard('VIP', String(vip), 'hors mur d’abonnement')
+    var html = '<div class="grid-kpi">'
+      + kpiCard('Comptes', n(c.comptes), 'inscrits au total')
+      + kpiCard('Essais en cours', n(c.essais), n(c.essais_convertis) + ' convertis')
+      + kpiCard('Abonnés', n(c.abonnes), n(c.abonnes_pct) + ' % des comptes')
+      + kpiCard('Fiches', n(c.fiches), n(c.leads) + ' leads consommés')
+      + kpiCard('VIP', n(c.vip), 'hors mur d’abonnement')
       + '</div>';
+
+    if (p.present) {
+      html += '<div class="kpi-note">Compte propriétaire exclu des cinq chiffres — '
+        + esc(p.email) + ' : ' + n(p.fiches) + ' fiche' + (Number(p.fiches) > 1 ? 's' : '')
+        + ', ' + n(p.leads) + ' lead' + (Number(p.leads) > 1 ? 's' : '') + '.</div>';
+    }
+    return html;
   }
 
   // ── SÉRIE HEBDOMADAIRE ─────────────────────────────────────────────────
-  // Inscriptions par semaine sur les douze dernières, lundi comme premier
-  // jour. Barres en CSS pur, une seule couleur : var(--accent).
-  var WEEKS = 12;
-
-  function mondayOf(d) {
-    var m = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    var day = m.getDay();               // 0 = dimanche
-    m.setDate(m.getDate() - (day === 0 ? 6 : day - 1));
-    return m;
+  // Douze semaines, lundi comme premier jour, découpées PAR LE SERVEUR : la
+  // page ne fait plus d'arithmétique de calendrier, elle affiche des bornes
+  // déjà posées (AAAA-MM-JJ). Deux séries par colonne :
+  //
+  //   • VISITEURS — la série principale dès que l'audience est agrégée. La
+  //     grandeur est le VISITEUR-JOUR : le jeton d'unicité change de sel chaque
+  //     nuit, donc un même visiteur revenu trois jours compte trois fois sur la
+  //     semaine. C'est indépassable par construction, et l'intitulé le dit
+  //     plutôt que de laisser croire à un décompte d'individus.
+  //
+  //   • INSCRIPTIONS — conservées en second jeu. C'est le seul des deux qui
+  //     mesure une conversion, et lire les deux côte à côte est tout l'intérêt.
+  //
+  // ÉCHELLES INDÉPENDANTES, et c'est écrit dans la légende : quelques
+  // inscriptions à côté de centaines de visiteurs seraient une barre plate. Le
+  // maximum de chaque série est porté par sa propre pastille, sans quoi deux
+  // hauteurs égales se liraient comme deux quantités égales.
+  function moisJour(iso) {
+    return String(iso || '').slice(8, 10) + '/' + String(iso || '').slice(5, 7);
   }
 
-  function renderSemaines(rows) {
-    // Bornes posées en arithmétique de calendrier (setDate) et écarts arrondis
-    // au jour : un changement d'heure dans la fenêtre décale les millisecondes,
-    // jamais le rang de la semaine.
-    var lastMonday = mondayOf(new Date());
-    var firstMonday = new Date(lastMonday.getFullYear(), lastMonday.getMonth(), lastMonday.getDate() - (WEEKS - 1) * 7);
+  function renderSemaines(kpi) {
+    var semaines = kpi.semaines || [];
+    var audience = kpi.audience || {};
+    var mesuree = !!audience.disponible;
+    if (!semaines.length) return '';
 
-    var buckets = [];
-    for (var w = 0; w < WEEKS; w++) {
-      buckets.push({
-        start: new Date(firstMonday.getFullYear(), firstMonday.getMonth(), firstMonday.getDate() + w * 7),
-        n: 0
-      });
+    // Série principale : les visiteurs si l'audience est agrégée, sinon les
+    // inscriptions — la page reste lisible le jour de la mise en service, avant
+    // que le cron n'ait rempli visite_jour une première fois.
+    var clePrim = mesuree ? 'visiteurs' : 'inscriptions';
+    var cleSec = mesuree ? 'inscriptions' : null;
+
+    var maxPrim = 0, maxSec = 0, totalPrim = 0, totalSec = 0;
+    for (var i = 0; i < semaines.length; i++) {
+      var vp = Number(semaines[i][clePrim]) || 0;
+      totalPrim += vp;
+      if (vp > maxPrim) maxPrim = vp;
+      if (cleSec) {
+        var vs = Number(semaines[i][cleSec]) || 0;
+        totalSec += vs;
+        if (vs > maxSec) maxSec = vs;
+      }
     }
 
-    var total = 0;
-    for (var i = 0; i < rows.length; i++) {
-      var raw = rows[i] && rows[i].created_at;
-      if (!raw) continue;
-      var d = new Date(raw);
-      if (isNaN(d.getTime())) continue;
-      var jours = Math.round((mondayOf(d).getTime() - firstMonday.getTime()) / 86400000);
-      var idx = Math.round(jours / 7);
-      if (idx < 0 || idx >= WEEKS) continue;
-      buckets[idx].n++;
-      total++;
-    }
-
-    var max = 0;
-    for (var j = 0; j < buckets.length; j++) if (buckets[j].n > max) max = buckets[j].n;
+    var hauteur = function (v, max) {
+      return (max > 0 && v > 0) ? Math.max(2, Math.round(v / max * 100)) : 0;
+    };
 
     var cols = '';
-    for (var k = 0; k < buckets.length; k++) {
-      var b = buckets[k];
-      var isCurrent = (k === buckets.length - 1);
-      var hasData = b.n > 0;
-      var h = (max > 0 && hasData) ? Math.max(2, Math.round(b.n / max * 100)) : 0;
-      var label = b.start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    for (var k = 0; k < semaines.length; k++) {
+      var s = semaines[k];
+      var courante = (k === semaines.length - 1);
+      var prim = Number(s[clePrim]) || 0;
+      var sec = cleSec ? (Number(s[cleSec]) || 0) : 0;
+      var vide = (prim === 0 && sec === 0);
 
-      cols += '<div class="calyear-bar-col' + (isCurrent ? ' is-current' : '') + '">'
-        + '<div class="calyear-bar-amount' + (hasData ? '' : ' empty') + '">' + (hasData ? b.n : '—') + '</div>'
-        + '<div class="calyear-bar-track">'
-        + (hasData
-            ? '<div class="calyear-bar-fill" style="height:' + h + '%;"></div>'
-            : '<div class="calyear-bar-fill empty" style="height:2px;"></div>')
-        + '</div>'
-        + '<div class="calyear-bar-label">' + esc(label) + '</div>'
+      var infobulle = 'Semaine du ' + moisJour(s.debut) + ' au ' + moisJour(s.fin)
+        + (mesuree ? ' — ' + s.visiteurs + ' visiteurs-jours, ' + s.vues + ' vues' : '')
+        + ' — ' + s.inscriptions + ' inscription' + (s.inscriptions > 1 ? 's' : '');
+
+      var barres;
+      if (vide) {
+        barres = '<div class="calyear-bar-fill empty" style="height:2px;"></div>';
+      } else {
+        barres = '<div class="calyear-bar-fill" style="height:' + hauteur(prim, maxPrim) + '%;"></div>';
+        if (cleSec) {
+          barres += '<div class="calyear-bar-fill secondaire' + (sec > 0 ? '' : ' empty')
+            + '" style="height:' + (sec > 0 ? hauteur(sec, maxSec) : 2) + '%;"></div>';
+        }
+      }
+
+      cols += '<div class="calyear-bar-col' + (courante ? ' is-current' : '') + '" title="' + esc(infobulle) + '">'
+        + '<div class="calyear-bar-amount' + (prim > 0 ? '' : ' empty') + '">' + (prim > 0 ? prim : '—') + '</div>'
+        + '<div class="calyear-bar-track">' + barres + '</div>'
+        + '<div class="calyear-bar-label">' + esc(moisJour(s.debut)) + '</div>'
         + '</div>';
     }
 
+    var legende = '<div class="legende">'
+      + '<span><i class="primaire"></i>' + (mesuree ? 'Visiteurs-jours' : 'Inscriptions')
+      + ' (max ' + maxPrim + ')</span>'
+      + (cleSec ? '<span><i class="secondaire"></i>Inscriptions (max ' + maxSec + ')</span>' : '')
+      + (cleSec ? '<span>échelles indépendantes</span>' : '')
+      + '</div>';
+
+    var sousTitre;
+    if (mesuree) {
+      sousTitre = totalPrim + ' visiteurs-jours et ' + totalSec + ' inscriptions sur 12 semaines'
+        + ' — ' + (Number(audience.visiteurs_total) || 0) + ' depuis le ' + esc(moisJour(audience.depuis))
+        + '/' + String(audience.depuis || '').slice(0, 4);
+    } else {
+      sousTitre = totalPrim + ' inscriptions sur 12 semaines — audience pas encore agrégée';
+    }
+
+    var instant = Number(audience.a_l_instant) || 0;
+
     return '<div class="card">'
       + '<div class="card-header-light">'
-      + '<h3>Inscriptions</h3>'
-      + '<div class="card-subtitle">' + total + ' sur les 12 dernières semaines</div>'
+      + '<div><h3>' + (mesuree ? 'Audience et inscriptions' : 'Inscriptions') + '</h3>'
+      + '<div class="card-subtitle">' + esc(sousTitre) + '</div></div>'
+      + '<div class="card-subtitle">' + instant + ' visiteur' + (instant > 1 ? 's' : '') + ' à l’instant</div>'
       + '</div>'
-      + '<div class="card-body"><div class="calyear-chart">' + cols + '</div></div>'
+      + '<div class="card-body">' + legende + '<div class="calyear-chart">' + cols + '</div></div>'
       + '</div>';
   }
 
@@ -353,6 +401,7 @@ td.muted{color:var(--muted)}
       + '<th>Fiches</th>'
       + '<th>Leads</th>'
       + '<th>Créé le</th>'
+      + '<th>Vu le</th>'
       + '<th>VIP</th>'
       + '</tr></thead>';
 
@@ -369,6 +418,10 @@ td.muted{color:var(--muted)}
         + '<td class="num">' + num(r.fiches) + '</td>'
         + '<td class="num">' + num(r.leads) + '</td>'
         + '<td class="muted">' + (fmtDate(r.created_at) ? esc(fmtDate(r.created_at)) : '<span class="dash">—</span>') + '</td>'
+        // Dernière venue. Le tiret dit « jamais revenu depuis la mise en service
+        // du champ », pas « revenu il y a longtemps » : aucune valeur n'a été
+        // posée rétroactivement.
+        + '<td class="muted">' + (fmtDate(r.last_seen_at) ? esc(fmtDate(r.last_seen_at)) : '<span class="dash">—</span>') + '</td>'
         + '<td><button type="button" class="vip-toggle" role="switch" aria-checked="' + (r.bypass ? 'true' : 'false') + '" data-email="' + esc(r.email || '') + '" aria-label="Statut VIP"><span class="vip-knob"></span></button></td>'
         + '</tr>';
     }
@@ -423,6 +476,14 @@ td.muted{color:var(--muted)}
       .finally(function () { btn.disabled = false; });
   });
 
+  // Deux appels, deux rôles : /comptes porte le tableau, /kpi porte les cartes
+  // et la série. Le second est FACULTATIF — s'il échoue, la page rend le
+  // tableau seul plutôt que rien. C'est l'inventaire des comptes qui est la
+  // raison d'être de cette page ; les indicateurs sont ce qui la surmonte.
+  var kpiOptionnel = fetch('/api/admin/kpi', { credentials: 'same-origin' })
+    .then(function (res) { return res.ok ? res.json() : null; })
+    .catch(function () { return null; });
+
   fetch('/api/admin/comptes', { credentials: 'same-origin' })
     .then(function (res) {
       if (res.status === 403) {
@@ -435,11 +496,17 @@ td.muted{color:var(--muted)}
       return res.json();
     })
     .then(function (rows) {
-      if (rows === null) return;
+      if (rows === null) return null;
+      return kpiOptionnel.then(function (kpi) { return { rows: rows, kpi: kpi }; });
+    })
+    .then(function (data) {
+      if (!data) return;
+      var rows = data.rows;
       if (!Array.isArray(rows) || rows.length === 0) { content.innerHTML = noticeEmpty(); return; }
       var sub = document.getElementById('page-subtitle');
       if (sub) sub.textContent = rows.length + ' compte' + (rows.length > 1 ? 's' : '') + ' — lecture seule';
-      content.innerHTML = renderKpis(rows) + renderSemaines(rows) + renderTable(rows);
+      var entete = data.kpi ? (renderKpis(data.kpi) + renderSemaines(data.kpi)) : '';
+      content.innerHTML = entete + renderTable(rows);
     })
     .catch(function () {
       content.innerHTML = noticeError();

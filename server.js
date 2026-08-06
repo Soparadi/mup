@@ -46,7 +46,8 @@ import { runReferentielAtoutFranceMigration } from './server/services/referentie
 import { chargerAtoutFrance } from './server/services/atout-france.js'
 import { runReferentielRgeMigration } from './server/services/referentiel-rge.js'
 import { chargerRge } from './server/services/rge.js'
-import { runVisitesMigration, creerMesureAudience } from './server/services/visites.js'
+import { runVisitesMigration, creerMesureAudience, visiteursALInstant, jourParis, decalerJour } from './server/services/visites.js'
+import { BYPASS_EMAIL, isOwner } from './lib/vip.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
@@ -1067,6 +1068,11 @@ app.get('/api/admin/comptes', requireSuperadmin, async (req, res) => {
         leads: plan?.leadsConsumedThisMonth ?? u.leadsConsumedThisMonth ?? 0,
         fiches: fichesById.get(id) ?? 0,
         created_at: u.created_at || null,
+        // Dernière venue — posée par toucherLastSeen dans les deux portillons de
+        // session, pas d'une heure. NONE tant que le compte n'est pas revenu
+        // depuis la mise en service du champ : la colonne affiche alors un tiret,
+        // ce qui se lit « jamais vu », et non « vu il y a longtemps ».
+        last_seen_at: u.last_seen_at || null,
         // Statut VIP — vit sur user (pas user_plan). Lu par le toggle superadmin.
         bypass: !!u.bypass
       }
@@ -1104,6 +1110,167 @@ app.post('/api/admin/comptes/bypass', requireSuperadmin, async (req, res) => {
   } catch (err) {
     console.error('[admin/comptes/bypass]', err.message)
     res.status(500).json({ error: 'Mise à jour bypass impossible' })
+  }
+})
+
+// ── GET /api/admin/kpi — superadmin, LECTURE SEULE ──
+// Même verrou que /api/admin/comptes (requireSuperadmin, dev@soparadi.com SEUL).
+// Aucune mutation, aucun appel Stripe.
+//
+// POURQUOI UNE ROUTE, et pas un calcul dans la page. Les cinq chiffres étaient
+// dérivés côté navigateur du corps de /api/admin/comptes. Deux choses en
+// découlaient : le tableau et les cartes disaient forcément la même chose, mais
+// les cartes ne pouvaient jamais dire davantage — pas d'audience, pas de cumul
+// hors fenêtre — et surtout la page comptait le COMPTE PROPRIÉTAIRE parmi les
+// abonnés et son pipeline de mise au point parmi les fiches. Sur une base jeune
+// c'est le premier chiffre en importance qui est faux.
+//
+// LE PROPRIÉTAIRE EST HORS DE TOUS LES INDICATEURS D'USAGE. L'adresse vient de
+// BYPASS_EMAIL (lib/vip.js), source unique, jamais recopiée ici. Son compte,
+// ses fiches et ses leads sont rendus à part sous `proprietaire` : retirés du
+// total, pas escamotés. Le drapeau `bypass` des AUTRES comptes, lui, reste
+// compté — ce sont de vrais utilisateurs, simplement dispensés du mur
+// d'abonnement.
+//
+// COÛT DES LECTURES. Quatre requêtes, aucune sur un référentiel. `user` et
+// `user_plan` sont projetées (jamais SELECT *) et se comptent en centaines de
+// lignes ; `pipeline` est agrégée par count() GROUP BY userId ; `visite_jour`
+// porte une ligne par jour depuis la mise en service. Rien qui balaie une table
+// de masse — l'instance est petite (1 Go), une agrégation large la fait tomber.
+//
+// TYPES DE CLÉS, à ne pas mélanger : `userId` est une CHAÎNE NUE sur pipeline et
+// user_plan (d'où le norm ci-dessous, identique à celui de /api/admin/comptes) ;
+// c'est `user_id` de type record<user> qui règne sur lead_search et audit_log —
+// aucune des deux tables n'est lue ici, et le jour où elles le seront, la clé
+// n'aura pas la même forme.
+app.get('/api/admin/kpi', requireSuperadmin, async (req, res) => {
+  const norm = (id) => String(id ?? '')
+    .replace(/^user:/, '').replace(/^user_plan:/, '').replace(/^⟨+|⟩+$/g, '')
+  // Même fallback user → user_plan que /api/admin/comptes : les deux routes
+  // doivent lire le même statut pour le même compte, sinon les cartes
+  // contredisent le tableau qu'elles surmontent.
+  const champ = (u, plan, cle) => {
+    if (u[cle] !== undefined && u[cle] !== null && u[cle] !== '') return u[cle]
+    if (plan && plan[cle] !== undefined && plan[cle] !== null && plan[cle] !== '') return plan[cle]
+    return null
+  }
+  // Jour civil Europe/Paris d'un datetime, quelle que soit la forme rendue par
+  // le pilote (Date ou chaîne). Null si la valeur n'est pas une date.
+  const jourDe = (v) => {
+    if (!v) return null
+    const d = new Date(v)
+    return Number.isNaN(d.getTime()) ? null : jourParis(d)
+  }
+  // Lundi de la semaine d'une date AAAA-MM-JJ. Ancrage à midi UTC comme
+  // decalerJour : le quantième obtenu ne dépend pas du changement d'heure.
+  const lundiDe = (jour) => {
+    const t = Date.parse(jour + 'T12:00:00Z')
+    if (Number.isNaN(t)) return null
+    const jsJour = new Date(t).getUTCDay()          // 0 = dimanche
+    return decalerJour(jour, -(jsJour === 0 ? 6 : jsJour - 1))
+  }
+
+  try {
+    const db = await getDb()
+    const [users, plans, pipes, jours] = await Promise.all([
+      queryOrEmpty(db, 'SELECT id, email, created_at, bypass, plan, subscription_status, trial_status, leadsConsumedThisMonth FROM user'),
+      queryOrEmpty(db, 'SELECT userId, id, plan, subscription_status, trial_status, leadsConsumedThisMonth FROM user_plan'),
+      queryOrEmpty(db, 'SELECT userId, count() AS n FROM pipeline GROUP BY userId'),
+      queryOrEmpty(db, 'SELECT jour, vues, visiteurs FROM visite_jour ORDER BY jour')
+    ])
+
+    const planParId = new Map()
+    for (const p of plans) planParId.set(norm(p.userId || p.id), p)
+    const fichesParId = new Map()
+    for (const r of pipes) fichesParId.set(norm(r.userId), r.n)
+
+    const cartes = { comptes: 0, essais: 0, essais_convertis: 0, abonnes: 0, fiches: 0, leads: 0, vip: 0 }
+    const proprietaire = { email: BYPASS_EMAIL, present: false, fiches: 0, leads: 0 }
+    const inscriptionsParJour = new Map()
+
+    for (const u of users) {
+      const id = norm(u.id)
+      const plan = planParId.get(id)
+      const fiches = Number(fichesParId.get(id) ?? 0) || 0
+      const leads = Number(plan?.leadsConsumedThisMonth ?? u.leadsConsumedThisMonth ?? 0) || 0
+
+      if (isOwner(u)) {
+        proprietaire.present = true
+        proprietaire.fiches += fiches
+        proprietaire.leads += leads
+        continue
+      }
+
+      cartes.comptes++
+      if (champ(u, plan, 'subscription_status') === 'active') cartes.abonnes++
+      if (champ(u, plan, 'trial_status') === 'active') cartes.essais++
+      if (champ(u, plan, 'trial_status') === 'converted') cartes.essais_convertis++
+      if (u.bypass === true) cartes.vip++
+      cartes.fiches += fiches
+      cartes.leads += leads
+
+      const j = jourDe(u.created_at)
+      if (j) inscriptionsParJour.set(j, (inscriptionsParJour.get(j) || 0) + 1)
+    }
+
+    const abonnes_pct = cartes.comptes ? Math.round(cartes.abonnes / cartes.comptes * 100) : 0
+
+    // ── Série hebdomadaire — douze semaines, lundi comme premier jour ──
+    // DEUX jeux de données par semaine, et pas un seul :
+    //
+    //   • visiteurs — la somme des visiteurs quotidiens distincts de la
+    //     semaine. Ce n'est PAS un décompte d'individus sur sept jours, et ça ne
+    //     peut pas l'être : le sel du jeton d'unicité tourne chaque nuit, donc
+    //     deux journées ne partagent aucun jeton comparable (voir
+    //     server/services/visites.js). La grandeur est un « visiteur-jour », et
+    //     l'intitulé côté page le dit.
+    //
+    //   • inscriptions — le compte de créations de comptes, propriétaire exclu.
+    //     Conservé alors que l'audience prend la vedette : c'est le seul des
+    //     deux qui mesure une conversion, et une semaine à forte audience sans
+    //     inscription est précisément le rapprochement qu'on veut voir.
+    const SEMAINES = 12
+    const lundiCourant = lundiDe(jourParis())
+    const semaines = []
+    for (let i = SEMAINES - 1; i >= 0; i--) {
+      const debut = decalerJour(lundiCourant, -7 * i)
+      semaines.push({ debut, fin: decalerJour(debut, 6), visiteurs: 0, vues: 0, inscriptions: 0 })
+    }
+    const semaineParDebut = new Map(semaines.map((s) => [s.debut, s]))
+
+    let vues_total = 0, visiteurs_total = 0
+    for (const r of jours) {
+      // Cumul depuis la mise en service : lu sur l'agrégat, JAMAIS par un
+      // balayage du détail — c'est la raison d'être de visite_jour.
+      vues_total += Number(r.vues) || 0
+      visiteurs_total += Number(r.visiteurs) || 0
+      const s = semaineParDebut.get(lundiDe(r.jour))
+      if (s) { s.vues += Number(r.vues) || 0; s.visiteurs += Number(r.visiteurs) || 0 }
+    }
+    for (const [jour, n] of inscriptionsParJour) {
+      const s = semaineParDebut.get(lundiDe(jour))
+      if (s) s.inscriptions += n
+    }
+
+    res.json({
+      cartes: { ...cartes, abonnes_pct },
+      proprietaire,
+      audience: {
+        // La table existe-t-elle et a-t-elle été agrégée au moins une fois ?
+        // Tant que non, la page garde les inscriptions en série principale.
+        disponible: jours.length > 0,
+        depuis: jours.length ? jours[0].jour : null,
+        jours: jours.length,
+        vues_total,
+        visiteurs_total,
+        // Mémoire du process, jamais lue en base (fenêtre de cinq minutes).
+        a_l_instant: visiteursALInstant()
+      },
+      semaines
+    })
+  } catch (err) {
+    console.error('[admin/kpi]', err.message)
+    res.status(500).json({ error: 'Lecture des indicateurs impossible' })
   }
 })
 

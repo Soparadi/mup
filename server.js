@@ -79,6 +79,9 @@ import {
   verifyResendSignature,
   listMailboxCredentials,
   listGoogleMessages,
+  listImapMessages,
+  getImapAccount,
+  classifyMailError,
   sendWelcomeEmail
 } from './lib/mail-service.js'
 
@@ -5977,22 +5980,94 @@ app.get('/api/v2/mail/accounts', async (req, res) => {
   }
 })
 
-// Preview inbox d'un compte Google connecté (Track 1 OAuth).
+// Résout la boîte à lire À PARTIR DE LA SESSION. Le paramètre email ne sert
+// qu'à départager plusieurs comptes DÉJÀ possédés par cet abonné
+// (listMailboxCredentials filtre sur ownerId) : il ne peut jamais désigner la
+// boîte d'un autre. Renvoie null si aucune boîte n'est connectée.
+async function resolveMailAccount(db, ownerId, email) {
+  const wanted = email ? String(email) : null
+  const creds = await listMailboxCredentials(db, ownerId)
+  if (wanted) {
+    const match = creds.find(c => c.email === wanted)
+    if (match) return { provider: match.provider, email: match.email }
+  }
+  const imap = await getImapAccount(db, ownerId)
+  if (imap) return { provider: 'imap', email: imap.email }
+  if (creds[0]) return { provider: creds[0].provider, email: creds[0].email }
+  return null
+}
+
+// Traduit une erreur de lecture en réponse lisible par l'abonné. Le détail
+// technique reste dans les logs serveur, jamais dans la réponse.
+function sendMailReadError(res, err, tag) {
+  console.error(tag, err?.message)
+  if (err?.code === 'no_account') {
+    return res.status(409).json({ code: 'no_account', error: 'Aucune boîte mail connectée.' })
+  }
+  if (err?.code === 'unsupported_provider') {
+    return res.status(409).json({ code: 'unsupported_provider', error: err.message })
+  }
+  if (err?.code === 'no_sent_folder') {
+    return res.status(409).json({ code: 'no_sent_folder', error: err.message })
+  }
+  if (err?.code === 'not_found') {
+    return res.status(404).json({ code: 'not_found', error: 'Ce message n\'est plus disponible dans votre boîte.' })
+  }
+  const kind = err?.mailKind || classifyMailError(err)
+  if (kind === 'auth') {
+    return res.status(409).json({
+      code: 'reconnect_required',
+      error: 'Votre boîte a refusé les identifiants enregistrés. Reconnectez-la depuis l\'onglet Paramètres.'
+    })
+  }
+  return res.status(502).json({
+    code: 'network',
+    error: 'La connexion à votre boîte a échoué. Réessayez dans un instant.'
+  })
+}
+
+// Le fournisseur Microsoft passé par OAuth n'a pas d'identifiants IMAP en base :
+// la lecture par Graph fera l'objet d'une passe dédiée. Message explicite plutôt
+// que liste vide.
+function unsupportedProviderError(provider) {
+  const err = new Error(provider === 'microsoft'
+    ? 'La lecture des messages n\'est pas encore disponible pour les boîtes connectées avec Microsoft. Vos envois, eux, fonctionnent.'
+    : 'La lecture des messages n\'est pas disponible pour ce mode de connexion.')
+  err.code = 'unsupported_provider'
+  return err
+}
+
+// Liste les enveloppes d'un dossier (Reçus ou Envoyés). Aucun corps n'est
+// rapatrié ici : le corps se charge au clic via /api/v2/mail/message.
 app.get('/api/v2/mail/inbox-preview', async (req, res) => {
   const ownerId = requireUserId(req, res)
   if (!ownerId) return
-  const { email, limit, query } = req.query
-  if (!email) return res.status(400).json({ error: 'email requis (du compte Google connecté)' })
+  const { email, limit, query, folder } = req.query
+  const wantedFolder = folder === 'sent' ? 'sent' : 'inbox'
   try {
     const db = await getDb()
-    const messages = await listGoogleMessages(db, ownerId, String(email), {
-      limit: limit ? Number(limit) : 25,
-      query: query ? String(query) : 'newer_than:7d'
-    })
-    res.json(messages)
+    const account = await resolveMailAccount(db, ownerId, email)
+    if (!account) {
+      return res.status(409).json({ code: 'no_account', error: 'Aucune boîte mail connectée.' })
+    }
+    if (account.provider === 'google') {
+      const messages = await listGoogleMessages(db, ownerId, account.email, {
+        limit: limit ? Number(limit) : 25,
+        query: query ? String(query) : 'newer_than:7d',
+        folder: wantedFolder
+      })
+      return res.json(messages)
+    }
+    if (account.provider === 'imap') {
+      const messages = await listImapMessages(db, ownerId, {
+        folder: wantedFolder,
+        limit: limit ? Number(limit) : 50
+      })
+      return res.json(messages)
+    }
+    throw unsupportedProviderError(account.provider)
   } catch (err) {
-    console.error('[v2/mail:inbox-preview]', err.message)
-    res.status(500).json({ error: err.message || 'Lecture inbox impossible' })
+    sendMailReadError(res, err, '[v2/mail:inbox-preview]')
   }
 })
 

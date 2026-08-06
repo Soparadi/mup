@@ -23,16 +23,45 @@
 import { normText } from './overpass.js'
 import { politeFetchText } from './mentions-legales.js'
 
-// Agrégateurs / annuaires / réseaux sociaux / moteurs : jamais des sites
-// d'entreprise. Un candidat porté par l'un de ces hôtes est écarté (suffixe strict
-// sur le domaine enregistrable, insensible au www).
-const BLACKLIST_HOSTS = [
+// Hôtes qui ne peuvent PAS corroborer une entreprise donnée : un candidat (ou un
+// website déjà en base) porté par l'un d'eux est écarté. Suffixe strict sur le
+// domaine enregistrable, insensible au www.
+//
+// Deux familles, même conséquence :
+//   • agrégateurs / annuaires / réseaux sociaux / moteurs — la page décrit
+//     l'entreprise mais les coordonnées publiées sont celles du portail ;
+//   • plateformes de réservation, franchises et enseignes nationales — la page
+//     de l'établissement porte le SIRET du réseau, son standard, son courriel
+//     générique. Crawler ces domaines ne peut RIEN corroborer sur l'établissement
+//     visé, et ne coûte que de la file.
+//
+// Exportée (avec le prédicat hostBlacklisted, pour qu'aucun appelant n'ait à
+// réimplémenter la correspondance par suffixe) : le chemin d'enrichissement à la
+// demande s'en sert pour ne pas lancer le moteur sur un site qui ne peut pas
+// corroborer. La passe de fond, elle, n'appelle rien de tout cela : son maillon
+// 1.a (website déjà en base) reste inchangé.
+export const BLACKLIST_HOSTS = [
   'societe.com', 'pappers.fr', 'pappers.com', 'verif.com', 'kompass.com',
   'pagesjaunes.fr', 'facebook.com', 'instagram.com', 'linkedin.com',
   'google.com', 'google.fr', 'wikipedia.org', 'mappy.com',
   // apparentés fréquents (mêmes familles) — écartés par prudence
   'infogreffe.fr', 'manageo.fr', 'bodacc.fr', 'score3.fr', 'dnb.com',
-  'twitter.com', 'x.com', 'youtube.com', 'tiktok.com', 'yelp.fr', 'yelp.com'
+  'twitter.com', 'x.com', 'youtube.com', 'tiktok.com', 'yelp.fr', 'yelp.com',
+  // plateformes de réservation / prise de rendez-vous
+  'planity.com', 'doctolib.fr', 'app.kiute.com', 'kalendes.com', 'business.site',
+  // coiffure — enseignes et réseaux
+  'tchip.fr', 'pascalcoste.com', 'franckprovost.com', 'jeanlouisdavid.com',
+  'dessange.com', 'saint-algue.com', 'coiffirst.com', 'davidlucas.fr',
+  'labarbieredeparis.com', 'lorealprofessionnel.com',
+  // optique — enseignes
+  'krys.com', 'optical-center.fr', 'optic2000.com', 'generale-optique.com',
+  'monopticien.com', 'opticiensparconviction.fr', 'jimmyfairly.com', 'visual.fr',
+  // immobilier — réseaux
+  'orpi.com', 'squarehabitat.fr', 'cimm.com', 'msimond.fr',
+  'espaces-atypiques.com', 'blot-immobilier.fr', 'lamotte.fr',
+  // divers — grande distribution, énergie, franchises
+  'carrefour.fr', 'totalenergies.com', 'brunoflaujac.com', 'renoval-veranda.com',
+  'diloys.fr', 'laprocure.com', 'methode-busquet.com'
 ]
 
 // ---------------------------------------------------------------------------
@@ -73,7 +102,9 @@ export function buildQueries({ raison_sociale, ville, dirigeant_nom } = {}) {
 // (on crawle la home au maillon 2), dédupliqués en préservant l'ordre.
 // ---------------------------------------------------------------------------
 
-function hostBlacklisted(host) {
+// Hôte inexploitable (vide, illisible) → true : fail-closed. L'appelant qui ne sait
+// pas lire l'hôte d'une URL n'a rien à crawler.
+export function hostBlacklisted(host) {
   const h = String(host || '').replace(/^www\./, '').toLowerCase()
   if (!h) return true
   return BLACKLIST_HOSTS.some(b => h === b || h.endsWith('.' + b))

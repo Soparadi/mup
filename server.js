@@ -45,7 +45,8 @@ import { runActualitesMigration, lireActualites } from './server/services/actual
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
-import { runMentionsLegalesJob } from './server/services/mentions-legales.js'
+import { runMentionsLegalesJob, enrichirMentionsLegales } from './server/services/mentions-legales.js'
+import { hostBlacklisted } from './server/services/recherche-web.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs, startActualitesCron } from './server/services/cron.js'
 import {
@@ -3251,6 +3252,19 @@ app.get('/api/enrich/:siret', async (req, res) => {
   }
 })
 
+// Budget d'attente accordé au crawl mentions légales DANS la route d'enrichissement,
+// compté depuis l'entrée en route. Au-delà, la route rend la main sans l'attendre.
+const ENRICH_ML_BUDGET_MS = 15000
+
+// Hôte d'un website de référentiel. Le schéma est parfois absent en base ; on le
+// complète pour parser, sans jamais réécrire la valeur. Rend '' si illisible —
+// et hostBlacklisted('') vaut true, donc l'illisible n'est jamais crawlé.
+function hostDeSite(raw) {
+  const s = String(raw || '').trim()
+  if (!s) return ''
+  try { return new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s).host } catch { return '' }
+}
+
 // POST /api/enrich/:siret — restitution des champs contact société depuis DEUX
 // sources : referentiel_societes (amorçage Overpass, PRIORITAIRE) et referentiel_osm
 // (réserve nationale OSM, fill-if-empty). Fusion champ par champ : valeur société si
@@ -3260,6 +3274,10 @@ app.get('/api/enrich/:siret', async (req, res) => {
 // restitution. L'idempotence SIRET passe AVANT le gate — un SIRET déjà enrichi
 // par ce user a déjà été payé, il reste consultable même au plafond.
 app.post('/api/enrich/:siret', async (req, res) => {
+  // Repère de temps de la route : le budget du maillon mentions légales se compte
+  // DEPUIS L'ENTRÉE, pas depuis son propre départ. Ce qu'on borne, c'est l'attente
+  // de l'abonné — les lectures qui précèdent en font partie.
+  const tRoute = Date.now()
   const userId = requireUserId(req, res)
   if (!userId) return
   const siret = String(req.params.siret || '').replace(/\s+/g, '')
@@ -3337,6 +3355,57 @@ app.post('/api/enrich/:siret', async (req, res) => {
         error: 'opt_out',
         message: "Cette entreprise n'est pas disponible pour prospection."
       })
+    }
+
+    // ── Maillon Mentions légales (crawl du site DÉJÀ connu) ─────────────────
+    // AVANT DataForSEO, et pour cause : le site de l'entreprise est déjà en base,
+    // il porte souvent le courriel et le téléphone en clair sur sa page de
+    // mentions légales ou de contact, et il ne coûte rien. Appeler le fournisseur
+    // payant à sa place, c'est payer pour moins : DataForSEO ne rend JAMAIS de
+    // courriel. Le crawl, lui, en rend — sous corroboration (SIRET/SIREN de la
+    // page, ou deux signaux parmi raison sociale / adresse / dirigeant).
+    //
+    // Conditions cumulatives, aucune requête supplémentaire pour les évaluer :
+    //   • un website en base (sinon rien à lire — le maillon 1.b reste hors jeu) ;
+    //   • au moins un des trois canaux manquant (mêmes trois que `complet` plus
+    //     bas : trois pleins → rien à chercher) ;
+    //   • hôte hors liste noire : sur planity/carrefour/orpi… la page porte le
+    //     SIRET du réseau, elle ne peut rien corroborer.
+    const siteHote = hostDeSite(merged.website)
+    const manqueCanal = !(merged.website && merged.societe_tel && merged.societe_email)
+    if (merged.website && manqueCanal && !hostBlacklisted(siteHote)) {
+      try {
+        // Budget de 15 s MESURÉ DEPUIS L'ENTRÉE EN ROUTE. Au dépassement, la main
+        // passe à la suite : le crawl N'EST PAS annulé, il continue en fond
+        // derrière la file mono-verrou et son écriture (fill-if-empty, référentiel
+        // mutualisé) profitera au clic suivant. Ce clic suivant est idempotent —
+        // markEnriched a déjà marqué ce SIRET pour ce user, added:false, aucun
+        // second décompte. Perdre la course coûte donc une attente, jamais un lead.
+        const restant = ENRICH_ML_BUDGET_MS - (Date.now() - tRoute)
+        if (restant > 0) {
+          // Le moteur ne throw pas (try/catch global) ; le .catch est structurel,
+          // pour qu'aucune promesse perdante ne puisse rejeter sans gestionnaire.
+          const crawl = enrichirMentionsLegales(siret, { forcerTtl: true, sansRechercheWeb: true })
+            .catch(e => { console.warn('[enrich:ml]', String(e?.message || e).slice(0, 80)) })
+          let minuteur
+          const bornage = new Promise(r => { minuteur = setTimeout(r, restant) })
+          try { await Promise.race([crawl, bornage]) } finally { clearTimeout(minuteur) }
+        }
+        // Le moteur écrit en base et NE REND PAS les valeurs : on relit, on refait
+        // le pick (société prioritaire, OSM en fill-if-empty), et `complet` juste
+        // en dessous s'en trouve recalculé — c'est lui qui décide si DataForSEO
+        // part. Relecture faite même en cas de dépassement : le crawl a pu écrire
+        // entre la fin du budget et cette ligne.
+        const soc3 = await getReferentielContactBySiret(siret)
+        if (soc3) {
+          merged.website = pick(soc3.website, merged.website)
+          merged.societe_email = pick(soc3.societe_email, merged.societe_email)
+          merged.societe_tel = pick(soc3.societe_tel, merged.societe_tel)
+        }
+      } catch (e) {
+        // Fail-safe intégral : tout pépin retombe sur le merged existant.
+        console.warn('[enrich:ml]', String(e?.message || e).slice(0, 80))
+      }
     }
 
     // ── Maillon DataForSEO (Business Info / Google My Business) ──────────────

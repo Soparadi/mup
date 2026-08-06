@@ -404,6 +404,50 @@ function extractLegalLinks(html, baseUrl) {
   return [...out]
 }
 
+// Nature d'une page candidate : 'contact' ou 'mentions'. Décidée sur le CHEMIN
+// (le libellé du lien n'est plus disponible ici) : « contact », « nous-contacter »,
+// « contactez-nous » → contact ; tout le reste → mentions. normText réduit à
+// [a-z0-9 ], donc la recherche de « contact » capte les trois formes.
+function naturePage(url) {
+  let chemin = ''
+  try {
+    const u = new URL(url)
+    chemin = decodeURIComponent((u.pathname || '') + (u.search || ''))
+  } catch { chemin = String(url || '') }
+  return normText(chemin).includes('contact') ? 'contact' : 'mentions'
+}
+
+// Répartition du budget de pages légales, À BUDGET CONSTANT (MAX_LEGAL_PAGES : il
+// coûte de la file — un appel sortant sérialisé chacun).
+//
+// Avant : liens de l'accueil PUIS chemins devinés, tronqué sec. Un accueil offrant
+// quatre liens « mentions / legal / cgv / cgu » saturait le budget et /contact ne
+// sortait JAMAIS. Or le courriel est tantôt sur la page de mentions légales, tantôt
+// sur la page de contact — écarter l'une des deux natures, c'est rater la moitié
+// des sites.
+//
+// Maintenant : une place est RÉSERVÉE par nature — au moins une page de mentions
+// légales et au moins une page de contact —, le reste au premier arrivé dans
+// l'ordre d'origine. La réserve décide QUI est retenu, jamais dans quel ordre :
+// le parcours reste celui d'origine (liens du site d'abord, chemins devinés ensuite).
+// Exportée (pure, sans effet de bord) pour vérification hors-base.
+export function repartirPages(candidats, budget) {
+  const liste = Array.isArray(candidats) ? candidats : []
+  if (budget <= 0) return []
+  if (liste.length <= budget) return [...liste]
+  const retenus = new Set()
+  for (const nature of ['mentions', 'contact']) {
+    if (retenus.size >= budget) break
+    const premier = liste.find(u => !retenus.has(u) && naturePage(u) === nature)
+    if (premier) retenus.add(premier)
+  }
+  for (const u of liste) {
+    if (retenus.size >= budget) break
+    retenus.add(u)
+  }
+  return liste.filter(u => retenus.has(u))
+}
+
 // ---------------------------------------------------------------------------
 // Maillon 3 — extraction. Fonctions pures sur le texte (déjà strippé/décodé).
 // ---------------------------------------------------------------------------
@@ -548,9 +592,11 @@ function recouper(faisceau, ex) {
 // analyserSite(homeUrl, faisceau) — maillons 2→4 sur un site.
 // Rend { confidence, signals, emails, phones } (confidence possiblement null si
 // le site est joignable mais ne recoupe pas), ou null si le home est injoignable.
+// Exportée pour diagnostic : elle ne touche JAMAIS la base (crawl + extraction +
+// recoupement en mémoire), l'écriture reste le seul fait d'enrichirMentionsLegales.
 // ---------------------------------------------------------------------------
 
-async function analyserSite(homeUrlRaw, faisceau) {
+export async function analyserSite(homeUrlRaw, faisceau) {
   const homeUrl = normalizeUrl(homeUrlRaw)
   if (!homeUrl) return null
 
@@ -564,9 +610,10 @@ async function analyserSite(homeUrlRaw, faisceau) {
   const legalLinks = extractLegalLinks(homeHtml, base)
   const origin = safeOrigin(base)
   const conventional = origin ? CONVENTIONAL_PATHS.map(p => origin + p) : []
-  const pages = [...new Set([...legalLinks, ...conventional])]
+  const candidats = [...new Set([...legalLinks, ...conventional])]
     .filter(u => normalizeUrl(u) !== normalizeUrl(base))
-    .slice(0, MAX_LEGAL_PAGES)
+  // Budget inchangé, répartition garantie : au moins une page de chaque nature.
+  const pages = repartirPages(candidats, MAX_LEGAL_PAGES)
 
   // Corpus = home + pages légales (texte strippé/décodé).
   const texts = [stripTags(homeHtml)]

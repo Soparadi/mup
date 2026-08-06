@@ -9,66 +9,66 @@
 <link rel="stylesheet" href="/styles/sidebar.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* Palette des pages app — reprise à l'identique de statistiques.html, plus
+   --accent / --shadow-sm / --radius (déjà en usage sur contacts.html). Aucune
+   valeur nouvelle : --bg et --surface étaient inversés ici par rapport aux
+   treize autres pages, ils reprennent leur rôle canonique. */
 :root{
-  --bg:#F5F5F7;
-  --surface:#FFFFFF;
-  --surface2:#EBEBF0;
-  --card:#FFFFFF;
-  --border:#E8E8ED;
-  --border2:#C7C7CC;
-  --text:#1D1D1F;
-  --muted:#6E6E73;
-  --muted2:#AEAEB2;
-  --green:#1D8348;
-  --green-bg:#EDF7F2;
-  --orange:#B84C00;
-  --orange-bg:#FFF4EC;
-  --red:#CC0000;
-  --red-bg:#FFF0F0;
-  --blue:#0A66C2;
-  --blue-bg:#EEF3FD;
+  --bg:#FFFFFF; --surface:#F5F5F7; --surface2:#EBEBF0;
+  --card:#FFFFFF; --border:#E8E8ED; --border2:#C7C7CC;
+  --text:#1D1D1F; --muted:#6E6E73; --muted2:#AEAEB2;
+  --green:#1D8348; --orange:#B84C00; --red:#CC0000;
+  --blue:#0A66C2; --purple:#4338CA;
   --accent:#1D1D1F;
   --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
   --mono:'Geist Mono','SF Mono','Menlo',monospace;
   --shadow-sm:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
-  --shadow-md:0 4px 16px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.04);
-  --shadow-lg:0 16px 48px rgba(0,0,0,.12),0 4px 12px rgba(0,0,0,.06);
   --radius:10px;
 }
 
-html,body{height:100%;overflow:hidden;background:var(--bg)}
-body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoothing:antialiased;display:flex}
+html,body{height:100%;overflow:hidden;background:var(--bg);}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;display:flex;}
+::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+main{flex:1;overflow-y:auto;height:calc(100vh - var(--app-footer-h));}
 
-/* ── SHELL ── */
-.shell{display:flex;flex:1;overflow:hidden;height:100vh}
+/* ── EN-TÊTE DE PAGE ── */
+.page-header{background:var(--text);color:#fff;padding:28px 36px;display:flex;align-items:center;justify-content:space-between;}
+.page-title{font-size:24px;font-weight:800;letter-spacing:-.4px;}
+.page-subtitle{font-size:11px;color:rgba(255,255,255,.5);font-weight:500;letter-spacing:.4px;margin-top:2px;}
 
-/* ── SIDEBAR ── */
-.sidebar{
-  width:220px;
-  background:var(--surface);
-  border-right:1px solid var(--border);
-  display:flex;flex-direction:column;
-  padding:0 0 16px;flex-shrink:0;
-  height:100%;overflow-y:auto;
-}
+.container{padding:24px 36px 60px;display:flex;flex-direction:column;gap:18px;}
 
-/* ── MAIN ── */
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+/* ── CARTES CHIFFRÉES ── */
+.grid-kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px 14px;display:flex;flex-direction:column;gap:3px;position:relative;overflow:hidden;border-left:3px solid var(--border);}
+.kpi-card.k-closing{border-left-color:var(--text);} .kpi-card.k-closing .kpi-value{color:var(--text);}
+.kpi-label{font-size:9.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px;line-height:1;}
+.kpi-value{font-size:32px;font-weight:900;line-height:1;letter-spacing:-.8px;font-family:var(--font);margin-top:6px;}
+.kpi-sub{font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:3px;letter-spacing:.2px;}
 
-.page-header{
-  padding:20px 24px 0;
-  display:flex;align-items:flex-start;justify-content:space-between;
-  gap:16px;flex-shrink:0;
-}
-.page-title{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--text)}
-.page-subtitle{font-size:12.5px;color:var(--muted);margin-top:2px}
+/* ── CARTE ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:0;overflow:hidden;}
+.card-header-light{padding:18px 22px 8px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);margin-bottom:14px;}
+.card-header-light h3{font-size:17px;font-weight:800;letter-spacing:-.3px;color:var(--text);margin:0;}
+.card-header-light .card-subtitle{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.4px;text-transform:none;}
+.card-body{padding:0 22px 22px;}
 
-.content{flex:1;overflow:auto;padding:20px 24px 32px}
+/* ── SÉRIE EN BARRES ── */
+.calyear-chart{display:flex;align-items:flex-end;justify-content:space-between;gap:6px;height:200px;padding:0 4px 0;margin-bottom:14px;position:relative;}
+.calyear-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;position:relative;}
+.calyear-bar-amount{font-size:10px;font-weight:700;font-family:var(--mono);color:var(--text);min-height:14px;letter-spacing:-.2px;text-align:center;line-height:1;}
+.calyear-bar-amount.empty{color:var(--muted2);font-weight:500;}
+.calyear-bar-track{flex:1;width:100%;display:flex;align-items:flex-end;background:var(--surface);border-radius:5px 5px 0 0;overflow:hidden;}
+.calyear-bar-fill{width:100%;background:var(--accent);border-radius:5px 5px 0 0;transition:height .4s;min-height:2px;}
+.calyear-bar-fill.empty{background:var(--surface2);min-height:2px;}
+.calyear-bar-label{font-size:9.5px;font-weight:700;font-family:var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);text-align:center;line-height:1;}
+.calyear-bar-col.is-current .calyear-bar-label{color:var(--text);font-weight:800;}
 
 /* ── ENCART ÉTAT (chargement / refus / vide) ── */
 .notice{
   max-width:520px;margin:40px auto;
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   padding:28px 24px;text-align:center;box-shadow:var(--shadow-sm);
 }
 .notice-icon{
@@ -81,7 +81,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 /* ── TABLEAU ── */
 .table-wrap{
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   overflow:hidden;box-shadow:var(--shadow-sm);
 }
 table.accounts{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -89,14 +89,14 @@ table.accounts thead th{
   text-align:left;font-weight:600;color:var(--muted);
   font-size:11px;text-transform:uppercase;letter-spacing:.4px;
   padding:11px 14px;border-bottom:1px solid var(--border);
-  background:var(--bg);white-space:nowrap;
+  background:var(--surface);white-space:nowrap;
 }
 table.accounts tbody td{
   padding:11px 14px;border-bottom:1px solid var(--border);
   color:var(--text);vertical-align:middle;
 }
 table.accounts tbody tr:last-child td{border-bottom:none}
-table.accounts tbody tr:hover{background:var(--bg)}
+table.accounts tbody tr:hover{background:var(--surface)}
 td.email{font-weight:500}
 td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);color:var(--muted)}
 td.muted{color:var(--muted)}
@@ -131,42 +131,57 @@ td.muted{color:var(--muted)}
 .vip-toast{
   position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
   background:var(--text);color:#FFFFFF;font-size:12.5px;font-weight:500;
-  padding:9px 16px;border-radius:8px;box-shadow:var(--shadow-md);
+  padding:9px 16px;border-radius:8px;box-shadow:var(--shadow-sm);
   opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;
 }
 .vip-toast.show{opacity:1}
 </style>
+<link rel="stylesheet" href="/styles/app-footer.css">
+<link rel="stylesheet" href="/styles/cookies-banner.css">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 </head>
 <body>
 
-<!-- SHELL -->
-<div class="shell">
+<aside id="sidebar" class="sidebar"></aside>
 
-  <aside class="sidebar" id="sidebar"></aside>
+<main>
 
-  <!-- MAIN -->
-  <main class="main" id="main-content">
-
-    <!-- PAGE HEADER -->
-    <div class="page-header">
-      <div class="page-title-block">
-        <div class="page-title">Comptes</div>
-        <div class="page-subtitle" id="page-subtitle">Inventaire des comptes — lecture seule</div>
-      </div>
+  <div class="page-header">
+    <div>
+      <div class="page-title">Comptes</div>
+      <div class="page-subtitle" id="page-subtitle">Inventaire des comptes — lecture seule</div>
     </div>
+  </div>
 
-    <div class="content" id="content">
-      <div class="notice">
-        <div class="notice-title">Chargement…</div>
-        <div class="notice-text">Récupération de l'inventaire des comptes.</div>
-      </div>
+  <div class="container" id="content">
+    <div class="notice">
+      <div class="notice-title">Chargement…</div>
+      <div class="notice-text">Récupération de l'inventaire des comptes.</div>
     </div>
+  </div>
 
-  </main>
+</main>
 
-</div>
+<footer class="mup-app-footer">
+  <div class="mup-app-footer__inner">
+    <span>© 2026 <strong>MovUP</strong></span>
+    <nav>
+      <a href="/mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a>
+      <a href="/cgu.html" target="_blank" rel="noopener">CGU</a>
+      <a href="/confidentialite.html" target="_blank" rel="noopener">Confidentialité</a>
+      <a href="/cgv.html" target="_blank" rel="noopener">CGV</a>
+      <a href="/dpa.html" target="_blank" rel="noopener">DPA</a>
+      <a href="/sous-traitants.html" target="_blank" rel="noopener">Sous-traitants</a>
+      <a href="/cookies.html" target="_blank" rel="noopener">Cookies</a>
+      <a href="/cookies.html" id="mup-cookies-reopen" target="_blank" rel="noopener">Gérer mes cookies</a>
+    </nav>
+  </div>
+</footer>
 
 <script src="/sidebar.js"></script>
+<script defer src="/scripts/cookies-banner.js"></script>
 <script>
 (function () {
   var content = document.getElementById('content');
@@ -216,6 +231,114 @@ td.muted{color:var(--muted)}
     return '<div class="notice">'
       + '<div class="notice-title">Aucun compte</div>'
       + '<div class="notice-text">L\'inventaire ne contient aucun compte pour le moment.</div>'
+      + '</div>';
+  }
+
+  // ── CARTES CHIFFRÉES ───────────────────────────────────────────────────
+  // Les cinq indicateurs se dérivent du seul corps renvoyé par
+  // /api/admin/comptes (server.js:1050-1062) : aucun appel supplémentaire,
+  // aucune donnée qui n'y figure pas. Statuts d'abonnement et d'essai tels
+  // qu'ils sont écrits côté serveur (active / trialing / past_due / canceled,
+  // active / converted / expired).
+  function kpiCard(label, value, sub) {
+    return '<div class="kpi-card k-closing">'
+      + '<div class="kpi-label">' + esc(label) + '</div>'
+      + '<div class="kpi-value">' + esc(value) + '</div>'
+      + '<div class="kpi-sub">' + esc(sub) + '</div>'
+      + '</div>';
+  }
+
+  function renderKpis(rows) {
+    var total = rows.length;
+    var abonnes = 0, essais = 0, convertis = 0, vip = 0, fiches = 0, leads = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i] || {};
+      if (r.subscription_status === 'active') abonnes++;
+      if (r.trial_status === 'active') essais++;
+      if (r.trial_status === 'converted') convertis++;
+      if (r.bypass) vip++;
+      fiches += Number(r.fiches) || 0;
+      leads += Number(r.leads) || 0;
+    }
+    var pct = total ? Math.round(abonnes / total * 100) : 0;
+
+    return '<div class="grid-kpi">'
+      + kpiCard('Comptes', String(total), 'inscrits au total')
+      + kpiCard('Essais en cours', String(essais), convertis + ' convertis')
+      + kpiCard('Abonnés', String(abonnes), pct + ' % des comptes')
+      + kpiCard('Fiches', String(fiches), leads + ' leads consommés')
+      + kpiCard('VIP', String(vip), 'hors mur d’abonnement')
+      + '</div>';
+  }
+
+  // ── SÉRIE HEBDOMADAIRE ─────────────────────────────────────────────────
+  // Inscriptions par semaine sur les douze dernières, lundi comme premier
+  // jour. Barres en CSS pur, une seule couleur : var(--accent).
+  var WEEKS = 12;
+
+  function mondayOf(d) {
+    var m = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var day = m.getDay();               // 0 = dimanche
+    m.setDate(m.getDate() - (day === 0 ? 6 : day - 1));
+    return m;
+  }
+
+  function renderSemaines(rows) {
+    // Bornes posées en arithmétique de calendrier (setDate) et écarts arrondis
+    // au jour : un changement d'heure dans la fenêtre décale les millisecondes,
+    // jamais le rang de la semaine.
+    var lastMonday = mondayOf(new Date());
+    var firstMonday = new Date(lastMonday.getFullYear(), lastMonday.getMonth(), lastMonday.getDate() - (WEEKS - 1) * 7);
+
+    var buckets = [];
+    for (var w = 0; w < WEEKS; w++) {
+      buckets.push({
+        start: new Date(firstMonday.getFullYear(), firstMonday.getMonth(), firstMonday.getDate() + w * 7),
+        n: 0
+      });
+    }
+
+    var total = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var raw = rows[i] && rows[i].created_at;
+      if (!raw) continue;
+      var d = new Date(raw);
+      if (isNaN(d.getTime())) continue;
+      var jours = Math.round((mondayOf(d).getTime() - firstMonday.getTime()) / 86400000);
+      var idx = Math.round(jours / 7);
+      if (idx < 0 || idx >= WEEKS) continue;
+      buckets[idx].n++;
+      total++;
+    }
+
+    var max = 0;
+    for (var j = 0; j < buckets.length; j++) if (buckets[j].n > max) max = buckets[j].n;
+
+    var cols = '';
+    for (var k = 0; k < buckets.length; k++) {
+      var b = buckets[k];
+      var isCurrent = (k === buckets.length - 1);
+      var hasData = b.n > 0;
+      var h = (max > 0 && hasData) ? Math.max(2, Math.round(b.n / max * 100)) : 0;
+      var label = b.start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+
+      cols += '<div class="calyear-bar-col' + (isCurrent ? ' is-current' : '') + '">'
+        + '<div class="calyear-bar-amount' + (hasData ? '' : ' empty') + '">' + (hasData ? b.n : '—') + '</div>'
+        + '<div class="calyear-bar-track">'
+        + (hasData
+            ? '<div class="calyear-bar-fill" style="height:' + h + '%;"></div>'
+            : '<div class="calyear-bar-fill empty" style="height:2px;"></div>')
+        + '</div>'
+        + '<div class="calyear-bar-label">' + esc(label) + '</div>'
+        + '</div>';
+    }
+
+    return '<div class="card">'
+      + '<div class="card-header-light">'
+      + '<h3>Inscriptions</h3>'
+      + '<div class="card-subtitle">' + total + ' sur les 12 dernières semaines</div>'
+      + '</div>'
+      + '<div class="card-body"><div class="calyear-chart">' + cols + '</div></div>'
       + '</div>';
   }
 
@@ -316,7 +439,7 @@ td.muted{color:var(--muted)}
       if (!Array.isArray(rows) || rows.length === 0) { content.innerHTML = noticeEmpty(); return; }
       var sub = document.getElementById('page-subtitle');
       if (sub) sub.textContent = rows.length + ' compte' + (rows.length > 1 ? 's' : '') + ' — lecture seule';
-      content.innerHTML = renderTable(rows);
+      content.innerHTML = renderKpis(rows) + renderSemaines(rows) + renderTable(rows);
     })
     .catch(function () {
       content.innerHTML = noticeError();

@@ -46,7 +46,7 @@ import { runReferentielAtoutFranceMigration } from './server/services/referentie
 import { chargerAtoutFrance } from './server/services/atout-france.js'
 import { runReferentielRgeMigration } from './server/services/referentiel-rge.js'
 import { chargerRge } from './server/services/rge.js'
-import { runVisitesMigration, creerMesureAudience, visiteursALInstant, jourParis, decalerJour } from './server/services/visites.js'
+import { runVisitesMigration, creerMesureAudience, visiteursALInstant, etatVivant, jourParis, decalerJour } from './server/services/visites.js'
 import { BYPASS_EMAIL, isOwner } from './lib/vip.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
@@ -1113,6 +1113,260 @@ app.post('/api/admin/comptes/bypass', requireSuperadmin, async (req, res) => {
   }
 })
 
+// ── GET /api/admin/comptes/:email — superadmin, LECTURE SEULE ──
+// Même verrou que /api/admin/comptes (requireSuperadmin, dev@soparadi.com SEUL).
+// AUCUNE mutation, AUCUN appel Stripe : que des SELECT.
+//
+// POURQUOI. Le tableau ne rend que dix colonnes alors que la fiche d'un compte
+// en porte une quarantaine, et que son activité n'y figure pas du tout. Tout
+// cela se lisait jusqu'ici par un script de diagnostic lancé à la main ; c'est
+// désormais une route, et la page la déplie dans un panneau.
+//
+// CE QUI NE SORT JAMAIS D'ICI. La projection est ÉNUMÉRÉE champ par champ dans
+// CHAMPS_USER : password_hash n'y est pas, aucun jeton de session ni de
+// vérification non plus, et aucun `SELECT *` ne part vers le client. Ajouter un
+// champ à la fiche demande de l'écrire dans cette liste — c'est le but. Même
+// règle sur geo_data : la capture d'inscription porte l'IP interrogée
+// (`ip_used`), la fiche n'en rend que la ville, la région et le pays.
+//
+// ABSENT N'EST PAS VIDE. Un champ jamais renseigné n'existe pas dans
+// l'enregistrement ; sous une PROJECTION il revient tout de même, à null —
+// vérifié en lecture sur la base, la projection ci-dessous rend ses 46 clés
+// quoi qu'il arrive. Un test de présence de clé serait donc toujours vrai et ne
+// dirait rien. C'est la VALEUR qui tranche, et chacune part sous enveloppe
+// { present, valeur } : null ou undefined → absent ; false, 0 et la chaîne vide
+// → présents. La page distingue ainsi « jamais renseigné » (tiret) de « posé
+// puis vidé » (valeur vide) — un consentement retiré ne doit pas ressembler à
+// un consentement jamais demandé.
+//
+// TYPES DE CLÉS, à ne pas mélanger : `user_id` est un record<user> sur
+// lead_search — d'où type::record('user', $uid) ; `userId` est une CHAÎNE NUE
+// sur pipeline, contacts, societes, devis, facture et user_plan. Les dates,
+// elles, sont des datetime sur lead_search et user (time::max, jamais
+// math::max) mais des CHAÎNES ISO sur contacts, societes et pipeline : leurs
+// agrégats se font donc côté application, une base ne comparera pas une chaîne
+// comme une date.
+const CHAMPS_USER = [
+  'id',
+  // Identité
+  'prenom', 'nom', 'name', 'email', 'email_verified', 'created_at',
+  // Contact
+  'telephone', 'adresse', 'code_postal', 'ville', 'lat', 'lng',
+  // Entreprise
+  'siret', 'raison_sociale', 'code_naf', 'billing_address',
+  // Origine (capture à l'inscription)
+  'geo_data',
+  // Consentements
+  'marketing_consent', 'marketing_consent_at', 'cgu_accepted', 'cgu_accepted_at', 'cgu_version',
+  // Abonnement
+  'plan', 'intended_plan', 'intended_plan_at', 'trial_started_at', 'trial_ends_at', 'trial_status',
+  'subscription_status', 'current_period_end', 'plan_billing_cycle', 'cancel_at_period_end',
+  'past_due_since', 'stripe_customer_id', 'stripe_subscription_id', 'bypass',
+  // Cycle de vie
+  'welcome_email_sent_at', 'trial_email_j0_sent_at', 'trial_email_j2_sent_at',
+  'trial_email_j12_sent_at', 'grace_j_minus_1_sent_at', 'trial_purge_warning_sent_at',
+  'deletion_requested_at', 'deletion_scheduled_at', 'last_seen_at'
+].join(', ')
+
+app.get('/api/admin/comptes/:email', requireSuperadmin, async (req, res) => {
+  const email = String(req.params.email ?? '').toLowerCase().trim()
+  if (!email) return res.status(400).json({ error: 'email requis' })
+
+  // Enveloppe { present, valeur } — cf. « ABSENT N'EST PAS VIDE » ci-dessus.
+  // Un booléen false, un zéro et une chaîne vide sont PRÉSENTS ; seuls
+  // undefined et null (la forme JS d'un NONE SurrealDB) valent absence.
+  const ch = (o, cle) => (o && o[cle] !== undefined && o[cle] !== null)
+    ? { present: true, valeur: o[cle] }
+    : { present: false }
+
+  // Millisecondes depuis une valeur datetime OU chaîne ISO ; null si ce n'en
+  // est pas une. Le pilote rend tantôt un Date, tantôt une chaîne.
+  const ms = (v) => {
+    if (v === undefined || v === null || v === '') return null
+    const d = v instanceof Date ? v : new Date(v)
+    return Number.isNaN(d.getTime()) ? null : d.getTime()
+  }
+  // Plus récente des dates portées par un jeu de lignes, sur plusieurs clés
+  // possibles : pipeline écrit `createdAt` depuis la page et `created_at`
+  // depuis les imports, les deux cohabitent en base.
+  const plusRecente = (lignes, ...cles) => {
+    let max = null
+    for (const l of lignes) {
+      for (const c of cles) {
+        const t = ms(l[c])
+        if (t !== null && (max === null || t > max)) max = t
+      }
+    }
+    return max
+  }
+  const nombre = (lignes) => Number(lignes?.[0]?.n) || 0
+
+  try {
+    const db = await getDb()
+    const trouve = await queryOrEmpty(
+      db, `SELECT ${CHAMPS_USER} FROM user WHERE email = $email LIMIT 1`, { email })
+    const u = trouve[0]
+    if (!u) return res.status(404).json({ error: 'compte introuvable' })
+
+    // uid nu (sans préfixe ni chevrons) — même normalisation que les deux
+    // routes voisines. Il sert au type::record des tables à clé record ET à
+    // l'égalité de chaîne des tables métier.
+    const uid = String(u.id ?? '').replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+
+    const [plans, rechAgr, recherches, pipes, contacts, societes, devis, factures] = await Promise.all([
+      // user_plan est tantôt clé par le champ userId, tantôt par l'identifiant
+      // de record — les deux formes existent en base, les deux sont couvertes.
+      queryOrEmpty(db,
+        `SELECT leadsConsumedThisMonth, enrichedSirets, plan, subscription_status, trial_status, current_period_end
+           FROM user_plan WHERE userId = $uid OR id = type::record('user_plan', $uid) LIMIT 1`, { uid }),
+      // Total des recherches + date de la plus récente. time::max sur un
+      // datetime ; math::max rendrait un nombre et casserait la comparaison.
+      queryOrEmpty(db,
+        `SELECT count() AS n, time::max(searched_at) AS derniere
+           FROM lead_search WHERE user_id = type::record('user', $uid) GROUP ALL`, { uid }),
+      queryOrEmpty(db,
+        `SELECT naf_code, naf_label, region_name, department_code, department_name, city_name,
+                results_count, searched_at
+           FROM lead_search WHERE user_id = type::record('user', $uid)
+          ORDER BY searched_at DESC LIMIT 20`, { uid }),
+      // Les trois tables métier datées en CHAÎNES ISO : la projection ne
+      // ramène que leurs colonnes de date, et le compte se lit sur le nombre
+      // de lignes rendues — un count() de plus serait un aller-retour pour
+      // rien.
+      queryOrEmpty(db, 'SELECT createdAt, created_at FROM pipeline WHERE userId = $uid', { uid }),
+      queryOrEmpty(db, 'SELECT created_at FROM contacts WHERE userId = $uid', { uid }),
+      queryOrEmpty(db, 'SELECT created_at, updated_at FROM societes WHERE userId = $uid', { uid }),
+      // Devis et factures : le compte suffit, count() GROUP ALL.
+      queryOrEmpty(db, 'SELECT count() AS n FROM devis WHERE userId = $uid GROUP ALL', { uid }),
+      queryOrEmpty(db, 'SELECT count() AS n FROM facture WHERE userId = $uid GROUP ALL', { uid })
+    ])
+
+    const plan = plans[0] || null
+
+    // Repli user → user_plan, LE MÊME que /api/admin/comptes et /api/admin/kpi :
+    // les trois routes doivent lire le même statut pour le même compte, sinon
+    // la fiche contredit la ligne du tableau qu'on vient de cliquer. La
+    // provenance est rendue avec la valeur, pour que le repli reste visible.
+    const chPlan = (cle) => {
+      if (u[cle] !== undefined && u[cle] !== null && u[cle] !== '') return { present: true, valeur: u[cle] }
+      if (plan && plan[cle] !== undefined && plan[cle] !== null && plan[cle] !== '') {
+        return { present: true, valeur: plan[cle], source: 'user_plan' }
+      }
+      return { present: false }
+    }
+
+    // Origine — capture d'inscription (server/services/geolocation.js). NI
+    // `ip_used` NI le fournisseur n'en sortent : la fiche dit d'où la personne
+    // s'est inscrite, pas depuis quelle adresse.
+    const geo = (u.geo_data && typeof u.geo_data === 'object') ? u.geo_data : null
+
+    // ── Dernière trace datée ──
+    // Le plus récent des signaux datés du compte, avec l'écart en jours. Les
+    // deux premiers sont des datetime, les trois suivants des chaînes ISO
+    // agrégées ici même — d'où le passage par des millisecondes, seule échelle
+    // où les cinq se comparent.
+    const traces = [
+      ['dernière venue', ms(u.last_seen_at)],
+      ['dernière recherche', ms(rechAgr[0]?.derniere)],
+      ['dernière fiche pipeline', plusRecente(pipes, 'createdAt', 'created_at')],
+      ['dernier contact', plusRecente(contacts, 'created_at')],
+      ['dernière société', plusRecente(societes, 'updated_at', 'created_at')]
+    ].filter(([, t]) => t !== null).sort((a, b) => b[1] - a[1])
+    const recente = traces[0] || null
+    const enrichis = Array.isArray(plan?.enrichedSirets) ? plan.enrichedSirets.length : 0
+
+    res.json({
+      email: u.email || email,
+
+      identite: {
+        prenom: ch(u, 'prenom'), nom: ch(u, 'nom'), name: ch(u, 'name'),
+        email: ch(u, 'email'), email_verified: ch(u, 'email_verified'),
+        created_at: ch(u, 'created_at')
+      },
+
+      contact: {
+        telephone: ch(u, 'telephone'), adresse: ch(u, 'adresse'),
+        code_postal: ch(u, 'code_postal'), ville: ch(u, 'ville'),
+        lat: ch(u, 'lat'), lng: ch(u, 'lng')
+      },
+
+      entreprise: {
+        siret: ch(u, 'siret'), raison_sociale: ch(u, 'raison_sociale'),
+        code_naf: ch(u, 'code_naf'), billing_address: ch(u, 'billing_address')
+      },
+
+      origine: {
+        ville: ch(geo, 'city'), region: ch(geo, 'region'), pays: ch(geo, 'country'),
+        code_pays: ch(geo, 'country_code'), code_postal: ch(geo, 'postal_code'),
+        captee_le: ch(geo, 'detected_at')
+      },
+
+      consentements: {
+        marketing_consent: ch(u, 'marketing_consent'),
+        marketing_consent_at: ch(u, 'marketing_consent_at'),
+        cgu_accepted: ch(u, 'cgu_accepted'),
+        cgu_accepted_at: ch(u, 'cgu_accepted_at'),
+        cgu_version: ch(u, 'cgu_version')
+      },
+
+      abonnement: {
+        plan: chPlan('plan'),
+        intended_plan: ch(u, 'intended_plan'), intended_plan_at: ch(u, 'intended_plan_at'),
+        trial_started_at: ch(u, 'trial_started_at'), trial_ends_at: ch(u, 'trial_ends_at'),
+        trial_status: chPlan('trial_status'),
+        subscription_status: chPlan('subscription_status'),
+        current_period_end: chPlan('current_period_end'),
+        plan_billing_cycle: ch(u, 'plan_billing_cycle'),
+        cancel_at_period_end: ch(u, 'cancel_at_period_end'),
+        past_due_since: ch(u, 'past_due_since'),
+        stripe_customer_id: ch(u, 'stripe_customer_id'),
+        stripe_subscription_id: ch(u, 'stripe_subscription_id'),
+        bypass: ch(u, 'bypass')
+      },
+
+      cycle_de_vie: {
+        welcome_email_sent_at: ch(u, 'welcome_email_sent_at'),
+        trial_email_j0_sent_at: ch(u, 'trial_email_j0_sent_at'),
+        trial_email_j2_sent_at: ch(u, 'trial_email_j2_sent_at'),
+        trial_email_j12_sent_at: ch(u, 'trial_email_j12_sent_at'),
+        grace_j_minus_1_sent_at: ch(u, 'grace_j_minus_1_sent_at'),
+        trial_purge_warning_sent_at: ch(u, 'trial_purge_warning_sent_at'),
+        deletion_requested_at: ch(u, 'deletion_requested_at'),
+        deletion_scheduled_at: ch(u, 'deletion_scheduled_at'),
+        last_seen_at: ch(u, 'last_seen_at')
+      },
+
+      activite: {
+        recherches: nombre(rechAgr),
+        fiches_pipeline: pipes.length,
+        contacts: contacts.length,
+        societes: societes.length,
+        devis: nombre(devis),
+        factures: nombre(factures),
+        sirets_enrichis: enrichis,
+        leads_consommes: Number(plan?.leadsConsumedThisMonth ?? 0) || 0,
+        derniere_trace: recente
+          ? {
+              quoi: recente[0],
+              quand: new Date(recente[1]).toISOString(),
+              ecart_jours: Math.max(0, Math.floor((Date.now() - recente[1]) / 86400000))
+            }
+          : null
+      },
+
+      recherches: recherches.map((s) => ({
+        metier: [s.naf_code, s.naf_label].filter(Boolean).join(' '),
+        zone: [s.city_name, s.department_name || s.department_code, s.region_name].filter(Boolean).join(', '),
+        resultats: Number(s.results_count) || 0,
+        date: s.searched_at ?? null
+      }))
+    })
+  } catch (err) {
+    console.error('[admin/comptes/:email]', err.message)
+    res.status(500).json({ error: 'Lecture de la fiche impossible' })
+  }
+})
+
 // ── GET /api/admin/kpi — superadmin, LECTURE SEULE ──
 // Même verrou que /api/admin/comptes (requireSuperadmin, dev@soparadi.com SEUL).
 // Aucune mutation, aucun appel Stripe.
@@ -1132,11 +1386,14 @@ app.post('/api/admin/comptes/bypass', requireSuperadmin, async (req, res) => {
 // compté — ce sont de vrais utilisateurs, simplement dispensés du mur
 // d'abonnement.
 //
-// COÛT DES LECTURES. Quatre requêtes, aucune sur un référentiel. `user` et
+// COÛT DES LECTURES. Cinq requêtes, aucune sur un référentiel. `user` et
 // `user_plan` sont projetées (jamais SELECT *) et se comptent en centaines de
 // lignes ; `pipeline` est agrégée par count() GROUP BY userId ; `visite_jour`
-// porte une ligne par jour depuis la mise en service. Rien qui balaie une table
-// de masse — l'instance est petite (1 Go), une agrégation large la fait tomber.
+// porte une ligne par jour depuis la mise en service ; `visite` est lue par
+// ÉGALITÉ sur `jour` (champ indexé), donc une seule journée. Rien qui balaie
+// une table de masse — l'instance est petite (1 Go), une agrégation large la
+// fait tomber. La page rappelle cette route toutes les dix secondes : ce coût
+// est celui d'un rafraîchissement, pas d'une consultation.
 //
 // TYPES DE CLÉS, à ne pas mélanger : `userId` est une CHAÎNE NUE sur pipeline et
 // user_plan (d'où le norm ci-dessous, identique à celui de /api/admin/comptes) ;
@@ -1170,13 +1427,24 @@ app.get('/api/admin/kpi', requireSuperadmin, async (req, res) => {
     return decalerJour(jour, -(jsJour === 0 ? 6 : jsJour - 1))
   }
 
+  // Le jour civil courant, Europe/Paris — celui que vit le lecteur du tableau.
+  const jourCourant = jourParis()
+
   try {
     const db = await getDb()
-    const [users, plans, pipes, jours] = await Promise.all([
+    const [users, plans, pipes, agreges, detailDuJour] = await Promise.all([
       queryOrEmpty(db, 'SELECT id, email, created_at, bypass, plan, subscription_status, trial_status, leadsConsumedThisMonth FROM user'),
       queryOrEmpty(db, 'SELECT userId, id, plan, subscription_status, trial_status, leadsConsumedThisMonth FROM user_plan'),
       queryOrEmpty(db, 'SELECT userId, count() AS n FROM pipeline GROUP BY userId'),
-      queryOrEmpty(db, 'SELECT jour, vues, visiteurs FROM visite_jour ORDER BY jour')
+      queryOrEmpty(db, 'SELECT jour, vues, visiteurs FROM visite_jour ORDER BY jour'),
+      // LA JOURNÉE EN COURS. agregerVisitesJour ne traite que les journées
+      // RÉVOLUES — par construction, sinon il écrirait une ligne fausse qu'il
+      // faudrait réécrire le lendemain. Conséquence : le jour courant
+      // n'apparaissait JAMAIS dans visite_jour, donc jamais dans la série. Il
+      // est lu ici directement dans le DÉTAIL, par égalité sur `jour` (champ
+      // indexé) et projeté sur le seul `jeton` : vues = lignes, visiteurs =
+      // jetons distincts — exactement le calcul de l'agrégateur.
+      queryOrEmpty(db, 'SELECT jeton FROM visite WHERE jour = $jour', { jour: jourCourant })
     ])
 
     const planParId = new Map()
@@ -1215,6 +1483,35 @@ app.get('/api/admin/kpi', requireSuperadmin, async (req, res) => {
 
     const abonnes_pct = cartes.comptes ? Math.round(cartes.abonnes / cartes.comptes * 100) : 0
 
+    // ── La journée en cours, recollée à la série des journées agrégées ──
+    // L'AGRÉGAT PRIME. Si le cron a déjà écrit la date du jour dans visite_jour
+    // — rattrapage après un long arrêt, passage à minuit pendant la lecture —
+    // c'est sa ligne qui fait foi et le détail n'est pas relu : deux sources
+    // pour une même date, c'est la source stable qui gagne.
+    //
+    // Sinon la journée est reconstruite depuis le détail et marquée
+    // `partielle` : elle n'est pas finie, elle grossira jusqu'à minuit. Sans
+    // ce drapeau, la dernière barre de la série se lirait comme une chute
+    // alors qu'elle n'est qu'inachevée.
+    const jours = agreges.slice()
+    const dejaAgrege = agreges.some((r) => r.jour === jourCourant)
+    let jour_courant = null
+    if (dejaAgrege) {
+      const r = agreges.find((x) => x.jour === jourCourant)
+      jour_courant = {
+        jour: jourCourant, vues: Number(r.vues) || 0, visiteurs: Number(r.visiteurs) || 0,
+        partielle: false, source: 'agregat'
+      }
+    } else if (detailDuJour.length) {
+      const distincts = new Set()
+      for (const l of detailDuJour) distincts.add(l.jeton)
+      jour_courant = {
+        jour: jourCourant, vues: detailDuJour.length, visiteurs: distincts.size,
+        partielle: true, source: 'detail'
+      }
+      jours.push({ jour: jourCourant, vues: jour_courant.vues, visiteurs: jour_courant.visiteurs, partielle: true })
+    }
+
     // ── Série hebdomadaire — douze semaines, lundi comme premier jour ──
     // DEUX jeux de données par semaine, et pas un seul :
     //
@@ -1234,7 +1531,7 @@ app.get('/api/admin/kpi', requireSuperadmin, async (req, res) => {
     const semaines = []
     for (let i = SEMAINES - 1; i >= 0; i--) {
       const debut = decalerJour(lundiCourant, -7 * i)
-      semaines.push({ debut, fin: decalerJour(debut, 6), visiteurs: 0, vues: 0, inscriptions: 0 })
+      semaines.push({ debut, fin: decalerJour(debut, 6), visiteurs: 0, vues: 0, inscriptions: 0, partielle: false })
     }
     const semaineParDebut = new Map(semaines.map((s) => [s.debut, s]))
 
@@ -1245,7 +1542,12 @@ app.get('/api/admin/kpi', requireSuperadmin, async (req, res) => {
       vues_total += Number(r.vues) || 0
       visiteurs_total += Number(r.visiteurs) || 0
       const s = semaineParDebut.get(lundiDe(r.jour))
-      if (s) { s.vues += Number(r.vues) || 0; s.visiteurs += Number(r.visiteurs) || 0 }
+      if (s) {
+        s.vues += Number(r.vues) || 0
+        s.visiteurs += Number(r.visiteurs) || 0
+        // La semaine qui porte la journée en cours est elle-même inachevée.
+        if (r.partielle) s.partielle = true
+      }
     }
     for (const [jour, n] of inscriptionsParJour) {
       const s = semaineParDebut.get(lundiDe(jour))
@@ -1256,16 +1558,31 @@ app.get('/api/admin/kpi', requireSuperadmin, async (req, res) => {
       cartes: { ...cartes, abonnes_pct },
       proprietaire,
       audience: {
-        // La table existe-t-elle et a-t-elle été agrégée au moins une fois ?
-        // Tant que non, la page garde les inscriptions en série principale.
+        // Y a-t-il de quoi mesurer ? Depuis que la journée en cours est recollée
+        // à la série, la réponse ne dépend plus du passage du cron : une seule
+        // ligne dans `visite` aujourd'hui suffit, l'audience est « disponible »
+        // le jour même de la mise en service. Reste un cas de bord assumé — du
+        // détail sur des journées passées, pas encore agrégé, et aucune visite
+        // aujourd'hui : il se referme à la première visite ou au premier cron,
+        // et le lever demanderait un balayage de `visite` que cette instance ne
+        // supporte pas.
         disponible: jours.length > 0,
         depuis: jours.length ? jours[0].jour : null,
         jours: jours.length,
         vues_total,
         visiteurs_total,
+        // La journée en cours, à part : la série la porte déjà, mais la page
+        // doit pouvoir dire qu'elle n'est pas finie.
+        jour_courant,
         // Mémoire du process, jamais lue en base (fenêtre de cinq minutes).
         a_l_instant: visiteursALInstant()
       },
+      // ── L'ÉTAT VIVANT ──
+      // Entièrement dérivé de la fenêtre en mémoire (server/services/visites.js) :
+      // aucune lecture de base, aucun coût de requête. Il ne survit pas à un
+      // redémarrage du process — `minutes_couvertes` dit jusqu'où la mémoire
+      // répond, pour qu'un trou ne se lise pas comme un creux d'audience.
+      vivant: etatVivant(),
       semaines
     })
   } catch (err) {

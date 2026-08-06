@@ -40,9 +40,9 @@
 // trafic.
 //
 // ÉTAT EN MÉMOIRE, jamais en base : le sel du jour, la file d'écriture et la
-// fenêtre de présence (« visiteurs à l'instant »). Le tout est propre au
-// process ; un redémarrage remet ces trois choses à zéro sans rien corrompre en
-// base. L'instance est unique côté Railway, donc la présence est exacte ; si le
+// fenêtre de présence (l'« état vivant »). Le tout est propre au process ; un
+// redémarrage remet ces trois choses à zéro sans rien corrompre en base.
+// L'instance est unique côté Railway, donc la présence est exacte ; si le
 // service passait à plusieurs instances, elle deviendrait un décompte par
 // instance — à retravailler ce jour-là, pas avant.
 
@@ -109,26 +109,120 @@ function calculerJeton(ip, ua) {
   return createHmac('sha256', selDuJour()).update(ip + '\n' + ua).digest('hex').slice(0, 32)
 }
 
-// ── Fenêtre de présence — « visiteurs à l'instant » ───────────────────────
-// Jetons distincts vus dans les cinq dernières minutes. Purement en mémoire :
-// cette valeur ne descend JAMAIS en base, elle n'a pas d'histoire à conserver.
+// ── Fenêtre de présence — l'ÉTAT VIVANT ───────────────────────────────────
+// Ce qui se passe sur le site MAINTENANT : combien de monde, sur quelles pages,
+// quelles ont été les dernières vues, et la crête des trente dernières minutes.
+// Tout se dérive de cette seule file en mémoire ; RIEN de tout cela ne descend
+// en base et rien n'est relu au démarrage.
+//
+// L'ÉTAT EST PROPRE AU PROCESS ET UN REDÉMARRAGE LE REMET À ZÉRO. C'est une
+// propriété à connaître avant de lire ces chiffres : au lendemain d'un
+// déploiement la courbe des trente minutes repart d'une mémoire vide, et les
+// minutes d'avant ne valent pas zéro — elles sont INCONNUES. C'est ce que dit
+// `minutes_couvertes`, pour qu'une ignorance ne se lise pas comme un creux.
+//
+// DEUX DURÉES, UNE SEULE FILE. Les entrées sont gardées trente minutes — la
+// portée de la courbe — et « à l'instant » n'en lit que les cinq dernières.
+// Deux files auraient deux purges à tenir d'accord, et elles finiraient par
+// diverger d'une minute.
+const FENETRE_MS = 30 * 60 * 1000
 const PRESENCE_MS = 5 * 60 * 1000
+const MINUTES = 30
+const PAGES_MAX = 10
+const DERNIERES_MAX = 20
 const PRESENCE_MAX = 5000
 const presence = []
 
-function noterPresence(jeton, maintenant) {
-  presence.push({ jeton, ts: maintenant })
+// Repères de couverture. DEBUT_MESURE est posé au chargement du module — donc
+// au démarrage du process. `evincesJusqua` retient l'horodatage de la dernière
+// entrée abandonnée sous le plafond : au-delà de ce point la mémoire est
+// trouée, et la courbe ne peut pas prétendre le contraire.
+const DEBUT_MESURE = Date.now()
+let evincesJusqua = 0
+
+function noterPresence(jeton, chemin, maintenant) {
+  presence.push({ jeton, chemin, ts: maintenant })
   // Plafond de sécurité : sous un pic anormal la fenêtre reste bornée, on perd
   // les plus anciennes entrées de la fenêtre plutôt que la mémoire du process.
-  if (presence.length > PRESENCE_MAX) presence.splice(0, presence.length - PRESENCE_MAX)
+  if (presence.length > PRESENCE_MAX) {
+    const evinces = presence.splice(0, presence.length - PRESENCE_MAX)
+    const dernier = evinces[evinces.length - 1]
+    if (dernier && dernier.ts > evincesJusqua) evincesJusqua = dernier.ts
+  }
+}
+
+// Purge par l'âge, faite À LA LECTURE : pas d'horloge dédiée pour une fenêtre
+// que personne ne regarde la plupart du temps.
+function purger(maintenant) {
+  const seuil = maintenant - FENETRE_MS
+  while (presence.length && presence[0].ts < seuil) presence.shift()
 }
 
 export function visiteursALInstant() {
-  const seuil = Date.now() - PRESENCE_MS
-  while (presence.length && presence[0].ts < seuil) presence.shift()
+  const maintenant = Date.now()
+  purger(maintenant)
+  const seuil = maintenant - PRESENCE_MS
   const distincts = new Set()
-  for (const p of presence) distincts.add(p.jeton)
+  for (const p of presence) if (p.ts >= seuil) distincts.add(p.jeton)
   return distincts.size
+}
+
+// L'état vivant complet, en UNE passe sur la fenêtre — la route d'indicateurs
+// est rappelée toutes les dix secondes, elle ne doit pas la balayer cinq fois.
+//
+//   • a_l_instant      jetons distincts des CINQ dernières minutes ;
+//   • pages            par chemin, sur ces mêmes cinq minutes, le nombre de
+//                      jetons distincts — décroissant, dix au plus ;
+//   • dernieres        les vingt dernières vues, la plus récente en tête ;
+//   • par_minute       les vues par minute sur les trente dernières, minute
+//                      courante en DERNIER ;
+//   • minutes_couvertes  celles des trente pour lesquelles la mémoire répond.
+//
+// CE QUI N'EN SORT PAS : aucun identifiant de visiteur, nulle part. Ni jeton,
+// ni IP, ni User-Agent — le jeton reste à l'intérieur du module, où il ne sert
+// qu'à dédoublonner. Le fil des dernières vues ne dit que QUAND et QUOI ; il ne
+// permet donc pas de recomposer le parcours d'une personne.
+export function etatVivant() {
+  const maintenant = Date.now()
+  purger(maintenant)
+
+  const seuilInstant = maintenant - PRESENCE_MS
+  const minuteCourante = Math.floor(maintenant / 60000)
+
+  const distincts = new Set()
+  const parPage = new Map()
+  const par_minute = new Array(MINUTES).fill(0)
+
+  for (const p of presence) {
+    // Position dans le tableau : la minute courante occupe la dernière case,
+    // la trentième minute écoulée la première.
+    const i = MINUTES - 1 - (minuteCourante - Math.floor(p.ts / 60000))
+    if (i >= 0 && i < MINUTES) par_minute[i]++
+    if (p.ts < seuilInstant) continue
+    distincts.add(p.jeton)
+    let jetons = parPage.get(p.chemin)
+    if (!jetons) { jetons = new Set(); parPage.set(p.chemin, jetons) }
+    jetons.add(p.jeton)
+  }
+
+  // Départage par le chemin à égalité de visiteurs : sans lui, deux pages à un
+  // visiteur permutent d'un rafraîchissement à l'autre pour rien.
+  const pages = Array.from(parPage, ([chemin, jetons]) => ({ chemin, visiteurs: jetons.size }))
+    .sort((a, b) => (b.visiteurs - a.visiteurs) || (a.chemin < b.chemin ? -1 : 1))
+    .slice(0, PAGES_MAX)
+
+  const dernieres = []
+  for (let i = presence.length - 1; i >= 0 && dernieres.length < DERNIERES_MAX; i--) {
+    dernieres.push({ heure: new Date(presence[i].ts).toISOString(), chemin: presence[i].chemin })
+  }
+
+  // Le plancher de ce que la mémoire sait : le démarrage du process, la dernière
+  // entrée évincée sous le plafond, ou le bord de la fenêtre — le plus récent
+  // des trois gagne.
+  const plancher = Math.max(DEBUT_MESURE, evincesJusqua, maintenant - FENETRE_MS)
+  const minutes_couvertes = Math.max(0, Math.min(MINUTES, Math.ceil((maintenant - plancher) / 60000)))
+
+  return { a_l_instant: distincts.size, pages, dernieres, par_minute, minutes_couvertes }
 }
 
 // ── File d'écriture ───────────────────────────────────────────────────────
@@ -204,7 +298,7 @@ function normaliserChemin(chemin) {
 function enregistrer(chemin, ip, ua) {
   const maintenant = Date.now()
   const jeton = calculerJeton(ip, ua)
-  noterPresence(jeton, maintenant)
+  noterPresence(jeton, chemin, maintenant)
   file.push({ jour: jourParis(), chemin, jeton })
   if (file.length > FILE_MAX) file.splice(0, file.length - FILE_MAX)
   demarrerHorloge()

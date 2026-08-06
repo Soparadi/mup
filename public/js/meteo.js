@@ -11,13 +11,15 @@
 window.MupMeteo = (function () {
   'use strict';
 
-  // Le réglage vers lequel pointe le libellé de lieu, et vers lequel invite le
-  // composant quand aucune position n'est connue.
-  var REGLAGE = '/account/profil#adresse-depart';
+  // AUCUNE DESTINATION DE RÉGLAGE. Le libellé de lieu pointait vers l'adresse
+  // de départ de /account/profil ; cet écran est revenu à la seule identité de
+  // connexion et la carte a disparu. Le libellé reste une mention neutre : tant
+  // que le réglage n'a pas de nouvelle adresse, un lien mort vaudrait moins que
+  // du texte.
 
   // Mention portée quand la position vient du rang 3 (adresse réseau captée à
   // l'inscription) : l'abonné doit pouvoir comprendre pourquoi la ville
-  // affichée n'est pas la sienne, et où la corriger.
+  // affichée n'est pas la sienne.
   var MENTION_RESEAU = 'd’après votre connexion';
 
   var INVITATION = 'Renseigner mon adresse de départ';
@@ -81,7 +83,6 @@ window.MupMeteo = (function () {
   return {
     charger: charger,
     libelleLieu: libelleLieu,
-    REGLAGE: REGLAGE,
     INVITATION: INVITATION
   };
 })();

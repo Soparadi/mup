@@ -89,10 +89,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .day-weather-info{display:flex;flex-direction:column;gap:1px}
 .day-weather-temp{font-size:18px;font-weight:800;letter-spacing:-.4px;color:var(--text);line-height:1}
 .day-weather-desc{font-size:10.5px;color:var(--muted);font-weight:500}
-/* Le libellé de lieu est un lien vers le réglage d'adresse de départ : mêmes
-   graisse, casse et couleur qu'auparavant, seul le soulignement par défaut du
-   navigateur est neutralisé. */
-.day-weather-loc{font-size:9.5px;color:var(--muted2);font-weight:600;text-transform:uppercase;letter-spacing:.8px;text-decoration:none}
+/* Le libellé de lieu pointait vers le réglage d'adresse de départ, retiré de
+   l'écran Mon compte : mention neutre plutôt que lien mort, à graisse, casse et
+   couleur inchangées. */
+.day-weather-loc{font-size:9.5px;color:var(--muted2);font-weight:600;text-transform:uppercase;letter-spacing:.8px}
 .day-actions{display:flex;gap:6px;margin-top:12px}
 .btn-add-evt{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:9px;border:none;background:var(--text);color:#fff;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
 .btn-add-evt:hover{background:#000}
@@ -212,7 +212,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
           <div class="day-weather-info">
             <div class="day-weather-temp" id="weather-temp">—°</div>
             <div class="day-weather-desc" id="weather-desc">Chargement…</div>
-            <a class="day-weather-loc" id="weather-loc" href="/account/profil#adresse-depart"></a>
+            <div class="day-weather-loc" id="weather-loc"></div>
           </div>
         </div>
       </div>
@@ -890,7 +890,7 @@ async function fetchWeather() {
 
   if (r.etat === 'absent') {
     // Sans position, le bloc n'affiche pas de météo : il n'y a rien à afficher
-    // qui serait vrai. Le libellé, déjà cliquable, porte l'invitation.
+    // qui serait vrai. Le libellé porte l'invitation.
     elTemp.textContent = '';
     elDesc.textContent = 'Position inconnue';
     elLoc.textContent  = MupMeteo.INVITATION;

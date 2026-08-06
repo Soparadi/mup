@@ -460,6 +460,9 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
+  <!-- Acquisition météo (position de l'abonné) — chargé sans defer : le bloc
+       inline plus bas appelle MupMeteo dès son exécution. -->
+  <script src="/js/meteo.js"></script>
 </head>
 <body>
 
@@ -516,7 +519,9 @@
           <span id="weather-icon" style="display:flex;align-items:center;color:var(--muted);flex-shrink:0;line-height:0;"></span>
           <div style="display:flex;flex-direction:column;justify-content:center;">
             <span id="weather-temp" style="font-size:20px;font-weight:900;color:var(--text);line-height:1;letter-spacing:-.5px;">—°</span>
-            <span id="weather-city" style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">…</span>
+            <!-- Libellé cliquable vers le réglage d'adresse de départ : mêmes
+                 graisse, casse et couleur qu'avant, soulignement neutralisé. -->
+            <a id="weather-city" href="/account/profil#adresse-depart" style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;text-decoration:none;">…</a>
           </div>
         </div>
         <div id="news-ticker" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;flex:1;overflow:hidden;min-width:0;">
@@ -910,37 +915,50 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
 </script>
 
 <script>
+// ── HORLOGE ──
+// Elle vivait à l'intérieur du bloc météo, après les deux appels réseau : une
+// météo en échec — ou simplement une position inconnue — laissait la date et
+// l'heure vides. Les deux n'ont rien à voir, l'horloge démarre donc seule.
+(() => {
+  const days = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  const months = ['jan.','fév.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    const dateStr = days[now.getDay()] + ' ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
+    const cd = document.getElementById('clock-display'); if(cd) cd.textContent = dateStr + '  ·  ' + h + ':' + m + ':' + s;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+})();
+
+// ── MÉTÉO ──
+// La position vient de l'abonné (cascade adresse de départ → compte → adresse
+// réseau, résolue par /api/meteo/position), plus d'une ville en dur — et plus
+// de géocodage Nominatim au chargement, le serveur rend déjà des coordonnées.
 (async () => {
   const SVG_WEATHER = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>';
-  try {
-    const geo = await fetch('https://nominatim.openstreetmap.org/search?q=Combourg,France&format=json&limit=1').then(r=>r.json());
-    const {lat, lon, display_name} = geo[0];
-    const city = display_name.split(',')[0];
-    const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`).then(r=>r.json());
-    const {temperature, weathercode} = wx.current_weather;
-    document.getElementById('weather-icon').innerHTML = SVG_WEATHER;
-    document.getElementById('weather-temp').textContent = Math.round(temperature) + '°C';
-    document.getElementById('weather-city').textContent = city;
-    const days = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-    function updateClock() {
-      const now = new Date();
-      const d = days[now.getDay()];
-      const h = String(now.getHours()).padStart(2,'0');
-      const m = String(now.getMinutes()).padStart(2,'0');
-      const s = String(now.getSeconds()).padStart(2,'0');
-      const now2 = new Date();
-      const months2 = ['jan.','fév.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
-      const dateStr = d + ' ' + now2.getDate() + ' ' + months2[now2.getMonth()] + ' ' + now2.getFullYear();
-      const cd = document.getElementById('clock-display'); if(cd) cd.textContent = dateStr + '  ·  ' + h + ':' + m + ':' + s;
-    }
-    updateClock();
-    setInterval(updateClock, 1000);
-  } catch(e) {
-    document.getElementById('weather-city').textContent = 'Météo indisponible';
-    // En échec, ne pas laisser le « —° » de chargement ni une icône orpheline.
-    document.getElementById('weather-temp').textContent = '';
-    document.getElementById('weather-icon').innerHTML = '';
+  const elIcon = document.getElementById('weather-icon');
+  const elTemp = document.getElementById('weather-temp');
+  const elCity = document.getElementById('weather-city');
+
+  const r = await MupMeteo.charger();
+
+  if (r.etat === 'ok') {
+    elIcon.innerHTML = SVG_WEATHER;
+    elTemp.textContent = r.temp + '°C';
+    elCity.textContent = MupMeteo.libelleLieu(r);
+    return;
   }
+
+  // Ni température ni icône hors du cas « ok » : sans position connue il n'y a
+  // pas de météo à montrer, et le « —° » de chargement passerait pour une
+  // mesure. Le libellé, cliquable, porte l'invitation ou le constat de panne.
+  elIcon.innerHTML = '';
+  elTemp.textContent = '';
+  elCity.textContent = r.etat === 'absent' ? MupMeteo.INVITATION : 'Météo indisponible';
 })();
 </script>
 

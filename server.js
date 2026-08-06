@@ -54,6 +54,7 @@ import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
 import { rapprocherDepartementAtoutFrance } from './server/services/rapprochement-atout-france.js'
 import { runMentionsLegalesJob, enrichirMentionsLegales } from './server/services/mentions-legales.js'
 import { hostBlacklisted } from './server/services/recherche-web.js'
+import { resoudrePositionMeteo } from './server/services/meteo-position.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs, startActualitesCron } from './server/services/cron.js'
 import {
@@ -5429,6 +5430,34 @@ app.put('/api/user-settings', async (req, res) => {
   } catch (err) {
     console.error('[user-settings:put]', err.message)
     res.status(500).json({ error: 'Mise à jour user settings impossible' })
+  }
+})
+
+// ── MÉTÉO — position de l'abonné ──
+// Rend la position sur laquelle le composant météo interrogera Open-Meteo, et
+// la SOURCE dont elle vient, pour que l'affichage puisse la nommer et signaler
+// un repli. La cascade est dans server/services/meteo-position.js : c'est là
+// que se lit la doctrine, pas ici.
+//
+// LECTURE SEULE, y compris sur geo_data : cette route n'écrit rien et ne
+// déclenche aucune géolocalisation d'adresse réseau. Elle relit ce qui est en
+// base. Réponse 200 même sans position connue — { source: null } n'est pas une
+// erreur, c'est un état légitime que la page sait rendre (invitation à
+// renseigner l'adresse de départ).
+app.get('/api/meteo/position', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    // req.authUser est le record user complet posé par requireAuth : ville,
+    // code_postal, lat, lng et geo_data y sont déjà, aucune relecture à faire.
+    const db = await getDb()
+    const settings = (await queryOrEmpty(
+      db, 'SELECT homeAddress, homeLat, homeLon FROM type::record("user_settings", $id)', { id: userId }))[0] || null
+    const pos = await resoudrePositionMeteo({ user: req.authUser, settings })
+    res.json(pos)
+  } catch (err) {
+    console.error('[meteo:position]', err.message)
+    res.status(500).json({ error: 'Position indisponible' })
   }
 })
 

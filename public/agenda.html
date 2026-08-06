@@ -89,7 +89,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .day-weather-info{display:flex;flex-direction:column;gap:1px}
 .day-weather-temp{font-size:18px;font-weight:800;letter-spacing:-.4px;color:var(--text);line-height:1}
 .day-weather-desc{font-size:10.5px;color:var(--muted);font-weight:500}
-.day-weather-loc{font-size:9.5px;color:var(--muted2);font-weight:600;text-transform:uppercase;letter-spacing:.8px}
+/* Le libellé de lieu est un lien vers le réglage d'adresse de départ : mêmes
+   graisse, casse et couleur qu'auparavant, seul le soulignement par défaut du
+   navigateur est neutralisé. */
+.day-weather-loc{font-size:9.5px;color:var(--muted2);font-weight:600;text-transform:uppercase;letter-spacing:.8px;text-decoration:none}
 .day-actions{display:flex;gap:6px;margin-top:12px}
 .btn-add-evt{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:9px;border:none;background:var(--text);color:#fff;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
 .btn-add-evt:hover{background:#000}
@@ -158,6 +161,9 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
+<!-- Acquisition météo (position de l'abonné) — chargé sans defer : le bloc
+     inline plus bas appelle MupMeteo dès son exécution. -->
+<script src="/js/meteo.js"></script>
 </head>
 <body>
 
@@ -206,7 +212,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
           <div class="day-weather-info">
             <div class="day-weather-temp" id="weather-temp">—°</div>
             <div class="day-weather-desc" id="weather-desc">Chargement…</div>
-            <div class="day-weather-loc">Combourg</div>
+            <a class="day-weather-loc" id="weather-loc" href="/account/profil#adresse-depart"></a>
           </div>
         </div>
       </div>
@@ -858,23 +864,42 @@ function startClock() {
   _clockInterval = setInterval(tick, 1000);
 }
 
-// ── MÉTÉO Combourg ──
+// ── MÉTÉO ──
+// La position vient de l'abonné (cascade adresse de départ → compte → adresse
+// réseau, résolue par /api/meteo/position), plus d'une ville en dur. Trois
+// états à rendre, et un seul d'entre eux affiche une température :
+//   ok      → température, description, nom de la ville retenue
+//   absent  → aucune position connue : PAS de météo, une invitation à la place
+//   erreur  → service indisponible, on le dit sans rien inventer
 async function fetchWeather() {
-  try {
-    const r = await fetch(
-      'https://api.open-meteo.com/v1/forecast?latitude=48.41&longitude=-1.75&current=temperature_2m,weathercode&timezone=Europe/Paris',
-      { signal: AbortSignal.timeout(6000) }
-    );
-    const d = await r.json();
-    const temp = Math.round(d.current.temperature_2m);
-    const code = d.current.weathercode;
-    const { ico, desc } = weatherCode(code);
-    document.getElementById('weather-ico').innerHTML    = ico;
-    document.getElementById('weather-temp').textContent = temp + '°C';
-    document.getElementById('weather-desc').textContent = desc;
-  } catch(e) {
-    document.getElementById('weather-desc').textContent = 'Indisponible';
+  const elIco  = document.getElementById('weather-ico');
+  const elTemp = document.getElementById('weather-temp');
+  const elDesc = document.getElementById('weather-desc');
+  const elLoc  = document.getElementById('weather-loc');
+
+  const r = await MupMeteo.charger();
+
+  if (r.etat === 'ok') {
+    const { ico, desc } = weatherCode(r.code);
+    elIco.innerHTML    = ico;
+    elTemp.textContent = r.temp + '°C';
+    elDesc.textContent = desc;
+    elLoc.textContent  = MupMeteo.libelleLieu(r);
+    return;
   }
+
+  if (r.etat === 'absent') {
+    // Sans position, le bloc n'affiche pas de météo : il n'y a rien à afficher
+    // qui serait vrai. Le libellé, déjà cliquable, porte l'invitation.
+    elTemp.textContent = '';
+    elDesc.textContent = 'Position inconnue';
+    elLoc.textContent  = MupMeteo.INVITATION;
+    return;
+  }
+
+  elTemp.textContent = '';
+  elDesc.textContent = 'Indisponible';
+  elLoc.textContent  = '';
 }
 
 function weatherCode(c) {

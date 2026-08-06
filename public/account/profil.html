@@ -101,6 +101,26 @@
     </div>
   </section>
 
+  <!-- Adresse de départ — rang 1 de la cascade météo (server/services/meteo-position.js).
+       Seule position que l'abonné déclare lui-même ; sans elle la météo retombe
+       sur le compte puis sur l'adresse réseau de l'inscription. -->
+  <section class="card" id="adresse-depart">
+    <h2 class="card-title">Adresse de départ</h2>
+
+    <div class="field">
+      <label for="home-address">Point de départ de vos tournées</label>
+      <input id="home-address" name="home-address" type="text" autocomplete="street-address" maxlength="160" placeholder="Numéro, voie, code postal, commune">
+    </div>
+    <p class="help">Elle sert à afficher la météo de votre point de départ. Laissez le champ vide pour la retirer.</p>
+    <p class="field-err hidden" id="home-err" role="alert"></p>
+
+    <div class="actions">
+      <button type="button" id="btn-home-save" class="btn btn-dark">Enregistrer</button>
+    </div>
+
+    <div id="home-done" class="alert alert-success" style="display:none;margin:16px 0 0" role="status"></div>
+  </section>
+
   <section class="card" id="change-card">
     <h2 class="card-title">Changer d'adresse</h2>
 
@@ -158,6 +178,79 @@
       setVal('v-telephone', u.telephone)
     })
     .catch(function(){ setBanner('error', 'Erreur réseau, réessayez.') })
+
+  // ── Carte « Adresse de départ » ──
+  // Ce que l'on enregistre n'est pas la saisie brute mais l'adresse reconnue
+  // par la Base Adresse Nationale, avec ses coordonnées : la météo a besoin
+  // d'un point, pas d'une chaîne. Une saisie introuvable n'est donc PAS
+  // enregistrée — mieux vaut le dire tout de suite que garder une adresse dont
+  // rien ne pourra sortir.
+  var homeInput = document.getElementById('home-address')
+  var homeErr = document.getElementById('home-err')
+  var homeDone = document.getElementById('home-done')
+  var btnHome = document.getElementById('btn-home-save')
+
+  function homeMsg(msg) {
+    homeDone.textContent = msg
+    homeDone.style.display = ''
+  }
+
+  fetch('/api/user-settings', { credentials: 'same-origin' })
+    .then(function(r){ return r.ok ? r.json() : null })
+    .then(function(s){ if (s && s.homeAddress) homeInput.value = s.homeAddress })
+    .catch(function(){ /* le champ reste vide : réglage facultatif, pas d'alarme */ })
+
+  function enregistrerAdresse(body) {
+    return fetch('/api/user-settings', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(r){ if (!r.ok) throw new Error('put ' + r.status) })
+  }
+
+  btnHome.addEventListener('click', function(){
+    var saisie = String(homeInput.value || '').trim()
+    clearErr(homeErr)
+    homeInput.classList.remove('error')
+    homeDone.style.display = 'none'
+    busy(btnHome, true, 'Enregistrer')
+
+    // Champ vidé : on retire le réglage. La météo redescendra d'elle-même sur
+    // le rang suivant de la cascade.
+    if (!saisie) {
+      enregistrerAdresse({ homeAddress: '', homeLat: null, homeLon: null })
+        .then(function(){ busy(btnHome, false, 'Enregistrer'); homeMsg('Adresse de départ retirée.') })
+        .catch(function(){ busy(btnHome, false, 'Enregistrer'); showErr(homeErr, 'Enregistrement impossible. Réessayez.') })
+      return
+    }
+
+    fetch('/api/geocode?q=' + encodeURIComponent(saisie), { credentials: 'same-origin' })
+      .then(function(r){ return r.ok ? r.json() : null })
+      .then(function(d){
+        var f = d && d.features && d.features[0]
+        var c = f && f.geometry && f.geometry.coordinates
+        if (!c || c.length < 2) {
+          busy(btnHome, false, 'Enregistrer')
+          homeInput.classList.add('error')
+          showErr(homeErr, 'Adresse introuvable. Précisez la voie, le code postal ou la commune.')
+          return null
+        }
+        var label = (f.properties && f.properties.label) || saisie
+        return enregistrerAdresse({ homeAddress: label, homeLat: Number(c[1]), homeLon: Number(c[0]) })
+          .then(function(){
+            // On réaffiche l'adresse retenue par la BAN, pas la saisie : c'est
+            // elle qui sera nommée sous la météo.
+            homeInput.value = label
+            busy(btnHome, false, 'Enregistrer')
+            homeMsg('Adresse de départ enregistrée : ' + label + '.')
+          })
+      })
+      .catch(function(){
+        busy(btnHome, false, 'Enregistrer')
+        showErr(homeErr, 'Enregistrement impossible. Réessayez.')
+      })
+  })
 
   // ── Carte « Changer d'adresse » ──
   var emailInput = document.getElementById('new-email')

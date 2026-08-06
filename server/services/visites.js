@@ -272,17 +272,38 @@ async function viderFile() {
 //   2. les pages applicatives, /superadmin compris — l'appelant fournit le
 //      prédicat, c'est le MÊME que celui du portillon d'authentification
 //      (isProtectedHtmlRoute), pour qu'aucune des deux listes ne dérive ;
-//   3. les fichiers statiques — reconnus à leur extension. Restent donc les
-//      chemins sans extension (servis en .html par express.static) et les .html
-//      explicites, moins les fragments de /components/ que le navigateur va
-//      chercher en second temps : ce sont des morceaux de page, pas des pages.
-const EXTENSION = /\.[a-z0-9]{1,8}$/i
+//   3. les fichiers statiques — moins les fragments de /components/ que le
+//      navigateur va chercher en second temps : ce sont des morceaux de page,
+//      pas des pages.
+//
+// LA RECONNAISSANCE DU FICHIER SE FAIT PAR LA PRÉSENCE D'UN POINT, jamais par
+// la longueur de ce qui le suit. Un dernier segment qui contient un point est un
+// fichier — il n'est compté que si l'extension est .html ou .htm. Un dernier
+// segment sans point est un document : express.static le sert en .html.
+//
+// La borne de longueur qu'appliquait la version précédente (huit caractères au
+// plus après le point) laissait passer `manifest.webmanifest` — onze — pour un
+// document, et chaque chargement de page comptait donc une vue de trop. Aucune
+// borne allongée n'est sûre : la liste des extensions longues n'est pas close
+// (.webmanifest, .appcache…), tandis que la présence d'un point, elle, ne dépend
+// d'aucun inventaire.
+//
+// Cas éprouvés :
+//
+//   /                        → document  (racine)
+//   /tarifs                  → document  (sans point, servi en .html)
+//   /cgu.html                → document  (.html explicite)
+//   /manifest.webmanifest    → fichier   (RÉGRESSION CORRIGÉE ICI)
+//   /apple-touch-icon.png    → fichier
+//   /favicon.svg             → fichier
+//   /styles/sidebar.css      → fichier
+//   /components/entete.html  → exclu     (fragment, avant tout autre test)
 
 function estDocument(chemin) {
   if (chemin === '/') return true
   if (chemin.startsWith('/components/')) return false
   const dernier = chemin.slice(chemin.lastIndexOf('/') + 1)
-  if (!EXTENSION.test(dernier)) return true
+  if (!dernier.includes('.')) return true
   return /\.html?$/i.test(dernier)
 }
 

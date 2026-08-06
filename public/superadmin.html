@@ -590,7 +590,8 @@ table.accounts tbody tr[data-email]{cursor:pointer;}
       var vide = (prim === 0 && sec === 0);
 
       var infobulle = 'Semaine du ' + moisJour(s.debut) + ' au ' + moisJour(s.fin)
-        + (mesuree ? ' — ' + s.visiteurs + ' visiteurs-jours, ' + s.vues + ' vues' : '')
+        + (mesuree ? ' — ' + s.visiteurs + (s.visiteurs > 1 ? ' visiteurs-jours' : ' visiteur-jour')
+          + ', ' + s.vues + ' vues' : '')
         + ' — ' + s.inscriptions + ' inscription' + (s.inscriptions > 1 ? 's' : '')
         + (s.partielle ? ' — semaine en cours, journée du jour incomplète' : '');
 
@@ -621,7 +622,8 @@ table.accounts tbody tr[data-email]{cursor:pointer;}
 
     var sousTitre;
     if (mesuree) {
-      sousTitre = totalPrim + ' visiteurs-jours et ' + totalSec + ' inscriptions sur 12 semaines'
+      sousTitre = totalPrim + (totalPrim > 1 ? ' visiteurs-jours' : ' visiteur-jour')
+        + ' et ' + totalSec + ' inscriptions sur 12 semaines'
         + ' — ' + (Number(audience.visiteurs_total) || 0) + ' depuis le ' + esc(moisJour(audience.depuis))
         + '/' + String(audience.depuis || '').slice(0, 4);
     } else {

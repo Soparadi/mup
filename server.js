@@ -3373,6 +3373,10 @@ app.post('/api/enrich/:siret', async (req, res) => {
     //     SIRET du réseau, elle ne peut rien corroborer.
     const siteHote = hostDeSite(merged.website)
     const manqueCanal = !(merged.website && merged.societe_tel && merged.societe_email)
+    // Courriel tel que le rempart par adresse (ci-dessus) l'a vu. Sert de témoin :
+    // si le crawl en fait apparaître un AUTRE, celui-là n'a jamais été opposé au
+    // rempart, et doit l'être. Cf. le second passage juste après ce bloc.
+    const emailAvantMl = merged.societe_email
     if (merged.website && manqueCanal && !hostBlacklisted(siteHote)) {
       try {
         // Budget de 15 s MESURÉ DEPUIS L'ENTRÉE EN ROUTE. Au dépassement, la main
@@ -3406,6 +3410,29 @@ app.post('/api/enrich/:siret', async (req, res) => {
         // Fail-safe intégral : tout pépin retombe sur le merged existant.
         console.warn('[enrich:ml]', String(e?.message || e).slice(0, 80))
       }
+    }
+
+    // Troisième passage du rempart opt-out — par ADRESSE, sur le courriel ISSU DU
+    // CRAWL. Le rempart par adresse est évalué plus haut, avant le moteur ; en
+    // juillet, un second passage après enrichissement avait été jugé inutile au
+    // motif que DataForSEO ne rend jamais de courriel — vrai pour lui, faux
+    // désormais : le moteur mentions légales, lui, en écrit. Un courriel opposé
+    // depuis un fournisseur grand public (ni siret_hash ni siren_hash) sortirait
+    // sans avoir jamais rencontré le rempart. Il le rencontre ici : APRÈS la
+    // relecture, AVANT toute restitution et AVANT consumeLead — un contrôle placé
+    // plus tard décompterait un lead qu'on refuse ensuite.
+    // Testé SEULEMENT si le crawl a fait apparaître un courriel différent de celui
+    // déjà passé au rempart : sinon la réponse est connue, et la requête inutile.
+    // Réponse STRICTEMENT identique aux deux autres blocages — même code, même
+    // motif, même journalisation : l'abonné ignore par quelle clé la fiche est
+    // opposée. checkBlocklistEmailOne est fail-closed, inchangée.
+    if (merged.societe_email && merged.societe_email !== emailAvantMl &&
+        await checkBlocklistEmailOne(merged.societe_email)) {
+      console.log(`[optout] enrich refusé ${siret}`)
+      return res.status(403).json({
+        error: 'opt_out',
+        message: "Cette entreprise n'est pas disponible pour prospection."
+      })
     }
 
     // ── Maillon DataForSEO (Business Info / Google My Business) ──────────────

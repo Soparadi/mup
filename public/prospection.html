@@ -250,9 +250,12 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 }
 
 /* ── REPLI DU BLOC RECHERCHE ──────────────────────────────────────
-   Une fois la recherche lancée, les deux rangées de saisie n'ont plus de
+   Une fois la recherche TERMINÉE — gisement complet déroulé et file de points
+   vidée, pas au premier clic —, les deux rangées de saisie n'ont plus de
    raison d'occuper la hauteur : le bloc se replie en une ligne de résumé
-   rappelant les critères retenus. Ouvert par défaut (aucune classe .collapsed
+   rappelant les critères retenus. Pendant toute la recherche le bloc reste
+   ouvert : le bouton visible, inactif, spinner + « Chargement… », est le seul
+   retour d'état de l'abonné. Ouvert par défaut (aucune classe .collapsed
    au chargement) → il l'est aussi à la réouverture de la page. « Modifier »
    rouvre le bloc complet en un clic, toutes les valeurs intactes : aucune perte
    de fonction, tout ce qui est saisissable reste atteignable. */
@@ -1760,6 +1763,10 @@ var S = {
 
   // convergence compteur « Prospects trouvés » vers les points réellement posés
   finished:     false,
+  // Repli du bloc de recherche EN ATTENTE : posé au lancement ('metier' | 'id'),
+  // consommé seulement à la fin réelle. Tant qu'il est posé, la barre reste
+  // dépliée et le bouton visible en « Chargement… ».
+  pendingCollapse: null,
 
   // map
   useCluster:   false
@@ -2722,6 +2729,7 @@ async function loadPage(page) {
   if(!S.nafLocked || !selectedNAFCode || !S.region) {
     console.error('[Prospect] loadPage aborted — NAF not locked. selectedNAFCode="'+selectedNAFCode+'" nafLocked='+S.nafLocked);
     setBtnReady();
+    S.pendingCollapse = null;   // recherche avortée : la barre reste dépliée
     return;
   }
 
@@ -2862,6 +2870,7 @@ async function loadPage(page) {
     if(isFirstPage) {
       document.getElementById('skel').classList.remove('show');
       setBtnReady();   // garde-fou : sur erreur le bouton se libère, jamais bloqué en chargement
+      S.pendingCollapse = null;   // et la barre reste dépliée : l'abonné corrige et relance
     }
   } finally {
     S.loading = false;
@@ -3254,6 +3263,10 @@ function maybeFinishSearch(gen) {
   if(gen !== undefined && gen !== S.autoRoll.gen) return;
   if(S.upstreamExhausted && !S.autoRoll.active && !_geoRunning && _geoQ.length === 0) {
     setBtnReady();
+    // Fin réelle : c'est SEULEMENT ici que la barre se replie en pastilles et que
+    // « Modifier la recherche » apparaît. Avant, elle est restée dépliée avec le
+    // bouton en chargement.
+    if (S.pendingCollapse) { collapseSearch(S.pendingCollapse); S.pendingCollapse = null; }
     // Convergence : « Prospects trouvés » se fige sur le nombre de points
     // réellement posés sur la carte (carte = compteur). Flag pour que
     // updateCountDisplay n'écrase plus cette valeur depuis S.loaded.
@@ -3317,9 +3330,12 @@ function startSearch() {
   }
   if(!btn.classList.contains('active')) return;
   setBtnLoading();
-  // La recherche est lancée : le bloc se replie en résumé, la carte récupère
-  // les deux rangées de saisie. « Modifier la recherche » le rouvre.
-  collapseSearch('metier');
+  // Le repli N'A PAS LIEU ICI. Tant que la recherche tourne, la barre reste
+  // dépliée et le bouton à l'écran, inactif, spinner + « Chargement… » : c'est
+  // le seul retour d'état dont dispose l'abonné. Le repli en résumé est armé et
+  // ne sera consommé qu'à la convergence (maybeFinishSearch), au dernier point
+  // posé — jamais à la première page.
+  S.pendingCollapse = _summaryChips('metier');
   document.getElementById('exp-bar').classList.remove('show');
   document.getElementById('stats-bar').classList.remove('show');
   loadPage(1);
@@ -3355,18 +3371,22 @@ function _summaryChips(mode) {
   }
   return chips;
 }
-// Replie le bloc en ligne de résumé. mode : 'metier' (défaut) ou 'id'.
-function collapseSearch(mode) {
+// Replie le bloc en ligne de résumé. Argument : le mode ('metier' | 'id') ou,
+// puisque le repli n'a plus lieu qu'à la fin réelle, l'instantané des critères
+// pris AU LANCEMENT — la barre étant restée ouverte pendant la recherche, les
+// champs ont pu changer entre-temps et le résumé doit rappeler ce qui a été
+// réellement cherché.
+function collapseSearch(modeOrChips) {
   var se  = document.querySelector('.search-engine');
   var box = document.getElementById('ss-chips');
   if (!se || !box) return;
-  var chips = _summaryChips(mode);
+  var chips = Array.isArray(modeOrChips) ? modeOrChips : _summaryChips(modeOrChips);
   box.innerHTML = chips.length
     ? chips.map(function(c){
         return '<span class="ss-chip"><span class="ss-k">' + esc(c[0]) +
                '</span><span class="ss-v" title="' + esc(c[1]) + '">' + esc(c[1]) + '</span></span>';
       }).join('')
-    : '<span class="ss-empty">Recherche en cours…</span>';
+    : '<span class="ss-empty">Recherche terminée</span>';
   se.classList.add('collapsed');
   // Le conteneur #map a grandi : Leaflet doit remesurer après le reflow
   // (patron de carte.html — appel différé, jamais pendant une transition).
@@ -3717,8 +3737,11 @@ async function searchById() {
 
   var btn = document.getElementById('btn-id');
   btn.disabled = true;   // anti double-clic pendant le fetch (restauré en fin)
-  // Recherche par identifiant lancée : même repli que le mode métier.
-  collapseSearch('id');
+  // Même règle que le mode métier : pas de repli au lancement. La barre reste
+  // dépliée pendant le fetch et ne se replie qu'une fois les fiches rendues et
+  // les marqueurs posés (drapeau _idDone, consommé dans le finally).
+  var _idDone  = false;
+  var _idChips = _summaryChips('id');   // instantané des critères au lancement
   document.getElementById('skel').classList.add('show');
   document.getElementById('empty').classList.remove('show');
   document.getElementById('res-context').classList.remove('show');
@@ -3751,6 +3774,7 @@ async function searchById() {
       emptyEl.classList.add('show');
       emptyEl.querySelector('.empty-title').textContent = 'Aucun résultat';
       emptyEl.querySelector('.empty-sub').textContent = 'Aucune entreprise pour cet identifiant ' + raw + '.';
+      _idDone = true;   // recherche terminée, sans résultat : le repli est légitime
       return;
     }
 
@@ -3772,6 +3796,7 @@ async function searchById() {
     // Marqueur(s) carte + centrage (obligatoire), chemin sans test NAF.
     _resetMapLayers();
     await _placeIdMarkers(items);
+    _idDone = true;   // dernier marqueur posé : fin réelle
 
   } catch (err) {
     console.error('[Prospect] searchById error:', err.message);
@@ -3782,6 +3807,8 @@ async function searchById() {
     var still = isValidIdentifier(String(inp.value || '').replace(/\s/g, ''));
     btn.disabled = !still;
     btn.classList.toggle('active', still);
+    // Repli à la fin réelle seulement. Sur erreur, la barre reste dépliée.
+    if (_idDone) collapseSearch(_idChips);
   }
 }
 

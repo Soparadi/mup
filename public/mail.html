@@ -32,10 +32,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .topbar-title{font-size:22px;font-weight:900;letter-spacing:-.6px;}
 .kpi-row{display:flex;align-items:stretch;gap:8px;}
 .kpi-group{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0;}
-.kpi-chip{display:flex;align-items:center;gap:10px;padding:8px 14px;border-right:1px solid var(--border);cursor:pointer;transition:background .12s;font-family:var(--font);background:transparent;border-top:none;border-bottom:none;border-left:none;}
+.kpi-chip{display:flex;align-items:center;gap:10px;padding:8px 14px;border-right:1px solid var(--border);font-family:var(--font);}
 .kpi-chip:last-child{border-right:none;}
-.kpi-chip:hover{background:var(--surface2);}
-.kpi-chip.active{background:var(--surface2);box-shadow:inset 0 -2px 0 currentColor;}
 .kpi-num{font-size:18px;font-weight:900;line-height:1;letter-spacing:-.4px;font-family:var(--mono);}
 .kpi-num.pulse{animation:pulse .8s ease-in-out 2;}
 @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.18);color:var(--green);}}
@@ -63,18 +61,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .subnav-lbl{font-size:9px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted2);padding:0 4px 8px;}
 .btn-newmsg{display:flex;align-items:center;gap:8px;width:100%;background:var(--text);color:#fff;border:none;border-radius:9px;padding:10px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);margin-bottom:8px;}
 .btn-newmsg:hover{opacity:.88;}
-.subnav-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:12.5px;color:var(--muted);font-weight:500;transition:background .1s;}
+.subnav-item{display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 10px;border:none;border-radius:8px;background:none;text-align:left;cursor:pointer;font-family:var(--font);font-size:12.5px;color:var(--muted);font-weight:500;transition:background .1s;}
 .subnav-item:hover{background:var(--surface);color:var(--text);}
 .subnav-item.active{background:var(--surface);color:var(--text);font-weight:700;}
 .subnav-item-svg{width:14px;height:14px;flex-shrink:0;margin-right:8px;}
 .subnav-item-name{flex:1;display:flex;align-items:center;}
 .subnav-badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;color:var(--muted);background:var(--surface);font-family:var(--mono);min-width:22px;text-align:center;}
-.col-left-search{padding:12px 14px;border-top:1px solid var(--border);}
-.col-left-search input{width:100%;padding:8px 10px 8px 30px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--surface);outline:none;}
-.col-left-search input:focus{border-color:var(--text);background:var(--card);}
-.search-wrap{position:relative;}
-.search-wrap svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--muted2);pointer-events:none;}
-.col-left-sync{padding:0 14px 14px;}
+.col-left-sync{padding:12px 14px 14px;border-top:1px solid var(--border);}
 .btn-sync{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px 10px;border:1.5px solid var(--border);background:var(--card);border-radius:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s;}
 .btn-sync:hover{border-color:var(--text);color:var(--text);}
 .btn-sync.loading svg{animation:spin 1s linear infinite;}
@@ -130,6 +123,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .btn-danger{background:#fff;color:var(--red);border:1.5px solid var(--red);}
 .btn-danger:hover{background:var(--red-l);}
 .btn-sm{padding:7px 12px;font-size:12px;}
+
+/* Désactivé — gabarit commun (carte Signature, nav dossiers, actions viewer) */
+.btn:disabled,.subnav-item:disabled{color:var(--muted2);cursor:default;}
+.subnav-item:disabled:hover{background:none;color:var(--muted2);}
+.btn-outline:disabled{border-color:var(--border);}
+.btn-outline:disabled:hover{background:#fff;border-color:var(--border);}
 
 /* Boutons OAuth (réutilisés dans empty state + Paramètres) */
 .oauth-btn{display:flex;align-items:center;justify-content:center;gap:10px;padding:11px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;background:#fff;color:#1F1F1F;border:1.5px solid var(--border2);width:100%;}
@@ -222,21 +221,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <span class="topbar-title">Mail</span>
       <div class="kpi-row">
         <div class="kpi-group">
-          <button class="kpi-chip active" data-folder="inbox">
+          <div class="kpi-chip">
             <div><div class="kpi-num" id="kpi-inbox">0</div><div class="kpi-lbl">Reçus</div></div>
-          </button>
-          <button class="kpi-chip" data-folder="sent">
-            <div><div class="kpi-num" id="kpi-sent">0</div><div class="kpi-lbl">Envoyés</div></div>
-          </button>
-          <button class="kpi-chip" data-folder="drafts">
-            <div><div class="kpi-num" id="kpi-drafts">0</div><div class="kpi-lbl">Brouillons</div></div>
-          </button>
+          </div>
         </div>
         <button class="kpi-campagne" onclick="document.querySelector('.subtab[data-tab=campaigns]').click()">
-          <div><div class="kpi-num" id="kpi-mailing" style="color:var(--orange);">0</div><div class="kpi-lbl" style="color:var(--orange);">Mailing</div></div>
+          <div class="kpi-lbl" style="color:var(--orange);">Mailing</div>
         </button>
         <button class="kpi-newsletter" onclick="document.querySelector('.subtab[data-tab=campaigns]').click()">
-          <div><div class="kpi-num" id="kpi-newsletter" style="color:var(--purple);">0</div><div class="kpi-lbl" style="color:var(--purple);">Newsletter</div></div>
+          <div class="kpi-lbl" style="color:var(--purple);">Newsletter</div>
         </button>
       </div>
     </div>
@@ -253,7 +246,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     <div class="tab-pane active" id="tab-inbox" role="tabpanel">
       <div class="mail-layout">
 
-        <!-- COLONNE GAUCHE : Mail + Templates + Recherche + Sync -->
+        <!-- COLONNE GAUCHE : Mail + Sync -->
         <div class="col-left">
           <div class="subnav-section">
             <div class="subnav-lbl">Mail</div>
@@ -265,31 +258,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Reçus</span>
               <span class="subnav-badge" id="badge-inbox">0</span>
             </div>
-            <div class="subnav-item" data-folder="sent" onclick="setFolder('sent')">
+            <button class="subnav-item" data-folder="sent" disabled>
               <span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Envoyés</span>
-              <span class="subnav-badge" id="badge-sent">0</span>
-            </div>
-            <div class="subnav-item" data-folder="drafts" onclick="setFolder('drafts')">
+            </button>
+            <button class="subnav-item" data-folder="drafts" disabled>
               <span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Brouillons</span>
-              <span class="subnav-badge" id="badge-drafts">0</span>
-            </div>
+            </button>
           </div>
 
-          <div class="subnav-section">
-            <div class="subnav-lbl">Templates</div>
-            <div class="subnav-item" data-template="prospection"><span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Mailing Prospection</span></div>
-            <div class="subnav-item" data-template="post-visio"><span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Post-visio</span></div>
-            <div class="subnav-item" data-template="devis"><span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Devis</span></div>
-            <div class="subnav-item" data-template="facture"><span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Facture</span></div>
-            <div class="subnav-item" data-template="newsletter"><span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>Newsletter</span></div>
-          </div>
-
-          <div class="col-left-search">
-            <div class="search-wrap">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input type="text" id="mail-search" placeholder="Rechercher dans les mails..." />
-            </div>
-          </div>
           <div class="col-left-sync">
             <button class="btn-sync" id="btn-sync" onclick="syncInbox()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -360,9 +336,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <div class="viewer-head"><div class="viewer-subject" id="v-subject">—</div></div>
             <div class="viewer-meta"><div class="viewer-meta-from" id="v-from">—</div><div class="viewer-meta-date" id="v-date"></div></div>
             <div class="viewer-actions">
-              <button class="btn btn-outline btn-sm" onclick="alert('Réponse — disponible prochainement')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>Répondre</button>
-              <button class="btn btn-outline btn-sm" onclick="alert('Transfert — disponible prochainement')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Transférer</button>
-              <button class="btn btn-outline btn-sm" onclick="alert('Archivage — disponible prochainement')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archiver</button>
+              <button class="btn btn-outline btn-sm" disabled><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>Répondre</button>
+              <button class="btn btn-outline btn-sm" disabled><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Transférer</button>
+              <button class="btn btn-outline btn-sm" disabled><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archiver</button>
             </div>
             <div class="viewer-body" id="v-body"></div>
           </div>
@@ -441,16 +417,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         </div>
 
         <div class="card">
-          <h3>Domaine d'envoi (campagnes)</h3>
-          <p class="card-sub">Domaine vérifié sur Resend pour l'envoi de campagnes à volume.</p>
-          <div class="settings-section">
-            <div class="row"><span class="row-label">Statut</span><span class="row-value" id="settings-domain-status">À configurer</span></div>
-          </div>
-        </div>
-
-        <div class="card">
           <h3>Signature email</h3>
-          <p class="card-sub">Bloc inséré automatiquement en bas de vos messages 1:1.</p>
+          <p class="card-sub">Bloc de signature pour vos messages 1:1.</p>
           <div class="field"><textarea id="signature-input" rows="4" disabled placeholder="Cordialement,&#10;Prénom NOM&#10;Entreprise"></textarea></div>
           <button class="btn btn-outline btn-sm" disabled>Enregistrer</button>
         </div>
@@ -701,7 +669,7 @@ function selectEmail(id){
   document.getElementById('v-subject').textContent = msg.subject || '(sans sujet)';
   document.getElementById('v-from').textContent = msg.from || '—';
   document.getElementById('v-date').textContent = msg.date ? new Date(msg.date).toLocaleString('fr-FR') : '';
-  document.getElementById('v-body').innerHTML = '<div style="color:var(--muted);font-size:12.5px;font-style:italic;margin-bottom:14px;">Aperçu rapide (snippet) — corps complet à charger en session ultérieure</div><div>' + escHtml(msg.snippet || '') + '</div>';
+  document.getElementById('v-body').innerHTML = '<div style="color:var(--muted);font-size:12.5px;font-style:italic;margin-bottom:14px;">Extrait du message</div><div>' + escHtml(msg.snippet || '') + '</div>';
 }
 
 function setFolder(folder){
@@ -728,7 +696,6 @@ function refreshInboxIfReady(){
 function updateKpis(){
   document.getElementById('kpi-inbox').textContent = STATE.emails.length;
   document.getElementById('badge-inbox').textContent = STATE.emails.length;
-  // Sent/Drafts/Mailing/Newsletter restent à 0 en V1 (sessions ultérieures pour Gmail labels)
 }
 
 // ────────────────────────────────────────────────
@@ -1042,6 +1009,11 @@ var SIRET_MODAL = (function() {
     inputSiret.addEventListener('input', onSiretInput);
     btnSubmit.addEventListener('click', onSubmit);
     document.addEventListener('click', onDocClick);
+    document.addEventListener('keydown', onEscape);
+  }
+
+  function onEscape(e) {
+    if (e.key === 'Escape' && modal.classList.contains('open')) close();
   }
 
   function updateSubmitState() {
@@ -1207,6 +1179,7 @@ var SIRET_MODAL = (function() {
 
   function close() {
     modal.classList.remove('open');
+    autocompleteBox.classList.remove('is-open');
     pendingCampaignId = null;
   }
 
@@ -1357,10 +1330,13 @@ loadAccountsAndInbox();
     </nav>
   </div>
 </footer>
-<div class="modal-overlay" id="siret-modal">
+<div class="modal-overlay" id="siret-modal" onclick="if(event.target===this)SIRET_MODAL.close()">
   <div class="modal" role="dialog" aria-labelledby="siret-modal-title">
     <div class="modal-head">
       <span class="modal-title" id="siret-modal-title">Avant votre premier envoi de prospection</span>
+      <button class="modal-close" onclick="SIRET_MODAL.close()" aria-label="Fermer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
     <div class="modal-body">
       <p style="font-size:13px;color:var(--muted);margin:0 0 16px;">

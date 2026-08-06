@@ -453,18 +453,41 @@ export async function rapprocherDepartementAtoutFrance(dept, { blanc = true } = 
 
   // ── Fiches sociétés du département : les trois NAF d'hébergement, et le seul
   // `website` VIDE — comparer ce qui est déjà rempli ne mènerait à rien, l'écriture
-  // étant de toute façon en remplissage-si-vide. Index (departement, naf) existant.
+  // étant de toute façon en remplissage-si-vide.
+  //
+  // TROIS REQUÊTES D'ÉGALITÉ, PAS UN `naf IN $nafs`. Mesuré à l'EXPLAIN : le `IN`
+  // n'est pas une clause indexable, le planificateur n'emprunte alors que
+  // idx_ref_dept (le département SEUL) et filtre le NAF en mémoire — 7 045 fiches
+  // lues sur le 75 pour zéro fiche traitée, 1,5 s payée à CHAQUE recherche
+  // d'abonné du département. Une égalité par code rend la clause indexable.
+  //
+  // ET UN `WITH INDEX` EXPLICITE, parce que l'égalité seule ne suffit pas : laissé
+  // libre, le planificateur préfère idx_ref_naf (le NAF seul), ce qui n'est rapide
+  // que tant que ces trois NAF sont rares à l'échelle NATIONALE — vrai aujourd'hui
+  // (134 lignes), faux le jour où le référentiel couvrira l'hôtellerie. `WITH
+  // INDEX idx_ref_dept_naf` (referentiel.js:123) épingle le seul accès qui borne
+  // les DEUX dimensions. Mesures movup-prod, les trois requêtes cumulées :
+  // 1 536 ms → 85 ms sur le 75, 675 ms → 99 ms sur le 22.
+  //
+  // Un nom d'index inconnu ne throw PAS — SurrealDB retombe sur le balayage de
+  // table : la requête resterait correcte, seulement lente, si l'index venait à
+  // manquer. Rien à rattraper ici.
+  //
+  // Fusion en mémoire, sans dédoublonnage : une fiche porte UN seul NAF, les trois
+  // ensembles sont disjoints par construction.
   let societes = []
   try {
     const db = await getDb()
-    const r = await db.query(
-      'SELECT siret, raison_sociale, enseigne, nom_commercial, naf, ' +
-      'code_postal, numero_voie, type_voie, libelle_voie, adresse, ville, website ' +
-      'FROM referentiel_societes ' +
-      'WHERE departement = $d AND naf IN $nafs AND (website = NONE OR website = "")',
-      { d, nafs: NAFS_HEBERGEMENT }
-    )
-    societes = r[0] || []
+    for (const naf of NAFS_HEBERGEMENT) {
+      const r = await db.query(
+        'SELECT siret, raison_sociale, enseigne, nom_commercial, naf, ' +
+        'code_postal, numero_voie, type_voie, libelle_voie, adresse, ville, website ' +
+        'FROM referentiel_societes WITH INDEX idx_ref_dept_naf ' +
+        'WHERE departement = $d AND naf = $naf AND (website = NONE OR website = "")',
+        { d, naf }
+      )
+      for (const soc of (r[0] || [])) societes.push(soc)
+    }
   } catch (e) {
     console.warn('[rapprochement-atout-france]', String(e?.message || e).slice(0, 100))
     return rendre()

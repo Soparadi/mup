@@ -21,7 +21,8 @@
 import { getDb } from '../../lib/surreal.js'
 import { cleanRecordId } from '../../lib/db.js'
 import { enrichReferentielActionnable } from './referentiel.js'
-import { getReferentielFaisceauBySiret } from './referentiel-read.js'
+import { getReferentielFaisceauBySiret, getOsmSitesBySiret } from './referentiel-read.js'
+import { normaliserDomaine } from './rapprochement-osm.js'
 import { normText, corroborerSiret } from './overpass.js'
 import { normaliserVoie, parserAdresseAgregee, canoniserTexteVoie } from '../../lib/societes.js'
 import { rechercherUrlSociete } from './recherche-web.js'
@@ -540,10 +541,34 @@ function sortEmailsBySiteDomain(emails, siteHost) {
 // ---------------------------------------------------------------------------
 // Maillon 4 — recoupement scoré contre le faisceau.
 //   • SIRET/SIREN trouvé = certain (réutilise corroborerSiret d'overpass.js).
-//   • ≥ 2 signaux indépendants parmi {raison_sociale, adresse, dirigeant_nom} = présumé.
-//   • 1 seul signal = insuffisant → confidence null (silence, on n'écrit rien).
+//   • ≥ 2 signaux indépendants parmi {raison_sociale, adresse, dirigeant_nom} = présumé,
+//     ramenés à 1 seul quand l'URL visitée est ATTESTÉE PAR IDENTIFIANT (cf. infra).
+//   • en deçà du seuil = insuffisant → confidence null (silence, on n'écrit rien).
 //   • dirigeant_nom = VALIDATEUR de concordance uniquement (jamais écrit ni exposé).
 // ---------------------------------------------------------------------------
+
+// Seuils de signaux de PAGE requis pour « présumé », selon la provenance de l'URL.
+//
+// URL SUPPOSÉE (composée, cherchée sur le web, ou héritée d'une étiquette dont rien
+// ne garantit qu'elle vise CET établissement) : deux signaux, comme toujours.
+//
+// URL ATTESTÉE PAR IDENTIFIANT — une entité referentiel_osm portant le MÊME SIRET que
+// la fiche ET le même domaine que l'URL visitée : un seul signal suffit. Ce n'est PAS
+// compter le SIRET d'OpenStreetMap comme un signal de plus, ce qui serait circulaire
+// puisque c'est lui qui a fait venir jusqu'à cette page. C'est reconnaître que la
+// PRÉSOMPTION D'ARRIVÉE n'est pas la même selon que l'adresse a été DEVINÉE ou
+// ATTESTÉE PAR DEUX SOURCES INDÉPENDANTES sur le même identifiant — OpenStreetMap et
+// Etalab, appariées par le SIRET. Le doute résiduel ne porte plus sur « est-ce le bon
+// site ? » mais sur « la page dit-elle quelque chose de l'entreprise ? ».
+//
+// LE PLANCHER EST FERME : JAMAIS ZÉRO. Zéro signal ne veut pas dire « lu et accepté »,
+// il veut dire « rien n'a été lu » — page vide, page inatteignable, page qui ne parle
+// de personne. Et il protège du site de GROUPE hérité d'une étiquette approximative
+// (vincentcoiffure.fr, loeilenscene.fr) : le domaine y est bien celui de l'étiquette,
+// mais la page ne nomme ni l'établissement, ni son adresse, ni son dirigeant — elle
+// reste donc sans verdict.
+const SEUIL_PRESUME = 2
+const SEUIL_PRESUME_ATTESTE = 1
 
 // Présence d'un libellé (normalisé) dans le corpus normalisé, longueur minimale
 // pour éviter les collisions sur des jetons trop courts/communs.
@@ -603,7 +628,7 @@ export function adresseConcorde(f, ex) {
   return (villeOk && cpOk) || voieCitee(f, ex)
 }
 
-function recouper(faisceau, ex) {
+function recouper(faisceau, ex, attestee) {
   const sirenCible = faisceau.siren || (faisceau.siret ? faisceau.siret.slice(0, 9) : '')
   const siretTrouve =
     (!!sirenCible && ex.sirets.some(s => corroborerSiret({ siret: s }, sirenCible))) ||
@@ -621,7 +646,10 @@ function recouper(faisceau, ex) {
     confidence = 'certain'
   } else {
     const n = ['raison_sociale', 'adresse', 'dirigeant_nom'].filter(k => sig[k]).length
-    if (n >= 2) confidence = 'presume'
+    // Math.max(1, …) : le plancher est écrit ici, structurellement, et non déduit de
+    // la valeur des constantes. Aucune provenance, jamais, ne descend à zéro signal.
+    const seuil = Math.max(1, attestee ? SEUIL_PRESUME_ATTESTE : SEUIL_PRESUME)
+    if (n >= seuil) confidence = 'presume'
   }
   // signals : liste des CLÉS concordantes (jamais la valeur du dirigeant → RGPD).
   const signals = Object.keys(sig).filter(k => sig[k])
@@ -629,14 +657,19 @@ function recouper(faisceau, ex) {
 }
 
 // ---------------------------------------------------------------------------
-// analyserSite(homeUrl, faisceau) — maillons 2→4 sur un site.
+// analyserSite(homeUrl, faisceau, options) — maillons 2→4 sur un site.
 // Rend { confidence, signals, emails, phones } (confidence possiblement null si
 // le site est joignable mais ne recoupe pas), ou null si le home est injoignable.
 // Exportée pour diagnostic : elle ne touche JAMAIS la base (crawl + extraction +
 // recoupement en mémoire), l'écriture reste le seul fait d'enrichirMentionsLegales.
+//
+// options.attestee — l'URL est attestée par identifiant (cf. SEUIL_PRESUME_ATTESTE) :
+// un seul signal de page suffit alors pour « présumé ». ABSENTE PAR DÉFAUT : sans
+// options, le seuil reste à deux, à l'identique d'avant.
 // ---------------------------------------------------------------------------
 
-export async function analyserSite(homeUrlRaw, faisceau) {
+export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
+  const attestee = options.attestee === true
   const homeUrl = normalizeUrl(homeUrlRaw)
   if (!homeUrl) return null
 
@@ -675,7 +708,7 @@ export async function analyserSite(homeUrlRaw, faisceau) {
   const emails = sortEmailsBySiteDomain(extractEmails(corpusRaw), safeHost(base))
 
   // Maillon 4 — recoupement.
-  const { confidence, signals } = recouper(faisceau, ex)
+  const { confidence, signals } = recouper(faisceau, ex, attestee)
   return { confidence, signals, emails, phones }
 }
 
@@ -726,7 +759,7 @@ export async function enrichirMentionsLegales(siret, options = {}) {
   const forcerTtl = options.forcerTtl === true
   const sansRechercheWeb = options.sansRechercheWeb === true
   const s = String(siret || '').replace(/\s+/g, '')
-  const result = { siret: s, source: null, confidence: null, signals: [], written: false, skipped: null }
+  const result = { siret: s, source: null, confidence: null, signals: [], attestee: false, written: false, skipped: null }
   try {
     if (!s) { result.skipped = 'siret_vide'; return result }
 
@@ -740,10 +773,30 @@ export async function enrichirMentionsLegales(siret, options = {}) {
     let analyse = null
     let sourceUrl = null
 
+    // Attestation par identifiant — UNE requête indexée par SIRET, et seulement si
+    // une URL est effectivement visitée (mémoïsée : le Set, même vide, est vérité).
+    // Le résultat vaut pour toutes les URL du SIRET : c'est le DOMAINE qui décide.
+    let domainesOsm = null
+    const estAttestee = async (url) => {
+      const d = normaliserDomaine(url)
+      if (!d) return false
+      if (!domainesOsm) {
+        const sites = await getOsmSitesBySiret(faisceau.siret)
+        domainesOsm = new Set(sites.map(normaliserDomaine).filter(Boolean))
+      }
+      return domainesOsm.has(d)
+    }
+
     // Maillon 1.a — URL déjà en base.
     if (faisceau.website) {
-      const a = await analyserSite(faisceau.website, faisceau)
-      if (a && a.confidence) { analyse = a; sourceUrl = normalizeUrl(faisceau.website); result.source = 'base' }
+      const attestee = await estAttestee(faisceau.website)
+      const a = await analyserSite(faisceau.website, faisceau, { attestee })
+      if (a && a.confidence) {
+        analyse = a
+        sourceUrl = normalizeUrl(faisceau.website)
+        result.source = 'base'
+        result.attestee = attestee
+      }
     }
 
     // Maillon 1.b — recherche web si rien de concluant en base. On vérifie CHAQUE
@@ -757,8 +810,18 @@ export async function enrichirMentionsLegales(siret, options = {}) {
       })
       const liste = Array.isArray(candidats) ? candidats.slice(0, MAX_CANDIDATS) : []
       for (const url of liste) {
-        const a = await analyserSite(url, faisceau)
-        if (a && a.confidence) { analyse = a; sourceUrl = normalizeUrl(url); result.source = 'web'; break }
+        // Même test qu'en 1.a : ce qui atteste, c'est la CONCORDANCE DE DOMAINE avec
+        // une entité OSM du même SIRET, jamais le maillon par lequel l'URL est venue.
+        // Une URL devinée ou composée ne la rencontre pas, et reste à deux signaux.
+        const attestee = await estAttestee(url)
+        const a = await analyserSite(url, faisceau, { attestee })
+        if (a && a.confidence) {
+          analyse = a
+          sourceUrl = normalizeUrl(url)
+          result.source = 'web'
+          result.attestee = attestee
+          break
+        }
       }
     }
 
@@ -790,6 +853,9 @@ export async function enrichirMentionsLegales(siret, options = {}) {
     source: result.source,
     confidence: result.confidence,
     signals: result.signals,
+    // Provenance de l'URL retenue : le seuil appliqué se relit dans l'audit (un seul
+    // signal + attestee:false serait une anomalie, pas un verdict).
+    attestee: result.attestee,
     written: result.written,
     skipped: result.skipped,
     at: new Date().toISOString()

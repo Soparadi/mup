@@ -296,6 +296,32 @@ export async function getOsmContactBySiret(siret) {
   }
 }
 
+// ── D-ter. getOsmSitesBySiret(siret) — async, fail-safe ──
+// Les URL que la réserve OSM porte POUR CE SIRET, brutes et TOUTES (pas de fusion :
+// l'appelant compare un domaine, il lui faut l'ensemble des candidats, pas seulement
+// le premier non vide). Sert au moteur mentions légales à savoir si l'URL qu'il
+// s'apprête à lire est ATTESTÉE PAR IDENTIFIANT — même SIRET des deux côtés — ou
+// simplement supposée.
+//
+// UNE requête, sur l'index idx_osm_siret (égalité stricte, jamais de scan) : un
+// point-lookup rendant en pratique 0 à 2 lignes, un seul champ projeté. La jointure
+// par SIREN n'est PAS tentée : referentiel_osm n'a pas d'index sur siren, un
+// `OR siren = $siren` dégraderait la requête en scan des ~685 k lignes de la réserve.
+// Rend [] si rien / tout échec (fail-safe, jamais de throw remontant).
+export async function getOsmSitesBySiret(siret) {
+  try {
+    const s = str(siret).replace(/\s+/g, '')
+    if (!s) return []
+    const sql = 'SELECT website FROM referentiel_osm WHERE siret = $siret'
+    const db = await getDb()
+    const r = await db.query(sql, { siret: s })
+    return (r[0] || []).map(row => str(row?.website)).filter(Boolean)
+  } catch (e) {
+    console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
+    return []
+  }
+}
+
 // ── E. getReferentielFaisceauBySiret(siret) — async, fail-safe ──
 // FAISCEAU COMPLET d'un SIRET pour le crawl mentions légales (mentions-legales.js) :
 // identité (siren/siret/raison_sociale), adresse décomposée (voie + CP + ville) pour

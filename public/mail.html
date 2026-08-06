@@ -224,6 +224,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <div class="kpi-chip">
             <div><div class="kpi-num" id="kpi-inbox">0</div><div class="kpi-lbl">Reçus</div></div>
           </div>
+          <div class="kpi-chip">
+            <div><div class="kpi-num" id="kpi-sent">0</div><div class="kpi-lbl">Envoyés</div></div>
+          </div>
         </div>
         <button class="kpi-campagne" onclick="document.querySelector('.subtab[data-tab=campaigns]').click()">
           <div class="kpi-lbl" style="color:var(--orange);">Mailing</div>
@@ -258,8 +261,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Reçus</span>
               <span class="subnav-badge" id="badge-inbox">0</span>
             </div>
-            <button class="subnav-item" data-folder="sent" disabled>
+            <button class="subnav-item" data-folder="sent" onclick="setFolder('sent')">
               <span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Envoyés</span>
+              <span class="subnav-badge" id="badge-sent">0</span>
             </button>
             <button class="subnav-item" data-folder="drafts" disabled>
               <span class="subnav-item-name"><svg class="subnav-item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Brouillons</span>
@@ -323,6 +327,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             </div>
             <div class="empty-state-title">Boîte vide</div>
             <div class="empty-state-sub">Aucun email récent dans cette boîte. Cliquer sur Synchroniser pour rafraîchir.</div>
+          </div>
+
+          <!-- État échec : la boîte n'a pas pu être lue -->
+          <div class="empty-state" id="empty-state-error" style="display:none;">
+            <div class="empty-state-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12" y2="16"/></svg>
+            </div>
+            <div class="empty-state-title" id="empty-state-error-title">Lecture impossible</div>
+            <div class="empty-state-sub" id="empty-state-error-sub"></div>
           </div>
         </div>
 
@@ -534,9 +547,12 @@ document.querySelectorAll('.subtab').forEach(function(btn){
 // ────────────────────────────────────────────────
 var STATE = {
   primaryAccount: null,    // { provider, email } — premier compte connecté
-  emails: [],              // liste emails inbox-preview
+  emails: [],              // enveloppes du dossier affiché
+  counts: { inbox: 0, sent: 0 },
   selectedEmailId: null,
   folder: 'inbox',
+  listToken: 0,            // ignore la réponse d'un dossier qu'on a quitté
+  bodyToken: 0,            // idem pour le corps d'un message
   welcomePollTimer: null
 };
 
@@ -549,7 +565,7 @@ async function loadAccountsAndInbox(){
     var accounts = r.ok ? await r.json() : [];
     if(accounts.length > 0){
       STATE.primaryAccount = accounts[0];
-      showInboxList();
+      showLoading();
       await loadInbox();
     } else {
       STATE.primaryAccount = null;
@@ -558,56 +574,63 @@ async function loadAccountsAndInbox(){
   } catch(e){ showEmptyNoAccount(); }
 }
 
-function showEmptyNoAccount(){
-  document.getElementById('empty-state-noaccount').style.display = 'flex';
-  document.getElementById('empty-state-empty').style.display = 'none';
-  document.getElementById('empty-state-loading').style.display = 'none';
-  document.getElementById('email-list').style.display = 'none';
+// Un seul état visible à la fois : rien n'est masqué avant d'avoir la réponse.
+var INBOX_STATES = { noaccount:'empty-state-noaccount', empty:'empty-state-empty', loading:'empty-state-loading', error:'empty-state-error' };
+function setInboxState(state){
+  Object.keys(INBOX_STATES).forEach(function(k){
+    document.getElementById(INBOX_STATES[k]).style.display = (k === state) ? 'flex' : 'none';
+  });
+  document.getElementById('email-list').style.display = (state === 'list') ? 'block' : 'none';
 }
-function showInboxList(){
-  document.getElementById('empty-state-noaccount').style.display = 'none';
-  document.getElementById('empty-state-empty').style.display = 'none';
-  document.getElementById('empty-state-loading').style.display = 'none';
-  document.getElementById('email-list').style.display = 'block';
-}
-function showLoading(){
-  document.getElementById('empty-state-noaccount').style.display = 'none';
-  document.getElementById('empty-state-empty').style.display = 'none';
-  document.getElementById('empty-state-loading').style.display = 'flex';
-  document.getElementById('email-list').style.display = 'none';
-}
-function showInboxEmpty(){
-  document.getElementById('empty-state-noaccount').style.display = 'none';
-  document.getElementById('empty-state-empty').style.display = 'flex';
-  document.getElementById('empty-state-loading').style.display = 'none';
-  document.getElementById('email-list').style.display = 'none';
+function showEmptyNoAccount(){ setInboxState('noaccount'); }
+function showInboxList(){ setInboxState('list'); }
+function showLoading(){ setInboxState('loading'); }
+function showInboxEmpty(){ setInboxState('empty'); }
+function showInboxError(message, code){
+  // Boîte réellement absente : l'écran de connexion, pas un écran d'erreur.
+  if(code === 'no_account'){ showEmptyNoAccount(); return; }
+  document.getElementById('empty-state-error-title').textContent =
+    code === 'reconnect_required' ? 'Reconnexion nécessaire' : 'Lecture impossible';
+  document.getElementById('empty-state-error-sub').textContent =
+    message || 'La connexion à votre boîte a échoué. Réessayez dans un instant.';
+  setInboxState('error');
 }
 
 // ────────────────────────────────────────────────
-// INBOX (Gmail)
+// DOSSIERS (Reçus / Envoyés) — le serveur aiguille selon le fournisseur
 // ────────────────────────────────────────────────
 async function loadInbox(opts){
-  if(!STATE.primaryAccount || STATE.primaryAccount.provider !== 'google'){
-    if(!STATE.primaryAccount) showEmptyNoAccount();
-    return;
-  }
-  if(!opts || !opts.silent) showLoading();
+  if(!STATE.primaryAccount){ showEmptyNoAccount(); return; }
+  var silent = Boolean(opts && opts.silent);
+  var folder = STATE.folder === 'sent' ? 'sent' : 'inbox';
+  var token = ++STATE.listToken;
+  if(!silent) showLoading();
   try {
-    var url = '/api/v2/mail/inbox-preview?email=' + encodeURIComponent(STATE.primaryAccount.email) + '&limit=50';
+    var url = '/api/v2/mail/inbox-preview?folder=' + folder + '&limit=50'
+      + (STATE.primaryAccount.email ? '&email=' + encodeURIComponent(STATE.primaryAccount.email) : '');
     var r = await fetch(url);
-    if(!r.ok){ throw new Error('Lecture inbox impossible'); }
-    var msgs = await r.json();
-    var prevCount = STATE.emails.length;
+    var data = null;
+    try { data = await r.json(); } catch(e){ data = null; }
+    if(token !== STATE.listToken) return;
+    if(!r.ok){
+      // Un rafraîchissement de fond qui échoue ne vide pas une liste qui marche.
+      if(!(silent && STATE.emails.length)) showInboxError(data && data.error, data && data.code);
+      return;
+    }
+    var msgs = Array.isArray(data) ? data : [];
+    var prevCount = STATE.counts[folder];
     STATE.emails = msgs;
+    STATE.counts[folder] = msgs.length;
     renderInbox(msgs);
     updateKpis();
     // Pulse si count est passé de 0 à >=1 (welcome arrivé)
-    if(prevCount === 0 && msgs.length >= 1){
+    if(folder === 'inbox' && prevCount === 0 && msgs.length >= 1){
       var k = document.getElementById('kpi-inbox');
       k.classList.remove('pulse'); void k.offsetWidth; k.classList.add('pulse');
     }
   } catch(e){
-    if(!opts || !opts.silent) showEmptyNoAccount();
+    if(token !== STATE.listToken) return;
+    if(!(silent && STATE.emails.length)) showInboxError();
   }
 }
 
@@ -618,8 +641,10 @@ function renderInbox(msgs){
     return;
   }
   showInboxList();
+  var isSent = STATE.folder === 'sent';
   list.innerHTML = msgs.map(function(m){
-    var senderRaw = m.from || '—';
+    // En Envoyés, la colonne d'identité montre le destinataire.
+    var senderRaw = (isSent ? m.to : m.from) || '—';
     var senderName = senderRaw.replace(/<[^>]+>/, '').trim() || senderRaw;
     var initials = (senderName.match(/\b\w/g) || ['•']).slice(0,2).join('').toUpperCase();
     var dateStr = m.date ? formatRelativeDate(m.date) : '';
@@ -664,22 +689,75 @@ function selectEmail(id){
   document.querySelectorAll('.email-item').forEach(function(el){ el.classList.toggle('active', el.dataset.id === id); });
   var msg = STATE.emails.find(function(m){ return m.id === id; });
   if(!msg) return;
+  var isSent = STATE.folder === 'sent';
   document.getElementById('viewer-empty').style.display = 'none';
   document.getElementById('viewer').classList.add('active');
   document.getElementById('v-subject').textContent = msg.subject || '(sans sujet)';
-  document.getElementById('v-from').textContent = msg.from || '—';
+  document.getElementById('v-from').textContent = (isSent ? msg.to : msg.from) || '—';
   document.getElementById('v-date').textContent = msg.date ? new Date(msg.date).toLocaleString('fr-FR') : '';
-  document.getElementById('v-body').innerHTML = '<div style="color:var(--muted);font-size:12.5px;font-style:italic;margin-bottom:14px;">Extrait du message</div><div>' + escHtml(msg.snippet || '') + '</div>';
+  loadMessageBody(id);
+}
+
+// Le corps ne se charge qu'ici, au clic. Il arrive en texte et s'affiche via
+// textContent : rien de ce que contient un courriel n'est interprété.
+async function loadMessageBody(id){
+  var body = document.getElementById('v-body');
+  var token = ++STATE.bodyToken;
+  var folder = STATE.folder === 'sent' ? 'sent' : 'inbox';
+  setBodyNotice(body, 'Chargement du message…');
+  try {
+    var url = '/api/v2/mail/message?id=' + encodeURIComponent(id) + '&folder=' + folder
+      + (STATE.primaryAccount && STATE.primaryAccount.email ? '&email=' + encodeURIComponent(STATE.primaryAccount.email) : '');
+    var r = await fetch(url);
+    var data = null;
+    try { data = await r.json(); } catch(e){ data = null; }
+    if(token !== STATE.bodyToken) return;
+    if(!r.ok){
+      setBodyNotice(body, (data && data.error) || 'Ce message n\'a pas pu être chargé.');
+      return;
+    }
+    var text = (data && data.text) || '';
+    body.innerHTML = '';
+    if(!text.trim()){
+      setBodyNotice(body, 'Ce message ne contient pas de texte.');
+      return;
+    }
+    var pre = document.createElement('div');
+    pre.style.whiteSpace = 'pre-wrap';
+    pre.style.wordBreak = 'break-word';
+    pre.textContent = text;
+    body.appendChild(pre);
+  } catch(e){
+    if(token !== STATE.bodyToken) return;
+    setBodyNotice(body, 'Ce message n\'a pas pu être chargé.');
+  }
+}
+
+function setBodyNotice(body, message){
+  body.innerHTML = '';
+  var note = document.createElement('div');
+  note.style.color = 'var(--muted)';
+  note.style.fontSize = '12.5px';
+  note.textContent = message;
+  body.appendChild(note);
+}
+
+function closeViewer(){
+  STATE.selectedEmailId = null;
+  STATE.bodyToken++;
+  document.getElementById('viewer').classList.remove('active');
+  document.getElementById('viewer-empty').style.display = 'flex';
+  document.getElementById('v-body').innerHTML = '';
 }
 
 function setFolder(folder){
+  if(folder !== 'inbox' && folder !== 'sent') return;  // Brouillons reste inerte
   STATE.folder = folder;
   document.querySelectorAll('.subnav-item').forEach(function(it){ it.classList.toggle('active', it.dataset.folder === folder); });
   var lblEl = document.getElementById('cc-toolbar-label');
-  if(lblEl) lblEl.textContent = folder === 'inbox' ? 'Reçus' : folder === 'sent' ? 'Envoyés' : 'Brouillons';
-  // Pour V1, seul inbox est supporté
-  if(folder === 'inbox') loadInbox();
-  else { renderInbox([]); }
+  if(lblEl) lblEl.textContent = folder === 'sent' ? 'Envoyés' : 'Reçus';
+  closeViewer();
+  loadInbox();
 }
 
 async function syncInbox(){
@@ -694,8 +772,10 @@ function refreshInboxIfReady(){
 }
 
 function updateKpis(){
-  document.getElementById('kpi-inbox').textContent = STATE.emails.length;
-  document.getElementById('badge-inbox').textContent = STATE.emails.length;
+  document.getElementById('kpi-inbox').textContent = STATE.counts.inbox;
+  document.getElementById('badge-inbox').textContent = STATE.counts.inbox;
+  document.getElementById('kpi-sent').textContent = STATE.counts.sent;
+  document.getElementById('badge-sent').textContent = STATE.counts.sent;
 }
 
 // ────────────────────────────────────────────────

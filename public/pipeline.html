@@ -1709,8 +1709,8 @@ async function openDetail(id) {
 // fill-if-empty. Silencieux sur SIRET absent, échec réseau, 403 opt-out ou
 // found:false. Garde de fraîcheur sur currentId : si l'utilisateur a changé de
 // fiche pendant l'appel, on abandonne sans rien peindre.
-// Le site affiché reste celui de la carte : la restitution ne le repeint pas,
-// elle se contente de ne pas l'effacer en re-rendant le bloc société.
+// Le site suit le régime des réseaux sociaux : non décomptable, donc restitué
+// librement, mais affiché seulement — il n'est pas posé sur la carte.
 async function autoEnrichOnOpen(c) {
   if(!c) return;
   const openedId = c.id;
@@ -1736,17 +1736,24 @@ async function autoEnrichOnOpen(c) {
   fillSocialIfEmpty('d-linkedin', 'd-linkedin-link', data.societe_linkedin);
   fillSocialIfEmpty('d-facebook', 'd-facebook-link', data.societe_facebook);
   fillSocialIfEmpty('d-instagram', 'd-instagram-link', data.societe_instagram);
+  // Site : non décomptable, exactement comme les réseaux sociaux ci-dessus →
+  // restitué sans aucune condition de paiement, en fill-if-empty : une carte qui
+  // porte déjà un site garde le sien, la restitution ne remplit que le vide. Et
+  // comme pour les réseaux, la valeur n'est PAS écrite sur la carte : elle
+  // s'affiche, rien de plus, et repartira tant que personne n'aura cliqué sur
+  // Enrichir. Limite assumée, identique à celle des réseaux aujourd'hui.
+  const siteCarte = String(c.website||'').trim();
+  const siteRendu = siteCarte || String(data.website||'').trim();
   // Email + téléphone société : décomptables → repeints seulement si ce SIRET a
-  // déjà été payé. Re-render du bloc société en fill-if-empty (valeur carte
-  // prioritaire, valeur restituée en repli), SANS écrire sur la carte. Sinon on
-  // n'affiche rien : le bouton Enrichir reste le seul chemin.
-  // Le site repart de la carte à l'identique : ce re-render ne doit pas coûter
-  // au passage la case que le rendu de la fiche vient de peindre.
-  if(siretEnrichi(siret)) {
-    const email = String(c.societe_email||'').trim() || String(data.societe_email||'').trim();
-    const tel = String(c.societe_tel||'').trim() || String(data.societe_tel||'').trim();
-    peindreGrilleSociete(c.website, email, tel);
-  }
+  // déjà été payé (valeur carte prioritaire, valeur restituée en repli), SANS
+  // écrire sur la carte. Sinon ils repartent de la carte, tels que le rendu de
+  // la fiche les a peints : le bouton Enrichir reste leur seul chemin.
+  const paye = siretEnrichi(siret);
+  const email = paye ? (String(c.societe_email||'').trim() || String(data.societe_email||'').trim()) : c.societe_email;
+  const tel   = paye ? (String(c.societe_tel||'').trim()   || String(data.societe_tel||'').trim())   : c.societe_tel;
+  // Un seul re-render du bloc, et seulement quand il apporte quelque chose que
+  // le rendu de la fiche n'avait pas.
+  if(paye || siteRendu !== siteCarte) peindreGrilleSociete(siteRendu, email, tel);
 }
 
 // Libellé du bouton Enrichir. Écrire dans #d-enrich-label et non sur le bouton :

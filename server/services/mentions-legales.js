@@ -23,6 +23,7 @@ import { cleanRecordId } from '../../lib/db.js'
 import { enrichReferentielActionnable } from './referentiel.js'
 import { getReferentielFaisceauBySiret } from './referentiel-read.js'
 import { normText, corroborerSiret } from './overpass.js'
+import { normaliserVoie, parserAdresseAgregee, canoniserTexteVoie } from '../../lib/societes.js'
 import { rechercherUrlSociete } from './recherche-web.js'
 import { parserRobots, evaluerRobots } from './robots-txt.js'
 
@@ -552,15 +553,54 @@ function presentNorm(corpusNorm, needle, minLen) {
   return corpusNorm.includes(n)
 }
 
-// adresse concorde si (ville ET code postal présents) OU (libellé de voie présent).
-function adresseConcorde(f, ex) {
+// Voie ATTENDUE d'une fiche : { numero, voie } sous forme canonique. D'abord les
+// champs éclatés (numero_voie / type_voie / libelle_voie) ; s'ils sont vides — cas
+// SYSTÉMATIQUE côté Etalab, qui ne les peuple jamais —, repli sur l'agrégat
+// `adresse` parsé. Sans ce repli, la voie attendue restait vide et la branche
+// « libellé de voie » d'adresseConcorde était MORTE : elle ne pouvait jamais
+// concorder. Même repli, même parseur que sonderAdresse (rapprochement-osm.js).
+function voieAttendue(f) {
+  const voie = normaliserVoie(f.type_voie, f.libelle_voie)
+  if (voie) return { numero: (String(f.numero_voie || '').match(/\d+/) || [''])[0], voie }
+  return parserAdresseAgregee(f.adresse)
+}
+
+// La voie de la fiche est-elle CITÉE dans le corpus ? Comparaison de JETONS, pas de
+// chaînes : les deux côtés passent par la MÊME canonisation (lib/societes.js), qui
+// retire accents, ponctuation et articles, et ramène les types de voie abrégés à
+// leur forme pleine — « 8 r. des Boucheries » et « 8 RUE DES BOUCHERIES » deviennent
+// tous deux « 8 rue boucheries », « 3 RTE DE PARIS » et « 3 route de Paris » tous
+// deux « 3 route paris ». Une page qui écrit l'adresse autrement que l'INSEE cesse
+// donc de faire échouer la concordance pour une seule abréviation.
+//
+// Deux formes acceptées, dans cet ordre de force :
+//   • « <numéro> <voie> » — la plus sûre : le numéro colle la citation à CETTE
+//     adresse et non à la rue en général.
+//   • « <voie> » seule, à condition d'au moins DEUX jetons (type + nom propre) —
+//     les pieds de page qui omettent le numéro restent lisibles, mais un libellé
+//     réduit à un seul jeton (« quai », « gare ») happerait n'importe quelle page.
+// Corollaire assumé de la tolérance aux abréviations : une poignée de clés sont
+// aussi des mots français courants (« pas » → passage, « car » → carrefour). Le
+// risque de faux positif qu'elles ouvrent est borné par ces deux formes — il faut
+// que le mot courant soit suivi EXACTEMENT du nom propre de la voie attendue.
+function voieCitee(f, ex) {
+  const { numero, voie } = voieAttendue(f)
+  if (voie.length < 4) return false
+  const jetons = voie.split(' ')
+  if (!numero && jetons.length < 2) return false
+  const corpus = ' ' + canoniserTexteVoie(ex.corpusRaw) + ' '
+  if (numero && corpus.includes(' ' + numero + ' ' + voie + ' ')) return true
+  return jetons.length >= 2 && corpus.includes(' ' + voie + ' ')
+}
+
+// adresse concorde si (ville ET code postal présents) OU (voie de la fiche citée).
+// Exportée (pure, sans I/O ni base) pour vérification hors-base, comme repartirPages.
+export function adresseConcorde(f, ex) {
   const villeN = normText(f.ville)
   const villeOk = villeN.length >= 3 && ex.corpusNorm.includes(villeN)
   const cp = String(f.code_postal || '').replace(/\D/g, '')
   const cpOk = cp.length === 5 && new RegExp('\\b' + cp + '\\b').test(ex.corpusRaw)
-  const voieN = normText(f.libelle_voie)
-  const voieOk = voieN.length >= 4 && ex.corpusNorm.includes(voieN)
-  return (villeOk && cpOk) || voieOk
+  return (villeOk && cpOk) || voieCitee(f, ex)
 }
 
 function recouper(faisceau, ex) {

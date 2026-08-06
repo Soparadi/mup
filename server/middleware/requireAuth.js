@@ -3,6 +3,7 @@
 // /api/auth/* et /api/health.
 
 import { getSession } from '../auth/surreal-adapter.js'
+import { toucherLastSeen } from '../services/last-seen.js'
 
 export const SESSION_COOKIE = 'mup_session'
 
@@ -39,6 +40,13 @@ export async function requireAuth(req, res, next) {
     // Compat avec lib/auth.js getUserId() qui lit req.session?.userId en priorité
     req.session = { userId: userIdStr }
     req.authUser = session.user || null
+    // Trace de dernière venue — sans await, pas d'une heure (cf. last-seen.js).
+    // Posée dans les DEUX portillons : requireAuth voit les appels d'API,
+    // requireAuthHtml voit les ouvertures de page. Un abonné qui consulte son
+    // pipeline sans qu'aucun appel d'API ne parte resterait invisible ici seul,
+    // et la carte de pas est partagée : les deux points d'appel ne produisent
+    // pas deux écritures.
+    toucherLastSeen(userIdStr)
     next()
   } catch (e) {
     console.error('[requireAuth]', e.message)
@@ -69,6 +77,7 @@ export async function requireAuthHtml(req, res, next) {
     req.userId = userIdStr
     req.session = { userId: userIdStr }
     req.authUser = session.user || null
+    toucherLastSeen(userIdStr)
     next()
   } catch (e) {
     console.error('[requireAuthHtml]', e.message)

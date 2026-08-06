@@ -23,6 +23,7 @@ import {
   sendTrialDataDeletionWarningEmails
 } from './trial-emails.js'
 import { purgeExpiredUsers, purgeExpiredTrials, deleteUserCascade } from './purge-expired.js'
+import { agregerVisitesJour } from './visites.js'
 import { sendAccountDeletionConfirmed } from './email.js'
 import { ramasserActualites } from './actualites.js'
 
@@ -86,6 +87,10 @@ async function runTrialJobs() {
   await runStep('account_deletion', runAccountDeletions)
   await runStep('purge', purgeExpiredUsers)
   await runStep('purge_trial', purgeExpiredTrials)
+  // Audience — agrège les journées révolues dans visite_jour puis purge le
+  // détail de plus de 90 jours. En DERNIER : c'est la seule étape qui n'envoie
+  // rien et ne touche aucun compte, elle ne doit pas retarder les relances.
+  await runStep('visites', agregerVisitesJour)
 }
 
 // Suppression compte art. 17 (Phase 6 Étape 13) — exécute la cascade pour

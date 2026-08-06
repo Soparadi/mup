@@ -459,6 +459,11 @@ export async function runAuthMigration() {
     // N'ouvre JAMAIS le superadmin (verrou email seul, statut disjoint). Géré
     // depuis le tableau superadmin via POST /api/admin/comptes/bypass.
     'DEFINE FIELD IF NOT EXISTS bypass ON user TYPE option<bool> DEFAULT false',
+    // Dernière venue du compte — posée par toucherLastSeen (pas d'une heure)
+    // depuis les deux portillons de session. option<...> sans DEFAULT : les
+    // comptes qui ne sont pas revenus depuis l'ajout restent à NONE, et cette
+    // absence se lit « jamais vu depuis la mise en service », pas « vu au boot ».
+    'DEFINE FIELD IF NOT EXISTS last_seen_at ON user TYPE option<datetime>',
     'DEFINE INDEX IF NOT EXISTS user_email_unique ON user FIELDS email UNIQUE',
     // SIRET unique mais optionnel : plusieurs users peuvent rester sans siret
     // tant qu'ils n'ont pas franchi /account/upgrade (pré-Stripe Checkout).

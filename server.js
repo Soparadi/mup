@@ -46,6 +46,7 @@ import { runReferentielAtoutFranceMigration } from './server/services/referentie
 import { chargerAtoutFrance } from './server/services/atout-france.js'
 import { runReferentielRgeMigration } from './server/services/referentiel-rge.js'
 import { chargerRge } from './server/services/rge.js'
+import { runVisitesMigration, creerMesureAudience } from './server/services/visites.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
@@ -984,6 +985,15 @@ app.use(async (req, res, next) => {
     return next()
   }
 })
+
+// ── Mesure d'audience du site public ──
+// Placée JUSTE AVANT express.static : les pages applicatives ont déjà été
+// servies par le middleware d'injection window.__USER__ au-dessus et
+// n'arrivent pas ici ; celles qui y arriveraient malgré tout sont écartées par
+// isProtectedHtmlRoute, le MÊME prédicat que le portillon d'authentification.
+// Le middleware n'attend rien : il accroche un écouteur sur `finish` et rend
+// la main (server/services/visites.js).
+app.use(creerMesureAudience({ estPageApp: isProtectedHtmlRoute }))
 
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }))
 
@@ -6036,6 +6046,16 @@ app.use((req, res) => {
     console.log('[boot] referentiel_rge table ready (+ 4 indexes)')
   } catch (e) {
     console.error('[boot] referentiel_rge migration failed:', e.message)
+  }
+  // Audience du site public — tables visite (détail, 90 jours) et visite_jour
+  // (agrégat, conservé). Aucun userId, aucun lien avec la table user : ce sont
+  // des visiteurs anonymes. Vides au boot, alimentées par le middleware de
+  // mesure et par l'étape « visites » du cron quotidien.
+  try {
+    await runVisitesMigration()
+    console.log('[boot] visite tables ready (visite + visite_jour, 2 indexes)')
+  } catch (e) {
+    console.error('[boot] visites migration failed:', e.message)
   }
   // Cron trial — node-cron in-process déclenché à 8h Europe/Paris.
   // Skip si NODE_ENV !== 'production' (évite spam emails en dev) ou

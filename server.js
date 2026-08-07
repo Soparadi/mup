@@ -6236,8 +6236,8 @@ app.get('/api/v2/mail/inbox-preview', async (req, res) => {
 
 // Le corps d'un envoi parti par Resend se sert depuis la table mail : aucun
 // fournisseur ne l'a jamais eu. Le record est relu sous l'abonné qui le
-// demande — l'identifiant d'un autre ne rend rien. Comme partout ici, du
-// texte : un corps enregistré en HTML est réduit à son texte avant de partir.
+// demande — l'identifiant d'un autre ne rend rien. Comme les autres corps, il
+// part en deux champs : le HTML enregistré tel quel, et son texte pour le repli.
 async function corpsEnvoiResend(db, ownerId, recordId) {
   const propre = String(recordId || '').replace(/[^a-zA-Z0-9_-]/g, '')
   const rec = propre
@@ -6256,13 +6256,15 @@ async function corpsEnvoiResend(db, ownerId, recordId) {
     subject: rec.subject || '',
     date: rec.date || null,
     text: rec.body_text || (rec.body_html ? htmlToText(rec.body_html) : ''),
+    html: rec.body_html || '',
     attachments: []
   }
 }
 
-// Corps d'UN message, chargé au clic. Rend du texte, jamais du HTML : la page
-// l'affiche comme du texte et n'a donc rien à assainir. Aucune écriture en base,
-// la lecture reste volatile.
+// Corps d'UN message, chargé au clic. Rend le texte ET le HTML d'origine, non
+// retouché : c'est la page qui l'enferme dans un cadre isolé, sans script ni
+// accès à la session. Le texte reste le repli quand il n'y a pas de partie HTML.
+// Aucune écriture en base, la lecture reste volatile.
 app.get('/api/v2/mail/message', async (req, res) => {
   const ownerId = requireUserId(req, res)
   if (!ownerId) return

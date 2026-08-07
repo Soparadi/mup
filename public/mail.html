@@ -145,6 +145,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .viewer-meta-date{font-size:11px;color:var(--muted2);font-family:var(--mono);margin-left:auto;}
 .viewer-actions{display:flex;gap:8px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--card);flex-shrink:0;}
 .viewer-body{flex:1;overflow-y:auto;padding:18px 24px;font-size:13px;line-height:1.7;background:var(--card);}
+/* Un message qui a une partie HTML s'affiche dans un cadre isolé. Le volet
+   cesse alors de défiler : c'est le cadre qui occupe la place et défile seul,
+   d'un seul ascenseur. Aucune couleur ni police nouvelle — la bordure et le
+   fond sont ceux de l'écran, tout le reste appartient au message. */
+.viewer-body.has-frame{display:flex;flex-direction:column;gap:10px;overflow:hidden;padding:12px 16px;}
+.msg-frame{flex:1;min-height:180px;width:100%;display:block;border:1px solid var(--border);border-radius:8px;background:#fff;}
+.msg-images-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;font-size:11.5px;color:var(--muted);}
+.msg-images-bar span{flex:1;min-width:180px;}
 
 /* Boutons */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;border:none;}
@@ -1094,8 +1102,10 @@ function eteindrePastille(id){
   });
 }
 
-// Le corps ne se charge qu'ici, au clic. Il arrive en texte et s'affiche via
-// textContent : rien de ce que contient un courriel n'est interprété.
+// Le corps ne se charge qu'ici, au clic. Il arrive en deux formes : le HTML
+// d'origine du message, s'il en a un, et son texte. Le HTML l'emporte et part
+// dans un cadre isolé ; sans lui, le texte s'affiche via textContent, comme
+// avant.
 // Rend true quand le message a bien été mis sous les yeux de l'abonné — un
 // message sans texte compte, un message qui n'a pas pu être chargé non plus, et
 // un message dont on est parti avant sa réponse pas davantage. C'est cela seul
@@ -1116,8 +1126,14 @@ async function loadMessageBody(id){
       setBodyNotice(body, (data && data.error) || 'Ce message n\'a pas pu être chargé.');
       return false;
     }
+    var html = (data && data.html) || '';
     var text = (data && data.text) || '';
+    if(html.trim()){
+      afficherCadreMessage(body, html);
+      return true;
+    }
     body.innerHTML = '';
+    body.classList.remove('has-frame');
     if(!text.trim()){
       setBodyNotice(body, 'Ce message ne contient pas de texte.');
       return true;
@@ -1135,8 +1151,130 @@ async function loadMessageBody(id){
   }
 }
 
+// ────────────────────────────────────────────────
+// CADRE ISOLÉ D'UN MESSAGE HTML
+// ────────────────────────────────────────────────
+// Le HTML d'un courriel s'affiche tel qu'il est, mais jamais DANS la page : il
+// est rendu dans un iframe dont l'attribut sandbox n'accorde ni allow-scripts,
+// ni allow-same-origin. Aucun script du message ne s'exécute — pas même un
+// gestionnaire onerror d'image — et le document est d'origine opaque : ni nos
+// cookies, ni notre session, ni le moindre accès au reste de l'écran. C'est là,
+// et non dans un filtrage du balisage, que tient la sécurité de cet affichage.
+//
+// allow-popups est la seule permission accordée : sans elle, cliquer un lien ne
+// ferait rien du tout. Elle n'autorise qu'une ouverture née d'un clic, et
+// allow-popups-to-escape-sandbox ne concerne que l'onglet ainsi ouvert, qui doit
+// se comporter en page normale sur le site visité. Avec target et rel posés sur
+// chaque ancre, cet onglet n'a ni poignée vers nous, ni notre adresse.
+var CADRE_SANDBOX = 'allow-popups allow-popups-to-escape-sandbox';
+
+// La hauteur du cadre suit le volet de lecture et le message y défile seul.
+// Le coller au contenu demanderait de mesurer le document rendu, ce qu'aucune
+// page ne peut faire sans allow-same-origin (lire dans le cadre) ou
+// allow-scripts (le faire parler) : les deux sont exclus, et cette exclusion
+// vaut mieux qu'une hauteur au millimètre.
+function afficherCadreMessage(body, htmlOrigine){
+  body.innerHTML = '';
+  body.classList.add('has-frame');
+  var cadre = document.createElement('iframe');
+  cadre.className = 'msg-frame';
+  cadre.setAttribute('sandbox', CADRE_SANDBOX);
+  cadre.setAttribute('referrerpolicy', 'no-referrer');
+  cadre.setAttribute('title', 'Contenu du message');
+  var prepare = preparerHtmlMessage(htmlOrigine, false);
+  if(prepare.bloques){
+    var barre = document.createElement('div');
+    barre.className = 'msg-images-bar';
+    var dit = document.createElement('span');
+    dit.textContent = 'Images distantes bloquées : les charger signalerait votre lecture à l\'expéditeur.';
+    var bouton = document.createElement('button');
+    bouton.className = 'btn btn-outline btn-sm';
+    bouton.textContent = 'Afficher les images';
+    // Pour ce message et cette lecture seulement : rien n'est retenu, ni ici,
+    // ni en base. Rouvrir le message rebloque.
+    bouton.onclick = function(){
+      cadre.srcdoc = documentCadre(preparerHtmlMessage(htmlOrigine, true).html);
+      barre.remove();
+    };
+    barre.appendChild(dit);
+    barre.appendChild(bouton);
+    body.appendChild(barre);
+  }
+  cadre.srcdoc = documentCadre(prepare.html);
+  body.appendChild(cadre);
+}
+
+// Le message est posé dans un document à nous, qui ne lui apporte que de quoi
+// ne pas déborder du cadre. Le <base> donne le nouvel onglet à tout lien.
+function documentCadre(interieur){
+  return '<!doctype html><html lang="fr"><head><meta charset="utf-8">'
+    + '<meta name="referrer" content="no-referrer">'
+    + '<base target="_blank">'
+    + '<style>html,body{margin:0;}'
+    + 'body{padding:14px 16px;background:#fff;color:#1a1a1a;'
+    + 'font:13px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;'
+    + 'overflow-wrap:break-word;}'
+    + 'img,video,table{max-width:100%;}img{height:auto;}'
+    + '</style></head><body>' + interieur + '</body></html>';
+}
+
+// Ce qui suit n'assainit rien : le sandbox l'a déjà fait, et mieux. Il ne
+// s'occupe que de ce que le sandbox ne couvre pas — la confidentialité de la
+// lecture. Une image chargée chez l'expéditeur lui livre l'adresse IP de
+// l'abonné et l'heure exacte où il a ouvert le message ; c'est à quoi servent
+// les pixels espions. Toute référence qui partirait sur le réseau est donc
+// désamorcée avant d'entrer dans le cadre, en renommant l'attribut qui la
+// porte. Les sources data: et cid: ne sortent nulle part et restent.
+var TAGS_CHARGEURS = /<(img|image|video|audio|source|track|object|embed|iframe|input|link|body|table|td|th|tr)\b([^>]*)>/gi;
+var ATTRS_DISTANTS = /\s(src|srcset|background|poster|data|href)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
+var URLS_CSS = /url\(\s*(['"]?)([^'")]*)\1\s*\)/gi;
+
+function estReferenceLocale(valeur){
+  var v = String(valeur).trim().replace(/^["']|["']$/g, '').trim();
+  return v === '' || /^(data:|cid:|#)/i.test(v);
+}
+
+function preparerHtmlMessage(html, avecImages){
+  var s = String(html || '');
+  var bloques = 0;
+  var neutraliserCss = function(morceau){
+    return morceau.replace(URLS_CSS, function(entier, guillemet, adresse){
+      if(estReferenceLocale(adresse)) return entier;
+      bloques++;
+      return 'none';
+    });
+  };
+  if(!avecImages){
+    s = s.replace(TAGS_CHARGEURS, function(entier, nom, attributs){
+      return '<' + nom + attributs.replace(ATTRS_DISTANTS, function(m, attribut, valeur){
+        if(estReferenceLocale(valeur)) return m;
+        bloques++;
+        return ' data-bloque-' + attribut.toLowerCase() + '=' + valeur;
+      }) + '>';
+    });
+    // Une feuille de style embarquée charge aussi bien qu'une balise : fonds,
+    // polices et images de liste passent par url(), qui part sur le réseau.
+    s = s.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, neutraliserCss);
+    s = s.replace(/\sstyle\s*=\s*("[^"]*"|'[^']*')/gi, neutraliserCss);
+  }
+  return { html: forcerLiensNouvelOnglet(s), bloques: bloques };
+}
+
+// Chaque lien s'ouvre dans un nouvel onglet, sans poignée window.opener vers
+// l'onglet ouvrant et sans lui transmettre d'où l'on venait. Le rel et le target
+// que porterait le message sont remplacés, jamais complétés.
+function forcerLiensNouvelOnglet(s){
+  return s.replace(/<a\b([^>]*)>/gi, function(entier, attributs){
+    var nets = attributs
+      .replace(/\s(rel|target)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/\/\s*$/, '');
+    return '<a' + nets + ' target="_blank" rel="noopener noreferrer">';
+  });
+}
+
 function setBodyNotice(body, message){
   body.innerHTML = '';
+  body.classList.remove('has-frame');
   var note = document.createElement('div');
   note.style.color = 'var(--muted)';
   note.style.fontSize = '12.5px';
@@ -1149,7 +1287,9 @@ function closeViewer(){
   STATE.bodyToken++;
   document.getElementById('viewer').classList.remove('active');
   document.getElementById('viewer-empty').style.display = 'flex';
-  document.getElementById('v-body').innerHTML = '';
+  var body = document.getElementById('v-body');
+  body.innerHTML = '';
+  body.classList.remove('has-frame');
 }
 
 function setFolder(folder){

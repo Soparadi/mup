@@ -380,6 +380,46 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   }
   .mail-layout[data-phone-pane="list"] .fab-newmsg.is-on { display: flex; }
 }
+
+/* ============================================================================
+   MASQUAGE — RÉDUCTION AU LANCEMENT
+   ----------------------------------------------------------------------------
+   La page se limite à connecter une boîte Google ou Microsoft, lire ses
+   messages et écrire à ses contacts. Ce qui déborde n'est PAS retiré du
+   document : le balisage, les fonctions et les routes restent en place et
+   redeviennent atteignables en supprimant ce seul bloc.
+
+   display:none, et non visibility ni opacity : un élément retiré du flux n'est
+   plus focusable — la tabulation ne l'atteint pas, aucune de ces cibles ne peut
+   être déclenchée au clavier faute d'être affichée.
+
+   Trois voies s'éteignent ici :
+   — Campagnes : le sous-onglet, son panneau, et les trois fenêtres qui n'en
+     relèvent que (création, détail, SIRET avant premier envoi) ;
+   — les pastilles Mailing et Newsletter du bandeau, qui n'ouvraient rien
+     d'autre que ce sous-onglet ;
+   — la connexion manuelle : les deux entrées vers la fenêtre IMAP — le lien de
+     l'écran d'accueil, le bouton des Paramètres — et la fenêtre elle-même. Ces
+     deux entrées sont les seuls .link-secondary de la page ; elles sont visées
+     par leur emplacement, pour que rien n'ait à être marqué sur les éléments.
+
+   Ce que ce bloc ne touche pas : la lecture IMAP côté serveur. Une boîte déjà
+   connectée en manuel continue de se lire exactement comme avant — seule la
+   création d'une nouvelle est hors d'atteinte. Deux endroits du script tirent
+   la conséquence de ce cul-de-sac et portent le même mot MASQUAGE :
+   showInboxError(), qui offre une sortie quand une telle boîte cesse de
+   répondre, et disconnectAccount(), qui prévient avant de la débrancher.
+   ============================================================================ */
+.subtab[data-tab="campaigns"],
+#tab-campaigns,
+#campaign-modal,
+#campaign-detail-modal,
+#siret-modal,
+.kpi-campagne,
+.kpi-newsletter,
+.empty-state-actions .link-secondary,
+#tab-settings .link-secondary,
+#imap-modal { display: none; }
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
@@ -529,6 +569,29 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             </div>
             <div class="empty-state-title" id="empty-state-error-title">Lecture impossible</div>
             <div class="empty-state-sub" id="empty-state-error-sub"></div>
+            <!-- Une boîte qui demande à être rebranchée doit pouvoir l'être
+                 depuis l'écran qui le dit. Montré par showInboxError() pour ce
+                 seul motif : sur une panne réseau, il n'y a rien à reconnecter. -->
+            <div class="empty-state-actions" id="empty-state-error-actions" style="display:none;">
+              <button class="oauth-btn" onclick="oauthGoogle()">
+                <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A10.99 10.99 0 0 0 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.99 10.99 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A10.99 10.99 0 0 0 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Reconnecter avec Google
+              </button>
+              <button class="oauth-btn" onclick="oauthMicrosoft()">
+                <svg width="16" height="16" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#F25022" d="M0 0h11v11H0z"/>
+                  <path fill="#7FBA00" d="M12 0h11v11H12z"/>
+                  <path fill="#00A4EF" d="M0 12h11v11H0z"/>
+                  <path fill="#FFB900" d="M12 12h11v11H12z"/>
+                </svg>
+                Reconnecter avec Microsoft
+              </button>
+            </div>
           </div>
         </div>
 
@@ -825,10 +888,22 @@ function showInboxEmpty(){ setInboxState('empty'); }
 function showInboxError(message, code){
   // Boîte réellement absente : l'écran de connexion, pas un écran d'erreur.
   if(code === 'no_account'){ showEmptyNoAccount(); return; }
+  var reconnexion = code === 'reconnect_required';
   document.getElementById('empty-state-error-title').textContent =
-    code === 'reconnect_required' ? 'Reconnexion nécessaire' : 'Lecture impossible';
+    reconnexion ? 'Reconnexion nécessaire' : 'Lecture impossible';
+  // MASQUAGE — le motif du serveur renvoie vers les Paramètres, où la
+  // connexion manuelle n'est plus proposée : une boîte IMAP ne s'y rebranche
+  // pas. On lui substitue la seule marche à suivre qui reste. À retirer avec
+  // le bloc de masquage de la feuille de style.
+  var imap = STATE.primaryAccount && STATE.primaryAccount.provider === 'imap';
   document.getElementById('empty-state-error-sub').textContent =
-    message || 'La connexion à votre boîte a échoué. Réessayez dans un instant.';
+    (reconnexion && imap)
+      ? 'Votre boîte a refusé les identifiants enregistrés. Reconnectez-la avec Google ou Microsoft.'
+      : (message || 'La connexion à votre boîte a échoué. Réessayez dans un instant.');
+  // Un écran d'erreur qui ne propose rien est un cul-de-sac : quand la boîte
+  // demande à être rebranchée, les deux voies de connexion sont sous les yeux.
+  var actions = document.getElementById('empty-state-error-actions');
+  if(actions) actions.style.display = reconnexion ? 'flex' : 'none';
   setInboxState('error');
 }
 
@@ -1198,7 +1273,13 @@ async function loadAccounts(){
 }
 
 async function disconnectAccount(provider, email){
-  if(!confirm('Déconnecter ' + email + ' (' + provider + ') ?')) return;
+  // MASQUAGE — débrancher une boîte connectée en manuel est sans retour tant
+  // que la fenêtre IMAP est masquée : on le dit avant, pas après. À retirer
+  // avec le bloc de masquage de la feuille de style.
+  var sansRetour = provider === 'imap'
+    ? '\n\nVous ne pourrez pas la rebrancher de la même façon : seules les connexions Google et Microsoft sont proposées.'
+    : '';
+  if(!confirm('Déconnecter ' + email + ' (' + provider + ') ?' + sansRetour)) return;
   try {
     if(provider === 'google'){
       var r = await fetch('/auth/google/disconnect', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email }) });

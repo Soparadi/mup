@@ -6257,7 +6257,10 @@ async function corpsEnvoiResend(db, ownerId, recordId) {
     date: rec.date || null,
     text: rec.body_text || (rec.body_html ? htmlToText(rec.body_html) : ''),
     html: rec.body_html || '',
-    attachments: []
+    attachments: [],
+    // Un envoi relu depuis notre base n'a pas de partie en ligne : le HTML
+    // stocké est celui qui est parti, ses images y sont déjà des adresses.
+    inlineImages: []
   }
 }
 

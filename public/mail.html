@@ -1129,7 +1129,7 @@ async function loadMessageBody(id){
     var html = (data && data.html) || '';
     var text = (data && data.text) || '';
     if(html.trim()){
-      afficherCadreMessage(body, html);
+      afficherCadreMessage(body, html, (data && data.inlineImages) || []);
       return true;
     }
     body.innerHTML = '';
@@ -1173,7 +1173,7 @@ var CADRE_SANDBOX = 'allow-popups allow-popups-to-escape-sandbox';
 // page ne peut faire sans allow-same-origin (lire dans le cadre) ou
 // allow-scripts (le faire parler) : les deux sont exclus, et cette exclusion
 // vaut mieux qu'une hauteur au millimètre.
-function afficherCadreMessage(body, htmlOrigine){
+function afficherCadreMessage(body, htmlOrigine, imagesEnLigne){
   body.innerHTML = '';
   body.classList.add('has-frame');
   var cadre = document.createElement('iframe');
@@ -1181,6 +1181,10 @@ function afficherCadreMessage(body, htmlOrigine){
   cadre.setAttribute('sandbox', CADRE_SANDBOX);
   cadre.setAttribute('referrerpolicy', 'no-referrer');
   cadre.setAttribute('title', 'Contenu du message');
+  // Les images embarquées sont incorporées d'abord, une fois pour les deux
+  // rendus possibles : le blocage qui suit ne voit plus que des data:, qu'il
+  // laisse passer sans les compter comme distantes.
+  htmlOrigine = incorporerImagesEnLigne(htmlOrigine, imagesEnLigne);
   var prepare = preparerHtmlMessage(htmlOrigine, false);
   if(prepare.bloques){
     var barre = document.createElement('div');
@@ -1232,6 +1236,54 @@ var URLS_CSS = /url\(\s*(['"]?)([^'")]*)\1\s*\)/gi;
 function estReferenceLocale(valeur){
   var v = String(valeur).trim().replace(/^["']|["']$/g, '').trim();
   return v === '' || /^(data:|cid:|#)/i.test(v);
+}
+
+// ────────────────────────────────────────────────
+// IMAGES EMBARQUÉES DU MESSAGE (cid:)
+// ────────────────────────────────────────────────
+// Le serveur a remonté, depuis le message DÉJÀ TÉLÉCHARGÉ, les parties en ligne
+// qui portent un identifiant de contenu : rien n'est allé les chercher, et rien
+// n'ira. Les référencer en data: les affiche sans qu'aucune requête ne parte —
+// l'expéditeur n'apprend ni que le message a été ouvert, ni depuis où. Le
+// blocage des images distantes, lui, reste entier : aucune adresse, aucun
+// domaine n'y gagne d'exception.
+//
+// Le message est hostile par défaut. Le serveur a déjà borné ce qu'il envoie
+// (types d'image seulement, taille par partie et cumul) ; il reste à borner ce
+// qui est INJECTÉ, car une seule image citée mille fois gonflerait le document
+// autant que mille images. Le budget est un compte de caractères écrits, pas
+// d'octets reçus : passé le budget, les références suivantes restent en cid:,
+// leur image ne s'affiche pas, et le document ne grossit plus.
+var BUDGET_IMAGES_EN_LIGNE = 2 * 1024 * 1024;
+var REFERENCE_CID = /cid:([^"'\s)>]+)/gi;
+
+function incorporerImagesEnLigne(html, images){
+  var s = String(html || '');
+  if(!s || !Array.isArray(images) || !images.length) return s;
+  var table = {};
+  for(var i = 0; i < images.length; i++){
+    var img = images[i];
+    if(!img || !img.cid || !img.content) continue;
+    // Seconde garde, sur le même principe que celle du serveur : rien qui ne
+    // soit une image n'entre dans le document, quoi qu'annonce la réponse.
+    var type = String(img.contentType || '').toLowerCase();
+    if(!/^image\/[a-z0-9.+-]+$/.test(type) || type === 'image/svg+xml') continue;
+    table[String(img.cid).toLowerCase()] = 'data:' + type + ';base64,' + img.content;
+  }
+  var reste = BUDGET_IMAGES_EN_LIGNE;
+  return s.replace(REFERENCE_CID, function(entier, reference){
+    var brute = String(reference).replace(/^<+|>+$/g, '');
+    var url = table[brute.toLowerCase()];
+    if(!url){
+      // Un identifiant peut voyager encodé dans l'attribut (image%40envoi).
+      var decodee = brute;
+      try { decodee = decodeURIComponent(brute); } catch(e){ decodee = brute; }
+      url = table[decodee.toLowerCase()];
+    }
+    if(!url || url.length > reste) return entier;
+    reste -= url.length;
+    return url;
+  });
 }
 
 function preparerHtmlMessage(html, avecImages){

@@ -85,6 +85,7 @@ import {
   getImapAccount,
   classifyMailError,
   sendWelcomeEmail,
+  mailboxCredentialId,
   domainOf,
   listVerifiedResendDomains,
   isVerifiedResendSender,
@@ -5828,7 +5829,7 @@ app.get('/auth/google/callback', async (req, res) => {
     const email = userInfo.email
 
     const db = await getDb()
-    const recordId = `${claims.ownerId}__google__${email.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const recordId = mailboxCredentialId(claims.ownerId, 'google', email)
     const now = new Date().toISOString()
     const payload = {
       ownerId: claims.ownerId,
@@ -5885,7 +5886,7 @@ app.post('/auth/google/disconnect', async (req, res) => {
   if (!email) return res.status(400).json({ error: 'email requis' })
   try {
     const db = await getDb()
-    const recordId = `${ownerId}__google__${String(email).replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const recordId = mailboxCredentialId(ownerId, 'google', email)
     const sel = await db.query('SELECT * FROM type::record("mailbox_credentials", $id)', { id: recordId })
     const cred = sel[0]?.[0]
     if (!cred || cred.ownerId !== ownerId) return res.status(404).json({ error: 'Compte introuvable' })
@@ -5950,7 +5951,7 @@ app.get('/auth/microsoft/callback', async (req, res) => {
     const email = userInfo.email
 
     const db = await getDb()
-    const recordId = `${claims.ownerId}__microsoft__${email.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const recordId = mailboxCredentialId(claims.ownerId, 'microsoft', email)
     const now = new Date().toISOString()
     const payload = {
       ownerId: claims.ownerId,
@@ -6007,7 +6008,7 @@ app.post('/auth/microsoft/disconnect', async (req, res) => {
   if (!email) return res.status(400).json({ error: 'email requis' })
   try {
     const db = await getDb()
-    const recordId = `${ownerId}__microsoft__${String(email).replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const recordId = mailboxCredentialId(ownerId, 'microsoft', email)
     const sel = await db.query('SELECT * FROM type::record("mailbox_credentials", $id)', { id: recordId })
     const cred = sel[0]?.[0]
     if (!cred || cred.ownerId !== ownerId) return res.status(404).json({ error: 'Compte introuvable' })

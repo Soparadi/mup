@@ -214,14 +214,24 @@
   .mail-thread.unread .mt-from{font-weight:700;}
   .mt-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:1px;}
   .mt-from{font-size:13px;color:var(--text);font-weight:600;}
-  /* Un en-tête sans nom d'affichage laisse l'adresse seule sur cette ligne.
-     iOS la reconnaît et l'enveloppe de lui-même dans un lien : le nom vire au
-     bleu souligné, et le toucher ouvre Mail au lieu d'ouvrir la page Mail. Les
-     ancres ainsi posées portent l'attribut x-apple-data-detectors ; on leur
-     rend l'apparence de leur parent et on les rend inertes au toucher, qui
-     retombe alors sur le fil. `font:inherit` ne fixe aucune taille : il
-     reprend celle de .mt-from, que le lien aurait autrement remplacée. */
-  .mt-from a[x-apple-data-detectors]{color:inherit;text-decoration:none;font:inherit;pointer-events:none;}
+  /* Un en-tête dont le nom d'affichage est une adresse laisse une adresse seule
+     sur cette ligne. iOS la reconnaît et l'enveloppe de lui-même dans un lien :
+     le nom vire au bleu souligné, et le toucher ouvre Mail au lieu d'ouvrir la
+     page Mail. Rien ici ne pose ce soulignement — la carte n'émet aucune ancre
+     dans .mt-from (tout y passe par textContent) : c'est le moteur qui le peint.
+
+     La première règle a d'abord été écrite pour `a[x-apple-data-detectors]`, le
+     seul attribut qu'iOS pose sur les liens qu'il fabrique. Elle laissait passer
+     ce cas-ci. On ne conditionne plus à l'attribut : la décoration est coupée
+     sur .mt-from et toute sa descendance, quelle que soit la balise. -webkit- en
+     plus de la propriété standard, car c'est la forme préfixée que WebKit honore
+     pour défaire une décoration qu'il a lui-même appliquée.
+
+     La seconde rend l'ancre inerte au toucher, qui retombe alors sur le fil, et
+     lui rend l'apparence de son parent. `font:inherit` ne fixe aucune taille :
+     il reprend celle de .mt-from, que le lien aurait autrement remplacée. */
+  .mt-from,.mt-from *{-webkit-text-decoration:none;text-decoration:none;}
+  .mt-from a{color:inherit;font:inherit;pointer-events:none;}
   .mt-time{font-size:10px;color:var(--muted2);font-family:var(--mono);}
   .mt-subject{font-size:12px;color:var(--text);margin-bottom:2px;font-weight:500;}
   .mt-preview{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -1521,6 +1531,11 @@ window.addEventListener('storage', function (e) {
 
   function expediteur(brut){
     var nom = String(brut || '').replace(/<[^>]+>/, '').trim();
+    // Un nom d'affichage RFC 5322 peut arriver entre guillemets —
+    // « "info@mairie.fr" <info@mairie.fr> » — et la ligne les montrait. On ne
+    // retire que la PAIRE qui enveloppe le nom entier : un guillemet ouvrant
+    // orphelin fait partie du nom et reste.
+    nom = nom.replace(/^"(.*)"$/, '$1').trim();
     return nom || String(brut || '') || '—';
   }
 

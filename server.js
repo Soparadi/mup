@@ -5858,6 +5858,7 @@ app.get('/auth/google/callback', async (req, res) => {
         const result = await sendWelcomeEmail(db, {
           ownerId: claims.ownerId,
           companyId: claims.companyId || null,
+          provider: 'google',
           userEmail: email,
           userName: userInfo.given_name || userInfo.name || null
         })
@@ -5979,6 +5980,7 @@ app.get('/auth/microsoft/callback', async (req, res) => {
         const result = await sendWelcomeEmail(db, {
           ownerId: claims.ownerId,
           companyId: claims.companyId || null,
+          provider: 'microsoft',
           userEmail: email,
           userName: userInfo.given_name || userInfo.name || null
         })

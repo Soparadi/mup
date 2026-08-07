@@ -655,15 +655,17 @@
           <div>
             <div style="display:flex;align-items:center;gap:8px;">
               <div class="card-title">Messagerie</div>
-              <span style="font-size:11px;font-weight:700;background:rgba(255,255,255,.15);color:#fff;border-radius:6px;padding:2px 8px;">0 non lus</span>
+              <span id="dash-mail-badge" style="display:none;font-size:11px;font-weight:700;background:rgba(255,255,255,.15);color:#fff;border-radius:6px;padding:2px 8px;"></span>
             </div>
           </div>
-          <span class="card-action">Tout voir <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+          <!-- Un lien, pas un mot cliquable : atteignable au clavier et pourvu
+               d'une destination. Le clic sur la carte entière reste. -->
+          <a class="card-action" href="/mail" style="text-decoration:none;">Tout voir <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
         </div>
         <div class="mail-inner">
 
-          <div class="mail-col">
-            <div style="padding:24px 18px;text-align:center;color:var(--muted2);font-size:12px;">Aucun message</div>
+          <div class="mail-col" id="dash-mail-col">
+            <div style="padding:24px 18px;text-align:center;color:var(--muted2);font-size:12px;">Chargement…</div>
           </div>
         </div><!-- /mail-inner -->
       </div><!-- /mail-card -->
@@ -1441,6 +1443,117 @@ window.addEventListener('storage', function (e) {
     </nav>
   </div>
 </footer>
+<script>
+// ── MESSAGERIE — la carte se remplit après coup, pour son compte ────────
+// La lecture traverse la boîte de l'abonné : elle prend des secondes ou
+// n'aboutit pas. Elle a donc sa requête à elle, que rien dans le chargement
+// du tableau de bord n'attend ; une boîte lente ne retarde plus rien.
+(function(){
+  var COL   = document.getElementById('dash-mail-col');
+  var BADGE = document.getElementById('dash-mail-badge');
+  if(!COL || !BADGE) return;
+
+  // La même fenêtre que la page Mail interroge : les deux comptent alors sur
+  // la même population, et ne peuvent pas annoncer deux chiffres différents.
+  var FENETRE = 50;
+  var AFFICHES = 4;
+
+  // Trois états à dire : aucune boîte connectée, boîte sans message, messages.
+  // Le quatrième est la lecture qui échoue — écrire « aucun message » à sa
+  // place annoncerait un fait qu'on n'a pas.
+  function ligne(texte){
+    COL.replaceChildren();
+    var d = document.createElement('div');
+    d.style.cssText = 'padding:24px 18px;text-align:center;color:var(--muted2);font-size:12px;';
+    d.textContent = texte;
+    COL.appendChild(d);
+  }
+
+  // Le badge ne paraît que sur une boîte réellement lue. Sans boîte connectée,
+  // ou sur une lecture qui a échoué, il est retiré : un zéro par défaut se
+  // lirait comme un relevé.
+  function badge(nonLus){
+    if(nonLus === null){ BADGE.style.display = 'none'; return; }
+    BADGE.textContent = nonLus + (nonLus > 1 ? ' non lus' : ' non lu');
+    BADGE.style.display = '';
+  }
+
+  // Mêmes repères de temps que la liste de la page Mail.
+  function heure(valeur){
+    var d = new Date(valeur);
+    if(!valeur || isNaN(d.getTime())) return '';
+    var jours = Math.floor((Date.now() - d.getTime()) / 86400000);
+    if(jours <= 0) return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    if(jours === 1) return 'hier';
+    if(jours < 7) return jours + 'j';
+    return d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' });
+  }
+
+  function expediteur(brut){
+    var nom = String(brut || '').replace(/<[^>]+>/, '').trim();
+    return nom || String(brut || '') || '—';
+  }
+
+  // Sujet, expéditeur et extrait viennent d'un message reçu : posés en
+  // textContent, jamais en innerHTML.
+  function fil(m){
+    var el = document.createElement('div');
+    el.className = 'mail-thread' + (m.unread ? ' unread' : '');
+
+    var rang = document.createElement('div');
+    rang.className = 'mt-row';
+    var de = document.createElement('div');
+    de.className = 'mt-from';
+    if(m.unread){
+      var pastille = document.createElement('span');
+      pastille.className = 'unread-dot';
+      de.appendChild(pastille);
+    }
+    de.appendChild(document.createTextNode(expediteur(m.from)));
+    var quand = document.createElement('div');
+    quand.className = 'mt-time';
+    quand.textContent = heure(m.date);
+    rang.appendChild(de);
+    rang.appendChild(quand);
+
+    var sujet = document.createElement('div');
+    sujet.className = 'mt-subject';
+    sujet.textContent = m.subject || '(sans sujet)';
+
+    el.appendChild(rang);
+    el.appendChild(sujet);
+    if(m.snippet){
+      var extrait = document.createElement('div');
+      extrait.className = 'mt-preview';
+      extrait.textContent = m.snippet;
+      el.appendChild(extrait);
+    }
+    return el;
+  }
+
+  fetch('/api/v2/mail/inbox-preview?folder=inbox&limit=' + FENETRE, { credentials: 'same-origin' })
+    .then(function(r){
+      return r.json().catch(function(){ return null; }).then(function(data){
+        return { ok: r.ok, data: data };
+      });
+    })
+    .then(function(rep){
+      if(!rep.ok){
+        badge(null);
+        var code = rep.data && rep.data.code;
+        if(code === 'no_account'){ ligne('Aucune boîte connectée'); return; }
+        ligne(code === 'reconnect_required' ? 'Reconnexion nécessaire' : 'Lecture impossible');
+        return;
+      }
+      var messages = Array.isArray(rep.data) ? rep.data : [];
+      badge(messages.filter(function(m){ return m && m.unread; }).length);
+      if(!messages.length){ ligne('Aucun message'); return; }
+      COL.replaceChildren();
+      messages.slice(0, AFFICHES).forEach(function(m){ COL.appendChild(fil(m)); });
+    })
+    .catch(function(){ badge(null); ligne('Lecture impossible'); });
+})();
+</script>
 <script defer src="/scripts/cookies-banner.js"></script>
 </body>
 </html>

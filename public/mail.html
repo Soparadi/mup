@@ -89,6 +89,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .etop{display:flex;align-items:center;justify-content:space-between;margin-bottom:1px;}
 .esender{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;}
 .esender.bold{font-weight:800;}
+/* Un en-tête sans nom d'affichage laisse l'adresse seule dans cette colonne.
+   iOS la reconnaît et l'enveloppe de lui-même dans un lien : le nom vire au
+   bleu souligné, et le toucher ouvre Mail au lieu d'ouvrir le message. Les
+   ancres ainsi posées portent l'attribut x-apple-data-detectors ; on leur rend
+   l'apparence de leur parent et on les rend inertes au toucher, qui retombe
+   alors sur la ligne. `font:inherit` ne fixe aucune taille : il reprend celle
+   de .esender, que le lien aurait autrement remplacée. */
+.esender a[x-apple-data-detectors]{color:inherit;text-decoration:none;font:inherit;pointer-events:none;}
 .edate{font-size:10px;color:var(--muted2);font-family:var(--mono);flex-shrink:0;}
 .esubject{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;}
 .epreview{font-size:11px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4;}

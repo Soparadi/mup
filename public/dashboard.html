@@ -377,6 +377,14 @@
 
     /* Today: 3 colonnes prioritaires */
     .today-grid{grid-template-columns:repeat(3,1fr)!important;}
+    /* Filet horizontal entre rangées; le filet vertical de la colonne de droite
+       tombe contre le bord de la carte et ne sépare rien: on le retire. */
+    .today-grid > div{border-bottom:1px solid var(--border)!important;}
+    .today-grid > div:nth-child(3n){border-right:none!important;}
+    /* Dernière rangée épargnée quel que soit le nombre d'étages: l'étage qui
+       ouvre une rangée en étant dans les trois derniers ouvre la dernière. */
+    .today-grid > div:nth-child(3n+1):nth-last-child(-n+3),
+    .today-grid > div:nth-child(3n+1):nth-last-child(-n+3) ~ div{border-bottom:none!important;}
 
     /* Grid iPad portrait: 2 colonnes bien hiérarchisées */
     .grid-main{grid-template-columns:1fr 1fr!important;gap:14px!important;}

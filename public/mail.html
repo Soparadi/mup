@@ -1287,12 +1287,15 @@ function renderOauthAvailability(p){
       else btn.setAttribute('title', 'Connexion ' + OAUTH_LABELS[k] + ' momentanément indisponible');
     });
   });
+  // La mention ne nomme que des voies réellement ouvertes. Pas l'IMAP : ses
+  // deux entrées et sa fenêtre sont éteintes par le bloc MASQUAGE de la
+  // feuille de style. À rouvrir avec lui, pas avant.
   var absents = ['google','microsoft'].filter(function(k){ return !p[k]; });
   var msg = '';
   if(absents.length === 2){
-    msg = 'Les connexions Google et Microsoft sont momentanément indisponibles. Vous pouvez connecter votre boîte en IMAP, ou réessayer plus tard.';
+    msg = 'Les connexions Google et Microsoft sont momentanément indisponibles. Aucune boîte ne peut être connectée pour l\'instant : réessayez plus tard.';
   } else if(absents.length === 1){
-    msg = 'La connexion ' + OAUTH_LABELS[absents[0]] + ' est momentanément indisponible. Vous pouvez connecter votre boîte avec ' + OAUTH_LABELS[absents[0] === 'google' ? 'microsoft' : 'google'] + ', en IMAP, ou réessayer plus tard.';
+    msg = 'La connexion ' + OAUTH_LABELS[absents[0]] + ' est momentanément indisponible. Vous pouvez connecter votre boîte avec ' + OAUTH_LABELS[absents[0] === 'google' ? 'microsoft' : 'google'] + ', ou réessayer plus tard.';
   }
   Array.prototype.forEach.call(document.querySelectorAll('.oauth-notice'), function(el){
     el.textContent = msg;

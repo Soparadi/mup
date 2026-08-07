@@ -546,6 +546,7 @@ document.querySelectorAll('.subtab').forEach(function(btn){
 // ÉTAT GLOBAL
 // ────────────────────────────────────────────────
 var STATE = {
+  accounts: [],            // tout ce d'où l'abonné peut écrire, boîtes et domaines vérifiés
   primaryAccount: null,    // { provider, email } — premier compte connecté
   emails: [],              // enveloppes du dossier affiché
   counts: { inbox: 0, sent: 0 },
@@ -563,8 +564,12 @@ async function loadAccountsAndInbox(){
   try {
     var r = await fetch('/api/v2/mail/accounts');
     var accounts = r.ok ? await r.json() : [];
-    if(accounts.length > 0){
-      STATE.primaryAccount = accounts[0];
+    STATE.accounts = accounts;
+    // Une adresse de domaine vérifié sert à écrire, pas à lire : la colonne
+    // n'affiche que les boîtes réellement connectées.
+    var boites = accounts.filter(function(a){ return !a.sendOnly; });
+    if(boites.length > 0){
+      STATE.primaryAccount = boites[0];
       renderToolbarAccount();
       showLoading();
       await loadInbox();
@@ -792,14 +797,19 @@ function updateKpis(){
 // COMPOSE
 // ────────────────────────────────────────────────
 async function openCompose(){
-  if(!STATE.primaryAccount){ toast('Connectez d\'abord une boîte mail', 'error'); return; }
+  // Un domaine vérifié suffit pour écrire, même sans boîte connectée.
+  if(!STATE.primaryAccount && !STATE.accounts.length){ toast('Connectez d\'abord une boîte mail', 'error'); return; }
   document.getElementById('compose-modal').classList.add('open');
-  // Remplit le selecteur "De" avec les comptes connectés
+  // Remplit le selecteur "De" avec tout ce d'où l'abonné peut partir
   try {
     var r = await fetch('/api/v2/mail/accounts');
-    var accounts = r.ok ? await r.json() : [];
+    var accounts = r.ok ? await r.json() : STATE.accounts;
+    STATE.accounts = accounts;
     var sel = document.getElementById('cmp-from');
-    sel.innerHTML = accounts.map(function(a){ return '<option value="' + escAttr(a.email) + '">' + escHtml(a.email) + ' (' + escHtml(a.provider) + ')</option>'; }).join('');
+    sel.innerHTML = accounts.map(function(a){
+      var voie = a.sendOnly ? 'domaine vérifié' : a.provider;
+      return '<option value="' + escAttr(a.email) + '">' + escHtml(a.email) + ' (' + escHtml(voie) + ')</option>';
+    }).join('');
   } catch(e){}
 }
 function closeCompose(){
@@ -937,7 +947,9 @@ async function loadAccounts(){
   try {
     var r = await fetch('/api/v2/mail/accounts');
     if(!r.ok) return;
-    var accounts = await r.json();
+    // La liste des comptes ne montre que ce qui se déconnecte : un domaine
+    // vérifié se gère dans Campagnes, pas ici.
+    var accounts = (await r.json() || []).filter(function(a){ return !a.sendOnly; });
     var list = document.getElementById('accounts-list');
     if(!accounts || accounts.length === 0){ list.innerHTML = '<div style="font-size:12.5px;color:var(--muted);font-style:italic;">Aucun compte connecté pour l\'instant.</div>'; return; }
     list.innerHTML = accounts.map(function(a){

@@ -84,7 +84,10 @@ import {
   getGoogleMessageBody,
   getImapAccount,
   classifyMailError,
-  sendWelcomeEmail
+  sendWelcomeEmail,
+  domainOf,
+  listVerifiedResendDomains,
+  isVerifiedResendSender
 } from './lib/mail-service.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -5681,11 +5684,15 @@ app.post('/api/v2/mail/disconnect', async (req, res) => {
   }
 })
 
-// Renvoie l'adresse TELLE QU'ELLE EST EN BASE si elle désigne bien l'une des
-// boîtes de cet abonné — comptes OAuth et boîte IMAP confondus —, sinon null.
-// La comparaison ignore la casse, qu'une adresse ne distingue pas. La valeur
-// rendue vient toujours de la base, jamais du corps de la requête.
-async function ownedMailAccountEmail(db, ownerId, wanted) {
+// Renvoie l'adresse d'expédition si elle est bien à cet abonné, sinon null.
+// Trois sources et pas une de plus : ses comptes OAuth, sa boîte IMAP, et les
+// domaines qu'il a fait vérifier — une adresse d'un domaine vérifié lui
+// appartient autant qu'une boîte connectée. La comparaison ignore la casse,
+// qu'une adresse ne distingue pas. Les deux premières sources rendent la
+// valeur telle qu'elle est en base ; la troisième rend l'adresse demandée,
+// dont le domaine — seul élément qui engage l'abonné — a été autorisé.
+const FORME_ADRESSE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+async function allowedSenderEmail(db, ownerId, wanted) {
   const cible = String(wanted || '').trim().toLowerCase()
   if (!cible) return null
   const creds = await listMailboxCredentials(db, ownerId)
@@ -5693,6 +5700,7 @@ async function ownedMailAccountEmail(db, ownerId, wanted) {
   if (match) return match.email
   const imap = await getImapAccount(db, ownerId)
   if (imap && String(imap.email || '').toLowerCase() === cible) return imap.email
+  if (FORME_ADRESSE.test(cible) && await isVerifiedResendSender(db, ownerId, cible)) return cible
   return null
 }
 
@@ -5705,14 +5713,14 @@ app.post('/api/v2/mail/send', async (req, res) => {
   if (!to || !subject) return res.status(400).json({ error: 'Champs requis : to, subject' })
   try {
     const db = await getDb()
-    // L'expéditeur choisi ne peut désigner qu'une boîte que l'abonné possède
-    // déjà : il est vérifié contre ses propres comptes, jamais cru sur parole.
-    // Absent, le service choisit comme avant.
+    // L'expéditeur choisi ne peut désigner qu'une adresse que l'abonné possède
+    // déjà : il est vérifié contre ses propres comptes et ses propres domaines,
+    // jamais cru sur parole. Absent, le service choisit comme avant.
     let expediteur = null
     if (from_email) {
-      expediteur = await ownedMailAccountEmail(db, userId, from_email)
+      expediteur = await allowedSenderEmail(db, userId, from_email)
       if (!expediteur) {
-        return res.status(403).json({ error: 'Cette adresse d\'expédition n\'est pas l\'une de vos boîtes connectées' })
+        return res.status(403).json({ error: 'Cette adresse d\'expédition n\'est ni l\'une de vos boîtes connectées ni un domaine que vous avez fait vérifier' })
       }
     }
     const result = await mailServiceSendOne(db, userId, { to, subject, body, html, attachments, from_email: expediteur })
@@ -5999,6 +6007,19 @@ app.get('/api/v2/mail/accounts', async (req, res) => {
     const imapStatus = await mailServiceStatus(db, ownerId)
     if (imapStatus.connected && imapStatus.provider === 'imap' && imapStatus.email) {
       accounts.push({ id: `mail_settings:${ownerId}`, provider: 'imap', email: imapStatus.email, legacy: true })
+    }
+    // Un domaine vérifié dont aucune boîte connectée ne relève n'apparaîtrait
+    // nulle part : l'abonné aurait le droit d'en partir sans pouvoir le
+    // choisir. Une entrée alors, et une seule — bâtie sur son adresse de
+    // connexion, et seulement si elle relève de ce domaine. Elle ne prétend pas
+    // être une boîte : sendOnly dit qu'on en part sans jamais y lire.
+    const adresseConnexion = String(req.authUser?.email || '').trim()
+    const domaineConnexion = domainOf(adresseConnexion)
+    if (domaineConnexion && !accounts.some(a => domainOf(a.email) === domaineConnexion)) {
+      const verifies = await listVerifiedResendDomains(db, ownerId)
+      if (verifies.includes(domaineConnexion)) {
+        accounts.push({ id: `resend:${domaineConnexion}`, provider: 'resend', email: adresseConnexion, sendOnly: true })
+      }
     }
     res.json(accounts)
   } catch (err) {

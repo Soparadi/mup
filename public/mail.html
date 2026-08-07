@@ -280,7 +280,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
         <!-- COLONNE CENTRALE : empty state OU liste emails -->
         <div class="col-center">
-          <div class="col-center-toolbar" id="cc-toolbar"><span id="cc-toolbar-label">Reçus</span></div>
+          <div class="col-center-toolbar" id="cc-toolbar"><span id="cc-toolbar-label">Reçus</span><span id="cc-toolbar-account"></span></div>
 
           <!-- Empty state : aucun compte connecté -->
           <div class="empty-state" id="empty-state-noaccount">
@@ -565,13 +565,23 @@ async function loadAccountsAndInbox(){
     var accounts = r.ok ? await r.json() : [];
     if(accounts.length > 0){
       STATE.primaryAccount = accounts[0];
+      renderToolbarAccount();
       showLoading();
       await loadInbox();
     } else {
       STATE.primaryAccount = null;
+      renderToolbarAccount();
       showEmptyNoAccount();
     }
   } catch(e){ showEmptyNoAccount(); }
+}
+
+// L'abonné consulte sa boîte depuis un outil extérieur : la colonne dit
+// laquelle. Rien quand aucun compte n'est connecté.
+function renderToolbarAccount(){
+  var el = document.getElementById('cc-toolbar-account');
+  if(!el) return;
+  el.textContent = (STATE.primaryAccount && STATE.primaryAccount.email) || '';
 }
 
 // Un seul état visible à la fois : rien n'est masqué avant d'avoir la réponse.

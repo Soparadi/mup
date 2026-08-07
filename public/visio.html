@@ -2367,12 +2367,22 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
     }
   }
 
-  // Agenda event via API existante
+  // Agenda event via API existante — même forme que la fiche pipeline : date YYYY-MM-DD,
+  // start/end HH:MM, ficheId. Le serveur stocke le corps tel quel, sans normalisation.
+  const pad2 = n => String(n).padStart(2, '0');
+  const dStart = new Date(dateISO);
+  const duree = +$('rdvDuration').value;
+  const dEnd = new Date(dStart.getTime() + duree * 60000);
+  const dateStr = dStart.getFullYear() + '-' + pad2(dStart.getMonth() + 1) + '-' + pad2(dStart.getDate());
+  const startStr = pad2(dStart.getHours()) + ':' + pad2(dStart.getMinutes());
+  const endStr = pad2(dEnd.getHours()) + ':' + pad2(dEnd.getMinutes());
+
   const agendaPayload = {
     id: newId, type: 'visio',
-    title: prospectName, societe, prospectId,
+    title: prospectName, societe,
+    ficheId: prospectId ? String(prospectId) : null,
     email: $('prospectEmail').value,
-    start: dateISO, duree: +$('rdvDuration').value,
+    date: dateStr, start: startStr, end: endStr, duree,
     provider, link, sujet: $('rdvSubject').value,
     status: 'planned', createdAt: new Date().toISOString()
   };

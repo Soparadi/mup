@@ -82,6 +82,8 @@ import {
   listImapMessages,
   getImapMessageBody,
   getGoogleMessageBody,
+  markImapMessageSeen,
+  markGoogleMessageRead,
   getImapAccount,
   classifyMailError,
   sendWelcomeEmail,
@@ -6126,6 +6128,16 @@ function sendMailReadError(res, err, tag) {
     return res.status(404).json({ code: 'not_found', error: 'Ce message n\'est plus disponible dans votre boîte.' })
   }
   const kind = err?.mailKind || classifyMailError(err)
+  // Autorisation manquante — refus du fournisseur (403 de scope) ou consentement
+  // enregistré trop étroit. Ce n'est pas une panne : rien ne sert à réessayer.
+  // Le message ne promet pas qu'une reconnexion y changerait quelque chose,
+  // puisque cela dépend du consentement demandé au moment où elle a lieu.
+  if (err?.code === 'scope_insuffisant' || kind === 'scope') {
+    return res.status(409).json({
+      code: 'scope_insuffisant',
+      error: 'MovUP n\'est pas autorisé à modifier les messages de cette boîte.'
+    })
+  }
   if (kind === 'auth') {
     return res.status(409).json({
       code: 'reconnect_required',
@@ -6275,6 +6287,46 @@ app.get('/api/v2/mail/message', async (req, res) => {
     throw unsupportedProviderError(account.provider)
   } catch (err) {
     sendMailReadError(res, err, '[v2/mail:message]')
+  }
+})
+
+// Marque un message comme lu chez le fournisseur : une étiquette retirée
+// (Gmail UNREAD) ou un drapeau posé (IMAP \Seen), rien d'autre. Route SÉPARÉE
+// de /api/v2/mail/message à dessein : la lecture d'un message ne doit jamais
+// dépendre de la réussite du marquage. Aucun état de lecture n'est stocké chez
+// nous — la liste suivante le relira chez le fournisseur, comme aujourd'hui.
+app.post('/api/v2/mail/mark-read', async (req, res) => {
+  const ownerId = requireUserId(req, res)
+  if (!ownerId) return
+  const { email, id, folder } = req.body || {}
+  if (!id) return res.status(400).json({ error: 'Identifiant de message requis' })
+  const wantedFolder = folder === 'sent' ? 'sent' : 'inbox'
+  try {
+    // Un envoi servi depuis notre table n'a jamais eu d'état de lecture chez un
+    // tiers : il n'y a rien à modifier, et rien à faire croire.
+    if (String(id).startsWith('resend:')) {
+      return res.status(409).json({
+        code: 'unsupported_provider',
+        error: 'Un envoi parti par MovUP n\'a pas d\'état de lecture à modifier.'
+      })
+    }
+    const db = await getDb()
+    const account = await resolveMailAccount(db, ownerId, email)
+    if (!account) {
+      return res.status(409).json({ code: 'no_account', error: 'Aucune boîte mail connectée.' })
+    }
+    if (account.provider === 'google') {
+      return res.json(await markGoogleMessageRead(db, ownerId, account.email, String(id)))
+    }
+    if (account.provider === 'imap') {
+      return res.json(await markImapMessageSeen(db, ownerId, { folder: wantedFolder, uid: String(id) }))
+    }
+    return res.status(409).json({
+      code: 'unsupported_provider',
+      error: 'Le marquage comme lu n\'est pas disponible pour ce mode de connexion.'
+    })
+  } catch (err) {
+    sendMailReadError(res, err, '[v2/mail:mark-read]')
   }
 })
 

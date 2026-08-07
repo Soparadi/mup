@@ -1019,11 +1019,87 @@ function selectEmail(id){
   document.getElementById('v-from').textContent = (isSent ? msg.to : msg.from) || '—';
   document.getElementById('v-date').textContent = msg.date ? new Date(msg.date).toLocaleString('fr-FR') : '';
   setPhonePane('message');
-  loadMessageBody(id);
+  // Le marquage SUIT la lecture, il ne court pas avec elle : une seule
+  // connexion à la boîte à la fois, et l'affichage du message n'a jamais à
+  // disputer sa place à l'écriture. Il n'a lieu que si le corps est bien
+  // arrivé — un message qui n'a pas pu s'afficher n'a pas été lu.
+  loadMessageBody(id).catch(function(){ return false; }).then(function(affiche){
+    if(affiche) markRead(msg);
+  });
+}
+
+// ────────────────────────────────────────────────
+// MARQUER COMME LU
+// ────────────────────────────────────────────────
+
+// Le fournisseur d'abord, l'affichage ensuite : la pastille ne s'éteint que
+// quand l'étiquette est réellement tombée chez lui. Un échec ne dit rien à
+// l'abonné et ne lui coûte rien — son message reste ouvert, la pastille reste
+// allumée, et elle a raison.
+async function markRead(msg){
+  if(!msg || !msg.unread) return;
+  if(STATE.folder !== 'inbox') return;
+  if(!canMarkRead()) return;
+  var id = msg.id;
+  try {
+    var r = await fetch('/api/v2/mail/mark-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        id: id,
+        folder: 'inbox',
+        email: (STATE.primaryAccount && STATE.primaryAccount.email) || undefined
+      })
+    });
+    if(!r.ok) return;
+    // La liste n'est pas rechargée : l'enveloppe en mémoire et la seule ligne
+    // concernée suffisent. Ni défilement perdu, ni sélection perdue, ni
+    // clignotement. Relue par son identifiant plutôt que par la référence
+    // reçue : entre-temps un rafraîchissement de fond a pu remplacer le tableau.
+    var courant = STATE.emails.find(function(m){ return m.id === id; });
+    if(courant) courant.unread = false;
+    eteindrePastille(id);
+  } catch(e){
+    // Rien. Une pastille allumée à tort est moins coûteuse qu'une pastille
+    // éteinte à tort, qui ferait perdre un message de vue.
+  }
+}
+
+// Un compte Google dont le consentement ne porte que gmail.readonly ne peut
+// rien modifier : on ne tente pas l'appel. Le scope accordé arrive avec le
+// compte (/api/v2/mail/accounts). IMAP n'a pas de scope — \Seen est toujours à
+// portée. Le serveur revérifie de son côté : ce test-ci évite un aller-retour
+// voué à l'échec, il ne fait pas autorité.
+var GMAIL_SCOPES_ECRITURE = ['https://www.googleapis.com/auth/gmail.modify', 'https://mail.google.com/'];
+function canMarkRead(){
+  var c = STATE.primaryAccount;
+  if(!c) return false;
+  if(c.provider === 'imap') return true;
+  if(c.provider !== 'google') return false;
+  var accordes = String(c.scope || '').split(/\s+/);
+  return GMAIL_SCOPES_ECRITURE.some(function(s){ return accordes.indexOf(s) !== -1; });
+}
+
+// Éteint la pastille et le gras d'une ligne, sans reconstruire la liste.
+// Comparaison sur dataset.id comme ailleurs : un identifiant de message n'a pas
+// à être échappé pour un sélecteur d'attribut.
+function eteindrePastille(id){
+  document.querySelectorAll('.email-item').forEach(function(el){
+    if(el.dataset.id !== id) return;
+    var pastille = el.querySelector('.unread-dot');
+    if(pastille) pastille.remove();
+    var nom = el.querySelector('.esender');
+    if(nom) nom.classList.remove('bold');
+  });
 }
 
 // Le corps ne se charge qu'ici, au clic. Il arrive en texte et s'affiche via
 // textContent : rien de ce que contient un courriel n'est interprété.
+// Rend true quand le message a bien été mis sous les yeux de l'abonné — un
+// message sans texte compte, un message qui n'a pas pu être chargé non plus, et
+// un message dont on est parti avant sa réponse pas davantage. C'est cela seul
+// qui autorise le marquage comme lu.
 async function loadMessageBody(id){
   var body = document.getElementById('v-body');
   var token = ++STATE.bodyToken;
@@ -1035,25 +1111,27 @@ async function loadMessageBody(id){
     var r = await fetch(url);
     var data = null;
     try { data = await r.json(); } catch(e){ data = null; }
-    if(token !== STATE.bodyToken) return;
+    if(token !== STATE.bodyToken) return false;
     if(!r.ok){
       setBodyNotice(body, (data && data.error) || 'Ce message n\'a pas pu être chargé.');
-      return;
+      return false;
     }
     var text = (data && data.text) || '';
     body.innerHTML = '';
     if(!text.trim()){
       setBodyNotice(body, 'Ce message ne contient pas de texte.');
-      return;
+      return true;
     }
     var pre = document.createElement('div');
     pre.style.whiteSpace = 'pre-wrap';
     pre.style.wordBreak = 'break-word';
     pre.textContent = text;
     body.appendChild(pre);
+    return true;
   } catch(e){
-    if(token !== STATE.bodyToken) return;
+    if(token !== STATE.bodyToken) return false;
     setBodyNotice(body, 'Ce message n\'a pas pu être chargé.');
+    return false;
   }
 }
 

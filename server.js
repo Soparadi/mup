@@ -87,7 +87,8 @@ import {
   sendWelcomeEmail,
   domainOf,
   listVerifiedResendDomains,
-  isVerifiedResendSender
+  isVerifiedResendSender,
+  htmlToText
 } from './lib/mail-service.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -6127,6 +6128,40 @@ function unsupportedProviderError(provider) {
   return err
 }
 
+// Les envois partis par Resend, en enveloppes, telles que la liste des Envoyés
+// les attend. Ceux-là et pas d'autres : ce qui est parti par le fournisseur de
+// l'abonné est déjà dans son dossier Envoyés à lui. Aucune clé de
+// rapprochement à inventer, aucun doublon possible.
+const ENVOIS_RESEND_MAX = 200
+async function envoisResendEnveloppes(db, ownerId, plafond) {
+  const n = Math.min(Math.max(Number(plafond) || 50, 1), ENVOIS_RESEND_MAX)
+  const lignes = await queryOrEmpty(
+    db,
+    `SELECT * FROM mail WHERE userId = $userId AND transport = "resend" ORDER BY date DESC LIMIT ${n}`,
+    { userId: ownerId }
+  )
+  return lignes.map(r => ({
+    id: 'resend:' + String(r.id).replace(/^mail:/, '').replace(/^⟨+|⟩+$/g, ''),
+    from: r.from || '',
+    to: r.to || '',
+    subject: r.subject || '',
+    snippet: '',
+    date: r.date || null,
+    unread: false,
+    folder: 'sent',
+    transport: 'resend'
+  }))
+}
+
+// Une seule liste, la plus récente en tête, bornée comme celle du fournisseur.
+function fusionEnvoyes(messages, parResend, plafond) {
+  if (!parResend.length) return messages
+  return messages
+    .concat(parResend)
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+    .slice(0, plafond)
+}
+
 // Liste les enveloppes d'un dossier (Reçus ou Envoyés). Aucun corps n'est
 // rapatrié ici : le corps se charge au clic via /api/v2/mail/message.
 app.get('/api/v2/mail/inbox-preview', async (req, res) => {
@@ -6134,10 +6169,15 @@ app.get('/api/v2/mail/inbox-preview', async (req, res) => {
   if (!ownerId) return
   const { email, limit, query, folder } = req.query
   const wantedFolder = folder === 'sent' ? 'sent' : 'inbox'
+  const plafond = Math.min(Math.max(Number(limit) || 50, 1), ENVOIS_RESEND_MAX)
   try {
     const db = await getDb()
+    const parResend = wantedFolder === 'sent' ? await envoisResendEnveloppes(db, ownerId, plafond) : []
     const account = await resolveMailAccount(db, ownerId, email)
     if (!account) {
+      // Un abonné qui n'écrit que depuis un domaine vérifié n'a pas de boîte à
+      // interroger — ses envois existent quand même.
+      if (parResend.length) return res.json(parResend)
       return res.status(409).json({ code: 'no_account', error: 'Aucune boîte mail connectée.' })
     }
     if (account.provider === 'google') {
@@ -6146,20 +6186,46 @@ app.get('/api/v2/mail/inbox-preview', async (req, res) => {
         query: query ? String(query) : 'newer_than:7d',
         folder: wantedFolder
       })
-      return res.json(messages)
+      return res.json(fusionEnvoyes(messages, parResend, plafond))
     }
     if (account.provider === 'imap') {
       const messages = await listImapMessages(db, ownerId, {
         folder: wantedFolder,
         limit: limit ? Number(limit) : 50
       })
-      return res.json(messages)
+      return res.json(fusionEnvoyes(messages, parResend, plafond))
     }
     throw unsupportedProviderError(account.provider)
   } catch (err) {
     sendMailReadError(res, err, '[v2/mail:inbox-preview]')
   }
 })
+
+// Le corps d'un envoi parti par Resend se sert depuis la table mail : aucun
+// fournisseur ne l'a jamais eu. Le record est relu sous l'abonné qui le
+// demande — l'identifiant d'un autre ne rend rien. Comme partout ici, du
+// texte : un corps enregistré en HTML est réduit à son texte avant de partir.
+async function corpsEnvoiResend(db, ownerId, recordId) {
+  const propre = String(recordId || '').replace(/[^a-zA-Z0-9_-]/g, '')
+  const rec = propre
+    ? (await queryOrEmpty(db, 'SELECT * FROM type::record("mail", $id)', { id: propre }))[0]
+    : null
+  if (!rec || String(rec.userId) !== String(ownerId) || rec.transport !== 'resend') {
+    const err = new Error('Envoi introuvable')
+    err.code = 'not_found'
+    throw err
+  }
+  return {
+    id: 'resend:' + propre,
+    folder: 'sent',
+    from: rec.from || '',
+    to: rec.to || '',
+    subject: rec.subject || '',
+    date: rec.date || null,
+    text: rec.body_text || (rec.body_html ? htmlToText(rec.body_html) : ''),
+    attachments: []
+  }
+}
 
 // Corps d'UN message, chargé au clic. Rend du texte, jamais du HTML : la page
 // l'affiche comme du texte et n'a donc rien à assainir. Aucune écriture en base,
@@ -6172,6 +6238,9 @@ app.get('/api/v2/mail/message', async (req, res) => {
   const wantedFolder = folder === 'sent' ? 'sent' : 'inbox'
   try {
     const db = await getDb()
+    if (String(id).startsWith('resend:')) {
+      return res.json(await corpsEnvoiResend(db, ownerId, String(id).slice('resend:'.length)))
+    }
     const account = await resolveMailAccount(db, ownerId, email)
     if (!account) {
       return res.status(409).json({ code: 'no_account', error: 'Aucune boîte mail connectée.' })

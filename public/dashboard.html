@@ -1456,7 +1456,13 @@ window.addEventListener('storage', function (e) {
   // La même fenêtre que la page Mail interroge : les deux comptent alors sur
   // la même population, et ne peuvent pas annoncer deux chiffres différents.
   var FENETRE = 50;
-  var AFFICHES = 4;
+  // Le calendrier voisin occupe la même ligne de grille : la carte qui le
+  // dépasse ne déborde pas d'elle-même, elle pousse la ligne et reporte le
+  // vide sous le calendrier. Cinq fils (82 px chacun, en-tête compris) tiennent
+  // sous le plus court des calendriers — mois de cinq semaines sans rendez-vous
+  // à venir — dès 1280 px de large. Au-delà, la valeur reste tenable ; en deçà,
+  // c'est déjà la hauteur du calendrier qui commande.
+  var AFFICHES = 5;
 
   // Trois états à dire : aucune boîte connectée, boîte sans message, messages.
   // Le quatrième est la lecture qui échoue — écrire « aucun message » à sa

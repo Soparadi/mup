@@ -38,6 +38,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .kpi-num.pulse{animation:pulse .8s ease-in-out 2;}
 @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.18);color:var(--green);}}
 .kpi-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin-top:2px;}
+/* Le libellé de compte est une adresse et rien d'autre : c'est le dernier
+   endroit de la page où iOS la reconnaît et l'enveloppe de lui-même dans un
+   lien, qui vire au bleu souligné et ouvre Mail au toucher. Rien ici ne pose ce
+   soulignement — la page n'émet aucune ancre dans #topbar-account (le libellé
+   passe par textContent) : c'est le moteur qui le peint. Même traitement que
+   .esender — décoration coupée sur l'élément et toute sa descendance, quelle que
+   soit la balise, en -webkit- comme en standard (c'est la forme préfixée que
+   WebKit honore pour défaire une décoration qu'il a lui-même appliquée), et
+   ancre inerte au toucher, à l'apparence de son parent. On vise l'identifiant,
+   pas .kpi-lbl : les autres libellés de la rangée (Reçus, Envoyés, Mailing,
+   Newsletter) ne sont pas des adresses et n'ont rien à défaire. */
+#topbar-account,#topbar-account *{-webkit-text-decoration:none;text-decoration:none;}
+#topbar-account a{color:inherit;font:inherit;pointer-events:none;}
 .kpi-campagne{display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(184,76,0,.08);border:1px solid rgba(184,76,0,.2);border-radius:12px;flex-shrink:0;cursor:pointer;font-family:var(--font);}
 .kpi-newsletter{display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(67,56,202,.08);border:1px solid rgba(67,56,202,.2);border-radius:12px;flex-shrink:0;cursor:pointer;font-family:var(--font);}
 .subtabs{display:flex;gap:4px;margin-bottom:-1px;}

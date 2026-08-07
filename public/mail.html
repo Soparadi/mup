@@ -166,6 +166,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .oauth-btn{display:flex;align-items:center;justify-content:center;gap:10px;padding:11px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;background:#fff;color:#1F1F1F;border:1.5px solid var(--border2);width:100%;}
 .oauth-btn:hover{border-color:#1F1F1F;background:var(--surface);}
 .oauth-btn svg{flex-shrink:0;}
+/* Fournisseur non configuré côté serveur : le bouton reste lisible mais ne
+   part plus (cf. renderOauthAvailability). */
+.oauth-btn:disabled{opacity:.45;cursor:not-allowed;}
+.oauth-btn:disabled:hover{border-color:var(--border2);background:#fff;}
 
 /* Paramètres + Campagnes (cards) */
 .tab-scroll{flex:1;overflow-y:auto;padding:24px;}
@@ -518,7 +522,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <div class="empty-state-title">Connectez votre boîte mail</div>
             <div class="empty-state-sub">Pour envoyer et recevoir vos messages depuis MUP, connectez d'abord votre boîte professionnelle. Connexion sécurisée OAuth en 1 clic.</div>
             <div class="empty-state-actions">
-              <button class="oauth-btn" onclick="oauthGoogle()">
+              <div class="notice notice-warn oauth-notice" style="display:none;text-align:left;"></div>
+              <button class="oauth-btn" data-oauth="google" onclick="oauthGoogle()">
                 <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A10.99 10.99 0 0 0 12 23z"/>
@@ -527,7 +532,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
                 </svg>
                 Connecter avec Google
               </button>
-              <button class="oauth-btn" onclick="oauthMicrosoft()">
+              <button class="oauth-btn" data-oauth="microsoft" onclick="oauthMicrosoft()">
                 <svg width="16" height="16" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
                   <path fill="#F25022" d="M0 0h11v11H0z"/>
                   <path fill="#7FBA00" d="M12 0h11v11H12z"/>
@@ -573,7 +578,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
                  depuis l'écran qui le dit. Montré par showInboxError() pour ce
                  seul motif : sur une panne réseau, il n'y a rien à reconnecter. -->
             <div class="empty-state-actions" id="empty-state-error-actions" style="display:none;">
-              <button class="oauth-btn" onclick="oauthGoogle()">
+              <div class="notice notice-warn oauth-notice" style="display:none;text-align:left;"></div>
+              <button class="oauth-btn" data-oauth="google" onclick="oauthGoogle()">
                 <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A10.99 10.99 0 0 0 12 23z"/>
@@ -582,7 +588,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
                 </svg>
                 Reconnecter avec Google
               </button>
-              <button class="oauth-btn" onclick="oauthMicrosoft()">
+              <button class="oauth-btn" data-oauth="microsoft" onclick="oauthMicrosoft()">
                 <svg width="16" height="16" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
                   <path fill="#F25022" d="M0 0h11v11H0z"/>
                   <path fill="#7FBA00" d="M12 0h11v11H12z"/>
@@ -670,7 +676,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <p class="card-sub">Boîtes mail utilisées pour les conversations 1:1 avec vos prospects.</p>
           <div id="accounts-list" style="margin-bottom:14px;"></div>
           <div style="display:flex;flex-direction:column;gap:8px;max-width:340px;">
-            <button class="oauth-btn" onclick="oauthGoogle()">
+            <div class="notice notice-warn oauth-notice" style="display:none;margin-bottom:0;"></div>
+            <button class="oauth-btn" data-oauth="google" onclick="oauthGoogle()">
               <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A10.99 10.99 0 0 0 12 23z"/>
@@ -679,7 +686,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               </svg>
               Connecter un compte Google
             </button>
-            <button class="oauth-btn" onclick="oauthMicrosoft()">
+            <button class="oauth-btn" data-oauth="microsoft" onclick="oauthMicrosoft()">
               <svg width="16" height="16" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
                 <path fill="#F25022" d="M0 0h11v11H0z"/>
                 <path fill="#7FBA00" d="M12 0h11v11H12z"/>
@@ -832,7 +839,8 @@ var STATE = {
   folder: 'inbox',
   listToken: 0,            // ignore la réponse d'un dossier qu'on a quitté
   bodyToken: 0,            // idem pour le corps d'un message
-  welcomePollTimer: null
+  welcomePollTimer: null,
+  oauthProviders: null     // { google, microsoft } — null tant que non interrogé
 };
 
 // ────────────────────────────────────────────────
@@ -1247,8 +1255,66 @@ function startWelcomePoll(){
 // ────────────────────────────────────────────────
 // COMPTES (Paramètres)
 // ────────────────────────────────────────────────
-async function oauthGoogle(){ window.location.href = '/auth/google'; }
-async function oauthMicrosoft(){ window.location.href = '/auth/microsoft'; }
+// ── Disponibilité des fournisseurs OAuth ──
+// Un fournisseur non configuré côté serveur répond 503 en pleine page : sans
+// ce garde-fou, cliquer « Connecter » sortait l'abonné de l'application sur un
+// message brut. On interroge donc le serveur avant de partir, et on le dit
+// dans la page. Vaut pour Microsoft, non configuré aujourd'hui, comme pour
+// Google, qui pourrait ne plus l'être demain.
+var OAUTH_LABELS = { google: 'Google', microsoft: 'Microsoft' };
+
+// Réponse mémorisée le temps de la page. En cas d'échec de la requête on
+// renvoie null : disponibilité inconnue, on ne bloque rien et le serveur
+// reste seul juge — un garde-fou ne doit pas devenir une panne de plus.
+async function fetchOauthProviders(){
+  if(STATE.oauthProviders) return STATE.oauthProviders;
+  try {
+    var r = await fetch('/api/mail/oauth-providers');
+    if(!r.ok) return null;
+    var d = await r.json() || {};
+    STATE.oauthProviders = { google: d.google === true, microsoft: d.microsoft === true };
+    return STATE.oauthProviders;
+  } catch(e){ return null; }
+}
+
+function renderOauthAvailability(p){
+  if(!p) return;
+  ['google','microsoft'].forEach(function(k){
+    var btns = document.querySelectorAll('[data-oauth="' + k + '"]');
+    Array.prototype.forEach.call(btns, function(btn){
+      btn.disabled = !p[k];
+      if(p[k]) btn.removeAttribute('title');
+      else btn.setAttribute('title', 'Connexion ' + OAUTH_LABELS[k] + ' momentanément indisponible');
+    });
+  });
+  var absents = ['google','microsoft'].filter(function(k){ return !p[k]; });
+  var msg = '';
+  if(absents.length === 2){
+    msg = 'Les connexions Google et Microsoft sont momentanément indisponibles. Vous pouvez connecter votre boîte en IMAP, ou réessayer plus tard.';
+  } else if(absents.length === 1){
+    msg = 'La connexion ' + OAUTH_LABELS[absents[0]] + ' est momentanément indisponible. Vous pouvez connecter votre boîte avec ' + OAUTH_LABELS[absents[0] === 'google' ? 'microsoft' : 'google'] + ', en IMAP, ou réessayer plus tard.';
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.oauth-notice'), function(el){
+    el.textContent = msg;
+    el.style.display = msg ? '' : 'none';
+  });
+}
+
+async function refreshOauthAvailability(){ renderOauthAvailability(await fetchOauthProviders()); }
+
+// Ne quitte l'application que si le serveur confirme le fournisseur configuré.
+async function startOauth(provider){
+  var p = await fetchOauthProviders();
+  if(p && !p[provider]){
+    renderOauthAvailability(p);
+    toast('Connexion ' + OAUTH_LABELS[provider] + ' momentanément indisponible', 'error');
+    return;
+  }
+  window.location.href = '/auth/' + provider;
+}
+
+async function oauthGoogle(){ return startOauth('google'); }
+async function oauthMicrosoft(){ return startOauth('microsoft'); }
 
 async function loadAccounts(){
   try {
@@ -1768,6 +1834,7 @@ function toast(msg, type){
 // INIT
 // ────────────────────────────────────────────────
 loadAccountsAndInbox();
+refreshOauthAvailability();
 </script>
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>

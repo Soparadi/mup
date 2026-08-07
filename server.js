@@ -5792,6 +5792,24 @@ async function requireSessionOwnerId(req, res) {
   return String(session.user_id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
 }
 
+// ── Disponibilité des fournisseurs OAuth de boîte mail ──
+// La page mail interroge cette route AVANT d'envoyer le navigateur sur
+// /auth/<fournisseur> : non configuré, celui-ci répond 503 en pleine page, donc
+// hors de l'application. Ne renvoie qu'un booléen par fournisseur — jamais les
+// identifiants, ni le détail des variables d'environnement manquantes.
+app.get('/api/mail/oauth-providers', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const { isGoogleReady } = await import('./lib/oauth-google.js')
+    const { isMicrosoftReady } = await import('./lib/oauth-microsoft.js')
+    res.json({ google: isGoogleReady(), microsoft: isMicrosoftReady() })
+  } catch (err) {
+    console.error('[oauth-providers]', err.message)
+    res.status(500).json({ error: 'Disponibilité des fournisseurs indisponible' })
+  }
+})
+
 app.get('/auth/google', async (req, res) => {
   const ownerId = await requireSessionOwnerId(req, res)
   if (!ownerId) return

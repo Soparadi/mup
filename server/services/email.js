@@ -213,7 +213,7 @@ export async function sendMailboxConnected(user, mailboxEmail) {
   const text = [
     `${salutation},`,
     '',
-    `L'adresse ${mailboxEmail} est reliée à votre espace MovUP. Vous lisez et vous écrivez vos messages sans quitter l'application, et chaque échange reste rattaché à la fiche du prospect.`,
+    `L'adresse ${mailboxEmail} est reliée à votre espace MovUP. Vous lisez et vous écrivez vos messages sans quitter l'application.`,
     '',
     '1. Lancer une recherche de prospects',
     '2. Les envoyer dans votre pipeline',

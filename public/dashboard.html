@@ -271,7 +271,8 @@
 
     /* Today: 1 colonne, sections empilées */
     .today-grid{grid-template-columns:1fr!important;}
-    .today-col-border{border-right:none!important;border-bottom:1px solid var(--border)!important;}
+    /* Le filet vertical ne sépare plus rien: il passe à l'horizontale entre étages. */
+    .today-grid > div{border-right:none!important;border-bottom:1px solid var(--border)!important;}
     .today-grid > div:last-child{border-bottom:none!important;}
 
     /* Hiérarchie Today: noms plus lisibles */
@@ -330,6 +331,13 @@
 
     /* Today: 2-3 colonnes */
     .today-grid{grid-template-columns:repeat(2,1fr)!important;}
+    /* Filet horizontal entre rangées; le filet vertical de la colonne de droite
+       tombe contre le bord de la carte et ne sépare rien: on le retire. */
+    .today-grid > div{border-bottom:1px solid var(--border)!important;}
+    .today-grid > div:nth-child(2n){border-right:none!important;}
+    /* Dernière rangée épargnée, que le nombre d'étages soit pair ou impair. */
+    .today-grid > div:last-child,
+    .today-grid > div:nth-last-child(2):nth-child(2n+1){border-bottom:none!important;}
     .today-name{font-size:13px!important;}
     .today-meta{font-size:11px!important;}
 

@@ -28,7 +28,7 @@ import {
 } from './surreal-adapter.js'
 import { sendWelcomeVerify, sendWelcome, sendPasswordReset, sendEmailChangeVerify, sendEmailChangeNotice } from '../services/email.js'
 import { getLocationFromIp } from '../services/geolocation.js'
-import { readSessionToken, SESSION_COOKIE, requireAuth } from '../middleware/requireAuth.js'
+import { readSessionToken, SESSION_COOKIE, setSessionCookie, requireAuth } from '../middleware/requireAuth.js'
 
 export const router = express.Router()
 
@@ -173,18 +173,9 @@ function trimToMax(s, max) {
   return String(s == null ? '' : s).trim().slice(0, max)
 }
 
-function setSessionCookie(res, token, expiresAt) {
-  const isProd = process.env.NODE_ENV === 'production'
-  const parts = [
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
-    'HttpOnly',
-    'Path=/',
-    'SameSite=Lax',
-    `Expires=${new Date(expiresAt).toUTCString()}`
-  ]
-  if (isProd) parts.push('Secure')
-  res.setHeader('Set-Cookie', parts.join('; '))
-}
+// setSessionCookie vient de middleware/requireAuth.js : les portillons de
+// session reposent eux aussi ce cookie (prolongation glissante), les attributs
+// n'ont donc qu'un seul lieu de définition.
 
 // ── Marqueur d'attente de vérification ──
 // Posé au signup (cookie HttpOnly, PAS une session : Doctrine A). Seule la
@@ -470,8 +461,10 @@ router.post('/login', async (req, res) => {
 
     const userIdStr = String(user.id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
 
-    // Rotation : invalide les sessions précédentes pour cet utilisateur, puis crée la nouvelle.
-    await deleteAllSessionsForUser(userIdStr)
+    // La session s'AJOUTE aux précédentes : se connecter sur un second appareil
+    // ne déconnecte pas le premier. Seul le plafond par compte (dans
+    // createSession) écarte les plus anciennes. La coupure de toutes les
+    // sessions reste attachée à la réinitialisation de mot de passe.
     const { token, expiresAt } = await createSession(userIdStr, meta)
     setSessionCookie(res, token, expiresAt)
 
@@ -509,7 +502,8 @@ router.get('/verify', async (req, res) => {
       const user = await getUserById(vt.user_id)
       if (!user) return res.redirect('/verify?status=error&reason=server_error')
       const userIdStr = String(user.id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
-      await deleteAllSessionsForUser(userIdStr)
+      // Session ajoutée aux existantes, comme à la connexion : ouvrir le lien
+      // depuis un autre appareil ne chasse pas les sessions déjà ouvertes.
       const { token: sessionToken, expiresAt } = await createSession(userIdStr, meta)
       setSessionCookie(res, sessionToken, expiresAt)
       clearPendingCookie(res)   // marqueur d'attente devenu inutile
@@ -540,8 +534,8 @@ router.get('/verify', async (req, res) => {
       }
     }
 
-    // Session immédiate — email vérifié = identité prouvée.
-    await deleteAllSessionsForUser(userIdStr)
+    // Session immédiate — email vérifié = identité prouvée. Ajoutée aux
+    // existantes, jamais en remplacement.
     const { token: sessionToken, expiresAt } = await createSession(userIdStr, meta)
     setSessionCookie(res, sessionToken, expiresAt)
     clearPendingCookie(res)   // marqueur d'attente devenu inutile

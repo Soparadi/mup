@@ -2,10 +2,42 @@
 // sinon répond 401. Utilisé pour protéger toutes les routes /api/* hors
 // /api/auth/* et /api/health.
 
-import { getSession } from '../auth/surreal-adapter.js'
+import { getSession, renewSessionIfNeeded } from '../auth/surreal-adapter.js'
 import { toucherLastSeen } from '../services/last-seen.js'
 
 export const SESSION_COOKIE = 'mup_session'
+
+// Fabrique de l'en-tête Set-Cookie de session — source unique des attributs du
+// cookie. Deux écrivains : les routes d'auth qui ouvrent une session, et les
+// portillons ci-dessous qui reposent le cookie sur une échéance prolongée.
+export function buildSessionCookie(token, expiresAt) {
+  const parts = [
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
+    'HttpOnly',
+    'Path=/',
+    'SameSite=Lax',
+    `Expires=${new Date(expiresAt).toUTCString()}`
+  ]
+  if (process.env.NODE_ENV === 'production') parts.push('Secure')
+  return parts.join('; ')
+}
+
+export function setSessionCookie(res, token, expiresAt) {
+  res.setHeader('Set-Cookie', buildSessionCookie(token, expiresAt))
+}
+
+// Prolongation glissante posée sur la réponse en cours. res.append et non
+// setHeader : le portillon s'exécute AVANT le gestionnaire de route, qui peut
+// avoir ses propres cookies à poser. Une prolongation qui échoue ne fait pas
+// échouer la requête — la session reste valide jusqu'à son échéance actuelle.
+async function prolongerSession(res, token, session) {
+  try {
+    const nouvelleEcheance = await renewSessionIfNeeded(token, session)
+    if (nouvelleEcheance) res.append('Set-Cookie', buildSessionCookie(token, nouvelleEcheance))
+  } catch (e) {
+    console.warn('[session] prolongation échouée :', e.message)
+  }
+}
 
 // Parse minimaliste de l'en-tête Cookie (évite la dépendance cookie-parser).
 function parseCookies(header) {
@@ -35,6 +67,7 @@ export async function requireAuth(req, res, next) {
     if (!token) return res.status(401).json({ error: 'Authentification requise' })
     const session = await getSession(token)
     if (!session) return res.status(401).json({ error: 'Session invalide ou expirée' })
+    await prolongerSession(res, token, session)
     const userIdStr = String(session.user_id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
     req.userId = userIdStr
     // Compat avec lib/auth.js getUserId() qui lit req.session?.userId en priorité
@@ -73,6 +106,7 @@ export async function requireAuthHtml(req, res, next) {
       const dest = '/login?redirect=' + encodeURIComponent(req.originalUrl || req.url || '/')
       return res.redirect(302, dest)
     }
+    await prolongerSession(res, token, session)
     const userIdStr = String(session.user_id).replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
     req.userId = userIdStr
     req.session = { userId: userIdStr }

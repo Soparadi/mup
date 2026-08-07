@@ -25,6 +25,14 @@ bloquante et inscription par SIRET (pré-remplissage INSEE + géocodage BAN).
 - **Hash mot de passe** : argon2id (OWASP 2024 — memory 19456 KiB, time 2, parallel 1)
 - **Sessions** : token aléatoire 32 octets (base64url), hashé SHA-256 en base, cookie
   `mup_session` httpOnly + sameSite=Lax (+ Secure en prod). TTL 30 jours.
+  Plusieurs appareils peuvent être connectés simultanément : une connexion ajoute
+  une session, elle n'écarte pas les autres. Plafond de 10 sessions par compte,
+  la plus ancienne cédant sa place (`createSession` → `enforceSessionLimit`).
+  **Prolongation glissante** : les portillons de session (`requireAuth`,
+  `requireAuthHtml`) repoussent l'échéance à 30 jours pleins dès que la session
+  a plus d'un jour d'âge, et reposent le cookie — un compte utilisé ne se fait
+  jamais déconnecter au trentième jour. Au plus une écriture par jour et par
+  session (`renewSessionIfNeeded`).
 - **Tokens vérification / reset** : token aléatoire 32 octets, hashé SHA-256 en base.
   TTL 24h pour `email_verify`, 1h pour `password_reset`. `used=true` après usage.
 - **Stockage** : SurrealDB Cloud — namespace `soparadi`, database `movup`. Tables
@@ -104,7 +112,7 @@ ci-dessus.
 
 1. `POST /api/auth/login { email, password }`
 2. Serveur : `getUserByEmail` → `argon2.verify` → check `email_verified=true`
-3. Si OK : `deleteAllSessionsForUser` (rotation) → `createSession` → cookie `mup_session`
+3. Si OK : `createSession` (ajoutée aux sessions existantes) → cookie `mup_session`
 4. Audit `login_success` ou `login_failed`
 
 ### Réinitialisation mot de passe
@@ -198,7 +206,7 @@ cat migrations/001_auth_tables.surql | surreal sql \
 - Cookies session `HttpOnly; Path=/; SameSite=Lax` (+ `Secure` en prod)
 - Tokens (session, verify, reset) hashés SHA-256 en base — un dump de la base
   ne révèle aucun token exploitable
-- Rotation de session à chaque login : invalidation des sessions précédentes
+- Sessions simultanées bornées à 10 par compte (éviction de la plus ancienne)
 - Rate limiting 5/15min par IP sur signup, login, forgot-password
 - Réponse identique à `forgot-password` que le compte existe ou non
 - Vérification email bloquante : pas d'accès au pipeline tant que non vérifié

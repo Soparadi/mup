@@ -6,8 +6,21 @@ import { randomBytes, createHash } from 'crypto'
 import { getDb } from '../../lib/surreal.js'
 
 const SESSION_TTL_MS = 30 * 24 * 3600 * 1000      // 30 jours
+const SESSION_TTL_SURQL = '30d'                   // même durée, écrite côté SurrealQL
 const VERIFY_TTL_MS = 24 * 3600 * 1000            // 24h pour email_verify
 const RESET_TTL_MS = 60 * 60 * 1000               // 1h pour password_reset
+
+// Pas de la prolongation glissante : une session utilisée voit son échéance
+// repoussée à 30 jours pleins, mais au plus une fois par jour. Tant qu'elle a
+// moins d'un jour d'âge, aucune écriture — sinon chaque requête réécrirait la
+// ligne. Un abonné qui revient au moins une fois par mois ne tombe jamais sur
+// l'échéance des 30 jours.
+const SESSION_RENEW_STEP_MS = 24 * 3600 * 1000    // 1 jour
+
+// Plafond de sessions simultanées par compte. Plusieurs appareils connectés en
+// même temps sont attendus (bureau, portable, téléphone) ; une accumulation
+// sans fin ne l'est pas. Au-delà, les plus anciennes cèdent leur place.
+const SESSION_MAX_PER_USER = 10
 
 // ── Cache mémoire LRU pour getSession ─────────────────────────────────
 // Évite les rafales 100+ queries SurrealDB lors d'une recherche /prospection.
@@ -148,10 +161,64 @@ export async function createSession(userId, { ip, userAgent } = {}) {
   // que le caller puisse poser le cookie avec la bonne date d'expiration.
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
   await db.query(
-    'CREATE session SET user_id = type::record("user", $uid), token = $tok, expires_at = time::now() + 30d',
+    `CREATE session SET user_id = type::record("user", $uid), token = $tok, expires_at = time::now() + ${SESSION_TTL_SURQL}`,
     { uid: cleanUserId, tok: tokenHash }
   )
+  // La nouvelle session s'AJOUTE aux existantes (plusieurs appareils connectés
+  // à la fois) : seul le plafond fait le ménage, et seulement au-delà de dix.
+  await enforceSessionLimit(db, cleanUserId).catch(e => {
+    console.warn('[session] plafond non appliqué :', e.message)
+  })
   return { token, expiresAt }
+}
+
+// Ramène le nombre de sessions du compte sous le plafond en supprimant les plus
+// anciennes. Appelée juste après une création : la session qui vient de naître
+// est la plus récente, elle n'est donc jamais celle qui cède sa place.
+// Suppression par token (chaîne) et non par id : pas de coercion d'un record id
+// ou d'un datetime via $binding à négocier avec SurrealDB v2.
+async function enforceSessionLimit(db, cleanUserId) {
+  const result = await db.query(
+    'SELECT token FROM session WHERE user_id = type::record("user", $uid) ORDER BY created_at DESC',
+    { uid: cleanUserId }
+  )
+  const rows = result[0] || []
+  if (rows.length <= SESSION_MAX_PER_USER) return 0
+  const surplus = rows.slice(SESSION_MAX_PER_USER).map(r => r.token).filter(Boolean)
+  if (!surplus.length) return 0
+  await db.query('DELETE session WHERE token IN $toks', { toks: surplus })
+  // Le cache est indexé par token EN CLAIR, on ne sait pas remonter du hash
+  // supprimé vers sa clef : on vide les entrées du compte (au pire une relecture
+  // DB pour les sessions restées valides).
+  invalidateSessionCacheByUserId(cleanUserId)
+  return surplus.length
+}
+
+// Prolongation glissante. Appelée par les portillons de session sur une session
+// déjà validée : si elle a plus d'un jour d'âge, son échéance repart à 30 jours
+// pleins en base, et l'appelant repose le cookie sur la même échéance (valeur
+// ISO retournée). Retourne null quand il n'y a rien à faire — cas de la très
+// grande majorité des requêtes.
+export async function renewSessionIfNeeded(token, session) {
+  if (!token || !session?.expires_at) return null
+  const expiresAt = new Date(session.expires_at).getTime()
+  if (!Number.isFinite(expiresAt)) return null
+  const remaining = expiresAt - Date.now()
+  if (remaining <= 0) return null
+  if (remaining > SESSION_TTL_MS - SESSION_RENEW_STEP_MS) return null
+
+  const db = await getDb()
+  const tokenHash = hashToken(token)
+  await db.query(
+    `UPDATE session SET expires_at = time::now() + ${SESSION_TTL_SURQL} WHERE token = $tok`,
+    { tok: tokenHash }
+  )
+  const newExpiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
+  // Le cache sert la MÊME instance d'objet aux requêtes suivantes : sans cette
+  // mise à jour, la fenêtre de 30 s relancerait la prolongation à chaque appel.
+  session.expires_at = newExpiresAt
+  cacheSet(token, session)
+  return newExpiresAt
 }
 
 export async function getSession(token) {
@@ -474,6 +541,11 @@ export async function runAuthMigration() {
     'DEFINE FIELD IF NOT EXISTS expires_at ON session TYPE datetime',
     'DEFINE FIELD IF NOT EXISTS created_at ON session TYPE datetime DEFAULT time::now()',
     'DEFINE INDEX IF NOT EXISTS session_token_unique ON session FIELDS token UNIQUE',
+    // Recherche par compte : le plafond de sessions simultanées (dix par compte,
+    // plusieurs appareils connectés à la fois) relit les sessions du user à
+    // chaque ouverture de session, et la coupure globale post-réinitialisation
+    // supprime par ce même champ. Sans index, un balayage de table à chaque fois.
+    'DEFINE INDEX IF NOT EXISTS session_user_idx ON session FIELDS user_id',
     'DEFINE TABLE IF NOT EXISTS verification_token SCHEMAFULL',
     'DEFINE FIELD IF NOT EXISTS user_id ON verification_token TYPE record<user>',
     'DEFINE FIELD IF NOT EXISTS token ON verification_token TYPE string',

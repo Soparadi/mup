@@ -5681,16 +5681,41 @@ app.post('/api/v2/mail/disconnect', async (req, res) => {
   }
 })
 
+// Renvoie l'adresse TELLE QU'ELLE EST EN BASE si elle désigne bien l'une des
+// boîtes de cet abonné — comptes OAuth et boîte IMAP confondus —, sinon null.
+// La comparaison ignore la casse, qu'une adresse ne distingue pas. La valeur
+// rendue vient toujours de la base, jamais du corps de la requête.
+async function ownedMailAccountEmail(db, ownerId, wanted) {
+  const cible = String(wanted || '').trim().toLowerCase()
+  if (!cible) return null
+  const creds = await listMailboxCredentials(db, ownerId)
+  const match = creds.find(c => String(c.email || '').toLowerCase() === cible)
+  if (match) return match.email
+  const imap = await getImapAccount(db, ownerId)
+  if (imap && String(imap.email || '').toLowerCase() === cible) return imap.email
+  return null
+}
+
 // Envoi 1:1 — utilise mail-service.js (route sur le bon provider).
 // Session 1 : seul provider:'imap' fonctionne.
 app.post('/api/v2/mail/send', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
-  const { to, subject, body, html, attachments } = req.body || {}
+  const { to, subject, body, html, attachments, from_email } = req.body || {}
   if (!to || !subject) return res.status(400).json({ error: 'Champs requis : to, subject' })
   try {
     const db = await getDb()
-    const result = await mailServiceSendOne(db, userId, { to, subject, body, html, attachments })
+    // L'expéditeur choisi ne peut désigner qu'une boîte que l'abonné possède
+    // déjà : il est vérifié contre ses propres comptes, jamais cru sur parole.
+    // Absent, le service choisit comme avant.
+    let expediteur = null
+    if (from_email) {
+      expediteur = await ownedMailAccountEmail(db, userId, from_email)
+      if (!expediteur) {
+        return res.status(403).json({ error: 'Cette adresse d\'expédition n\'est pas l\'une de vos boîtes connectées' })
+      }
+    }
+    const result = await mailServiceSendOne(db, userId, { to, subject, body, html, attachments, from_email: expediteur })
     res.json(result)
   } catch (err) {
     console.error('[v2/mail:send]', err.message)

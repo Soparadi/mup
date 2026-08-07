@@ -218,7 +218,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 <div class="shell">
   <div class="topbar">
     <div class="topbar-row1">
-      <span class="topbar-title">Mail</span>
+      <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+        <span class="topbar-title">Mail</span>
+        <span class="kpi-lbl" id="topbar-account"></span>
+      </div>
       <div class="kpi-row">
         <div class="kpi-group">
           <div class="kpi-chip">
@@ -280,7 +283,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
         <!-- COLONNE CENTRALE : empty state OU liste emails -->
         <div class="col-center">
-          <div class="col-center-toolbar" id="cc-toolbar"><span id="cc-toolbar-label">Reçus</span><span id="cc-toolbar-account"></span></div>
+          <div class="col-center-toolbar" id="cc-toolbar"><span id="cc-toolbar-label">Reçus</span></div>
 
           <!-- Empty state : aucun compte connecté -->
           <div class="empty-state" id="empty-state-noaccount">
@@ -570,21 +573,21 @@ async function loadAccountsAndInbox(){
     var boites = accounts.filter(function(a){ return !a.sendOnly; });
     if(boites.length > 0){
       STATE.primaryAccount = boites[0];
-      renderToolbarAccount();
+      renderHeaderAccount();
       showLoading();
       await loadInbox();
     } else {
       STATE.primaryAccount = null;
-      renderToolbarAccount();
+      renderHeaderAccount();
       showEmptyNoAccount();
     }
   } catch(e){ showEmptyNoAccount(); }
 }
 
-// L'abonné consulte sa boîte depuis un outil extérieur : la colonne dit
-// laquelle. Rien quand aucun compte n'est connecté.
-function renderToolbarAccount(){
-  var el = document.getElementById('cc-toolbar-account');
+// L'abonné consulte sa boîte depuis un outil extérieur : l'en-tête de page
+// dit laquelle, sur les trois onglets. Rien quand aucun compte n'est connecté.
+function renderHeaderAccount(){
+  var el = document.getElementById('topbar-account');
   if(!el) return;
   el.textContent = (STATE.primaryAccount && STATE.primaryAccount.email) || '';
 }

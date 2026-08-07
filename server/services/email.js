@@ -11,13 +11,62 @@ import { PLAN_PRICES_DISPLAY } from '../../lib/stripe-config.js'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TEMPLATES_DIR = join(__dirname, '..', 'templates')
 
+// ── Logo embarqué ──
+// Les gabarits pointent le logo en `cid:` et non en https://movup.io/... :
+// la plupart des clients mail bloquent les images distantes tant que le
+// destinataire n'a pas cliqué « afficher les images », et l'en-tête arrivait
+// donc vide. Une pièce jointe en ligne s'affiche sans autorisation.
+// Le fichier 1× suffit : le logo est rendu à 90 px de large.
+const LOGO_CID = 'movup-logo'
+const LOGO_FILENAME = 'movup-email-logo.png'
+const LOGO_PATH = join(__dirname, '..', '..', 'public', LOGO_FILENAME)
+
+let logoAttachment = null
+async function inlineLogo() {
+  if (!logoAttachment) {
+    const bytes = await readFile(LOGO_PATH)
+    logoAttachment = {
+      filename: LOGO_FILENAME,
+      content: bytes.toString('base64'),
+      contentType: 'image/png',
+      // Sans chevrons : le SDK Resend pose lui-même les < > de l'en-tête
+      // Content-ID. En ajouter ici casserait la correspondance avec le
+      // `src="cid:movup-logo"` du gabarit.
+      contentId: LOGO_CID
+    }
+  }
+  return logoAttachment
+}
+
 let resendClient = null
+let sender = null
+// N'expose pas le client Resend nu mais un enrobage réduit à `emails.send`,
+// seule méthode utilisée ici. C'est le point unique par lequel part tout
+// transactionnel : la pièce jointe du logo y est ajoutée une fois pour
+// toutes, plutôt qu'aux quinze appels — dont un futur seizième, écrit sur le
+// même modèle, hériterait sans que personne ait à y penser.
+// Le rattachement est piloté par le gabarit lui-même : seul un HTML qui
+// référence `cid:movup-logo` reçoit la pièce jointe, si bien que le seul
+// gabarit sans logo (optout-internal-notification) ne la transporte pas.
 function getResendClient() {
-  if (resendClient) return resendClient
+  if (sender) return sender
   const key = process.env.RESEND_API_KEY
   if (!key) throw new Error('RESEND_API_KEY non configurée')
   resendClient = new Resend(key)
-  return resendClient
+  sender = {
+    emails: {
+      send: async (payload) => {
+        if (!payload?.html || !payload.html.includes(`cid:${LOGO_CID}`)) {
+          return resendClient.emails.send(payload)
+        }
+        return resendClient.emails.send({
+          ...payload,
+          attachments: [...(payload.attachments || []), await inlineLogo()]
+        })
+      }
+    }
+  }
+  return sender
 }
 
 const FROM = process.env.RESEND_FROM_EMAIL || 'bonjour@movup.io'

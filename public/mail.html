@@ -212,6 +212,150 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   background:#FEF2F2; border:1px solid #FCA5A5; color:#991B1B;
   padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:16px;
 }
+
+/* ============================================================================
+   TÉLÉPHONE — ≤ 640px
+   ----------------------------------------------------------------------------
+   Au-dessus de 640px, RIEN de ce bloc ne s'applique : la mise en page à trois
+   colonnes est inchangée.
+
+   Sous 640px, ce n'est pas la même page rétrécie, c'est une autre mise en page.
+   Les trois colonnes deviennent trois volets dont un seul est à l'écran, et la
+   liste occupe tout ce qui reste. L'attribut data-phone-pane porté par
+   .mail-layout dit lequel est visible ; il est posé par setPhonePane() et ne
+   sert qu'ici — au-delà de 640px aucune règle ne le lit, le poser est sans
+   effet sur grand écran.
+
+   Trois éléments n'existent que pour le téléphone (bouton de retour, barre de
+   retour du volet message, bouton flottant). Ils sont dans le document à
+   toutes les largeurs mais display:none par défaut : c'est ce bloc, et lui
+   seul, qui les allume.
+   ============================================================================ */
+.phone-back,
+.phone-topbar,
+.fab-newmsg { display: none; }
+
+@media (max-width: 640px) {
+
+  /* 1 — EN-TÊTE : ne garder que ce qui oriente.
+     La rangée de compteurs (Reçus / Envoyés / Mailing / Newsletter) prenait
+     deux rangées repliées, soit une bonne centaine de pixels, sans rien dire
+     que la page ne dise ailleurs : les compteurs sont sur les dossiers
+     (pastilles du volet Dossiers), et Mailing / Newsletter ne faisaient
+     qu'ouvrir l'onglet Campagnes, à un doigt dans les sous-onglets. L'adresse
+     de la boîte reste : elle est sur la même rangée que le titre et ne coûte
+     aucune hauteur. */
+  .topbar { padding: 10px 14px 0; gap: 8px; }
+  .topbar-title { font-size: 17px; letter-spacing: -.3px; line-height: 1.35; }
+  .kpi-row { display: none; }
+  .subtab { padding: 7px 10px; font-size: 12.5px; }
+
+  /* 2 — UN VOLET À LA FOIS.
+     La grille 240/360/1fr devient une pile verticale d'un seul enfant visible,
+     en flex : le volet affiché prend flex:1 et donne au défilement interne
+     (.email-list, .viewer) une hauteur définie. Une grille en 1fr laisserait
+     la rangée se dimensionner sur son contenu et la liste ne défilerait plus
+     toute seule. Les filets verticaux entre colonnes n'ont plus d'objet. */
+  .mail-layout { display: flex; flex-direction: column; }
+  .col-left,
+  .col-center,
+  .col-right { flex: 1; min-height: 0; border-right: none; }
+
+  .mail-layout[data-phone-pane="folders"] .col-center,
+  .mail-layout[data-phone-pane="folders"] .col-right,
+  .mail-layout[data-phone-pane="list"]    .col-left,
+  .mail-layout[data-phone-pane="list"]    .col-right,
+  .mail-layout[data-phone-pane="message"] .col-left,
+  .mail-layout[data-phone-pane="message"] .col-center { display: none; }
+
+  /* 3 — LA LIGNE DE MESSAGE : toute la largeur, trois niveaux.
+     La bande de couleur de 3px disparaît — elle catégorisait par mot-clé du
+     sujet, décoration que la largeur ne peut plus se payer et qui empêchait la
+     ligne de commencer au bord.
+     Le plafond de 200px sur le nom était taillé pour une colonne de 360px ;
+     ici le nom dispose de la largeur d'écran moins l'avatar et la date.
+     Les interlignages sont redescendus de 1,6 (valeur du body) à ~1,35 : c'est
+     ce qui fait tenir six à sept lignes au lieu de trois.
+     L'extrait tient sur UNE ligne et non deux : à deux lignes la ligne fait
+     93px et il n'en entre que cinq et demie sur un écran de 6 pouces. */
+  .email-bar { display: none; }
+  .email-inner { gap: 12px; padding: 10px 14px; }
+  .av { width: 34px; height: 34px; font-size: 12px; }
+  .etop { align-items: baseline; gap: 10px; }
+  .esender { font-size: 15px; font-weight: 700; line-height: 1.35; max-width: none; }
+  .esender.bold { font-weight: 800; }
+  .edate { font-size: 11px; }
+  .esubject { font-size: 13px; line-height: 1.35; }
+  .epreview {
+    display: block; -webkit-line-clamp: none;
+    font-size: 12.5px; line-height: 1.4;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .unread-dot { margin-top: 8px; }
+
+  /* 4 — LE FILET COMMENCE APRÈS L'AVATAR.
+     La bordure de la ligne courait d'un bord à l'autre et découpait la page en
+     bandes. Elle passe sur un pseudo-élément décalé de la gouttière gauche, de
+     l'avatar et de son écart : 14 + 34 + 12 = 60px. Aucun filet sous la
+     dernière ligne, qui n'a rien à séparer d'en dessous. */
+  .email-item { border-bottom: none; position: relative; }
+  .email-item::after {
+    content: ''; position: absolute; left: 60px; right: 0; bottom: 0;
+    height: 0.5px; background: var(--border);
+  }
+  .email-item:last-child::after { display: none; }
+
+  /* 5 — LES DOSSIERS NE SONT PLUS EN PERMANENCE À L'ÉCRAN.
+     Le bouton de retour est en haut à gauche du volet, dans la barre qui
+     portait déjà le nom du dossier. Il n'est écrit nulle part ailleurs : dans
+     .col-center-toolbar il hérite de l'uppercase et de l'interlettrage de la
+     barre, qu'on lui reprend. La marge négative rattrape le rembourrage de la
+     zone tactile pour que la barre ne grandisse pas. */
+  .phone-back {
+    display: inline-flex; align-items: center; gap: 3px;
+    margin: -6px 0; padding: 6px 8px 6px 0;
+    background: none; border: none; cursor: pointer;
+    font-family: var(--font); font-size: 13px; font-weight: 600;
+    color: var(--blue); letter-spacing: 0; text-transform: none;
+  }
+  .col-center-toolbar { padding: 8px 14px; }
+
+  /* 6 — VOLET MESSAGE : sa propre barre de retour, vers la liste.
+     .col-right est une colonne flex ; la barre ne doit pas s'étirer. */
+  .phone-topbar {
+    display: flex; align-items: center; flex-shrink: 0;
+    padding: 9px 14px; background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .viewer-head { padding: 14px 16px; }
+  .viewer-subject { font-size: 15px; }
+  .viewer-meta { padding: 10px 16px; }
+  .viewer-meta-from { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .viewer-actions { padding: 10px 16px; overflow-x: auto; }
+  .viewer-body { padding: 16px; }
+
+  /* 7 — VOLET DOSSIERS : cibles au doigt. */
+  .subnav-item { padding: 11px 10px; font-size: 14px; }
+  .btn-newmsg { padding: 12px; font-size: 14px; }
+  .empty-state { padding: 36px 20px; }
+
+  /* 8 — « NOUVEAU MESSAGE » EN BAS À DROITE.
+     Le bouton pleine largeur du volet Dossiers reste où il est ; celui-ci le
+     double sous le pouce, dans le seul volet où il a un sens (la liste) et au
+     seul moment où écrire répond à quelque chose (des messages à l'écran :
+     .is-on est posé par setInboxState). Il se pose au-dessus du pied
+     applicatif, dont la hauteur est déjà publiée par app-footer.css.
+     z-index 6 : au-dessus du pied (5), sous le voile du tiroir (190). */
+  .fab-newmsg {
+    position: fixed; z-index: 6;
+    right: 16px; bottom: calc(var(--app-footer-h) + 16px);
+    width: 52px; height: 52px; padding: 0; border: none; border-radius: 50%;
+    background: var(--text); color: #fff; cursor: pointer;
+    align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .22);
+  }
+  .mail-layout[data-phone-pane="list"] .fab-newmsg.is-on { display: flex; }
+}
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
@@ -258,7 +402,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
     <!-- ────── BOÎTE DE RÉCEPTION (3 colonnes) ────── -->
     <div class="tab-pane active" id="tab-inbox" role="tabpanel">
-      <div class="mail-layout">
+      <!-- data-phone-pane : volet visible sous 640px (dossiers | list | message).
+           Posé ici pour que l'état de départ soit bon avant même le script ;
+           au-dessus de 640px aucune règle ne le lit. -->
+      <div class="mail-layout" data-phone-pane="list">
 
         <!-- COLONNE GAUCHE : Mail + Sync -->
         <div class="col-left">
@@ -291,7 +438,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
         <!-- COLONNE CENTRALE : empty state OU liste emails -->
         <div class="col-center">
-          <div class="col-center-toolbar" id="cc-toolbar"><span id="cc-toolbar-label">Reçus</span></div>
+          <div class="col-center-toolbar" id="cc-toolbar">
+            <button class="phone-back" onclick="setPhonePane('folders')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              Dossiers
+            </button>
+            <span id="cc-toolbar-label">Reçus</span>
+          </div>
 
           <!-- Empty state : aucun compte connecté -->
           <div class="empty-state" id="empty-state-noaccount">
@@ -326,6 +479,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           <!-- Liste emails -->
           <div class="email-list" id="email-list" style="display:none;"></div>
 
+          <!-- Écrire, à portée du pouce — téléphone seulement (cf. bloc ≤ 640px). -->
+          <button class="fab-newmsg" id="fab-newmsg" onclick="openCompose()" aria-label="Nouveau message" title="Nouveau message">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+
           <!-- État chargement -->
           <div class="empty-state" id="empty-state-loading" style="display:none;">
             <div style="font-size:12.5px;color:var(--muted);">Chargement…</div>
@@ -352,6 +510,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
         <!-- COLONNE DROITE : viewer email -->
         <div class="col-right">
+          <!-- Retour vers la liste — téléphone seulement (cf. bloc ≤ 640px). -->
+          <div class="phone-topbar">
+            <button class="phone-back" onclick="setPhonePane('list')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              <span id="viewer-back-label">Reçus</span>
+            </button>
+          </div>
           <div class="viewer-empty" id="viewer-empty">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/></svg>
             <div class="viewer-empty-title">Sélectionnez un email pour le lire</div>
@@ -547,11 +712,26 @@ document.querySelectorAll('.subtab').forEach(function(btn){
     document.querySelectorAll('.subtab').forEach(function(b){ b.classList.toggle('active', b === btn); });
     var name = btn.dataset.tab;
     document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.toggle('active', p.id === 'tab-' + name); });
-    if(name === 'inbox') refreshInboxIfReady();
+    if(name === 'inbox'){ setPhonePane('list'); refreshInboxIfReady(); }
     if(name === 'campaigns') loadCampaignsTab();
     if(name === 'settings') loadAccounts();
   });
 });
+
+// ────────────────────────────────────────────────
+// VOLETS TÉLÉPHONE
+// ────────────────────────────────────────────────
+// Sous 640px les trois colonnes deviennent trois volets dont un seul est à
+// l'écran ; la feuille de style choisit lequel d'après cet attribut. Au-dessus
+// de 640px rien ne le lit : l'appeler est sans effet, aucun appelant n'a donc
+// à savoir sur quelle largeur il tourne.
+//   'folders' → dossiers + Nouveau message + Synchroniser
+//   'list'    → la liste des messages (état de départ)
+//   'message' → le message ouvert
+function setPhonePane(pane){
+  var layout = document.querySelector('.mail-layout');
+  if(layout) layout.dataset.phonePane = pane;
+}
 
 // ────────────────────────────────────────────────
 // ÉTAT GLOBAL
@@ -607,6 +787,12 @@ function setInboxState(state){
     document.getElementById(INBOX_STATES[k]).style.display = (k === state) ? 'flex' : 'none';
   });
   document.getElementById('email-list').style.display = (state === 'list') ? 'block' : 'none';
+  // Le bouton flottant d'écriture (téléphone) ne se montre qu'avec une liste
+  // sous les yeux — pas sur « Connectez votre boîte », pas sur une erreur.
+  // Une classe, pas un style en ligne : la requête de média reste maîtresse
+  // et rien n'apparaît au-delà de 640px.
+  var fab = document.getElementById('fab-newmsg');
+  if(fab) fab.classList.toggle('is-on', state === 'list');
 }
 function showEmptyNoAccount(){ setInboxState('noaccount'); }
 function showInboxList(){ setInboxState('list'); }
@@ -721,6 +907,7 @@ function selectEmail(id){
   document.getElementById('v-subject').textContent = msg.subject || '(sans sujet)';
   document.getElementById('v-from').textContent = (isSent ? msg.to : msg.from) || '—';
   document.getElementById('v-date').textContent = msg.date ? new Date(msg.date).toLocaleString('fr-FR') : '';
+  setPhonePane('message');
   loadMessageBody(id);
 }
 
@@ -780,9 +967,15 @@ function setFolder(folder){
   if(folder !== 'inbox' && folder !== 'sent') return;  // Brouillons reste inerte
   STATE.folder = folder;
   document.querySelectorAll('.subnav-item').forEach(function(it){ it.classList.toggle('active', it.dataset.folder === folder); });
+  var label = folder === 'sent' ? 'Envoyés' : 'Reçus';
   var lblEl = document.getElementById('cc-toolbar-label');
-  if(lblEl) lblEl.textContent = folder === 'sent' ? 'Envoyés' : 'Reçus';
+  if(lblEl) lblEl.textContent = label;
+  // Le retour du volet message nomme le dossier d'où l'on vient.
+  var backEl = document.getElementById('viewer-back-label');
+  if(backEl) backEl.textContent = label;
   closeViewer();
+  // Choisir un dossier, sur téléphone, c'est demander à en voir les messages.
+  setPhonePane('list');
   loadInbox();
 }
 

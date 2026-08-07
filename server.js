@@ -5704,6 +5704,36 @@ async function allowedSenderEmail(db, ownerId, wanted) {
   return null
 }
 
+// Un message parti par Resend ne passe par aucun serveur de l'abonné : son
+// fournisseur ne l'a pas vu, et le dossier Envoyés de sa boîte ne le contiendra
+// jamais. C'est le seul cas où MUP doit garder le message, sans quoi il
+// n'existe nulle part. Ce que le fournisseur connaît déjà n'est pas réécrit
+// ici : pas de doublon possible, donc pas de rapprochement à inventer.
+// Le format reprend celui de la table mail (direction, from, to, subject,
+// body_text, date, status) et ajoute transport, qui isole ces enregistrements
+// de tous les autres.
+async function traceEnvoiResend(db, userId, { from, to, subject, body, html, messageId }) {
+  const maintenant = new Date().toISOString()
+  const cle = messageId || `resend_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  const record = {
+    userId,
+    direction: 'sent',
+    transport: 'resend',
+    prospectId: null,
+    from: from || '',
+    to: Array.isArray(to) ? to.join(', ') : String(to || ''),
+    cc: '',
+    subject: subject || '',
+    body_html: html || '',
+    body_text: body || '',
+    date: maintenant,
+    messageId: messageId || '',
+    status: 'sent',
+    attachments: []
+  }
+  await upsertRecord(db, 'mail', hashMessageId(cle), record)
+}
+
 // Envoi 1:1 — utilise mail-service.js (route sur le bon provider).
 // Session 1 : seul provider:'imap' fonctionne.
 app.post('/api/v2/mail/send', async (req, res) => {
@@ -5724,6 +5754,18 @@ app.post('/api/v2/mail/send', async (req, res) => {
       }
     }
     const result = await mailServiceSendOne(db, userId, { to, subject, body, html, attachments, from_email: expediteur })
+    // Le message est parti : une trace qui ne s'écrit pas ne doit pas le faire
+    // passer pour perdu. L'échec se lit dans les journaux, l'abonné garde sa
+    // confirmation d'envoi.
+    if (result?.provider === 'resend') {
+      try {
+        await traceEnvoiResend(db, userId, {
+          from: result.from || expediteur, to, subject, body, html, messageId: result.messageId
+        })
+      } catch (e) {
+        console.error('[v2/mail:send] envoi remis mais trace non écrite —', e.message)
+      }
+    }
     res.json(result)
   } catch (err) {
     console.error('[v2/mail:send]', err.message)
@@ -6623,6 +6665,8 @@ app.use((req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS contacts SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS agenda SCHEMALESS')
     // Indexes pour les requêtes scoping userId et lookups par campagne/destinataire
+    // mail : lue à chaque ouverture des Envoyés, toujours filtrée sur userId.
+    await db.query('DEFINE INDEX IF NOT EXISTS mail_user ON TABLE mail COLUMNS userId')
     await db.query('DEFINE INDEX IF NOT EXISTS campaigns_user ON TABLE campaigns COLUMNS userId')
     await db.query('DEFINE INDEX IF NOT EXISTS domains_user ON TABLE domains_resend COLUMNS userId')
     await db.query('DEFINE INDEX IF NOT EXISTS events_campaign ON TABLE campaign_events COLUMNS campaign_id')
@@ -6636,7 +6680,7 @@ app.use((req, res) => {
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siret ON societes FIELDS siret')
     // Sociétés — dédup par SIREN (NON unique : siren vide partagé tant que non enrichi)
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siren ON societes FIELDS siren')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes, pipeline, contacts, agenda + 8 indexes)')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes, pipeline, contacts, agenda + 10 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

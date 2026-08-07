@@ -147,6 +147,49 @@ export async function sendWelcome(user) {
   return { id: result.data?.id || null }
 }
 
+// ── sendMailboxConnected ──
+// Confirmation de connexion d'une boîte mail (OAuth Google ou Microsoft réussi).
+// Courriel de SERVICE, déclenché par l'abonné lui-même : aucune mention de
+// désinscription (elle ne vaut que pour la prospection commerciale).
+// Idempotence gérée par le caller (mail-service.js) via mailbox_credentials
+// .welcomeEmailSentAt.
+//   user : { email: adresse du COMPTE MovUP, prenom, nom, name } — sert la
+//   salutation ; mailboxEmail : l'adresse de la boîte connectée, destinataire.
+export async function sendMailboxConnected(user, mailboxEmail) {
+  if (!mailboxEmail) throw new Error('mailboxEmail requis')
+  const salutation = buildSalutation(user)
+  const ctaUrl = `${appUrl()}/prospection`
+  const tpl = await loadTemplate('mailbox-connected.html')
+  const html = applyVars(tpl, { salutation, mailbox_email: mailboxEmail, cta_url: ctaUrl })
+  const text = [
+    `${salutation},`,
+    '',
+    `L'adresse ${mailboxEmail} est reliée à votre espace MovUP. Vous lisez et vous écrivez vos messages sans quitter l'application, et chaque échange reste rattaché à la fiche du prospect.`,
+    '',
+    '1. Lancer une recherche de prospects',
+    '2. Les envoyer dans votre pipeline',
+    '3. Leur écrire depuis MovUP',
+    '',
+    `Lancer une recherche : ${ctaUrl}`,
+    '',
+    'Bien à vous,',
+    'L\'équipe MovUP'
+  ].join('\n')
+
+  const r = getResendClient()
+  const result = await r.emails.send({
+    from: FROM_HEADER,
+    to: [mailboxEmail],
+    replyTo: FROM,
+    subject: 'Votre boîte mail est connectée à MovUP',
+    html,
+    text,
+    tags: [{ name: 'kind', value: 'mailbox_connected' }]
+  })
+  if (result.error) throw new Error(result.error.message || 'Resend send failed')
+  return { id: result.data?.id || null }
+}
+
 // ── sendPasswordReset ──
 export async function sendPasswordReset(user, token) {
   if (!user?.email) throw new Error('user.email requis')

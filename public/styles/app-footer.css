@@ -113,24 +113,56 @@ html, body, * {
     --app-footer-nav-gap-row: 8px;
     --app-footer-nav-gap-col:14px;
 
-    /* L'inner passe en colonne et les huit liens ne tiennent pas sur
-       une ligne : trois rangées de texte, la gouttière de l'inner
-       entre le © et le nav, celle du nav entre ses deux lignes.
-       1 + 2×8 + 3×11×1.5 + 4 + 8 = 78,5px.
+    /* L'inner passe en colonne et le nav est réduit à deux entrées
+       (voir plus bas) : il tient sur une ligne. Deux rangées de texte,
+       la gouttière de l'inner entre le © et le nav.
+       1 + 2×8 + 2×11×1.5 + 4 = 54px. */
+    --app-footer-h: calc(
+        var(--app-footer-bd)
+      + var(--app-footer-pad-y) * 2
+      + var(--app-footer-fs) * var(--app-footer-lh) * 2
+      + var(--app-footer-gap-row)
+    );
+  }
 
-       Dimensionné sur le cas téléphone ; entre 548 et 640px le nav
-       tient sur une ligne et la réserve dépasse de 24,5px — du blanc,
-       jamais du contenu masqué. */
+  /* Prospection est la seule page à porter la mention de source
+     INSEE/SIRENE sous le nav : elle ajoute une rangée et sa gouttière
+     à la réserve, et elle seule. 54 + 16,5 + 4 = 74,5px. */
+  :root:has(.mup-app-footer__rgpd){
     --app-footer-h: calc(
         var(--app-footer-bd)
       + var(--app-footer-pad-y) * 2
       + var(--app-footer-fs) * var(--app-footer-lh) * 3
-      + var(--app-footer-gap-row)
-      + var(--app-footer-nav-gap-row)
+      + var(--app-footer-gap-row) * 2
     );
   }
+
   .mup-app-footer__inner{
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  /* Sur téléphone les huit liens occupaient trois rangées, soit un
+     tiers de la hauteur utile. Le pied se réduit à deux entrées : la
+     porte d'entrée juridique et le réglage des cookies. Les six
+     autres sont masqués, pas retirés du document — au-delà de 640px
+     rien de tout ce bloc ne s'applique et le pied est inchangé.
+
+     Sélection par href et par id, jamais par rang : les deux liens
+     survivants restent les bons si l'ordre du nav change un jour. */
+  .mup-app-footer nav a{ display: none; }
+
+  .mup-app-footer nav a[href="/mentions-legales.html"],
+  .mup-app-footer nav a#mup-cookies-reopen{ display: inline; }
+
+  /* « Mentions légales » ne dit pas, sur deux entrées, qu'on trouve
+     derrière les CGU, les CGV, le DPA et la confidentialité. Le
+     libellé du téléphone est plus large ; la destination ne bouge
+     pas, et le libellé du grand écran non plus. */
+  .mup-app-footer nav a[href="/mentions-legales.html"]{ font-size: 0; }
+
+  .mup-app-footer nav a[href="/mentions-legales.html"]::after{
+    content: "Informations légales";
+    font-size: var(--app-footer-fs);
   }
 }

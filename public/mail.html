@@ -521,7 +521,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <div class="field"><label>Message</label><textarea id="cmp-body" rows="9"></textarea></div>
       <div id="cmp-result" style="display:none;margin-top:8px;font-size:12.5px;"></div>
     </div>
-    <div class="modal-foot"><button class="btn btn-outline btn-sm" onclick="closeCompose()">Annuler</button><button class="btn btn-dark btn-sm" onclick="sendCompose()">Envoyer</button></div>
+    <div class="modal-foot"><button class="btn btn-outline btn-sm" onclick="closeCompose()">Annuler</button><button class="btn btn-dark btn-sm" id="cmp-send" onclick="sendCompose()">Envoyer</button></div>
   </div>
 </div>
 
@@ -807,6 +807,21 @@ function closeCompose(){
   ['cmp-to','cmp-subject','cmp-body'].forEach(function(id){ document.getElementById(id).value = ''; });
   document.getElementById('cmp-result').style.display = 'none';
 }
+// Plus long que les délais de garde du serveur (connexion 15 s, socket 30 s) :
+// quand l'envoi échoue, c'est le motif du serveur qui doit arriver le premier.
+// Ce délai-ci ne sert qu'aux cas où le serveur ne répond jamais.
+var COMPOSE_SEND_TIMEOUT = 45000;
+
+function setComposeStatus(el, couleur, texte){
+  el.style.display = 'block';
+  el.innerHTML = '';
+  var span = document.createElement('span');
+  span.style.color = couleur === 'ok' ? 'var(--green)' : (couleur === 'ko' ? 'var(--red)' : 'var(--muted)');
+  if(couleur === 'ok') span.style.fontWeight = '700';
+  span.textContent = texte;
+  el.appendChild(span);
+}
+
 async function sendCompose(){
   var from_email = document.getElementById('cmp-from').value;
   var to = document.getElementById('cmp-to').value.trim();
@@ -814,18 +829,45 @@ async function sendCompose(){
   var body = document.getElementById('cmp-body').value;
   if(!to || !subject){ toast('Champs requis : à, sujet', 'error'); return; }
   var resEl = document.getElementById('cmp-result');
-  resEl.style.display = 'block'; resEl.innerHTML = '<span style="color:var(--muted);">Envoi…</span>';
+  var btn = document.getElementById('cmp-send');
+  if(btn && btn.disabled) return;   // un envoi à la fois
+
+  // Toute sortie passe par le finally : « Envoi… » ne peut pas survivre à la
+  // requête. Trois issues et pas une de plus — envoyé, échec avec motif,
+  // délai dépassé. Cette valeur est écrasée dans tous les chemins.
+  var issue = { ok:false, texte:'Envoi interrompu — votre message n\'est pas parti.' };
+  var ctrl = new AbortController();
+  var minuteur = setTimeout(function(){ ctrl.abort(); }, COMPOSE_SEND_TIMEOUT);
+  if(btn) btn.disabled = true;
+  setComposeStatus(resEl, 'muted', 'Envoi…');
   try {
-    var r = await fetch('/api/v2/mail/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to, subject, body, from_email }) });
-    var d = await r.json();
-    if(r.ok){
-      resEl.innerHTML = '<span style="color:var(--green);font-weight:700;">Envoyé via ' + (d.provider || 'IMAP') + '</span>';
-      setTimeout(closeCompose, 1100);
-      toast('Message envoyé', 'ok');
+    var r = await fetch('/api/v2/mail/send', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ to, subject, body, from_email }),
+      signal: ctrl.signal
+    });
+    var d = null, estJson = true;
+    try { d = await r.json(); } catch(e){ estJson = false; }
+    if(!estJson){
+      // 502 du proxy, page d'erreur HTML : le serveur n'a pas parlé notre
+      // langue. Ce n'est pas une panne de réseau, et l'issue reste inconnue.
+      issue = { ok:false, texte:'Le serveur n\'a pas répondu correctement (code ' + r.status + '). Vérifiez vos Envoyés avant de réessayer.' };
+    } else if(r.ok){
+      issue = { ok:true, texte:'Envoyé via ' + ((d && d.provider) || 'IMAP') };
     } else {
-      resEl.innerHTML = '<span style="color:var(--red);">' + escHtml(d.error || 'Erreur') + '</span>';
+      issue = { ok:false, texte:(d && d.error) || 'Envoi refusé par le serveur.' };
     }
-  } catch(e){ resEl.innerHTML = '<span style="color:var(--red);">Erreur réseau</span>'; }
+  } catch(e){
+    issue = (e && e.name === 'AbortError')
+      ? { ok:false, texte:'Délai dépassé : le serveur n\'a pas répondu en 45 secondes. Votre message n\'est pas parti.' }
+      : { ok:false, texte:'Connexion interrompue — votre message n\'est pas parti.' };
+  } finally {
+    clearTimeout(minuteur);
+    if(btn) btn.disabled = false;
+    setComposeStatus(resEl, issue.ok ? 'ok' : 'ko', issue.texte);
+    if(issue.ok){ setTimeout(closeCompose, 1100); toast('Message envoyé', 'ok'); }
+  }
 }
 
 // ────────────────────────────────────────────────

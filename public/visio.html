@@ -2292,22 +2292,16 @@ $('sendInviteBtn').addEventListener('click', ()=>{
    MODALE NOUVEAU RDV
    ———————————————————————————————————————————————— */
 $('openNewRdvBtn').addEventListener('click', async ()=>{
-  const [pipeline, contacts] = await Promise.all([api.getPipeline(), api.getContacts()]);
+  // Une seule source : les cartes pipeline, comme la page agenda. L'id posé en
+  // ficheId doit être de la forme "pipeline:xxx" — c'est la seule que la fiche
+  // pipeline sait relire (égalité stricte côté serveur). Un RDV rattaché à un
+  // contact n'apparaîtrait sur aucune fiche.
+  const pipeline = await api.getPipeline();
   const sel = $('prospectSelect');
   sel.innerHTML = '<option value="">— Sélectionner —</option>';
-  const merged = new Map();
   pipeline.forEach(p=>{
-    const key = p.id || (p.nom + p.societe);
-    merged.set(key, { id:p.id, name:p.nom||p.name||p.co, societe:p.societe, email:p.email });
-  });
-  contacts.forEach(c=>{
-    const key = c.id || (c.nom + c.societe);
-    if(!merged.has(key)){
-      merged.set(key, { id:c.id, name:c.nom||c.name, societe:c.societe, email:c.email });
-    }
-  });
-  [...merged.values()].forEach(p=>{
-    sel.innerHTML += `<option value="${p.id}">${escapeHtml(p.name||'')}${p.societe ? ' — '+escapeHtml(p.societe) : ''}</option>`;
+    const name = p.nom||p.name||p.co;
+    sel.innerHTML += `<option value="${p.id}">${escapeHtml(name||'')}${p.societe ? ' — '+escapeHtml(p.societe) : ''}</option>`;
   });
 
   const now = new Date();
@@ -2327,8 +2321,8 @@ document.querySelectorAll('.provider-opt').forEach(opt=>{
 
 $('prospectSelect').addEventListener('change', async e=>{
   const id = e.target.value;
-  const [pipeline, contacts] = await Promise.all([api.getPipeline(), api.getContacts()]);
-  const found = pipeline.find(p=>p.id===id) || contacts.find(c=>c.id===id);
+  const pipeline = await api.getPipeline();
+  const found = pipeline.find(p=>p.id===id);
   if(found?.email) $('prospectEmail').value = found.email;
 });
 

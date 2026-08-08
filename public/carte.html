@@ -203,6 +203,33 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
      -------------------------------------------------------------------- */
   .map-toolbar{position:fixed;top:12px;right:12px}
   .map-btn{height:40px}
+
+  /* --------------------------------------------------------------------
+     LA BARRE DE SAISIE, D'UN BORD À L'AUTRE. Elle était centrée par
+     left:50% + translateX(-50%) sur une largeur fixe de 420, ramenée par
+     max-width:calc(100% - 260px). Ce 260 est le 280 de .shell.tour-open
+     recopié à la main : une réserve pour un panneau qui poussait la
+     carte. Sous ce seuil ce panneau ne pousse plus rien depuis que
+     .shell.tour-open ne vaut plus margin-right — la réserve n'a plus de
+     source, elle ne doit pas lui survivre. À 390 elle amputait la barre
+     de 260 des 390 disponibles : 130px pour un champ d'adresse et un
+     bouton « Calculer la tournée ».
+
+     left:16 / right:16 remplacent le centrage : la largeur devient celle
+     de l'écran moins deux marges, sans nombre à tenir à jour. width:auto
+     libère les 420, max-width:none la réserve morte, transform:none le
+     décalage qui n'a plus rien à compenser. Le champ est déjà en flex:1
+     dans la règle de base : il prend tout ce que le bouton laisse.
+
+     PANNEAU OUVERT, LA BARRE DISPARAÎT. Sous ce seuil le panneau est en
+     surimpression pleine hauteur : la barre est dessous, entièrement
+     recouverte — le relevé du commit 2 mesurait un elementFromPoint
+     tombant sur .tour-clear, le pied du panneau. Une surface qu'on ne
+     peut ni voir ni atteindre n'a pas à rester dans l'arbre. La classe
+     pivot fournit l'état, aucune ligne de JS n'a à en poser un.
+     -------------------------------------------------------------------- */
+  .tour-input-bar{left:16px;right:16px;width:auto;max-width:none;transform:none}
+  .shell.tour-open .tour-input-bar{display:none}
 }
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
@@ -394,6 +421,12 @@ function migrateCard(c){
 }
 var markers={}; // id -> {marker, card, latlng}
 var rdvPanelIds=[]; // ids shown in RDV panel
+// Une fermeture du panneau est un geste, pas un état de passage : autoShowRdv
+// est rappelée à chaque retour d'onglet (agenda-sync : storage,
+// visibilitychange, focus) et ne consultait que l'ouverture courante, donc
+// rouvrait ce qui venait d'être fermé. Posé par toggleTourPanel, jamais remis
+// à faux : un rechargement de page est la seule remise à zéro légitime.
+var rdvPanelDismissed=false;
 var userLatLng=null;
 var watchId=null;
 var userMarker=null;
@@ -609,8 +642,20 @@ function autoShowRdv(){
 
   renderPanel();
 
-  // Open panel automatically
-  if(rdvPanelIds.length&&!document.getElementById('tour-panel').classList.contains('open')){
+  // OUVERTURE AUTOMATIQUE. Tout ce qui précède — cercles de proximité,
+  // rdvPanelIds, et par renderPanel le badge, le compteur et l'état actif du
+  // bouton « Actions » — est calculé sans condition : le signal « il y a des
+  // RDV » passe par eux, pas par la saisie de l'écran. Seul le geste
+  // d'ouvrir est conditionné.
+  //
+  // Deux gardes s'ajoutent à l'ouverture courante :
+  // — sous 640 (le seuil de la media query ci-dessus), jamais : le panneau y
+  //   est en surimpression pleine hauteur et masquerait la carte d'entrée de
+  //   jeu, sans que l'abonné ait rien demandé ;
+  // — à toute largeur, plus après une fermeture : l'abonné a tranché.
+  var etroit=window.matchMedia('(max-width:640px)').matches;
+  if(rdvPanelIds.length&&!rdvPanelDismissed&&!etroit
+     &&!document.getElementById('tour-panel').classList.contains('open')){
     toggleTourPanel();
   }
 }
@@ -742,6 +787,10 @@ function toggleTourPanel(){
   shell.classList.toggle('tour-open');
   // If closing, reset overlays
   if(isOpen){
+    // Le seul endroit d'où part une fermeture : le bouton « Actions ». Tous
+    // les autres appelants (scrollToStop, calcTour, autoShowRdv) testent
+    // l'ouverture avant d'appeler et n'entrent donc jamais ici.
+    rdvPanelDismissed=true;
     resetOverlays();
   }
   setTimeout(function(){map.invalidateSize();},300);

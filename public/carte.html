@@ -598,7 +598,61 @@ function placeCard(c, clat, clng){
   var addrs=Object.keys(addrMap);
   var pending=addrs.length;
 
+  // ── RÉCEPTEUR DE ?fiche= ──
+  // Le Dashboard émet ce lien depuis 77b44ad (« Voir sur la carte → »), en
+  // production, et rien ne le lisait : il menait à la Carte nue.
+  //
+  // Appelé depuis finish, donc une fois tous les marqueurs pipeline posés. Plus
+  // tôt, la fiche visée peut n'être pas encore inscrite et l'on conclurait à
+  // tort qu'elle n'est pas situable.
+  //
+  // LA CLÉ, vérifiée et non supposée. markers est indexé par String(c.id) tel
+  // que /api/pipeline le rend, préfixe compris — « pipeline:abc ». carte.html ne
+  // le retire nulle part, à la différence de pipeline.html qui le strippe au
+  // chargement (pipeline.html:903). Le Dashboard, lui, passe l'id brut de l'API :
+  // sur le chemin nominal la clé correspond donc telle quelle, sans rien faire.
+  // Mais quand /api/pipeline est injoignable, le Dashboard se rabat sur le cache
+  // localStorage mup_pipeline (dashboard.html:726) — cache écrit par pipeline.html
+  // avec des ids DÉJÀ strippés (pipeline.html:973). Le lien émis porte alors
+  // « abc », sans préfixe. Les deux formes circulent réellement : on compare sur
+  // la forme nue, des deux côtés, ce qui couvre l'une comme l'autre.
+  function ficheNue(id){ return String(id).replace(/^pipeline:/,''); }
+
+  // Deux échecs, deux phrases, parce que deux gestes différents en sortent : une
+  // fiche qui n'est plus là ne se rattrape pas, une fiche sans adresse se
+  // complète depuis le Pipeline. « Introuvable » plutôt que « supprimée » : une
+  // lecture de pipeline en échec donne la même liste vide qu'une suppression, et
+  // la formule ne doit pas affirmer plus que ce qui est su.
+  var FICHE_INTROUVABLE='Cette fiche est introuvable dans votre pipeline.';
+  var FICHE_SANS_LIEU='Cette fiche n\'a pas d\'adresse localisée : complétez-la dans le Pipeline pour la voir sur la carte.';
+
+  function cadrerSurFicheDemandee(){
+    var p=window.location.search.match(/[?&]fiche=([^&]+)/);
+    if(!p) return;
+    var vise=ficheNue(decodeURIComponent(p[1]));
+    var cle=Object.keys(markers).filter(function(k){ return ficheNue(k)===vise; })[0];
+    if(!cle){
+      // markers ne porte que les fiches posées : placeCard est le seul à y
+      // inscrire, et seulement avec des coordonnées résolues. L'absence a donc
+      // deux causes possibles, et la liste cards tranche. Dans les deux cas le
+      // drapeau reste baissé — le cadrage global fait son travail juste après —
+      // et on le dit : laisser l'abonnée chercher sur une carte de France un
+      // marqueur qui n'y est pas serait l'abandonner sans explication.
+      var connue=cards.some(function(c){ return ficheNue(c.id)===vise; });
+      toast(connue?FICHE_SANS_LIEU:FICHE_INTROUVABLE);
+      return;
+    }
+    var info=markers[cle];
+    cadrerSur(info.latlng, 14);
+    // Ouverture directe. Aucun délai n'est établi ici, et en inventer un
+    // reconduirait le symptôme du chemin ?contact_siret=.
+    info.marker.openPopup();
+  }
+
   function finish(){
+    // Le récepteur passe en premier : il lui faut tous les marqueurs posés,
+    // donc finish, et la ligne suivante lui doit sa décision.
+    cadrerSurFicheDemandee();
     // Repli, et seulement repli : le cadrage global ne s'applique que si
     // personne n'a réclamé la vue (cf. ARBITRE DE CADRAGE).
     if(!vueDemandee && bounds.length) map.fitBounds(bounds,{padding:[40,40],maxZoom:12});

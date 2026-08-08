@@ -477,12 +477,21 @@ map.on('click',function(){
 // point perdu. Un délai n'aurait pas pu tenir lieu d'arbitre : la fenêtre à
 // couvrir n'est pas bornée.
 //
-// Règle : une vue demandée par l'URL prime, le cadrage global est son repli.
+// Règle : une vue demandée prime, le cadrage global est son repli.
+//
+// Demandée par l'URL, ou demandée à la main : le premier relevé de « Ma position »
+// recentre sur l'abonnée, et ce clic est une intention aussi explicite qu'un
+// ?fiche= — la même fenêtre non bornée le sépare de finish(), vue depuis l'autre
+// bout. Un finish() tardif rendait ce recentrage à la France entière. Le premier
+// relevé passe donc par le même arbitre. Lui seul : depuis 028f025, les relevés
+// suivants ne touchent plus à la vue, et n'ont donc aucun drapeau à poser.
 //
 // Le drapeau se pose quand la vue demandée est EFFECTIVEMENT appliquée, jamais à
-// la lecture du paramètre. Une cible introuvable ou sans coordonnées exploitables
-// ne doit pas supprimer le cadrage global sans le remplacer : ce serait laisser
-// l'abonnée sur la carte de France du zoom 5, sans marqueur visé ni cadrage.
+// la lecture du paramètre ni au clic. Une cible introuvable ou sans coordonnées
+// exploitables ne doit pas supprimer le cadrage global sans le remplacer : ce
+// serait laisser l'abonnée sur la carte de France du zoom 5, sans marqueur visé
+// ni cadrage. Un suivi allumé qui n'a encore rien relevé ne le supprime pas
+// davantage.
 //
 // L'arbitrage vaut dans les deux sens d'arrivée. Vue demandée d'abord : le
 // drapeau retient le fitBounds. Cadrage global d'abord : la vue demandée
@@ -830,7 +839,10 @@ function locateUser(){
     if(userMarker) map.removeLayer(userMarker);
     var icon=L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]});
     userMarker=L.marker(userLatLng,{icon:icon,zIndexOffset:1000}).addTo(map);
-    if(premierFix) map.setView(userLatLng,11);
+    // Par l'arbitre, et pas par setView : le pipeline peut n'avoir pas fini, et
+    // son fitBounds de repli emporterait ce recentrage-là comme il emportait
+    // celui de ?fiche= (cf. ARBITRE DE CADRAGE).
+    if(premierFix) cadrerSur(userLatLng,11);
     // Le relevé sert à trier le panneau RDV par distance — mais renderPanel et
     // renderSchedule se disputent #tour-body, et la feuille de route ne dépend
     // pas de la position. Même garde que renderSchedule, inversée : tant qu'un

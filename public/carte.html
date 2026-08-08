@@ -480,6 +480,12 @@ function autoShowRdv(){
   });
   if(!rdvCards.length) return;
 
+  // autoShowRdv est rappelée à chaque retour d'onglet (agenda-sync : storage,
+  // visibilitychange, focus). Sans ce reset, la boucle ci-dessous empile un jeu
+  // de cercles supplémentaire à chaque passage. Portée volontairement limitée
+  // aux overlays : un retour d'onglet ne doit pas effacer une tournée en cours.
+  resetOverlays();
+
   rdvPanelIds=[];
 
   // Draw 30km circle for each RDV card and collect nearby prospects

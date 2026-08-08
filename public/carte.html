@@ -314,10 +314,16 @@ var userMarker=null;
 var proximityCircles=[]; // array of L.circle
 var dimmedMarkers=[]; // markers set to low opacity
 
+// Purge les mises en évidence transitoires : cercles de proximité et opacité.
+// La restauration d'opacité parcourt markers sans condition plutôt que le seul
+// dimmedMarkers, parce que renderSchedule estompe aussi les étapes en retard
+// (setOpacity(0.2)) sans rien y inscrire, et le fait à chaque frame du oninput
+// du curseur de durée : un enregistrement y accumulerait des doublons. Le
+// parcours, lui, est idempotent et coûte une itération par fiche.
 function resetOverlays(){
   proximityCircles.forEach(function(c){map.removeLayer(c);});
   proximityCircles=[];
-  dimmedMarkers.forEach(function(m){m.setOpacity(1);});
+  Object.keys(markers).forEach(function(id){markers[id].marker.setOpacity(1);});
   dimmedMarkers=[];
 }
 

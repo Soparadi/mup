@@ -647,6 +647,7 @@ function toggleTourPanel(){
 }
 
 function clearTour(){
+  clearTourPlan();
   rdvPanelIds=[];
   resetOverlays();
   renderPanel();
@@ -671,9 +672,31 @@ var anchorCard=null;
 var routeLine=null;
 var tourStops=[]; // ordered array of {id, card, latlng}
 
+// Efface le plan de tournée dans son entier : les deux calques qu'il pose, tout
+// l'état de calcul, et les affichages qui n'ont de sens que par lui. Seul point
+// de remise à zéro du planificateur, appelé par clearTour et en tête de calcTour
+// — il remplace les retraits ponctuels de startMarker et de routeLine qui
+// vivaient au milieu du calcul et ne couvraient que ces deux calques.
+// Ne touche ni rdvPanelIds ni les cercles de proximité : effacer une tournée
+// n'est pas effacer le panneau RDV.
+function clearTourPlan(){
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  if(startMarker){map.removeLayer(startMarker);startMarker=null;}
+  startLatLng=null;
+  anchorCard=null;
+  tourStops=[];
+  tourLegs=[];
+  stopDurations={};
+  document.getElementById('tour-controls').style.display='none';
+  // Détruit, pas masqué : renderSchedule le recrée à la demande (940-948).
+  var summaryEl=document.getElementById('tour-summary');
+  if(summaryEl&&summaryEl.parentNode) summaryEl.parentNode.removeChild(summaryEl);
+}
+
 function calcTour(){
   var addr=document.getElementById('tour-start-addr').value.trim();
   if(!addr){toast('Saisir une adresse de départ');return;}
+  clearTourPlan();
 
   // 1. Geocode start address
   console.log('[Tour] Geocoding start address:', addr);
@@ -685,8 +708,7 @@ function calcTour(){
       startLatLng=[coords[1],coords[0]]; // lat,lng
       console.log('[Tour] Start geocoded:', addr, '→', startLatLng, 'label:', data.features[0].properties?.label);
 
-      // Place start marker
-      if(startMarker)map.removeLayer(startMarker);
+      // Place start marker (le précédent a été retiré par clearTourPlan)
       var icon=L.divIcon({
         className:'',
         html:'<div style="width:24px;height:24px;border-radius:8px;background:#1D1D1F;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>',
@@ -756,7 +778,7 @@ function calcTour(){
         .then(function(r){return r.json();})
         .then(function(route){
           if(!route.routes||!route.routes.length){toast('Impossible de calculer l\'itinéraire');return;}
-          if(routeLine)map.removeLayer(routeLine);
+          // Le tracé précédent a été retiré par clearTourPlan en tête de calcTour.
           var geojson=route.routes[0].geometry;
           routeLine=L.geoJSON(geojson,{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
 
@@ -772,7 +794,9 @@ function calcTour(){
           if(!document.getElementById('tour-panel').classList.contains('open')){
             toggleTourPanel();
           }
-          setTimeout(function(){map.fitBounds(routeLine.getBounds(),{padding:[60,60]});},400);
+          // Différé de 400 ms : le plan peut avoir été effacé entretemps
+          // (« Effacer », ou un second calcul lancé dans la foulée).
+          setTimeout(function(){if(routeLine)map.fitBounds(routeLine.getBounds(),{padding:[60,60]});},400);
           toast('Tournée calculée — '+Math.round(totalDist/1000)+' km · '+Math.round(totalTime/60)+' min');
         })
         .catch(function(){toast('Erreur de calcul itinéraire');});

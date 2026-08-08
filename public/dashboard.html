@@ -109,7 +109,9 @@
   .leaflet-tile-pane{filter:grayscale(100%) contrast(1.1);}
   .leaflet-popup-content-wrapper{border-radius:12px!important;border:1px solid var(--border)!important;box-shadow:0 10px 28px rgba(0,0,0,.12)!important;padding:0!important;overflow:hidden;}
   .leaflet-popup-content{margin:0!important;width:auto!important;}
-  .leaflet-popup-tip-container{display:none!important;}
+  /* La pointe reste au rendu Leaflet standard — triangle blanc sans bordure.
+     La masquer laissait la bulle flotter sans désigner son marqueur. L'offset
+     du bindPopup est réglé sur sa hauteur : le toucher la décolle. */
   .map-popup{padding:12px 14px;min-width:190px;font-family:var(--font);}
   .mp-name{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:2px;}
   .mp-meta{font-size:11px;color:var(--muted);margin-bottom:8px;}
@@ -774,23 +776,10 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
     {id:'devis',color:'#F59E0B'},{id:'nego',color:'#EA580C'},
     {id:'won',color:'#1D8348'}
   ];
-  function stageIdx(col){ for(var i=0;i<STAGES.length;i++){if(STAGES[i].id===col)return i;} return -1; }
   function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-  function progressHtml(col){
-    var cur=stageIdx(col);
-    if(cur<0) return '';
-    var h='<div style="display:flex;align-items:center;gap:2px;margin-top:8px">';
-    for(var i=0;i<STAGES.length;i++){
-      var done=i<cur,isCur=i===cur;
-      var op=done||isCur?'1':'.2';
-      var bg=done||isCur?STAGES[i].color:'#C7C7CC';
-      var shadow=isCur?';box-shadow:0 0 0 2px #fff,0 0 0 3px '+STAGES[i].color:'';
-      h+='<div style="width:7px;height:7px;border-radius:50%;background:'+bg+';opacity:'+op+shadow+'" title="'+STAGES[i].id+'"></div>';
-      if(i<STAGES.length-1) h+='<div style="flex:1;height:1px;background:'+(done?'#C7C7CC':'#E8E8ED')+'"></div>';
-    }
-    h+='</div>';
-    return h;
-  }
+  // progressHtml et stageIdx ne servaient qu'à la barre de progression de la
+  // bulle : elles partent avec elle. STAGES reste, il donne la couleur du
+  // marqueur — laquelle porte déjà l'étape que la barre répétait.
 
   function migrateCard(c){
     if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
@@ -827,17 +816,20 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
             var dotColor=col?col.color:'#0BBCD4';
             var icon=createMupMarker(lat+jitter, lng+jitter, dotColor);
             var val=c.val>=1000?Math.round(c.val/1000)+'k\u20AC':(c.val?c.val+'\u20AC':'\u2014');
+            // Nom de société et montant, rien d'autre : c'est ce que
+            // « Localisation pipeline » promet. Le nom du contact, le J+ et la
+            // barre de progression appartiennent à la fiche — et la couleur du
+            // marqueur porte déjà l'étape que la barre répétait.
             var popup='<div style="font-family:var(--font);width:200px;padding:10px 12px">'
               +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">'+esc(c.co||c.name)+'</div>'
-              +'<div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">'+esc(c.co&&c.name?c.name:'')+'</div>'
-              +'<div style="display:flex;justify-content:space-between;align-items:center">'
-              +'<span style="font-size:12px;font-weight:800;font-family:var(--mono);color:var(--text)">'+val+'</span>'
-              +'<span style="font-size:10px;font-weight:600;color:var(--muted2);background:var(--surface);border-radius:4px;padding:2px 6px">J+'+(c.days||0)+'</span>'
-              +'</div>'
-              +progressHtml(c.col)
+              +'<div style="font-size:12px;font-weight:800;font-family:var(--mono);color:var(--text)">'+val+'</div>'
               +'</div>';
+            // offset : Leaflet pose l'apex de la pointe à « centre du marqueur
+            // + offset.y − 10,5 px ». Pour un disque de rayon R l'apex touche
+            // le bord haut quand offset.y = 11 − R ; le disque fait 14 px comme
+            // sur la Carte, donc 4. Règle mesurée au rendu (cf. b1148c1).
             L.marker([lat+jitter,lng+jitter],{icon:icon}).addTo(map)
-              .bindPopup(popup,{maxWidth:220,closeButton:false,offset:[0,-6]})
+              .bindPopup(popup,{maxWidth:220,closeButton:true,offset:[0,4],autoPanPadding:[24,24]})
               .on('mouseover',function(){this.openPopup();})
               .on('click',function(){window.location.href='/carte';});
           });

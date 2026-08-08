@@ -545,7 +545,12 @@ function locateUser(){
     var icon=L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]});
     userMarker=L.marker(userLatLng,{icon:icon,zIndexOffset:1000}).addTo(map);
     map.setView(userLatLng,11);
-    renderPanel();
+    // Le relevé sert à trier le panneau RDV par distance — mais renderPanel et
+    // renderSchedule se disputent #tour-body, et la feuille de route ne dépend
+    // pas de la position. Même garde que renderSchedule, inversée : tant qu'un
+    // plan est affiché, un relevé ne le remplace pas. #tour-controls et
+    // #tour-summary restaient sinon en place au-dessus de la liste RDV.
+    if(!anchorCard||!startLatLng) renderPanel();
   },function(){
     watchId=null;
     document.getElementById('btn-locate').classList.remove('active');

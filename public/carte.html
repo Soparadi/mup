@@ -466,6 +466,33 @@ map.on('click',function(){
   resetOverlays();
 });
 
+// ── ARBITRE DE CADRAGE ──
+// Deux chargements indépendants commandent la même vue. Celui du pipeline cadre
+// sur l'ensemble de ses marqueurs, mais seulement une fois tous ses géocodages
+// retombés — un instant qui varie d'un chargement à l'autre, et d'autant plus
+// tôt que les fiches portent déjà leurs coordonnées stockées. Celui des contacts
+// recentre sur celui que l'URL désigne, dès sa propre réponse. Rien n'arbitrait :
+// l'ordre d'arrivée décidait, et le cadrage global l'emportait le plus souvent —
+// la bonne bulle s'ouvrait, mais sur une France entière où la cible n'était qu'un
+// point perdu. Un délai n'aurait pas pu tenir lieu d'arbitre : la fenêtre à
+// couvrir n'est pas bornée.
+//
+// Règle : une vue demandée par l'URL prime, le cadrage global est son repli.
+//
+// Le drapeau se pose quand la vue demandée est EFFECTIVEMENT appliquée, jamais à
+// la lecture du paramètre. Une cible introuvable ou sans coordonnées exploitables
+// ne doit pas supprimer le cadrage global sans le remplacer : ce serait laisser
+// l'abonnée sur la carte de France du zoom 5, sans marqueur visé ni cadrage.
+//
+// L'arbitrage vaut dans les deux sens d'arrivée. Vue demandée d'abord : le
+// drapeau retient le fitBounds. Cadrage global d'abord : la vue demandée
+// l'écrase ensuite. L'intention explicite gagne, quel que soit l'ordre.
+var vueDemandee=false;
+function cadrerSur(latlng, zoom){
+  map.setView(latlng, zoom);
+  vueDemandee=true;
+}
+
 // Place all cards (lecture pipeline + agenda via API SurrealDB).
 // Agenda chargé en parallèle pour alimenter agendaByFiche → nextActionOf.
 //
@@ -572,8 +599,12 @@ function placeCard(c, clat, clng){
   var pending=addrs.length;
 
   function finish(){
-    if(bounds.length) map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
-    // Auto-show RDV cards with proximity
+    // Repli, et seulement repli : le cadrage global ne s'applique que si
+    // personne n'a réclamé la vue (cf. ARBITRE DE CADRAGE).
+    if(!vueDemandee && bounds.length) map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
+    // Auto-show RDV cards with proximity. Hors condition, et à dessein :
+    // autoShowRdv porte les cercles de proximité, le badge et l'ouverture du
+    // panneau — aucune décision de vue. Une vue demandée n'a pas à la priver.
     autoShowRdv();
   }
   if(!pending){ finish(); return; }
@@ -1284,9 +1315,19 @@ function renderSchedule(){
     var siret = decodeURIComponent(m[1]);
     var target = contacts.find(function(c){ return c.siret === siret; });
     var coordTarget = coordContact(target);
+    // Le drapeau se pose ici, dans la branche qui applique réellement la vue :
+    // un contact demandé mais introuvable, ou sans coordonnées, laisse le
+    // cadrage global faire son travail.
     if(coordTarget){
-      map.setView(coordTarget, 14);
+      cadrerSur(coordTarget, 14);
       var mk = contactMarkers[siret];
+      // Le délai de 300 ms n'a jamais arbitré la course : il oppose une durée
+      // fixe à une fenêtre non bornée, et le cadrage global pouvait tomber
+      // avant comme longtemps après. L'arbitre ci-dessus règle cette course-là
+      // et rend le délai inutile pour elle — mais il ne dit rien de ce qui
+      // reste dessous : laisser l'animation de setView retomber avant que
+      // l'autoPan de la bulle ne joue à son tour. Faute d'avoir pu le mesurer
+      // au rendu, il reste.
       if(mk) setTimeout(function(){ mk.openPopup(); }, 300);
     }
   }

@@ -694,13 +694,32 @@ var GEO_SANS_API='Votre navigateur ne donne pas accès à la position.';
 // sans lui — ce que faisait le callback d'erreur — laissait une veille vivante
 // à un identifiant que plus personne ne tenait : le clic suivant en ouvrait une
 // seconde, et le navigateur les alimentait toutes les deux.
+//
+// Couper le suivi coupe tout. Le marqueur partait déjà de l'écran par la seule
+// grâce de n'être plus rafraîchi, mais il restait posé ; userLatLng gardait sa
+// dernière valeur et le panneau continuait d'afficher des distances calculées
+// depuis un point que plus rien ne tenait à jour, en les triant par-dessus le
+// marché. Plus de position, plus de distances : c'est la seule version qui ne
+// mente pas. L'effacement est ici et non dans la bascule du bouton, donc il
+// vaut aussi pour les extinctions par erreur et par refus.
+//
+// renderPanel reste gardé comme au commit 4c1275a : renderPanel et
+// renderSchedule se disputent #tour-body, et une feuille de route calculée ne
+// dépend pas de la position. Tant qu'un plan est affiché, l'extinction ne le
+// remplace pas.
 function stopLocate(){
   if(watchId!==null){
     navigator.geolocation.clearWatch(watchId);
     watchId=null;
   }
+  if(userMarker){
+    map.removeLayer(userMarker);
+    userMarker=null;
+  }
+  userLatLng=null;
   document.getElementById('btn-locate').classList.remove('active');
   document.getElementById('locate-dot').style.display='none';
+  if(!anchorCard||!startLatLng) renderPanel();
 }
 
 function locateUser(){

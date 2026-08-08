@@ -1603,8 +1603,8 @@ async function openDetail(id) {
     mapSection.style.display = '';
     setTimeout(() => {
       if(detailMap) { detailMap.remove(); detailMap = null; }
-      detailMap = L.map('detail-map', { zoomControl:false, attributionControl:false }).setView([48.4, -1.75], 10);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:18 }).addTo(detailMap);
+      detailMap = L.map('detail-map', { zoomControl:false }).setView([48.4, -1.75], 10);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:18, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' }).addTo(detailMap);
       detailMap.invalidateSize();
 
       // Récupérer la couleur de la colonne pour le marker

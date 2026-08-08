@@ -117,6 +117,13 @@
   .mp-meta{font-size:11px;color:var(--muted);margin-bottom:8px;}
   .mp-row{font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:2px;}
   .mp-foot{display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--border);margin-top:6px;}
+  /* La ligne de navigation de la bulle. À l'écran elle garde sa hauteur de
+     texte ; sa zone touchable est portée à 44 px par un pseudo-élément, donc
+     sans déplacer un pixel de géométrie. Le retrait de 16 px au-dessus tient
+     ces 44 px à distance du montant, et le padding bas de 16 px de la bulle
+     les garde à l'intérieur du cadre, que overflow:hidden découperait. */
+  .mp-lien{position:relative;display:inline-block;margin-top:16px;font-size:11px;line-height:16px;font-weight:600;color:var(--blue);text-decoration:none;}
+  .mp-lien::after{content:'';position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:44px;}
   .map-overlay{position:absolute;top:12px;left:12px;display:flex;gap:8px;}
   .mo-chip{background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:9px;padding:5px 11px;font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;}
   .mo-num{font-size:16px;font-weight:900;font-family:var(--mono);line-height:1;color:var(--text);}
@@ -768,6 +775,27 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
 }).addTo(map);
 setTimeout(function(){ map.invalidateSize(); }, 100);
 
+// Le fond de carte mène à la Carte, comme le reste de la vignette : la carte
+// « Localisation pipeline » est un bloc .dash-clickable de data-href="/carte",
+// mais le handler délégué du bas de page écarte .leaflet-container et laissait
+// donc le fond seul sans destination. Il en reçoit une, la même.
+//
+// Un clic sur le fond porte deux gestes superposés : Leaflet y referme la bulle
+// ouverte (preclick, tiré juste avant click), et nous y partons. Le premier
+// clic après l'ouverture d'une bulle servirait donc aux deux — un geste, deux
+// destinations. Un relevé en preclick, inscrit avant la bulle qui se ferme,
+// les sépare : ce clic-là ne fait que fermer. Même mécanique qu'en carte.html
+// (b1148c1), où elle protège les cercles de proximité.
+var popupOpen=false;
+map.on('popupopen',function(){popupOpen=true;});
+map.on('popupclose',function(){popupOpen=false;});
+var clickClosesPopup=false;
+map.on('preclick',function(){clickClosesPopup=popupOpen;});
+map.on('click',function(){
+  if(clickClosesPopup){clickClosesPopup=false;return;}
+  window.location.href='/carte';
+});
+
 (async function(){
   var STAGES=[
     {id:'prospects',color:'#CC0000'},{id:'linkedin',color:'#0A66C2'},
@@ -820,18 +848,28 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
             // « Localisation pipeline » promet. Le nom du contact, le J+ et la
             // barre de progression appartiennent à la fiche — et la couleur du
             // marqueur porte déjà l'étape que la barre répétait.
-            var popup='<div style="font-family:var(--font);width:200px;padding:10px 12px">'
+            // La navigation quitte le marqueur pour le pied de la bulle : une
+            // ligne, pas un bloc bouton, portant l'identifiant de la fiche.
+            // /carte?fiche= reprend le nom que l'Agenda emploie déjà pour
+            // désigner une fiche pipeline (/pipeline?fiche=). Rien ne lit ce
+            // paramètre côté Carte à ce jour : le récepteur vient au groupe D,
+            // par le même arbitre que ?contact_siret=. D'ici là le lien mène à
+            // la Carte nue, ce qui est le comportement d'avant, en mieux visé.
+            var popup='<div style="font-family:var(--font);width:200px;padding:10px 12px 16px">'
               +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">'+esc(c.co||c.name)+'</div>'
               +'<div style="font-size:12px;font-weight:800;font-family:var(--mono);color:var(--text)">'+val+'</div>'
+              +(c.id?'<a class="mp-lien" href="/carte?fiche='+encodeURIComponent(c.id)+'">Voir sur la carte →</a>':'')
               +'</div>';
             // offset : Leaflet pose l'apex de la pointe à « centre du marqueur
             // + offset.y − 10,5 px ». Pour un disque de rayon R l'apex touche
             // le bord haut quand offset.y = 11 − R ; le disque fait 14 px comme
             // sur la Carte, donc 4. Règle mesurée au rendu (cf. b1148c1).
             L.marker([lat+jitter,lng+jitter],{icon:icon}).addTo(map)
-              .bindPopup(popup,{maxWidth:220,closeButton:true,offset:[0,4],autoPanPadding:[24,24]})
-              .on('mouseover',function(){this.openPopup();})
-              .on('click',function(){window.location.href='/carte';});
+              .bindPopup(popup,{maxWidth:220,closeButton:true,offset:[0,4],autoPanPadding:[24,24]});
+            // Plus de mouseover : un balayage de la carte n'ouvrait rien qu'on
+            // ait demandé, et n'ouvrait rien du tout au doigt. Plus de click
+            // vers /carte non plus : le clic du marqueur n'a qu'un seul effet,
+            // ouvrir sa bulle — c'est ce que bindPopup pose de lui-même.
           });
         }
         pending--;

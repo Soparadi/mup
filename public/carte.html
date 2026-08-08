@@ -609,7 +609,10 @@ function renderPanel(){
     var actSt=it.isRdv?actionStyle(it.nextAction.type):null;
     var label=it.isRdv?actSt.label:'Prospect';
     var labelColor=it.isRdv?actSt.color:'#6E6E73';
-    return '<div class="tour-item" style="cursor:pointer;'+(it.isRdv?'border-color:'+labelColor+';background:'+labelColor+'14':'')+'" onclick="flyTo(\''+it.id+'\')">'
+    // Même espace d'identifiants que les étapes de renderSchedule : les deux
+    // rendus remplacent #tour-body en entier et ne coexistent jamais, donc pas
+    // de collision. C'est ce qui donne une cible à scrollToStop hors tournée.
+    return '<div class="tour-item" id="sched-'+it.id+'" style="cursor:pointer;'+(it.isRdv?'border-color:'+labelColor+';background:'+labelColor+'14':'')+'" onclick="flyTo(\''+it.id+'\')">'
       +'<div class="tour-num" style="background:'+col+'">'+(i+1)+'</div>'
       +'<div class="tour-info">'
       +'<div class="tour-info-name">'+esc(it.card.co||it.card.name)+'</div>'
@@ -626,11 +629,18 @@ function flyTo(id){
   info.marker.openPopup();
 }
 
+// Cible cherchée AVANT d'ouvrir le panneau : une fiche posée sur la carte mais
+// absente du panneau — hors des 30 km d'un RDV — n'y a pas de ligne, et ouvrir
+// pour ne rien montrer était l'échec silencieux. getElementById et non
+// querySelector : les identifiants portent un « : » qu'un sélecteur CSS
+// n'accepterait pas sans échappement.
 function scrollToStop(id){
-  // Open panel if closed
-  if(!document.getElementById('tour-panel').classList.contains('open')) toggleTourPanel();
   var el=document.getElementById('sched-'+id);
-  if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.boxShadow='0 0 0 2px var(--text)';setTimeout(function(){el.style.boxShadow='';},1500);}
+  if(!el){toast('Fiche absente du panneau');return;}
+  if(!document.getElementById('tour-panel').classList.contains('open')) toggleTourPanel();
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+  el.style.boxShadow='0 0 0 2px var(--text)';
+  setTimeout(function(){el.style.boxShadow='';},1500);
 }
 
 function toggleTourPanel(){
@@ -924,7 +934,7 @@ function renderSchedule(){
   // Excluded stops (grayed)
   excluded.forEach(function(s){
     var col=stageColor(s.card.col);
-    html+='<div class="sched-item excluded">'
+    html+='<div class="sched-item excluded" id="sched-'+s.id+'">'
       +'<div class="sched-time" style="color:var(--muted2)">—</div>'
       +'<div class="sched-dot" style="background:var(--border2)"></div>'
       +'<div class="sched-info"><div class="sched-name" style="color:var(--muted2)">'+esc(s.card.co||s.card.name)+'</div>'

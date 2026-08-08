@@ -177,6 +177,32 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   .map-toolbar{z-index:140}
   .tour-panel{z-index:120}
   .tour-input-bar{z-index:100}
+
+  /* --------------------------------------------------------------------
+     LA BARRE D'OUTILS, SOLIDAIRE DE LA FENÊTRE. En absolute, elle était
+     accrochée à la boîte de padding du .shell, c'est-à-dire au seul
+     conteneur qui bouge sous ce seuil : hier le margin-right du panneau,
+     aujourd'hui le padding-top:56px du tiroir, demain autre chose. Elle
+     n'a rien à suivre de tout cela — elle se pose sur la fenêtre, comme
+     le bouton de tiroir et pour la même raison.
+
+     La position ne bouge pas d'un pixel : sous ce seuil la boîte de
+     padding du .shell affleure déjà la fenêtre (marge nulle, bordure
+     nulle, et le padding-top ne déplace pas l'origine d'un absolute),
+     donc top:12 / right:12 tombaient exactement là où ils tombent
+     maintenant. Ce qui change n'est pas où la barre est, c'est à quoi
+     elle est accrochée. L'empilement ne bouge pas non plus : .shell est
+     position:relative z-index:auto, il ne crée aucun contexte, le 140
+     ci-dessus se résolvait déjà à la racine.
+
+     HAUTEUR 40. Le bouton de tiroir fait 40 (sidebar.css), les .map-btn
+     faisaient 33 : la rangée haute avait deux hauteurs et se lisait comme
+     deux éléments posés côte à côte. box-sizing:border-box est global,
+     40px est donc la hauteur finale ; les 8px de padding vertical
+     deviennent sans effet et align-items:center recentre le contenu.
+     -------------------------------------------------------------------- */
+  .map-toolbar{position:fixed;top:12px;right:12px}
+  .map-btn{height:40px}
 }
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">

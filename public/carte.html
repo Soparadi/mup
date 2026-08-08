@@ -40,7 +40,9 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .leaflet-tile-pane{filter:grayscale(100%) contrast(1.1)}
 .leaflet-popup-content-wrapper{border-radius:12px!important;border:1px solid var(--border)!important;box-shadow:0 10px 28px rgba(0,0,0,.12)!important;padding:0!important;overflow:hidden}
 .leaflet-popup-content{margin:0!important;width:auto!important}
-.leaflet-popup-tip-container{display:none!important}
+/* La pointe reste au rendu Leaflet standard — triangle blanc sans bordure.
+   La masquer laissait la bulle flotter sans désigner sa fiche. Les offsets
+   des deux bindPopup sont réglés sur sa hauteur : les toucher la décolle. */
 
 /* POPUP CARD */
 .pop{padding:12px 14px;width:220px;font-family:var(--font)}
@@ -446,8 +448,21 @@ function resetOverlays(){
   dimmedMarkers=[];
 }
 
-// Click on map background → reset
+// Un clic sur le fond de carte portait deux gestes superposés : Leaflet y
+// referme la bulle ouverte (preclick, tiré juste avant click) et nous y
+// effacions la mise en évidence. Le premier clic après l'ouverture d'une bulle
+// servait donc aux deux, et emportait les cercles de proximité alors que
+// l'utilisateur ne demandait qu'à refermer. On relève en preclick s'il y avait
+// une bulle — l'ordre d'inscription nous place avant celle qui se ferme — et ce
+// clic-là ne fait que fermer. Le geste « effacer » reste entier : il lui suffit
+// d'un clic sur une carte sans bulle ouverte.
+var popupOpen=false;
+map.on('popupopen',function(){popupOpen=true;});
+map.on('popupclose',function(){popupOpen=false;});
+var clickClosesPopup=false;
+map.on('preclick',function(){clickClosesPopup=popupOpen;});
 map.on('click',function(){
+  if(clickClosesPopup){clickClosesPopup=false;return;}
   resetOverlays();
 });
 
@@ -510,7 +525,12 @@ function placeCard(c, clat, clng){
     +'<button class="pop-btn" onclick="scrollToStop(\''+c.id+'\')">Voir dans le panneau</button>'
     +'</div>'
     +'</div>';
-  var m=L.marker([clat,clng],{icon:icon,zIndexOffset:isRdv?500:0}).addTo(map).bindPopup(popup,{maxWidth:240,closeButton:false,offset:[0,-10]});
+  // offset : Leaflet pose l'apex de la pointe à « centre du marqueur + offset.y
+  // − 10,5 px » (20 px de margin-bottom de .leaflet-popup, moins la hauteur
+  // visible du triangle). Pour un disque de rayon R, l'apex touche le bord haut
+  // quand offset.y = 11 − R ; ici R = 7, donc 4. Mesuré au rendu, pas déduit :
+  // avec l'ancien −10 la bulle flottait 13 px au-dessus du disque.
+  var m=L.marker([clat,clng],{icon:icon,zIndexOffset:isRdv?500:0}).addTo(map).bindPopup(popup,{maxWidth:240,closeButton:true,offset:[0,4],autoPanPadding:[24,24]});
   markers[String(c.id)]={marker:m,card:c,latlng:[clat,clng]};
 }
 
@@ -1195,7 +1215,10 @@ function renderSchedule(){
       + '</div>'
       + '<div style="display:flex;align-items:center;gap:3px;">'+dotsHtml+'</div>'
       + '</div>';
-    marker.bindPopup(popup, { maxWidth: 240, closeButton: false });
+    // Disque de 20 px, donc rayon 10 : offset.y = 11 − R = 1 (même règle que
+    // placeCard). Sans offset, Leaflet appliquait sa valeur par défaut de 7 et
+    // la pointe s'enfonçait de 6,5 px dans le disque.
+    marker.bindPopup(popup, { maxWidth: 240, closeButton: true, offset: [0, 1], autoPanPadding: [24, 24] });
     if(contact.siret) contactMarkers[contact.siret] = marker;
   });
 

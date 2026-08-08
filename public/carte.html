@@ -118,6 +118,37 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .route-line{stroke:var(--text);stroke-width:3;stroke-dasharray:8 6;fill:none}
 
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ============================================================================
+   TÉLÉPHONE — ≤ 640px
+   ----------------------------------------------------------------------------
+   640 est le seuil applicatif du projet, pas une valeur choisie ici : c'est
+   celui de sidebar.css (la barre de gauche y quitte le flux et devient un
+   tiroir, --sidebar-w passe à 0, .shell reçoit padding-top:56px) et celui de
+   app-footer.css (le pied passe à deux rangées, --app-footer-h à 54px). La
+   Carte n'avait aucune media query : elle était la dernière surface à pousser
+   du contenu latéralement sous un seuil où le projet a déjà décidé qu'un
+   panneau latéral n'a plus le droit d'occuper le flux.
+
+   La zone 641-800px reste hors de ce lot : le panneau y laisse 356 à 456px de
+   carte, étroit mais jamais sans issue — le bouton « Actions » y reste
+   atteignable.
+
+   LE PIVOT. .shell.tour-open ne veut plus dire « pousse la carte de 280px »,
+   elle veut dire « le panneau est ouvert ». La classe survit intacte, posée et
+   retirée par le même toggleTourPanel ; seul son effet change. C'est ce qui
+   permet à la feuille de style d'interroger l'état du panneau sans qu'aucune
+   ligne de JS n'ait à poser un état supplémentaire.
+
+   Conséquence sur invalidateSize (toggleTourPanel, différé de 300ms) : sous ce
+   seuil #map ne change plus de taille au basculement, l'appel devient un
+   non-événement. Il reste indispensable au-dessus de 640 et n'est pas touché.
+   ============================================================================ */
+@media (max-width:640px){
+  /* Le panneau est déjà en surimpression : position:fixed, translateX(100%),
+     z-index:800. Cette seule ligne poussait la carte — plus rien ne pousse. */
+  .shell.tour-open{margin-right:0}
+}
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">

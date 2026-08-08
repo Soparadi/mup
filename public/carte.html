@@ -681,13 +681,32 @@ function autoShowRdv(){
 }
 
 // Geolocation
-function locateUser(){
-  if(!navigator.geolocation) return;
+// Trois sorties d'échec, trois phrases, parce que trois gestes différents en
+// sortent : un refus se rattrape dans les réglages, une position introuvable se
+// retente, un navigateur sans API ne se rattrape pas. Aucune n'était dite : le
+// bouton s'éteignait sans un mot, et le `return` du premier cas ne faisait même
+// pas ça.
+var GEO_REFUS='Position refusée. Vous pouvez l\'autoriser dans les réglages du navigateur.';
+var GEO_INTROUVABLE='Position introuvable. Réessayez dans un instant.';
+var GEO_SANS_API='Votre navigateur ne donne pas accès à la position.';
+
+// Toute extinction passe par ici, et donc par clearWatch. Poser watchId=null
+// sans lui — ce que faisait le callback d'erreur — laissait une veille vivante
+// à un identifiant que plus personne ne tenait : le clic suivant en ouvrait une
+// seconde, et le navigateur les alimentait toutes les deux.
+function stopLocate(){
   if(watchId!==null){
     navigator.geolocation.clearWatch(watchId);
     watchId=null;
-    document.getElementById('btn-locate').classList.remove('active');
-    document.getElementById('locate-dot').style.display='none';
+  }
+  document.getElementById('btn-locate').classList.remove('active');
+  document.getElementById('locate-dot').style.display='none';
+}
+
+function locateUser(){
+  if(!navigator.geolocation){ toast(GEO_SANS_API); return; }
+  if(watchId!==null){
+    stopLocate();
     return;
   }
   watchId=navigator.geolocation.watchPosition(function(pos){
@@ -702,11 +721,17 @@ function locateUser(){
     // plan est affiché, un relevé ne le remplace pas. #tour-controls et
     // #tour-summary restaient sinon en place au-dessus de la liste RDV.
     if(!anchorCard||!startLatLng) renderPanel();
-  },function(){
-    watchId=null;
-    document.getElementById('btn-locate').classList.remove('active');
-    document.getElementById('locate-dot').style.display='none';
-  },{enableHighAccuracy:false,maximumAge:10000});
+  },function(err){
+    // Une erreur en cours de suivi signale sans éteindre : un tunnel, un
+    // sous-sol, une minute sans ciel ne doivent pas coûter la session. Deux
+    // exceptions. Le refus, qui ne se retentera pas de lui-même — laisser la
+    // pastille pulser pour une veille qui ne rendra jamais rien serait mentir.
+    // Et l'échec avant le premier relevé, où il n'y a aucun suivi à préserver :
+    // sans lui, le timeout de 15 s rallumait une attente sans fin.
+    if(err&&err.code===1){ toast(GEO_REFUS); stopLocate(); return; }
+    toast(GEO_INTROUVABLE);
+    if(!userLatLng) stopLocate();
+  },{enableHighAccuracy:false,maximumAge:10000,timeout:15000});
   document.getElementById('btn-locate').classList.add('active');
   document.getElementById('locate-dot').style.display='inline-block';
 }

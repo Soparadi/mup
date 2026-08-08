@@ -729,11 +729,23 @@ function locateUser(){
     return;
   }
   watchId=navigator.geolocation.watchPosition(function(pos){
+    // Seul le premier relevé d'une session de suivi recentre. setView partait à
+    // chaque relevé et reforçait le zoom à 11 : tout déplacement, tout zoom fait
+    // à la main était annulé au relevé suivant, c'est-à-dire dans la minute, sur
+    // une carte que l'abonné venait justement de cadrer. Les relevés suivants
+    // mettent à jour la position et le marqueur, et ne touchent plus à la vue.
+    //
+    // userLatLng suffit à savoir qu'on est au premier : stopLocate le remet à
+    // null à chaque extinction, quelle qu'en soit la cause, donc il est null au
+    // début de toute session et jamais entre deux relevés d'une même session.
+    // Un drapeau de plus n'aurait rien dit que celui-ci ne dise déjà, et aurait
+    // eu sa propre remise à zéro à tenir.
+    var premierFix=(userLatLng===null);
     userLatLng=[pos.coords.latitude,pos.coords.longitude];
     if(userMarker) map.removeLayer(userMarker);
     var icon=L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]});
     userMarker=L.marker(userLatLng,{icon:icon,zIndexOffset:1000}).addTo(map);
-    map.setView(userLatLng,11);
+    if(premierFix) map.setView(userLatLng,11);
     // Le relevé sert à trier le panneau RDV par distance — mais renderPanel et
     // renderSchedule se disputent #tour-body, et la feuille de route ne dépend
     // pas de la position. Même garde que renderSchedule, inversée : tant qu'un

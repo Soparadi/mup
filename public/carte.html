@@ -148,6 +148,35 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   /* Le panneau est déjà en surimpression : position:fixed, translateX(100%),
      z-index:800. Cette seule ligne poussait la carte — plus rien ne pousse. */
   .shell.tour-open{margin-right:0}
+
+  /* --------------------------------------------------------------------
+     L'EMPILEMENT. Les trois surfaces carte sont à 800 depuis toujours ;
+     tant que la barre d'outils était hors champ sous ce seuil, personne ne
+     le voyait. Maintenant qu'elle est revenue dans l'écran, deux dettes
+     remontent d'un coup : la barre d'outils se dessine SOUS le panneau
+     (elementFromPoint sur « Ma position » rendait .tour-hdr, sur
+     « Actions » rendait #tour-count), et les trois surfaces passent
+     AU-DESSUS du voile du tiroir de gauche (190), donc cliquables à
+     travers lui.
+
+     On abaisse les surfaces carte plutôt que de remonter le tiroir : le
+     tiroir et son voile sont partagés par toute l'application et vivent
+     dans sidebar.css, la Carte est la seule à déborder. Corriger chez soi.
+
+     Ordre obtenu, du plus haut au plus bas :
+       tiroir 200 > voile 190 > bouton de tiroir 150
+         > barre d'outils 140 > panneau 120 > barre de saisie 100
+     140 laisse dix sous le bouton de tiroir et cinquante sous le voile :
+     aucune valeur n'est collée à sa borne, et les vingt qui séparent
+     chaque surface de la suivante laissent de quoi intercaler plus tard.
+     La barre d'outils passe au-dessus du panneau — c'est ce qui rend
+     « Ma position » et « Actions » cliquables panneau ouvert comme fermé.
+     Le toast (9000) et le pied (5) ne sont pas concernés : le premier doit
+     rester au-dessus de tout, le second n'a jamais été en litige.
+     -------------------------------------------------------------------- */
+  .map-toolbar{z-index:140}
+  .tour-panel{z-index:120}
+  .tour-input-bar{z-index:100}
 }
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">

@@ -1263,7 +1263,13 @@ function renderSchedule(){
         +'<div class="sched-dot" style="background:'+col+'"></div>'
         +'<div class="sched-info"><div class="sched-name">'+esc(s.card.co||s.card.name)+'</div>'
         +'<div class="sched-meta">'+distLabel+' · '+timeLabel+'</div>'
-        +(tel?'<div class="sched-tel"><a href="tel:'+esc(window.MUPTel.lien(tel))+'">'+esc(window.MUPTel.format(tel))+'</a></div>':'')
+        // Le numéro est dans une ligne qui vole vers le marqueur au clic. Sans
+        // arrêt de la propagation, appeler déclenchait aussi ce vol : le temps
+        // que le combiné prenne la main, la carte s'était recentrée et avait
+        // ouvert une infobulle sous l'appel. Même geste que le lien tel: de
+        // l'infobulle (cf. popupHtml) — le href n'est pas touché, seule la
+        // remontée de l'événement au parent est coupée.
+        +(tel?'<div class="sched-tel"><a href="tel:'+esc(window.MUPTel.lien(tel))+'" onclick="event.stopPropagation()">'+esc(window.MUPTel.format(tel))+'</a></div>':'')
         +'</div>'
         +'<div class="sched-badge" style="background:'+col+'22;color:'+col+'">'+stageName(s.card.col)+'</div>'
         +'</div>'

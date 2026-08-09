@@ -417,16 +417,26 @@ function formatRdvDate(dateStr, timeStr) {
   return result;
 }
 
+// La barre de progression rend un PARCOURS : les neuf étapes de Prospects à
+// Gagné. « Disqualifié » n'en fait pas partie — c'est un état terminal, pas
+// une position. La boucle comptait jusqu'à 9 en dur alors que STAGES a dix
+// entrées : une fiche lost sortait à cur=9, donc les neuf pastilles
+// satisfaisaient toutes i<cur et passaient en « fait », aucune n'était
+// marquée courante — la fiche disqualifiée se lisait comme parcourue jusqu'au
+// bout. PARCOURS écarte lost, et cur est cherché DANS PARCOURS : lost n'y
+// figurant pas, il tombe dans le cur<0 déjà là et l'infobulle n'a pas de
+// barre. Son état est dit par la pastille .pop-stage, grise et libellée.
+var PARCOURS=STAGES.filter(function(s){return s.id!=='lost';});
 function progressHtml(col){
-  var cur=stageIdx(col);if(cur<0)return '';
+  var cur=PARCOURS.findIndex(function(s){return s.id===col;});if(cur<0)return '';
   var h='<div class="pop-progress">';
-  for(var i=0;i<9;i++){
+  for(var i=0;i<PARCOURS.length;i++){
     var done=i<cur,isCur=i===cur;
     var op=done||isCur?'1':'.2';
-    var bg=done||isCur?STAGES[i].color:'#C7C7CC';
-    var shadow=isCur?';box-shadow:0 0 0 2px #fff,0 0 0 3px '+STAGES[i].color:'';
-    h+='<div style="width:7px;height:7px;border-radius:50%;background:'+bg+';opacity:'+op+shadow+'" title="'+STAGES[i].name+'"></div>';
-    if(i<8)h+='<div style="flex:1;height:1px;background:'+(done?'#C7C7CC':'#E8E8ED')+'"></div>';
+    var bg=done||isCur?PARCOURS[i].color:'#C7C7CC';
+    var shadow=isCur?';box-shadow:0 0 0 2px #fff,0 0 0 3px '+PARCOURS[i].color:'';
+    h+='<div style="width:7px;height:7px;border-radius:50%;background:'+bg+';opacity:'+op+shadow+'" title="'+PARCOURS[i].name+'"></div>';
+    if(i<PARCOURS.length-1)h+='<div style="flex:1;height:1px;background:'+(done?'#C7C7CC':'#E8E8ED')+'"></div>';
   }
   return h+'</div>';
 }

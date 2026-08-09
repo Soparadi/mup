@@ -741,7 +741,17 @@ const ORIGIN_LABEL = {
 // localStorage n'est écrit que sur confirmation : un cache écrit après un échec
 // ferait croire à l'abonnée que son contact est enregistré, et le lui
 // réafficherait au rechargement suivant alors qu'il n'existe nulle part.
-async function save(){
+// touches : les seuls enregistrements que le geste vient de produire. La liste
+// affichée fusionne /api/contacts et /api/pipeline ; la réécrire en entier
+// envoyait un PUT par carte, et ceux qui portaient un identifiant pipeline:
+// remplaçaient la fiche du Pipeline par la projection allégée bâtie à l'init,
+// effaçant colonne, montant, enseigne et le reste. La page Contacts lit le
+// Pipeline, elle ne l'écrit pas.
+async function save(touches){
+  var aEcrire = (Array.isArray(touches) ? touches : []).filter(function(p){
+    return p && p.id && !String(p.id).startsWith('pipeline:');
+  });
+
   // mup_contacts est la source de vérité pour cette page
   var contacts = prospects.map(function(p){
     var c = Object.assign({}, p);
@@ -754,12 +764,16 @@ async function save(){
   var echec = false;
   // for…of awaité : un forEach(async …) n'attend aucune de ses réponses, save()
   // rendrait la main et écrirait le cache avant que le serveur ait répondu.
-  for (const contact of contacts) {
+  for (const p of aEcrire) {
+    const contact = Object.assign({}, p);
+    delete contact.col; delete contact.value; delete contact.val;
+    contact.updated_at = new Date().toISOString();
     try {
-      const method = contact.id ? 'PUT' : 'POST';
-      const url = contact.id ? `/api/contacts/${contact.id}` : '/api/contacts';
-      const res = await fetch(url, {
-        method: method,
+      // POST : la route accepte l'identifiant fabriqué côté client et fait
+      // l'upsert. Un PUT sur cet identifiant ne trouve rien à mettre à jour et
+      // rend 404 — le contact n'était jamais créé en base.
+      const res = await fetch('/api/contacts', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(contact)
       });
@@ -1523,7 +1537,7 @@ async function confirmImport(){
       created_at: new Date().toISOString()
     });
     prospects.push(p);
-    const enregistre = await save();
+    const enregistre = await save([p]);
     ['f-name','f-company','f-email','f-phone','f-loc','f-website','f-notes','f-linkedin','f-facebook','f-instagram'].forEach(id=>document.getElementById(id).value='');
     // save() a déjà dit l'échec : pas de toast de succès par-dessus.
     if(enregistre) toast('Contact ajouté');
@@ -1553,7 +1567,7 @@ async function confirmImport(){
       });
     });
     prospects=[...prospects,...added];
-    const enregistre = await save();
+    const enregistre = await save(added);
     document.getElementById('paste-input').value='';
     // save() a déjà dit l'échec : pas de toast de succès par-dessus.
     if(enregistre) toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}`);

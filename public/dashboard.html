@@ -124,12 +124,6 @@
      les garde à l'intérieur du cadre, que overflow:hidden découperait. */
   .mp-lien{position:relative;display:inline-block;margin-top:16px;font-size:11px;line-height:16px;font-weight:600;color:var(--blue);text-decoration:none;}
   .mp-lien::after{content:'';position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:44px;}
-  .map-overlay{position:absolute;top:12px;left:12px;display:flex;gap:8px;}
-  .mo-chip{background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:9px;padding:5px 11px;font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;}
-  .mo-num{font-size:16px;font-weight:900;font-family:var(--mono);line-height:1;color:var(--text);}
-  .map-legend{position:absolute;bottom:12px;right:12px;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:9px;padding:8px 12px;display:flex;gap:10px;}
-  .ml-item{display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;}
-  .ml-dot{width:8px;height:8px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.2);}
 
   /* ── CALENDAR CARD ── */
   .cal-card{grid-column:1/2;grid-row:1;}
@@ -752,7 +746,7 @@ async function _loadAgenda(){
   _agendaCacheTime = Date.now();
   return _agendaCache;
 }
-function createMupMarker(lat, lng, color){
+function createMupMarker(color){
   return L.divIcon({
     className: 'mup-marker',
     html: '<div style="width:14px;height:14px;border-radius:50%;background:'+color+';border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.25);"></div>',
@@ -841,7 +835,7 @@ map.on('click',function(){
             var jitter=group.cards.length>1?(idx-group.cards.length/2)*0.0003:0;
             var col=STAGES.find(function(s){return s.id===c.col;});
             var dotColor=col?col.color:'#0BBCD4';
-            var icon=createMupMarker(lat+jitter, lng+jitter, dotColor);
+            var icon=createMupMarker(dotColor);
             var val=c.val>=1000?Math.round(c.val/1000)+'k\u20AC':(c.val?c.val+'\u20AC':'\u2014');
             // Nom de société et montant, rien d'autre : c'est ce que
             // « Localisation pipeline » promet. Le nom du contact, le J+ et la
@@ -1015,7 +1009,6 @@ map.on('click',function(){
 </script>
 
 <script>
-function isUpcoming(dateStr){if(!dateStr)return false;var today=new Date();today.setHours(0,0,0,0);return new Date(dateStr+'T00:00:00')>=today;}
 // ── TODAY ──
 (function(){
   const now = new Date();

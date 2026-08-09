@@ -299,7 +299,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
         <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)">Durée visite</span>
         <span id="visit-dur-label" style="margin-left:auto;font-size:11px;font-weight:700;font-family:var(--mono);color:var(--text)">45 min</span>
       </div>
-      <input type="range" id="visit-dur" min="15" max="480" step="15" value="45" oninput="updateDurLabel();recalcSchedule()" style="width:100%;margin-top:4px;accent-color:var(--text)">
+      <input type="range" id="visit-dur" min="15" max="240" step="15" value="45" oninput="updateDurLabel();recalcSchedule()" style="width:100%;margin-top:4px;accent-color:var(--text)">
     </div>
     <div class="tour-body" id="tour-body"></div>
     <div class="tour-footer">
@@ -1197,6 +1197,10 @@ function getStopDur(id){
   return parseInt(document.getElementById('visit-dur').value)||45;
 }
 
+// Les bornes 15-240 doivent rester celles du curseur « Durée visite »
+// (carte.html:302) : getStopDur retombe sur sa valeur tant qu'aucun réglage
+// individuel n'existe. Quand le curseur montait à 480, un « + » sur une étape
+// la rabattait à 240 — le bouton diminuait la durée.
 function adjStopDur(id,delta){
   var cur=getStopDur(id);
   var nv=Math.max(15,Math.min(240,cur+delta));

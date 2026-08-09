@@ -81,7 +81,31 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .tour-remove{width:20px;height:20px;border-radius:6px;border:none;background:none;cursor:pointer;color:var(--muted2);display:flex;align-items:center;justify-content:center;transition:color .12s;flex-shrink:0}
 .tour-remove:hover{color:var(--red)}
 .tour-footer{padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0}
-.tour-clear{width:100%;padding:7px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .12s}
+/* ----------------------------------------------------------------------------
+   « EFFACER » — 44px TOUCHABLES, 29 VISIBLES
+   ----------------------------------------------------------------------------
+   Ici on ne peut pas agrandir la boîte. .tour-clear vit dans .tour-footer, qui
+   est un flex-shrink:0 d'une colonne de hauteur imposée : tout pixel donné au
+   pied est un pixel repris à .tour-body, la liste des étapes, qui est le
+   flex:1 en face. Quinze pixels de bouton coûteraient quinze pixels de liste.
+
+   Le pseudo-élément du commit 77b44ad : position:relative sur le bouton, un
+   ::after en absolute à inset négatif. Il n'a ni fond ni contenu, il ne se
+   voit pas ; il hérite du pointer-events du bouton, donc elementFromPoint y
+   répond « .tour-clear ». La géométrie, elle, ne connaît pas les absolus :
+   .tour-body garde ses 674,2px à 1280 et ses 602,5px à 390, au dixième près,
+   avant comme après.
+
+   -9px et pas -7,5 : l'inset se compte depuis la boîte de PADDING, et le
+   bouton a une bordure de 1px — les 29px visibles n'en font que 27 pour le
+   calcul. 27+18 = 45 : on passe la barre plutôt que de l'effleurer, ce qui
+   laisse aussi de quoi absorber le pixel que la fonte fait varier sur la
+   hauteur visible. Ces 9px restent à l'intérieur des 10px de padding du pied,
+   en haut comme en bas : la zone ne mord ni sur .tour-body ni sous le pied.
+   Rien horizontalement, le bouton est déjà en width:100% (247px).
+   -------------------------------------------------------------------------- */
+.tour-clear{position:relative;width:100%;padding:7px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .12s}
+.tour-clear::after{content:'';position:absolute;inset:-9px 0}
 .tour-clear:hover{border-color:var(--red);color:var(--red)}
 
 /* MAP CONTROLS */
@@ -129,15 +153,88 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .sched-summary{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;flex-shrink:0}
 .sched-summary strong{color:var(--text);font-family:var(--mono)}
 
+/* ----------------------------------------------------------------------------
+   LES ± DE DURÉE — 20x20 VISIBLES, 40x44 TOUCHABLES
+   ----------------------------------------------------------------------------
+   Deux carrés de 20px encadrant le libellé de durée, dans une ligne rendue par
+   renderSchedule. Même pseudo-élément qu'ailleurs : la géométrie ne bouge pas,
+   seule la zone du doigt s'étend.
+
+   LES INSETS SE COMPTENT DEPUIS LE PADDING, PAS DEPUIS LE BORD. Le bloc
+   conteneur d'un absolute est la boîte de PADDING de son ancêtre positionné.
+   Ces boutons portent border:1px : leur boîte de padding fait 18x18, pas
+   20x20, et un inset de -12px n'aurait donné que 42. Deux pixels manquants
+   qu'on ne voit pas en lisant la règle — d'où -13px, relevé plutôt que déduit.
+   (« Effacer » a la même bordure, même correction ; .tour-input et
+   .tour-calc-btn n'ont pas le problème, ils sont agrandis par height.)
+
+   LA HAUTEUR : 44 PLEINS. inset vertical -13px, 18+26 = 44.
+
+   LA LARGEUR : 40, PAS 44, ET DÉCENTRÉE. Le libellé central est à 6px du bord
+   de chaque bouton, donc à 7 de sa boîte de padding. Une zone de 44 centrée
+   déborderait de 22 depuis le centre du bouton et couvrirait les chiffres —
+   relevé : le − s'arrête à x=1039, le texte « 45 min » commence à 1046,1, une
+   zone de 44 centrée irait à 1051 et une de 40 centrée à 1049. On ne centre
+   donc pas : chaque zone prend les 7px qui la séparent du libellé et va
+   chercher les 15 qui manquent du côté libre, vers le bord de la ligne où il
+   n'y a rien. 15+18+7 = 40 de large, et le bord intérieur de la zone tombe
+   exactement sur le bord de la boîte du libellé — dessus, jamais dedans.
+
+   Ce 6 ne dépend d'aucune fonte : c'est le gap:6px de la ligne. Si la durée
+   s'allonge, c'est la boîte du libellé qui s'élargit et le + qui recule ; le
+   gap, lui, reste 6. La zone ne peut donc pas rattraper le texte. Relevé avec
+   « 45 min », la plus large que fmtDur produise (39,8px dans une boîte de 42) :
+   1,1px de marge au premier chiffre côté −, 1,1px au dernier caractère côté +.
+
+   LES DEUX ZONES NE SE TOUCHENT PAS. Les centres des boutons sont écartés de
+   74px (mesuré, invariant : 6+20+42+6 avec le min-width:42px du libellé). La
+   zone du − s'arrête à 16px de son centre, celle du + commence à 16px du sien :
+   74-16-16 = 42px les séparent, soit exactement la boîte du libellé.
+
+   CE QU'ON CONCÈDE. 44 de haut ne tiennent pas dans la ligne : 9px la séparent
+   de l'étape du dessus, 11 de celle du dessous, soit 40 disponibles. La zone
+   mord donc 3px sur le bas de l'étape au-dessus — la même étape, celle dont ce
+   ± règle la durée — et 1px sur le haut de la suivante. Ces 3 et 1 pixels
+   tombent dans le padding de 9px de .sched-item, sur 40px de large au bord
+   gauche : aucun texte, aucun lien tel: dessous. Le choix est de tenir les 44
+   plutôt que de s'arrêter à 40.
+   -------------------------------------------------------------------------- */
+.dur-btn{position:relative}
+.dur-btn::after{content:'';position:absolute}
+.dur-btn-moins::after{inset:-13px -7px -13px -15px}
+.dur-btn-plus::after{inset:-13px -15px -13px -7px}
+
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:600;z-index:9000;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 
+/* ----------------------------------------------------------------------------
+   LA BARRE DE SAISIE — 44px, EN VISIBLE
+   ----------------------------------------------------------------------------
+   Le champ mesurait 32px de haut, le bouton 29 : les deux seules cibles de
+   cette barre étaient sous les 44, et ce sont celles qu'on vise au pouce, en
+   bas d'écran. Ici on agrandit pour de bon, sans pseudo-élément — parce qu'on
+   le peut, et parce qu'un <input> ne rend pas de ::after de toute façon
+   (élément remplacé) : la cible du champ ne pouvait venir que de sa boîte.
+
+   RIEN NE SE DÉPLACE. .tour-input-bar est en position:absolute, ancrée par
+   bottom:16px : elle est hors flux, aucun voisin ne la suit. Relevé à 1280 et
+   à 390, avant puis après : la barre passe de 46 à 58 de haut et son bord BAS
+   ne bouge pas d'un pixel — elle grandit vers le haut, sur la carte. Rien
+   n'était posé là ; ce qui était sous elle (l'attribution du fond, le pied)
+   reste exactement aussi dégagé qu'avant.
+
+   height plutôt qu'un padding vertical : la hauteur devient un nombre, pas une
+   somme qui dépendrait de la fonte — c'est ce qui faisait 32 ici et 34 sur une
+   machine où Geist se charge autrement. box-sizing:border-box est global, les
+   8px de padding et les bordures sont donc compris dans les 44 ; le texte d'un
+   input et le libellé d'un button se centrent seuls dans ce qui reste.
+   -------------------------------------------------------------------------- */
 /* TOUR INPUT BAR */
 .tour-input-bar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:800;display:flex;gap:6px;align-items:center;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;padding:6px 8px;box-shadow:0 4px 20px rgba(0,0,0,.12);width:420px;max-width:calc(100% - 260px)}
-.tour-input{flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s}
+.tour-input{flex:1;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s}
 .tour-input:focus{border-color:var(--text);background:var(--card)}
-.tour-calc-btn{padding:8px 16px;border-radius:8px;border:none;background:var(--text);color:#fff;font-family:var(--font);font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .12s}
+.tour-calc-btn{height:44px;padding:8px 16px;border-radius:8px;border:none;background:var(--text);color:#fff;font-family:var(--font);font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .12s}
 .tour-calc-btn:hover{background:#000}
 
 /* ROUTE LINE */
@@ -1288,9 +1385,9 @@ function renderSchedule(){
         +'<div class="sched-badge" style="background:'+col+'22;color:'+col+'">'+stageName(s.card.col)+'</div>'
         +'</div>'
         +'<div style="display:flex;align-items:center;gap:6px;padding:4px 10px 6px;margin-bottom:5px;font-size:10px;color:var(--muted)">'
-        +'<button onclick="event.stopPropagation();adjStopDur(\''+s.id+'\',-15)" style="width:20px;height:20px;border-radius:5px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center">−</button>'
+        +'<button class="dur-btn dur-btn-moins" onclick="event.stopPropagation();adjStopDur(\''+s.id+'\',-15)" style="width:20px;height:20px;border-radius:5px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center">−</button>'
         +'<span style="font-family:var(--mono);font-weight:700;font-size:11px;color:var(--text);min-width:42px;text-align:center">'+fmtDur(thisDur)+'</span>'
-        +'<button onclick="event.stopPropagation();adjStopDur(\''+s.id+'\',15)" style="width:20px;height:20px;border-radius:5px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center">+</button>'
+        +'<button class="dur-btn dur-btn-plus" onclick="event.stopPropagation();adjStopDur(\''+s.id+'\',15)" style="width:20px;height:20px;border-radius:5px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center">+</button>'
         +'<span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted2)">Départ · '+fmtTime(departureMins)+'</span>'
         +'</div>';
       currentMins=departureMins;

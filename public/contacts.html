@@ -671,6 +671,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <script>
 // ── STATE ──
 let prospects = [];
+// Cartes du board telles que lues à l'init, AVANT la fusion. Une carte jumelle
+// d'un contact disparaît de prospects (la face contacts: gagne) mais reste une
+// carte au pipeline : le KPI Pipeline se calcule ici, jamais sur prospects.
+let pipelineCards = [];
 let filteredProspects = [];
 let sortField = 'lastContact';
 let sortDir = -1;
@@ -765,6 +769,9 @@ async function save(touches){
   var contacts = prospects.map(function(p){
     var c = Object.assign({}, p);
     delete c.col; delete c.value; delete c.val;
+    // _pipeline / _pipelineCol : drapeaux d'affichage posés à la fusion, jamais
+    // des champs de la fiche — ils ne sortent pas de la page.
+    delete c._pipeline; delete c._pipelineCol;
     c.updated_at = new Date().toISOString();
     return c;
   });
@@ -776,6 +783,7 @@ async function save(touches){
   for (const p of aEcrire) {
     const contact = Object.assign({}, p);
     delete contact.col; delete contact.value; delete contact.val;
+    delete contact._pipeline; delete contact._pipelineCol;
     contact.updated_at = new Date().toISOString();
     try {
       // POST : la route accepte l'identifiant fabriqué côté client et fait
@@ -846,6 +854,17 @@ function journaliserRepli(route, cle, err, nb, etatCle){
     ' · ' + cause +
     ' · ' + nb + ' enregistrement' + (nb > 1 ? 's' : '') + ' repris du cache' +
     ' · clé ' + cle + ' ' + etatCle, err);
+}
+
+// Identifiant local, préfixe de table retiré — calqué sur pipelineLocalId()
+// (contact-societe.html), qui pose la doctrine : la carte de board partage l'id
+// local du contact. « contacts:abc » et « pipeline:abc » sont donc le même
+// objet. Sert de clé de fusion à l'init ET de clé de repli au regroupement de
+// renderTable / countContacts, pour que les deux ne divergent jamais.
+// Volontairement local à ce fichier : pas de module partagé dans ce lot.
+function localId(v){
+  const raw = (v && typeof v === 'object' && v.id != null) ? v.id : v;
+  return String(raw == null ? '' : raw).replace(/^[a-z_]+:/i, '').trim();
 }
 
 // ── INIT ──
@@ -988,16 +1007,42 @@ async function init(){
     journaliserRepli('/api/pipeline', 'mup_pipeline', e, fromPipeline.length, etatCleP);
   }
 
-  // 3) Fusion sans doublon : clé = id (priorité Pipeline si même id)
-  var seen = {};
+  // 3) Fusion sans doublon : clé = id local (préfixe de table retiré), la face
+  //    contacts: gagne. L'ordre est décisif — éditer une fiche ouverte depuis
+  //    une carte de board écrit dans le board et jamais dans le contact ; le
+  //    représentant doit donc être l'enregistrement contact.
+  //    La déduplication se fait ICI, pas seulement au regroupement de
+  //    renderTable : la carte née d'une prospection n'a pas de societe_id, le
+  //    regroupement par société ne la rattacherait jamais à son contact.
+  //    Le compteur du board est pris AVANT la fusion (pipelineCards) : une
+  //    carte jumelle retirée de prospects reste une carte au pipeline.
+  pipelineCards = fromPipeline;
+  var parId = new Map();
   prospects = [];
-  fromPipeline.forEach(function(p){
-    var k = String(p.id);
-    if(!seen[k]){ seen[k] = true; prospects.push(p); }
-  });
   fromContacts.forEach(function(p){
-    var k = String(p.id);
-    if(!seen[k]){ seen[k] = true; prospects.push(p); }
+    var k = localId(p.id);
+    if(!k){ prospects.push(p); return; }        // sans id : jamais fusionné
+    if(parId.has(k)) return;
+    parId.set(k, p);
+    prospects.push(p);
+  });
+  fromPipeline.forEach(function(p){
+    var k = localId(p.id);
+    if(!k){ prospects.push(p); return; }
+    var jumeau = parId.get(k);
+    if(jumeau){
+      // Drapeau local : la carte disparaît de la liste, l'information « ce
+      // contact est au pipeline » ne doit pas disparaître avec elle. Non
+      // affiché dans ce lot — présent dans la ligne pour n'avoir pas à refaire
+      // la fusion quand son apparence sera tranchée. Retiré des écritures par
+      // save() : c'est un état d'affichage, pas une donnée de la fiche.
+      jumeau._pipeline = true;
+      if(p.col) jumeau._pipelineCol = p.col;
+      return;
+    }
+    // Carte sans jumeau : conservée telle quelle, elle reste sa propre ligne.
+    parId.set(k, p);
+    prospects.push(p);
   });
 
   // Migration des données locales si API vide
@@ -1091,7 +1136,7 @@ function countContacts(list){
   const keys = new Set();
   (list||[]).forEach(p => {
     const sid = p.societe_id != null ? String(p.societe_id).trim() : '';
-    keys.add(sid || ('__id__' + p.id));
+    keys.add(sid || ('__id__' + localId(p.id)));
   });
   return keys.size;
 }
@@ -1099,7 +1144,14 @@ function countContacts(list){
 function renderKpis(){
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
   set('kpi-total', countContacts(prospects));
-  set('kpi-pipeline', countContacts(prospects.filter(p => p.source === 'pipeline' || p.source === 'prospection')));
+  // Pipeline : alimenté par les cartes lues à l'init (pipelineCards), pas par
+  // prospects où les jumelles ont été fusionnées. Les contacts de source
+  // 'prospection' restés sans carte sont joints pour ne rien perdre ; la clé de
+  // countContacts étant l'id local, une jumelle et son contact ne comptent
+  // qu'une fois. Le filtre reste celui d'ORIGIN_FILTERS, inchangé dans ce lot.
+  set('kpi-pipeline', countContacts(
+    pipelineCards.concat(prospects.filter(p => p.source === 'pipeline' || p.source === 'prospection'))
+  ));
   set('kpi-relations', countContacts(prospects.filter(p => p.source === 'relations')));
   set('kpi-actions-today', countActionsToday());
 }
@@ -1175,7 +1227,7 @@ function renderTable(){
   const groupMap = new Map();
   list.forEach(p => {
     const sid = p.societe_id != null ? String(p.societe_id).trim() : '';
-    const key = sid || ('__id__' + p.id);
+    const key = sid || ('__id__' + localId(p.id));
     let g = groupMap.get(key);
     if(!g){ g = []; groupMap.set(key, g); }
     g.push(p);
@@ -1184,7 +1236,15 @@ function renderTable(){
   groupMap.forEach(members => {
     const rep = members.find(m => m.source !== 'pipeline') || members[0];
     const nbPers = Math.max(1, members.filter(m => m.source !== 'pipeline').length);
-    groups.push(Object.assign({}, rep, { _nbPers: nbPers }));
+    // Le drapeau de fusion est posé sur un membre précis ; la ligne le porte dès
+    // qu'un membre l'a, même si le représentant n'est pas celui-là.
+    const auPipeline = members.find(m => m._pipeline);
+    const row = Object.assign({}, rep, { _nbPers: nbPers });
+    if(auPipeline){
+      row._pipeline = true;
+      if(auPipeline._pipelineCol) row._pipelineCol = auPipeline._pipelineCol;
+    }
+    groups.push(row);
   });
 
   // Tri figé : lastContact DESC (fallback updated_at), sur les représentants.

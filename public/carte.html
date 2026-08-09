@@ -78,8 +78,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .tour-info{flex:1;min-width:0}
 .tour-info-name{font-size:11.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tour-info-dist{font-size:10px;color:var(--muted);font-family:var(--mono)}
-.tour-remove{width:20px;height:20px;border-radius:6px;border:none;background:none;cursor:pointer;color:var(--muted2);display:flex;align-items:center;justify-content:center;transition:color .12s;flex-shrink:0}
-.tour-remove:hover{color:var(--red)}
 .tour-footer{padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0}
 /* ----------------------------------------------------------------------------
    « EFFACER » — 44px TOUCHABLES, 29 VISIBLES
@@ -236,9 +234,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .tour-input:focus{border-color:var(--text);background:var(--card)}
 .tour-calc-btn{height:44px;padding:8px 16px;border-radius:8px;border:none;background:var(--text);color:#fff;font-family:var(--font);font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .12s}
 .tour-calc-btn:hover{background:#000}
-
-/* ROUTE LINE */
-.route-line{stroke:var(--text);stroke-width:3;stroke-dasharray:8 6;fill:none}
 
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
@@ -415,8 +410,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-function isUpcoming(dateStr){if(!dateStr)return false;var today=new Date();today.setHours(0,0,0,0);return new Date(dateStr+'T00:00:00')>=today;}
-
 // Index agenda events par ficheId — alimenté par loadAllAgenda() au boot.
 // Source unique de vérité : table agenda en SurrealDB.
 var agendaByFiche = {};
@@ -491,7 +484,7 @@ function stageIdx(col){for(var i=0;i<STAGES.length;i++){if(STAGES[i].id===col)re
 function stageColor(col){var s=STAGES.find(function(x){return x.id===col;});return s?s.color:'#AEAEB2';}
 function stageName(col){var s=STAGES.find(function(x){return x.id===col;});return s?s.name:col;}
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function createMupMarker(lat, lng, color){
+function createMupMarker(color){
   return L.divIcon({
     className: 'mup-marker',
     html: '<div style="width:14px;height:14px;border-radius:50%;background:'+color+';border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.25);"></div>',
@@ -504,7 +497,6 @@ function formatRdvDate(dateStr, timeStr) {
   if(!dateStr) return '';
   var JOURS=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
   var MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-  var parts=dateStr.split('-');
   var d=new Date(dateStr+'T00:00:00');
   var jour=JOURS[d.getDay()];
   var num=d.getDate();
@@ -573,19 +565,17 @@ var userLatLng=null;
 var watchId=null;
 var userMarker=null;
 var proximityCircles=[]; // array of L.circle
-var dimmedMarkers=[]; // markers set to low opacity
 
 // Purge les mises en évidence transitoires : cercles de proximité et opacité.
-// La restauration d'opacité parcourt markers sans condition plutôt que le seul
-// dimmedMarkers, parce que renderSchedule estompe aussi les étapes en retard
-// (setOpacity(0.2)) sans rien y inscrire, et le fait à chaque frame du oninput
-// du curseur de durée : un enregistrement y accumulerait des doublons. Le
-// parcours, lui, est idempotent et coûte une itération par fiche.
+// La restauration d'opacité parcourt markers sans condition plutôt que de tenir
+// un registre des marqueurs estompés, parce que renderSchedule estompe les
+// étapes en retard (setOpacity(0.2)) à chaque frame du oninput du curseur de
+// durée : un registre y accumulerait des doublons. Le parcours, lui, est
+// idempotent et coûte une itération par fiche.
 function resetOverlays(){
   proximityCircles.forEach(function(c){map.removeLayer(c);});
   proximityCircles=[];
   Object.keys(markers).forEach(function(id){markers[id].marker.setOpacity(1);});
-  dimmedMarkers=[];
 }
 
 // Un clic sur le fond de carte portait deux gestes superposés : Leaflet y
@@ -686,7 +676,7 @@ function placeCard(c, clat, clng){
   var nextAct=nextActionOf(c);
   var isRdv=!!nextAct;
   var actStyle=isRdv?actionStyle(nextAct.type):null;
-  var icon=createMupMarker(clat, clng, col);
+  var icon=createMupMarker(col);
   var val=c.val>=1000?Math.round(c.val/1000)+'k€':(c.val?c.val+'€':'—');
   var popup='<div class="pop">'
     +'<div class="pop-bar" style="background:'+col+'"></div>'
@@ -1004,27 +994,6 @@ function locateUser(){
   document.getElementById('locate-dot').style.display='inline-block';
 }
 
-// Proximity for a single card
-function showProximity(id){
-  resetOverlays();
-  var info=markers[String(id)];
-  if(!info) return;
-  var center=info.latlng;
-  var circle=L.circle(center,{radius:30000,color:stageColor(info.card.col),fillOpacity:0.06,weight:2,dashArray:'6 4'}).addTo(map);
-  proximityCircles.push(circle);
-
-  // Dim those outside radius
-  Object.keys(markers).forEach(function(mid){
-    var m=markers[mid];
-    var dist=map.distance(L.latLng(center),L.latLng(m.latlng));
-    if(dist>30000&&mid!==String(id)){
-      m.marker.setOpacity(0.25);
-      dimmedMarkers.push(m.marker);
-    }
-  });
-  map.fitBounds(circle.getBounds(),{padding:[30,30]});
-}
-
 // Panel rendering
 function renderPanel(){
   var body=document.getElementById('tour-body');
@@ -1314,7 +1283,6 @@ function renderSchedule(){
   var count=document.getElementById('tour-count');
   var btnTour=document.getElementById('btn-tour');
 
-  var visitMin=parseInt(document.getElementById('visit-dur').value)||45;
   var departParts=(document.getElementById('tour-depart-time').value||'09:00').split(':');
   var currentMins=parseInt(departParts[0])*60+parseInt(departParts[1]);
 

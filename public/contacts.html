@@ -1509,6 +1509,9 @@ function newContactId(){ return 'contact_' + Date.now() + '_' + Math.random().to
 
 // ── CONFIRM IMPORT ──
 async function confirmImport(){
+  // Sur échec d'enregistrement, la saisie reste à l'écran et la modale reste
+  // ouverte : « réessayez » n'est exécutable que si le formulaire est encore là.
+  var enregistre = true;
   if(activeModalTab==='csv'){
     // Onglet Import CSV : dryrun -> écran de validation -> import confirmé.
     startImportFlow();
@@ -1537,10 +1540,12 @@ async function confirmImport(){
       created_at: new Date().toISOString()
     });
     prospects.push(p);
-    const enregistre = await save([p]);
-    ['f-name','f-company','f-email','f-phone','f-loc','f-website','f-notes','f-linkedin','f-facebook','f-instagram'].forEach(id=>document.getElementById(id).value='');
+    enregistre = await save([p]);
     // save() a déjà dit l'échec : pas de toast de succès par-dessus.
-    if(enregistre) toast('Contact ajouté');
+    if(enregistre){
+      ['f-name','f-company','f-email','f-phone','f-loc','f-website','f-notes','f-linkedin','f-facebook','f-instagram'].forEach(id=>document.getElementById(id).value='');
+      toast('Contact ajouté');
+    }
   } else if(activeModalTab==='paste'){
     const raw=document.getElementById('paste-input').value.trim();
     if(!raw){toast('Aucune donnée');return;}
@@ -1567,12 +1572,14 @@ async function confirmImport(){
       });
     });
     prospects=[...prospects,...added];
-    const enregistre = await save(added);
-    document.getElementById('paste-input').value='';
+    enregistre = await save(added);
     // save() a déjà dit l'échec : pas de toast de succès par-dessus.
-    if(enregistre) toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}`);
+    if(enregistre){
+      document.getElementById('paste-input').value='';
+      toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}`);
+    }
   }
-  closeModal();
+  if(enregistre) closeModal();
   renderAll();
 }
 

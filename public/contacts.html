@@ -737,7 +737,11 @@ const ORIGIN_LABEL = {
   import: 'Direct'
 };
 
-function save(){
+// Rend true si le serveur a confirmé chaque écriture, false sinon. Le cache
+// localStorage n'est écrit que sur confirmation : un cache écrit après un échec
+// ferait croire à l'abonnée que son contact est enregistré, et le lui
+// réafficherait au rechargement suivant alors qu'il n'existe nulle part.
+async function save(){
   // mup_contacts est la source de vérité pour cette page
   var contacts = prospects.map(function(p){
     var c = Object.assign({}, p);
@@ -746,22 +750,43 @@ function save(){
     return c;
   });
 
-  // Dual-write : API + localStorage
-  contacts.forEach(async function(contact) {
+  var refus402 = false;
+  var echec = false;
+  // for…of awaité : un forEach(async …) n'attend aucune de ses réponses, save()
+  // rendrait la main et écrirait le cache avant que le serveur ait répondu.
+  for (const contact of contacts) {
     try {
       const method = contact.id ? 'PUT' : 'POST';
       const url = contact.id ? `/api/contacts/${contact.id}` : '/api/contacts';
-      await fetch(url, {
+      const res = await fetch(url, {
         method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(contact)
       });
+      if (res.status === 402) { refus402 = true; break; }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (e) {
+      // Le catch couvre l'échec de transport, le throw ci-dessus le refus du
+      // serveur : les deux lèvent le même drapeau.
       console.error('Erreur sauvegarde API pour contact', contact.id, e);
+      echec = true;
     }
-  });
+  }
 
+  if (refus402) {
+    // Refus du péage : le modal est déjà affiché par l'intercepteur 402 global
+    // (trial-expired-modal.js), on ne double pas le message. Cache non écrit.
+    return false;
+  }
+  if (echec) {
+    // Le serveur n'a pas l'enregistrement. On le dit, et on n'écrit pas le cache.
+    toast('Modification non enregistrée — réessayez');
+    return false;
+  }
+
+  // localStorage = cache de lecture : écrit sur confirmation serveur uniquement.
   localStorage.setItem('mup_contacts', JSON.stringify(contacts));
+  return true;
 }
 
 function migrateProspect(p){
@@ -1469,7 +1494,7 @@ dz.addEventListener('drop',e=>{
 function newContactId(){ return 'contact_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
 
 // ── CONFIRM IMPORT ──
-function confirmImport(){
+async function confirmImport(){
   if(activeModalTab==='csv'){
     // Onglet Import CSV : dryrun -> écran de validation -> import confirmé.
     startImportFlow();
@@ -1498,9 +1523,10 @@ function confirmImport(){
       created_at: new Date().toISOString()
     });
     prospects.push(p);
-    save();
+    const enregistre = await save();
     ['f-name','f-company','f-email','f-phone','f-loc','f-website','f-notes','f-linkedin','f-facebook','f-instagram'].forEach(id=>document.getElementById(id).value='');
-    toast('Contact ajouté');
+    // save() a déjà dit l'échec : pas de toast de succès par-dessus.
+    if(enregistre) toast('Contact ajouté');
   } else if(activeModalTab==='paste'){
     const raw=document.getElementById('paste-input').value.trim();
     if(!raw){toast('Aucune donnée');return;}
@@ -1527,9 +1553,10 @@ function confirmImport(){
       });
     });
     prospects=[...prospects,...added];
-    save();
+    const enregistre = await save();
     document.getElementById('paste-input').value='';
-    toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}`);
+    // save() a déjà dit l'échec : pas de toast de succès par-dessus.
+    if(enregistre) toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}`);
   }
   closeModal();
   renderAll();

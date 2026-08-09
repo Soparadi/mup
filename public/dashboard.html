@@ -815,67 +815,126 @@ map.on('click',function(){
   }
   var cards=[];
   try{cards=(await _loadPipeline()).map(migrateCard);}catch(e){}
-  var withAddr=cards.filter(function(c){return c.address;});
-  if(!withAddr.length) return;
 
-  // Group by address for geocoding, but keep individual cards
-  var addrMap={};
-  withAddr.forEach(function(c){
-    if(!addrMap[c.address]) addrMap[c.address]={cards:[]};
-    addrMap[c.address].cards.push(c);
-  });
+  // Coordonnées exploitables portées par la fiche, ou null (null-island
+  // exclue). Même lecture qu'en carte.html (carte.html:650) : /api/pipeline
+  // est la source commune, et c'est la Carte qui y écrit lat/lng une fois le
+  // géocodage abouti. Le Dashboard n'en est que lecteur.
+  function storedLatLng(c){
+    var lat=parseFloat(c.lat), lng=parseFloat(c.lng);
+    if(isFinite(lat)&&isFinite(lng)&&(lat!==0||lng!==0)) return {lat:lat,lng:lng};
+    return null;
+  }
 
   var bounds=[];
-  var pending=Object.keys(addrMap).length;
-  Object.keys(addrMap).forEach(function(addr){
-    var group=addrMap[addr];
-    fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(addr)+'&limit=1')
+
+  // Pose d'un marqueur à des coordonnées déjà résolues, quelle qu'en soit la
+  // provenance — fiche ou géocodage.
+  function placeCard(c, clat, clng){
+    bounds.push([clat,clng]);
+    var col=STAGES.find(function(s){return s.id===c.col;});
+    var dotColor=col?col.color:'#0BBCD4';
+    var icon=createMupMarker(dotColor);
+    var val=c.val>=1000?Math.round(c.val/1000)+'k€':(c.val?c.val+'€':'—');
+    // Nom de société et montant, rien d'autre : c'est ce que
+    // « Localisation pipeline » promet. Le nom du contact, le J+ et la
+    // barre de progression appartiennent à la fiche — et la couleur du
+    // marqueur porte déjà l'étape que la barre répétait.
+    // La navigation quitte le marqueur pour le pied de la bulle : une
+    // ligne, pas un bloc bouton, portant l'identifiant de la fiche.
+    // /carte?fiche= reprend le nom que l'Agenda emploie déjà pour
+    // désigner une fiche pipeline (/pipeline?fiche=). Rien ne lit ce
+    // paramètre côté Carte à ce jour : le récepteur vient au groupe D,
+    // par le même arbitre que ?contact_siret=. D'ici là le lien mène à
+    // la Carte nue, ce qui est le comportement d'avant, en mieux visé.
+    var popup='<div style="font-family:var(--font);width:200px;padding:10px 12px 16px">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">'+esc(c.co||c.name)+'</div>'
+      +'<div style="font-size:12px;font-weight:800;font-family:var(--mono);color:var(--text)">'+val+'</div>'
+      +(c.id?'<a class="mp-lien" href="/carte?fiche='+encodeURIComponent(c.id)+'">Voir sur la carte →</a>':'')
+      +'</div>';
+    // offset : Leaflet pose l'apex de la pointe à « centre du marqueur
+    // + offset.y − 10,5 px ». Pour un disque de rayon R l'apex touche
+    // le bord haut quand offset.y = 11 − R ; le disque fait 14 px comme
+    // sur la Carte, donc 4. Règle mesurée au rendu (cf. b1148c1).
+    L.marker([clat,clng],{icon:icon}).addTo(map)
+      .bindPopup(popup,{maxWidth:220,closeButton:true,offset:[0,4],autoPanPadding:[24,24]});
+    // Plus de mouseover : un balayage de la carte n'ouvrait rien qu'on
+    // ait demandé, et n'ouvrait rien du tout au doigt. Plus de click
+    // vers /carte non plus : le clic du marqueur n'a qu'un seul effet,
+    // ouvrir sa bulle — c'est ce que bindPopup pose de lui-même.
+  }
+
+  // Résolution des coordonnées d'une fiche, ordre strict :
+  //  a. coordonnées déjà portées par la fiche → placement direct, aucun réseau ;
+  //  b. sinon /api/geocode, groupé par adresse — un appel par adresse distincte ;
+  //  c. échec ou adresse non résolue → aucun marqueur, aucun repli approximatif.
+  // Rien n'est écrit nulle part : le Dashboard ne persiste pas ce qu'il
+  // géocode. La Carte tient seule ce rôle (carte.html:661), et c'est d'elle
+  // que viennent les coordonnées lues en a.
+  //
+  // Le navigateur ne sort plus vers nominatim.openstreetmap.org. Il appelait
+  // ce tiers directement, une fois par adresse distincte, à chaque chargement
+  // du Dashboard — sans réutiliser les coordonnées déjà résolues, et sans
+  // égard pour sa politique d'usage. Les seuls appels sortants du navigateur
+  // vont désormais chez nous ; /api/geocode interroge la BAN côté serveur,
+  // derrière son rate-limit (server.js:184).
+  var withStored=[], addrMap={};
+  cards.forEach(function(c){
+    var s=storedLatLng(c);
+    if(s){ withStored.push({c:c,lat:s.lat,lng:s.lng}); return; }
+    if(c.address){ if(!addrMap[c.address])addrMap[c.address]=[]; addrMap[c.address].push(c); }
+  });
+  var addrs=Object.keys(addrMap);
+  if(!withStored.length&&!addrs.length) return;
+
+  function finish(){
+    if(bounds.length) map.fitBounds(bounds,{padding:[30,30],maxZoom:12});
+  }
+
+  // a. Placement direct. Jitter pour déstacker les fiches qui partagent
+  //    exactement les mêmes coordonnées.
+  var storedByKey={};
+  withStored.forEach(function(s){var k=s.lat+','+s.lng;if(!storedByKey[k])storedByKey[k]=[];storedByKey[k].push(s);});
+  Object.keys(storedByKey).forEach(function(k){
+    var grp=storedByKey[k];
+    grp.forEach(function(s,idx){
+      var jitter=grp.length>1?(idx-grp.length/2)*0.0003:0;
+      placeCard(s.c,s.lat+jitter,s.lng+jitter);
+    });
+  });
+
+  var pending=addrs.length;
+  // Aucune adresse à résoudre : le cadrage doit tout de même avoir lieu, sinon
+  // les fiches posées en a resteraient sous la vue France par défaut.
+  if(!pending){ finish(); return; }
+
+  // b. Géocodage des seules fiches sans coordonnées.
+  addrs.forEach(function(addr){
+    fetch('/api/geocode?q='+encodeURIComponent(addr))
       .then(function(r){return r.json();})
       .then(function(data){
-        if(data.length){
-          var lat=parseFloat(data[0].lat),lng=parseFloat(data[0].lon);
-          bounds.push([lat,lng]);
-          // One marker per card, slightly offset if multiple at same address
-          group.cards.forEach(function(c,idx){
-            var jitter=group.cards.length>1?(idx-group.cards.length/2)*0.0003:0;
-            var col=STAGES.find(function(s){return s.id===c.col;});
-            var dotColor=col?col.color:'#0BBCD4';
-            var icon=createMupMarker(dotColor);
-            var val=c.val>=1000?Math.round(c.val/1000)+'k\u20AC':(c.val?c.val+'\u20AC':'\u2014');
-            // Nom de société et montant, rien d'autre : c'est ce que
-            // « Localisation pipeline » promet. Le nom du contact, le J+ et la
-            // barre de progression appartiennent à la fiche — et la couleur du
-            // marqueur porte déjà l'étape que la barre répétait.
-            // La navigation quitte le marqueur pour le pied de la bulle : une
-            // ligne, pas un bloc bouton, portant l'identifiant de la fiche.
-            // /carte?fiche= reprend le nom que l'Agenda emploie déjà pour
-            // désigner une fiche pipeline (/pipeline?fiche=). Rien ne lit ce
-            // paramètre côté Carte à ce jour : le récepteur vient au groupe D,
-            // par le même arbitre que ?contact_siret=. D'ici là le lien mène à
-            // la Carte nue, ce qui est le comportement d'avant, en mieux visé.
-            var popup='<div style="font-family:var(--font);width:200px;padding:10px 12px 16px">'
-              +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">'+esc(c.co||c.name)+'</div>'
-              +'<div style="font-size:12px;font-weight:800;font-family:var(--mono);color:var(--text)">'+val+'</div>'
-              +(c.id?'<a class="mp-lien" href="/carte?fiche='+encodeURIComponent(c.id)+'">Voir sur la carte →</a>':'')
-              +'</div>';
-            // offset : Leaflet pose l'apex de la pointe à « centre du marqueur
-            // + offset.y − 10,5 px ». Pour un disque de rayon R l'apex touche
-            // le bord haut quand offset.y = 11 − R ; le disque fait 14 px comme
-            // sur la Carte, donc 4. Règle mesurée au rendu (cf. b1148c1).
-            L.marker([lat+jitter,lng+jitter],{icon:icon}).addTo(map)
-              .bindPopup(popup,{maxWidth:220,closeButton:true,offset:[0,4],autoPanPadding:[24,24]});
-            // Plus de mouseover : un balayage de la carte n'ouvrait rien qu'on
-            // ait demandé, et n'ouvrait rien du tout au doigt. Plus de click
-            // vers /carte non plus : le clic du marqueur n'a qu'un seul effet,
-            // ouvrir sa bulle — c'est ce que bindPopup pose de lui-même.
+        // GeoJSON de la BAN : coordinates en [lng, lat]. Un 502 du serveur
+        // renvoie {error} — pas de features, donc pas de marqueur, sans qu'il
+        // faille distinguer la panne de l'adresse introuvable.
+        var f=data&&data.features&&data.features[0];
+        if(f&&f.geometry&&f.geometry.coordinates){
+          var lng=f.geometry.coordinates[0], lat=f.geometry.coordinates[1];
+          var grp=addrMap[addr];
+          grp.forEach(function(c,idx){
+            var jitter=grp.length>1?(idx-grp.length/2)*0.0003:0;
+            placeCard(c,lat+jitter,lng+jitter);
           });
         }
         pending--;
-        if(pending<=0&&bounds.length){
-          map.fitBounds(bounds,{padding:[30,30],maxZoom:12});
-        }
+        if(pending<=0) finish();
       })
-      .catch(function(){pending--;});
+      .catch(function(){
+        // Réseau coupé ou réponse illisible : même issue que c. Le décompte
+        // doit aboutir quand même, sans quoi les fiches posées en a ne
+        // seraient jamais cadrées.
+        pending--;
+        if(pending<=0) finish();
+      });
   });
 })();
 </script>

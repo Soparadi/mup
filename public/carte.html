@@ -90,6 +90,30 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .map-btn:hover{border-color:var(--text)}
 .map-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
 
+/* ----------------------------------------------------------------------------
+   LES COMMANDES DE ZOOM — 44px. Leaflet donne 26px à ses deux boutons, 30 si
+   le navigateur se déclare tactile (.leaflet-touch) : sous la cible de 44
+   dans les deux cas, et c'est précisément le doigt qui a le moins de marge.
+
+   LE DÉPLACEMENT N'A PAS LIEU. Relevé à 390 : le contrôle occupe (10,66) à
+   (44,130), le bouton de tiroir (12,12) à (52,52) — quatorze pixels d'écart,
+   aucun croisement. À 1280 le tiroir n'est pas rendu du tout et le contrôle
+   est à (74,10), la barre d'outils à 948px de là. Il n'y a rien à éviter :
+   agrandir suffit, bouger serait un geste sans cause.
+
+   L'AGRANDISSEMENT NE POUSSE RIEN. Le contrôle vit dans .leaflet-top
+   .leaflet-left, un conteneur position:absolute : il est hors flux, sa boîte
+   peut grandir sans qu'aucun voisin ne se décale. Après agrandissement il
+   descend à 158 au lieu de 130 — toujours sous le tiroir, jamais dessus.
+
+   La spécificité vaut celle de `.leaflet-touch .leaflet-bar a` (deux classes,
+   un élément) et cette feuille est chargée après celle de Leaflet : l'ordre
+   du cascade tranche. line-height suit la hauteur, sinon les glyphes + et −
+   restent collés en haut de leur boîte.
+   -------------------------------------------------------------------------- */
+.leaflet-control-zoom a.leaflet-control-zoom-in,
+.leaflet-control-zoom a.leaflet-control-zoom-out{width:44px;height:44px;line-height:44px}
+
 /* SCHEDULE ITEMS */
 .sched-item{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:5px;background:var(--surface);transition:opacity .2s}
 .sched-item.excluded{opacity:.35;background:var(--surface2)}
@@ -408,7 +432,16 @@ function progressHtml(col){
 }
 
 // State
-var map=L.map('map',{center:[46.5,2.5],zoom:5,zoomControl:true});
+// Le contrôle de zoom est posé à la main, pas par l'option de construction :
+// c'est le seul moyen de lui passer des libellés. Leaflet écrit « Zoom in » /
+// « Zoom out » en dur, et il les écrit deux fois — dans title (l'infobulle) et
+// dans aria-label (ce que la synthèse vocale annonce). zoomInTitle et
+// zoomOutTitle alimentent les deux à la fois, une valeur pour deux attributs.
+// La position ne change pas : topleft est déjà le défaut, on le laisse
+// implicite plutôt que de le réécrire — le relevé dit qu'il n'y a rien à
+// éviter (cf. le bloc des commandes de zoom dans la feuille de style).
+var map=L.map('map',{center:[46.5,2.5],zoom:5,zoomControl:false});
+L.control.zoom({zoomInTitle:'Zoom avant',zoomOutTitle:'Zoom arrière'}).addTo(map);
 // CartoDB Positron (cf prospection.html pour le détail du choix).
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
   attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',

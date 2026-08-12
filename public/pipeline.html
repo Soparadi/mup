@@ -1038,6 +1038,11 @@ function migrateCard(c){
   c.co = c.company || '';
   c.name = c.contact || '';
   c.tel = c.phone || '';
+  // Date de création : created_at est le nom canonique. Une carte qui ne porte
+  // que createdAt (nom abandonné) se voit poser created_at à la lecture, pour
+  // que timeline et compteur J+N lisent le même champ. Normalisation en
+  // mémoire : aucune écriture en base n'est déclenchée ici.
+  if(!c.created_at && c.createdAt) c.created_at = c.createdAt;
   // Init new fields
   if(!c.emailStatus) c.emailStatus = 'new';
   if(!c.lastContact) c.lastContact = '';
@@ -1059,11 +1064,13 @@ function noterEtapeVie(card, nouvelleCol){
 
 // J+N compté depuis la création. Calculé à l'affichage et non stocké : un
 // compteur écrit sur la fiche se fige au jour de sa dernière sauvegarde.
+// Sans date de création exploitable, rend null : le badge est alors omis
+// plutôt que d'afficher un J+0 qu'aucune donnée ne fonde.
 function joursDepuisCreation(c){
-  const src = c && (c.createdAt || c.created_at);
-  if(!src) return 0;
+  const src = c && (c.created_at || c.createdAt);
+  if(!src) return null;
   const t = new Date(src).getTime();
-  if(isNaN(t)) return 0;
+  if(isNaN(t)) return null;
   const j = Math.floor((Date.now() - t) / 86400000);
   return j > 0 ? j : 0;
 }
@@ -1296,6 +1303,7 @@ function renderKanban() {
 
 function renderCard(c, color) {
   const valFmt = fmtVal(c.val);
+  const _jours = joursDepuisCreation(c);
   // Nom société composé (enseigne en titre, nom juridique en 2e rang) — module partagé.
   const _nomC = window.MUPNom
     ? window.MUPNom.compose({ enseigne: c.enseigne, nomJuridique: c.co || c.name })
@@ -1315,7 +1323,7 @@ function renderCard(c, color) {
     ${(c.sector||c.naf_label||c.naf)?`<div class="card-naf-pill">${esc(c.sector||c.naf_label||c.naf)}</div>`:''}
     <div class="kcard-foot">
       <div class="kcard-val">${valFmt||'0,00 €'}</div>
-      <div class="kcard-days">J+${joursDepuisCreation(c)}</div>
+      ${_jours === null ? '' : `<div class="kcard-days">J+${_jours}</div>`}
     </div>
     ${c.src?`<div class="kcard-src">↳ ${esc(c.src)}</div>`:''}
     ${renderProgress(c)}
@@ -1427,13 +1435,13 @@ function saveCard() {
     const nouvelle = {
       id: String('c'+Date.now()),
       ...fields,
-      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
       src: 'Manuel',
       entity_origine: 'mup',
       activity: [],
       noteEntries: []
     };
-    if(nouvelle.col === 'won') nouvelle.wonAt = nouvelle.createdAt;
+    if(nouvelle.col === 'won') nouvelle.wonAt = nouvelle.created_at;
     cards.push(nouvelle);
   }
   save(); closeModal(); renderKanban();
@@ -1500,12 +1508,13 @@ async function openDetail(id) {
     : { titre: c.co || c.name || '', sousTitre: c.co ? c.name : '' };
 
   // Header
+  const _joursD = joursDepuisCreation(c);
   document.getElementById('d-name').textContent = _nomD.titre;
   document.getElementById('d-co').textContent = _nomD.sousTitre;
   document.getElementById('d-badges').innerHTML = `
     <span class="detail-badge" style="background:${col?.color}22;color:${col?.color}">${col?.name||''}</span>
     <span class="detail-badge" style="background:var(--surface2);color:var(--muted)">${val}</span>
-    <span class="detail-badge" style="background:var(--surface2);color:var(--muted2)">J+${joursDepuisCreation(c)}</span>
+    ${_joursD === null ? '' : `<span class="detail-badge" style="background:var(--surface2);color:var(--muted2)">J+${_joursD}</span>`}
     ${c.src?`<span class="detail-badge" style="background:var(--surface2);color:var(--muted2)">↳ ${esc(c.src)}</span>`:''}
   `;
 
@@ -1513,7 +1522,7 @@ async function openDetail(id) {
   document.getElementById('d-focus-cat').textContent = c.sector || c.naf_label || c.naf || '—';
   document.getElementById('d-focus-name').textContent = _nomD.titre || '—';
   document.getElementById('d-focus-sub').textContent = _nomD.sousTitre;
-  document.getElementById('d-focus-pills').innerHTML = `<span class="pill pill-phoning">${esc(col?.name || 'Prospects')}</span><span class="pill pill-neutral">—</span><span class="pill pill-day">J+${joursDepuisCreation(c)}</span>`;
+  document.getElementById('d-focus-pills').innerHTML = `<span class="pill pill-phoning">${esc(col?.name || 'Prospects')}</span><span class="pill pill-neutral">—</span>${_joursD === null ? '' : `<span class="pill pill-day">J+${_joursD}</span>`}`;
 
   // Info grid
   let infoHtml = '';
@@ -1572,7 +1581,12 @@ async function openDetail(id) {
     return 'type-note';
   }
   // Add pipeline entry as first event
-  const entryDate = c.created || new Date(typeof c.id==='string'?(parseInt(c.id.replace('c',''))||Date.now()):c.id).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
+  // La date se lit sur ce que la fiche porte : created_at, repli createdAt.
+  // Sans l'un ni l'autre, la ligne s'affiche SANS date — on n'invente pas une
+  // création qu'on ignore, ni depuis l'identifiant, ni depuis la date du jour.
+  const entryTs = c.created_at || c.createdAt;
+  const entryTime = entryTs ? new Date(entryTs).getTime() : NaN;
+  const entryDate = isNaN(entryTime) ? '' : new Date(entryTime).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
   const entryItem = `<div class="tl-item type-move"><div class="tl-date">${esc(entryDate)}</div><div class="tl-txt">Ajouté au pipeline</div></div>`;
   const tlItems = allActs.map(a => `<div class="tl-item ${getTimelineType(a.txt)}"><div class="tl-date">${esc(a.date)}</div><div class="tl-txt">${esc(a.txt)}</div></div>`).join('');
   const noteItems = (c.noteEntries||[]).slice().reverse().map(n => {
@@ -2317,7 +2331,7 @@ function importFromProspects() {
     const prospects = JSON.parse(raw);
     prospects.forEach(p => {
       if(!cards.find(c=>String(c.id)===String(p.id))) {
-        cards.push({ id:String(p.id), name:p.name||p.contact_name||p.nom||'', co:p.company||p.co||p.partner_name||'', email:p.email||p.email_from||'', tel:p.phone||p.tel||p.mobile||'', address:p.location||p.address||p.city||p.ville||'', val:0, col:'prospects', notes:p.notes||p.description||'', createdAt:new Date().toISOString(), src:p.source||'Prospects', linkedin:p.linkedin||'', facebook:p.facebook||'', instagram:p.instagram||'', activity:[] });
+        cards.push({ id:String(p.id), name:p.name||p.contact_name||p.nom||'', co:p.company||p.co||p.partner_name||'', email:p.email||p.email_from||'', tel:p.phone||p.tel||p.mobile||'', address:p.location||p.address||p.city||p.ville||'', val:0, col:'prospects', notes:p.notes||p.description||'', created_at:new Date().toISOString(), src:p.source||'Prospects', linkedin:p.linkedin||'', facebook:p.facebook||'', instagram:p.instagram||'', activity:[] });
       }
     });
     save(); renderKanban();
@@ -2415,6 +2429,7 @@ function importFromProspects() {
 
   function buildFocusCard(c, col){
     const val = c.val >= 1000 ? Math.round(c.val/1000) + 'k€' : (c.val ? c.val + '€' : '—');
+    const jours = joursDepuisCreation(c);
     const div = document.createElement('div');
     div.className = 'kcard';
     if(String(c.id) === String(window.currentId)) div.classList.add('selected');
@@ -2425,7 +2440,7 @@ function importFromProspects() {
       <div class="kcard-co">${escapeHtml(c.co ? c.name : '')}</div>
       <div class="kcard-foot">
         <span class="kcard-val">${val}</span>
-        <span class="kcard-days">J+${joursDepuisCreation(c)}</span>
+        ${jours === null ? '' : `<span class="kcard-days">J+${jours}</span>`}
       </div>
     `;
     div.onclick = () => {
@@ -2573,7 +2588,7 @@ function importFromProspects() {
         instagram: ct.instagram || '',
         col: ct.col || 'leads',
         val: 0,
-        createdAt: ct.createdAt || ct.created_at || new Date().toISOString(),
+        created_at: ct.created_at || ct.createdAt || new Date().toISOString(),
         src: ct.source || 'contacts',
         activity: ct.activity || [],
         noteEntries: ct.noteEntries || []

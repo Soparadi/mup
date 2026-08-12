@@ -2,7 +2,7 @@
 <!--
   SCHÉMA LOCALSTORAGE MUP (cible migration SurrealDB)
   ====================================================
-  mup_pipeline      : Card[] { id, col, name, co, address, val, createdAt, updatedAt, activity:[{type, ts, toCol}] }
+  mup_pipeline      : Card[] { id, col, name, co, address, val, created_at, updatedAt, activity:[{type, ts, toCol}], noteEntries:[{text, createdAt}] }
   mup_agenda        : Rdv[] { id, cardId, date, time, status?, createdAt }
   mup_devis         : Doc[] { id, type:'devis'|'facture', num, name, co, addr, date, validity, status, tva, lines:[{desc,qty,pu}], notes, createdAt, updatedAt, signedAt? }
   mup_prospects     : Prospect[] (legacy, en cours de fusion dans mup_pipeline.col='prospects')
@@ -16,15 +16,39 @@
   CONVENTIONS
   -----------
   - Tous les IDs sont des strings (pas des numbers)
-  - createdAt et updatedAt sont des strings ISO 8601 (Date.toISOString())
+  - Les dates sont des strings ISO 8601 (Date.toISOString())
   - Les références entre tables utilisent {entity}Id (cardId, prospectId, etc.)
   - Les champs préfixés par _ sont calculés (jamais persistés)
+
+  DATE DE CRÉATION D'UNE CARTE PIPELINE
+  --------------------------------------
+  Nom canonique : created_at. C'est celui que le serveur pose et rend depuis le
+  renommage ; un lecteur resté sur createdAt sort de son indicateur toute fiche
+  créée depuis. Les fiches d'avant portent createdAt ; les plus anciennes ne
+  portent ni l'un ni l'autre.
+
+  Chaîne de lecture retenue, identique dans les quatre pages qui affichent une
+  carte (statistiques, dashboard, pipeline, carte) :
+
+      created_at → createdAt → plus ancienne trace portée par la fiche
+
+  La troisième n'est pas la création : c'est une borne supérieure crédible,
+  lue au MINIMUM de activity[].ts et noteEntries[].createdAt. Sans date
+  exploitable, dateCreation() rend null et l'appelant omet l'affichage ou
+  exclut la fiche de l'indicateur — jamais de J+0 par défaut, jamais de date
+  fabriquée injectée dans un comptage.
+
+  Cette date déduite ne s'écrit JAMAIS sur la fiche : les pages sérialisent
+  l'objet carte entier en PUT, et le serveur accepte un created_at fourni par
+  le client quand le record n'en porte aucun.
 
   CLÉS OBSOLÈTES (à ne pas réintroduire)
   ---------------------------------------
   mup_docs        → renommée mup_devis (migration auto au load)
   mup_year_target → déplacé dans mup_user_settings.yearTarget
   mup_leads       → supprimée (jamais alimentée en pratique)
+  Card.ts         → jamais écrite ; repli mort retiré des lecteurs
+  Card.days       → écrite à 0 à la création et jamais recalculée
 -->
 <html lang="fr">
 <head>
@@ -540,6 +564,48 @@
     if(isNaN(d.getTime())) return true; // date invalide = même logique
     return d >= periodStart(p);
   }
+
+  // Une date n'est retenue que si elle se parse ET tombe après 2020. La borne
+  // écarte les 1970 que fabriquaient les anciens replis `|| 0` et les
+  // identifiants numériques pris pour des millisecondes.
+  function dateValide(v){
+    if(!v) return null;
+    var d = new Date(v);
+    return (!isNaN(d.getTime()) && d.getFullYear() >= 2020) ? d : null;
+  }
+
+  // Date de création d'une carte pipeline — LECTURE PURE : rend une Date ou
+  // null, et n'assigne RIEN sur c. Les pages sérialisent l'objet carte entier
+  // en PUT (pipeline.html save(), carte.html persistCoords()) et le serveur
+  // accepte un created_at fourni par le client quand le record n'en porte
+  // aucun — c'est-à-dire exactement sur la population que le repli vise. Une
+  // date déduite posée sur l'objet partirait en base au premier
+  // enregistrement, deviendrait indiscernable d'une vraie date, et ne serait
+  // plus jamais corrigeable.
+  //
+  // created_at → createdAt → plus ancienne trace portée par la fiche.
+  // La troisième n'est pas la création mais une borne supérieure crédible :
+  //   • MINIMUM des traces, jamais la première — ni activity ni noteEntries
+  //     ne sont triés ;
+  //   • activity[].ts SEULEMENT : activity[].date est une chaîne d'affichage
+  //     française (« 12 août, 14:30 ») qui ne se parse pas.
+  // Aucune date exploitable → null, et l'appelant s'abstient.
+  function dateCreation(c){
+    if(!c) return null;
+    var direct = dateValide(c.created_at) || dateValide(c.createdAt);
+    if(direct) return direct;
+    var min = null;
+    (c.activity || []).forEach(function(a){
+      var d = dateValide(a && a.ts);
+      if(d && (min === null || d < min)) min = d;
+    });
+    (c.noteEntries || []).forEach(function(n){
+      var d = dateValide(n && n.createdAt);
+      if(d && (min === null || d < min)) min = d;
+    });
+    return min;
+  }
+
   function fmtN(n){ return new Intl.NumberFormat('fr-FR').format(Math.round(n)); }
   function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Math.round(n||0)); }
 
@@ -582,8 +648,10 @@
           return c.activity.some(function(a){ return inPeriod(a.ts || a.date, p); });
         }
       }
-      // Sinon on tente createdAt/ts (avec inPeriod tolérant)
-      return inPeriod(c.createdAt || c.ts, p);
+      // Sinon la date de création, sous son nom canonique (avec inPeriod
+      // tolérant : une fiche sans date reste dans la période courante plutôt
+      // que de disparaître de tous les indicateurs à la fois).
+      return inPeriod(dateCreation(c), p);
     });
 
     var byCol = {};
@@ -595,10 +663,10 @@
     var revenue = won.reduce(function(s,c){ return s + (parseFloat(c.val)||0); }, 0);
 
     var cycles = won.map(function(c){
-      var createdRaw = c.createdAt || c.ts || (c.activity && c.activity[0] && c.activity[0].ts);
-      if(!createdRaw) return null;
-      var created = new Date(createdRaw);
-      if(isNaN(created.getTime()) || created.getFullYear() < 2020) return null;
+      // Sans date de création, la fiche sort du calcul : une durée de cycle
+      // mesurée depuis une date fabriquée n'est pas une durée de cycle.
+      var created = dateCreation(c);
+      if(!created) return null;
       var wonEntry = (c.activity||[]).slice().reverse().find(function(a){ return a.toCol==='won' || a.col==='won'; });
       var wonAt = wonEntry ? new Date(wonEntry.ts || wonEntry.date) : new Date();
       if(isNaN(wonAt.getTime())) return null;
@@ -888,13 +956,16 @@
     for(var i = buckets - 1; i >= 0; i--){
       var dEnd = new Date(now); dEnd.setDate(dEnd.getDate() - i * unitDays);
       var dStart = new Date(dEnd); dStart.setDate(dStart.getDate() - unitDays);
-      var created = pipeline.filter(function(c){ var t = new Date(c.createdAt || c.ts || 0); return t >= dStart && t < dEnd; }).length;
+      // Une fiche sans date de création n'est pas comptée : l'ancien repli
+      // `|| 0` la datait de 1970, donc l'excluait déjà de tous les buckets —
+      // mais en la faisant passer pour datée.
+      var created = pipeline.filter(function(c){ var t = dateCreation(c); return t && t >= dStart && t < dEnd; }).length;
       var rdvs = agenda.filter(function(a){ var t = new Date(a.date || a.ts || 0); return t >= dStart && t < dEnd; }).length;
       var won = pipeline.filter(function(c){
         if(c.col !== 'won') return false;
         var wonEntry = (c.activity||[]).slice().reverse().find(function(a){ return a.toCol==='won'; });
-        var t = wonEntry ? new Date(wonEntry.ts) : new Date(c.createdAt || 0);
-        return t >= dStart && t < dEnd;
+        var t = wonEntry ? dateValide(wonEntry.ts) : dateCreation(c);
+        return t && t >= dStart && t < dEnd;
       }).length;
       data.push({ created: created, rdvs: rdvs, won: won });
     }
@@ -987,7 +1058,7 @@
     pipeline.forEach(function(c){
       if(c.col !== 'won') return;
       var wonEntry = (c.activity||[]).slice().reverse().find(function(a){ return a.toCol==='won' || a.col==='won'; });
-      var wonDate = wonEntry ? new Date(wonEntry.ts || wonEntry.date) : (c.createdAt ? new Date(c.createdAt) : null);
+      var wonDate = wonEntry ? new Date(wonEntry.ts || wonEntry.date) : dateCreation(c);
       if(!wonDate || isNaN(wonDate.getTime()) || wonDate.getFullYear() < 2020) return;
       var amount = parseFloat(c.val) || 0;
       var match = months.find(function(m){ return m.year === wonDate.getFullYear() && m.month === wonDate.getMonth(); });
@@ -1074,7 +1145,7 @@
     openCards.forEach(function(c){
       c._val = parseFloat(c.val) || 0;
       var lastA = (c.activity||[]).slice().reverse().find(function(a){ return a.ts || a.date; });
-      var lastTs = lastA ? new Date(lastA.ts || lastA.date) : (c.createdAt ? new Date(c.createdAt) : null);
+      var lastTs = lastA ? new Date(lastA.ts || lastA.date) : dateCreation(c);
       c._daysSince = (lastTs && !isNaN(lastTs.getTime()) && lastTs.getFullYear() >= 2020) ? Math.floor((new Date() - lastTs) / 86400000) : null;
     });
     openCards.sort(function(a,b){ return b._val - a._val; });

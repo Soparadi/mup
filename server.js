@@ -1949,6 +1949,15 @@ app.post('/api/pipeline', async (req, res) => {
   if (!userId) return
   try {
     const body = { ...(req.body || {}), userId } // userId forcé, body.userId écrasé
+
+    // Date de création posée par le serveur quand le client n'en fournit pas :
+    // une carte enregistrée sans date de création n'en a plus jamais. Le client
+    // reste libre de fournir la sienne (import, reprise d'un existant). Nom
+    // canonique : created_at ; createdAt (abandonné en écriture) est repris.
+    if (!body.created_at) {
+      body.created_at = body.createdAt || new Date().toISOString()
+    }
+
     const db = await getDb()
 
     // Quota leads (Phase 2 roadmap, commit 1) — ne s'applique QU'AUX ajouts
@@ -2223,7 +2232,11 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
         days: 0,
         activity: [],
         source: 'prospection',
-        societe_id: societeId
+        societe_id: societeId,
+        // La carte reçoit la même date de création que le record société et les
+        // records dirigeants créés dans cette transaction. Son omission ici
+        // était le défaut du chemin nominal d'ajout depuis la Prospection.
+        created_at: now
       }
       stmts.push('CREATE pipeline CONTENT $pbody;')
     }
@@ -2265,6 +2278,13 @@ app.put('/api/pipeline/:id', async (req, res) => {
     const cleanBody = { ...(req.body || {}) }
     delete cleanBody.id
     cleanBody.userId = userId
+    // Date de création préservée. UPDATE … CONTENT remplace le record entier :
+    // un client qui omet created_at l'effacerait à chaque sauvegarde. On
+    // réinjecte celle du record relu ci-dessus (repli createdAt, nom abandonné
+    // mais encore porté par l'existant). Une date de création ne se réécrit
+    // pas : si le corps en porte une autre, celle du record gagne.
+    const dateCreationOrigine = rec.created_at || rec.createdAt
+    if (dateCreationOrigine) cleanBody.created_at = dateCreationOrigine
     const result = await db.query('UPDATE type::record("pipeline", $id) CONTENT $body', { id, body: cleanBody })
     // Enrichissement additif du référentiel mutualisé (clé SIRET) — motif calqué
     // sur PUT /api/contacts/:id, même intention : ce que l'abonné saisit ou enrichit

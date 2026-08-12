@@ -1570,7 +1570,9 @@ async function openDetail(id) {
   document.getElementById('d-focus-cat').textContent = c.sector || c.naf_label || c.naf || '—';
   document.getElementById('d-focus-name').textContent = _nomD.titre || '—';
   document.getElementById('d-focus-sub').textContent = _nomD.sousTitre;
-  document.getElementById('d-focus-pills').innerHTML = `<span class="pill pill-phoning">${esc(col?.name || 'Prospects')}</span><span class="pill pill-neutral">—</span>${_joursD === null ? '' : `<span class="pill pill-day">J+${_joursD}</span>`}`;
+  // La pastille neutre n'est qu'un séparateur devant le J+N : sans J+N elle
+  // fermerait la rangée sur un tiret qui n'annonce plus rien. Elle suit donc.
+  document.getElementById('d-focus-pills').innerHTML = `<span class="pill pill-phoning">${esc(col?.name || 'Prospects')}</span>${_joursD === null ? '' : `<span class="pill pill-neutral">—</span><span class="pill pill-day">J+${_joursD}</span>`}`;
 
   // Info grid
   let infoHtml = '';
@@ -1644,7 +1646,13 @@ async function openDetail(id) {
     const formatted = safe.replace(titleRegex, '<strong>$1</strong>');
     return `<div class="tl-item type-note"><div class="tl-date">${esc(formatNoteDate(n.createdAt))}</div><div class="tl-txt">${formatted}</div></div>`;
   }).join('');
-  document.getElementById('d-timeline').innerHTML = noteItems + (tlItems || '') + entryItem;
+  // Une fiche importée depuis Prospects ou depuis un contact n'a ni note, ni
+  // activité, ni date d'entrée exploitable : les trois morceaux sont vides et
+  // la section se réduisait à son titre. Elle dit alors l'état, sur le gabarit
+  // d'un élément de timeline et sans date — il n'y en a aucune à afficher.
+  const timelineHtml = noteItems + (tlItems || '') + entryItem;
+  document.getElementById('d-timeline').innerHTML = timelineHtml
+    || `<div class="tl-item"><div class="tl-txt">Cette fiche n'a pas encore d'historique.</div></div>`;
 
   // Notes (legacy textarea — éléments removed; reset new note input)
   const noteInput = document.getElementById('d-notes-input');

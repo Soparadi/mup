@@ -1213,6 +1213,47 @@ renderCalendar();
 <script>
 // IIFE supprimée — corps déplacé dans renderDashboardAgenda() (cf. bloc final).
 
+// Une date n'est retenue que si elle se parse ET tombe après 2020. La borne
+// écarte les 1970 que fabriquaient les anciens replis `|| 0` et les
+// identifiants numériques pris pour des millisecondes.
+function dateValide(v){
+  if(!v) return null;
+  var d = new Date(v);
+  return (!isNaN(d.getTime()) && d.getFullYear() >= 2020) ? d : null;
+}
+
+// Date de création d'une carte pipeline — LECTURE PURE : rend une Date ou
+// null, et n'assigne RIEN sur c. Le Tableau de bord est strictement lecteur,
+// mais la règle vaut partout : pipeline.html save() et carte.html
+// persistCoords() sérialisent l'objet carte entier en PUT, et le serveur
+// accepte un created_at fourni par le client quand le record n'en porte aucun.
+// Une date déduite posée sur l'objet partirait en base et deviendrait
+// indiscernable d'une vraie date.
+//
+// created_at (nom canonique depuis le renommage serveur) → createdAt (fiches
+// d'avant) → plus ancienne trace portée par la fiche.
+// La troisième n'est pas la création mais une borne supérieure crédible :
+//   • MINIMUM des traces, jamais la première — ni activity ni noteEntries
+//     ne sont triés ;
+//   • activity[].ts SEULEMENT : activity[].date est une chaîne d'affichage
+//     française (« 12 août, 14:30 ») qui ne se parse pas.
+// Aucune date exploitable → null, et l'appelant exclut la fiche.
+function dateCreation(c){
+  if(!c) return null;
+  var direct = dateValide(c.created_at) || dateValide(c.createdAt);
+  if(direct) return direct;
+  var min = null;
+  (c.activity || []).forEach(function(a){
+    var d = dateValide(a && a.ts);
+    if(d && (min === null || d < min)) min = d;
+  });
+  (c.noteEntries || []).forEach(function(n){
+    var d = dateValide(n && n.createdAt);
+    if(d && (min === null || d < min)) min = d;
+  });
+  return min;
+}
+
 async function renderDashFunnel(cards){
   if(!Array.isArray(cards)){
     cards = await _loadPipeline();
@@ -1263,7 +1304,9 @@ async function renderDashFunnel(cards){
   var durSum = 0, durCount = 0;
   cards.forEach(function(c){
     if(c.col !== 'won') return;
-    var created = c.createdAt ? new Date(c.createdAt) : null;
+    // La lecture était restée sur createdAt seul : toute fiche gagnée créée
+    // depuis le renommage serveur sortait de la moyenne.
+    var created = dateCreation(c);
     var wonAt = c.wonAt ? new Date(c.wonAt) : null;
     if(created && wonAt && !isNaN(created) && !isNaN(wonAt)){
       durSum += (wonAt - created) / (1000 * 60 * 60 * 24);

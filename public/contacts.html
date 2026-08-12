@@ -679,6 +679,15 @@ let currentOriginFilter = 'all';
 let currentPage = 1;
 const PAGE_SIZE = 10;
 
+// Provenance des deux sources lues au chargement, renseignée par init() :
+//   'api'    le serveur a rendu une liste
+//   'cache'  le serveur a échoué, le cache localStorage a rendu une liste
+//   'aucune' ni l'un ni l'autre n'a rendu de liste exploitable
+// Sert au marqueur écran (au moins une source vient du cache) et à l'état vide,
+// qui ne doit annoncer une absence de contacts que s'il l'a constatée.
+let sourceContacts = 'api';
+let sourcePipeline = 'api';
+
 // Définition statique des filtres "Origine" — étiquettes UI + matcher fonction.
 // Compteurs dynamiques calculés dans renderOriginFilters().
 // Sources du moteur /api/import (linkedin, iphone, carnet, gmail, outlook,
@@ -825,6 +834,20 @@ function migrateProspect(p){
   return p;
 }
 
+// Journalise un repli de lecture : la route, la nature de l'échec (statut rendu
+// par le serveur, ou message de transport quand la requête n'a pas abouti), ce
+// que le cache a rendu, et l'état de la clé localStorage. Un seul format pour
+// les deux sources, pour qu'un repli se repère d'un coup d'œil en console.
+function journaliserRepli(route, cle, err, nb, etatCle){
+  var cause = (err && err.status)
+    ? ('statut HTTP ' + err.status)
+    : ('échec de transport : ' + ((err && err.message) || 'erreur inconnue'));
+  console.warn('[contacts] repli sur le cache — route ' + route +
+    ' · ' + cause +
+    ' · ' + nb + ' enregistrement' + (nb > 1 ? 's' : '') + ' repris du cache' +
+    ' · clé ' + cle + ' ' + etatCle, err);
+}
+
 // ── INIT ──
 async function init(){
   localStorage.removeItem('mup_prospects');
@@ -832,27 +855,50 @@ async function init(){
 
   // 1) Source historique : mup_contacts (API + fallback localStorage)
   var fromContacts = [];
+  sourceContacts = 'api';
   try {
     const response = await fetch('/api/contacts');
     if (response.ok) {
       fromContacts = await response.json();
     } else {
-      throw new Error('API failed');
+      // Le statut voyage avec l'erreur : le catch qui déclenche le repli doit
+      // pouvoir dire lequel des deux échecs il traite — un refus du serveur
+      // (statut présent) ou une requête qui n'a pas abouti (statut absent).
+      const err = new Error(`HTTP ${response.status}`);
+      err.status = response.status;
+      throw err;
     }
   } catch (e) {
     // Fallback localStorage
+    var etatCleC = 'présente';
+    var cacheLuC = false;
     try {
       var raw = localStorage.getItem('mup_contacts');
       if(raw){
         var parsed = JSON.parse(raw);
-        if(Array.isArray(parsed)) fromContacts = parsed.map(migrateProspect);
+        if(Array.isArray(parsed)){
+          fromContacts = parsed.map(migrateProspect);
+          cacheLuC = true;
+        } else {
+          etatCleC = 'présente mais sans tableau';
+        }
+      } else {
+        etatCleC = 'absente';
       }
-    } catch(e2){}
+    } catch(e2){
+      // Cache présent mais illisible : le repli n'a rien à rendre. Se taire ici
+      // rendait cet échec indiscernable d'une base réellement vide.
+      etatCleC = 'illisible';
+      console.warn('[contacts] cache illisible — clé mup_contacts, contenu non analysable', e2);
+    }
+    sourceContacts = cacheLuC ? 'cache' : 'aucune';
+    journaliserRepli('/api/contacts', 'mup_contacts', e, fromContacts.length, etatCleC);
   }
 
   // 2) Source pipeline : tout client ajouté depuis Leads ou directement
   //    dans Pipeline doit apparaître dans Contacts
   var fromPipeline = [];
+  sourcePipeline = 'api';
   try {
     const response = await fetch('/api/pipeline');
     if (response.ok) {
@@ -881,12 +927,24 @@ async function init(){
             noteEntries: p.noteEntries || []
           });
         });
+      } else {
+        // 200 dont le corps n'est pas un tableau : la réponse est un succès,
+        // aucun repli ne se déclenche, la liste pipeline reste vide. Journalisé
+        // à part des replis — la cause n'est ni un refus ni un transport rompu.
+        sourcePipeline = 'aucune';
+        console.warn('[contacts] réponse inattendue — route /api/pipeline · statut HTTP ' +
+          response.status + ' · corps de type ' + (parsedP === null ? 'null' : typeof parsedP) +
+          ' au lieu d\'un tableau · 0 enregistrement retenu, aucun repli déclenché');
       }
     } else {
-      throw new Error('API failed');
+      const err = new Error(`HTTP ${response.status}`);
+      err.status = response.status;
+      throw err;
     }
   } catch(e){
     // Fallback localStorage si API échoue
+    var etatCleP = 'présente';
+    var cacheLuP = false;
     try {
       var rawP = localStorage.getItem('mup_pipeline');
       if(rawP){
@@ -914,9 +972,20 @@ async function init(){
               noteEntries: p.noteEntries || []
             });
           });
+          cacheLuP = true;
+        } else {
+          etatCleP = 'présente mais sans tableau';
         }
+      } else {
+        etatCleP = 'absente';
       }
-    } catch(e2){}
+    } catch(e2){
+      // Même règle que pour mup_contacts : un cache illisible se dit.
+      etatCleP = 'illisible';
+      console.warn('[contacts] cache illisible — clé mup_pipeline, contenu non analysable', e2);
+    }
+    sourcePipeline = cacheLuP ? 'cache' : 'aucune';
+    journaliserRepli('/api/pipeline', 'mup_pipeline', e, fromPipeline.length, etatCleP);
   }
 
   // 3) Fusion sans doublon : clé = id (priorité Pipeline si même id)
@@ -965,6 +1034,14 @@ async function init(){
       }
     };
     document.body.appendChild(importBtn);
+  }
+
+  // Marqueur écran : au moins une des deux sources vient du cache, l'abonnée
+  // regarde une copie et non l'état du serveur. On reprend le toast existant,
+  // sa classe et son style d'origine. Rien n'est mémorisé : le chargement
+  // suivant ne le réaffiche que s'il retombe lui aussi sur le cache.
+  if(sourceContacts === 'cache' || sourcePipeline === 'cache'){
+    toast('Affichage de la dernière copie enregistrée sur cet appareil');
   }
 
   renderAll();
@@ -1123,7 +1200,30 @@ function renderTable(){
   // Empty state si AUCUN contact en base ; sinon table même si filtre vide.
   if(!prospects.length){
     if(tableCard) tableCard.style.display = 'none';
-    if(empty) empty.style.display = 'flex';
+    if(empty){
+      // Une liste vide et une lecture en échec ne sont pas la même chose :
+      // il suffit qu'UNE des deux sources n'ait rendu aucune liste (serveur en
+      // échec et cache absent ou illisible) pour que l'écran ne puisse plus
+      // annoncer une absence de contacts qu'il n'a pas constatée — le reste de
+      // la liste vit peut-être dans la source muette. Même bloc, même style :
+      // seul le texte change, et « Aucun contact pour l'instant » reste réservé
+      // à une liste réellement vide, c'est-à-dire aux deux sources confirmées.
+      var lectureImpossible = (sourceContacts === 'aucune' || sourcePipeline === 'aucune');
+      var emptyTitle = empty.querySelector('.empty-title');
+      var emptySub = empty.querySelector('.empty-sub');
+      var emptyImport = empty.querySelector('.btn-import');
+      if(emptyTitle) emptyTitle.textContent = lectureImpossible
+        ? 'Contacts non chargés'
+        : 'Aucun contact pour l\'instant';
+      if(emptySub) emptySub.textContent = lectureImpossible
+        ? 'La liste n\'a pas pu être lue. Rechargez la page dans un instant.'
+        : 'Importez un fichier CSV ou ajoutez des contacts manuellement pour démarrer votre prospection.';
+      // Rien à importer par-dessus une liste qu'on n'a pas réussi à lire : le
+      // bouton se retire tant que la lecture est en échec, et revient intact
+      // quand la liste est réellement vide.
+      if(emptyImport) emptyImport.style.display = lectureImpossible ? 'none' : '';
+      empty.style.display = 'flex';
+    }
     return;
   }
   if(tableCard) tableCard.style.display = 'flex';

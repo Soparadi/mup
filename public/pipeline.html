@@ -1062,17 +1062,65 @@ function noterEtapeVie(card, nouvelleCol){
   if(nouvelleCol === 'lost') card.lostFromCol = card.col || null;
 }
 
-// J+N compté depuis la création. Calculé à l'affichage et non stocké : un
-// compteur écrit sur la fiche se fige au jour de sa dernière sauvegarde.
-// Sans date de création exploitable, rend null : le badge est alors omis
-// plutôt que d'afficher un J+0 qu'aucune donnée ne fonde.
+// Une date n'est retenue que si elle se parse ET tombe après 2020. La borne
+// écarte les 1970 fabriqués par un repli sur zéro et les identifiants
+// numériques pris pour des millisecondes.
+function dateValide(v){
+  if(!v) return null;
+  const d = new Date(v);
+  return (!isNaN(d.getTime()) && d.getFullYear() >= 2020) ? d : null;
+}
+
+// Date de création d'une fiche — LECTURE PURE : rend une Date ou null, et
+// N'ASSIGNE RIEN sur c. save() sérialise l'objet carte lui-même en PUT, sans
+// liste blanche, et le serveur accepte un created_at fourni par le client dès
+// lors que le record en base n'en porte aucun — c'est-à-dire exactement sur la
+// population que le repli vise. Une date déduite posée sur l'objet partirait
+// donc en base au premier enregistrement, deviendrait indiscernable d'une
+// vraie date, et ne serait plus jamais corrigeable. Elle se calcule à
+// l'affichage, elle ne se stocke pas.
+//
+// created_at (nom canonique depuis le renommage serveur) → createdAt (fiches
+// d'avant) → plus ancienne trace portée par la fiche.
+// La troisième n'est pas la création mais une borne supérieure crédible :
+//   • MINIMUM des traces, jamais la première — ni activity ni noteEntries
+//     ne sont triés ;
+//   • activity[].ts SEULEMENT : activity[].date est une chaîne d'affichage
+//     française (« 12 août, 14:30 ») qui ne se parse pas ;
+//   • noteEntries[].createdAt est inclus, comme dans carte.html, pour que la
+//     bulle de la Carte et le badge du Kanban donnent le même nombre sur la
+//     même fiche.
+function dateCreation(c){
+  if(!c) return null;
+  const direct = dateValide(c.created_at) || dateValide(c.createdAt);
+  if(direct) return direct;
+  let min = null;
+  (c.activity || []).forEach(a => {
+    const d = dateValide(a && a.ts);
+    if(d && (min === null || d < min)) min = d;
+  });
+  (c.noteEntries || []).forEach(n => {
+    const d = dateValide(n && n.createdAt);
+    if(d && (min === null || d < min)) min = d;
+  });
+  return min;
+}
+
+// J+N depuis la création. Rend null — et non zéro — quand la fiche ne porte
+// aucune date exploitable : l'appelant omet alors le badge. Un J+0 par défaut
+// se lirait « créée aujourd'hui », ce qui est faux précisément sur les fiches
+// les plus anciennes.
 function joursDepuisCreation(c){
-  const src = c && (c.created_at || c.createdAt);
-  if(!src) return null;
-  const t = new Date(src).getTime();
-  if(isNaN(t)) return null;
-  const j = Math.floor((Date.now() - t) / 86400000);
+  const d = dateCreation(c);
+  if(!d) return null;
+  const j = Math.floor((Date.now() - d.getTime()) / 86400000);
   return j > 0 ? j : 0;
+}
+
+// Badge d'ancienneté prêt à insérer, vide quand la date manque.
+function badgeJours(c, balise = 'div'){
+  const j = joursDepuisCreation(c);
+  return j === null ? '' : `<${balise} class="kcard-days">J+${j}</${balise}>`;
 }
 
 // Liens sociaux de la fiche. La valeur vient d'un champ libre ou d'un
@@ -1303,7 +1351,6 @@ function renderKanban() {
 
 function renderCard(c, color) {
   const valFmt = fmtVal(c.val);
-  const _jours = joursDepuisCreation(c);
   // Nom société composé (enseigne en titre, nom juridique en 2e rang) — module partagé.
   const _nomC = window.MUPNom
     ? window.MUPNom.compose({ enseigne: c.enseigne, nomJuridique: c.co || c.name })
@@ -1323,7 +1370,7 @@ function renderCard(c, color) {
     ${(c.sector||c.naf_label||c.naf)?`<div class="card-naf-pill">${esc(c.sector||c.naf_label||c.naf)}</div>`:''}
     <div class="kcard-foot">
       <div class="kcard-val">${valFmt||'0,00 €'}</div>
-      ${_jours === null ? '' : `<div class="kcard-days">J+${_jours}</div>`}
+      ${badgeJours(c)}
     </div>
     ${c.src?`<div class="kcard-src">↳ ${esc(c.src)}</div>`:''}
     ${renderProgress(c)}
@@ -1508,9 +1555,10 @@ async function openDetail(id) {
     : { titre: c.co || c.name || '', sousTitre: c.co ? c.name : '' };
 
   // Header
-  const _joursD = joursDepuisCreation(c);
   document.getElementById('d-name').textContent = _nomD.titre;
   document.getElementById('d-co').textContent = _nomD.sousTitre;
+  // Sans date exploitable, le badge d'ancienneté est omis — jamais un J+0.
+  const _joursD = joursDepuisCreation(c);
   document.getElementById('d-badges').innerHTML = `
     <span class="detail-badge" style="background:${col?.color}22;color:${col?.color}">${col?.name||''}</span>
     <span class="detail-badge" style="background:var(--surface2);color:var(--muted)">${val}</span>
@@ -1580,14 +1628,15 @@ async function openDetail(id) {
     if(t.includes('déplacé') || t.includes('move')) return 'type-move';
     return 'type-note';
   }
-  // Add pipeline entry as first event
-  // La date se lit sur ce que la fiche porte : created_at, repli createdAt.
-  // Sans l'un ni l'autre, la ligne s'affiche SANS date — on n'invente pas une
-  // création qu'on ignore, ni depuis l'identifiant, ni depuis la date du jour.
-  const entryTs = c.created_at || c.createdAt;
-  const entryTime = entryTs ? new Date(entryTs).getTime() : NaN;
-  const entryDate = isNaN(entryTime) ? '' : new Date(entryTime).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
-  const entryItem = `<div class="tl-item type-move"><div class="tl-date">${esc(entryDate)}</div><div class="tl-txt">Ajouté au pipeline</div></div>`;
+  // Ligne d'entrée au pipeline, datée par la chaîne commune. Elle lisait
+  // `c.created` — champ qui n'existe sur aucune carte — puis se rabattait sur
+  // l'identifiant lu comme un nombre de millisecondes, et à défaut sur la date
+  // du jour : toute fiche affichait donc son entrée « aujourd'hui ». Sans date
+  // exploitable la ligne est désormais omise plutôt que datée au hasard.
+  const _entree = dateCreation(c);
+  const entryItem = _entree
+    ? `<div class="tl-item type-move"><div class="tl-date">${esc(_entree.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}))}</div><div class="tl-txt">Ajouté au pipeline</div></div>`
+    : '';
   const tlItems = allActs.map(a => `<div class="tl-item ${getTimelineType(a.txt)}"><div class="tl-date">${esc(a.date)}</div><div class="tl-txt">${esc(a.txt)}</div></div>`).join('');
   const noteItems = (c.noteEntries||[]).slice().reverse().map(n => {
     const safe = esc(n.text);
@@ -2429,7 +2478,6 @@ function importFromProspects() {
 
   function buildFocusCard(c, col){
     const val = c.val >= 1000 ? Math.round(c.val/1000) + 'k€' : (c.val ? c.val + '€' : '—');
-    const jours = joursDepuisCreation(c);
     const div = document.createElement('div');
     div.className = 'kcard';
     if(String(c.id) === String(window.currentId)) div.classList.add('selected');
@@ -2440,7 +2488,7 @@ function importFromProspects() {
       <div class="kcard-co">${escapeHtml(c.co ? c.name : '')}</div>
       <div class="kcard-foot">
         <span class="kcard-val">${val}</span>
-        ${jours === null ? '' : `<span class="kcard-days">J+${jours}</span>`}
+        ${badgeJours(c, 'span')}
       </div>
     `;
     div.onclick = () => {

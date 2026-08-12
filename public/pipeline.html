@@ -1611,119 +1611,119 @@ async function openDetail(id) {
     // rejouées. Seule la carte est sautée — la suite d'openDetail, elle, doit
     // se rejouer. La garde est levée par fini(), quelle que soit l'issue.
     if(detailGeoFiche !== String(c.id)) {
-    detailGeoFiche = String(c.id);
-    setTimeout(() => {
-      // Levée de la garde, quelle que soit l'issue. Conditionnelle : une autre
-      // fiche a pu prendre la main entre-temps, sa garde ne nous appartient pas.
-      function fini(){ if(detailGeoFiche === String(c.id)) detailGeoFiche = null; }
+      detailGeoFiche = String(c.id);
+      setTimeout(() => {
+        // Levée de la garde, quelle que soit l'issue. Conditionnelle : une autre
+        // fiche a pu prendre la main entre-temps, sa garde ne nous appartient pas.
+        function fini(){ if(detailGeoFiche === String(c.id)) detailGeoFiche = null; }
 
-      if(detailMap) { detailMap.remove(); detailMap = null; }
-      detailMap = L.map('detail-map', { zoomControl:false }).setView([48.4, -1.75], 10);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:18, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' }).addTo(detailMap);
-      detailMap.invalidateSize();
-
-      // La résolution est asynchrone : la fiche peut changer, ou être fermée
-      // puis rouverte, avant qu'elle n'aboutisse. Rien ne doit alors être posé
-      // sur la carte à l'écran, qui n'est plus celle-ci.
-      var maCarte = detailMap;
-      function carteVivante(){ return detailMap === maCarte; }
-
-      // Récupérer la couleur de la colonne pour le marker
-      var colColor = '#1D1D1F';
-      try { var stage = (typeof STAGES !== 'undefined' ? STAGES : []).find(function(s){return s.id===c.col;}); if(stage) colColor = stage.color; } catch(e){}
-
-      // Helper : place le marker et zoome
-      function placeMarker(lat, lon, label) {
-        detailMap.setView([lat, lon], 14);
-        if(detailMarker) { try { detailMap.removeLayer(detailMarker); } catch(e){} }
-        var icon = createMupMarker(lat, lon, colColor);
-        detailMarker = L.marker([lat, lon], { icon: icon }).addTo(detailMap).bindPopup(esc(label)).openPopup();
+        if(detailMap) { detailMap.remove(); detailMap = null; }
+        detailMap = L.map('detail-map', { zoomControl:false }).setView([48.4, -1.75], 10);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:18, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' }).addTo(detailMap);
         detailMap.invalidateSize();
-      }
 
-      // Les deux causes d'échec, distinctes à l'écran : le service a répondu
-      // sans rien trouver, ou le service n'a pas répondu.
-      var MSG_INTROUVABLE = 'Adresse non localisable';
-      var MSG_PANNE = 'Localisation indisponible';
-      function afficherEchec(msg) {
-        var mapEl = document.getElementById('detail-map');
-        if(mapEl) mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#8E8E93;font-size:12px;background:#F5F5F7;">'+msg+'</div>';
-      }
+        // La résolution est asynchrone : la fiche peut changer, ou être fermée
+        // puis rouverte, avant qu'elle n'aboutisse. Rien ne doit alors être posé
+        // sur la carte à l'écran, qui n'est plus celle-ci.
+        var maCarte = detailMap;
+        function carteVivante(){ return detailMap === maCarte; }
 
-      // a. Coordonnées portées par la fiche : placement direct, zéro réseau.
-      //    C'est la Carte qui les écrit sur /api/pipeline (carte.html) ; le
-      //    Pipeline les ignorait et regéocodait ce qui était déjà résolu.
-      //    Null-island exclue, comme au Tableau de bord.
-      var ficheLat = parseFloat(c.lat), ficheLng = parseFloat(c.lng);
-      if(isFinite(ficheLat) && isFinite(ficheLng) && (ficheLat !== 0 || ficheLng !== 0)) {
-        placeMarker(ficheLat, ficheLng, c.address);
-        fini();
-        return;
-      }
+        // Récupérer la couleur de la colonne pour le marker
+        var colColor = '#1D1D1F';
+        try { var stage = (typeof STAGES !== 'undefined' ? STAGES : []).find(function(s){return s.id===c.col;}); if(stage) colColor = stage.color; } catch(e){}
 
-      // b. Cache localStorage des géocodages
-      var GEO_KEY = 'mup_geocode_cache';
-      var cache = {};
-      try { cache = JSON.parse(localStorage.getItem(GEO_KEY) || '{}'); } catch(e){}
-      var cacheKey = c.address.trim().toLowerCase();
+        // Helper : place le marker et zoome
+        function placeMarker(lat, lon, label) {
+          detailMap.setView([lat, lon], 14);
+          if(detailMarker) { try { detailMap.removeLayer(detailMarker); } catch(e){} }
+          var icon = createMupMarker(lat, lon, colColor);
+          detailMarker = L.marker([lat, lon], { icon: icon }).addTo(detailMap).bindPopup(esc(label)).openPopup();
+          detailMap.invalidateSize();
+        }
 
-      if(cache[cacheKey] && cache[cacheKey].lat && cache[cacheKey].lon) {
-        placeMarker(cache[cacheKey].lat, cache[cacheKey].lon, c.address);
-        fini();
-        return;
-      }
+        // Les deux causes d'échec, distinctes à l'écran : le service a répondu
+        // sans rien trouver, ou le service n'a pas répondu.
+        var MSG_INTROUVABLE = 'Adresse non localisable';
+        var MSG_PANNE = 'Localisation indisponible';
+        function afficherEchec(msg) {
+          var mapEl = document.getElementById('detail-map');
+          if(mapEl) mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#8E8E93;font-size:12px;background:#F5F5F7;">'+msg+'</div>';
+        }
 
-      // c. Géocodage par /api/geocode, repli sur CP+ville si l'adresse
-      //    complète ne donne rien. Le navigateur ne sort plus vers
-      //    nominatim.openstreetmap.org : le serveur interroge la BAN derrière
-      //    son rate-limit (server.js:184), comme au Tableau de bord.
-      //    Trois issues, que l'appelant doit pouvoir distinguer :
-      //      'ok'    — marqueur posé ;
-      //      'vide'  — le service a répondu, sans résultat ;
-      //      'panne' — r.ok faux (502…) ou transport rompu.
-      //    isFallback est conservé et enfin lu : il nomme la tentative dans la
-      //    trace console, sans quoi une panne survenue sur le repli CP+ville
-      //    serait indiscernable d'une panne sur l'adresse complète.
-      function geocode(query, isFallback) {
-        return fetch('/api/geocode?q='+encodeURIComponent(query))
-          .then(function(r){
-            if(!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-          })
-          .then(function(data){
-            // GeoJSON de la BAN : coordinates en [lng, lat] — ordre inverse de
-            // ce que Nominatim rendait.
-            var f = data && data.features && data.features[0];
-            if(f && f.geometry && f.geometry.coordinates) {
-              var lng = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
-              cache[cacheKey] = { lat: lat, lon: lng, ts: Date.now() };
-              try { localStorage.setItem(GEO_KEY, JSON.stringify(cache)); } catch(e){}
-              if(carteVivante()) placeMarker(lat, lng, c.address);
-              return 'ok';
-            }
-            return 'vide';
-          })
-          .catch(function(err){
-            console.warn('[geocode] service en échec', isFallback ? '(repli CP+ville)' : '(adresse complète)', query, err && err.message);
-            return 'panne';
-          });
-      }
-
-      geocode(c.address, false).then(function(issue){
-        if(!carteVivante() || issue === 'ok') { fini(); return; }
-        if(issue === 'panne') { afficherEchec(MSG_PANNE); fini(); return; }
-        // Repli : extraire CP (5 chiffres) + ville (mots qui suivent)
-        var m = c.address.match(/(\d{5})\s*([A-Za-z\u00C0-\u017F\-\s]+)/);
-        if(!m) { afficherEchec(MSG_INTROUVABLE); fini(); return; }
-        geocode(m[1] + ' ' + m[2].trim(), true).then(function(issue2){
-          if(carteVivante()) {
-            if(issue2 === 'vide') afficherEchec(MSG_INTROUVABLE);
-            else if(issue2 === 'panne') afficherEchec(MSG_PANNE);
-          }
+        // a. Coordonnées portées par la fiche : placement direct, zéro réseau.
+        //    C'est la Carte qui les écrit sur /api/pipeline (carte.html) ; le
+        //    Pipeline les ignorait et regéocodait ce qui était déjà résolu.
+        //    Null-island exclue, comme au Tableau de bord.
+        var ficheLat = parseFloat(c.lat), ficheLng = parseFloat(c.lng);
+        if(isFinite(ficheLat) && isFinite(ficheLng) && (ficheLat !== 0 || ficheLng !== 0)) {
+          placeMarker(ficheLat, ficheLng, c.address);
           fini();
+          return;
+        }
+
+        // b. Cache localStorage des géocodages
+        var GEO_KEY = 'mup_geocode_cache';
+        var cache = {};
+        try { cache = JSON.parse(localStorage.getItem(GEO_KEY) || '{}'); } catch(e){}
+        var cacheKey = c.address.trim().toLowerCase();
+
+        if(cache[cacheKey] && cache[cacheKey].lat && cache[cacheKey].lon) {
+          placeMarker(cache[cacheKey].lat, cache[cacheKey].lon, c.address);
+          fini();
+          return;
+        }
+
+        // c. Géocodage par /api/geocode, repli sur CP+ville si l'adresse
+        //    complète ne donne rien. Le navigateur ne sort plus vers
+        //    nominatim.openstreetmap.org : le serveur interroge la BAN derrière
+        //    son rate-limit (server.js:184), comme au Tableau de bord.
+        //    Trois issues, que l'appelant doit pouvoir distinguer :
+        //      'ok'    — marqueur posé ;
+        //      'vide'  — le service a répondu, sans résultat ;
+        //      'panne' — r.ok faux (502…) ou transport rompu.
+        //    isFallback est conservé et enfin lu : il nomme la tentative dans la
+        //    trace console, sans quoi une panne survenue sur le repli CP+ville
+        //    serait indiscernable d'une panne sur l'adresse complète.
+        function geocode(query, isFallback) {
+          return fetch('/api/geocode?q='+encodeURIComponent(query))
+            .then(function(r){
+              if(!r.ok) throw new Error('HTTP ' + r.status);
+              return r.json();
+            })
+            .then(function(data){
+              // GeoJSON de la BAN : coordinates en [lng, lat] — ordre inverse de
+              // ce que Nominatim rendait.
+              var f = data && data.features && data.features[0];
+              if(f && f.geometry && f.geometry.coordinates) {
+                var lng = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
+                cache[cacheKey] = { lat: lat, lon: lng, ts: Date.now() };
+                try { localStorage.setItem(GEO_KEY, JSON.stringify(cache)); } catch(e){}
+                if(carteVivante()) placeMarker(lat, lng, c.address);
+                return 'ok';
+              }
+              return 'vide';
+            })
+            .catch(function(err){
+              console.warn('[geocode] service en échec', isFallback ? '(repli CP+ville)' : '(adresse complète)', query, err && err.message);
+              return 'panne';
+            });
+        }
+
+        geocode(c.address, false).then(function(issue){
+          if(!carteVivante() || issue === 'ok') { fini(); return; }
+          if(issue === 'panne') { afficherEchec(MSG_PANNE); fini(); return; }
+          // Repli : extraire CP (5 chiffres) + ville (mots qui suivent)
+          var m = c.address.match(/(\d{5})\s*([A-Za-z\u00C0-\u017F\-\s]+)/);
+          if(!m) { afficherEchec(MSG_INTROUVABLE); fini(); return; }
+          geocode(m[1] + ' ' + m[2].trim(), true).then(function(issue2){
+            if(carteVivante()) {
+              if(issue2 === 'vide') afficherEchec(MSG_INTROUVABLE);
+              else if(issue2 === 'panne') afficherEchec(MSG_PANNE);
+            }
+            fini();
+          });
         });
-      });
-    }, 300);
+      }, 300);
     }
   } else {
     mapSection.style.display = 'none';

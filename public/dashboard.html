@@ -1396,6 +1396,7 @@ document.addEventListener('click', function(e) {
   if (href) window.location.href = href;
 });
 </script>
+<script src="/_mup-projection.js"></script>
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
@@ -1537,7 +1538,15 @@ async function renderDashboardAgenda() {
         } else {
           var colCards=cards.filter(function(c){return c.col===tc.id;}).slice(0,3);
           count=cards.filter(function(c){return c.col===tc.id;}).length;
-          items=colCards.length?colCards.map(function(c){return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(c.co||c.name)+'</div><div class="today-meta">'+esc(c.name||'')+'</div></div></div>';}).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
+          // Colonne Phoning : la seconde ligne portait le nom du contact, et
+          // restait vide sur toute fiche qui n'en a pas — une colonne d'appels
+          // qui n'affichait aucun numéro. À défaut de nom, elle donne le numéro
+          // à composer : saisie d'abord, projection du référentiel en repli.
+          // Lecture seule, comme partout : rien n'est écrit sur la fiche.
+          items=colCards.length?colCards.map(function(c){
+            var sousTitre = c.name || (window.MUPProjection ? window.MUPProjection.tel(c) : '');
+            return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(c.co||c.name)+'</div><div class="today-meta">'+esc(sousTitre)+'</div></div></div>';
+          }).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
         }
         return '<div style="padding:14px 18px;'+border+'"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted2);">'+tc.label+'</div><span style="font-size:16px;font-weight:900;color:'+tc.color+';">'+count+'</span></div>'+items+'</div>';
       }).join('');

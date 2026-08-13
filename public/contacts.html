@@ -772,6 +772,10 @@ async function save(touches){
     // _pipeline / _pipelineCol : drapeaux d'affichage posés à la fusion, jamais
     // des champs de la fiche — ils ne sortent pas de la page.
     delete c._pipeline; delete c._pipelineCol;
+    // `referentiel` : ce que le référentiel mutualisé sait, joint à la lecture.
+    // Pas plus un champ de la fiche que les deux drapeaux ci-dessus — ni au
+    // cache, ni au serveur (qui le retire de toute façon).
+    delete c.referentiel;
     c.updated_at = new Date().toISOString();
     return c;
   });
@@ -784,6 +788,7 @@ async function save(touches){
     const contact = Object.assign({}, p);
     delete contact.col; delete contact.value; delete contact.val;
     delete contact._pipeline; delete contact._pipelineCol;
+    delete contact.referentiel;
     contact.updated_at = new Date().toISOString();
     try {
       // POST : la route accepte l'identifiant fabriqué côté client et fait
@@ -958,6 +963,16 @@ async function init(){
             siren: p.siren || '',
             siret: p.siret || '',
             societe_id: p.societe_id || '',
+            // Coordonnées SOCIÉTÉ portées par la carte, et projection du
+            // référentiel mutualisé. Cette projection ne les listait pas : la
+            // ligne arrivait sans rien à afficher ni rien à cliquer, alors que
+            // la carte et le référentiel avaient l'un et l'autre de quoi la
+            // renseigner. Le sous-objet `referentiel` reste tel quel — il n'est
+            // pas aplati, une valeur projetée reste distinguable d'une saisie.
+            website: p.website || '',
+            societe_email: p.societe_email || '',
+            societe_tel: p.societe_tel || '',
+            referentiel: p.referentiel,
             source: 'pipeline',
             entity_origine: p.entity_origine || 'mup',
             col: p.col || 'leads',
@@ -1004,6 +1019,13 @@ async function init(){
               instagram: p.instagram || '',
               siren: p.siren || '',
               siret: p.siret || '',
+              // Mêmes champs que la branche serveur ci-dessus. Le cache peut
+              // porter une projection d'une lecture précédente ; elle vaut ce
+              // que vaut le cache, et se lit au même endroit.
+              website: p.website || '',
+              societe_email: p.societe_email || '',
+              societe_tel: p.societe_tel || '',
+              referentiel: p.referentiel,
               source: 'pipeline',
               entity_origine: p.entity_origine || 'mup',
               col: p.col || 'leads',

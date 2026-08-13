@@ -1746,7 +1746,14 @@ function loadCampaignRecipients(){
   // societe_email en repli : une fiche créée par le + du Pipeline ne remplit
   // que ce champ-là. Sans ce repli elle n'était jamais destinataire d'une
   // campagne, alors qu'elle porte bien une adresse.
-  var recipients = filtered.map(function(c){ var email = c.email || c.societe_email || c.mail || c.contactEmail; if(!email) return null;
+  //
+  // Et ce repli-là ne trouvait une valeur que si un « Enrichir » l'avait un jour
+  // recopiée sur la carte — la donnée existait au référentiel, la campagne ne la
+  // voyait pas. L'adresse projetée ferme la marche (MUPProjection : saisie
+  // d'abord, projection en dernier). Le serveur ne projette une adresse qu'au
+  // SIRET déjà payé et retire les fiches opposées : ce qui arrive ici est
+  // adressable.
+  var recipients = filtered.map(function(c){ var email = window.MUPProjection ? window.MUPProjection.email(c) : (c.email || c.societe_email || c.mail || c.contactEmail); if(!email) return null;
     return { email, prenom: (c.contactFirstName || c.firstName || (c.name || '').split(' ')[0] || '').trim(), entreprise: (c.co || c.company || '').trim(), secteur: (c.naf || c.sector || '').trim(), ville: (c.city || '').trim() };
   }).filter(Boolean);
   window.__currentRecipients = recipients;
@@ -2109,6 +2116,7 @@ function toast(msg, type){
 loadAccountsAndInbox();
 refreshOauthAvailability();
 </script>
+<script src="/_mup-projection.js"></script>
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>

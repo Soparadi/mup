@@ -736,6 +736,12 @@ function placeCard(c, clat, clng){
   // création et jamais recalculé depuis : la bulle affichait J+0 pour toutes
   // les fiches. `days` n'est ni écrit ni supprimé ici, seulement cessé d'être lu.
   var jours=joursDepuisCreation(c);
+  // Numéro à appeler : la saisie d'abord (personne, puis société), la projection
+  // du référentiel en dernier repli. La bulle ne portait que `c.tel` — une carte
+  // qui n'a pas de numéro de personne n'offrait rien à composer, alors que le
+  // référentiel en connaît un pour son SIRET. Rien n'est écrit sur la carte : la
+  // valeur projetée s'affiche, et disparaît avec la page.
+  var telAppel=window.MUPProjection?window.MUPProjection.tel(c):(c.tel||'');
   var popup='<div class="pop">'
     +'<div class="pop-bar" style="background:'+col+'"></div>'
     +'<div class="pop-name">'+esc(c.co||c.name)+'</div>'
@@ -744,7 +750,7 @@ function placeCard(c, clat, clng){
     +'<div class="pop-stage" style="background:'+col+'22;color:'+col+'">'+stageName(c.col)+'</div>'
     +progressHtml(c.col)
     +(nextAct?'<div style="font-size:11px;color:var(--text);margin-top:8px;padding:6px 8px;background:var(--surface);border-radius:6px;font-weight:600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="'+actStyle.color+'" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+actStyle.label+' — '+formatRdvDate(nextAct.date.slice(0,10),nextAct.hour||'14:00')+'</div>':'')
-    +(c.tel?'<div style="margin-top:8px;font-size:11px"><a href="tel:'+esc(window.MUPTel.lien(c.tel))+'" style="color:var(--blue);text-decoration:none;display:flex;align-items:center;gap:5px" onclick="event.stopPropagation()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'+esc(window.MUPTel.format(c.tel))+'</a></div>':'')
+    +(telAppel?'<div style="margin-top:8px;font-size:11px"><a href="tel:'+esc(window.MUPTel.lien(telAppel))+'" style="color:var(--blue);text-decoration:none;display:flex;align-items:center;gap:5px" onclick="event.stopPropagation()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'+esc(window.MUPTel.format(telAppel))+'</a></div>':'')
     +'<div class="pop-actions">'
     +'<button class="pop-btn" onclick="scrollToStop(\''+c.id+'\')">Voir dans le panneau</button>'
     +'</div>'
@@ -1392,7 +1398,8 @@ function renderSchedule(){
       included.push(s);
       totalDist+=legDist;
       var col=stageColor(s.card.col);
-      var tel=s.card.tel||'';
+      // Même lecture que la bulle : saisie d'abord, projection en repli.
+      var tel=window.MUPProjection?window.MUPProjection.tel(s.card):(s.card.tel||'');
       var distLabel=legDist<2000?'< 2 km':fmtDist(legDist);
       var timeLabel=legDist<2000?'< 2 min':Math.round(legTime)+' min';
       html+='<div class="sched-item" id="sched-'+s.id+'" style="cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+s.id+'\')">'
@@ -1576,6 +1583,7 @@ function renderSchedule(){
 })();
 </script>
 <script src="/_mup-tel.js"></script>
+<script src="/_mup-projection.js"></script>
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>

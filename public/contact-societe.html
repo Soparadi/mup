@@ -1125,32 +1125,38 @@ function renderPeople(){
 }
 
 // Sous-titres des deux dossiers. Les factures liées au record sont comptées —
-// factures_ids est tenu à jour par la page Factures, c'est un chiffre sûr. Les
-// devis ne sont pas comptés : rien ne les rattache à ce contact autrement que
-// par le SIRET que porte le lien, et annoncer « 0 devis » sur cette base serait
-// affirmer plus que ce qu'on sait. Le sous-titre dit alors ce que le clic fait.
-function majDossiers(siret){
+// factures_ids est tenu à jour par la page Factures, c'est un chiffre sûr.
+// Les devis ne sont ni comptés ni filtrés : rien ne rattache un devis à ce
+// contact, et le sous-titre annonce donc ce que le clic ouvre — la liste
+// entière.
+function majDossiers(){
   const n = ((contact && contact.factures_ids) || []).length;
   const fact = document.getElementById('folder-factures-count');
   const dev = document.getElementById('folder-devis-count');
   if (fact) fact.textContent = n + ' facture' + (n > 1 ? 's' : '');
-  if (dev) dev.textContent = siret ? 'Filtrés sur ce SIRET' : 'Liste complète';
+  if (dev) dev.textContent = 'Liste complète';
 }
 
 function wireActions(){
-  // Devis et Factures se filtrent par SIRET du client, jamais par id de fiche :
-  // `?contact=` n'était lu par aucune des deux pages, et les quatre liens
-  // ouvraient donc la liste entière. `?client_siret=` est le paramètre que
-  // factures.html lit déjà ; devis.html le lit désormais aussi. Sans SIRET, il
-  // n'y a rien à filtrer : le lien ouvre la page sans paramètre plutôt que d'en
-  // porter un vide.
+  // Factures se filtre par SIRET du client, jamais par id de fiche :
+  // `?contact=` n'était lu par aucune des deux pages. `?client_siret=` est le
+  // paramètre que factures.html lit, et le filtre y porte : une facture est
+  // enregistrée avec le SIRET de son client.
+  //
+  // Devis, non. Aucun devis ne porte de SIRET — ni l'éditeur de devis.html, ni
+  // la conversion serveur n'en écrivent — et le filtre serait donc toujours
+  // vide. Passer le paramètre ferait afficher un bandeau « filtre actif » sur
+  // une liste sans aucun résultat : la fiche prétendrait filtrer sur un critère
+  // qu'aucun devis ne porte. Les deux liens Devis ouvrent la liste entière. Le
+  // jour où un SIRET client sera posé à la création d'un devis, il suffira de
+  // leur rendre le paramètre : devis.html sait déjà le lire.
   const siret = String((contact && contact.siret) || '').replace(/\s+/g, '');
   const q = siret ? '?client_siret=' + encodeURIComponent(siret) : '';
-  document.getElementById('qa-devis').href        = '/devis' + q;
+  document.getElementById('qa-devis').href        = '/devis';
   document.getElementById('qa-facture').href      = '/factures' + q;
-  document.getElementById('folder-devis').href    = '/devis' + q;
+  document.getElementById('folder-devis').href    = '/devis';
   document.getElementById('folder-factures').href = '/factures' + q;
-  majDossiers(siret);
+  majDossiers();
 
   // Dropdowns header (Appeler / Écrire / Planifier) — listent les personnes.
   //

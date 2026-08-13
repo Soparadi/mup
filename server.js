@@ -3002,11 +3002,16 @@ app.get('/api/agenda', async (req, res) => {
   try {
     const db = await getDb()
     const ficheId = typeof req.query?.ficheId === 'string' ? req.query.ficheId.trim() : ''
+    // Deux formes ont été écrites : nue ("abc123") depuis le Pipeline, préfixée
+    // ("pipeline:abc123") depuis l'Agenda et la Visio. L'égalité stricte faisait
+    // disparaître les secondes de la fiche. La lecture accepte les deux le temps
+    // que l'ancien s'éteigne ; rien n'est réécrit.
+    const ficheIdNu = ficheId.replace(/^pipeline:/, '')
     const result = ficheId
       ? await queryOrEmpty(
           db,
-          'SELECT * FROM agenda WHERE userId = $userId AND ficheId = $ficheId',
-          { userId, ficheId }
+          'SELECT * FROM agenda WHERE userId = $userId AND ficheId IN $ficheIds',
+          { userId, ficheIds: [ficheIdNu, 'pipeline:' + ficheIdNu] }
         )
       : await queryOrEmpty(db, 'SELECT * FROM agenda WHERE userId = $userId', { userId })
     res.json(result)

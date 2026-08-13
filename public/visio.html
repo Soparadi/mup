@@ -1026,10 +1026,25 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
+// Forme unique d'un id de fiche : nue, sans le préfixe de table. C'est celle
+// que le Pipeline écrit et relit ; l'API pipeline, elle, rend l'id préfixé.
+// Sans cette normalisation un RDV créé ici portait "pipeline:xxx" et
+// n'apparaissait sur aucune fiche.
+function normFicheId(id){
+  const s = String(id == null ? '' : id).replace(/^pipeline:/, '');
+  return s || null;
+}
+
 const api = {
   // Pipeline / Agenda / Contacts (lecture seule, APIs déjà migrées)
   async getPipeline(){
-    try { const r = await fetch('/api/pipeline'); return r.ok ? await r.json() : []; } catch(e){ return []; }
+    try {
+      const r = await fetch('/api/pipeline');
+      if(!r.ok) return [];
+      const data = await r.json();
+      if(!Array.isArray(data)) return [];
+      return data.map(p => { if(p && p.id) p.id = normFicheId(p.id); return p; });
+    } catch(e){ return []; }
   },
   async getAgenda(){
     try { const r = await fetch('/api/agenda'); return r.ok ? await r.json() : []; } catch(e){ return []; }
@@ -1284,11 +1299,13 @@ async function collectVisioRdvs(){
     // Compose ISO depuis date YYYY-MM-DD + start HH:MM (format unifié post-refactor)
     const dateIso = new Date(e.date + 'T' + (e.start || '14:00') + ':00').toISOString();
     if(isNaN(new Date(dateIso).getTime())) return;
-    // Enrichissement depuis la fiche pipeline parente si ficheId présent
-    const p = e.ficheId ? fichesById[String(e.ficheId)] : null;
+    // Enrichissement depuis la fiche pipeline parente si ficheId présent.
+    // Lecture tolérante : l'existant porte encore la forme préfixée.
+    const fid = normFicheId(e.ficheId);
+    const p = fid ? fichesById[fid] : null;
     rdvs.push({
       id: e.id || 'a_' + uid(),
-      prospectId: e.ficheId || null,
+      prospectId: fid,
       prospectName: (p && (p.co || p.nom || p.name)) || e.title || e.contact || 'Sans nom',
       societe: (p && (p.societe || p.co)) || '',
       email: (p && p.email) || '',
@@ -1651,7 +1668,7 @@ async function endCurrentRdv(){
 
   if(rdv.prospectId){
     const pipeline = await api.getPipeline();
-    const card = pipeline.find(p => p.id === rdv.prospectId);
+    const card = pipeline.find(p => p.id === normFicheId(rdv.prospectId));
     if(card && (card.stage || '').toLowerCase() === 'visio'){
       card.stage = 'rdv';
       await api.putPipelineCard(card);
@@ -2293,9 +2310,9 @@ $('sendInviteBtn').addEventListener('click', ()=>{
    ———————————————————————————————————————————————— */
 $('openNewRdvBtn').addEventListener('click', async ()=>{
   // Une seule source : les cartes pipeline, comme la page agenda. L'id posé en
-  // ficheId doit être de la forme "pipeline:xxx" — c'est la seule que la fiche
-  // pipeline sait relire (égalité stricte côté serveur). Un RDV rattaché à un
-  // contact n'apparaîtrait sur aucune fiche.
+  // ficheId est de la forme nue, sans préfixe de table — c'est la seule que la
+  // fiche pipeline sait relire. Un RDV rattaché à un contact n'apparaîtrait sur
+  // aucune fiche.
   const pipeline = await api.getPipeline();
   const sel = $('prospectSelect');
   sel.innerHTML = '<option value="">— Sélectionner —</option>';
@@ -2374,7 +2391,7 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
   const agendaPayload = {
     id: newId, type: 'visio',
     title: prospectName, societe,
-    ficheId: prospectId ? String(prospectId) : null,
+    ficheId: normFicheId(prospectId),
     email: $('prospectEmail').value,
     date: dateStr, start: startStr, end: endStr, duree,
     provider, link, sujet: $('rdvSubject').value,

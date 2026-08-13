@@ -301,6 +301,15 @@ var _pipelineCacheTime = 0;
 var _agendaCache = null;
 var _agendaCacheTime = 0;
 
+// Forme unique d'un id de fiche : nue, sans le préfixe de table. C'est celle
+// que le Pipeline écrit et relit ; l'API pipeline, elle, rend l'id préfixé.
+// Sans cette normalisation un RDV créé ici portait "pipeline:xxx" et
+// n'apparaissait sur aucune fiche.
+function _normFicheId(id){
+  var s = String(id == null ? '' : id).replace(/^pipeline:/, '');
+  return s || null;
+}
+
 async function _loadPipeline(){
   if(_pipelineCache && (Date.now() - _pipelineCacheTime < 30000)){
     return _pipelineCache;
@@ -310,7 +319,10 @@ async function _loadPipeline(){
     var resp = await fetch('/api/pipeline');
     if(resp.ok){
       var data = await resp.json();
-      if(Array.isArray(data)) cards = data;
+      if(Array.isArray(data)) cards = data.map(function(c){
+        if(c && c.id) c.id = _normFicheId(c.id);
+        return c;
+      });
     } else {
       throw new Error('Pipeline API unavailable');
     }
@@ -685,7 +697,8 @@ function editEvent(id) {
   const e = events.find(x => _normAgendaId(x.id) === nid);
   if(!e) return;
   editingId = id;
-  modalFicheId = e.ficheId || null;
+  // Lecture tolérante : l'existant porte encore la forme préfixée.
+  modalFicheId = _normFicheId(e.ficheId);
   document.getElementById('m-title').value = e.title || '';
   document.getElementById('m-contact').value = e.contact || '';
   document.getElementById('m-date').value = e.date || dateKey(selectedDay);
@@ -758,9 +771,10 @@ async function saveEvent() {
   const endVal = document.getElementById('m-end').value;
   const contactVal = document.getElementById('m-contact').value.trim();
   const notesVal = document.getElementById('m-notes').value.trim();
-  // ficheId : depuis modalFicheId (édition) OU select (création)
+  // ficheId : depuis modalFicheId (édition) OU select (création), toujours
+  // sous la forme nue — c'est la seule que la fiche Pipeline relit.
   const sel = document.getElementById('m-pipeline-card');
-  const ficheId = modalFicheId || (sel && sel.value) || null;
+  const ficheId = _normFicheId(modalFicheId || (sel && sel.value) || '');
 
   let target;
   if (editingId) {

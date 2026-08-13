@@ -640,6 +640,26 @@ let personSaveTimers = {};  // débounce de sauvegarde par personne (clé = inde
 let personLocks = {};       // verrou « save en vol » par personne (anti double POST)
 let personDirty = {};       // re-save demandé pendant un save en vol (coalescing)
 
+// ── CE QUI S'ENREGISTRE : LE GESTE, PAS L'AFFICHAGE ──
+// Les champs contact société sont peints par DEUX sources : le record de
+// l'abonnée (populate) et la PROJECTION du référentiel mutualisé
+// (autoEnrichOnOpen, bouton Enrichir). Tant que captureFields relisait le DOM
+// sans distinction, une frappe dans n'importe quel autre champ recopiait la
+// valeur projetée sur le record — et le PUT la renvoyait au référentiel d'où
+// elle venait. Une donnée mutualisée finissait dupliquée sur un enregistrement
+// privé, sans que personne l'ait saisie.
+//
+// Ce registre tranche : un champ n'entre dans le record que si une FRAPPE l'a
+// touché. Il n'est alimenté que par les écouteurs de saisie posés dans
+// wireForm() — et poser .value par script ne déclenche pas 'input', donc aucune
+// peinture (populate, projection, reformatage du téléphone au blur) ne s'y
+// inscrit jamais. Un champ non touché garde la valeur du record, quelle que
+// soit celle affichée à l'écran.
+//
+// Vidé à chaque populate() : la fiche vient d'être repeinte depuis le record,
+// plus rien à l'écran n'est une saisie en attente.
+const champsSaisis = new Set();
+
 // ── Restitution silencieuse à l'ouverture — DOCTRINE (tranchée le 3 juillet) ──
 // Le décompte porte sur l'apport d'un MOYEN DE CONTACT — email ou téléphone —
 // quelle qu'en soit la provenance (référentiel ou tiers). Les afficher
@@ -871,6 +891,9 @@ async function refreshEnrichButtonState(){
 
 function populate(){
   const c = contact;
+  // Tout ce qui suit repeint les champs depuis le record : aucune saisie n'est
+  // plus en attente (cf. champsSaisis).
+  champsSaisis.clear();
   // Titre = enseigne si présente, sinon nom juridique (module partagé). Le nom
   // juridique s'affiche en sous-titre quand il diffère du titre.
   const _nom = window.MUPNom
@@ -1231,30 +1254,44 @@ function setAutosaveState(state){
   else if (state === 'error') { dot.classList.add('error'); txt.textContent = 'Erreur de sauvegarde'; }
 }
 
+// Reporte sur le record ce que l'abonnée a SAISI, et rien d'autre — cf.
+// champsSaisis. Un champ jamais touché n'est même pas lu : la valeur du record
+// tient, y compris quand l'écran en affiche une autre (projection du
+// référentiel). Effacer un champ reste une saisie : le champ est marqué, la
+// chaîne vide part, l'effacement persiste.
 function captureFields(){
   const c = contact;
-  c.nom = document.getElementById('f-nom').value.trim() || c.nom;
-  c.sector = document.getElementById('f-sector').value.trim();
-  c.website = document.getElementById('f-website').value.trim();
-  c.societe_email = document.getElementById('f-societe-email').value.trim();
-  c.societe_tel = window.MUPTel.format(document.getElementById('f-societe-tel').value);
-  c.adresse = document.getElementById('f-adresse').value.trim();
-  c.zip = document.getElementById('f-zip').value.trim();
-  c.ville = document.getElementById('f-ville').value.trim();
-  c.note_societe = document.getElementById('f-note-societe').value.trim();
+  const saisi = (id, poser) => {
+    if (!champsSaisis.has(id)) return;
+    const el = document.getElementById(id);
+    if (el) poser(el.value);
+  };
+  saisi('f-nom', v => { c.nom = v.trim() || c.nom; });
+  saisi('f-sector', v => { c.sector = v.trim(); });
+  saisi('f-website', v => { c.website = v.trim(); });
+  saisi('f-societe-email', v => { c.societe_email = v.trim(); });
+  saisi('f-societe-tel', v => { c.societe_tel = window.MUPTel.format(v); });
+  saisi('f-adresse', v => { c.adresse = v.trim(); });
+  saisi('f-zip', v => { c.zip = v.trim(); });
+  saisi('f-ville', v => { c.ville = v.trim(); });
+  saisi('f-note-societe', v => { c.note_societe = v.trim(); });
   // f-linkedin = LinkedIn SOCIÉTÉ -> societe_linkedin (le LinkedIn personne est
   // géré dans le bloc personne via pf-linkedin, jamais écrasé ici).
-  c.societe_linkedin = document.getElementById('f-linkedin').value.trim();
-  c.facebook = document.getElementById('f-facebook').value.trim();
-  c.instagram = document.getElementById('f-instagram').value.trim();
-  // Prochaine action via contenteditable
+  saisi('f-linkedin', v => { c.societe_linkedin = v.trim(); });
+  saisi('f-facebook', v => { c.facebook = v.trim(); });
+  saisi('f-instagram', v => { c.instagram = v.trim(); });
+  // Prochaine action via contenteditable — jamais peinte par la projection.
   const naText = document.getElementById('next-action-text');
   if (naText && !naText.classList.contains('empty')) {
     c.prochaine_action = naText.textContent.trim();
   }
-  // Aliases legacy
-  c.name = c.nom; c.company = c.nom;
-  c.address = c.adresse; c.location = c.adresse;
+  // Aliases legacy, recalculés SEULEMENT quand leur source vient d'être saisie.
+  // Les recalculer à sec les poserait à `undefined` sur un record qui ne porte
+  // que la forme ancienne (une carte pipeline porte `address`, pas `adresse`) :
+  // la clé disparaîtrait du corps, et l'UPDATE … CONTENT du serveur effacerait
+  // l'adresse au premier enregistrement d'un autre champ.
+  if (champsSaisis.has('f-nom')) { c.name = c.nom; c.company = c.nom; }
+  if (champsSaisis.has('f-adresse')) { c.address = c.adresse; c.location = c.adresse; }
   c.updated_at = new Date().toISOString();
 }
 
@@ -1296,7 +1333,13 @@ function wireForm(){
   const inputs = document.querySelectorAll('.input, .select, .textarea');
   inputs.forEach(el => {
     const evt = el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input';
-    el.addEventListener(evt, scheduleAutoSave);
+    // Le seul endroit qui inscrit un champ au registre : un évènement de saisie.
+    // Les champs des blocs personne n'ont pas d'id — ils ne s'y inscrivent pas
+    // et n'ont jamais alimenté captureFields, qui ne lit que la face société.
+    el.addEventListener(evt, () => {
+      if (el.id) champsSaisis.add(el.id);
+      scheduleAutoSave();
+    });
   });
 
   // Prochaine action contenteditable
@@ -1325,13 +1368,13 @@ function wireForm(){
   // (amorçage Overpass), remplissage-si-vide — un champ déjà porteur d'une
   // valeur n'est jamais écrasé, comme le fait le serveur côté référentiel.
   //
-  // Le geste CONSOMME un lead : ce qu'il rapporte doit finir sur le record, pas
-  // dans le DOM. Poser .value par script ne déclenche pas l'autosave, qui
-  // écoute 'input' — le remplissage était donc perdu au premier rechargement, et
-  // l'écran s'en remettait à un « pensez à enregistrer » que rien n'exécutait.
-  // L'écriture est faite ici, par le même autoSave() que n'importe quelle
-  // saisie de la page (captureFields lit les six champs concernés), et le toast
-  // dit ce qui est réellement enregistré.
+  // N'ÉCRIT RIEN SUR LE RECORD. Ce que le geste rapporte appartient au
+  // référentiel mutualisé, pas à l'enregistrement de l'abonnée : le recopier
+  // dessus dupliquait la donnée mutualisée et la renvoyait au référentiel au
+  // PUT suivant. Ce qui est acquis par le geste, c'est le SIRET inscrit à
+  // enrichedSirets — la restitution à l'ouverture (autoEnrichOnOpen) repeindra
+  // email et téléphone à chaque visite, sans nouveau geste ni nouvelle dépense.
+  // Le toast ne parle donc plus d'enregistrement.
   const enrichBtn = document.getElementById('c-enrich');
   if (enrichBtn) {
     enrichBtn.addEventListener('click', async () => {
@@ -1369,12 +1412,7 @@ function wireForm(){
           const s = normalizeSiretClient(siret);
           if (s && !enrichedSirets.includes(s)) enrichedSirets.push(s);
         }
-        if (n > 0) {
-          const ecrit = await autoSave();
-          toast(ecrit ? 'Fiche enrichie et enregistrée' : 'Fiche enrichie — enregistrement impossible');
-        } else {
-          toast('Aucune donnée à ajouter');
-        }
+        toast(n > 0 ? 'Fiche enrichie' : 'Aucune donnée à ajouter');
         await refreshEnrichButtonState();       // bascule en terminal si ce SIRET est désormais enrichi
       } catch (e) {
         // restitution best-effort : pas de toast d'erreur
@@ -1553,6 +1591,11 @@ async function proposerTelephoneDeLaNote(text){
   if (!confirm('Cette note contient un numéro : ' + numero
     + '\n\nL\'enregistrer comme téléphone de la société ?')) return;
   champ.value = numero;
+  // Le champ est posé par script, mais la valeur vient de la note de l'abonnée et
+  // le confirm() ci-dessus EST le geste : on l'inscrit au registre, sans quoi
+  // captureFields l'ignorerait et le toast annoncerait un enregistrement qui
+  // n'aurait pas eu lieu.
+  champsSaisis.add('f-societe-tel');
   toast(await autoSave() ? 'Téléphone enregistré' : 'Téléphone non enregistré');
 }
 

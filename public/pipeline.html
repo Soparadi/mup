@@ -861,6 +861,20 @@ let dragId = null;
 // Source unique de vérité pour les RDV / actions calendrier — table agenda en DB.
 let _agendaForCurrentFiche = [];
 
+// ── CE QUI S'ENREGISTRE : LE GESTE, PAS L'AFFICHAGE ──
+// Les trois champs sociaux de la fiche sont peints par DEUX sources : la carte
+// et la restitution du référentiel mutualisé (autoEnrichOnOpen, bouton
+// Enrichir). Ils enregistrent au blur — et un blur ne dit pas qu'on a écrit :
+// cliquer dans un champ puis en sortir suffisait à recopier sur la carte la
+// valeur que la restitution venait d'afficher, sans qu'une seule touche ait été
+// frappée. Le PUT la renvoyait ensuite au référentiel d'où elle venait.
+//
+// Ce registre tranche, comme sur la fiche société : un champ n'entre dans la
+// carte que si une FRAPPE l'a touché. Alimenté par les seuls écouteurs 'input'
+// posés à l'init — poser .value par script ne les déclenche pas. Vidé à chaque
+// ouverture de fiche, qui repeint le panneau depuis la carte.
+const champsSociauxSaisis = new Set();
+
 // ── Restitution silencieuse à l'ouverture — DOCTRINE (tranchée le 3 juillet) ──
 // Le décompte porte sur l'apport d'un MOYEN DE CONTACT — email ou téléphone —
 // quelle qu'en soit la provenance (référentiel ou tiers). Les afficher
@@ -1689,7 +1703,9 @@ async function openDetail(id) {
   peindreGrilleSociete(c.website, c.societe_email, c.societe_tel);
   refreshEnrichButtonState(c.siret); // état terminal du bouton, après le rendu du bloc société
 
-  // Socials (editable)
+  // Socials (editable). Le panneau est repeint depuis la carte : plus aucune
+  // saisie en attente (cf. champsSociauxSaisis).
+  champsSociauxSaisis.clear();
   document.getElementById('d-linkedin').value = c.linkedin||'';
   document.getElementById('d-facebook').value = c.facebook||'';
   document.getElementById('d-instagram').value = c.instagram||'';
@@ -2297,13 +2313,23 @@ async function saveRdv() {
   }
 }
 
+// Appelée au blur des trois champs sociaux. N'écrit sur la carte que ce qu'une
+// frappe a touché (cf. champsSociauxSaisis) : un blur sans saisie ne fait plus
+// rien du tout — ni écriture, ni PUT.
 function saveSocials() {
   if(!currentId) return;
   const c = cards.find(x=>String(x.id)===String(currentId));
   if(!c) return;
-  c.linkedin = document.getElementById('d-linkedin').value.trim();
-  c.facebook = document.getElementById('d-facebook').value.trim();
-  c.instagram = document.getElementById('d-instagram').value.trim();
+  const CHAMPS = { 'd-linkedin': 'linkedin', 'd-facebook': 'facebook', 'd-instagram': 'instagram' };
+  let touche = false;
+  for(const [id, prop] of Object.entries(CHAMPS)){
+    if(!champsSociauxSaisis.has(id)) continue;
+    const el = document.getElementById(id);
+    if(!el) continue;
+    c[prop] = el.value.trim();
+    touche = true;
+  }
+  if(!touche) return;
   // Update link icons
   poserLienSocial('d-linkedin-link', c.linkedin);
   poserLienSocial('d-facebook-link', c.facebook);
@@ -2345,15 +2371,19 @@ function toast(msg){
 }
 
 // Enrichissement fiche détail — calque de #c-enrich (contact-societe.html).
-// fillIfEmpty sur l'objet carte : website, réseaux sociaux ET les coordonnées
-// SOCIÉTÉ (societe_email / societe_tel). JAMAIS c.email ni c.tel : ceux-ci sont
-// les coordonnées du CONTACT (personne) — y verser des coordonnées d'entreprise
-// ferait mentir la fiche. Écriture puis save()/syncToProspects/refresh sur le
-// patron de saveSocials. 403 opt-out → toast avec le message du serveur (trou du
-// modèle : sans ça l'abonné ne voit pas le refus). 402 plafond → silencieux,
-// l'intercepteur global (trial-expired-modal.js) affiche déjà la modale.
-// Idempotence portée par le serveur : un re-clic est gratuit et rend
-// « Aucune donnée à ajouter ».
+//
+// PEINTURE SEULE : la carte n'est PAS touchée, aucun save(). Ce que le geste
+// rapporte appartient au référentiel mutualisé, pas à la carte de l'abonnée : le
+// recopier dessus dupliquait la donnée mutualisée et la renvoyait au référentiel
+// au PUT suivant. Ce qui est acquis par le geste, c'est le SIRET inscrit à
+// enrichedSirets — la restitution à l'ouverture (autoEnrichOnOpen) repeindra
+// site, email et téléphone à chaque visite, sans nouvelle dépense.
+// JAMAIS c.email ni c.tel non plus : ceux-ci sont les coordonnées du CONTACT
+// (personne) — y verser des coordonnées d'entreprise ferait mentir la fiche.
+// 403 opt-out → toast avec le message du serveur (trou du modèle : sans ça
+// l'abonné ne voit pas le refus). 402 plafond → silencieux, l'intercepteur
+// global (trial-expired-modal.js) affiche déjà la modale. Idempotence portée par
+// le serveur : un re-clic est gratuit et rend « Aucune donnée à ajouter ».
 async function enrichDetail() {
   if(!currentId) return;
   const c = cards.find(x=>String(x.id)===String(currentId));
@@ -2377,16 +2407,30 @@ async function enrichDetail() {
     const data = await resp.json();
     if(!data || !data.found) return; // found:false → aucun changement visible
     let n = 0;
-    const fillIfEmpty = (prop, val) => {
-      if(!String(c[prop]||'').trim() && val) { c[prop] = val; n++; }
+    // Réseaux sociaux : peinture des inputs en fill-if-empty, sans marquer le
+    // registre de saisie — ce n'est pas une frappe, ça ne s'enregistre pas.
+    const peindreSocialSiVide = (inputId, linkId, val) => {
+      if(!val) return;
+      const el = document.getElementById(inputId);
+      if(!el || el.value.trim()) return;
+      el.value = val; n++;
+      poserLienSocial(linkId, val);
     };
-    fillIfEmpty('website', data.website);
-    fillIfEmpty('linkedin', data.societe_linkedin);
-    fillIfEmpty('facebook', data.societe_facebook);
-    fillIfEmpty('instagram', data.societe_instagram);
-    fillIfEmpty('societe_email', data.societe_email);
-    fillIfEmpty('societe_tel', data.societe_tel);
-    // NE PAS toucher c.email ni c.tel : coordonnées du contact, pas de la société.
+    peindreSocialSiVide('d-linkedin', 'd-linkedin-link', data.societe_linkedin);
+    peindreSocialSiVide('d-facebook', 'd-facebook-link', data.societe_facebook);
+    peindreSocialSiVide('d-instagram', 'd-instagram-link', data.societe_instagram);
+    // Bloc société : valeur de la carte prioritaire, valeur restituée en repli —
+    // même partage que la restitution à l'ouverture, affichage seul.
+    const siteCarte  = String(c.website||'').trim();
+    const emailCarte = String(c.societe_email||'').trim();
+    const telCarte   = String(c.societe_tel||'').trim();
+    const site  = siteCarte  || String(data.website||'').trim();
+    const email = emailCarte || String(data.societe_email||'').trim();
+    const tel   = telCarte   || String(data.societe_tel||'').trim();
+    if(site !== siteCarte) n++;
+    if(email !== emailCarte) n++;
+    if(tel !== telCarte) n++;
+    peindreGrilleSociete(site, email, tel);
     // Ce SIRET vient d'être payé (canal décomptable livré) → l'ajouter au miroir
     // local, pour que ses email/tél soient repeints sans nouveau geste à la
     // prochaine ouverture. Même condition que le serveur.
@@ -2394,15 +2438,7 @@ async function enrichDetail() {
       const s = normalizeSiretClient(siret);
       if(s && !enrichedSirets.includes(s)) enrichedSirets.push(s);
     }
-    if(n > 0) {
-      save();
-      syncToProspects(c);
-      openDetail(currentId); // rafraîchit la fiche ouverte (bloc société + socials)
-      renderKanban();
-      toast('Fiche enrichie');
-    } else {
-      toast('Aucune donnée à ajouter');
-    }
+    toast(n > 0 ? 'Fiche enrichie' : 'Aucune donnée à ajouter');
     await refreshEnrichButtonState(siret); // bascule en terminal si ce SIRET est désormais enrichi
   } catch(e) {
     // best-effort : pas de toast d'erreur (calque du modèle)
@@ -2801,6 +2837,14 @@ function importFromProspects() {
     // curseur. La valeur enregistrée reste ce que MUPTel produit (cf. saveModal).
     var telIn = document.getElementById('m-societe-tel');
     if(telIn) telIn.addEventListener('blur', function(){ this.value = window.MUPTel.format(this.value); });
+
+    // Registre des saisies sociales : le seul endroit qui y inscrit un champ.
+    // 'input' ne se déclenche qu'à la frappe — jamais quand la restitution ou le
+    // rendu de la fiche posent .value (cf. champsSociauxSaisis).
+    ['d-linkedin', 'd-facebook', 'd-instagram'].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.addEventListener('input', function(){ champsSociauxSaisis.add(id); });
+    });
 
     // Échap referme le mode agrandi. Le test porte sur focusMode, que
     // toggleFullscreen tient désormais à jour.

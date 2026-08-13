@@ -867,6 +867,17 @@ function localId(v){
   return String(raw == null ? '' : raw).replace(/^[a-z_]+:/i, '').trim();
 }
 
+// Note dans la table de jonction le contact qu'une carte déclare. Les deux
+// côtés passent par localId : la carte porte l'id tel que l'a écrit la page
+// qui l'a créée (contact_1712…), le contact tel que le rend la base
+// (contacts:1712…). Une carte sans contact_id, ou avec un contact_id vide,
+// n'entre pas dans la table : elle n'a pas de seconde clé.
+function releverContactId(table, carte){
+  var cle = localId(carte && carte.id);
+  var cible = localId(carte && carte.contact_id);
+  if(cle && cible) table.set(cle, cible);
+}
+
 // ── INIT ──
 async function init(){
   localStorage.removeItem('mup_prospects');
@@ -917,6 +928,13 @@ async function init(){
   // 2) Source pipeline : tout client ajouté depuis Leads ou directement
   //    dans Pipeline doit apparaître dans Contacts
   var fromPipeline = [];
+  // Seconde clé de jonction, relevée à la lecture : id local de la carte →
+  // id local du contact qu'elle déclare. L'import de factures relie sa paire
+  // par ce champ et par lui seul (ni le suffixe ni societe_id ne la
+  // rapprochent). Gardée à côté plutôt que recopiée dans l'enregistrement
+  // projeté : c'est une clé de fusion, pas un champ de la fiche, et elle n'a
+  // rien à faire dans ce qui part au cache mup_contacts.
+  var contactIdParCarte = new Map();
   sourcePipeline = 'api';
   try {
     const response = await fetch('/api/pipeline');
@@ -924,6 +942,7 @@ async function init(){
       var parsedP = await response.json();
       if(Array.isArray(parsedP)){
         fromPipeline = parsedP.map(function(p){
+          releverContactId(contactIdParCarte, p);
           // Adaptation des champs Pipeline → Contacts (alias)
           return migrateProspect({
             id: p.id,
@@ -970,6 +989,7 @@ async function init(){
         var parsedP = JSON.parse(rawP);
         if(Array.isArray(parsedP)){
           fromPipeline = parsedP.map(function(p){
+            releverContactId(contactIdParCarte, p);
             // Adaptation des champs Pipeline → Contacts (alias)
             return migrateProspect({
               id: p.id,
@@ -1030,6 +1050,15 @@ async function init(){
     var k = localId(p.id);
     if(!k){ prospects.push(p); return; }
     var jumeau = parId.get(k);
+    // Second essai, et seulement si le premier a échoué : la carte née d'un
+    // import de factures ne partage ni son suffixe ni son societe_id avec son
+    // contact, elle ne le désigne que par contact_id. Égalité de clé ou rien —
+    // un contact_id absent, vide, ou qui ne correspond à aucun contact laisse
+    // la carte devenir sa propre ligne, comme avant.
+    if(!jumeau){
+      var parContact = contactIdParCarte.get(k);
+      if(parContact) jumeau = parId.get(parContact);
+    }
     if(jumeau){
       // Drapeau local : la carte disparaît de la liste, l'information « ce
       // contact est au pipeline » ne doit pas disparaître avec elle. Non

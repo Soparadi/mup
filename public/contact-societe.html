@@ -1265,8 +1265,11 @@ function captureFields(){
   c.updated_at = new Date().toISOString();
 }
 
+// Rend true si le record a bien été écrit. Les appelants qui déclenchent une
+// écriture sur un GESTE — et non sur une frappe — s'en servent pour dire à
+// l'écran ce qui est enregistré et ce qui ne l'est pas.
 async function autoSave(){
-  if (!contact || !contactId) return;
+  if (!contact || !contactId) return false;
   setAutosaveState('saving');
   captureFields();
   try {
@@ -1282,9 +1285,11 @@ async function autoSave(){
       localStorage.setItem('mup_contact_sync', stamp);
       window.dispatchEvent(new StorageEvent('storage', { key: 'mup_contact_sync', newValue: stamp }));
     } catch(_) {}
+    return true;
   } catch (e) {
     console.error('[contact-societe] autoSave', e);
     setAutosaveState('error');
+    return false;
   }
 }
 
@@ -1324,15 +1329,23 @@ function wireForm(){
     scheduleAutoSave();
   });
 
-  // Bouton Enrichir : restitue les champs contact société depuis le référentiel
-  // (amorçage Overpass), remplissage-si-vide. Aucun écrasement, aucune sauvegarde
-  // auto (poser .value par script ne déclenche pas l'autosave lié à 'input').
   // Téléphone société : reformatage à la SORTIE du champ (blur), jamais
   // pendant la frappe — reformater au fil des touches déplacerait le curseur.
   // La valeur enregistrée reste ce que MUPTel produit (cf. captureFields).
   const telSoc = document.getElementById('f-societe-tel');
   if (telSoc) telSoc.addEventListener('blur', () => { telSoc.value = window.MUPTel.format(telSoc.value); });
 
+  // Bouton Enrichir : restitue les champs contact société depuis le référentiel
+  // (amorçage Overpass), remplissage-si-vide — un champ déjà porteur d'une
+  // valeur n'est jamais écrasé, comme le fait le serveur côté référentiel.
+  //
+  // Le geste CONSOMME un lead : ce qu'il rapporte doit finir sur le record, pas
+  // dans le DOM. Poser .value par script ne déclenche pas l'autosave, qui
+  // écoute 'input' — le remplissage était donc perdu au premier rechargement, et
+  // l'écran s'en remettait à un « pensez à enregistrer » que rien n'exécutait.
+  // L'écriture est faite ici, par le même autoSave() que n'importe quelle
+  // saisie de la page (captureFields lit les six champs concernés), et le toast
+  // dit ce qui est réellement enregistré.
   const enrichBtn = document.getElementById('c-enrich');
   if (enrichBtn) {
     enrichBtn.addEventListener('click', async () => {
@@ -1370,8 +1383,12 @@ function wireForm(){
           const s = normalizeSiretClient(siret);
           if (s && !enrichedSirets.includes(s)) enrichedSirets.push(s);
         }
-        if (n > 0) toast('Fiche enrichie — pensez à enregistrer');
-        else toast('Aucune donnée à ajouter');
+        if (n > 0) {
+          const ecrit = await autoSave();
+          toast(ecrit ? 'Fiche enrichie et enregistrée' : 'Fiche enrichie — enregistrement impossible');
+        } else {
+          toast('Aucune donnée à ajouter');
+        }
         await refreshEnrichButtonState();       // bascule en terminal si ce SIRET est désormais enrichi
       } catch (e) {
         // restitution best-effort : pas de toast d'erreur

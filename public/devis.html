@@ -186,6 +186,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
         <button class="stab" onclick="filterStatus('transformed',this)">Transformé</button>
       </div>
     </div>
+    <div id="filter-client-banner" style="display:none;background:rgba(67,56,202,0.10);border-bottom:1px solid #4338CA;padding:10px 16px;font-size:11.5px;color:#4338CA;align-items:center;justify-content:space-between;gap:10px;">
+      <span id="filter-client-label">Filtre actif</span>
+      <button id="filter-client-clear" style="padding:5px 10px;border:none;background:#4338CA;color:#fff;border-radius:7px;font-family:var(--font);font-weight:700;font-size:10.5px;cursor:pointer;letter-spacing:.4px;">Retirer</button>
+    </div>
     <div class="list-scroll" id="doc-list"></div>
   </div>
 
@@ -408,6 +412,34 @@ function calcTotals(lines, tva) {
   return { ht, tva: tvaAmt, ttc: round2(ht + tvaAmt), rate: tvaRate };
 }
 
+// ── FILTRE CLIENT (?client_siret=) ──
+// Même paramètre que factures.html, lu de la même façon : la fiche contact
+// ouvre les deux listes sur le SIRET de son client. Les trois clés sont
+// acceptées parce que trois chemins écrivent un devis — l'éditeur d'ici, la
+// conversion serveur, l'import de factures — et qu'aucun n'a la même forme.
+let clientSiretFilter = null;
+
+function devisSiret(d) {
+  if (!d) return '';
+  const s = d.client_siret || (d.client && d.client.siret) || d.siret || '';
+  return String(s).replace(/\D/g, '');
+}
+
+function applyClientFilter(siret) {
+  clientSiretFilter = (siret || '').replace(/\D/g, '') || null;
+  const banner = document.getElementById('filter-client-banner');
+  const label = document.getElementById('filter-client-label');
+  if (clientSiretFilter) {
+    const n = docs.filter(d => devisSiret(d) === clientSiretFilter).length;
+    label.textContent = 'Filtre client : SIRET ' + clientSiretFilter
+      + ' (' + n + ' devis)';
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+  renderList();
+}
+
 // ── LISTE ──
 function filterStatus(s, btn) {
   filterStat = s;
@@ -417,7 +449,8 @@ function filterStatus(s, btn) {
 }
 
 function renderList() {
-  const list = filterStat === 'all' ? docs : docs.filter(d => d.status === filterStat);
+  let list = filterStat === 'all' ? docs : docs.filter(d => d.status === filterStat);
+  if (clientSiretFilter) list = list.filter(d => devisSiret(d) === clientSiretFilter);
   const el = document.getElementById('doc-list');
   if(!list.length) { el.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--muted2);font-style:italic;font-size:12.5px">Aucun document</div>'; return; }
   el.innerHTML = list.map(d => {
@@ -684,6 +717,14 @@ function showToast(msg) {
 (async () => {
   await loadAccountRegime();
   await loadDocs();
+  document.getElementById('filter-client-clear').addEventListener('click', () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('client_siret');
+    window.history.replaceState({}, '', url);
+    applyClientFilter(null);
+  });
+  const clientSiretParam = (window.location.search.match(/[?&]client_siret=([^&]+)/) || [])[1];
+  if(clientSiretParam) applyClientFilter(decodeURIComponent(clientSiretParam));
   renderList();
   // Sélectionner le premier par défaut
   if(docs.length) selectDoc(docs[0].id);

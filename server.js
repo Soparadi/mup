@@ -49,6 +49,7 @@ import { chargerRge } from './server/services/rge.js'
 import { runVisitesMigration, creerMesureAudience, visiteursALInstant, etatVivant, jourParis, decalerJour } from './server/services/visites.js'
 import { BYPASS_EMAIL, isOwner } from './lib/vip.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
+import { projeterReferentiel, retirerProjection } from './server/services/projection-referentiel.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
 import { rapprocherDepartementAtoutFrance } from './server/services/rapprochement-atout-france.js'
@@ -1966,7 +1967,11 @@ app.get('/api/pipeline', async (req, res) => {
   try {
     const db = await getDb()
     const result = await db.query('SELECT * FROM pipeline WHERE userId = $userId', { userId })
-    res.json(result[0] || [])
+    // Projection du référentiel mutualisé — jointure en lot sur la clé SIRET, dans
+    // un sous-objet `referentiel`. Rien n'est recopié sur les cartes ; le régime
+    // décomptable (email / téléphone au seul SIRET payé) est appliqué là, une fois.
+    // Fail-open : référentiel injoignable → cartes non projetées, jamais d'erreur.
+    res.json(await projeterReferentiel(result[0] || [], userId))
   } catch (err) {
     // Table jamais créée (nouvelle instance, aucun POST pipeline) : liste vide,
     // pas une erreur. On ne neutralise QUE ce cas ; toute autre panne SurrealDB
@@ -1983,7 +1988,7 @@ app.post('/api/pipeline', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   try {
-    const body = { ...(req.body || {}), userId } // userId forcé, body.userId écrasé
+    const body = retirerProjection({ ...(req.body || {}), userId }) // userId forcé, body.userId écrasé
 
     // Date de création posée par le serveur quand le client n'en fournit pas :
     // une carte enregistrée sans date de création n'en a plus jamais. Le client
@@ -2320,7 +2325,7 @@ app.put('/api/pipeline/:id', async (req, res) => {
     }
 
     // UPDATE — strip body.id et préserve userId initial
-    const cleanBody = { ...(req.body || {}) }
+    const cleanBody = retirerProjection({ ...(req.body || {}) })
     delete cleanBody.id
     cleanBody.userId = userId
     // Date de création préservée. UPDATE … CONTENT remplace le record entier :
@@ -2390,7 +2395,11 @@ app.get('/api/contacts', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    res.json(await queryOrEmpty(db, 'SELECT * FROM contacts WHERE userId = $userId', { userId }))
+    const rows = await queryOrEmpty(db, 'SELECT * FROM contacts WHERE userId = $userId', { userId })
+    // Projection du référentiel mutualisé — cf. GET /api/pipeline. La liste n'est
+    // pas paginée : c'est le découpage par tranches de 100 de la jointure qui
+    // borne le lot.
+    res.json(await projeterReferentiel(rows, userId))
   } catch (err) {
     console.error('[contacts]', err)
     res.status(500).json({ error: 'Impossible de lire les contacts' })
@@ -2401,7 +2410,7 @@ app.post('/api/contacts', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   try {
-    const body = { ...(req.body || {}), userId }
+    const body = retirerProjection({ ...(req.body || {}), userId })
     // Lien société (SCHEMALESS, champs optionnels) : societe_id (record/null),
     // statut ("pro"/"reserve"), source (saisie/linkedin/phone/mail/carnet).
     // Persistés tels quels via CONTENT ; on coerce seulement societe_id vide -> null.
@@ -2509,7 +2518,7 @@ app.put('/api/contacts/:id', async (req, res) => {
     if (!rec || rec.userId !== userId) {
       return res.status(404).json({ error: 'Contact introuvable' })
     }
-    const cleanBody = { ...(req.body || {}) }
+    const cleanBody = retirerProjection({ ...(req.body || {}) })
     delete cleanBody.id
     cleanBody.userId = userId
     // Lien société (SCHEMALESS) : voir POST /api/contacts. Coerce societe_id vide -> null.

@@ -256,6 +256,54 @@ export async function getReferentielContactBySiret(siret) {
   }
 }
 
+// ── D-lot. getReferentielContactsBySirets(sirets) — async, fail-open ──
+// Forme EN LOT de D, pour la projection des listes privées (/api/contacts,
+// /api/pipeline) : une liste porte des dizaines de SIRET, un point-lookup par
+// ligne serait des dizaines d'allers-retours. UNE requête par tranche de 100
+// (même découpage défensif que checkBlocklistBatch — la liste n'est pas paginée,
+// c'est ce découpage qui borne le lot), sur l'index UNIQUE idx_ref_siret.
+//
+// Rend une Map siret → { website, societe_email, societe_tel, societe_facebook,
+// societe_instagram, societe_linkedin }, clés canoniques telles que passées par
+// l'appelant (SIRET nettoyés de leurs espaces, comme partout ailleurs). Un SIRET
+// absent du référentiel n'a simplement pas d'entrée.
+//
+// FAIL-OPEN, et c'est la différence de régime avec les lectures ci-dessus : une
+// projection est un agrément, pas le contenu de la page. Un échec rend ce qui a
+// pu être lu (Map vide au premier échec) — l'appelant sert alors sa liste NON
+// PROJETÉE, jamais une erreur.
+export async function getReferentielContactsBySirets(sirets) {
+  const out = new Map()
+  if (!Array.isArray(sirets) || !sirets.length) return out
+  const cles = [...new Set(sirets.map(s => str(s).replace(/\s+/g, '')).filter(Boolean))]
+  if (!cles.length) return out
+  try {
+    const db = await getDb()
+    const sql =
+      'SELECT siret, website, societe_email, societe_tel, ' +
+      'societe_facebook, societe_instagram, societe_linkedin ' +
+      'FROM referentiel_societes WHERE siret IN $sirets'
+    for (let i = 0; i < cles.length; i += 100) {
+      const r = await db.query(sql, { sirets: cles.slice(i, i + 100) })
+      for (const row of (r[0] || [])) {
+        const s = str(row?.siret).replace(/\s+/g, '')
+        if (!s) continue
+        out.set(s, {
+          website: str(row.website),
+          societe_email: str(row.societe_email),
+          societe_tel: str(row.societe_tel),
+          societe_facebook: str(row.societe_facebook),
+          societe_instagram: str(row.societe_instagram),
+          societe_linkedin: str(row.societe_linkedin)
+        })
+      }
+    }
+  } catch (e) {
+    console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
+  }
+  return out
+}
+
 // ── D-bis. getOsmContactBySiret(siret) — async, fail-safe ──
 // Lecture unitaire des contacts OSM (réserve nationale referentiel_osm) pour un
 // SIRET donné. Index idx_osm_siret NON unique → PLUSIEURS lignes possibles pour un

@@ -364,19 +364,19 @@ body{display:flex;min-height:100vh}
         </div>
         <div class="kpi">
           <svg class="kpi-icon" data-c="mailing" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          <div><div class="kpi-value" id="kpi-mails">0</div><div class="kpi-label">Mails</div></div>
+          <div><div class="kpi-value" id="kpi-mails">—</div><div class="kpi-label">Mails</div></div>
         </div>
         <div class="kpi">
           <svg class="kpi-icon" data-c="phoning" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          <div><div class="kpi-value" id="kpi-calls">0</div><div class="kpi-label">Appels</div></div>
+          <div><div class="kpi-value" id="kpi-calls">—</div><div class="kpi-label">Appels</div></div>
         </div>
         <div class="kpi">
           <svg class="kpi-icon" data-c="visio" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          <div><div class="kpi-value" id="kpi-visios">0</div><div class="kpi-label">Visios</div></div>
+          <div><div class="kpi-value" id="kpi-visios">—</div><div class="kpi-label">Visios</div></div>
         </div>
         <div class="kpi">
           <svg class="kpi-icon" data-c="rdv" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          <div><div class="kpi-value" id="kpi-rdv">0</div><div class="kpi-label">RDV</div></div>
+          <div><div class="kpi-value" id="kpi-rdv">—</div><div class="kpi-label">RDV</div></div>
         </div>
         <div class="kpi">
           <svg class="kpi-icon" data-c="devis" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
@@ -972,8 +972,9 @@ function populate(){
   const created = c.created_at ? fmtDateLong(c.created_at) : '—';
   document.getElementById('info-subtitle').textContent = 'Créé le ' + created;
 
-  // KPIs : Sprint 3 placeholders à 0 (Sprint 4 lira agenda + mail + visio + devis pour ce contact)
-  // Si le record contient déjà des compteurs (factures_ids etc.), on les utilise.
+  // Devis : le seul des cinq compteurs qui ne vienne pas du fil — il compte
+  // les factures liées au record. Les quatre autres sont posés par le fil
+  // résolu, dans majCompteurs().
   document.getElementById('kpi-devis').textContent = (c.factures_ids || []).length || 0;
 
   // Prochaine action
@@ -1033,7 +1034,7 @@ function renderTimeline(){
   const root = document.getElementById('timeline');
   if (!root) return;
   // MUPFil absent : le fil n'est pas vide, il est illisible. L'écran le dit.
-  if (!window.MUPFil) { root.innerHTML = FIL_ECHEC; majDerniereActivite(null); return; }
+  if (!window.MUPFil) { root.innerHTML = FIL_ECHEC; majDerniereActivite(null); majCompteurs(null); return; }
   const jeton = ++_filJeton;
   MUPFil.lire(contact && contact.id, { local: contact ? [contact] : [] })
     .then(items => {
@@ -1041,12 +1042,40 @@ function renderTimeline(){
       if (jeton !== _filJeton) return;
       root.innerHTML = MUPFil.rendre(items) || FIL_VIDE;
       majDerniereActivite(items);
+      majCompteurs(items);
     })
     .catch(() => {
       if (jeton !== _filJeton) return;
       root.innerHTML = FIL_ECHEC;
       majDerniereActivite(null);
+      majCompteurs(null);
     });
+}
+
+// Les quatre compteurs de la barre — Mails, Appels, Visios, RDV — comptent ce
+// que porte le FIL RÉSOLU, c'est-à-dire l'histoire de l'ENTREPRISE : les
+// entrées de tous ses records réunis, pas celles du seul record ouvert. Ils
+// affichaient un 0 en dur, jamais recalculé, sur des fiches qui portaient dix
+// entrées.
+//
+// Depuis toujours, et sans fenêtre : le fil est l'histoire complète, une
+// entrée de l'an dernier compte autant que celle d'hier. Une entrée sans
+// horodatage exploitable compte aussi — c'est un mail passé, un appel passé,
+// même si le fil ne sait pas le dater.
+//
+// Fil illisible : un tiret. Zéro serait une affirmation — « cette entreprise
+// n'a reçu aucun mail » — qu'une lecture ratée ne permet pas de faire.
+const KPI_DU_FIL = { mail: 'kpi-mails', phone: 'kpi-calls', visio: 'kpi-visios', rdv: 'kpi-rdv' };
+
+function majCompteurs(items){
+  const compte = { mail: 0, phone: 0, visio: 0, rdv: 0 };
+  (items || []).forEach(it => {
+    if (it && compte[it.type] !== undefined) compte[it.type]++;
+  });
+  Object.keys(KPI_DU_FIL).forEach(type => {
+    const el = document.getElementById(KPI_DU_FIL[type]);
+    if (el) el.textContent = items ? String(compte[type]) : '—';
+  });
 }
 
 // L'en-tête de la carte date la dernière ACTIVITÉ. Il lisait `updated_at`,

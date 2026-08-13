@@ -238,6 +238,16 @@ body{display:flex;min-height:100vh}
 .pipeline-picker button:hover{background:var(--readonly)}
 .pipeline-picker .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 
+/* ── PLANIFICATEUR DE RDV ── */
+.rdv-planner{position:fixed;z-index:120;background:#fff;border:1px solid var(--border);border-radius:var(--radius-xs);box-shadow:0 10px 30px rgba(0,0,0,.14);padding:12px;min-width:220px;display:none;flex-direction:column;gap:10px}
+.rdv-planner.open{display:flex}
+.rdv-planner-title{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.rdv-planner label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.rdv-planner input{border:1px solid var(--border-input);border-radius:var(--radius-xs);padding:8px 10px;font-family:inherit;font-size:13px;font-weight:500;color:var(--text);text-transform:none;letter-spacing:0}
+.rdv-planner input:focus{outline:none;border-color:var(--text)}
+.rdv-planner-go{padding:9px 12px;background:var(--text);color:var(--text-on-dark);border:none;border-radius:var(--radius-xs);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.rdv-planner-go:disabled{opacity:.45;cursor:default}
+
 /* ── TOAST ── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;font-weight:600;z-index:300;transition:transform .25s cubic-bezier(.34,1.56,.64,1);box-shadow:0 4px 16px rgba(0,0,0,.18);display:flex;align-items:center;gap:8px}
 .toast.show{transform:translateX(-50%) translateY(0)}
@@ -618,6 +628,17 @@ body{display:flex;min-height:100vh}
 
 <div class="pipeline-picker" id="pipeline-picker" role="menu" aria-label="Choisir l'étape du pipeline">
   <div class="pipeline-picker-title">Envoyer à l'étape</div>
+</div>
+
+<div class="rdv-planner" id="rdv-planner" role="dialog" aria-label="Planifier un rendez-vous">
+  <div class="rdv-planner-title">Planifier un RDV</div>
+  <label>Date
+    <input type="date" id="rdv-planner-date">
+  </label>
+  <label>Heure
+    <input type="time" id="rdv-planner-heure" value="14:00">
+  </label>
+  <button class="rdv-planner-go" id="rdv-planner-go" type="button">Planifier</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1656,6 +1677,167 @@ function wirePipelineSend(){
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePipelinePicker(); });
 }
 
+// ── PLANIFIER UN RDV ──
+// Le rendez-vous se prend depuis la fiche, sans la quitter. Il se pose à deux
+// endroits, et dans cet ordre : l'agenda le PORTE, le fil en garde la TRACE.
+// Si l'agenda refuse, le fil ne dit rien — une entrée « RDV planifié » sur un
+// rendez-vous qui n'a été enregistré nulle part serait un mensonge que plus
+// rien ne viendrait démentir.
+//
+// L'évènement d'agenda se rattache à une CARTE de board, jamais au contact :
+// la fiche Pipeline relit ses rendez-vous sur l'id de sa carte. Or contact et
+// carte ne partagent pas toujours cet id — une carte née d'un import de
+// factures ne désigne son contact que par contact_id. C'est donc
+// idsEquivalents qui les rassemble, la même résolution que celle du fil.
+// Ce qui part dans ficheId est l'id NU de la carte : préfixé, il ne serait
+// relu par aucune fiche.
+
+const MOIS_COURTS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+
+// L'id nu de la carte de board de cette entreprise, ou null si elle n'en a
+// pas. Une lecture qui échoue n'est PAS une absence de carte : elle remonte,
+// et l'appelant s'arrête au lieu d'en fabriquer une seconde.
+async function carteDeLEntreprise(){
+  if (!window.MUPFil) throw new Error('MUPFil absent');
+  const ids = await MUPFil.idsEquivalents(contactId);
+  const resp = await fetch('/api/pipeline');
+  if (!resp.ok) throw new Error('/api/pipeline a répondu ' + resp.status);
+  const cards = await resp.json();
+  if (!Array.isArray(cards)) throw new Error('/api/pipeline n\'a pas rendu de tableau');
+  const carte = cards.find(c => c && ids.indexOf(MUPFil.localId(c.id)) !== -1);
+  return carte ? MUPFil.localId(carte.id) : null;
+}
+
+// Rend l'id de carte sur lequel accrocher le rendez-vous, ou null quand rien
+// ne doit être écrit. Sans carte, on ne la fabrique pas dans le dos de
+// l'abonné : on demande. Un refus arrête tout, et le péage aussi — sur 402 le
+// modal global dit pourquoi, et il n'y a ni évènement ni entrée de fil
+// derrière.
+async function carteOuCreation(){
+  let carte;
+  try {
+    carte = await carteDeLEntreprise();
+  } catch (e) {
+    console.error('[contact-societe] résolution de la carte', e);
+    toast('Pipeline illisible, RDV non planifié');
+    return null;
+  }
+  if (carte) return carte;
+  if (!confirm('Cette entreprise n\'a pas de fiche au pipeline.\n\nLa créer en colonne RDV pour y rattacher le rendez-vous ?')) return null;
+  try {
+    const resp = await fetch('/api/pipeline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildPipelineCard('rdv'))
+    });
+    if (resp.status === 402) return null;
+    if (!resp.ok) { toast('Fiche pipeline non créée'); return null; }
+  } catch (e) {
+    console.error('[contact-societe] création de la carte RDV', e);
+    toast('Fiche pipeline non créée');
+    return null;
+  }
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch (_) {}
+  return pipelineLocalId();
+}
+
+async function planifierRdv(){
+  if (!contact || !pipelineLocalId()) { toast('Contact introuvable'); return; }
+  const dateVal = document.getElementById('rdv-planner-date').value;
+  const heure = document.getElementById('rdv-planner-heure').value;
+  if (!dateVal || !heure) { toast('Renseignez une date et une heure'); return; }
+  const btn = document.getElementById('rdv-planner-go');
+  btn.disabled = true;
+  try {
+    const ficheId = await carteOuCreation();
+    if (!ficheId) return;
+
+    // Une heure de fin est due à l'agenda : une heure pleine après le début,
+    // comme le calendrier du Pipeline.
+    const [hh, mn] = heure.split(':');
+    const fin = String(Math.min(23, (parseInt(hh, 10) || 0) + 1)).padStart(2, '0') + ':' + (mn || '00');
+    const gens = getPeople();
+    const nomPersonne = gens.length ? personDisplayName(gens[0]) : '';
+    const corps = {
+      date: dateVal,
+      start: heure,
+      end: fin,
+      title: contact.nom || contact.company || contact.name || '',
+      contact: nomPersonne === '—' ? '' : nomPersonne,
+      type: 'rdv',
+      notes: '',
+      ficheId: ficheId
+    };
+
+    let pose = false;
+    try {
+      const resp = await fetch('/api/agenda', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corps)
+      });
+      pose = resp.ok;
+    } catch (e) {
+      console.error('[contact-societe] POST agenda', e);
+    }
+    if (!pose) { toast('RDV non planifié, réessayez'); return; }
+
+    closeRdvPlanner();
+    // Le fil est ancré sur le contact d'où part le geste, pas sur la carte :
+    // c'est la lecture qui rassemble les deux (doctrine MUPFil.ecrire). Même
+    // phrase que l'agenda, pour que le fil se lise pareil des deux côtés.
+    const jour = new Date(dateVal + 'T' + heure);
+    const quand = isNaN(jour.getTime())
+      ? ''
+      : ' le ' + jour.getDate() + ' ' + MOIS_COURTS[jour.getMonth()] + ' à ' + heure;
+    await MUPFil.ecrire({ ancrage: contactId, type: 'rdv', texte: 'RDV planifié' + quand });
+    renderTimeline();
+    toast('RDV planifié');
+    try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch (_) {}
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function closeRdvPlanner(){
+  document.getElementById('rdv-planner').classList.remove('open');
+}
+
+function wireRdvPlanner(){
+  const btn = document.getElementById('qa-rdv');
+  const panel = document.getElementById('rdv-planner');
+  if (!btn || !panel) return;
+  const dateEl = document.getElementById('rdv-planner-date');
+  document.getElementById('rdv-planner-go').addEventListener('click', planifierRdv);
+  btn.addEventListener('click', (e) => {
+    // Le lien vers l'agenda reste en href — clic milieu, nouvel onglet — mais
+    // un clic ordinaire prend le rendez-vous ici.
+    e.preventDefault();
+    if (panel.classList.contains('open')) { closeRdvPlanner(); return; }
+    if (!dateEl.value) {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      dateEl.value = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    }
+    panel.style.visibility = 'hidden';
+    panel.classList.add('open');
+    const r = btn.getBoundingClientRect();
+    let top = r.top - panel.offsetHeight - 6;
+    if (top < 8) top = r.bottom + 6;               // pas la place au-dessus → sous le bouton
+    let left = Math.min(r.left, window.innerWidth - panel.offsetWidth - 8);
+    if (left < 8) left = 8;
+    panel.style.top = top + 'px';
+    panel.style.left = left + 'px';
+    panel.style.visibility = '';
+  });
+  document.addEventListener('click', (e) => {
+    if (!panel.classList.contains('open')) return;
+    if (btn.contains(e.target) || panel.contains(e.target)) return;
+    closeRdvPlanner();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeRdvPlanner(); });
+}
+
 // ── BOOT ──
 (async function(){
   wireDropdowns();
@@ -1664,6 +1846,7 @@ function wirePipelineSend(){
   wireDelete();
   wirePeople();
   wirePipelineSend();
+  wireRdvPlanner();
   loadEnrichedSirets();   // un seul GET /api/user-plan, mémorisé pour la page
   await loadContact();
 })();

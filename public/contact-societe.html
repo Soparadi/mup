@@ -1430,7 +1430,169 @@ function wireActivityComposer(){
     input.value = '';
     renderTimeline();
     toast('Activité ajoutée');
+    // La note est écrite ; ce qu'elle ANNONCE se propose ensuite, jamais avant.
+    await proposerTelephoneDeLaNote(text);
+    await proposerActionDeLaNote(text);
   });
+}
+
+// ── CE QU'UNE NOTE ANNONCE ──
+// Détection reprise du Pipeline (detectActionInNote / parseFrenchDate /
+// parseFrenchTime), à deux différences près, toutes deux voulues.
+//
+// 1. Elle est branchée sur la SOUMISSION de la note, pas sur la seule dictée
+//    vocale : une note tapée annonce un rendez-vous aussi bien qu'une note
+//    dictée, et le Pipeline ne regardait que la seconde.
+// 2. Elle PROPOSE. Le Pipeline confirme le rendez-vous mais écrit le téléphone
+//    capturé en silence, dans la carte, sans que rien à l'écran le dise. Ici
+//    les deux passent par une demande, et un refus n'écrit rien.
+
+function detectActionInNote(text){
+  if(!text || text.length < 8) return null;
+  const lower = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+
+  // Type d'action — visio en priorité (avant 'appel', qui matcherait aussi).
+  let type = null;
+  if(/\b(visio|visioconference|teams|zoom|meet|appel video|en visio)\b/.test(lower)) type = 'visio';
+  else if(/\b(devis|proposition commerciale|chiffrage|propose un devis)\b/.test(lower)) type = 'devis';
+  else if(/\b(envoyer (un )?(mail|email|courriel)|relance(r)? par mail|mailing\b|email\b|envoyer un mail)\b/.test(lower)) type = 'mail';
+  else if(/\b(rdv|rendez[- ]vous|visite|rencontre|reunion|appeler|rappeler|telephoner|recontacter|contacter|joindre|me rappelle|le rappeler|me contacter)\b/.test(lower)) type = 'rdv';
+  if(!type) return null;
+
+  const date = parseFrenchDate(lower);
+  if(!date) return null;
+
+  const time = parseFrenchTime(lower) || '14:00';
+  return { type, date, time };
+}
+
+function parseFrenchDate(lower){
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const y = today.getFullYear();
+
+  if(/\baujourd[' ]?hui\b/.test(lower)) return new Date(today);
+  if(/\bdemain\b/.test(lower)){ const d=new Date(today); d.setDate(d.getDate()+1); return d; }
+  if(/\bapres[- ]?demain\b/.test(lower)){ const d=new Date(today); d.setDate(d.getDate()+2); return d; }
+
+  // « lundi » / « lundi prochain » …
+  const jours = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  const joursMatch = lower.match(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(\s+prochain)?\b/);
+  if(joursMatch){
+    const targetDay = jours.indexOf(joursMatch[1]);
+    const d = new Date(today);
+    let diff = (targetDay - d.getDay() + 7) % 7;
+    if(diff === 0 || joursMatch[2]) diff = diff || 7;
+    d.setDate(d.getDate() + diff);
+    return d;
+  }
+
+  // « le 6 mai » / « 6 mai »
+  const moisMap = {janvier:0,fevrier:1,mars:2,avril:3,mai:4,juin:5,juillet:6,aout:7,septembre:8,octobre:9,novembre:10,decembre:11};
+  const dateMatch = lower.match(/\b(?:le\s+)?(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\b/);
+  if(dateMatch){
+    const day = parseInt(dateMatch[1], 10);
+    const month = moisMap[dateMatch[2]];
+    if(day && month !== undefined){
+      let yr = y;
+      if(new Date(yr, month, day) < today) yr++;   // l'année prochaine si la date est passée
+      return new Date(yr, month, day);
+    }
+  }
+
+  // « le 12/05 » ou « 12/05/2026 »
+  const slashMatch = lower.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if(slashMatch){
+    const day = parseInt(slashMatch[1],10);
+    const month = parseInt(slashMatch[2],10) - 1;
+    let yr = slashMatch[3] ? parseInt(slashMatch[3],10) : y;
+    if(yr < 100) yr += 2000;
+    if(day && month >= 0){
+      const d = new Date(yr, month, day);
+      if(d >= today || slashMatch[3]) return d;
+      return new Date(yr+1, month, day);
+    }
+  }
+
+  return null;
+}
+
+function parseFrenchTime(lower){
+  // « 14h30 » / « 14h » / « 14:30 » / « 14 heures 30 » / « 9 heures »
+  let m = lower.match(/\b(\d{1,2})\s*h\s*(\d{1,2})?\b/);
+  if(m) return String(m[1]).padStart(2,'0') + ':' + String(m[2]||'00').padStart(2,'0');
+  m = lower.match(/\b(\d{1,2}):(\d{2})\b/);
+  if(m) return String(m[1]).padStart(2,'0') + ':' + m[2];
+  m = lower.match(/\b(\d{1,2})\s*heures?\s*(\d{1,2})?\b/);
+  if(m) return String(m[1]).padStart(2,'0') + ':' + String(m[2]||'00').padStart(2,'0');
+  return null;
+}
+
+const ACTION_ARTICLE = { rdv:'un RDV', visio:'une visio', mail:'un mail', devis:'un devis' };
+const ACTION_VERBE   = { rdv:'RDV planifié', visio:'Visio planifiée', mail:'Mail programmé', devis:'Devis planifié' };
+
+async function proposerActionDeLaNote(text){
+  const d = detectActionInNote(text);
+  if (!d) return;
+  const pad = (n) => String(n).padStart(2, '0');
+  const dateStr = d.date.getFullYear() + '-' + pad(d.date.getMonth()+1) + '-' + pad(d.date.getDate());
+  const quand = d.date.getDate() + ' ' + MOIS_COURTS[d.date.getMonth()] + ' à ' + d.time;
+  const question = 'Cette note annonce ' + (ACTION_ARTICLE[d.type] || 'une action')
+    + ' le ' + quand + '.\n\nL\'inscrire à l\'agenda ?';
+  if (!confirm(question)) return;
+  const pose = await poserRendezVous({
+    type: d.type,
+    dateStr: dateStr,
+    heure: d.time,
+    avec: '',
+    verbe: (ACTION_VERBE[d.type] || 'Action planifiée') + ' (depuis une note)'
+  });
+  if (pose === false) toast('Action non inscrite à l\'agenda');
+  else if (pose === true) toast('Inscrit à l\'agenda — ' + quand);
+}
+
+async function proposerTelephoneDeLaNote(text){
+  const m = text.match(/\b(0[1-9])(?:[\s.\-]?(\d{2})){4}\b/);
+  if (!m) return;
+  const champ = document.getElementById('f-societe-tel');
+  // Remplissage si vide : un numéro déjà saisi n'est jamais remplacé par celui
+  // qu'une note mentionne au passage.
+  if (!champ || champ.value.trim()) return;
+  const numero = window.MUPTel.format(m[0]);
+  if (!confirm('Cette note contient un numéro : ' + numero
+    + '\n\nL\'enregistrer comme téléphone de la société ?')) return;
+  champ.value = numero;
+  toast(await autoSave() ? 'Téléphone enregistré' : 'Téléphone non enregistré');
+}
+
+// ── CONSIGNER UN APPEL, UN MAIL ──
+// Appeler et Écrire passent la main au téléphone ou au client mail, et la fiche
+// n'en gardait aucune trace : le fil ignorait des gestes qui partaient d'ici.
+// La proposition arrive APRÈS COUP — le lien s'ouvre d'abord — et un refus
+// n'écrit rien.
+function wireConsignation(){
+  const brancher = (menuId, type, nomGeste) => {
+    const menu = document.getElementById(menuId);
+    if (!menu) return;
+    menu.addEventListener('click', (e) => {
+      const item = e.target.closest('a.dropdown-item');
+      if (!item) return;
+      const nomEl = item.querySelector('.dropdown-name');
+      const qui = nomEl ? nomEl.textContent.trim() : '';
+      setTimeout(() => consignerGeste(type, nomGeste, qui), 400);
+    });
+  };
+  brancher('dd-call', 'phone', 'Appel');
+  brancher('dd-mail', 'mail', 'Mail');
+}
+
+async function consignerGeste(type, nomGeste, qui){
+  const avec = qui && qui !== '—' ? ' à ' + qui : '';
+  if (!confirm('Consigner ' + (type === 'phone' ? 'cet appel' : 'ce mail') + avec + ' dans le fil ?')) return;
+  const pose = await MUPFil.ecrire({ ancrage: contactId, type: type, texte: nomGeste + avec });
+  if (!pose) { toast('Activité non enregistrée, réessayez'); return; }
+  renderTimeline();
+  toast(nomGeste + ' consigné');
 }
 
 // Dropdowns header (Appeler / Écrire / Planifier)
@@ -1816,6 +1978,61 @@ async function carteOuCreation(){
   return pipelineLocalId();
 }
 
+// Pose un rendez-vous : l'agenda le PORTE, le fil en garde la TRACE, dans cet
+// ordre. Trois issues distinctes, parce que l'appelant n'a pas la même chose à
+// dire dans les trois cas : true (posé), false (l'agenda a refusé — il faut le
+// dire), null (abandon délibéré — refus de créer la carte, ou péage : le motif
+// a déjà été donné, ou le silence est voulu).
+//
+// Deux gestes y passent : le planificateur, et l'action qu'une note annonce.
+// Aucun des deux n'écrit sa propre version de l'évènement.
+async function poserRendezVous(opts){
+  const ficheId = await carteOuCreation();
+  if (!ficheId) return null;
+
+  // Une heure de fin est due à l'agenda : une heure pleine après le début,
+  // comme le calendrier du Pipeline.
+  const heure = opts.heure;
+  const [hh, mn] = heure.split(':');
+  const fin = String(Math.min(23, (parseInt(hh, 10) || 0) + 1)).padStart(2, '0') + ':' + (mn || '00');
+  const corps = {
+    date: opts.dateStr,
+    start: heure,
+    end: fin,
+    title: contact.nom || contact.company || contact.name || '',
+    contact: opts.avec || '',
+    type: opts.type,
+    notes: '',
+    ficheId: ficheId
+  };
+
+  let pose = false;
+  try {
+    const resp = await fetch('/api/agenda', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps)
+    });
+    pose = resp.ok;
+  } catch (e) {
+    console.error('[contact-societe] POST agenda', e);
+  }
+  if (!pose) return false;
+
+  // Le fil est ancré sur le contact d'où part le geste, pas sur la carte :
+  // c'est la lecture qui rassemble les deux (doctrine MUPFil.ecrire). Même
+  // phrase que l'agenda, pour que le fil se lise pareil des deux côtés.
+  const jour = new Date(opts.dateStr + 'T' + heure);
+  const quand = isNaN(jour.getTime())
+    ? ''
+    : ' le ' + jour.getDate() + ' ' + MOIS_COURTS[jour.getMonth()] + ' à ' + heure;
+  const avec = opts.avec ? ' avec ' + opts.avec : '';
+  await MUPFil.ecrire({ ancrage: contactId, type: opts.type, texte: opts.verbe + avec + quand });
+  renderTimeline();
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch (_) {}
+  return true;
+}
+
 async function planifierRdv(){
   if (!contact || !pipelineLocalId()) { toast('Contact introuvable'); return; }
   const dateVal = document.getElementById('rdv-planner-date').value;
@@ -1824,50 +2041,14 @@ async function planifierRdv(){
   const btn = document.getElementById('rdv-planner-go');
   btn.disabled = true;
   try {
-    const ficheId = await carteOuCreation();
-    if (!ficheId) return;
-
-    // Une heure de fin est due à l'agenda : une heure pleine après le début,
-    // comme le calendrier du Pipeline.
-    const [hh, mn] = heure.split(':');
-    const fin = String(Math.min(23, (parseInt(hh, 10) || 0) + 1)).padStart(2, '0') + ':' + (mn || '00');
-    const corps = {
-      date: dateVal,
-      start: heure,
-      end: fin,
-      title: contact.nom || contact.company || contact.name || '',
-      contact: rdvPersonneNom,
-      type: 'rdv',
-      notes: '',
-      ficheId: ficheId
-    };
-
-    let pose = false;
-    try {
-      const resp = await fetch('/api/agenda', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(corps)
-      });
-      pose = resp.ok;
-    } catch (e) {
-      console.error('[contact-societe] POST agenda', e);
-    }
-    if (!pose) { toast('RDV non planifié, réessayez'); return; }
-
+    const pose = await poserRendezVous({
+      type: 'rdv', dateStr: dateVal, heure: heure,
+      avec: rdvPersonneNom, verbe: 'RDV planifié'
+    });
+    if (pose === false) { toast('RDV non planifié, réessayez'); return; }
+    if (pose !== true) return;
     closeRdvPlanner();
-    // Le fil est ancré sur le contact d'où part le geste, pas sur la carte :
-    // c'est la lecture qui rassemble les deux (doctrine MUPFil.ecrire). Même
-    // phrase que l'agenda, pour que le fil se lise pareil des deux côtés.
-    const jour = new Date(dateVal + 'T' + heure);
-    const quand = isNaN(jour.getTime())
-      ? ''
-      : ' le ' + jour.getDate() + ' ' + MOIS_COURTS[jour.getMonth()] + ' à ' + heure;
-    const avec = rdvPersonneNom ? ' avec ' + rdvPersonneNom : '';
-    await MUPFil.ecrire({ ancrage: contactId, type: 'rdv', texte: 'RDV planifié' + avec + quand });
-    renderTimeline();
     toast('RDV planifié');
-    try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch (_) {}
   } finally {
     btn.disabled = false;
   }
@@ -1956,6 +2137,7 @@ function wireRdvPlanner(){
 (async function(){
   wireDropdowns();
   wireActivityComposer();
+  wireConsignation();
   wireForm();
   wireDelete();
   wirePeople();

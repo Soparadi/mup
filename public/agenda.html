@@ -676,6 +676,47 @@ async function openModal(hour) {
   }
 }
 
+// ── ARRIVÉE DEPUIS UNE FICHE ──
+// La fiche contact envoie ici avec ?contact=<id>, et jusqu'ici l'agenda ne
+// lisait pas ce paramètre : le lien ouvrait un calendrier vierge, à charge
+// pour l'abonné de retrouver lui-même l'entreprise d'où il venait.
+//
+// L'id transmis est celui du RECORD d'où part le geste — un contact — quand
+// le select, lui, ne liste que des cartes de board. Les deux ne partagent pas
+// toujours leur id : une carte née d'un import de factures ne désigne son
+// contact que par contact_id. C'est donc idsEquivalents qui les rassemble, la
+// même résolution que celle du fil.
+//
+// Sans carte correspondante il n'y a rien à présélectionner, et rien n'est
+// inventé : la modale s'ouvre quand même, prête à recevoir un titre libre.
+async function _carteEquivalente(depart) {
+  if (!window.MUPFil) return null;
+  try {
+    var cards = await _loadPipeline();
+    var ids = await MUPFil.idsEquivalents(depart);
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      if (c && c.id && ids.indexOf(MUPFil.localId(c.id)) !== -1) return _normFicheId(c.id);
+    }
+  } catch (e) {
+    // Corpus illisible : on ne présélectionne rien plutôt que de choisir mal.
+    console.warn('[Agenda] résolution de ?contact= impossible', e);
+  }
+  return null;
+}
+
+async function ouvrirDepuisUrl() {
+  var depart = new URLSearchParams(window.location.search).get('contact');
+  if (!depart) return;
+  await openModal();
+  var carte = await _carteEquivalente(depart);
+  if (!carte) return;
+  var sel = document.getElementById('m-pipeline-card');
+  if (!sel) return;
+  sel.value = carte;
+  await fillFromPipeline();   // pose modalFicheId, le titre et le contact
+}
+
 async function fillFromPipeline() {
   var sel = document.getElementById('m-pipeline-card');
   if(!sel) return;
@@ -960,6 +1001,7 @@ try { localStorage.removeItem('mup_agenda'); } catch(_) {}
 loadEvents().then(function(){
   renderCal();
   renderDay();
+  ouvrirDepuisUrl();
 });
 fetchWeather();
 

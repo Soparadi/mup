@@ -1643,6 +1643,69 @@ function schedulePersonSave(idx){
   personSaveTimers[idx] = setTimeout(() => savePerson(idx), 800);
 }
 
+// ── RATTACHEMENT D'UNE PERSONNE ──
+// loadPeople() ne retient que les records dont societe_id vaut celui de la
+// fiche. Une personne créée sans societe_id était donc écrite, puis introuvable
+// au premier rechargement — et rien à l'écran ne le disait.
+//
+// Quand la fiche n'est rattachée à aucune société, celle-ci se crée à la
+// demande, depuis les champs de la fiche, et le contact courant la porte à son
+// tour. Rien si l'abonnée refuse : la question n'est posée qu'une fois, et le
+// témoin d'enregistrement reste au rouge tant que la personne n'est pas écrite.
+let societeCreationRefusee = false;
+
+async function societeDeLaFiche(){
+  if (contact && contact.societe_id) return contact.societe_id;
+  if (societeCreationRefusee) return null;
+  const nom = (document.getElementById('f-nom').value || '').trim()
+    || contact.nom || contact.company || contact.name || '';
+  if (!nom) { toast('Renseignez la raison sociale avant d\'ajouter une personne'); return null; }
+  if (!confirm('Cette fiche n\'est rattachée à aucune société.\n\nCréer « ' + nom
+    + ' » comme société, pour y rattacher la personne ?')) {
+    societeCreationRefusee = true;
+    toast('Personne non enregistrée : aucune société de rattachement');
+    return null;
+  }
+  let creee = null;
+  try {
+    const resp = await fetch('/api/societes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        raison_sociale: nom,
+        enseigne: contact.enseigne || '',
+        siret: String(contact.siret || '').replace(/\s+/g, ''),
+        siren: contact.siren || '',
+        naf: contact.code_naf || contact.naf || '',
+        forme_juridique: document.getElementById('f-forme').value.trim(),
+        adresse: document.getElementById('f-adresse').value.trim(),
+        zip: document.getElementById('f-zip').value.trim(),
+        ville: document.getElementById('f-ville').value.trim(),
+        source: 'contacts'
+      })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    creee = await resp.json();
+  } catch (e) {
+    console.error('[contact-societe] création société', e);
+    toast('Société non créée, personne non enregistrée');
+    return null;
+  }
+  // societe_id est stocké SANS préfixe de table — c'est sous cette forme que le
+  // serveur le pose (genId) et que socKey le compare.
+  const sid = creee && creee.id ? MUPFil.localId(creee.id) : '';
+  if (!sid) { toast('Société non créée, personne non enregistrée'); return null; }
+  contact.societe_id = sid;
+  // Le contact courant porte le rattachement, sans quoi la société existerait
+  // et la fiche l'ignorerait au prochain chargement.
+  if (!await autoSave()) {
+    contact.societe_id = null;
+    toast('Rattachement non enregistré, personne non créée');
+    return null;
+  }
+  return sid;
+}
+
 // PUT si la personne a déjà un id, sinon POST (rattachée à la société courante).
 // Verrou par index : tant qu'un save est en vol, un nouvel appel marque "dirty"
 // et re-save APRÈS coup (quand l'id POST est posé) -> jamais de double création.
@@ -1663,7 +1726,11 @@ async function savePerson(idx){
         body: JSON.stringify(body)
       });
     } else {
-      if (contact && contact.societe_id) body.societe_id = contact.societe_id;
+      // Jamais de personne orpheline : sans société de rattachement, rien n'est
+      // créé. Le témoin passe au rouge — la commande n'échoue pas en silence.
+      const sid = await societeDeLaFiche();
+      if (!sid) { setAutosaveState('error'); return; }
+      body.societe_id = sid;
       resp = await fetch('/api/contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

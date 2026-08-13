@@ -1569,6 +1569,12 @@ let _filCourant = [];
 let _filFiche = null;
 let _filJeton = 0;
 
+// Deux absences, deux messages — mêmes que sur la fiche contact, qui lit le
+// même fil. « Pas encore d'historique » est un fait sur l'entreprise ; un
+// échec de lecture n'en est pas un, il ne dit rien de ce qu'elle porte.
+const FIL_VIDE  = `<div class="timeline-empty">Cette fiche n'a pas encore d'historique.</div>`;
+const FIL_ECHEC = `<div class="timeline-empty">Le fil n'a pas pu être chargé. Rechargez la page pour réessayer.</div>`;
+
 // Le fil d'activité de la fiche ouverte. La lecture est asynchrone — il faut
 // résoudre les ids équivalents de l'entreprise puis lire la table activites —
 // donc le conteneur n'est vidé qu'au retour : sans ça chaque re-render ferait
@@ -1596,8 +1602,7 @@ function renderTimelineFiche(c){
       // Une fiche importée depuis Prospects ou depuis un contact n'a ni note,
       // ni activité, ni date d'entrée exploitable : le fil est vide et la
       // section se réduirait à son titre. Elle dit alors l'état.
-      root.innerHTML = MUPFil.rendre(items)
-        || `<div class="timeline-empty">Cette fiche n'a pas encore d'historique.</div>`;
+      root.innerHTML = MUPFil.rendre(items) || FIL_VIDE;
       // Le calendrier a été rendu avant que le fil n'arrive : ses pastilles de
       // notes lui manquaient. On le redessine une fois, s'il est à l'écran.
       var sect = document.getElementById('d-rdv-section');
@@ -1605,8 +1610,10 @@ function renderTimelineFiche(c){
     })
     .catch(() => {
       if(jeton !== _filJeton || String(currentId) !== cible) return;
+      // Le fil n'a pas été lu : il n'est pas vide, il est absent. L'écran ne
+      // peut pas l'annoncer comme une fiche sans historique.
       _filCourant = [];
-      root.innerHTML = `<div class="timeline-empty">Cette fiche n'a pas encore d'historique.</div>`;
+      root.innerHTML = FIL_ECHEC;
     });
 }
 

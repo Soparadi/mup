@@ -1141,17 +1141,23 @@ function countContacts(list){
   return keys.size;
 }
 
+// Jeu d'enregistrements « Générés par MovUP » : les cartes lues à l'init
+// (pipelineCards), pas prospects où les jumelles ont été fusionnées, plus les
+// contacts de même origine restés sans carte pour ne rien perdre. La clé de
+// countContacts étant l'id local, une jumelle et son contact ne comptent qu'une
+// fois. Une seule définition pour le KPI et pour la pastille : ils portaient le
+// même prédicat sur deux jeux différents et divergeaient d'une unité par paire
+// fusionnée, côte à côte à l'écran. Le prédicat reste celui d'ORIGIN_FILTERS.
+function pipelineOrigineSet(){
+  return pipelineCards.concat(
+    prospects.filter(p => p.source === 'pipeline' || p.source === 'prospection')
+  );
+}
+
 function renderKpis(){
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
   set('kpi-total', countContacts(prospects));
-  // Pipeline : alimenté par les cartes lues à l'init (pipelineCards), pas par
-  // prospects où les jumelles ont été fusionnées. Les contacts de source
-  // 'prospection' restés sans carte sont joints pour ne rien perdre ; la clé de
-  // countContacts étant l'id local, une jumelle et son contact ne comptent
-  // qu'une fois. Le filtre reste celui d'ORIGIN_FILTERS, inchangé dans ce lot.
-  set('kpi-pipeline', countContacts(
-    pipelineCards.concat(prospects.filter(p => p.source === 'pipeline' || p.source === 'prospection'))
-  ));
+  set('kpi-pipeline', countContacts(pipelineOrigineSet()));
   set('kpi-relations', countContacts(prospects.filter(p => p.source === 'relations')));
   set('kpi-actions-today', countActionsToday());
 }
@@ -1173,9 +1179,17 @@ function renderOriginFilters(){
   ORIGIN_FILTERS.forEach(f => {
     // Les compteurs hors "Réserve" excluent les contacts reserve (cohérent avec
     // la liste qui les masque par défaut).
+    // "Générés par MovUP" compte sur le même jeu et de la même façon que le KPI
+    // Pipeline affiché juste au-dessus : cartes lues à l'init, sociétés
+    // distinctes. Sur prospects et en enregistrements bruts, il perdait une
+    // unité par paire fusionnée là où le KPI n'en perdait aucune. L'exclusion
+    // de la réserve reste posée ici : c'est la règle de la rangée, pas celle du
+    // KPI, et la retirer ferait mentir la pastille sur la liste qu'elle ouvre.
     const count = f.key === 'reserve'
       ? prospects.filter(p => p.statut === 'reserve').length
-      : prospects.filter(p => p.statut !== 'reserve' && f.match(p)).length;
+      : f.key === 'pipeline'
+        ? countContacts(pipelineOrigineSet().filter(p => p.statut !== 'reserve'))
+        : prospects.filter(p => p.statut !== 'reserve' && f.match(p)).length;
     const btn = document.createElement('button');
     btn.className = 'origin-filter';
     if(currentOriginFilter === f.key) btn.classList.add('active');

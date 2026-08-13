@@ -67,20 +67,15 @@ body{display:flex;min-height:100vh}
 .fiche-meta-item{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted-dark)}
 .fiche-meta-item svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.75;fill:none}
 
-/* Étape pipeline colorée (select intégré) */
-.etape-select{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:var(--radius-xs);font-size:12px;color:#fff;font-weight:600;cursor:pointer;border:1px solid transparent;transition:opacity .15s}
-.etape-select:hover{opacity:.92}
-.etape-select[data-etape="prospect"]   {background:var(--orange)}
-.etape-select[data-etape="qualifie"]   {background:var(--indigo)}
-.etape-select[data-etape="rdv"]        {background:var(--purple)}
-.etape-select[data-etape="proposition"]{background:var(--cyan)}
-.etape-select[data-etape="negociation"]{background:var(--amber)}
-.etape-select[data-etape="signe"]      {background:var(--green)}
-.etape-select[data-etape="perdu"]      {background:var(--red)}
-.etape-select select{background:transparent;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;outline:none;padding:0;-webkit-appearance:none;appearance:none}
-.etape-select select option{background:var(--card-dark);color:var(--text-on-dark)}
-.etape-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.75);font-weight:600;margin-right:4px}
-.etape-caret{width:12px;height:12px;stroke:#fff;stroke-width:2;fill:none;opacity:.85}
+/* Colonne pipeline (select intégré). La couleur vient de PIPELINE_COLS, posée
+   en ligne : c'est la même table qui peint le sélecteur d'envoi et le board. */
+.colonne-pill{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:var(--radius-xs);font-size:12px;color:#fff;font-weight:600;cursor:pointer;border:1px solid transparent;background:#2A2A2A;transition:opacity .15s}
+.colonne-pill:hover{opacity:.92}
+.colonne-pill select{background:transparent;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;outline:none;padding:0;-webkit-appearance:none;appearance:none}
+.colonne-pill select:disabled{cursor:default;opacity:.75}
+.colonne-pill select option{background:var(--card-dark);color:var(--text-on-dark)}
+.colonne-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.75);font-weight:600;margin-right:4px}
+.colonne-caret{width:12px;height:12px;stroke:#fff;stroke-width:2;fill:none;opacity:.85}
 
 /* Actions header (3 dropdowns + autosave) */
 .actions{display:flex;gap:8px;flex-shrink:0;align-items:center}
@@ -295,18 +290,14 @@ button.dropdown-item{width:100%;background:transparent;border:none;font-family:i
           <h1 class="fiche-name" id="fiche-name">Chargement…</h1>
           <div class="fiche-sub" id="fiche-sub" style="display:none"></div>
           <div class="fiche-meta-line">
-            <label class="etape-select" id="etape-container" data-etape="prospect">
-              <span class="etape-label">Étape</span>
-              <select id="etape-select">
-                <option value="prospect">Prospect</option>
-                <option value="qualifie">Qualifié</option>
-                <option value="rdv">RDV pris</option>
-                <option value="proposition">Proposition envoyée</option>
-                <option value="negociation">Négociation</option>
-                <option value="signe">Signé</option>
-                <option value="perdu">Perdu</option>
+            <!-- Les colonnes sont posées par wireColonne() depuis PIPELINE_COLS :
+                 une seule table, pour le sélecteur d'envoi comme pour ici. -->
+            <label class="colonne-pill" id="colonne-container">
+              <span class="colonne-label">Pipeline</span>
+              <select id="colonne-select" disabled>
+                <option value="">Lecture…</option>
               </select>
-              <svg class="etape-caret" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+              <svg class="colonne-caret" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
             </label>
             <span class="fiche-meta-item" id="meta-forme" style="display:none">
               <svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l8-4 8 4v14"/></svg>
@@ -911,11 +902,6 @@ function populate(){
     ? 'Suivi depuis ' + days + ' jour' + (days>1?'s':'')
     : 'Date de création inconnue';
 
-  // Étape pipeline : mappage depuis champs existants (col, status, etape)
-  const etape = c.etape || mapColToEtape(c.col) || 'prospect';
-  document.getElementById('etape-select').value = etape;
-  document.getElementById('etape-container').setAttribute('data-etape', etape);
-
   // Champs informations
   document.getElementById('f-nom').value = c.nom || c.company || c.name || '';
   document.getElementById('f-forme').value = c.forme_juridique || c.forme || '';
@@ -979,21 +965,6 @@ function populate(){
 
   // Liens Actions rapides + dropdowns header
   wireActions();
-}
-
-function mapColToEtape(col){
-  // Mappage des colonnes pipeline historiques vers les étapes fiche société.
-  if (!col) return null;
-  const map = {
-    'prospects':'prospect','prospect':'prospect',
-    'linkedin':'qualifie','mailing':'qualifie','phoning':'qualifie',
-    'visio':'rdv','rdv':'rdv',
-    'devis':'proposition',
-    'nego':'negociation','negociation':'negociation',
-    'won':'signe','gagne':'signe','signe':'signe',
-    'lost':'perdu','perdu':'perdu'
-  };
-  return map[String(col).toLowerCase()] || null;
 }
 
 // Le fil de l'entreprise, pas le journal de ce seul record. Une note saisie
@@ -1248,7 +1219,6 @@ function captureFields(){
   c.societe_linkedin = document.getElementById('f-linkedin').value.trim();
   c.facebook = document.getElementById('f-facebook').value.trim();
   c.instagram = document.getElementById('f-instagram').value.trim();
-  c.etape = document.getElementById('etape-select').value;
   // Prochaine action via contenteditable
   const naText = document.getElementById('next-action-text');
   if (naText && !naText.classList.contains('empty')) {
@@ -1299,13 +1269,6 @@ function wireForm(){
   inputs.forEach(el => {
     const evt = el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input';
     el.addEventListener(evt, scheduleAutoSave);
-  });
-
-  // Étape select → met à jour data-etape pour la couleur + autosave
-  const etapeSelect = document.getElementById('etape-select');
-  etapeSelect.addEventListener('change', () => {
-    document.getElementById('etape-container').setAttribute('data-etape', etapeSelect.value);
-    scheduleAutoSave();
   });
 
   // Prochaine action contenteditable
@@ -1781,6 +1744,12 @@ function toast(msg){
 // (POST /api/pipeline avec body.id = id local), le même id sur lequel
 // deleteCard (pipeline.html) supprime les deux tables. L'étape n'est qu'un
 // attribut (col) posé au moment de l'envoi.
+//
+// Ces colonnes sont AUSSI celles du déroulant de l'en-tête : une seule table
+// pour les deux, et une seule notion d'avancement. La fiche portait à côté un
+// champ `etape` — sept valeurs à elle, écrites sur le record contact, lues
+// nulle part ailleurs dans le dépôt et sans aucun effet sur le board. Il a
+// disparu ; le déroulant déplace la carte réelle.
 const PIPELINE_COLS = [
   { id:'prospects', name:'Prospects',   color:'#CC0000' },
   { id:'linkedin',  name:'LinkedIn',    color:'#0A66C2' },
@@ -1852,26 +1821,41 @@ function closePipelinePicker(){
   document.getElementById('pipeline-picker').classList.remove('open');
 }
 
-async function sendToPipeline(col){
-  closePipelinePicker();
-  if (!contact || !pipelineLocalId()) { toast('Contact introuvable'); return; }
-  if (await contactAlreadyInPipeline()) { toast('Ce contact est déjà au pipeline'); return; }
+// Crée la carte de board de cette entreprise, dans la colonne demandée. Rend le
+// record créé, ou null — auquel cas le motif a déjà été dit (402 : le modal
+// global le porte). Le seul chemin de création : envoi manuel, planification
+// d'un rendez-vous et déplacement d'étape y passent tous.
+async function creerCarte(col){
   try {
     const resp = await fetch('/api/pipeline', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(buildPipelineCard(col))
     });
-    if (resp.status === 402) return;   // péage : le modal global (trial-expired-modal.js) prend le relais
-    if (!resp.ok) { toast('Envoi impossible'); return; }
-    const c = PIPELINE_COLS.find(x => x.id === col);
-    toast('Envoyé au pipeline — ' + (c ? c.name : col));
+    if (resp.status === 402) return null;   // péage : le modal global (trial-expired-modal.js) prend le relais
+    if (!resp.ok) { toast('Fiche pipeline non créée'); return null; }
+    const cree = await resp.json().catch(() => null);
     // Réveille un onglet pipeline ouvert pour qu'il recharge le board.
     try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch (_) {}
+    return Object.assign({ id: 'pipeline:' + pipelineLocalId() }, cree || {}, { col: col });
   } catch (e) {
-    console.error('[contact-societe] sendToPipeline', e);
-    toast('Envoi impossible');
+    console.error('[contact-societe] creerCarte', e);
+    toast('Fiche pipeline non créée');
+    return null;
   }
+}
+
+async function sendToPipeline(col){
+  closePipelinePicker();
+  if (!contact || !pipelineLocalId()) { toast('Contact introuvable'); return; }
+  if (await contactAlreadyInPipeline()) { toast('Ce contact est déjà au pipeline'); return; }
+  const cree = await creerCarte(col);
+  if (!cree) return;
+  _carte = cree;
+  _carteLue = true;
+  majColonne();
+  const c = PIPELINE_COLS.find(x => x.id === col);
+  toast('Envoyé au pipeline — ' + (c ? c.name : col));
 }
 
 function wirePipelineSend(){
@@ -1931,9 +1915,9 @@ const MOIS_COURTS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août'
 // quelqu'un d'autre. Chaîne vide quand le geste ne désigne personne.
 let rdvPersonneNom = '';
 
-// L'id nu de la carte de board de cette entreprise, ou null si elle n'en a
-// pas. Une lecture qui échoue n'est PAS une absence de carte : elle remonte,
-// et l'appelant s'arrête au lieu d'en fabriquer une seconde.
+// La carte de board de cette entreprise, ENTIÈRE, ou null si elle n'en a pas.
+// Une lecture qui échoue n'est PAS une absence de carte : elle remonte, et
+// l'appelant s'arrête au lieu d'en fabriquer une seconde.
 async function carteDeLEntreprise(){
   if (!window.MUPFil) throw new Error('MUPFil absent');
   const ids = await MUPFil.idsEquivalents(contactId);
@@ -1941,13 +1925,12 @@ async function carteDeLEntreprise(){
   if (!resp.ok) throw new Error('/api/pipeline a répondu ' + resp.status);
   const cards = await resp.json();
   if (!Array.isArray(cards)) throw new Error('/api/pipeline n\'a pas rendu de tableau');
-  const carte = cards.find(c => c && ids.indexOf(MUPFil.localId(c.id)) !== -1);
-  return carte ? MUPFil.localId(carte.id) : null;
+  return cards.find(c => c && ids.indexOf(MUPFil.localId(c.id)) !== -1) || null;
 }
 
 // Rend l'id de carte sur lequel accrocher le rendez-vous, ou null quand rien
 // ne doit être écrit. Sans carte, on ne la fabrique pas dans le dos de
-// l'abonné : on demande. Un refus arrête tout, et le péage aussi — sur 402 le
+// l'abonnée : on demande. Un refus arrête tout, et le péage aussi — sur 402 le
 // modal global dit pourquoi, et il n'y a ni évènement ni entrée de fil
 // derrière.
 async function carteOuCreation(){
@@ -1959,23 +1942,120 @@ async function carteOuCreation(){
     toast('Pipeline illisible, RDV non planifié');
     return null;
   }
-  if (carte) return carte;
+  if (carte) { _carte = carte; _carteLue = true; majColonne(); return MUPFil.localId(carte.id); }
   if (!confirm('Cette entreprise n\'a pas de fiche au pipeline.\n\nLa créer en colonne RDV pour y rattacher le rendez-vous ?')) return null;
-  try {
-    const resp = await fetch('/api/pipeline', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildPipelineCard('rdv'))
-    });
-    if (resp.status === 402) return null;
-    if (!resp.ok) { toast('Fiche pipeline non créée'); return null; }
-  } catch (e) {
-    console.error('[contact-societe] création de la carte RDV', e);
-    toast('Fiche pipeline non créée');
-    return null;
-  }
-  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch (_) {}
+  const cree = await creerCarte('rdv');
+  if (!cree) return null;
+  _carte = cree;
+  _carteLue = true;
+  majColonne();
   return pipelineLocalId();
+}
+
+// ── LA COLONNE DU BOARD, DEPUIS L'EN-TÊTE ──
+// `_carte` est la carte relue ; `_carteLue` dit si la lecture a abouti. Les
+// confondre ferait afficher « hors pipeline » sur une entreprise qui a une
+// carte et dont on n'a pas su la lire — une affirmation qu'un échec de lecture
+// ne permet pas.
+let _carte = null;
+let _carteLue = false;
+
+function wireColonne(){
+  const sel = document.getElementById('colonne-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Lecture…</option>'
+    + PIPELINE_COLS.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+  sel.addEventListener('change', () => deplacerCarte(sel.value));
+}
+
+function majColonne(){
+  const sel = document.getElementById('colonne-select');
+  const box = document.getElementById('colonne-container');
+  if (!sel || !box) return;
+  const vide = sel.querySelector('option[value=""]');
+  const col = _carte ? String(_carte.col || '') : '';
+  const connue = PIPELINE_COLS.find(c => c.id === col) || null;
+  // Trois états, trois libellés : pas encore lue, lue sans carte, lue avec une
+  // colonne que PIPELINE_COLS ne connaît pas (carte ancienne ou importée).
+  if (vide) {
+    vide.textContent = !_carteLue ? 'Pipeline illisible'
+      : (!_carte ? 'Hors pipeline' : (col || 'Colonne inconnue'));
+  }
+  sel.value = connue ? connue.id : '';
+  sel.disabled = !_carteLue;
+  box.style.background = connue ? connue.color : '';
+}
+
+// Relit la carte à l'ouverture pour savoir dans quelle colonne se trouve cette
+// entreprise. Sans elle, le déroulant ne peut rien affirmer.
+async function chargerCarte(){
+  try {
+    _carte = await carteDeLEntreprise();
+    _carteLue = true;
+  } catch (e) {
+    console.error('[contact-societe] lecture de la carte', e);
+    _carte = null;
+    _carteLue = false;
+  }
+  majColonne();
+}
+
+// Déplace la carte dans la colonne choisie. Sans carte, on la propose — patron
+// de carteOuCreation, même refus qui n'écrit rien.
+//
+// PUT /api/pipeline/:id est un UPDATE … CONTENT : le corps REMPLACE le record.
+// Envoyer { col } seul effacerait tout le reste de la carte. On la relit donc
+// entière, juste avant, et on la réécrit avec la seule colonne changée — relire
+// maintenant plutôt que se fier à `_carte`, qui peut dater de l'ouverture.
+async function deplacerCarte(col){
+  const def = PIPELINE_COLS.find(c => c.id === col);
+  const sel = document.getElementById('colonne-select');
+  if (!def) { majColonne(); return; }        // retour au vide : rien à faire
+  if (!contact || !pipelineLocalId()) { toast('Contact introuvable'); majColonne(); return; }
+  sel.disabled = true;
+  try {
+    if (!_carte) {
+      if (!confirm('Cette entreprise n\'a pas de fiche au pipeline.\n\nLa créer en colonne ' + def.name + ' ?')) return;
+      const cree = await creerCarte(col);
+      if (!cree) return;
+      _carte = cree;
+      toast('Fiche créée au pipeline — ' + def.name);
+      return;
+    }
+    let entiere;
+    try {
+      entiere = await carteDeLEntreprise();
+    } catch (e) {
+      console.error('[contact-societe] relecture de la carte', e);
+      toast('Pipeline illisible, colonne inchangée');
+      return;
+    }
+    if (!entiere) {                               // supprimée depuis l'ouverture
+      _carte = null;
+      toast('Fiche pipeline introuvable');
+      return;
+    }
+    const corps = Object.assign({}, entiere, { col: col, updated_at: new Date().toISOString() });
+    delete corps.id;                              // la route le refuse dans le corps
+    let ok = false;
+    try {
+      const resp = await fetch('/api/pipeline/' + encodeURIComponent(MUPFil.localId(entiere.id)), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corps)
+      });
+      ok = resp.ok;
+    } catch (e) {
+      console.error('[contact-societe] deplacerCarte', e);
+    }
+    if (!ok) { toast('Colonne non enregistrée'); return; }
+    _carte = Object.assign({}, entiere, { col: col });
+    toast('Déplacé au pipeline — ' + def.name);
+    try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch (_) {}
+  } finally {
+    sel.disabled = false;
+    majColonne();                             // l'écran redit l'état réel, succès ou non
+  }
 }
 
 // Pose un rendez-vous : l'agenda le PORTE, le fil en garde la TRACE, dans cet
@@ -2143,8 +2223,10 @@ function wireRdvPlanner(){
   wirePeople();
   wirePipelineSend();
   wireRdvPlanner();
+  wireColonne();
   loadEnrichedSirets();   // un seul GET /api/user-plan, mémorisé pour la page
   await loadContact();
+  await chargerCarte();   // la colonne du board, que seule la carte connaît
 })();
 </script>
 <script src="/sidebar.js"></script>

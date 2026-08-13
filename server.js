@@ -3079,6 +3079,109 @@ app.delete('/api/agenda/:id', async (req, res) => {
   }
 })
 
+// ── FIL D'ACTIVITÉ ──
+// Une note ou une action saisie depuis n'importe quelle porte — panneau du
+// Pipeline, fiche contact, agenda, visio — appartient à l'entreprise, pas au
+// record par lequel elle est entrée. Tant que le journal était un tableau
+// `activity[]` ou `noteEntries[]` DANS un enregistrement, il était dans un
+// seul des deux par construction. Table à part, sur le modèle d'agenda.
+//
+// Forme d'un enregistrement : userId, ancrage (id local du record de départ,
+// préfixe de table retiré), type, texte, ts (ISO 8601). Rien de dérivé n'y
+// est écrit : la désignation de l'entreprise est une résolution de lecture.
+//
+// `agenda` reste le journal du planifié. Le fil le lit, il ne l'absorbe pas.
+
+// Normalise une clé d'ancrage : id local, sans préfixe de table. Le client
+// peut envoyer l'une ou l'autre forme, comme pour ficheId.
+function normAncrage(raw) {
+  return String(raw == null ? '' : raw).replace(/^[a-z_]+:/i, '').trim()
+}
+
+app.get('/api/activites', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    // `ancrage` accepte une liste séparée par des virgules : la résolution de
+    // lecture rassemble les ids équivalents d'une même entreprise et les lit
+    // en un seul aller-retour.
+    const raw = typeof req.query?.ancrage === 'string' ? req.query.ancrage : ''
+    const ancrages = raw.split(',').map(normAncrage).filter(Boolean)
+    const result = ancrages.length
+      ? await queryOrEmpty(
+          db,
+          'SELECT * FROM activites WHERE userId = $userId AND ancrage IN $ancrages',
+          { userId, ancrages }
+        )
+      : await queryOrEmpty(db, 'SELECT * FROM activites WHERE userId = $userId', { userId })
+    res.json(result)
+  } catch (err) {
+    console.error('[activites]', err)
+    res.status(500).json({ error: 'Impossible de lire le fil d\'activité' })
+  }
+})
+app.post('/api/activites', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const body = { ...(req.body || {}), userId }
+    if (body.ancrage != null) body.ancrage = normAncrage(body.ancrage)
+    const db = await getDb()
+    const cleanId = cleanRecordId('activites', body?.id)
+    if (cleanId) {
+      const { record, status, action } = await upsertRecord(db, 'activites', cleanId, body)
+      if (action === 'updated') console.log(`[activites] upsert activites:${cleanId}`)
+      return res.status(status).json(record)
+    }
+    const result = await db.query('CREATE activites CONTENT $body', { body })
+    res.status(201).json(result[0]?.[0] || result[0] || null)
+  } catch (err) {
+    console.error('[activites]', err)
+    res.status(500).json({ error: 'Impossible d\'enregistrer l\'activité' })
+  }
+})
+app.put('/api/activites/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const { id } = req.params
+    const db = await getDb()
+    const existing = await db.query('SELECT * FROM type::record("activites", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) {
+      return res.status(404).json({ error: 'Activité introuvable' })
+    }
+    const cleanBody = { ...(req.body || {}) }
+    delete cleanBody.id
+    cleanBody.userId = userId
+    if (cleanBody.ancrage != null) cleanBody.ancrage = normAncrage(cleanBody.ancrage)
+    const result = await db.query('UPDATE type::record("activites", $id) CONTENT $body', { id, body: cleanBody })
+    res.json(result[0]?.[0] || result[0] || {})
+  } catch (err) {
+    console.error('[activites]', err)
+    res.status(500).json({ error: 'Impossible de mettre à jour l\'activité' })
+  }
+})
+app.delete('/api/activites/:id', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  try {
+    const db = await getDb()
+    const { id } = req.params
+    const existing = await db.query('SELECT * FROM type::record("activites", $id)', { id })
+    const rec = existing[0]?.[0]
+    if (!rec || rec.userId !== userId) {
+      return res.status(404).json({ error: 'Activité introuvable' })
+    }
+    await db.query('DELETE type::record("activites", $id)', { id })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[activites]', err)
+    res.status(500).json({ error: 'Impossible de supprimer l\'activité' })
+  }
+})
+
 // ── INSEE OAuth2 token cache ── déplacé dans server/services/insee.js,
 // getInseeToken importé en tête de fichier (seule source de vérité).
 
@@ -6836,6 +6939,8 @@ app.use((req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS pipeline SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS contacts SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS agenda SCHEMALESS')
+    // activites : le fil d'activité, hors des enregistrements qu'il concerne.
+    await db.query('DEFINE TABLE IF NOT EXISTS activites SCHEMALESS')
     // Indexes pour les requêtes scoping userId et lookups par campagne/destinataire
     // mail : lue à chaque ouverture des Envoyés, toujours filtrée sur userId.
     await db.query('DEFINE INDEX IF NOT EXISTS mail_user ON TABLE mail COLUMNS userId')
@@ -6852,7 +6957,10 @@ app.use((req, res) => {
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siret ON societes FIELDS siret')
     // Sociétés — dédup par SIREN (NON unique : siren vide partagé tant que non enrichi)
     await db.query('DEFINE INDEX IF NOT EXISTS idx_societes_siren ON societes FIELDS siren')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes, pipeline, contacts, agenda + 10 indexes)')
+    // Fil d'activité — toute lecture filtre userId, et la lecture d'une fiche
+    // y ajoute la liste des ancrages équivalents.
+    await db.query('DEFINE INDEX IF NOT EXISTS activites_user ON TABLE activites COLUMNS userId, ancrage')
+    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes, pipeline, contacts, agenda, activites + 11 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

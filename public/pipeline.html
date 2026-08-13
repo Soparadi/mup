@@ -1562,17 +1562,27 @@ let detailMarker = null;
 // et relançait à chaque fois le géocodage complet.
 let detailGeoFiche = null;
 
+// Le fil de la fiche ouverte, tel que la dernière lecture l'a rendu. Le
+// calendrier inline y prend ses pastilles de notes : il est synchrone, le fil
+// ne l'est pas.
+let _filCourant = [];
+let _filFiche = null;
+let _filJeton = 0;
+
 // Le fil d'activité de la fiche ouverte. La lecture est asynchrone — il faut
 // résoudre les ids équivalents de l'entreprise puis lire la table activites —
 // donc le conteneur n'est vidé qu'au retour : sans ça chaque re-render ferait
 // clignoter un « pas encore d'historique » que le fil dément aussitôt. Le
 // jeton écarte la réponse d'une fiche que l'abonné a déjà quittée.
-let _filJeton = 0;
 function renderTimelineFiche(c){
   const root = document.getElementById('d-timeline');
   if(!root || !c || !window.MUPFil) return;
   const jeton = ++_filJeton;
   const cible = String(c.id);
+  // Changement de fiche : le fil précédent est oublié tout de suite, sinon le
+  // calendrier de la nouvelle porterait un instant les pastilles de l'autre.
+  // Un simple re-render de la même fiche garde le sien, qui ne clignote pas.
+  if(_filFiche !== cible){ _filCourant = []; _filFiche = cible; }
   // LECTURE PURE : la date d'entrée est calculée à l'affichage et passée au
   // fil comme une entrée de plus. Elle n'est posée sur aucun enregistrement.
   const entree = dateCreation(c);
@@ -1582,14 +1592,20 @@ function renderTimelineFiche(c){
   MUPFil.lire(c.id, { local: cards, extra: extra })
     .then(items => {
       if(jeton !== _filJeton || String(currentId) !== cible) return;
+      _filCourant = items;
       // Une fiche importée depuis Prospects ou depuis un contact n'a ni note,
       // ni activité, ni date d'entrée exploitable : le fil est vide et la
       // section se réduirait à son titre. Elle dit alors l'état.
       root.innerHTML = MUPFil.rendre(items)
         || `<div class="timeline-empty">Cette fiche n'a pas encore d'historique.</div>`;
+      // Le calendrier a été rendu avant que le fil n'arrive : ses pastilles de
+      // notes lui manquaient. On le redessine une fois, s'il est à l'écran.
+      var sect = document.getElementById('d-rdv-section');
+      if(sect && sect.style.display !== 'none' && typeof renderRdvCalendar === 'function') renderRdvCalendar();
     })
     .catch(() => {
       if(jeton !== _filJeton || String(currentId) !== cible) return;
+      _filCourant = [];
       root.innerHTML = `<div class="timeline-empty">Cette fiche n'a pas encore d'historique.</div>`;
     });
 }
@@ -1978,7 +1994,7 @@ function formatNoteDate(isoDate) {
   return day + ' ' + month + ' à ' + hours + ':' + minutes;
 }
 
-function saveNote() {
+async function saveNote() {
   const input = document.getElementById('d-notes-input');
   const text = input ? input.value.trim() : '';
   if(!text || !currentId) return;
@@ -1986,24 +2002,31 @@ function saveNote() {
   const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
 
-  if(!Array.isArray(c.noteEntries)) c.noteEntries = [];
-  c.noteEntries.push({
-    id: 'tl_' + Date.now(),
-    text: text,
-    createdAt: new Date().toISOString()
-  });
+  // La note part dans le fil, pas dans la fiche. Écrite ici, elle se lit aussi
+  // sur la fiche contact de la même entreprise — ce qu'un noteEntries[] posé
+  // à l'intérieur de la carte ne pouvait pas faire.
+  const pose = await MUPFil.ecrire({ ancrage: c.id, type: 'note', texte: text });
+  if(!pose){
+    toast('Note non enregistrée — réessayez');
+    return;
+  }
 
   // Capture automatique d'un numéro de téléphone français
+  let ficheModifiee = false;
   const telMatch = text.match(/\b(0[1-9])(?:[\s.\-]?(\d{2})){4}\b/);
   if(telMatch){
     const normalized = telMatch[0].replace(/[^\d+]/g, '').replace(/^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/, '$1 $2 $3 $4 $5');
     if(!c.tel || c.tel.trim() === ''){
       c.tel = normalized;
       c.phone = normalized;
+      ficheModifiee = true;
     }
   }
 
-  save();
+  // La fiche n'est enregistrée que si la note y a changé quelque chose — le
+  // téléphone capturé. La note elle-même n'y est plus : la sauver à chaque
+  // saisie ferait repartir toutes les cartes en PUT pour rien.
+  if(ficheModifiee) save();
 
   if(input){
     input.value = '';
@@ -2033,16 +2056,19 @@ function buildDotsByDate() {
     addDot(String(ev.date), String(ev.type || 'rdv').toLowerCase());
   });
 
-  // 2) c.noteEntries → notes (gris)
-  const c = cards.find(x => String(x.id) === String(currentId));
-  if(c) {
-    (c.noteEntries||[]).forEach(n => {
-      if(!n.createdAt) return;
-      const d = new Date(n.createdAt);
-      const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      addDot(ds, 'note');
-    });
-  }
+  // 2) Notes du fil → pastilles grises. La source lue était c.noteEntries ;
+  // les notes s'écrivent maintenant dans la table activites, et le fil réunit
+  // les deux. Seules les entrées de ces deux provenances font une pastille :
+  // celles d'activity[] n'en ont jamais fait, un déplacement de colonne n'a
+  // pas à marquer le calendrier.
+  (_filCourant || []).forEach(function(it){
+    if(it.source !== 'activites' && it.source !== 'noteEntries') return;
+    if(!it.ts) return;
+    const d = new Date(it.ts);
+    if(isNaN(d.getTime())) return;
+    const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    addDot(ds, 'note');
+  });
   return dotsByDate;
 }
 
@@ -2217,21 +2243,25 @@ async function saveRdv() {
   // Refresh cache local fiche pour render immédiat (calendrier dots + focus mode)
   await loadAgendaForFiche(currentId);
 
-  // Note synthétique horodatée dans timeline (gris)
-  if(!Array.isArray(c.noteEntries)) c.noteEntries = [];
+  // Trace du geste dans le fil, à sa nature réelle — un RDV planifié entre
+  // comme un RDV, pas comme une note. L'agenda garde le rendez-vous lui-même :
+  // le fil dit qu'il a été pris, il ne le remplace pas.
   const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
-  c.noteEntries.push({
-    id: 'tl_' + Date.now(),
-    text: labelVerbe + ' le ' + rdvSelectedDate.getDate() + ' ' + monthsShort[rdvSelectedDate.getMonth()] + ' à ' + time,
-    createdAt: new Date().toISOString()
+  await MUPFil.ecrire({
+    ancrage: c.id,
+    type: actionType,
+    texte: labelVerbe + ' le ' + rdvSelectedDate.getDate() + ' ' + monthsShort[rdvSelectedDate.getMonth()] + ' à ' + time
   });
-  save();
 
   // Auto-advance colonne pipeline (RDV et Visio uniquement)
   if(advanceTarget && advanceCardColumn(c, advanceTarget)) {
-    save();
     renderKanban();
   }
+  // Un seul enregistrement, pour l'heure retenue comme pour la colonne. Il
+  // était porté par la note synthétique, qui n'est plus sur la fiche : sans
+  // lui, l'heure choisie repartait à 14:00 à la réouverture dès que le type
+  // n'était ni RDV ni visio.
+  save();
 
   // Notif cross-onglet (agenda écoutera côté V1.2)
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(e) {}
@@ -2378,18 +2408,50 @@ async function enrichDetail() {
   }
 }
 
-function quickAction(type) {
+// Les deux gestes étaient inversés : « RDV » journalisait « RDV planifié »
+// sans rien planifier, et le calendrier juste au-dessus attendait qu'on le
+// trouve. Le bouton ouvre désormais le calendrier — il planifie. Ce sont
+// Mailing et Phoning qui journalisent, parce qu'eux constatent un geste déjà
+// fait.
+async function quickAction(type) {
   if(!currentId) return;
   const c = cards.find(x=>x.id===currentId);
   if(!c) return;
-  const labels = { mailing:'Mailing envoyé', phoning:'Appel effectué', rdv:'RDV planifié' };
-  logActivity(currentId, labels[type]||type, type, null);
+
+  if(type === 'rdv' || type === 'visio'){
+    ouvrirCalendrierRdv(type);
+    return;
+  }
+
+  const labels = { mailing:'Mailing envoyé', phoning:'Appel effectué' };
+  // L'entrée part dans le fil, ancrée sur la carte : elle se lira aussi sur la
+  // fiche contact de la même entreprise.
+  const pose = await MUPFil.ecrire({ ancrage: c.id, type: type, texte: labels[type] || type });
+  if(!pose){ toast('Action non enregistrée — réessayez'); return; }
   // Auto-advance colonne (no-regress, ne sort pas de lost/won)
   if(advanceCardColumn(c, type)) {
     save(); renderKanban();
   }
   // Refresh panel
   openDetail(currentId);
+}
+
+// Amène le calendrier inline sous les yeux, sur le bon type d'action. Rien
+// n'est écrit : c'est « Enregistrer » qui planifie, et lui seul.
+function ouvrirCalendrierRdv(type){
+  const sect = document.getElementById('d-rdv-section');
+  if(!sect || sect.style.display === 'none'){
+    toast("Cette fiche n'attend plus de rendez-vous");
+    return;
+  }
+  const sel = document.getElementById('rdv-type-select');
+  if(sel && Array.from(sel.options).some(o => o.value === type)){
+    sel.value = type;
+    // Le libellé du bouton suit le type : posé à la main, le select ne
+    // déclenche pas son propre onchange.
+    if(typeof onRdvTypeChange === 'function') onRdvTypeChange();
+  }
+  sect.scrollIntoView({ behavior:'smooth', block:'center' });
 }
 function moveCard(colId) {
   if(!currentId) return;
@@ -3227,16 +3289,16 @@ async function createActionFromDetection(type, dateStr, time){
   }
   await loadAgendaForFiche(currentId);
 
-  if(!Array.isArray(c.noteEntries)) c.noteEntries = [];
   const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
   const verbe = {rdv:'RDV planifié', visio:'Visio planifiée', mail:'Mail programmé', devis:'Devis planifié'}[type] || 'Action planifiée';
-  c.noteEntries.push({
-    id: 'tl_' + Date.now(),
-    text: verbe + ' (auto) le ' + iso.getDate() + ' ' + monthsShort[iso.getMonth()] + ' à ' + time,
-    createdAt: new Date().toISOString()
+  // Même geste que le calendrier inline, même trace : dans le fil, au type de
+  // l'action détectée.
+  await MUPFil.ecrire({
+    ancrage: c.id,
+    type: String(type).toLowerCase(),
+    texte: verbe + ' (auto) le ' + iso.getDate() + ' ' + monthsShort[iso.getMonth()] + ' à ' + time
   });
 
-  save();
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(_){}
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
 

@@ -1289,20 +1289,22 @@ function wireActivityComposer(){
   input.addEventListener('input', () => {
     submit.disabled = input.value.trim().length === 0;
   });
-  submit.addEventListener('click', () => {
+  submit.addEventListener('click', async () => {
     const text = input.value.trim();
     if (!text) return;
-    if (!Array.isArray(contact.noteEntries)) contact.noteEntries = [];
-    contact.noteEntries.push({
-      id: 'tl_' + Date.now(),
-      type: activityType,
-      text,
-      createdAt: new Date().toISOString()
-    });
-    input.value = '';
     submit.disabled = true;
+    // L'activité part dans le fil, ancrée sur ce contact — plus dans son
+    // noteEntries[]. Saisie ici, elle se lit aussi sur la carte de board de la
+    // même entreprise. Le champ n'est vidé qu'une fois l'écriture confirmée :
+    // un texte effacé sur un enregistrement raté serait perdu.
+    const pose = await MUPFil.ecrire({ ancrage: contact && contact.id, type: activityType, texte: text });
+    if (!pose) {
+      submit.disabled = false;
+      toast('Activité non enregistrée, réessayez');
+      return;
+    }
+    input.value = '';
     renderTimeline();
-    autoSave();
     toast('Activité ajoutée');
   });
 }

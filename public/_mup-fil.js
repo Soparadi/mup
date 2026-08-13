@@ -188,7 +188,7 @@
           var items = [];
 
           (o.extra || []).forEach(function (e) {
-            if (e) items.push({ type: normType(e.type, e.text), text: e.text || '', ts: e.ts || null });
+            if (e) items.push({ type: normType(e.type, e.text), text: e.text || '', ts: e.ts || null, source: 'extra' });
           });
 
           activites.forEach(function (a) {
@@ -196,7 +196,8 @@
             items.push({
               type: normType(a.type, a.texte || a.text),
               text: a.texte != null ? a.texte : (a.text || ''),
-              ts: a.ts || a.createdAt || a.date || null
+              ts: a.ts || a.createdAt || a.date || null,
+              source: 'activites'
             });
           });
 
@@ -205,14 +206,15 @@
             // parse pas ; seul .ts porte un horodatage lisible.
             (rec.activity || []).forEach(function (a) {
               if (!a) return;
-              items.push({ type: normType(a.type, a.txt), text: a.txt || '', ts: a.ts || null });
+              items.push({ type: normType(a.type, a.txt), text: a.txt || '', ts: a.ts || null, source: 'activity' });
             });
             (rec.noteEntries || []).forEach(function (n) {
               if (!n) return;
               items.push({
                 type: normType(n.type, n.text),
                 text: n.text || '',
-                ts: n.createdAt || n.ts || n.date || null
+                ts: n.createdAt || n.ts || n.date || null,
+                source: 'noteEntries'
               });
             });
           });
@@ -245,6 +247,35 @@
         });
       });
     });
+  }
+
+  // ── ÉCRITURE ──
+
+  // Pose une entrée dans le fil. Quatre portes l'appellent — panneau du
+  // Pipeline, fiche contact, agenda, visio — et chacune fournit la même chose :
+  // l'id du record d'où part la saisie, la nature du geste, le texte.
+  // L'ancrage n'est PAS résolu à l'écriture : l'entrée se pose sur le record
+  // de départ et c'est la lecture qui rassemble. Une entreprise dont la
+  // composition change plus tard n'a ainsi rien à rattraper.
+  // Rend l'enregistrement créé, ou null si l'écriture a échoué — l'appelant
+  // doit pouvoir ne pas annoncer ce qui n'a pas eu lieu.
+  function ecrire(entree) {
+    var e = entree || {};
+    var ancrage = localId(e.ancrage);
+    if (!ancrage) return Promise.resolve(null);
+    var corps = {
+      ancrage: ancrage,
+      type: normType(e.type, e.texte),
+      texte: String(e.texte == null ? '' : e.texte),
+      ts: e.ts || new Date().toISOString()
+    };
+    return fetch('/api/activites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps)
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
   }
 
   // ── RENDU ──
@@ -301,6 +332,7 @@
     idsEquivalents: idsEquivalents,
     invaliderCache: invaliderCache,
     lire: lire,
+    ecrire: ecrire,
     rendre: rendre
   };
 })(window);

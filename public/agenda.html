@@ -164,6 +164,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <!-- Acquisition météo (position de l'abonné) — chargé sans defer : le bloc
      inline plus bas appelle MupMeteo dès son exécution. -->
 <script src="/js/meteo.js"></script>
+<script src="/_mup-fil.js"></script>
 </head>
 <body>
 
@@ -816,6 +817,26 @@ async function saveEvent() {
   if (!editingId) {
     target.id = String(saved.id).replace(/^agenda:/, '');
     events.push(target);
+
+    // Le rendez-vous pris ici entre aussi dans le fil de l'entreprise, ancré
+    // sur la fiche à laquelle il est lié : il se lira sur la fiche Pipeline
+    // comme sur la fiche contact, au même titre qu'un rendez-vous pris depuis
+    // le panneau. Sans fiche liée il n'y a rien à ancrer — l'évènement reste
+    // à l'agenda, et seulement là. Une modification n'écrit rien : le fil
+    // garde la trace du geste, il ne le rejoue pas.
+    if (ficheId && window.MUPFil) {
+      var jour = new Date(dateVal + 'T' + (startVal || '00:00'));
+      var libelles = { rdv:'RDV planifié', visio:'Visio planifiée', mail:'Mail programmé', devis:'Devis planifié' };
+      var mois = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+      var quand = isNaN(jour.getTime())
+        ? ''
+        : ' le ' + jour.getDate() + ' ' + mois[jour.getMonth()] + (startVal ? ' à ' + startVal : '');
+      await MUPFil.ecrire({
+        ancrage: ficheId,
+        type: modalType,
+        texte: (libelles[modalType] || 'Action planifiée') + quand
+      });
+    }
   }
 
   // Invalider cache agenda local pour forcer reload aux prochaines pages

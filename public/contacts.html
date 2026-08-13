@@ -687,6 +687,26 @@ const PAGE_SIZE = 10;
 let sourceContacts = 'api';
 let sourcePipeline = 'api';
 
+// ── AGENDA ET FIL, LUS EN LOT ──
+// Les deux colonnes du milieu lisaient des champs que rien n'écrit :
+// `prochaine_action_date` n'est posé par aucune surface, et `lastContact` pas
+// davantage — le tri par défaut retombait donc toujours sur `updated_at`,
+// l'horloge de sauvegarde, pendant que l'en-tête annonçait « triés par dernière
+// activité ». Elles lisent maintenant leurs vraies sources : l'agenda pour ce
+// qui vient, le fil pour ce qui a eu lieu.
+//
+// UN SEUL APPEL CHACUN, pour toute la liste, regroupé ensuite par ancrage —
+// jamais un appel par ligne : une page de dix lignes en aurait déclenché vingt,
+// et la liste entière en compte autant que de contacts.
+let prochainParAncrage = new Map();   // ancrage → évènement agenda à venir, le plus proche
+let derniereParAncrage = new Map();   // ancrage → entrée de fil la plus récente
+// Le fil a été lu, ou pas. Ce que le tri par défaut en fait : sur échec il
+// retombe sur `updated_at` et l'en-tête change de nom — sans ce drapeau il
+// trierait toute la liste sur des zéros en annonçant l'activité. L'agenda n'a
+// pas son pendant : une cellule sans date ne dit rien de plus qu'un agenda vide,
+// et rien ne dépend de lui.
+let filLu = false;
+
 // Définition statique des filtres "Origine" — étiquettes UI + matcher fonction.
 // Compteurs dynamiques calculés dans renderOriginFilters().
 // Sources du moteur /api/import (linkedin, iphone, carnet, gmail, outlook,
@@ -1135,9 +1155,11 @@ async function init(){
     toast('Affichage de la dernière copie enregistrée sur cet appareil');
   }
 
-  // Liste des SIRET déjà payés avant le premier rendu : sans elle, une ligne
-  // déjà enrichie afficherait un bouton actionnable le temps du chargement.
-  await loadEnrichedSirets();
+  // Avant le premier rendu, et en parallèle : les SIRET déjà payés — sans eux,
+  // une ligne déjà enrichie afficherait un bouton actionnable le temps du
+  // chargement — et les deux sources des colonnes du milieu, un appel chacune
+  // pour toute la liste.
+  await Promise.all([loadEnrichedSirets(), chargerAgendaEtFil()]);
   renderAll();
 }
 
@@ -1148,6 +1170,87 @@ async function init(){
 
 function siretFormat(s){
   return s ? String(s).replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4') : '';
+}
+
+// ── LECTURE DE L'AGENDA ET DU FIL, EN LOT ──
+// Vocabulaire du fil et de l'agenda, celui de la fiche contact — mêmes clés que
+// MUPFil (_mup-fil.js) et que TYPE_RDV (contact-societe.html).
+const LIBELLE_FIL = { note:'Note', phone:'Appel', visio:'Visio', rdv:'RDV', mail:'Mail', devis:'Devis' };
+
+// Une date n'est retenue que si elle se parse ET tombe après 2020 — même borne
+// que MUPFil : elle écarte les 1970 fabriqués par un repli sur zéro.
+function tsValide(v){
+  if(!v) return null;
+  const d = new Date(v);
+  return (!isNaN(d.getTime()) && d.getFullYear() >= 2020) ? d : null;
+}
+
+// Un appel, une liste. Rend null (et non []) sur échec : l'appelant doit
+// pouvoir distinguer « rien » de « pas lu ».
+async function lireListe(url){
+  try {
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    return Array.isArray(d) ? d : null;
+  } catch(e){
+    console.warn('[contacts] lecture ' + url + ' impossible', e);
+    return null;
+  }
+}
+
+// Deux lectures, en parallèle, pour toute la liste. Les résultats sont indexés
+// par ANCRAGE (id local, préfixe de table retiré) : c'est la clé sous laquelle
+// l'agenda range ses évènements (ficheId) et le fil ses entrées (ancrage).
+async function chargerAgendaEtFil(){
+  prochainParAncrage = new Map();
+  derniereParAncrage = new Map();
+  const [evts, actes] = await Promise.all([
+    lireListe('/api/agenda'),
+    lireListe('/api/activites')
+  ]);
+
+  if(evts){
+    const maintenant = Date.now();
+    evts.forEach(function(ev){
+      if(!ev || !ev.date) return;
+      const ancre = localId(ev.ficheId);
+      if(!ancre) return;
+      const d = new Date(String(ev.date) + 'T' + (ev.start || '00:00'));
+      if(isNaN(d.getTime()) || d.getTime() < maintenant) return;  // passé : plus à venir
+      const tenu = prochainParAncrage.get(ancre);
+      if(!tenu || d.getTime() < tenu._t) prochainParAncrage.set(ancre, Object.assign({}, ev, { _t: d.getTime() }));
+    });
+  }
+
+  filLu = actes !== null;
+  if(actes){
+    actes.forEach(function(a){
+      if(!a) return;
+      const ancre = localId(a.ancrage);
+      if(!ancre) return;
+      const d = tsValide(a.ts || a.createdAt || a.date);
+      if(!d) return;
+      const tenu = derniereParAncrage.get(ancre);
+      if(!tenu || d.getTime() > tenu._t) derniereParAncrage.set(ancre, { type: a.type || 'note', _t: d.getTime() });
+    });
+  }
+}
+
+// Le fil d'un enregistrement comprend aussi ce que ses propres tableaux portent
+// — activity[] et noteEntries[], écrits avant que le fil ait sa table. Ils sont
+// déjà en mémoire : les lire ici ne coûte aucun appel, et les ignorer afficherait
+// un tiret sur des fiches qui ont un historique.
+function derniereInterne(rec){
+  let meilleur = null;
+  const voir = function(type, ts){
+    const d = tsValide(ts);
+    if(!d) return;
+    if(!meilleur || d.getTime() > meilleur._t) meilleur = { type: type || 'note', _t: d.getTime() };
+  };
+  (rec && rec.activity || []).forEach(function(a){ if(a) voir(a.type, a.ts); });
+  (rec && rec.noteEntries || []).forEach(function(n){ if(n) voir(n.type, n.createdAt || n.ts || n.date); });
+  return meilleur;
 }
 
 // ── ENRICHISSEMENT DEPUIS LA LIGNE ──
@@ -1395,18 +1498,38 @@ function renderTable(){
       row._pipeline = true;
       if(auPipeline._pipelineCol) row._pipelineCol = auPipeline._pipelineCol;
     }
+    // Une ligne est une ENTREPRISE, donc plusieurs enregistrements : sa
+    // prochaine action et sa dernière activité sont les meilleures de tous ses
+    // ancrages réunis, pas celles du seul représentant. C'est la même doctrine
+    // que le fil de la fiche société, qui rassemble les records d'une entreprise.
+    members.forEach(function(m){
+      const ancre = localId(m.id);
+      if(!ancre) return;
+      const pr = prochainParAncrage.get(ancre);
+      if(pr && (!row._prochain || pr._t < row._prochain._t)) row._prochain = pr;
+      [derniereParAncrage.get(ancre), derniereInterne(m)].forEach(function(de){
+        if(de && (!row._derniere || de._t > row._derniere._t)) row._derniere = de;
+      });
+    });
     groups.push(row);
   });
 
-  // Tri figé : lastContact DESC (fallback updated_at), sur les représentants.
+  // Tri par défaut : la dernière activité du fil, décroissante — la même source
+  // que la colonne. Il lisait `lastContact`, qu'aucune surface n'écrit, et
+  // retombait donc toujours sur `updated_at`, l'horloge de sauvegarde : deux
+  // fiches ouvertes sans rien y changer remontaient en tête d'une liste triée,
+  // disait l'en-tête, par activité. Fil illisible : on trie sur ce qu'on a, et
+  // l'en-tête le dit — il n'annonce que la source réellement employée.
   groups.sort((a, b) => {
-    const da = new Date(a.lastContact || a.updated_at || 0).getTime();
-    const db = new Date(b.lastContact || b.updated_at || 0).getTime();
-    return db - da;
+    const cle = (r) => filLu
+      ? (r._derniere ? r._derniere._t : 0)
+      : new Date(r.updated_at || 0).getTime();
+    return cle(b) - cle(a);
   });
 
   const headerTitle = document.getElementById('table-header-title');
-  if(headerTitle) headerTitle.textContent = groups.length + ' contact' + (groups.length>1?'s':'') + ' · triés par dernière activité';
+  if(headerTitle) headerTitle.textContent = groups.length + ' contact' + (groups.length>1?'s':'')
+    + ' · triés par ' + (filLu ? 'dernière activité' : 'dernière modification');
 
   // Empty state si AUCUN contact en base ; sinon table même si filtre vide.
   if(!prospects.length){
@@ -1463,15 +1586,31 @@ function renderTable(){
     subParts.push(nbPers + ' personne' + (nbPers>1?'s':''));
     const meta = subParts.join(' · ');
 
-    const nextActHtml = p.prochaine_action
-      ? '<div class="cell-action">' + esc(p.prochaine_action) + '</div><div class="cell-action-date">' + fmtRelative(p.prochaine_action_date) + '</div>'
-      : '<span class="cell-empty">—</span>';
+    // Prochaine action — le texte libre saisi sur la fiche, et la DATE lue dans
+    // l'agenda. Elle lisait `prochaine_action_date`, qu'aucune surface n'écrit :
+    // toute ligne affichait « — » sous son action, et une fiche qui n'avait que
+    // le rendez-vous et pas le texte n'affichait rien du tout. Même duo que la
+    // fiche société : ce que l'abonnée a écrit, daté par ce qui est inscrit.
+    const prochain = p._prochain;
+    let nextActHtml = '<span class="cell-empty">—</span>';
+    if(p.prochaine_action || prochain){
+      const titre = p.prochaine_action || (LIBELLE_FIL[String(prochain.type||'').toLowerCase()] || 'Rendez-vous');
+      const quand = prochain
+        ? fmtRelative(prochain.date) + (prochain.start ? ' à ' + prochain.start : '')
+        : '';
+      nextActHtml = '<div class="cell-action">' + esc(titre) + '</div>'
+        + (quand ? '<div class="cell-action-date">' + esc(quand) + '</div>' : '');
+    }
 
+    // Dernière activité — la plus récente entrée du fil de l'entreprise, nommée
+    // par sa nature. La cellule lisait `lastContact`, jamais écrit, et annonçait
+    // « Dernier contact » sur les rares fiches importées qui le portaient.
     let lastActHtml = '<span class="cell-empty">—</span>';
-    if(p.lastContact){
+    if(p._derniere){
+      const libelle = LIBELLE_FIL[String(p._derniere.type||'').toLowerCase()] || 'Note';
       lastActHtml = '<div class="cell-activity">'
         + '<div class="cell-activity-icon" style="background:#F4F4F4;color:#525252">' + svgNote + '</div>'
-        + '<div><div>Dernier contact</div><div class="cell-activity-meta">' + fmtRelative(p.lastContact) + '</div></div>'
+        + '<div><div>' + esc(libelle) + '</div><div class="cell-activity-meta">' + fmtRelative(new Date(p._derniere._t).toISOString()) + '</div></div>'
         + '</div>';
     }
 

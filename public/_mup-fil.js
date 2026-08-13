@@ -23,16 +23,25 @@
   var _cache = null;
   var _cacheTime = 0;
 
-  // Charge les deux tables qui portent des records d'entreprise. Un échec
-  // ne fait pas échouer la résolution : elle retombe sur le seul id de
-  // départ, donc sur le fil du record ouvert. Moins large, jamais faux.
+  // Charge les deux tables qui portent des records d'entreprise. Un corpus
+  // VIDE et un corpus INDISPONIBLE ne sont pas la même chose : rendre le
+  // second comme le premier retire à la résolution les liens qui unissent
+  // les records d'une même entreprise, et le fil rétréci qui en sort est
+  // alors servi comme le fil complet — moins large ET faux, sans que rien
+  // ne le dise. L'échec remonte donc à l'appelant, et rien n'est mis en
+  // cache : la lecture suivante retentera.
   function _charger() {
     if (_cache && (Date.now() - _cacheTime < 30000)) return Promise.resolve(_cache);
     function lire(url) {
       return fetch(url)
-        .then(function (r) { return r.ok ? r.json() : []; })
-        .then(function (d) { return Array.isArray(d) ? d : []; })
-        .catch(function () { return []; });
+        .then(function (r) {
+          if (!r.ok) throw new Error('MUPFil : ' + url + ' a répondu ' + r.status);
+          return r.json();
+        })
+        .then(function (d) {
+          if (!Array.isArray(d)) throw new Error('MUPFil : ' + url + ' n\'a pas rendu de tableau');
+          return d;
+        });
     }
     return Promise.all([lire('/api/contacts'), lire('/api/pipeline')]).then(function (r) {
       _cache = { contacts: r[0], pipeline: r[1] };
@@ -139,12 +148,20 @@
     return deduireType(txt);
   }
 
+  // Même règle que _charger() : une table d'activités illisible n'est pas une
+  // table d'activités vide. Le fil amputé de sa source principale ne doit pas
+  // sortir d'ici comme un fil.
   function lireActivites(ids) {
     if (!ids.length) return Promise.resolve([]);
     return fetch('/api/activites?ancrage=' + encodeURIComponent(ids.join(',')))
-      .then(function (r) { return r.ok ? r.json() : []; })
-      .then(function (d) { return Array.isArray(d) ? d : []; })
-      .catch(function () { return []; });
+      .then(function (r) {
+        if (!r.ok) throw new Error('MUPFil : /api/activites a répondu ' + r.status);
+        return r.json();
+      })
+      .then(function (d) {
+        if (!Array.isArray(d)) throw new Error('MUPFil : /api/activites n\'a pas rendu de tableau');
+        return d;
+      });
   }
 
   // Tous les records de l'entreprise dont les tableaux internes seront lus en
@@ -174,6 +191,9 @@
   // `opts.local` : records déjà en mémoire côté appelant, prioritaires.
   // `opts.extra` : entrées déjà formées, à trier avec le reste — une ligne
   // calculée à l'affichage y entre sans être écrite nulle part.
+  // La promesse ÉCHOUE si une des lectures échoue : un tableau vide veut dire
+  // « cette entreprise n'a pas d'activité », jamais « je n'ai pas pu lire ».
+  // L'appelant a donc de quoi afficher deux états distincts.
   function lire(idDepart, opts) {
     var depart = localId(idDepart);
     if (!depart) return Promise.resolve([]);

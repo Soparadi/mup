@@ -465,7 +465,9 @@ body{display:flex;min-height:100vh}
           <div class="card">
             <div class="card-header">
               <div class="card-title">Activités</div>
-              <div class="card-subtitle" id="activity-subtitle">—</div>
+              <!-- Masqué tant que le fil n'a pas rendu d'entrée datée : sans
+                   activité, il n'y a pas de dernière activité à annoncer. -->
+              <div class="card-subtitle" id="activity-subtitle" style="display:none"></div>
             </div>
             <div class="section">
 
@@ -494,9 +496,11 @@ body{display:flex;min-height:100vh}
                 </div>
               </div>
 
-              <div id="timeline">
-                <div class="timeline-empty">Aucune activité enregistrée pour ce contact.</div>
-              </div>
+              <!-- Vide au départ : tant que la lecture n'a pas répondu, on ne
+                   sait pas si ce contact a des activités. Le message est posé
+                   par renderTimeline(), qui lui sait laquelle des deux
+                   absences il annonce. -->
+              <div id="timeline"></div>
             </div>
           </div>
 
@@ -942,12 +946,10 @@ function populate(){
   document.getElementById('f-facebook').value = c.facebook || '';
   document.getElementById('f-instagram').value = c.instagram || '';
 
-  // Card subtitles
+  // Card subtitles. « Dernière activité » n'est PAS posée ici : elle date la
+  // plus récente entrée du fil, que seul renderTimeline() connaît.
   const created = c.created_at ? fmtDateLong(c.created_at) : '—';
-  const updated = c.updated_at || c.lastContact;
-  const lastTouch = updated ? fmtDateLong(updated) : '—';
   document.getElementById('info-subtitle').textContent = 'Créé le ' + created;
-  document.getElementById('activity-subtitle').textContent = 'Dernière activité : ' + lastTouch;
 
   // KPIs : Sprint 3 placeholders à 0 (Sprint 4 lira agenda + mail + visio + devis pour ce contact)
   // Si le record contient déjà des compteurs (factures_ids etc.), on les utilise.
@@ -997,23 +999,55 @@ function mapColToEtape(col){
 // La lecture est asynchrone (résolution des ids équivalents + table activites).
 // Le conteneur n'est vidé qu'au retour : sans ça, chaque re-render ferait
 // clignoter un « aucune activité » que le fil dément aussitôt.
+//
+// Deux absences, deux messages. « Aucune activité » est un fait sur
+// l'entreprise ; un échec de lecture n'en est pas un — il ne dit rien de ce
+// qu'elle porte. Les confondre affiche un fil vide sur une fiche qui a des
+// notes, et personne à l'écran n'a de quoi s'en douter.
+const FIL_VIDE  = '<div class="timeline-empty">Aucune activité enregistrée pour ce contact.</div>';
+const FIL_ECHEC = '<div class="timeline-empty">Le fil n\'a pas pu être chargé. Rechargez la page pour réessayer.</div>';
+
 let _filJeton = 0;
 function renderTimeline(){
   const root = document.getElementById('timeline');
   if (!root) return;
-  if (!window.MUPFil) return;
+  // MUPFil absent : le fil n'est pas vide, il est illisible. L'écran le dit.
+  if (!window.MUPFil) { root.innerHTML = FIL_ECHEC; majDerniereActivite(null); return; }
   const jeton = ++_filJeton;
   MUPFil.lire(contact && contact.id, { local: contact ? [contact] : [] })
     .then(items => {
       // Un render plus récent a pris la main entre-temps : le sien fait foi.
       if (jeton !== _filJeton) return;
-      const html = MUPFil.rendre(items);
-      root.innerHTML = html || '<div class="timeline-empty">Aucune activité enregistrée pour ce contact.</div>';
+      root.innerHTML = MUPFil.rendre(items) || FIL_VIDE;
+      majDerniereActivite(items);
     })
     .catch(() => {
       if (jeton !== _filJeton) return;
-      root.innerHTML = '<div class="timeline-empty">Aucune activité enregistrée pour ce contact.</div>';
+      root.innerHTML = FIL_ECHEC;
+      majDerniereActivite(null);
     });
+}
+
+// L'en-tête de la carte date la dernière ACTIVITÉ. Il lisait `updated_at`,
+// l'horloge de sauvegarde du record : elle bouge au moindre enregistrement de
+// la fiche, et MUPFil.ecrire ne la touche jamais — elle ne datait donc pas une
+// activité, et depuis que le fil vit dans sa propre table elle n'en datera
+// plus aucune. Il lit maintenant la plus récente entrée du fil résolu.
+// Sans entrée datée, il n'y a rien à dater : l'en-tête est omis, sans repli.
+// Même borne à 2020 que le rendu du fil, qui affiche « — » en deçà.
+function majDerniereActivite(items){
+  const el = document.getElementById('activity-subtitle');
+  if (!el) return;
+  let recente = null;
+  (items || []).forEach(it => {
+    if (!it || !it.ts) return;
+    const d = new Date(it.ts);
+    if (isNaN(d.getTime()) || d.getFullYear() < 2020) return;
+    if (!recente || d > recente) recente = d;
+  });
+  if (!recente) { el.textContent = ''; el.style.display = 'none'; return; }
+  el.textContent = 'Dernière activité : ' + fmtDateLong(recente);
+  el.style.display = '';
 }
 
 // Une ligne d'input répétable (email ou téléphone). `cls` = classe du champ.

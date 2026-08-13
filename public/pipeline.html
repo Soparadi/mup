@@ -204,6 +204,29 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .tl-item.type-devis::before{background:#0A66C2}
 .tl-item.type-move::before{background:#1D8348}
 .tl-item.type-note::before{background:#1D1D1F}
+/* Fil d'activité — même fil, donc même rendu que la fiche contact. Règles et
+   valeurs reprises telles quelles de contact-societe.html, rien d'inventé ici.
+   Portées sur #d-timeline et non sur :root : les deux pages n'ont pas la même
+   palette (--blue, --text, --muted diffèrent), et le fil doit se lire à
+   l'identique des deux côtés sans rien changer au reste du panneau. */
+#d-timeline{--readonly:#F4F4F4;--text:#0A0A0A;--muted:#6B6B6B;--border:#E5E5E5;--green:#1D8348;--orange:#B84C00;--blue:#2563EB;--purple:#7C3AED;--note:#525252;--mono:'Geist Mono','SF Mono',Menlo,Consolas,monospace;--radius-xs:6px}
+#d-timeline .timeline-empty{padding:24px 0;text-align:center;color:var(--muted);font-size:13px;font-style:italic}
+#d-timeline .timeline-item{display:grid;grid-template-columns:100px 1fr;gap:16px;padding:16px 0;border-bottom:1px solid var(--border)}
+#d-timeline .timeline-item:last-child{border-bottom:none;padding-bottom:0}
+#d-timeline .timeline-item:first-of-type{padding-top:0}
+#d-timeline .timeline-date{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.5}
+#d-timeline .timeline-content{display:flex;align-items:flex-start;gap:10px}
+#d-timeline .timeline-icon{width:28px;height:28px;border-radius:var(--radius-xs);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+#d-timeline .timeline-icon svg{width:14px;height:14px;stroke:#fff;stroke-width:1.75;fill:none}
+#d-timeline .timeline-icon[data-type="mail"] {background:var(--orange)}
+#d-timeline .timeline-icon[data-type="phone"]{background:#DC2626}
+#d-timeline .timeline-icon[data-type="visio"]{background:var(--purple)}
+#d-timeline .timeline-icon[data-type="rdv"]  {background:var(--green)}
+#d-timeline .timeline-icon[data-type="devis"]{background:var(--blue)}
+#d-timeline .timeline-icon[data-type="note"] {background:var(--note)}
+#d-timeline .timeline-body{flex:1;min-width:0}
+#d-timeline .timeline-event{font-size:13px;font-weight:600;margin-bottom:2px}
+#d-timeline .timeline-note{background:var(--readonly);padding:10px 12px;border-radius:var(--radius-xs);margin-top:6px;font-size:13px;line-height:1.55;color:var(--text);white-space:pre-wrap}
 .notes-input-wrap{display:flex;flex-direction:column;gap:8px}
 .notes-input-wrap textarea{width:100%;border:1px solid #E8E8ED;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;min-height:80px;box-sizing:border-box}
 .notes-input-wrap textarea:focus{outline:none;border-color:#1D1D1F}
@@ -670,7 +693,10 @@ body.focus-mode .col-select{padding:10px 14px;font-size:13.5px;border-radius:10p
     <!-- 3) TIMELINE -->
     <div class="detail-section">
       <div class="detail-section-title">Timeline</div>
-      <div class="timeline-line" id="d-timeline"></div>
+      <!-- Le rail à pastilles disparaît avec le rendu qu'il portait : chaque
+           entrée du fil porte désormais sa propre icône, celle de la fiche
+           contact. -->
+      <div id="d-timeline"></div>
     </div>
 
     <!-- 4) NOTES -->
@@ -742,6 +768,7 @@ body.focus-mode .col-select{padding:10px 14px;font-size:13.5px;border-radius:10p
 
 <script src="/_mup-nom.js"></script>
 <script src="/_mup-tel.js"></script>
+<script src="/_mup-fil.js"></script>
 <script>
 
 const STAGES = [
@@ -1535,6 +1562,38 @@ let detailMarker = null;
 // et relançait à chaque fois le géocodage complet.
 let detailGeoFiche = null;
 
+// Le fil d'activité de la fiche ouverte. La lecture est asynchrone — il faut
+// résoudre les ids équivalents de l'entreprise puis lire la table activites —
+// donc le conteneur n'est vidé qu'au retour : sans ça chaque re-render ferait
+// clignoter un « pas encore d'historique » que le fil dément aussitôt. Le
+// jeton écarte la réponse d'une fiche que l'abonné a déjà quittée.
+let _filJeton = 0;
+function renderTimelineFiche(c){
+  const root = document.getElementById('d-timeline');
+  if(!root || !c || !window.MUPFil) return;
+  const jeton = ++_filJeton;
+  const cible = String(c.id);
+  // LECTURE PURE : la date d'entrée est calculée à l'affichage et passée au
+  // fil comme une entrée de plus. Elle n'est posée sur aucun enregistrement.
+  const entree = dateCreation(c);
+  const extra = entree
+    ? [{ type:'note', text:'Ajouté au pipeline', ts: entree.toISOString() }]
+    : [];
+  MUPFil.lire(c.id, { local: cards, extra: extra })
+    .then(items => {
+      if(jeton !== _filJeton || String(currentId) !== cible) return;
+      // Une fiche importée depuis Prospects ou depuis un contact n'a ni note,
+      // ni activité, ni date d'entrée exploitable : le fil est vide et la
+      // section se réduirait à son titre. Elle dit alors l'état.
+      root.innerHTML = MUPFil.rendre(items)
+        || `<div class="timeline-empty">Cette fiche n'a pas encore d'historique.</div>`;
+    })
+    .catch(() => {
+      if(jeton !== _filJeton || String(currentId) !== cible) return;
+      root.innerHTML = `<div class="timeline-empty">Cette fiche n'a pas encore d'historique.</div>`;
+    });
+}
+
 async function openDetail(id) {
   // Ouverture « fraîche » = changement de fiche, pas un simple re-render de la
   // fiche déjà ouverte (saveNote, saveRdv, sync agenda…). Seule une ouverture
@@ -1618,41 +1677,21 @@ async function openDetail(id) {
   // Move select
   document.getElementById('d-move').value = c.col||'prospects';
 
-  // Timeline (all activity + auto-generated entry date)
-  const allActs = (c.activity||[]).slice(-12).reverse();
-  function getTimelineType(txt) {
-    const t = txt.toLowerCase();
-    if(t.includes('devis')) return 'type-devis';
-    if(t.includes('mail')) return 'type-mail';
-    if(t.includes('appel') || t.includes('phoning')) return 'type-appel';
-    if(t.includes('visio')) return 'type-visio';
-    if(t.includes('rdv')) return 'type-rdv';
-    if(t.includes('déplacé') || t.includes('move')) return 'type-move';
-    return 'type-note';
-  }
-  // Ligne d'entrée au pipeline, datée par la chaîne commune. Elle lisait
-  // `c.created` — champ qui n'existe sur aucune carte — puis se rabattait sur
-  // l'identifiant lu comme un nombre de millisecondes, et à défaut sur la date
-  // du jour : toute fiche affichait donc son entrée « aujourd'hui ». Sans date
-  // exploitable la ligne est désormais omise plutôt que datée au hasard.
-  const _entree = dateCreation(c);
-  const entryItem = _entree
-    ? `<div class="tl-item type-move"><div class="tl-date">${esc(_entree.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}))}</div><div class="tl-txt">Ajouté au pipeline</div></div>`
-    : '';
-  const tlItems = allActs.map(a => `<div class="tl-item ${getTimelineType(a.txt)}"><div class="tl-date">${esc(a.date)}</div><div class="tl-txt">${esc(a.txt)}</div></div>`).join('');
-  const noteItems = (c.noteEntries||[]).slice().reverse().map(n => {
-    const safe = esc(n.text);
-    const titleRegex = /^(Compte-rendu — [^\n]+|Contexte|Besoins exprimés|Freins \/ objections|Budget|Décisions|Prochaines étapes|Autres points)$/gm;
-    const formatted = safe.replace(titleRegex, '<strong>$1</strong>');
-    return `<div class="tl-item type-note"><div class="tl-date">${esc(formatNoteDate(n.createdAt))}</div><div class="tl-txt">${formatted}</div></div>`;
-  }).join('');
-  // Une fiche importée depuis Prospects ou depuis un contact n'a ni note, ni
-  // activité, ni date d'entrée exploitable : les trois morceaux sont vides et
-  // la section se réduisait à son titre. Elle dit alors l'état, sur le gabarit
-  // d'un élément de timeline et sans date — il n'y en a aucune à afficher.
-  const timelineHtml = noteItems + (tlItems || '') + entryItem;
-  document.getElementById('d-timeline').innerHTML = timelineHtml
-    || `<div class="tl-item"><div class="tl-txt">Cette fiche n'a pas encore d'historique.</div></div>`;
+  // Timeline — le fil de l'entreprise, pas le journal de cette seule carte.
+  // Il juxtaposait trois morceaux sans les trier ensemble : les notes d'abord,
+  // les activités ensuite, l'entrée au pipeline en dernier. Trois blocs collés,
+  // donc un ordre faux dès que l'abonné écrivait une note après un déplacement.
+  // Et le `type` des activités se devinait du texte pour n'obtenir qu'une
+  // pastille, quand l'entrée le portait déjà.
+  //
+  // MUPFil réunit la table activites, activity[] et noteEntries[] de TOUS les
+  // records de la même entreprise, trie sur l'horodatage et rend le balisage
+  // de la fiche contact — mêmes icônes, mêmes libellés.
+  //
+  // Ligne d'entrée au pipeline : datée par la chaîne commune, omise sans date
+  // exploitable plutôt que datée au hasard. Elle entre dans le fil comme une
+  // entrée parmi les autres, à sa place chronologique.
+  renderTimelineFiche(c);
 
   // Notes (legacy textarea — éléments removed; reset new note input)
   const noteInput = document.getElementById('d-notes-input');

@@ -621,6 +621,7 @@ body{display:flex;min-height:100vh}
 <script src="/js/person-fields.js"></script>
 <script src="/_mup-nom.js"></script>
 <script src="/_mup-tel.js"></script>
+<script src="/_mup-fil.js"></script>
 <script>
 // ── STATE ──
 let contactId = null;
@@ -987,48 +988,32 @@ function mapColToEtape(col){
   return map[String(col).toLowerCase()] || null;
 }
 
+// Le fil de l'entreprise, pas le journal de ce seul record. Une note saisie
+// depuis le panneau du Pipeline concerne la même entreprise que celle saisie
+// ici : elle doit s'y lire. Le rendu — icônes, libellés, balisage — est celui
+// qui était écrit ici, sorti dans MUPFil pour que les deux surfaces le
+// partagent au lieu d'en tenir chacune une version.
+//
+// La lecture est asynchrone (résolution des ids équivalents + table activites).
+// Le conteneur n'est vidé qu'au retour : sans ça, chaque re-render ferait
+// clignoter un « aucune activité » que le fil dément aussitôt.
+let _filJeton = 0;
 function renderTimeline(){
-  const list = Array.isArray(contact.noteEntries) ? contact.noteEntries.slice() : [];
   const root = document.getElementById('timeline');
-  if (!list.length){
-    root.innerHTML = '<div class="timeline-empty">Aucune activité enregistrée pour ce contact.</div>';
-    return;
-  }
-  // Tri DESC (plus récent d'abord)
-  list.sort((a,b)=>{
-    const ta = new Date(a.createdAt || a.date || 0).getTime();
-    const tb = new Date(b.createdAt || b.date || 0).getTime();
-    return tb - ta;
-  });
-  root.innerHTML = list.map(e => {
-    const type = (e.type || 'note').toLowerCase();
-    const dateStr = e.createdAt || e.date;
-    const d = dateStr ? new Date(dateStr) : null;
-    const dateBlock = d && !isNaN(d.getTime())
-      ? d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' }) + '<br>' + d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })
-      : '—';
-    const labelMap = { note:'Note', phone:'Appel', visio:'Visio', rdv:'RDV', mail:'Mail', devis:'Devis' };
-    const label = labelMap[type] || 'Note';
-    const text = esc(e.text || '');
-    const iconMap = {
-      note: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
-      phone:'<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>',
-      visio:'<svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>',
-      rdv:  '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
-      mail: '<svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
-      devis:'<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>'
-    };
-    return '<div class="timeline-item">'
-      + '<div class="timeline-date">' + dateBlock + '</div>'
-      + '<div class="timeline-content">'
-      +   '<div class="timeline-icon" data-type="' + type + '">' + iconMap[type] + '</div>'
-      +   '<div class="timeline-body">'
-      +     '<div class="timeline-event">' + label + '</div>'
-      +     (text ? '<div class="timeline-note">' + text + '</div>' : '')
-      +   '</div>'
-      + '</div>'
-      + '</div>';
-  }).join('');
+  if (!root) return;
+  if (!window.MUPFil) return;
+  const jeton = ++_filJeton;
+  MUPFil.lire(contact && contact.id, { local: contact ? [contact] : [] })
+    .then(items => {
+      // Un render plus récent a pris la main entre-temps : le sien fait foi.
+      if (jeton !== _filJeton) return;
+      const html = MUPFil.rendre(items);
+      root.innerHTML = html || '<div class="timeline-empty">Aucune activité enregistrée pour ce contact.</div>';
+    })
+    .catch(() => {
+      if (jeton !== _filJeton) return;
+      root.innerHTML = '<div class="timeline-empty">Aucune activité enregistrée pour ce contact.</div>';
+    });
 }
 
 // Une ligne d'input répétable (email ou téléphone). `cls` = classe du champ.

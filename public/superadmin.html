@@ -851,6 +851,16 @@ table.accounts tbody tr[data-email]{cursor:pointer;}
     html += sectionFiche('Activité', lignesA);
 
     // ── Ses dernières recherches ──
+    // Des RECHERCHES, pas des pages : le serveur a regroupé les lignes d'un même
+    // déroulement. Sous le libellé, ce que la recherche a produit — entreprises
+    // ajoutées, contacts modifiés, tentatives d'enrichissement. Un compteur qui
+    // n'existe pas (recherche antérieure au lien) sort à tiret : rien n'est
+    // reconstitué, et un tiret ne se lit pas comme un zéro.
+    var COMPTEURS = [
+      ['entreprises', 'Entreprises ajoutées'],
+      ['contacts_modifies', 'Contacts modifiés'],
+      ['enrichissements', 'Enrichissements']
+    ];
     var rech = Array.isArray(f.recherches) ? f.recherches : [];
     var lignesR = '';
     if (!rech.length) {
@@ -859,9 +869,13 @@ table.accounts tbody tr[data-email]{cursor:pointer;}
       for (var r = 0; r < rech.length; r++) {
         var s = rech[r];
         var quoi = (s.metier || '') + (s.zone ? ' · ' + s.zone : '');
+        var compteurs = COMPTEURS.map(function (c) {
+          var v = s[c[0]];
+          return c[1] + ' : ' + (typeof v === 'number' ? n(v) : '—');
+        }).join(' · ');
         lignesR += '<tr><td class="muted">' + esc(fmtDateHeure(s.date) || '—') + '</td>'
           + '<td>' + esc(quoi || '—') + '<br><span class="dash">'
-          + esc(n(s.resultats) + ' résultat' + (Number(s.resultats) > 1 ? 's' : '')) + '</span></td></tr>';
+          + esc(compteurs) + '</span></td></tr>';
       }
     }
     html += sectionFiche('Ses dernières recherches (20 au plus)', lignesR);

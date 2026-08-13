@@ -233,6 +233,108 @@ export async function trackEnrichAttempt({ userId, siret, issue }) {
   }
 }
 
+// ── regroupement : des PAGES aux RECHERCHES ──
+// lead_search porte une ligne par page parcourue ; une recherche en compte
+// souvent des dizaines. Compter les lignes, c'est compter des pages.
+//
+// DEUX RÈGLES, et la seconde n'est qu'un repli. Une ligne qui porte un
+// search_id rejoint les autres lignes du même identifiant, sans condition de
+// temps ni de critères : c'est le lien exact, écrit par la page au lancement.
+// Une ligne qui n'en porte pas — toutes celles d'avant sa mise en service —
+// retombe sur l'ancienne approximation : mêmes critères, et moins de cinq
+// minutes depuis la page précédente du même groupe. Jamais l'inverse : une
+// ligne identifiée ne se fait pas rattraper par la fenêtre.
+//
+// Entrée : les lignes du user, de la plus récente à la plus ancienne.
+// Sortie : les groupes dans le même ordre, chacun daté de son LANCEMENT (sa
+// ligne la plus ancienne) et portant les critères de sa ligne la plus récente.
+const FENETRE_REPLI_MS = 5 * 60 * 1000
+export function grouperRecherches(lignes) {
+  const ms = (v) => {
+    if (v === undefined || v === null || v === '') return null
+    const d = v instanceof Date ? v : new Date(v)
+    return Number.isNaN(d.getTime()) ? null : d.getTime()
+  }
+  // Clé du repli — les critères de la recherche, et rien d'autre.
+  // fiches_completes_filter n'en fait plus partie : le filtre n'existe plus.
+  const cleRepli = (l) => [
+    l.naf_code, l.region_code, l.department_code, l.city_name
+  ].map(v => String(v ?? '')).join('|')
+
+  const groupes = []
+  const parId = new Map()
+  const parCle = new Map()
+  for (const l of lignes) {
+    const t = ms(l.searched_at)
+    const sid = nettoyerSearchId(l.search_id)
+    const ouvrir = () => {
+      const g = {
+        search_id: sid,
+        naf_code: l.naf_code, naf_label: l.naf_label,
+        region_name: l.region_name,
+        department_code: l.department_code, department_name: l.department_name,
+        city_name: l.city_name,
+        debut: t, pages: 1
+      }
+      groupes.push(g)
+      return g
+    }
+    if (sid) {
+      const g = parId.get(sid)
+      if (g) { g.pages++; if (t !== null && (g.debut === null || t < g.debut)) g.debut = t }
+      else parId.set(sid, ouvrir())
+      continue
+    }
+    const cle = cleRepli(l)
+    const g = parCle.get(cle)
+    // Chaînage sur la ligne la plus ancienne du groupe : les pages d'un même
+    // déroulement se suivent de quelques secondes, la recherche entière peut
+    // durer bien plus de cinq minutes.
+    if (g && t !== null && g.debut !== null && (g.debut - t) <= FENETRE_REPLI_MS) {
+      g.pages++
+      g.debut = t
+    } else {
+      parCle.set(cle, ouvrir())
+    }
+  }
+  return groupes
+}
+
+// ── compteurs d'usage rattachés à des recherches ──
+// Pour un lot d'identifiants de recherche, ce que chacune a produit du côté
+// des deux tables d'usage. Lecture bornée aux identifiants demandés (les vingt
+// de la fiche), jamais un balayage de table.
+// Retourne deux Map search_id → nombre ; une recherche sans ligne n'y figure
+// pas, et vaut zéro pour l'appelant.
+export async function compterUsageParRecherche(userId, searchIds) {
+  const vide = { contactsModifies: new Map(), enrichissements: new Map() }
+  const ids = [...new Set((searchIds || []).map(nettoyerSearchId).filter(Boolean))]
+  if (!userId || ids.length === 0) return vide
+  const db = await getDb()
+  const uid = normalizeId('user', userId)
+  const compter = async (table, etiquette) => {
+    const m = new Map()
+    try {
+      const r = await db.query(
+        `SELECT search_id, count() AS n FROM ${table}
+          WHERE user_id = type::record('user', $uid) AND search_id IN $ids
+          GROUP BY search_id`,
+        { uid, ids }
+      )
+      for (const ligne of (r?.[0] || [])) {
+        m.set(String(ligne.search_id || ''), Number(ligne.n) || 0)
+      }
+    } catch (e) {
+      console.warn(`[${etiquette}] comptage impossible :`, e.message)
+    }
+    return m
+  }
+  return {
+    contactsModifies: await compter('lead_contact_edit', 'contact-edit-tracker'),
+    enrichissements: await compter('lead_enrichment', 'enrich-tracker')
+  }
+}
+
 // ── lecture de l'historique pour un user ──
 // Retourne { total, history[] } — utilisé par GET /api/user/search-history.
 export async function getSearchHistory(userId, { limit = 10, offset = 0 } = {}) {

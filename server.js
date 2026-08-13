@@ -27,7 +27,7 @@ import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { requireSuperadmin } from './server/middleware/requireSuperadmin.js'
 import { deriveAppState } from './lib/derive-app-state.js'
 import { runAuthMigration, invalidateSessionCacheByUserId, getSession, getSchemaFailureCount } from './server/auth/surreal-adapter.js'
-import { runLeadSearchMigration, trackLeadSearch, getSearchHistory, trackContactEdit, trackEnrichAttempt, nettoyerSearchId } from './server/services/search-tracker.js'
+import { runLeadSearchMigration, trackLeadSearch, getSearchHistory, trackContactEdit, trackEnrichAttempt, nettoyerSearchId, grouperRecherches, compterUsageParRecherche } from './server/services/search-tracker.js'
 import { getInseeToken } from './server/services/insee.js'
 import {
   runOptoutMigration,
@@ -1155,10 +1155,11 @@ app.post('/api/admin/comptes/bypass', requireSuperadmin, async (req, res) => {
 // TYPES DE CLÉS, à ne pas mélanger : `user_id` est un record<user> sur
 // lead_search — d'où type::record('user', $uid) ; `userId` est une CHAÎNE NUE
 // sur pipeline, contacts, societes, devis, facture et user_plan. Les dates,
-// elles, sont des datetime sur lead_search et user (time::max, jamais
-// math::max) mais des CHAÎNES ISO sur contacts, societes et pipeline : leurs
-// agrégats se font donc côté application, une base ne comparera pas une chaîne
-// comme une date.
+// elles, sont des datetime sur lead_search et user mais des CHAÎNES ISO sur
+// contacts, societes et pipeline : leurs agrégats se font donc côté
+// application, une base ne comparera pas une chaîne comme une date. Les lignes
+// de lead_search sont d'ailleurs lues telles quelles, sans agrégat : elles se
+// regroupent en recherches côté application (search-tracker).
 const CHAMPS_USER = [
   'id',
   // Identité
@@ -1226,29 +1227,32 @@ app.get('/api/admin/comptes/:email', requireSuperadmin, async (req, res) => {
     // l'égalité de chaîne des tables métier.
     const uid = String(u.id ?? '').replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
 
-    const [plans, rechAgr, recherches, pipes, contacts, societes, devis, factures] = await Promise.all([
+    const [plans, lignesRecherche, pipes, contacts, societes, devis, factures] = await Promise.all([
       // user_plan est tantôt clé par le champ userId, tantôt par l'identifiant
       // de record — les deux formes existent en base, les deux sont couvertes.
       queryOrEmpty(db,
         `SELECT leadsConsumedThisMonth, enrichedSirets, plan, subscription_status, trial_status, current_period_end
            FROM user_plan WHERE userId = $uid OR id = type::record('user_plan', $uid) LIMIT 1`, { uid }),
-      // Total des recherches + date de la plus récente. time::max sur un
-      // datetime ; math::max rendrait un nombre et casserait la comparaison.
+      // UNE SEULE LECTURE DE lead_search, et pas de count(). La table porte une
+      // ligne par PAGE parcourue ; ce qu'on veut compter, ce sont des
+      // recherches. Le regroupement se fait donc sur les lignes elles-mêmes
+      // (grouperRecherches), et la même lecture sert au total, à la date de la
+      // dernière recherche et aux vingt dernières rendues plus bas. Projection
+      // de six colonnes sur les lignes d'UN user, servie par l'index
+      // (user_id, searched_at) : aucune agrégation de masse.
       queryOrEmpty(db,
-        `SELECT count() AS n, time::max(searched_at) AS derniere
-           FROM lead_search WHERE user_id = type::record('user', $uid) GROUP ALL`, { uid }),
-      queryOrEmpty(db,
-        `SELECT naf_code, naf_label, region_name, department_code, department_name, city_name,
-                results_count, searched_at
+        `SELECT search_id, naf_code, naf_label, region_code, region_name,
+                department_code, department_name, city_name, searched_at
            FROM lead_search WHERE user_id = type::record('user', $uid)
-          ORDER BY searched_at DESC LIMIT 20`, { uid }),
+          ORDER BY searched_at DESC`, { uid }),
       // Les trois tables métier datées en CHAÎNES ISO : la projection ne
       // ramène que leurs colonnes de date, et le compte se lit sur le nombre
       // de lignes rendues — un count() de plus serait un aller-retour pour
-      // rien.
+      // rien. societes porte en plus search_id : les entreprises ajoutées par
+      // recherche se comptent ici, sans une requête de plus.
       queryOrEmpty(db, 'SELECT createdAt, created_at FROM pipeline WHERE userId = $uid', { uid }),
       queryOrEmpty(db, 'SELECT created_at FROM contacts WHERE userId = $uid', { uid }),
-      queryOrEmpty(db, 'SELECT created_at, updated_at FROM societes WHERE userId = $uid', { uid }),
+      queryOrEmpty(db, 'SELECT created_at, updated_at, search_id FROM societes WHERE userId = $uid', { uid }),
       // Devis et factures : le compte suffit, count() GROUP ALL.
       queryOrEmpty(db, 'SELECT count() AS n FROM devis WHERE userId = $uid GROUP ALL', { uid }),
       queryOrEmpty(db, 'SELECT count() AS n FROM facture WHERE userId = $uid GROUP ALL', { uid })
@@ -1278,15 +1282,39 @@ app.get('/api/admin/comptes/:email', requireSuperadmin, async (req, res) => {
     // deux premiers sont des datetime, les trois suivants des chaînes ISO
     // agrégées ici même — d'où le passage par des millisecondes, seule échelle
     // où les cinq se comparent.
+    // Des pages aux recherches — la règle est dans search-tracker (identifiant
+    // écrit par la page, fenêtre de 5 min en repli pour les lignes qui n'en ont
+    // pas). Les lignes arrivent de la plus récente à la plus ancienne : la
+    // dernière recherche est donc la première ligne, sans agrégat.
+    const recherchesReelles = grouperRecherches(lignesRecherche)
     const traces = [
       ['dernière venue', ms(u.last_seen_at)],
-      ['dernière recherche', ms(rechAgr[0]?.derniere)],
+      ['dernière recherche', ms(lignesRecherche[0]?.searched_at)],
       ['dernière fiche pipeline', plusRecente(pipes, 'createdAt', 'created_at')],
       ['dernier contact', plusRecente(contacts, 'created_at')],
       ['dernière société', plusRecente(societes, 'updated_at', 'created_at')]
     ].filter(([, t]) => t !== null).sort((a, b) => b[1] - a[1])
     const recente = traces[0] || null
     const enrichis = Array.isArray(plan?.enrichedSirets) ? plan.enrichedSirets.length : 0
+
+    // ── Ce que chacune des vingt dernières recherches a produit ──
+    // Entreprises ajoutées (sociétés) : comptées sur les lignes de societes déjà
+    // lues. C'est bien l'ENTREPRISE qu'on compte, pas ses dirigeants — 17 % des
+    // sociétés n'en produisent aucun, et c'est l'entreprise que l'abonnée ajoute.
+    const vingt = recherchesReelles.slice(0, 20)
+    const nbSocietes = new Map()
+    for (const s of societes) {
+      const sid = String(s.search_id || '')
+      if (sid) nbSocietes.set(sid, (nbSocietes.get(sid) || 0) + 1)
+    }
+    // Les deux autres compteurs vivent dans les tables d'usage, lues pour ces
+    // vingt identifiants seulement.
+    const { contactsModifies, enrichissements } =
+      await compterUsageParRecherche(uid, vingt.map(g => g.search_id))
+    // Une recherche sans identifiant (antérieure au lien) ne se voit rien
+    // attribuer : ses trois compteurs valent null et sortiront à tiret. Rien
+    // n'est reconstitué par horodatage.
+    const compteur = (g, source) => g.search_id ? (source.get(g.search_id) || 0) : null
 
     res.json({
       email: u.email || email,
@@ -1350,7 +1378,9 @@ app.get('/api/admin/comptes/:email', requireSuperadmin, async (req, res) => {
       },
 
       activite: {
-        recherches: nombre(rechAgr),
+        // Des recherches, pas des pages : le déroulement d'un gisement compte
+        // pour une, quel que soit le nombre de pages qu'il a demandées.
+        recherches: recherchesReelles.length,
         fiches_pipeline: pipes.length,
         contacts: contacts.length,
         societes: societes.length,
@@ -1367,11 +1397,16 @@ app.get('/api/admin/comptes/:email', requireSuperadmin, async (req, res) => {
           : null
       },
 
-      recherches: recherches.map((s) => ({
-        metier: [s.naf_code, s.naf_label].filter(Boolean).join(' '),
-        zone: [s.city_name, s.department_name || s.department_code, s.region_name].filter(Boolean).join(', '),
-        resultats: Number(s.results_count) || 0,
-        date: s.searched_at ?? null
+      // Les vingt dernières RECHERCHES, datées de leur lancement. Plus de
+      // `resultats` : le nombre annoncé par l'API n'a jamais dit ce que
+      // l'abonnée en a fait. Trois compteurs le disent, ou trois null.
+      recherches: vingt.map((g) => ({
+        metier: [g.naf_code, g.naf_label].filter(Boolean).join(' '),
+        zone: [g.city_name, g.department_name || g.department_code, g.region_name].filter(Boolean).join(', '),
+        date: g.debut !== null ? new Date(g.debut).toISOString() : null,
+        entreprises: compteur(g, nbSocietes),
+        contacts_modifies: compteur(g, contactsModifies),
+        enrichissements: compteur(g, enrichissements)
       }))
     })
   } catch (err) {
@@ -2399,7 +2434,7 @@ app.post('/api/contacts', async (req, res) => {
 // chaîne (3 et "3" ne sont pas deux valeurs) ; objets et tableaux par leur
 // forme sérialisée.
 function memeValeur(a, b) {
-  const vide = (v) => v === undefined || v === null || v === ''
+  const vide = (v) => v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)
   if (vide(a) && vide(b)) return true
   if (vide(a) !== vide(b)) return false
   if (typeof a === 'object' || typeof b === 'object') {

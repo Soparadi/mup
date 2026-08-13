@@ -55,7 +55,7 @@ import { isVip } from '../../lib/vip.js'
 
 // Strip le préfixe 'user:' et les guillemets ⟨⟩ du Record ID SurrealDB
 // pour obtenir la string brute utilisée comme userId par les tables
-// SCHEMALESS (pipeline, contacts, devis, mail, visio*, user_settings,
+// SCHEMALESS (pipeline, contacts, societes, devis, mail, visio*, user_settings,
 // user_plan, etc.). Pattern aligné sur cleanUserId de server/routes/stripe.js.
 function cleanUserId(raw) {
   return String(raw || '').replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
@@ -84,7 +84,7 @@ const TABLES_SCHEMAFULL = [
   'lead_enrichment'
 ]
 
-// 16 tables SCHEMALESS avec FK string brute userId — DELETE pattern :
+// 17 tables SCHEMALESS avec FK string brute userId — DELETE pattern :
 //   DELETE <table> WHERE userId = $uid
 // TRAITÉES HORS BOUCLE (voir deleteUserCascade) :
 //   - mailbox_credentials → révocation OAuth Google avant DELETE (par ownerId,
@@ -97,6 +97,10 @@ const TABLES_SCHEMAFULL = [
 const TABLES_SCHEMALESS = [
   'pipeline',
   'contacts',
+  // societes — manquait depuis l'origine de la table. Elle porte les raisons
+  // sociales et les coordonnées des prospects, sous userId comme ses voisines :
+  // un compte supprimé les laissait derrière lui.
+  'societes',
   'agenda',
   'mail',
   'mail_settings',

@@ -3906,10 +3906,15 @@ app.get('/api/account/privacy/export', async (req, res) => {
         return r?.[0] || []
       } catch (e) { return [] }
     }
-    async function dumpSearchHistory() {
+    // Tables à clé record<user> — lead_search et les deux tables d'usage écrites
+    // par le serveur (modifications de contact, tentatives d'enrichissement).
+    // Même patron que dump(), seule la forme de la clé change : type::record
+    // au lieu d'une chaîne nue. L'abonnée ne les voit nulle part dans
+    // l'application ; raison de plus pour qu'elles figurent dans son export.
+    async function dumpParUserRecord(table) {
       try {
         const r = await db.query(
-          `SELECT * FROM lead_search WHERE user_id = type::record('user', $uid)`,
+          `SELECT * FROM ${table} WHERE user_id = type::record('user', $uid)`,
           { uid: cleanUserId }
         )
         return r?.[0] || []
@@ -3921,6 +3926,10 @@ app.get('/api/account/privacy/export', async (req, res) => {
       export_version: 1,
       user: await dumpUserDirect(),
       contacts: await dump('contacts'),
+      // societes — manquait depuis l'origine de la table : les raisons sociales
+      // et coordonnées des prospects sortaient par les contacts et les cartes,
+      // jamais par la fiche société elle-même.
+      societes: await dump('societes'),
       pipeline: await dump('pipeline'),
       agenda: await dump('agenda'),
       devis: await dump('devis'),
@@ -3929,7 +3938,9 @@ app.get('/api/account/privacy/export', async (req, res) => {
       frais_recurrents: await dump('frais_recurrents'),
       user_settings: await dump('user_settings'),
       mailbox_credentials: await dumpMailboxCreds(),
-      search_history: await dumpSearchHistory(),
+      search_history: await dumpParUserRecord('lead_search'),
+      contact_edits: await dumpParUserRecord('lead_contact_edit'),
+      enrichment_attempts: await dumpParUserRecord('lead_enrichment'),
       // Note : exclus volontairement — leads INSEE (données publiques),
       // mailbox tokens en clair, password_hash, sessions, verification_token.
     }

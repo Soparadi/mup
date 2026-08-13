@@ -106,6 +106,9 @@ body{display:flex;min-height:100vh}
 .dropdown-role{font-size:11px;color:var(--muted);margin-top:1px}
 .dropdown-value{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
 .dropdown-empty{padding:14px 12px;font-size:12px;color:var(--muted);text-align:center}
+/* Planifier : ses entrées agissent sur la page, elles ne mènent nulle part —
+   ce sont des boutons, à l'apparence des liens des deux autres menus. */
+button.dropdown-item{width:100%;background:transparent;border:none;font-family:inherit;text-align:left}
 
 /* ── KPI BAR ── */
 .kpi-bar{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px}
@@ -242,6 +245,8 @@ body{display:flex;min-height:100vh}
 .rdv-planner{position:fixed;z-index:120;background:#fff;border:1px solid var(--border);border-radius:var(--radius-xs);box-shadow:0 10px 30px rgba(0,0,0,.14);padding:12px;min-width:220px;display:none;flex-direction:column;gap:10px}
 .rdv-planner.open{display:flex}
 .rdv-planner-title{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.rdv-planner-avec{font-size:12.5px;font-weight:600;color:var(--text);margin-top:-4px}
+.rdv-planner-avec[hidden]{display:none}
 .rdv-planner label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 .rdv-planner input{border:1px solid var(--border-input);border-radius:var(--radius-xs);padding:8px 10px;font-family:inherit;font-size:13px;font-weight:500;color:var(--text);text-transform:none;letter-spacing:0}
 .rdv-planner input:focus{outline:none;border-color:var(--text)}
@@ -632,6 +637,7 @@ body{display:flex;min-height:100vh}
 
 <div class="rdv-planner" id="rdv-planner" role="dialog" aria-label="Planifier un rendez-vous">
   <div class="rdv-planner-title">Planifier un RDV</div>
+  <div class="rdv-planner-avec" id="rdv-planner-avec" hidden></div>
   <label>Date
     <input type="date" id="rdv-planner-date">
   </label>
@@ -1173,25 +1179,47 @@ function wireActions(){
   document.getElementById('folder-devis').href    = '/devis?contact=' + id;
   document.getElementById('folder-factures').href = '/factures?contact=' + id;
 
-  // Dropdowns header (Appeler / Écrire / Planifier) — listent les personnes
+  // Dropdowns header (Appeler / Écrire / Planifier) — listent les personnes.
+  //
+  // Appeler et Écrire mènent chacun ailleurs selon la personne : tel: et
+  // mailto: portent son numéro, son adresse. Planifier, lui, envoyait toutes
+  // ses lignes à la MÊME adresse — /agenda?contact= avec l'id de la fiche,
+  // constant d'une ligne à l'autre — et n'affichait aucune valeur qui les
+  // distingue : une liste de noms dont le choix ne changeait rien.
+  //
+  // Ses entrées ouvrent maintenant le planificateur de la fiche, et la
+  // personne choisie est ce qui les sépare : elle est nommée dans le panneau,
+  // portée par le champ `contact` de l'évènement d'agenda, et redite au fil.
+  // Elles n'ont donc plus de href : ce sont des boutons.
   const people = getPeople();
   const buildDd = (kind) => {
-    if (!people.length) return '<div class="dropdown-empty">Aucune personne identifiée</div>';
-    return people.map(p => {
+    // Sans personne identifiée, Planifier garde une entrée : le rendez-vous
+    // se prend avec l'entreprise, qui est ce que l'agenda porte de toute façon.
+    if (!people.length) {
+      if (kind !== 'rdv') return '<div class="dropdown-empty">Aucune personne identifiée</div>';
+      return '<button type="button" class="dropdown-item" data-rdv-personne="">'
+        + '<div class="dropdown-avatar">·</div>'
+        + '<div class="dropdown-info">'
+        +   '<div class="dropdown-name">Planifier un RDV</div>'
+        +   '<div class="dropdown-role">Aucune personne identifiée</div>'
+        + '</div></button>';
+    }
+    return people.map((p, idx) => {
       const nom = personDisplayName(p);
       const ini = initials(nom);
       const role = p.poste || '';
       let val = '', href = '#';
       if (kind === 'call') { val = p.phone ? window.MUPTel.format(p.phone) : ''; href = p.phone ? 'tel:' + window.MUPTel.lien(p.phone) : '#'; }
       if (kind === 'mail') { val = p.email || ''; href = p.email ? 'mailto:' + p.email : '#'; }
-      if (kind === 'rdv')  { val = ''; href = '/agenda?contact=' + id; }
-      return '<a href="' + href + '" class="dropdown-item">'
-        + '<div class="dropdown-avatar">' + ini + '</div>'
+      const corps = '<div class="dropdown-avatar">' + ini + '</div>'
         + '<div class="dropdown-info">'
         +   '<div class="dropdown-name">' + esc(nom) + '</div>'
         +   (role ? '<div class="dropdown-role">' + esc(role) + '</div>' : '')
         +   (val ? '<div class="dropdown-value">' + esc(val) + '</div>' : '')
-        + '</div></a>';
+        + '</div>';
+      return (kind === 'rdv')
+        ? '<button type="button" class="dropdown-item" data-rdv-personne="' + idx + '">' + corps + '</button>'
+        : '<a href="' + href + '" class="dropdown-item">' + corps + '</a>';
     }).join('');
   };
   document.getElementById('dd-call').innerHTML = buildDd('call');
@@ -1723,6 +1751,12 @@ function wirePipelineSend(){
 
 const MOIS_COURTS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
 
+// La personne avec qui le rendez-vous est pris, résolue à l'OUVERTURE du
+// panneau et gardée par son nom, pas par son rang : people[] est rechargé au
+// retour sur l'onglet, et un index survivrait au rechargement en désignant
+// quelqu'un d'autre. Chaîne vide quand le geste ne désigne personne.
+let rdvPersonneNom = '';
+
 // L'id nu de la carte de board de cette entreprise, ou null si elle n'en a
 // pas. Une lecture qui échoue n'est PAS une absence de carte : elle remonte,
 // et l'appelant s'arrête au lieu d'en fabriquer une seconde.
@@ -1785,14 +1819,12 @@ async function planifierRdv(){
     // comme le calendrier du Pipeline.
     const [hh, mn] = heure.split(':');
     const fin = String(Math.min(23, (parseInt(hh, 10) || 0) + 1)).padStart(2, '0') + ':' + (mn || '00');
-    const gens = getPeople();
-    const nomPersonne = gens.length ? personDisplayName(gens[0]) : '';
     const corps = {
       date: dateVal,
       start: heure,
       end: fin,
       title: contact.nom || contact.company || contact.name || '',
-      contact: nomPersonne === '—' ? '' : nomPersonne,
+      contact: rdvPersonneNom,
       type: 'rdv',
       notes: '',
       ficheId: ficheId
@@ -1819,7 +1851,8 @@ async function planifierRdv(){
     const quand = isNaN(jour.getTime())
       ? ''
       : ' le ' + jour.getDate() + ' ' + MOIS_COURTS[jour.getMonth()] + ' à ' + heure;
-    await MUPFil.ecrire({ ancrage: contactId, type: 'rdv', texte: 'RDV planifié' + quand });
+    const avec = rdvPersonneNom ? ' avec ' + rdvPersonneNom : '';
+    await MUPFil.ecrire({ ancrage: contactId, type: 'rdv', texte: 'RDV planifié' + avec + quand });
     renderTimeline();
     toast('RDV planifié');
     try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch (_) {}
@@ -1832,36 +1865,80 @@ function closeRdvPlanner(){
   document.getElementById('rdv-planner').classList.remove('open');
 }
 
+// Ouvre le panneau, ancré sur l'élément qui l'a demandé — l'action rapide de
+// la colonne droite, ou le bouton Planifier de l'en-tête. `personne` est le
+// record de la personne pour qui le rendez-vous est pris, ou null.
+function openRdvPlanner(ancre, personne){
+  const panel = document.getElementById('rdv-planner');
+  if (!panel || !ancre) return;
+
+  // Sans personne désignée, une seule personne identifiée vaut désignation :
+  // au-delà, en nommer une serait la choisir au hasard, et l'agenda comme le
+  // fil porteraient un nom que personne n'a donné.
+  const gens = getPeople();
+  const retenue = personne || (gens.length === 1 ? gens[0] : null);
+  const nom = retenue ? personDisplayName(retenue) : '';
+  rdvPersonneNom = (nom === '—') ? '' : nom;
+
+  const avec = document.getElementById('rdv-planner-avec');
+  if (avec) {
+    avec.textContent = rdvPersonneNom ? 'Avec ' + rdvPersonneNom : '';
+    avec.hidden = !rdvPersonneNom;
+  }
+
+  const dateEl = document.getElementById('rdv-planner-date');
+  if (!dateEl.value) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    dateEl.value = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  }
+
+  panel.style.visibility = 'hidden';
+  panel.classList.add('open');
+  const r = ancre.getBoundingClientRect();
+  let top = r.top - panel.offsetHeight - 6;
+  if (top < 8) top = r.bottom + 6;                 // pas la place au-dessus → sous l'ancre
+  let left = Math.min(r.left, window.innerWidth - panel.offsetWidth - 8);
+  if (left < 8) left = 8;
+  panel.style.top = top + 'px';
+  panel.style.left = left + 'px';
+  panel.style.visibility = '';
+}
+
 function wireRdvPlanner(){
   const btn = document.getElementById('qa-rdv');
   const panel = document.getElementById('rdv-planner');
   if (!btn || !panel) return;
-  const dateEl = document.getElementById('rdv-planner-date');
   document.getElementById('rdv-planner-go').addEventListener('click', planifierRdv);
   btn.addEventListener('click', (e) => {
     // Le lien vers l'agenda reste en href — clic milieu, nouvel onglet — mais
     // un clic ordinaire prend le rendez-vous ici.
     e.preventDefault();
     if (panel.classList.contains('open')) { closeRdvPlanner(); return; }
-    if (!dateEl.value) {
-      const now = new Date();
-      const pad = (n) => String(n).padStart(2, '0');
-      dateEl.value = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
-    }
-    panel.style.visibility = 'hidden';
-    panel.classList.add('open');
-    const r = btn.getBoundingClientRect();
-    let top = r.top - panel.offsetHeight - 6;
-    if (top < 8) top = r.bottom + 6;               // pas la place au-dessus → sous le bouton
-    let left = Math.min(r.left, window.innerWidth - panel.offsetWidth - 8);
-    if (left < 8) left = 8;
-    panel.style.top = top + 'px';
-    panel.style.left = left + 'px';
-    panel.style.visibility = '';
+    openRdvPlanner(btn, null);
   });
+
+  // Menu Planifier de l'en-tête. Écoute posée sur le conteneur, qui survit aux
+  // re-rendus de wireActions() : ce sont ses entrées qui sont refaites, pas lui.
+  // La personne est relue à CE moment, sur le people[] courant.
+  const menu = document.getElementById('dd-rdv');
+  if (menu) {
+    menu.addEventListener('click', (e) => {
+      const item = e.target.closest('[data-rdv-personne]');
+      if (!item) return;
+      const rang = item.getAttribute('data-rdv-personne');
+      const personne = (rang === '') ? null : (getPeople()[Number(rang)] || null);
+      const dd = menu.closest('[data-dropdown]');
+      if (dd) dd.classList.remove('open');
+      openRdvPlanner(dd ? dd.querySelector('[data-dropdown-toggle]') : item, personne);
+    });
+  }
   document.addEventListener('click', (e) => {
     if (!panel.classList.contains('open')) return;
     if (btn.contains(e.target) || panel.contains(e.target)) return;
+    // Le clic qui ouvre le panneau depuis le menu remonte jusqu'ici : sans
+    // cette exception, il refermerait aussitôt ce qu'il vient d'ouvrir.
+    if (e.target.closest('[data-rdv-personne]')) return;
     closeRdvPlanner();
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeRdvPlanner(); });

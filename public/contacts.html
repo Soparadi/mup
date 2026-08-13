@@ -196,12 +196,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .cell-activity{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text)}
 .cell-activity-icon{width:16px;height:16px;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .cell-activity-meta{font-size:11.5px;color:var(--muted)}
-.cell-tag{
-  display:inline-flex;align-items:center;padding:2px 7px;background:#F4F4F4;
-  border:1px solid #E5E5E5;border-radius:5px;font-size:10px;font-weight:600;
-  color:var(--muted);margin-right:4px;
-}
-.cell-tag-more{font-size:10px;color:var(--muted2);font-weight:600}
 .cell-origin{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--text)}
 .cell-origin-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 
@@ -492,7 +486,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
                   <th>Société</th>
                   <th>Prochaine action</th>
                   <th>Dernière activité</th>
-                  <th>Tags</th>
+                  <th>Coordonnées</th>
                   <th>Origine</th>
                   <th>Action</th>
                 </tr>
@@ -668,6 +662,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 <script src="/_mup-nom.js"></script>
 <script src="/_mup-tel.js"></script>
+<script src="/_mup-projection.js"></script>
 <script>
 // ── STATE ──
 let prospects = [];
@@ -1140,6 +1135,9 @@ async function init(){
     toast('Affichage de la dernière copie enregistrée sur cet appareil');
   }
 
+  // Liste des SIRET déjà payés avant le premier rendu : sans elle, une ligne
+  // déjà enrichie afficherait un bouton actionnable le temps du chargement.
+  await loadEnrichedSirets();
   renderAll();
 }
 
@@ -1150,6 +1148,94 @@ async function init(){
 
 function siretFormat(s){
   return s ? String(s).replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4') : '';
+}
+
+// ── ENRICHISSEMENT DEPUIS LA LIGNE ──
+// Le bouton de la colonne Action portait un onclick qui arrêtait la propagation
+// et ne faisait rien d'autre : un geste offert sur chaque ligne, sans effet.
+//
+// Il appelle maintenant la même route payante que la fiche société et la carte
+// Pipeline — POST /api/enrich/:siret — et son résultat se voit sur la ligne :
+// il rejoint la PROJECTION tenue en mémoire, jamais l'enregistrement. save()
+// retire ce sous-objet avant d'écrire, et le serveur le retire du corps reçu :
+// rien de mutualisé ne se dépose sur une fiche privée par ce chemin.
+let enrichedSirets = [];            // SIRET déjà payés par cette abonnée (miroir local)
+let enrichedSiretsReady = null;     // promesse du GET /api/user-plan (une seule fois)
+
+// Miroir client de normalizeSiret (server/config/plan-quotas.js) : 14 chiffres,
+// séparateurs retirés, '' sinon — forme canonique comparable à enrichedSirets.
+function normalizeSiretClient(raw){
+  const digits = String(raw == null ? '' : raw).replace(/\D/g, '');
+  return digits.length === 14 ? digits : '';
+}
+function siretEnrichi(rawSiret){
+  const s = normalizeSiretClient(rawSiret);
+  return !!s && enrichedSirets.includes(s);
+}
+// Miroir client de porteCanalDecomptable : email OU téléphone non vide. C'est la
+// condition à laquelle le serveur marque le SIRET comme payé ; le bouton ne passe
+// en terminal que dans le même cas.
+function porteCanalDecomptableClient(champs){
+  const nonVide = v => typeof v === 'string' && v.trim() !== '';
+  return nonVide(champs && champs.societe_email) || nonVide(champs && champs.societe_tel);
+}
+// Un seul GET /api/user-plan, mémorisé. Silencieux sur échec → liste vide, tous
+// les boutons restent actionnables (le serveur reste seul juge du décompte).
+function loadEnrichedSirets(){
+  if(enrichedSiretsReady) return enrichedSiretsReady;
+  enrichedSiretsReady = (async function(){
+    try {
+      const resp = await fetch('/api/user-plan');
+      if(!resp.ok) return;
+      const plan = await resp.json();
+      if(plan && Array.isArray(plan.enrichedSirets)) enrichedSirets = plan.enrichedSirets;
+    } catch(e) { /* silencieux */ }
+  })();
+  return enrichedSiretsReady;
+}
+
+// Verse ce que la route vient de rendre dans la projection en mémoire des
+// enregistrements qui portent ce SIRET — plusieurs lignes peuvent le partager.
+// Aucune écriture : ce sous-objet ne part ni au serveur ni au cache.
+function appliquerProjection(siret, data){
+  const champs = {};
+  ['website','societe_email','societe_tel','societe_facebook','societe_instagram','societe_linkedin']
+    .forEach(function(k){ if(data && data[k]) champs[k] = data[k]; });
+  if(!Object.keys(champs).length) return;
+  prospects.forEach(function(p){
+    if(normalizeSiretClient(p.siret) !== siret) return;
+    p.referentiel = Object.assign({}, p.referentiel, champs);
+  });
+}
+
+async function enrichirLigne(btn){
+  const siret = btn && btn.getAttribute('data-siret');
+  if(!siret || btn.disabled) return;
+  const libelle = btn.textContent;
+  btn.disabled = true;                  // verrou anti double-clic pendant l'appel
+  btn.textContent = 'Enrichissement…';
+  try {
+    const resp = await fetch('/api/enrich/' + encodeURIComponent(siret), { method: 'POST' });
+    if(resp.status === 403){ // opt-out RGPD : le serveur porte le message, l'abonnée doit le voir
+      let msg = "Cette entreprise n'est pas disponible pour prospection.";
+      try { const b = await resp.json(); if(b && b.message) msg = b.message; } catch(e){}
+      toast(msg);
+      return;
+    }
+    if(!resp.ok) return; // 402 plafond inclus : l'intercepteur global affiche la modale
+    const data = await resp.json();
+    if(!data || !data.found){ toast('Aucune donnée à ajouter'); return; }
+    appliquerProjection(siret, data);
+    if(porteCanalDecomptableClient(data) && !enrichedSirets.includes(siret)) enrichedSirets.push(siret);
+    toast('Fiche enrichie');
+    renderTable();   // la ligne montre les coordonnées, le bouton son nouvel état
+  } catch(e) {
+    // best-effort : pas de toast d'erreur (calque de la fiche société)
+  } finally {
+    // Ne réactive pas un bouton passé en terminal ; après un rendu réussi, il a
+    // de toute façon été remplacé par celui que renderTable vient d'écrire.
+    if(!siretEnrichi(siret)){ btn.disabled = false; btn.textContent = libelle; }
+  }
 }
 
 // Date relative type "il y a 3 j" / "aujourd'hui" / "demain". '—' si invalide.
@@ -1389,26 +1475,53 @@ function renderTable(){
         + '</div>';
     }
 
-    const tags = p.tags || [];
-    let tagsHtml = '<span class="cell-empty">—</span>';
-    if(tags.length > 0){
-      const visible = tags.slice(0, 2);
-      const remaining = tags.length - 2;
-      tagsHtml = visible.map(t => '<span class="cell-tag">' + esc(t) + '</span>').join('');
-      if(remaining > 0) tagsHtml += '<span class="cell-tag-more">+' + remaining + '</span>';
+    // Coordonnées — à la place des Tags, que rien ne remplissait : aucune
+    // surface n'écrit `tags`, la colonne affichait un tiret sur toutes les
+    // lignes de toutes les listes. Ce que l'abonnée vient chercher dans une
+    // liste de contacts, c'est de quoi les joindre.
+    //
+    // Saisie d'abord, projection du référentiel en repli (MUPProjection) : rien
+    // n'est écrit, et une coordonnée seulement projetée disparaît avec la page.
+    // Les deux lignes reprennent les classes de la colonne voisine — texte puis
+    // méta — pour ne rien changer au rythme du tableau.
+    const email = window.MUPProjection ? window.MUPProjection.email(p) : '';
+    const tel = window.MUPProjection ? window.MUPProjection.tel(p) : '';
+    const telAff = tel && window.MUPTel ? window.MUPTel.format(tel) : tel;
+    let coordHtml = '<span class="cell-empty">—</span>';
+    if(email || tel){
+      coordHtml = (email ? '<div class="cell-activity">' + esc(email) + '</div>' : '')
+        + (telAff ? '<div class="cell-activity-meta">' + esc(telAff) + '</div>' : '');
     }
 
     const dotColor = ORIGIN_DOT[p.source] || '#6B6B6B';
     const originLabel = ORIGIN_LABEL[p.source] || 'Direct';
     const originHtml = '<div class="cell-origin"><div class="cell-origin-dot" style="background:' + dotColor + '"></div>' + esc(originLabel) + '</div>';
 
+    // Bouton Enrichir — câblé, et seulement là où il peut agir. L'enrichissement
+    // a pour clé le SIRET : sans SIRET canonique, il n'y a rien à demander, et le
+    // bouton laisse place au tiret des cellules vides plutôt que de proposer un
+    // geste sans effet. Sur un SIRET déjà payé, il passe en état terminal —
+    // l'autorité est enrichedSirets, jamais le remplissage de la cellule : une
+    // abonnée qui efface une valeur ne doit pas se voir proposer de repayer.
+    const siretLigne = normalizeSiretClient(p.siret);
+    let enrichHtml = '<span class="cell-empty">—</span>';
+    if(siretLigne){
+      const deja = siretEnrichi(siretLigne);
+      enrichHtml = '<button class="btn-enrich" type="button" data-siret="' + siretLigne + '"'
+        + (deja ? ' disabled' : '')
+        + ' onclick="event.stopPropagation();enrichirLigne(this)"'
+        + ' style="padding:4px 9px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--orange);color:#fff;border:none;border-radius:8px;cursor:' + (deja ? 'not-allowed' : 'pointer') + ';white-space:nowrap' + (deja ? ';opacity:.3' : '') + '">'
+        + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M19 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L19 14z"/></svg>'
+        + (deja ? 'Déjà enrichi' : 'Enrichir') + '</button>';
+    }
+
     return '<tr onclick="window.location.href=\'/contacts/\' + encodeURIComponent(\'' + id + '\')">'
       + '<td><div class="cell-soc-name">' + nom + '</div><div class="cell-soc-meta">' + esc(meta) + '</div></td>'
       + '<td>' + nextActHtml + '</td>'
       + '<td>' + lastActHtml + '</td>'
-      + '<td>' + tagsHtml + '</td>'
+      + '<td>' + coordHtml + '</td>'
       + '<td>' + originHtml + '</td>'
-      + '<td><button class="btn-enrich" type="button" onclick="event.stopPropagation()" style="padding:4px 9px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--orange);color:#fff;border:none;border-radius:8px;cursor:pointer;white-space:nowrap"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M19 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L19 14z"/></svg>Enrichir</button></td>'
+      + '<td>' + enrichHtml + '</td>'
       + '</tr>';
   }).join('');
 

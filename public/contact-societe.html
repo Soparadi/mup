@@ -947,14 +947,15 @@ function populate(){
   // résolu, dans majCompteurs().
   document.getElementById('kpi-devis').textContent = (c.factures_ids || []).length || 0;
 
-  // Prochaine action
+  // Prochaine action — le champ libre, saisi ici et enregistré par
+  // captureFields. La DATE affichée dessous ne vient plus de
+  // `prochaine_action_date` : ce champ n'était écrit par rien, ni ici ni
+  // ailleurs, et la ligne restait donc toujours masquée. Elle annonce
+  // maintenant le prochain rendez-vous à venir, lu dans l'agenda
+  // (chargerProchainRdv).
   if (c.prochaine_action) {
     document.getElementById('next-action-text').textContent = c.prochaine_action;
     document.getElementById('next-action-text').classList.remove('empty');
-    if (c.prochaine_action_date) {
-      document.getElementById('next-action-date').style.display = '';
-      document.getElementById('next-action-date-text').textContent = fmtDateLong(c.prochaine_action_date);
-    }
   }
 
   // Timeline activités
@@ -1986,6 +1987,53 @@ function majColonne(){
   box.style.background = connue ? connue.color : '';
 }
 
+// ── LE PROCHAIN RENDEZ-VOUS ──
+// L'encart « Prochaine action » portait sous son champ libre une date lue dans
+// `prochaine_action_date`, que rien n'écrivait — ni cette page, ni le reste du
+// dépôt. Elle annonce désormais le premier rendez-vous À VENIR de l'agenda,
+// c'est-à-dire la prochaine chose réellement engagée avec cette entreprise.
+//
+// Les évènements d'agenda s'accrochent à la CARTE de board. Sans carte, il n'y
+// a rien à lire, et la ligne reste muette plutôt que d'annoncer un vide.
+const TYPE_RDV = { rdv:'RDV', visio:'Visio', mail:'Mail', devis:'Devis', phone:'Appel' };
+
+async function chargerProchainRdv(){
+  const ligne = document.getElementById('next-action-date');
+  const txt = document.getElementById('next-action-date-text');
+  if (!ligne || !txt) return;
+  ligne.style.display = 'none';
+  const ancre = _carte ? MUPFil.localId(_carte.id) : pipelineLocalId();
+  if (!ancre) return;
+  let evts;
+  try {
+    const resp = await fetch('/api/agenda?ficheId=' + encodeURIComponent(ancre));
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    evts = await resp.json();
+    if (!Array.isArray(evts)) throw new Error('réponse inattendue');
+  } catch (e) {
+    // Un agenda illisible n'est pas un agenda vide : masquer la ligne
+    // affirmerait qu'il n'y a rien de prévu.
+    console.error('[contact-societe] chargerProchainRdv', e);
+    txt.textContent = 'Agenda illisible';
+    ligne.style.display = '';
+    return;
+  }
+  const maintenant = Date.now();
+  let prochain = null, quand = 0;
+  evts.forEach(ev => {
+    if (!ev || !ev.date) return;
+    const d = new Date(String(ev.date) + 'T' + (ev.start || '00:00'));
+    if (isNaN(d.getTime()) || d.getTime() < maintenant) return;   // passé : ce n'est plus à venir
+    if (!prochain || d.getTime() < quand) { prochain = ev; quand = d.getTime(); }
+  });
+  if (!prochain) return;
+  const d = new Date(quand);
+  const heure = prochain.start ? ' à ' + prochain.start : '';
+  txt.textContent = (TYPE_RDV[String(prochain.type || '').toLowerCase()] || 'Rendez-vous')
+    + ' — ' + d.getDate() + ' ' + MOIS_COURTS[d.getMonth()] + heure;
+  ligne.style.display = '';
+}
+
 // Relit la carte à l'ouverture pour savoir dans quelle colonne se trouve cette
 // entreprise. Sans elle, le déroulant ne peut rien affirmer.
 async function chargerCarte(){
@@ -2109,6 +2157,7 @@ async function poserRendezVous(opts){
   const avec = opts.avec ? ' avec ' + opts.avec : '';
   await MUPFil.ecrire({ ancrage: contactId, type: opts.type, texte: opts.verbe + avec + quand });
   renderTimeline();
+  await chargerProchainRdv();   // celui qu'on vient de poser est peut-être le prochain
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch (_) {}
   return true;
 }
@@ -2225,9 +2274,17 @@ function wireRdvPlanner(){
   wireRdvPlanner();
   wireColonne();
   loadEnrichedSirets();   // un seul GET /api/user-plan, mémorisé pour la page
-  await loadContact();
-  await chargerCarte();   // la colonne du board, que seule la carte connaît
+  await rechargerFiche();
 })();
+
+// Le record, puis la carte — la colonne du board, que seule la carte connaît —
+// puis le prochain rendez-vous, qui s'accroche à cette carte. L'ordre compte :
+// chacun a besoin du précédent.
+async function rechargerFiche(){
+  await loadContact();
+  await chargerCarte();
+  await chargerProchainRdv();
+}
 </script>
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
@@ -2236,8 +2293,9 @@ function wireRdvPlanner(){
 <script>
   attachAgendaSync({
     reloadFn: async function () {
-      // Sprint 4 : recharger les KPIs agenda quand un event change ailleurs.
-      if (typeof loadContact === 'function' && contactId) await loadContact();
+      // Un évènement changé ailleurs déplace peut-être le prochain rendez-vous :
+      // c'est la fiche entière qui se relit, carte et agenda compris.
+      if (typeof rechargerFiche === 'function' && contactId) await rechargerFiche();
     }
   });
 </script>

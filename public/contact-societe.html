@@ -114,7 +114,7 @@ button.dropdown-item{width:100%;background:transparent;border:none;font-family:i
 .kpi-icon[data-c="phoning"]{stroke:#DC2626}
 .kpi-icon[data-c="visio"]  {stroke:var(--purple)}
 .kpi-icon[data-c="rdv"]    {stroke:var(--green)}
-.kpi-icon[data-c="devis"]  {stroke:var(--blue)}
+.kpi-icon[data-c="factures"]{stroke:var(--blue)}
 .kpi-value{font-size:22px;font-weight:700;line-height:1.15}
 .kpi-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--label-light);font-weight:600}
 
@@ -374,9 +374,11 @@ button.dropdown-item{width:100%;background:transparent;border:none;font-family:i
           <svg class="kpi-icon" data-c="rdv" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <div><div class="kpi-value" id="kpi-rdv">—</div><div class="kpi-label">RDV</div></div>
         </div>
+        <!-- Ce compteur compte les factures liées au record (factures_ids) :
+             c'est « Factures » qu'il annonce, pas « Devis ». -->
         <div class="kpi">
-          <svg class="kpi-icon" data-c="devis" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-          <div><div class="kpi-value" id="kpi-devis">0</div><div class="kpi-label">Devis</div></div>
+          <svg class="kpi-icon" data-c="factures" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          <div><div class="kpi-value" id="kpi-factures">0</div><div class="kpi-label">Factures</div></div>
         </div>
       </div>
 
@@ -517,15 +519,18 @@ button.dropdown-item{width:100%;background:transparent;border:none;font-family:i
             </div>
             <div class="section">
               <div class="folders">
+                <!-- Les deux sous-titres sont posés par majDossiers() : ils
+                     annonçaient « 0 fichier · auto » en dur, sur des dossiers
+                     qui n'ont jamais porté de fichier. -->
                 <a class="folder" id="folder-devis" href="#">
                   <svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                   <div class="folder-name">Devis</div>
-                  <div class="folder-count">0 fichier · auto</div>
+                  <div class="folder-count" id="folder-devis-count">—</div>
                 </a>
                 <a class="folder" id="folder-factures" href="#">
                   <svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                   <div class="folder-name">Factures</div>
-                  <div class="folder-count">0 fichier · auto</div>
+                  <div class="folder-count" id="folder-factures-count">—</div>
                 </a>
               </div>
             </div>
@@ -556,13 +561,15 @@ button.dropdown-item{width:100%;background:transparent;border:none;font-family:i
             </div>
             <div class="section">
               <div class="quick-actions">
+                <!-- Les deux ouvrent la liste correspondante, filtrée sur le
+                     SIRET du client : elles ne créent rien. -->
                 <a class="quick-action" id="qa-devis" href="#">
                   <svg stroke="var(--blue)" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-                  Créer un devis
+                  Voir les devis
                 </a>
                 <a class="quick-action" id="qa-facture" href="#">
                   <svg stroke="var(--amber)" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-                  Créer une facture
+                  Voir les factures
                 </a>
                 <button class="quick-action" id="qa-pipeline" type="button">
                   <svg stroke="var(--indigo)" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>
@@ -942,10 +949,10 @@ function populate(){
   const created = c.created_at ? fmtDateLong(c.created_at) : '—';
   document.getElementById('info-subtitle').textContent = 'Créé le ' + created;
 
-  // Devis : le seul des cinq compteurs qui ne vienne pas du fil — il compte
+  // Factures : le seul des cinq compteurs qui ne vienne pas du fil — il compte
   // les factures liées au record. Les quatre autres sont posés par le fil
   // résolu, dans majCompteurs().
-  document.getElementById('kpi-devis').textContent = (c.factures_ids || []).length || 0;
+  document.getElementById('kpi-factures').textContent = (c.factures_ids || []).length || 0;
 
   // Prochaine action — le champ libre, saisi ici et enregistré par
   // captureFields. La DATE affichée dessous ne vient plus de
@@ -1117,6 +1124,19 @@ function renderPeople(){
     + '<button class="add-contact" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Ajouter une personne</button>';
 }
 
+// Sous-titres des deux dossiers. Les factures liées au record sont comptées —
+// factures_ids est tenu à jour par la page Factures, c'est un chiffre sûr. Les
+// devis ne sont pas comptés : rien ne les rattache à ce contact autrement que
+// par le SIRET que porte le lien, et annoncer « 0 devis » sur cette base serait
+// affirmer plus que ce qu'on sait. Le sous-titre dit alors ce que le clic fait.
+function majDossiers(siret){
+  const n = ((contact && contact.factures_ids) || []).length;
+  const fact = document.getElementById('folder-factures-count');
+  const dev = document.getElementById('folder-devis-count');
+  if (fact) fact.textContent = n + ' facture' + (n > 1 ? 's' : '');
+  if (dev) dev.textContent = siret ? 'Filtrés sur ce SIRET' : 'Liste complète';
+}
+
 function wireActions(){
   // Devis et Factures se filtrent par SIRET du client, jamais par id de fiche :
   // `?contact=` n'était lu par aucune des deux pages, et les quatre liens
@@ -1130,6 +1150,7 @@ function wireActions(){
   document.getElementById('qa-facture').href      = '/factures' + q;
   document.getElementById('folder-devis').href    = '/devis' + q;
   document.getElementById('folder-factures').href = '/factures' + q;
+  majDossiers(siret);
 
   // Dropdowns header (Appeler / Écrire / Planifier) — listent les personnes.
   //

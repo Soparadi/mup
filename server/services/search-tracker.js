@@ -1,9 +1,19 @@
-// Tracking historique des recherches Leads.
+// Tracking historique de l'usage Leads : les recherches (lead_search), les
+// modifications de contact (lead_contact_edit) et les tentatives
+// d'enrichissement (lead_enrichment).
 // Écriture asynchrone (fire-and-forget côté caller) — ne doit JAMAIS bloquer
-// la réponse au front ni faire échouer une recherche utilisateur.
+// la réponse au front ni faire échouer un geste utilisateur.
 //
-// Schéma de la table lead_search défini ci-dessous (runLeadSearchMigration),
-// joué au boot du serveur de manière idempotente (DEFINE … IF NOT EXISTS).
+// Schéma des trois tables défini ci-dessous (runLeadSearchMigration), joué au
+// boot du serveur de manière idempotente (DEFINE … IF NOT EXISTS). Aucune
+// reprise du passé : un champ ajouté ne l'est que pour les lignes à venir.
+//
+// LE LIEN ENTRE LES TROIS, c'est `search_id` — un identifiant minté par la page
+// au lancement d'une recherche, porté sur chaque appel /api/search (donc écrit
+// sur chaque page de lead_search) et sur le corps de from-lead (donc posé sur
+// la société, ses contacts et sa carte). Les deux tables d'usage le recopient à
+// leur tour. Rien n'est corrélé par horodatage : tant que le lien n'est pas
+// écrit, il vaut chaîne vide et la donnée sort à tiret.
 
 import { getDb } from '../../lib/surreal.js'
 
@@ -24,6 +34,13 @@ function isValidNafCode(code) {
   return /^\d{4}[A-Z]$/.test(c) || /^\d{2}\.\d{2}[A-Z]$/.test(c)
 }
 
+// Identifiant de recherche, tel qu'il arrive de la page (query string ou corps
+// de requête) : un jeton court en minuscules et chiffres, jamais autre chose.
+// Ce qui ne ressemble pas à ça ne rattache rien — chaîne vide, pas d'erreur.
+export function nettoyerSearchId(raw) {
+  return String(raw ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32)
+}
+
 // ── migration idempotente ──
 export async function runLeadSearchMigration() {
   const db = await getDb()
@@ -38,11 +55,43 @@ export async function runLeadSearchMigration() {
     'DEFINE FIELD IF NOT EXISTS department_name ON lead_search TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS city_name ON lead_search TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS results_count ON lead_search TYPE number DEFAULT 0',
+    // fiches_completes_filter : plus jamais écrit — la page n'envoie plus le
+    // filtre, la valeur était false partout. Le champ reste défini (aucune
+    // migration ne défait le passé) et les lignes neuves prennent son DEFAULT.
     'DEFINE FIELD IF NOT EXISTS fiches_completes_filter ON lead_search TYPE bool DEFAULT false',
+    // search_id — même recherche, autant de lignes que de pages parcourues.
+    // Les lignes antérieures à sa mise en service ne l'ont pas : elles sont
+    // lues à l'absent, jamais réécrites.
+    'DEFINE FIELD IF NOT EXISTS search_id ON lead_search TYPE string DEFAULT ""',
     'DEFINE FIELD IF NOT EXISTS searched_at ON lead_search TYPE datetime DEFAULT time::now()',
     'DEFINE INDEX IF NOT EXISTS idx_lead_search_user ON lead_search FIELDS user_id',
     'DEFINE INDEX IF NOT EXISTS idx_lead_search_user_date ON lead_search FIELDS user_id, searched_at',
-    'DEFINE INDEX IF NOT EXISTS idx_lead_search_naf ON lead_search FIELDS naf_code'
+    'DEFINE INDEX IF NOT EXISTS idx_lead_search_naf ON lead_search FIELDS naf_code',
+
+    // ── lead_contact_edit — une ligne par MODIFICATION réelle d'un contact ──
+    // Écriture serveur seule, jamais rendue à l'abonnée : ni route de lecture,
+    // ni route de suppression. Seule la fiche superadmin la compte.
+    'DEFINE TABLE IF NOT EXISTS lead_contact_edit SCHEMAFULL',
+    'DEFINE FIELD IF NOT EXISTS user_id ON lead_contact_edit TYPE record<user>',
+    'DEFINE FIELD IF NOT EXISTS search_id ON lead_contact_edit TYPE string DEFAULT ""',
+    'DEFINE FIELD IF NOT EXISTS contact_table ON lead_contact_edit TYPE string DEFAULT ""',
+    'DEFINE FIELD IF NOT EXISTS contact_id ON lead_contact_edit TYPE string DEFAULT ""',
+    'DEFINE FIELD IF NOT EXISTS changed_fields ON lead_contact_edit TYPE array<string> DEFAULT []',
+    'DEFINE FIELD IF NOT EXISTS edited_at ON lead_contact_edit TYPE datetime DEFAULT time::now()',
+    'DEFINE INDEX IF NOT EXISTS idx_lead_contact_edit_user ON lead_contact_edit FIELDS user_id',
+    'DEFINE INDEX IF NOT EXISTS idx_lead_contact_edit_search ON lead_contact_edit FIELDS user_id, search_id',
+
+    // ── lead_enrichment — une ligne par TENTATIVE d'enrichissement ──
+    // Toutes les sorties de POST /api/enrich/:siret y passent, chacune avec son
+    // issue. Mêmes règles : écriture serveur seule, aucune route exposée.
+    'DEFINE TABLE IF NOT EXISTS lead_enrichment SCHEMAFULL',
+    'DEFINE FIELD IF NOT EXISTS user_id ON lead_enrichment TYPE record<user>',
+    'DEFINE FIELD IF NOT EXISTS search_id ON lead_enrichment TYPE string DEFAULT ""',
+    'DEFINE FIELD IF NOT EXISTS siret ON lead_enrichment TYPE string DEFAULT ""',
+    'DEFINE FIELD IF NOT EXISTS issue ON lead_enrichment TYPE string DEFAULT ""',
+    'DEFINE FIELD IF NOT EXISTS attempted_at ON lead_enrichment TYPE datetime DEFAULT time::now()',
+    'DEFINE INDEX IF NOT EXISTS idx_lead_enrichment_user ON lead_enrichment FIELDS user_id',
+    'DEFINE INDEX IF NOT EXISTS idx_lead_enrichment_search ON lead_enrichment FIELDS user_id, search_id'
   ]
   for (const q of queries) {
     try { await db.query(q) } catch (e) { console.warn('[lead_search-migration]', q.slice(0, 80), '→', e.message) }
@@ -62,7 +111,7 @@ export async function trackLeadSearch({
   departmentName,
   cityName,
   resultsCount,
-  fichesCompletesFilter
+  searchId
 }) {
   // Garde-fou strict : seules les recherches avec un code NAF au format INSEE
   // sont enregistrées. Les recherches en texte libre (?q=…) sont ignorées —
@@ -88,7 +137,7 @@ export async function trackLeadSearch({
         department_name = $departmentName,
         city_name = $cityName,
         results_count = $resultsCount,
-        fiches_completes_filter = $fichesCompletesFilter,
+        search_id = $searchId,
         searched_at = time::now()`,
       {
         uid: cleanUserId,
@@ -100,11 +149,87 @@ export async function trackLeadSearch({
         departmentName: departmentName || '',
         cityName: cityName || '',
         resultsCount: Number(resultsCount) || 0,
-        fichesCompletesFilter: !!fichesCompletesFilter
+        searchId: nettoyerSearchId(searchId)
       }
     )
   } catch (e) {
     console.warn('[search-tracker] échec insertion :', e.message)
+  }
+}
+
+// ── insertion d'une modification de contact ──
+// UNE LIGNE PAR MODIFICATION RÉELLE. C'est l'appelant qui compare l'avant et
+// l'après ; une liste de champs vide n'écrit rien. La fiche société enregistre
+// à chaque frappe (autosave débounçé) : sans cette condition, la table porterait
+// une ligne par frappe et ne compterait plus des modifications.
+// Échec silencieux, comme trackLeadSearch : jamais de propagation.
+export async function trackContactEdit({ userId, searchId, contactTable, contactId, champs }) {
+  if (!userId || !Array.isArray(champs) || champs.length === 0) return
+  try {
+    const db = await getDb()
+    await db.query(
+      `CREATE lead_contact_edit SET
+        user_id = type::record('user', $uid),
+        search_id = $searchId,
+        contact_table = $contactTable,
+        contact_id = $contactId,
+        changed_fields = $champs,
+        edited_at = time::now()`,
+      {
+        uid: normalizeId('user', userId),
+        searchId: nettoyerSearchId(searchId),
+        contactTable: String(contactTable || ''),
+        contactId: String(contactId || ''),
+        champs: champs.map(String)
+      }
+    )
+  } catch (e) {
+    console.warn('[contact-edit-tracker] échec insertion :', e.message)
+  }
+}
+
+// Les quatre issues d'une tentative d'enrichissement, et rien d'autre : une
+// issue inconnue n'écrit pas de ligne plutôt que d'en écrire une illisible.
+const ISSUES_ENRICHISSEMENT = new Set(['livre', 'sans_resultat', 'refus_opposition', 'refus_quota'])
+
+// ── insertion d'une tentative d'enrichissement ──
+// Appelée à CHAQUE sortie de POST /api/enrich/:siret, y compris les refus :
+// c'est la tentative qu'on compte, pas la réussite.
+//
+// RATTACHEMENT À LA RECHERCHE. La route ne connaît qu'un SIRET ; c'est la
+// société matérialisée depuis la Prospection qui porte le search_id. On le
+// relit ici (lecture indexée par siret, idx_societes_siret), donc APRÈS que la
+// route a répondu — l'appel est fire-and-forget. Société inconnue ou antérieure
+// au lien : chaîne vide, la ligne s'écrit quand même sans rattachement.
+export async function trackEnrichAttempt({ userId, siret, issue }) {
+  if (!userId || !ISSUES_ENRICHISSEMENT.has(issue)) return
+  try {
+    const db = await getDb()
+    const uid = normalizeId('user', userId)
+    const cleanSiret = String(siret || '').replace(/\s+/g, '')
+    let searchId = ''
+    if (cleanSiret) {
+      try {
+        const r = await db.query(
+          'SELECT search_id FROM societes WHERE siret = $siret AND userId = $uid LIMIT 1',
+          { siret: cleanSiret, uid }
+        )
+        searchId = nettoyerSearchId(r?.[0]?.[0]?.search_id)
+      } catch (e) {
+        console.warn('[enrich-tracker] rattachement impossible :', e.message)
+      }
+    }
+    await db.query(
+      `CREATE lead_enrichment SET
+        user_id = type::record('user', $uid),
+        search_id = $searchId,
+        siret = $siret,
+        issue = $issue,
+        attempted_at = time::now()`,
+      { uid, searchId, siret: cleanSiret, issue }
+    )
+  } catch (e) {
+    console.warn('[enrich-tracker] échec insertion :', e.message)
   }
 }
 

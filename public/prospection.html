@@ -1750,6 +1750,12 @@ var S = {
   hasMore:      true,
   lastFailPage: 0,
 
+  // Identifiant de LA recherche en cours — minté au lancement (startSearch),
+  // porté par chaque appel /api/search jusqu'à la dernière page, et recopié sur
+  // chaque fiche entrée au buffer. C'est lui qui relie ce que l'abonnée a
+  // demandé à ce qu'elle en a fait ; sans lui, rien n'est rattaché.
+  searchId:     '',
+
   // leads buffer (all loaded, for export)
   buffer:       [],
   // SIREN déjà entrés au buffer (dédup par entreprise, aligné search-count).
@@ -2418,6 +2424,9 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
       + (deptFb ? '&code_departement=' + encodeURIComponent(deptFb) : '')
       + (deptName ? '&department_name=' + encodeURIComponent(deptName) : '')
       + (villeName ? '&city_name=' + encodeURIComponent(villeName) : '')
+      // Identifiant de la recherche en cours : porté par CHAQUE page, c'est ce
+      // qui rassemble les lignes d'historique d'un même déroulement.
+      + (S.searchId ? '&search_id=' + encodeURIComponent(S.searchId) : '')
       + '&per_page=25&page=' + page;
 
     var resp = await fetch(url);
@@ -2495,6 +2504,10 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
         siege_adresse: r.siege && r.siege.adresse || '',
         siege_siret: r.siege && r.siege.siret || '',
         nombre_etablissements: r.nombre_etablissements != null ? r.nombre_etablissements : null,
+        // Recherche d'origine, posée sur la fiche elle-même et non lue au moment
+        // de l'ajout : une fiche reste attribuée à la recherche qui l'a
+        // rapportée, même si l'abonnée en a relancé une autre entre-temps.
+        search_id: S.searchId || '',
         complete: false, source: 'SIRENE'
       });
     });
@@ -3329,6 +3342,11 @@ function startSearch() {
     return;
   }
   if(!btn.classList.contains('active')) return;
+  // Un identifiant pour CETTE recherche, minté ici et nulle part ailleurs : le
+  // lancement est le seul moment où l'on sait qu'une recherche commence. Toutes
+  // les pages qui suivront le porteront, et les fiches qu'elles rapportent avec.
+  // Jeton court en minuscules et chiffres (le serveur ne garde que ça).
+  S.searchId = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   setBtnLoading();
   // Le repli N'A PAS LIEU ICI. Tant que la recherche tourne, la barre reste
   // dépliée et le bouton à l'écran, inactif, spinner + « Chargement… » : c'est
@@ -3476,7 +3494,11 @@ async function addToPipeline(leadId) {
     // serveur sur le record société ET la face société du contact.
     siege_adresse: lead.siege_adresse || '',
     siege_siret: lead.siege_siret || '',
-    nombre_etablissements: lead.nombre_etablissements != null ? lead.nombre_etablissements : null
+    nombre_etablissements: lead.nombre_etablissements != null ? lead.nombre_etablissements : null,
+    // Recherche d'origine — prise SUR LA FICHE (posée au moment où elle est
+    // entrée au buffer), jamais sur l'état courant. Le serveur la recopie sur la
+    // société, ses contacts et sa carte.
+    search_id: lead.search_id || ''
   };
   try {
     var apiResp = await fetch('/api/pipeline/from-lead', {

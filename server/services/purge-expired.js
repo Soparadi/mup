@@ -70,14 +70,18 @@ function cleanCampaignId(raw) {
   return String(raw || '').replace(/^campaigns:/, '').replace(/^⟨+|⟩+$/g, '')
 }
 
-// 4 tables SCHEMAFULL avec FK record<user> — DELETE pattern :
+// 6 tables SCHEMAFULL avec FK record<user> — DELETE pattern :
 //   DELETE <table> WHERE user_id = type::record('user', $uid)
 // Aucune FK croisée entre elles → ordre indifférent ici.
+// lead_contact_edit et lead_enrichment sont des traces d'usage que l'abonnée ne
+// voit jamais : raison de plus pour qu'elles partent avec son compte.
 const TABLES_SCHEMAFULL = [
   'session',
   'verification_token',
   'privacy_export_log',
-  'lead_search'
+  'lead_search',
+  'lead_contact_edit',
+  'lead_enrichment'
 ]
 
 // 16 tables SCHEMALESS avec FK string brute userId — DELETE pattern :

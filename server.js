@@ -27,7 +27,7 @@ import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { requireSuperadmin } from './server/middleware/requireSuperadmin.js'
 import { deriveAppState } from './lib/derive-app-state.js'
 import { runAuthMigration, invalidateSessionCacheByUserId, getSession, getSchemaFailureCount } from './server/auth/surreal-adapter.js'
-import { runLeadSearchMigration, trackLeadSearch, getSearchHistory } from './server/services/search-tracker.js'
+import { runLeadSearchMigration, trackLeadSearch, getSearchHistory, trackContactEdit, trackEnrichAttempt, nettoyerSearchId } from './server/services/search-tracker.js'
 import { getInseeToken } from './server/services/insee.js'
 import {
   runOptoutMigration,
@@ -2040,6 +2040,13 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
     const siret = String(body.siret || '').replace(/\s+/g, '')
     const siren = String(body.siren || '').replace(/\s+/g, '')
     if (!siren) return res.status(400).json({ error: 'siren_requis' })
+    // Recherche d'origine — l'identifiant minté par la page au lancement, porté
+    // par la fiche depuis qu'elle est entrée au buffer. Recopié tel quel sur les
+    // trois enregistrements créés ici : c'est le seul lien exact entre « ce que
+    // l'abonnée a cherché » et « ce qu'elle en a tiré ». Vide (ajout hors
+    // Prospection, recherche par identifiant, page antérieure) : rien n'est
+    // rattaché, et rien n'est deviné par horodatage.
+    const searchId = nettoyerSearchId(body.search_id)
     // 2. Rempart opt-out RGPD — refus dur AVANT toute écriture.
     if (await checkBlocklistOne(siret)) {
       return res.status(403).json({
@@ -2162,6 +2169,7 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
         lat: body.lat != null ? body.lat : null,
         lng: body.lng != null ? body.lng : null,
         source: 'prospection',
+        search_id: searchId,
         created_at: now,
         updated_at: now
       }
@@ -2195,6 +2203,7 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
           societe_id: societeId,
           statut: 'pro',
           source: 'prospection',
+          search_id: searchId,
           entity_origine: 'mup',
           status: 'new',
           created_at: now,
@@ -2232,6 +2241,7 @@ app.post('/api/pipeline/from-lead', async (req, res) => {
         days: 0,
         activity: [],
         source: 'prospection',
+        search_id: searchId,
         societe_id: societeId,
         // La carte reçoit la même date de création que le record société et les
         // records dirigeants créés dans cette transaction. Son omission ici
@@ -2382,6 +2392,39 @@ app.post('/api/contacts', async (req, res) => {
   }
 })
 
+// Deux valeurs sont-elles la MÊME valeur, du point de vue d'une fiche ? Absent,
+// null et chaîne vide sont un seul et même « pas renseigné » — sans quoi le
+// premier enregistrement d'un contact créé depuis la Prospection compterait
+// vingt modifications pour vingt champs restés vides. Le reste se compare en
+// chaîne (3 et "3" ne sont pas deux valeurs) ; objets et tableaux par leur
+// forme sérialisée.
+function memeValeur(a, b) {
+  const vide = (v) => v === undefined || v === null || v === ''
+  if (vide(a) && vide(b)) return true
+  if (vide(a) !== vide(b)) return false
+  if (typeof a === 'object' || typeof b === 'object') {
+    try { return JSON.stringify(a) === JSON.stringify(b) } catch { return false }
+  }
+  return String(a) === String(b)
+}
+
+// Champs qu'un PUT fait réellement bouger sur un contact — comparaison de
+// l'enregistrement AVANT au corps qui va le remplacer (UPDATE … CONTENT :
+// une clé absente du corps disparaît, c'est donc aussi une modification).
+// Les quatre clés ignorées ne disent rien de ce que l'abonnée a saisi :
+// `updated_at` est réécrit par la page à chaque enregistrement, et un contact
+// serait « modifié » à chaque passage sans qu'un seul caractère ait changé.
+const CHAMPS_HORS_MODIF = new Set(['id', 'userId', 'created_at', 'updated_at'])
+function champsModifies(avant, apres) {
+  const cles = new Set([...Object.keys(avant || {}), ...Object.keys(apres || {})])
+  const bouges = []
+  for (const c of cles) {
+    if (CHAMPS_HORS_MODIF.has(c)) continue
+    if (!memeValeur(avant?.[c], apres?.[c])) bouges.push(c)
+  }
+  return bouges
+}
+
 // ── Helpers /api/contacts/:id polymorphes (Sprint 3.5) ──
 // La liste /contacts fusionne côté client /api/contacts (table contacts)
 // et /api/pipeline (table pipeline). Les ids transmis au serveur portent
@@ -2444,6 +2487,21 @@ app.put('/api/contacts/:id', async (req, res) => {
       ? 'UPDATE type::record("pipeline", $id) CONTENT $body'
       : 'UPDATE type::record("contacts", $id) CONTENT $body'
     const result = await db.query(sql, { id, body: cleanBody })
+    // Trace d'usage — UNE LIGNE PAR MODIFICATION RÉELLE, jamais par requête. La
+    // fiche société enregistre en continu (autosave) et la plupart de ses PUT ne
+    // changent rien : la comparaison avant/après tranche, liste vide → aucune
+    // écriture (garde interne à trackContactEdit). Le rattachement à la recherche
+    // d'origine vient de l'enregistrement AVANT (`rec.search_id`, posé par
+    // from-lead) : le corps arrive du client, il ne fait pas autorité là-dessus.
+    // FIRE-AND-FORGET, échec silencieux : jamais un enregistrement perdu pour
+    // une trace manquée.
+    trackContactEdit({
+      userId,
+      searchId: rec.search_id,
+      contactTable: tb,
+      contactId: id,
+      champs: champsModifies(rec, cleanBody)
+    }).catch(() => {})
     // Enrichissement additif du référentiel mutualisé (clé SIRET) depuis la saisie
     // abonné — FIRE-AND-FORGET (sans await) : ne bloque pas la réponse déjà servie,
     // no-op silencieux si le SIRET est absent du référentiel. Additif strict côté DB.
@@ -3256,9 +3314,9 @@ app.get('/api/search', async (req, res) => {
                 regionName: req.query.region_name || '',
                 departmentCode: req.query.code_departement || req.query.departement || '',
                 departmentName: req.query.department_name || '',
-                cityName: req.query.code_commune || req.query.ville || '',
+                cityName: req.query.city_name || req.query.ville || '',
                 resultsCount: total,
-                fichesCompletesFilter: req.query.fiches_completes === 'true' || req.query.fiches_completes === '1'
+                searchId: req.query.search_id
               }).catch(() => {})
             }
             res.json({ results: lecture.results, total_results: total, raw_count: lecture.raw_count, page: pageNum, per_page: cPerPage, from_cache: true })
@@ -3483,6 +3541,14 @@ app.get('/api/search', async (req, res) => {
     // Fire-and-forget : tracking historique recherches. Lancé APRÈS res.json
     // pour ne jamais bloquer la réponse au front. Échec silencieux côté
     // search-tracker, .catch final pour neutraliser toute promesse rejetée.
+    //
+    // cityName VIENT DE city_name, le libellé que la page envoie déjà (« Paris
+    // 1er », « Lyon 3e »). On lisait code_commune : l'historique gardait un code
+    // INSEE là où l'abonnée avait demandé une ville. `ville` reste le repli des
+    // appels qui n'envoient pas le libellé.
+    //
+    // searchId : minté par la page au lancement, identique pour toutes les pages
+    // d'une même recherche. Nettoyé et validé côté search-tracker.
     if (req.userId) {
       trackLeadSearch({
         userId: req.userId,
@@ -3492,9 +3558,9 @@ app.get('/api/search', async (req, res) => {
         regionName: req.query.region_name || '',
         departmentCode: req.query.code_departement || req.query.departement || '',
         departmentName: req.query.department_name || '',
-        cityName: req.query.code_commune || req.query.ville || '',
+        cityName: req.query.city_name || req.query.ville || '',
         resultsCount: typeof data.total_results === 'number' ? data.total_results : (Array.isArray(data.results) ? data.results.length : 0),
-        fichesCompletesFilter: req.query.fiches_completes === 'true' || req.query.fiches_completes === '1'
+        searchId: req.query.search_id
       }).catch(() => {})
     }
   } catch(e) {
@@ -4039,6 +4105,7 @@ app.post('/api/enrich/:siret', async (req, res) => {
     // Rempart opt-out RGPD en tête : bloque d'un coup l'écriture DataForSEO, le décompte consumeLead et la restitution.
     if (await checkBlocklistOne(siret)) {
       console.log(`[optout] enrich refusé ${siret}`)
+      trackEnrichAttempt({ userId, siret, issue: 'refus_opposition' }).catch(() => {})
       return res.status(403).json({
         error: 'opt_out',
         message: "Cette entreprise n'est pas disponible pour prospection."
@@ -4058,6 +4125,7 @@ app.post('/api/enrich/:siret', async (req, res) => {
         // error === 'quota_exceeded' impérativement : trial_expired / grace_expired /
         // grace_active déclencheraient la modale du wrapper (subscription.js:86,
         // trial-expired-modal.js:305), qui n'a rien à voir avec un plafond de leads.
+        trackEnrichAttempt({ userId, siret, issue: 'refus_quota' }).catch(() => {})
         return res.status(402).json({
           error: 'quota_exceeded',
           plan: getEffectivePlan(user),
@@ -4101,6 +4169,7 @@ app.post('/api/enrich/:siret', async (req, res) => {
     // manuelle sous un mois annoncée dans l'accusé de réception.
     if (merged.societe_email && await checkBlocklistEmailOne(merged.societe_email)) {
       console.log(`[optout] enrich refusé ${siret}`)
+      trackEnrichAttempt({ userId, siret, issue: 'refus_opposition' }).catch(() => {})
       return res.status(403).json({
         error: 'opt_out',
         message: "Cette entreprise n'est pas disponible pour prospection."
@@ -4179,6 +4248,7 @@ app.post('/api/enrich/:siret', async (req, res) => {
     if (merged.societe_email && merged.societe_email !== emailAvantMl &&
         await checkBlocklistEmailOne(merged.societe_email)) {
       console.log(`[optout] enrich refusé ${siret}`)
+      trackEnrichAttempt({ userId, siret, issue: 'refus_opposition' }).catch(() => {})
       return res.status(403).json({
         error: 'opt_out',
         message: "Cette entreprise n'est pas disponible pour prospection."
@@ -4253,6 +4323,13 @@ app.post('/api/enrich/:siret', async (req, res) => {
       if (added) await consumeLead(db, userId)
     }
     res.json({ found, ...merged })
+    // Trace d'usage — UNE LIGNE PAR TENTATIVE, posée à CHACUNE des sorties de la
+    // route, celle-ci comme les trois refus plus haut. `found` sépare les deux
+    // issues de la sortie nominale : quelque chose a été livré, ou la recherche
+    // n'a rien rendu. Après res.json, fire-and-forget : le rattachement à la
+    // recherche d'origine (relecture de la société par SIRET) se paie hors de
+    // l'attente de l'abonnée.
+    trackEnrichAttempt({ userId, siret, issue: found ? 'livre' : 'sans_resultat' }).catch(() => {})
   } catch (err) {
     console.error('[enrich]', err.message)
     if (!res.headersSent) res.status(500).json({ error: 'Enrichissement indisponible' })
@@ -6971,10 +7048,11 @@ app.use((req, res) => {
   } catch (e) {
     console.error('[boot] auth migration failed:', e.message)
   }
-  // Tracking historique recherches Leads — table lead_search + 3 index.
+  // Tracking historique usage Leads — lead_search (+ 3 index), lead_contact_edit
+  // et lead_enrichment (+ 2 index chacune). Idempotent, aucune reprise du passé.
   try {
     await runLeadSearchMigration()
-    console.log('[boot] lead_search table ready (+ 3 indexes)')
+    console.log('[boot] lead_search + lead_contact_edit + lead_enrichment ready (+ 7 indexes)')
   } catch (e) {
     console.error('[boot] lead_search migration failed:', e.message)
   }

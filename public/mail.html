@@ -174,8 +174,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .oauth-btn{display:flex;align-items:center;justify-content:center;gap:10px;padding:11px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;background:#fff;color:#1F1F1F;border:1.5px solid var(--border2);width:100%;}
 .oauth-btn:hover{border-color:#1F1F1F;background:var(--surface);}
 .oauth-btn svg{flex-shrink:0;}
-/* Fournisseur non configuré côté serveur : le bouton reste lisible mais ne
-   part plus (cf. renderOauthAvailability). */
+/* Fournisseur non configuré côté serveur, ou boîte déjà connectée : le bouton
+   reste lisible mais ne part plus (cf. renderConnexionGate). */
 .oauth-btn:disabled{opacity:.45;cursor:not-allowed;}
 .oauth-btn:disabled:hover{border-color:var(--border2);background:#fff;}
 
@@ -207,6 +207,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .row-label{font-size:13px;font-weight:600;color:var(--text);}
 .row-value{font-size:12.5px;color:var(--muted);font-family:var(--mono);}
 .link-secondary{display:inline-block;font-size:12px;color:var(--muted);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;font-family:var(--font);}
+.link-secondary:disabled{opacity:.45;cursor:not-allowed;text-decoration:none;}
 .link-secondary:hover{color:var(--text);}
 
 /* Modale (IMAP / Compose / Détail campagne) */
@@ -865,11 +866,15 @@ async function loadAccountsAndInbox(){
     if(boites.length > 0){
       STATE.primaryAccount = boites[0];
       renderHeaderAccount();
+      // La place est prise : les voies de connexion se ferment avant tout
+      // affichage, sans attendre que l'abonné ouvre les Paramètres.
+      renderConnexionGate();
       showLoading();
       await loadInbox();
     } else {
       STATE.primaryAccount = null;
       renderHeaderAccount();
+      renderConnexionGate();
       showEmptyNoAccount();
     }
   } catch(e){ showEmptyNoAccount(); }
@@ -914,12 +919,16 @@ function showInboxError(message, code){
   var imap = STATE.primaryAccount && STATE.primaryAccount.provider === 'imap';
   document.getElementById('empty-state-error-sub').textContent =
     (reconnexion && imap)
-      ? 'Votre boîte a refusé les identifiants enregistrés. Reconnectez-la avec Google ou Microsoft.'
+      ? 'Votre boîte a refusé les identifiants enregistrés. Déconnectez-la dans Paramètres, puis connectez une boîte Google ou Microsoft.'
       : (message || 'La connexion à votre boîte a échoué. Réessayez dans un instant.');
   // Un écran d'erreur qui ne propose rien est un cul-de-sac : quand la boîte
-  // demande à être rebranchée, les deux voies de connexion sont sous les yeux.
+  // demande à être rebranchée, la voie de son fournisseur est sous les yeux.
+  // Sauf pour une boîte IMAP : aucun des deux boutons ne la rebranche, et
+  // connecter l'un ou l'autre serait refusé tant qu'elle occupe la place. Le
+  // texte ci-dessus porte alors seul la marche à suivre.
   var actions = document.getElementById('empty-state-error-actions');
-  if(actions) actions.style.display = reconnexion ? 'flex' : 'none';
+  if(actions) actions.style.display = (reconnexion && !imap) ? 'flex' : 'none';
+  renderConnexionGate();
   setInboxState('error');
 }
 
@@ -1470,6 +1479,20 @@ async function sendCompose(){
 // ────────────────────────────────────────────────
 (function handleOAuthReturn(){
   var params = new URLSearchParams(window.location.search);
+  // Place prise : refus de MovUP, pas du fournisseur. Canal à part pour cette
+  // seule raison — annoncé sous « Erreur Google », il enverrait l'abonné
+  // chercher une panne sur un compte qui n'a rien refusé. Le serveur ne
+  // transmet que l'adresse en place ; la phrase est écrite ici, sans nommer
+  // aucun fournisseur, et vaut pour les deux callbacks.
+  if(params.has('boite_occupee')){
+    var occupee = params.get('boite_occupee') || '';
+    setTimeout(function(){
+      toast(occupee
+        ? 'Votre boîte ' + occupee + ' est déjà connectée. Déconnectez-la dans Paramètres avant d\'en connecter une autre.'
+        : 'Une boîte est déjà connectée. Déconnectez-la dans Paramètres avant d\'en connecter une autre.', 'error');
+    }, 200);
+    window.history.replaceState(null, '', window.location.pathname);
+  }
   if(params.has('google_connected')){
     var email = params.get('email') || '';
     setTimeout(function(){ toast('Compte Gmail connecté : ' + email, 'ok'); }, 200);
@@ -1531,6 +1554,12 @@ function startWelcomePoll(){
 // message brut. On interroge donc le serveur avant de partir, et on le dit
 // dans la page. Vaut pour Microsoft, non configuré aujourd'hui, comme pour
 // Google, qui pourrait ne plus l'être demain.
+// À quoi s'ajoute une seconde fermeture, d'une autre nature : un abonné ne
+// connecte qu'UNE boîte, celle depuis laquelle il prospecte. Tant qu'elle est
+// là, le serveur refuse la connexion d'une autre — la page doit donc le dire
+// avant le départ, et ne pas laisser actif un bouton dont le geste sera refusé
+// au bout. Les deux motifs se cumulent et sont décidés au même endroit :
+// renderConnexionGate().
 var OAUTH_LABELS = { google: 'Google', microsoft: 'Microsoft' };
 
 // Réponse mémorisée le temps de la page. En cas d'échec de la requête on
@@ -1547,39 +1576,75 @@ async function fetchOauthProviders(){
   } catch(e){ return null; }
 }
 
-function renderOauthAvailability(p){
-  if(!p) return;
+// Un seul bouton échappe à la fermeture par boîte occupée, et c'est tout
+// l'objet de l'écran « Reconnexion nécessaire » : rebrancher LA boîte en place
+// chez SON fournisseur. Le serveur l'autorise pour la même raison — même
+// adresse, même fournisseur n'est pas une autre boîte, c'est un jeton réparé.
+function renderConnexionGate(){
+  var p = STATE.oauthProviders;      // null : disponibilité inconnue — on ne ferme rien de ce chef
+  var boite = STATE.primaryAccount;  // la boîte qui occupe la place, ou null
   ['google','microsoft'].forEach(function(k){
     var btns = document.querySelectorAll('[data-oauth="' + k + '"]');
     Array.prototype.forEach.call(btns, function(btn){
-      btn.disabled = !p[k];
-      if(p[k]) btn.removeAttribute('title');
-      else btn.setAttribute('title', 'Connexion ' + OAUTH_LABELS[k] + ' momentanément indisponible');
+      var reconnexion = Boolean(btn.closest('#empty-state-error-actions'));
+      var indisponible = Boolean(p) && !p[k];
+      var occupee = Boolean(boite) && !(reconnexion && boite.provider === k);
+      btn.disabled = indisponible || occupee;
+      if(indisponible) btn.setAttribute('title', 'Connexion ' + OAUTH_LABELS[k] + ' momentanément indisponible');
+      else if(occupee) btn.setAttribute('title', 'Déconnectez d\'abord ' + boite.email + ' dans Paramètres');
+      else btn.removeAttribute('title');
     });
   });
-  // La mention ne nomme que des voies réellement ouvertes. Pas l'IMAP : ses
-  // deux entrées et sa fenêtre sont éteintes par le bloc MASQUAGE de la
-  // feuille de style. À rouvrir avec lui, pas avant.
-  var absents = ['google','microsoft'].filter(function(k){ return !p[k]; });
-  var msg = '';
-  if(absents.length === 2){
-    msg = 'Les connexions Google et Microsoft sont momentanément indisponibles. Aucune boîte ne peut être connectée pour l\'instant : réessayez plus tard.';
-  } else if(absents.length === 1){
-    msg = 'La connexion ' + OAUTH_LABELS[absents[0]] + ' est momentanément indisponible. Vous pouvez connecter votre boîte avec ' + OAUTH_LABELS[absents[0] === 'google' ? 'microsoft' : 'google'] + ', ou réessayer plus tard.';
-  }
+  // La connexion manuelle relève de la même règle. Ses deux entrées sont
+  // éteintes par le bloc MASQUAGE de la feuille de style ; les fermer ici garde
+  // la règle vraie le jour où il sera retiré.
+  var manuelles = document.querySelectorAll('.empty-state-actions .link-secondary, #tab-settings .link-secondary');
+  Array.prototype.forEach.call(manuelles, function(btn){ btn.disabled = Boolean(boite); });
   Array.prototype.forEach.call(document.querySelectorAll('.oauth-notice'), function(el){
+    var msg = motifConnexionFermee(el, p, boite);
     el.textContent = msg;
     el.style.display = msg ? '' : 'none';
   });
 }
 
-async function refreshOauthAvailability(){ renderOauthAvailability(await fetchOauthProviders()); }
+// Ce qui bloque, et ce qu'il faut faire — dans cet ordre, et jamais deux
+// motifs à la fois : la boîte en place est le premier obstacle à lever.
+// La mention ne nomme que des voies réellement ouvertes. Pas l'IMAP : ses deux
+// entrées et sa fenêtre sont éteintes par le bloc MASQUAGE. À rouvrir avec lui,
+// pas avant.
+function motifConnexionFermee(el, p, boite){
+  if(boite){
+    var reconnexion = Boolean(el.closest('#empty-state-error-actions'));
+    if(reconnexion && (boite.provider === 'google' || boite.provider === 'microsoft')){
+      return 'Seule ' + boite.email + ' peut être rebranchée ici. Pour en connecter une autre, déconnectez celle-ci dans Paramètres.';
+    }
+    return 'Votre boîte ' + boite.email + ' est déjà connectée. MovUP n\'en utilise qu\'une : déconnectez-la ci-dessus avant d\'en connecter une autre.';
+  }
+  if(!p) return '';
+  var absents = ['google','microsoft'].filter(function(k){ return !p[k]; });
+  if(absents.length === 2){
+    return 'Les connexions Google et Microsoft sont momentanément indisponibles. Aucune boîte ne peut être connectée pour l\'instant : réessayez plus tard.';
+  }
+  if(absents.length === 1){
+    return 'La connexion ' + OAUTH_LABELS[absents[0]] + ' est momentanément indisponible. Vous pouvez connecter votre boîte avec ' + OAUTH_LABELS[absents[0] === 'google' ? 'microsoft' : 'google'] + ', ou réessayer plus tard.';
+  }
+  return '';
+}
 
-// Ne quitte l'application que si le serveur confirme le fournisseur configuré.
+async function refreshOauthAvailability(){ await fetchOauthProviders(); renderConnexionGate(); }
+
+// Ne quitte l'application que si le geste a une chance d'aboutir : fournisseur
+// configuré, et place libre — ou reconnexion de la boîte en place.
 async function startOauth(provider){
+  var boite = STATE.primaryAccount;
+  if(boite && boite.provider !== provider){
+    renderConnexionGate();
+    toast('Déconnectez d\'abord ' + boite.email + ' dans Paramètres', 'error');
+    return;
+  }
   var p = await fetchOauthProviders();
   if(p && !p[provider]){
-    renderOauthAvailability(p);
+    renderConnexionGate();
     toast('Connexion ' + OAUTH_LABELS[provider] + ' momentanément indisponible', 'error');
     return;
   }
@@ -1597,7 +1662,11 @@ async function loadAccounts(){
     // vérifié se gère dans Campagnes, pas ici.
     var accounts = (await r.json() || []).filter(function(a){ return !a.sendOnly; });
     var list = document.getElementById('accounts-list');
-    if(!accounts || accounts.length === 0){ list.innerHTML = '<div style="font-size:12.5px;color:var(--muted);font-style:italic;">Aucun compte connecté pour l\'instant.</div>'; return; }
+    if(!accounts || accounts.length === 0){
+      list.innerHTML = '<div style="font-size:12.5px;color:var(--muted);font-style:italic;">Aucun compte connecté pour l\'instant.</div>';
+      renderConnexionGate();
+      return;
+    }
     list.innerHTML = accounts.map(function(a){
       var providerLabel = a.provider === 'google' ? 'Google' : a.provider === 'microsoft' ? 'Microsoft' : 'IMAP';
       var providerColor = a.provider === 'google' ? '#4285F4' : a.provider === 'microsoft' ? '#00A4EF' : 'var(--text)';
@@ -1608,6 +1677,8 @@ async function loadAccounts(){
         + '<button class="btn btn-outline btn-sm" onclick="disconnectAccount(' + JSON.stringify(a.provider).replace(/"/g, '&quot;') + ', ' + JSON.stringify(a.email).replace(/"/g, '&quot;') + ')">Déconnecter</button>'
         + '</div>';
     }).join('');
+    // La liste qu'on vient d'écrire est celle que la mention désigne : « ci-dessus ».
+    renderConnexionGate();
   } catch(e){}
 }
 

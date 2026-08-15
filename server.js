@@ -5893,6 +5893,44 @@ app.post('/api/v2/mail/imap/test', async (req, res) => {
   res.json({ imap_ok, smtp_ok, errors })
 })
 
+// ── Une boîte, et une seule ──
+// L'abonné prospecte depuis une boîte : tant qu'elle est connectée, en brancher
+// une autre est refusé. Il n'y a pas de remplacement — c'est lui qui déconnecte
+// la sienne, par le geste des Paramètres, s'il veut en brancher une autre.
+// Rebrancher LA MÊME adresse chez LE MÊME fournisseur n'est pas une autre
+// boîte : c'est ce qui répare un jeton expiré, et cela doit rester possible.
+// Une boîte IMAP héritée occupe la place au même titre qu'une boîte OAuth.
+// Renvoie la boîte qui fait obstacle, ou null quand la voie est libre. Un
+// abonné qui en aurait plusieurs — connectées avant cette règle — les garde et
+// peut rebrancher chacune : la reconnaissance de la boîte passe AVANT le refus,
+// sans quoi aucune des siennes ne serait plus réparable.
+async function boiteFaisantObstacle(db, ownerId, { provider, email }) {
+  const cible = String(email || '').toLowerCase()
+  const memeBoite = b => b.provider === provider && String(b.email || '').toLowerCase() === cible
+  const creds = await listMailboxCredentials(db, ownerId)
+  const boites = creds.map(c => ({ provider: c.provider, email: c.email }))
+  const imap = await getImapAccount(db, ownerId)
+  if (imap) boites.push({ provider: 'imap', email: imap.email })
+  if (boites.some(memeBoite)) return null
+  return boites[0] || null
+}
+
+// Le motif dit ce qui occupe la place et le geste qui la libère. Il part tel
+// quel à l'abonné — aucun détail technique dedans.
+function motifBoiteOccupee(obstacle) {
+  return 'Une autre boîte est déjà connectée (' + obstacle.email + '). '
+    + 'Déconnectez-la dans Mail › Paramètres avant d\'en connecter une autre.'
+}
+
+// Retour des callbacks quand la place est prise. Canal à part, et c'est tout
+// son objet : passer par <fournisseur>_error ferait lire « Erreur Google » un
+// refus qui vient de MovUP, et enverrait l'abonné chercher une panne chez un
+// fournisseur qui n'a rien refusé. Ne voyage que l'adresse qui occupe la
+// place ; la phrase est écrite par la page, qui n'attribue rien à personne.
+function retourBoiteOccupee(obstacle) {
+  return '/mail.html?boite_occupee=' + encodeURIComponent(obstacle.email || '')
+}
+
 // Sauvegarde la config IMAP du user (chiffrement password). Body identique à imap/test.
 // Stockage dans mail_settings:userId (réutilise la table existante, schéma SCHEMALESS).
 app.post('/api/v2/mail/imap/connect', async (req, res) => {
@@ -5905,6 +5943,11 @@ app.post('/api/v2/mail/imap/connect', async (req, res) => {
   }
   try {
     const db = await getDb()
+    // Rien n'est écrit tant qu'une autre boîte occupe la place. Le contrôle
+    // vaut aussi ici : mail_settings est classé par abonné, une adresse
+    // différente écraserait silencieusement celle qui s'y trouve.
+    const obstacle = await boiteFaisantObstacle(db, userId, { provider: 'imap', email })
+    if (obstacle) return res.status(409).json({ code: 'boite_deja_connectee', error: motifBoiteOccupee(obstacle) })
     const payload = {
       userId,
       email,
@@ -6091,7 +6134,7 @@ app.get('/auth/google', async (req, res) => {
 
 app.get('/auth/google/callback', async (req, res) => {
   try {
-    const { isGoogleReady, verifyState, exchangeCode, fetchUserInfo } = await import('./lib/oauth-google.js')
+    const { isGoogleReady, verifyState, exchangeCode, fetchUserInfo, revokeRefreshToken } = await import('./lib/oauth-google.js')
     const { encryptMailToken, isMailCryptoReady } = await import('./lib/crypto.js')
     if (!isGoogleReady()) return res.status(503).send('OAuth Google non configuré')
     if (!isMailCryptoReady()) return res.status(503).send('MAIL_ENCRYPTION_KEY/SECRET_KEY manquante')
@@ -6111,6 +6154,16 @@ app.get('/auth/google/callback', async (req, res) => {
     const email = userInfo.email
 
     const db = await getDb()
+    // Une boîte, et une seule. Le refus est ici parce que la page peut être
+    // contournée, pas le callback : l'abonné repart sans qu'aucune credential
+    // n'ait été créée, ramené dans l'application — jamais sur du JSON brut.
+    // Le jeton qu'on vient d'obtenir n'étant pas conservé, on le révoque : rien
+    // ne doit rester ouvert côté Google au nom d'une connexion refusée.
+    const obstacle = await boiteFaisantObstacle(db, claims.ownerId, { provider: 'google', email })
+    if (obstacle) {
+      await revokeRefreshToken(tokens.refresh_token)
+      return res.redirect(302, retourBoiteOccupee(obstacle))
+    }
     const recordId = mailboxCredentialId(claims.ownerId, 'google', email)
     const now = new Date().toISOString()
     const payload = {
@@ -6233,6 +6286,15 @@ app.get('/auth/microsoft/callback', async (req, res) => {
     const email = userInfo.email
 
     const db = await getDb()
+    // Même refus que côté Google, et pour la même raison : le callback est le
+    // seul endroit qu'on ne contourne pas. Pas de révocation ici — Microsoft
+    // n'expose pas d'endpoint programmatique v2 (cf. /auth/microsoft/disconnect,
+    // dont la révocation est un no-op) ; le jeton non conservé expire de
+    // lui-même.
+    const obstacle = await boiteFaisantObstacle(db, claims.ownerId, { provider: 'microsoft', email })
+    if (obstacle) {
+      return res.redirect(302, retourBoiteOccupee(obstacle))
+    }
     const recordId = mailboxCredentialId(claims.ownerId, 'microsoft', email)
     const now = new Date().toISOString()
     const payload = {

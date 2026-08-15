@@ -6415,7 +6415,7 @@ function sendMailReadError(res, err, tag) {
 // que liste vide.
 function unsupportedProviderError(provider) {
   const err = new Error(provider === 'microsoft'
-    ? 'La lecture des messages n\'est pas encore disponible pour les boîtes connectées avec Microsoft. Vos envois, eux, fonctionnent.'
+    ? 'La lecture des messages n\'est pas encore disponible pour les boîtes connectées avec Microsoft. Vous pouvez en revanche écrire depuis cette adresse.'
     : 'La lecture des messages n\'est pas disponible pour ce mode de connexion.')
   err.code = 'unsupported_provider'
   return err

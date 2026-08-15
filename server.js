@@ -81,8 +81,10 @@ import {
   listMailboxCredentials,
   listGoogleMessages,
   listImapMessages,
+  listMicrosoftMessages,
   getImapMessageBody,
   getGoogleMessageBody,
+  getMicrosoftMessageBody,
   markImapMessageSeen,
   markGoogleMessageRead,
   getImapAccount,
@@ -6410,13 +6412,12 @@ function sendMailReadError(res, err, tag) {
   })
 }
 
-// Le fournisseur Microsoft passé par OAuth n'a pas d'identifiants IMAP en base :
-// la lecture par Graph fera l'objet d'une passe dédiée. Message explicite plutôt
-// que liste vide.
-function unsupportedProviderError(provider) {
-  const err = new Error(provider === 'microsoft'
-    ? 'La lecture des messages n\'est pas encore disponible pour les boîtes connectées avec Microsoft. Vous pouvez en revanche écrire depuis cette adresse.'
-    : 'La lecture des messages n\'est pas disponible pour ce mode de connexion.')
+// Les trois fournisseurs de boîte — google, imap, microsoft — se lisent. Ce
+// qui tombe ici n'est pas une boîte : un domaine vérifié dont on part sans
+// jamais y lire (provider 'resend', sendOnly), ou un mode de connexion qu'on ne
+// connaît pas. Message explicite plutôt que liste vide.
+function unsupportedProviderError() {
+  const err = new Error('La lecture des messages n\'est pas disponible pour ce mode de connexion.')
   err.code = 'unsupported_provider'
   return err
 }
@@ -6488,7 +6489,16 @@ app.get('/api/v2/mail/inbox-preview', async (req, res) => {
       })
       return res.json(fusionEnvoyes(messages, parResend, plafond))
     }
-    throw unsupportedProviderError(account.provider)
+    if (account.provider === 'microsoft') {
+      // Pas de paramètre query ici : la voie Graph ne pose aucune fenêtre de
+      // date, elle lit le dossier tel quel.
+      const messages = await listMicrosoftMessages(db, ownerId, account.email, {
+        folder: wantedFolder,
+        limit: limit ? Number(limit) : 50
+      })
+      return res.json(fusionEnvoyes(messages, parResend, plafond))
+    }
+    throw unsupportedProviderError()
   } catch (err) {
     sendMailReadError(res, err, '[v2/mail:inbox-preview]')
   }
@@ -6549,7 +6559,10 @@ app.get('/api/v2/mail/message', async (req, res) => {
     if (account.provider === 'imap') {
       return res.json(await getImapMessageBody(db, ownerId, { folder: wantedFolder, uid: String(id) }))
     }
-    throw unsupportedProviderError(account.provider)
+    if (account.provider === 'microsoft') {
+      return res.json(await getMicrosoftMessageBody(db, ownerId, account.email, String(id), { folder: wantedFolder }))
+    }
+    throw unsupportedProviderError()
   } catch (err) {
     sendMailReadError(res, err, '[v2/mail:message]')
   }

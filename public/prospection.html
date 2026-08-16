@@ -375,8 +375,9 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 .kpi-chip:hover{background:var(--surface2)}
 /* « Ajouter au pipeline » reprend la STRUCTURE d'une cellule d'indicateur — le
    nombre en .kpi-num, le libellé en .kpi-lbl dessous — mais rendue en bouton
-   plein : plaque #B84C00, coins et épaisseur de contour repris de .ss-edit
-   (10px / 1px). Pas d'icône. Deux valeurs en tout : #B84C00 et var(--surface).
+   plein : plaque var(--red) — le rouge de la colonne Prospects du Kanban —,
+   coins et épaisseur de contour repris de .ss-edit (10px / 1px). Pas d'icône.
+   Deux valeurs en tout : var(--red) et var(--surface).
    Au repos le contour est de la couleur du fond, donc invisible ; il ne devient
    visible qu'à l'état désactivé, où la plaque se vide. La géométrie ne bouge
    donc pas d'un état à l'autre.
@@ -386,7 +387,7 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 .kpi-cta{
   display:inline-flex;flex-direction:column;align-items:flex-start;
   padding:8px 14px;border-radius:10px;
-  border:1px solid #B84C00;background:#B84C00;
+  border:1px solid var(--red);background:var(--red);
   font-family:var(--font);white-space:nowrap;cursor:pointer;flex-shrink:0;
 }
 /* Chiffre et libellé EN RÉSERVE : ils sont peints de la couleur du fond de la
@@ -394,10 +395,10 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 .kpi-cta .kpi-num,
 .kpi-cta .kpi-lbl{color:var(--surface)}
 /* Après clic — le même bouton en creux : plaque vidée, contour et texte en
-   #B84C00. Le chiffre reste affiché, inchangé. */
+   var(--red). Le chiffre reste affiché, inchangé. */
 .kpi-cta:disabled{background:none;cursor:default}
 .kpi-cta:disabled .kpi-num,
-.kpi-cta:disabled .kpi-lbl{color:#B84C00}
+.kpi-cta:disabled .kpi-lbl{color:var(--red)}
 /* Le bouton porte tout : la cellule qui l'entoure ne se teinte pas au survol. */
 .kpi-chip-cta:hover{background:none}
 .kpi-num{font-size:22px;font-weight:900;line-height:1;letter-spacing:-.5px}
@@ -855,7 +856,7 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
              tant que la recherche n'a pas convergé : c'est maybeFinishSearch, et
              lui seul, qui la fait paraître. Masquée de nouveau au lancement de
              toute recherche. Le couple chiffre + libellé des cellules voisines,
-             rendu en bouton plein #B84C00 ; sans icône. -->
+             rendu en bouton plein var(--red) ; sans icône. -->
         <div class="kpi-chip kpi-chip-cta" id="cell-add-all" style="display:none">
           <button class="kpi-cta" type="button" id="btn-add-all"
                   onclick="addAllToPipeline()">

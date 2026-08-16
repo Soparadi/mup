@@ -373,23 +373,32 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 .kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-left:1px solid var(--border);transition:background .12s;flex-shrink:0;scroll-snap-align:start}
 .kpi-chip:first-child{border-left:none}
 .kpi-chip:hover{background:var(--surface2)}
-/* « Ajouter au pipeline » n'est plus un indicateur : la dernière cellule de la
-   bande porte un TEXTE SEUL, dans l'orangé déjà employé par « Prospects
-   trouvés ». Ni contour, ni pastille, ni fond : le fond de la bande passe au
-   travers, en repos comme au survol, où seul un soulignement du texte répond.
-   La géométrie, elle, reste celle d'un bouton — 36px de hauteur et 16px de
-   retrait latéral tiennent dans la bande sans l'étirer ; le centrage vertical
-   vient du align-items:center de .kpi-chip qui l'entoure. */
+/* « Ajouter au pipeline » reprend la STRUCTURE d'une cellule d'indicateur — le
+   nombre en .kpi-num, le libellé en .kpi-lbl dessous — mais rendue en bouton
+   plein : plaque #B84C00, coins et épaisseur de contour repris de .ss-edit
+   (10px / 1px). Pas d'icône. Deux valeurs en tout : #B84C00 et var(--surface).
+   Au repos le contour est de la couleur du fond, donc invisible ; il ne devient
+   visible qu'à l'état désactivé, où la plaque se vide. La géométrie ne bouge
+   donc pas d'un état à l'autre.
+   Le retrait vertical de la cellule tombe à 2px pour compenser les 8px du
+   bouton : hauteur de bande inchangée par rapport aux cellules voisines. */
+.kpi-chip-cta{padding:2px 18px}
 .kpi-cta{
-  display:inline-flex;align-items:center;
-  height:36px;padding:0 16px;
-  border:none;background:none;color:#B84C00;
-  font-family:var(--font);font-size:12.5px;font-weight:700;
-  white-space:nowrap;cursor:pointer;flex-shrink:0;
+  display:inline-flex;flex-direction:column;align-items:flex-start;
+  padding:8px 14px;border-radius:10px;
+  border:1px solid #B84C00;background:#B84C00;
+  font-family:var(--font);white-space:nowrap;cursor:pointer;flex-shrink:0;
 }
-.kpi-cta:hover{text-decoration:underline}
-.kpi-cta:disabled{cursor:default;text-decoration:none}
-/* Le survol appartient au texte : la cellule qui le porte ne se teinte pas. */
+/* Chiffre et libellé EN RÉSERVE : ils sont peints de la couleur du fond de la
+   bande, et se découpent donc dans le rouge. */
+.kpi-cta .kpi-num,
+.kpi-cta .kpi-lbl{color:var(--surface)}
+/* Après clic — le même bouton en creux : plaque vidée, contour et texte en
+   #B84C00. Le chiffre reste affiché, inchangé. */
+.kpi-cta:disabled{background:none;cursor:default}
+.kpi-cta:disabled .kpi-num,
+.kpi-cta:disabled .kpi-lbl{color:#B84C00}
+/* Le bouton porte tout : la cellule qui l'entoure ne se teinte pas au survol. */
 .kpi-chip-cta:hover{background:none}
 .kpi-num{font-size:22px;font-weight:900;line-height:1;letter-spacing:-.5px}
 .kpi-lbl{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
@@ -845,11 +854,14 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
         <!-- Ajout en bloc, en dernière cellule de la bande. ABSENT (pas grisé)
              tant que la recherche n'a pas convergé : c'est maybeFinishSearch, et
              lui seul, qui la fait paraître. Masquée de nouveau au lancement de
-             toute recherche. La cellule n'est pas un indicateur : ni icône, ni
-             couple .kpi-num/.kpi-lbl — un texte cliquable, sur une ligne. -->
+             toute recherche. Le couple chiffre + libellé des cellules voisines,
+             rendu en bouton plein #B84C00 ; sans icône. -->
         <div class="kpi-chip kpi-chip-cta" id="cell-add-all" style="display:none">
           <button class="kpi-cta" type="button" id="btn-add-all"
-                  onclick="addAllToPipeline()">Ajouter au pipeline</button>
+                  onclick="addAllToPipeline()">
+            <span class="kpi-num" id="btn-add-all-num">0</span>
+            <span class="kpi-lbl" id="btn-add-all-lbl">Ajouter au pipeline</span>
+          </button>
         </div>
       </div>
       <div class="res-panel" id="res-panel">
@@ -3672,11 +3684,16 @@ function afficherAjoutTotal() {
   var b = document.getElementById('btn-add-all');
   if (!cell || !b) return;
   if (!S.finished || !S.buffer.length) { cell.style.display = 'none'; return; }
-  // Le libellé est fixe : aucun nombre à composer. La seule écriture remet le
-  // bouton dans son état nominal — l'ajout précédent a pu le laisser sur
-  // « Ajouté au pipeline » ou « Ajout en cours… », et la cellule reparaît telle
-  // quelle à la recherche suivante comme au rattrapage d'erreur.
-  b.textContent = 'Ajouter au pipeline';
+  // Le nombre annoncé est celui des fiches QUE LA PAGE DÉTIENT (S.buffer),
+  // jamais le marché annoncé (S.market), qui n'est qu'une estimation upstream.
+  // Il occupe le .kpi-num du bouton, le libellé — fixe — son .kpi-lbl. Cette
+  // écriture remet aussi le bouton dans son état nominal (plein, cliquable) :
+  // l'ajout précédent a pu le laisser en creux et désactivé, et la cellule
+  // reparaît telle quelle à la recherche suivante comme au rattrapage d'erreur.
+  var n = document.getElementById('btn-add-all-num');
+  var l = document.getElementById('btn-add-all-lbl');
+  if (n) n.textContent = S.buffer.length.toLocaleString('fr-FR');
+  if (l) l.textContent = 'Ajouter au pipeline';
   b.disabled = false;
   cell.style.display = '';
 }
@@ -3699,8 +3716,12 @@ async function addAllToPipeline() {
     + "celles qui se sont opposées à la prospection sont écartées."
   )) return;
 
+  // Le bouton passe en creux (désactivé) et le reste : seul le libellé bouge,
+  // le chiffre demeure affiché tel quel.
   var b = document.getElementById('btn-add-all');
-  if (b) { b.disabled = true; b.textContent = 'Ajout en cours…'; }
+  var bLbl = document.getElementById('btn-add-all-lbl');
+  if (b) b.disabled = true;
+  if (bLbl) bLbl.textContent = 'Ajout en cours…';
   showToast('Ajout de ' + n.toLocaleString('fr-FR') + mot + ' en cours…');
   try {
     // UN SEUL appel HTTP pour tout le lot : le rate-limit global de 60/min
@@ -3751,7 +3772,10 @@ async function addAllToPipeline() {
     }
     showToast(d.total.toLocaleString('fr-FR') + ' fiches : ' + parts.join(', '), 6000);
 
-    if (b) { b.disabled = true; b.textContent = 'Ajouté au pipeline'; }
+    // L'ajout fait, le libellé revient à « Ajouter au pipeline » ; le bouton,
+    // lui, reste en creux et désactivé — c'est le creux qui dit que c'est fait.
+    if (b) b.disabled = true;
+    if (bLbl) bLbl.textContent = 'Ajouter au pipeline';
     // Les fiches à l'écran gardent leur bouton d'ajout : le serveur ne dit pas
     // LESQUELLES ont été écartées, seulement combien. Un nouvel ajout unitaire
     // sur une fiche déjà passée est sans effet (dédup serveur).

@@ -264,7 +264,7 @@
         </div>
         <div class="field">
           <label>Adresse</label>
-          <input type="text" id="new-client-adresse" placeholder="Rue, code postal, ville" />
+          <input type="text" id="new-client-adresse" autocomplete="off" placeholder="Rue, code postal, ville" />
         </div>
         <div class="checkbox-row">
           <input type="checkbox" id="new-livraison-diff" />
@@ -272,7 +272,7 @@
         </div>
         <div class="field" id="new-livraison-wrap" style="display:none;">
           <label>Adresse de livraison</label>
-          <input type="text" id="new-client-livraison" placeholder="Rue, code postal, ville" />
+          <input type="text" id="new-client-livraison" autocomplete="off" placeholder="Rue, code postal, ville" />
         </div>
       </div>
 
@@ -1744,7 +1744,7 @@
       html += fieldRow('Taux TVA (%)', 'taux_tva', c.taux_tva, c.taux_tva_conf, 'number', i);
       html += '</div>';
       html += '<div style="margin-bottom:8px;"><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Adresse client'+confDot(c.client_adresse_conf||0)+'</label>'
-           + '<textarea data-pdf-i="'+i+'" data-pdf-f="client_adresse" rows="2" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--font);resize:vertical;">'+esc(c.client_adresse||'')+'</textarea></div>';
+           + '<textarea data-pdf-i="'+i+'" data-pdf-f="client_adresse" autocomplete="off" rows="2" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--font);resize:vertical;">'+esc(c.client_adresse||'')+'</textarea></div>';
       html += '<div><label style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Désignation'+confDot(c.designation_conf||0)+'</label>'
            + '<textarea data-pdf-i="'+i+'" data-pdf-f="designation" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;min-height:50px;font-family:var(--font);">'+esc(c.designation||'')+'</textarea></div>';
       c.statut = c.statut || 'en_attente'; c.entity_origine = c.entity_origine || DEFAULT_ENTITY;

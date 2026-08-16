@@ -425,23 +425,23 @@ button.dropdown-item{width:100%;background:transparent;border:none;font-family:i
                 </div>
                 <div class="field">
                   <label class="label">Email société</label>
-                  <input class="input" id="f-societe-email" type="email" placeholder="accueil@…">
+                  <input class="input" id="f-societe-email" type="email" autocomplete="off" placeholder="accueil@…">
                 </div>
                 <div class="field">
                   <label class="label">Téléphone société</label>
-                  <input class="input" id="f-societe-tel" type="text" placeholder="02 96 …">
+                  <input class="input" id="f-societe-tel" type="text" autocomplete="off" placeholder="02 96 …">
                 </div>
                 <div class="field field-full">
                   <label class="label">Adresse</label>
-                  <input class="input" id="f-adresse" type="text">
+                  <input class="input" id="f-adresse" type="text" autocomplete="off">
                 </div>
                 <div class="field">
                   <label class="label">Code postal</label>
-                  <input class="input" id="f-zip" type="text">
+                  <input class="input" id="f-zip" type="text" autocomplete="off">
                 </div>
                 <div class="field">
                   <label class="label">Ville</label>
-                  <input class="input" id="f-ville" type="text">
+                  <input class="input" id="f-ville" type="text" autocomplete="off">
                 </div>
                 <div class="field">
                   <label class="label">LinkedIn</label>
@@ -1088,7 +1088,7 @@ function majDerniereActivite(items){
 
 // Une ligne d'input répétable (email ou téléphone). `cls` = classe du champ.
 function pfRowInput(cls, type, value){
-  return '<input class="input ' + cls + '" type="' + type + '" value="' + esc(value || '') + '">';
+  return '<input class="input ' + cls + '" type="' + type + '" autocomplete="off" value="' + esc(value || '') + '">';
 }
 
 // Bloc multi-valeurs (emails / téléphones) avec bouton « + ajouter ».
@@ -1861,6 +1861,7 @@ function wirePeople(){
     const input = document.createElement('input');
     input.className = 'input ' + cls;
     input.type = type;
+    input.autocomplete = 'off';
     listEl.appendChild(input);
     input.focus();
   });

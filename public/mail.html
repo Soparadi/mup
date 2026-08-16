@@ -51,6 +51,21 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    Newsletter) ne sont pas des adresses et n'ont rien à défaire. */
 #topbar-account,#topbar-account *{-webkit-text-decoration:none;text-decoration:none;}
 #topbar-account a{color:inherit;font:inherit;pointer-events:none;}
+/* Pastille d'authentification du domaine — à côté de l'adresse, et discrète
+   par construction. Elle ne dit rien de plus qu'elle-même : elle mène à
+   Paramètres, où la carte attend. C'est elle qui va chercher l'abonné qui n'y
+   serait pas allé, et pour cela il lui suffit de se faire remarquer une fois,
+   pas d'interrompre. D'où ni bandeau, ni rouge, ni animation — un point ambre,
+   deux mots, et le reste au ton des libellés voisins. Elle ne paraît que
+   lorsqu'il y a un réglage à faire ; en règle, la page n'en dit rien. */
+.auth-pastille{display:none;align-items:center;gap:6px;padding:4px 9px;background:transparent;border:1px solid var(--border2);border-radius:999px;cursor:pointer;font-family:var(--font);font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);flex-shrink:0;transition:background .12s,color .12s;}
+.auth-pastille.is-on{display:inline-flex;}
+.auth-pastille:hover{background:var(--surface);color:var(--text);}
+.auth-pastille .pt{width:6px;height:6px;border-radius:50%;background:var(--amber);flex-shrink:0;}
+/* Le bloc à transmettre : lisible d'un coup d'œil, sélectionnable d'un geste.
+   C'est la seule partie du panneau qui porte des noms techniques — l'abonné
+   n'a pas à les comprendre, seulement à les faire suivre. */
+.auth-demande{margin-top:10px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:12.5px;line-height:1.6;color:var(--text);white-space:pre-wrap;-webkit-user-select:text;user-select:text;}
 .kpi-campagne{display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(184,76,0,.08);border:1px solid rgba(184,76,0,.2);border-radius:12px;flex-shrink:0;cursor:pointer;font-family:var(--font);}
 .kpi-newsletter{display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(67,56,202,.08);border:1px solid rgba(67,56,202,.2);border-radius:12px;flex-shrink:0;cursor:pointer;font-family:var(--font);}
 .subtabs{display:flex;gap:4px;margin-bottom:-1px;}
@@ -468,6 +483,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <div style="display:flex;align-items:center;gap:10px;min-width:0;">
         <span class="topbar-title">Mail</span>
         <span class="kpi-lbl" id="topbar-account"></span>
+        <button type="button" class="auth-pastille" id="topbar-auth-domaine"
+                onclick="allerAuthDomaine()"
+                title="Un réglage dans Paramètres pour que vos messages soient reconnus comme venant de vous">
+          <span class="pt"></span><span>Configurer votre domaine</span>
+        </button>
       </div>
       <div class="kpi-row">
         <div class="kpi-group">
@@ -784,6 +804,32 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
           </div>
         </div>
 
+        <!-- ────── AUTHENTIFICATION DU DOMAINE ──────
+             SA PLACE EST ICI, à côté des comptes connectés, et nulle part
+             ailleurs. C'est un réglage de messagerie : il vit là où l'abonné
+             vient régler sa messagerie, dans l'état d'esprit qui convient, avec
+             le temps de transmettre la demande à qui gère son domaine.
+
+             PAS DE PANNEAU QUI S'OUVRE AU RETOUR DE CONNEXION. L'abonné qui
+             sort du consentement Google veut voir sa boîte, pas une fenêtre de
+             plus. Et pas davantage dans la fenêtre de rédaction : un
+             avertissement juste avant « Envoyer », quand l'abonné ne peut rien
+             y faire, n'est pas de la friction, c'est un abandon. Ne pas
+             déplacer cette carte vers #compose-modal.
+
+             LA PASTILLE DE L'EN-TÊTE mène ici — c'est elle qui va chercher
+             celui qui ne serait jamais venu dans Paramètres.
+
+             L'envoi n'est jamais empêché : cette carte n'a pas de refus. -->
+        <div class="card" id="auth-domaine-carte" style="display:none;">
+          <h3 id="auth-domaine-titre"></h3>
+          <p id="auth-domaine-accroche" style="display:none;font-size:13.5px;font-weight:700;color:var(--text);margin:8px 0 0;line-height:1.55;"></p>
+          <div id="auth-domaine-corps" style="margin-top:10px;"></div>
+          <div id="auth-domaine-pied" style="display:none;margin-top:16px;">
+            <button class="btn btn-outline btn-sm" id="auth-domaine-revalider" onclick="revaliderAuthDomaine()">C'est fait, revérifier</button>
+          </div>
+        </div>
+
       </div></div>
     </div>
 
@@ -943,12 +989,21 @@ async function loadAccountsAndInbox(){
       // La place est prise : les voies de connexion se ferment avant tout
       // affichage, sans attendre que l'abonné ouvre les Paramètres.
       renderConnexionGate();
+      // Le contrôle du domaine ne retarde pas la boîte de réception : il part
+      // à côté et se pose quand il a sa réponse. Une résolution DNS lente ne
+      // doit jamais faire attendre l'abonné devant sa liste de messages.
+      chargeAuthDomaine();
       showLoading();
       await loadInbox();
     } else {
       STATE.primaryAccount = null;
       renderHeaderAccount();
       renderConnexionGate();
+      // Plus de boîte, plus de domaine à contrôler : la pastille et la carte
+      // s'effacent avec elle. Sans cela, une déconnexion laisserait un réglage
+      // à faire sur une boîte qui n'existe plus.
+      AUTH_DOMAINE = null;
+      peintAuthDomaine();
       showEmptyNoAccount();
     }
   } catch(e){ showEmptyNoAccount(); }
@@ -960,6 +1015,151 @@ function renderHeaderAccount(){
   var el = document.getElementById('topbar-account');
   if(!el) return;
   el.textContent = (STATE.primaryAccount && STATE.primaryAccount.email) || '';
+}
+
+// ────────────────────────────────────────────────
+// AUTHENTIFICATION DU DOMAINE
+// ────────────────────────────────────────────────
+// L'abonné prospecte depuis sa propre adresse. Le domaine doit dire que son
+// fournisseur a le droit d'écrire en son nom : ce module-là le vérifie, et la
+// carte des Paramètres donne la marche à suivre quand il reste un geste.
+//
+// LE TEXTE VIENT DU SERVEUR, ENTIER. lib/mail-authentification.js sait ce qui
+// manque et sait le dire ; cette page l'affiche. Elle ne traduit aucun code en
+// phrase, ne devine aucun manquement, et n'a donc aucune formulation à tenir à
+// jour quand le module évolue.
+//
+// DEUX ÉTATS SEULEMENT ONT UN EFFET ICI :
+//   incomplet   → la carte dans Paramètres, et la pastille qui y mène ;
+//   complet     → la carte seule, sans pastille : rien à faire, rien à signaler
+//                 ailleurs qu'à l'endroit où l'on vient vérifier ses réglages ;
+//   le reste    → RIEN. Un résolveur muet, une adresse grand public, un envoi
+//                 par domaine vérifié : autant de cas où la page se tait. Le
+//                 silence est le comportement par défaut, pas l'exception.
+var AUTH_DOMAINE = null;
+
+async function chargeAuthDomaine(opts){
+  var o = opts || {};
+  try {
+    var r = await fetch('/api/mail/authentification-domaine' + (o.revalider ? '?revalider=1' : ''));
+    if(!r.ok) return null;
+    AUTH_DOMAINE = await r.json();
+  } catch(e){
+    // Un contrôle de délivrabilité qui échoue ne doit rien changer à la page.
+    return null;
+  }
+  peintAuthDomaine();
+  return AUTH_DOMAINE;
+}
+
+// La pastille conduit à la carte, et rien d'autre : l'onglet Paramètres, puis
+// la carte amenée sous les yeux. Elle ne porte aucun texte de réglage — tout ce
+// qui explique et tout ce qui se transmet est à destination.
+function allerAuthDomaine(){
+  var onglet = document.querySelector('.subtab[data-tab=settings]');
+  if(onglet) onglet.click();
+  var carte = document.getElementById('auth-domaine-carte');
+  if(carte && carte.style.display !== 'none'){
+    setTimeout(function(){ carte.scrollIntoView({ behavior:'smooth', block:'center' }); }, 60);
+  }
+}
+
+// La carte se peint à partir de la seule annonce : titre, accroche, marche à
+// suivre, à qui s'adresser, et le bloc à transmettre. Rien n'est composé ici.
+// Sans annonce — pas de boîte, résolveur muet, adresse grand public — la carte
+// n'existe pas dans la page.
+function peintAuthDomaine(){
+  var carte = document.getElementById('auth-domaine-carte');
+  var pastille = document.getElementById('topbar-auth-domaine');
+  if(pastille) pastille.classList.toggle('is-on', Boolean(AUTH_DOMAINE && AUTH_DOMAINE.etat === 'incomplet'));
+  var a = AUTH_DOMAINE && AUTH_DOMAINE.annonce;
+  if(!carte) return;
+  if(!a){ carte.style.display = 'none'; return; }
+  carte.style.display = '';
+  document.getElementById('auth-domaine-titre').textContent = a.titre;
+  var acc = document.getElementById('auth-domaine-accroche');
+  acc.style.display = a.accroche ? '' : 'none';
+  acc.textContent = a.accroche || '';
+  var h = '';
+  h += '<div style="font-size:13px;line-height:1.65;color:var(--text);">' + escHtml(a.phrase) + '</div>';
+  if(a.aQui) h += '<div style="font-size:12.5px;line-height:1.6;color:var(--muted);margin-top:12px;">' + escHtml(a.aQui) + '</div>';
+  if(a.demande){
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;">'
+      + '<div style="font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted2);">Message à transmettre</div>'
+      + '<button class="btn btn-outline btn-sm" onclick="copierDemandeAuth()">Copier</button></div>';
+    h += '<div class="auth-demande" id="auth-domaine-demande">' + escHtml(a.demande) + '</div>';
+  }
+  // DMARC est relevé en note de bas de carte, jamais comme un manquement : un
+  // domaine qui n'en publie pas n'est pas en faute. Une politique stricte n'est
+  // pas non plus relevée comme telle : expliquer qu'elle expose les envois
+  // reviendrait à décrire une défaillance là où l'accroche a déjà donné le
+  // geste et son urgence. La note dit ce que le domaine publie, rien de plus.
+  var dm = AUTH_DOMAINE.dmarc;
+  if(dm && dm.present === true){
+    h += '<div style="font-size:11.5px;color:var(--muted2);margin-top:14px;">Votre domaine publie par ailleurs une politique DMARC'
+      + (dm.politique ? ' (' + escHtml(dm.politique) + ')' : '') + '.</div>';
+  } else if(dm && dm.present === false){
+    h += '<div style="font-size:11.5px;color:var(--muted2);margin-top:14px;">Votre domaine peut aussi publier une politique DMARC : un réglage supplémentaire, qui vient après celui-ci et n\'a rien d\'obligatoire.</div>';
+  }
+  document.getElementById('auth-domaine-corps').innerHTML = h;
+  var pied = document.getElementById('auth-domaine-pied');
+  if(pied) pied.style.display = (AUTH_DOMAINE.etat === 'incomplet') ? '' : 'none';
+}
+
+function copierDemandeAuth(){
+  var a = AUTH_DOMAINE && AUTH_DOMAINE.annonce;
+  if(!a || !a.demande) return;
+  // Le presse-papiers n'est pas donné à toutes les pages ni à tous les
+  // navigateurs. Quand il manque, on sélectionne le bloc : l'abonné copie
+  // lui-même, plutôt que d'appuyer sur un bouton qui ne fait rien.
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(a.demande).then(function(){
+      toast('Message copié', 'ok');
+    }).catch(selectionneDemandeAuth);
+  } else {
+    selectionneDemandeAuth();
+  }
+}
+
+function selectionneDemandeAuth(){
+  var bloc = document.getElementById('auth-domaine-demande');
+  if(!bloc) return;
+  var plage = document.createRange();
+  plage.selectNodeContents(bloc);
+  var sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(plage);
+  toast('Message sélectionné — copiez-le', 'ok');
+}
+
+// « C'est fait, revérifier » : la seule voie qui court-circuite le cache du
+// serveur. Celui qui vient de faire poser la ligne veut la voir prise en
+// compte tout de suite, et non dans une demi-heure.
+async function revaliderAuthDomaine(){
+  var btn = document.getElementById('auth-domaine-revalider');
+  if(btn){ btn.disabled = true; btn.textContent = 'Vérification…'; }
+  var precedent = AUTH_DOMAINE;
+  await chargeAuthDomaine({ revalider: true });
+  if(btn){ btn.disabled = false; btn.textContent = 'C\'est fait, revérifier'; }
+  if(!AUTH_DOMAINE) return;
+  if(AUTH_DOMAINE.etat === 'complet'){
+    toast(AUTH_DOMAINE.annonce ? AUTH_DOMAINE.annonce.titre : 'Votre domaine est configuré pour la prospection', 'ok');
+    return;
+  }
+  if(AUTH_DOMAINE.etat === 'incomplet'){
+    // Une publication DNS met du temps à se répandre : le dire évite que
+    // l'abonné croie son geste raté, et lui épargne de le refaire.
+    if(precedent && precedent.etat === 'incomplet'){
+      toast('Une ligne publiée met parfois plusieurs heures à se propager : revenez un peu plus tard, il n\'y a rien de plus à faire.', 'ok');
+    }
+    return;
+  }
+  // Indéterminé : le contrôle n'a pas abouti. La carte précédente reste à
+  // l'écran — la faire disparaître ferait croire que le réglage est passé,
+  // et emporterait avec elle le message à transmettre. On ne dit rien de plus
+  // que ce qu'on sait, et surtout pas que le réglage manque : on n'en sait rien.
+  if(precedent){ AUTH_DOMAINE = precedent; peintAuthDomaine(); }
+  toast('Réessayez dans un moment : la vérification n\'aboutit pas pour l\'instant.', 'error');
 }
 
 // Un seul état visible à la fois : rien n'est masqué avant d'avoir la réponse.

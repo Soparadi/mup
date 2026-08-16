@@ -106,6 +106,7 @@ import {
   LOGO_LARGEUR_ENCODEE_MAX,
   LOGO_HAUTEUR_ENCODEE_MAX
 } from './lib/mail-signature.js'
+import { controleAuthentification, redigeAnnonce } from './lib/mail-authentification.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -4742,6 +4743,94 @@ app.delete('/api/mail/signature', async (req, res) => {
   } catch (err) {
     console.error('[mail/signature:delete]', err.message)
     res.status(500).json({ error: 'Suppression de votre signature impossible' })
+  }
+})
+
+// ── AUTHENTIFICATION DU DOMAINE DE LA BOÎTE CONNECTÉE ─────────────────────
+// Un abonné qui prospecte depuis contact@son-domaine.fr ne saura jamais que
+// ses messages sont écartés : il n'y a ni plainte ni signalement, seulement
+// une prospection qui ne reçoit pas de réponse. Cette route lit la zone DNS de
+// son domaine et rend ce qui manque, déjà rédigé — lib/mail-authentification.js
+// est l'autorité, la page n'interprète aucun code.
+//
+// D'OÙ VIENT LA BOÎTE. La même que celle dont la page fait son compte principal
+// (/api/v2/mail/accounts, puis boites[0] côté page) : les comptes OAuth
+// d'abord, la boîte IMAP héritée ensuite. L'identité vient de req.userId, jamais
+// d'un paramètre — ce contrôle nomme un domaine et le rend à l'écran.
+//
+// LE TRANSPORT RÉEL, PAS LA BOÎTE. sendOne() achemine par Resend TOUTE adresse
+// relevant d'un domaine vérifié, y compris quand une boîte du même nom est
+// connectée : dans ce cas les enregistrements qui comptent sont ceux posés à la
+// vérification, et contrôler le fournisseur de la boîte accuserait un domaine
+// parfaitement en règle. La condition reprend donc celle de l'envoi, clé Resend
+// comprise — sans clé, l'envoi retombe sur la boîte, et le contrôle aussi.
+async function boiteDontOnPart(db, userId) {
+  const creds = await listMailboxCredentials(db, userId)
+  let boite = null
+  if (creds[0]) {
+    boite = { email: creds[0].email, provider: creds[0].provider, smtp_host: null }
+  } else {
+    const imap = await getImapAccount(db, userId)
+    if (!imap) return null
+    // getImapAccount ne rend pas l'hôte d'envoi, et c'est lui qui désigne le
+    // fournisseur d'une boîte branchée en manuel. On relit le champ, et rien
+    // d'autre : aucun secret ne sort de cette fonction.
+    const rec = (await queryOrEmpty(db, 'SELECT smtp_host FROM type::record("mail_settings", $id)', { id: userId }))[0]
+    boite = { email: imap.email, provider: 'imap', smtp_host: rec?.smtp_host || null }
+  }
+  if (!boite.email) return null
+  const domaine = domainOf(boite.email)
+  if (domaine && isResendReady()) {
+    const verifies = await listVerifiedResendDomains(db, userId)
+    boite.envoiParDomaineVerifie = verifies.includes(domaine)
+  }
+  return boite
+}
+
+// Revalidation forcée : elle court-circuite le cache du module, donc une
+// dizaine de résolutions à chaque appel. Un abonné qui vient de faire poser la
+// ligne appuie deux ou trois fois, ce qui est légitime ; une page laissée
+// ouverte sur un minuteur ne l'est pas. Trente secondes entre deux passages en
+// force, par abonné — au-delà, la réponse vient du cache sans que rien ne soit
+// refusé : l'abonné voit une réponse, pas une erreur. La table ne porte qu'un
+// horodatage par abonné ayant forcé au moins une fois : elle est bornée par le
+// nombre d'abonnés, pas par le trafic.
+const DERNIERE_REVALIDATION = new Map()
+const DELAI_REVALIDATION_MS = 30 * 1000
+
+app.get('/api/mail/authentification-domaine', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  try {
+    const db = await getDb()
+    const boite = await boiteDontOnPart(db, userId)
+    // Aucune boîte connectée : il n'y a pas de domaine à contrôler, et surtout
+    // rien à annoncer. L'état est rendu tel quel, la page n'affiche rien.
+    if (!boite) return res.json({ etat: 'sans_objet', motif: 'aucune_boite', annonce: null })
+
+    let forcer = req.query.revalider === '1'
+    if (forcer) {
+      const dernier = DERNIERE_REVALIDATION.get(userId) || 0
+      if (Date.now() - dernier < DELAI_REVALIDATION_MS) forcer = false
+      else DERNIERE_REVALIDATION.set(userId, Date.now())
+    }
+
+    const resultat = await controleAuthentification(boite, { forcer })
+    res.json({
+      etat: resultat.etat,
+      motif: resultat.motif || null,
+      domaine: resultat.domaine || null,
+      fournisseur: resultat.fournisseur ? resultat.fournisseur.nom : null,
+      manquants: resultat.manquants || [],
+      dmarc: resultat.dmarc || null,
+      annonce: redigeAnnonce(resultat)
+    })
+  } catch (err) {
+    // Un contrôle de délivrabilité ne doit jamais devenir une panne de la page
+    // Mail. En cas d'échec, le silence : la page ne montre rien de plus qu'à
+    // l'ordinaire, et l'abonné ne lit pas une erreur qui ne lui apprend rien.
+    console.error('[mail/authentification-domaine]', err.message)
+    res.json({ etat: 'indetermine', motif: 'erreur_serveur', annonce: null })
   }
 })
 

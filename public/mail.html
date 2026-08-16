@@ -867,6 +867,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <div class="field"><label>À</label><input type="email" id="cmp-to" placeholder="destinataire@exemple.fr" /></div>
       <div class="field"><label>Sujet</label><input type="text" id="cmp-subject" /></div>
       <div class="field"><label>Message</label><textarea id="cmp-body" rows="9"></textarea></div>
+      <!-- La signature n'est pas recopiée ici : elle s'appose côté serveur, à
+           l'envoi. Cette ligne l'annonce sans la reproduire, pour que le champ
+           de rédaction ne contienne que ce que l'abonné a écrit. -->
+      <div class="field-hint" id="cmp-signature-note" style="display:none;margin-top:8px;"></div>
       <div id="cmp-result" style="display:none;margin-top:8px;font-size:12.5px;"></div>
     </div>
     <div class="modal-foot"><button class="btn btn-outline btn-sm" onclick="closeCompose()">Annuler</button><button class="btn btn-dark btn-sm" id="cmp-send" onclick="sendCompose()">Envoyer</button></div>
@@ -1464,6 +1468,7 @@ async function openCompose(){
   // Un domaine vérifié suffit pour écrire, même sans boîte connectée.
   if(!STATE.primaryAccount && !STATE.accounts.length){ toast('Connectez d\'abord une boîte mail', 'error'); return; }
   document.getElementById('compose-modal').classList.add('open');
+  annonceSignatureCompose();
   // Remplit le selecteur "De" avec tout ce d'où l'abonné peut partir
   try {
     var r = await fetch('/api/v2/mail/accounts');
@@ -2517,9 +2522,10 @@ function remplitFormulaireSignature(){
   majApercuSignature();
 }
 
-// Une seule lecture par chargement de page. Elle n'est pas lancée au
-// démarrage : le logo peut peser quelques centaines de kilo-octets, que la
-// boîte de réception n'a aucune raison de payer.
+// Une seule lecture par chargement de page, partagée par l'onglet et par la
+// fenêtre de composition. Elle n'est pas lancée au démarrage : le logo peut
+// peser quelques centaines de kilo-octets, que la boîte de réception n'a
+// aucune raison de payer.
 function assureSignatureChargee(){
   if(signaturePromesse) return signaturePromesse;
   signaturePromesse = fetch('/api/mail/signature')
@@ -2616,6 +2622,23 @@ document.getElementById('sig-logo-input').addEventListener('change', function(e)
     etatSignature('');
   });
 });
+
+// La fenêtre de composition annonce la signature sans la reproduire : le champ
+// de rédaction ne contient que ce que l'abonné a écrit. Rien de ce qui est
+// annoncé ici n'est envoyé d'ici — le serveur appose, la page se contente de
+// dire ce qui va arriver. Les mêmes deux conditions qu'à l'apposition : active,
+// et non vide. Une signature retenue mais éteinte ne s'annonce pas.
+function annonceSignatureCompose(){
+  var note = document.getElementById('cmp-signature-note');
+  if(!note) return;
+  note.style.display = 'none';
+  assureSignatureChargee().then(function(sig){
+    var quelqueChose = Boolean(sig.texte && sig.texte.trim()) || Boolean(sig.logo);
+    if(!sig.active || !quelqueChose) return;
+    note.textContent = 'Votre signature sera ajoutée à la fin de ce message.';
+    note.style.display = 'block';
+  });
+}
 
 function toast(msg, type){
   var el = document.getElementById('toast'); el.textContent = msg;

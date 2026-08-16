@@ -97,6 +97,7 @@ import {
   htmlToText
 } from './lib/mail-service.js'
 import {
+  apposeSignature,
   chargeSignature,
   signatureEnSortie,
   motifLogoRefuse,
@@ -6200,14 +6201,57 @@ app.post('/api/v2/mail/send', async (req, res) => {
         return res.status(403).json({ error: 'Cette adresse d\'expédition n\'est ni l\'une de vos boîtes connectées ni un domaine que vous avez fait vérifier' })
       }
     }
-    const result = await mailServiceSendOne(db, userId, { to, subject, body, html, attachments, from_email: expediteur })
+    // ── La signature s'appose ICI, et non dans sendOne ──
+    // sendOne est un service : un futur appelant y hériterait de la signature
+    // sans l'avoir demandée. Les campagnes, notamment, ne doivent jamais la
+    // porter — ce sont des envois de masse, pas des messages écrits par
+    // l'abonné. Cette route est le seul endroit du serveur où un message est
+    // rédigé par un humain, donc le seul où la signature a un sens.
+    //
+    // L'identité est celle que reçoit sendOne, et pas une autre : le message
+    // part de la boîte de `userId`, il doit porter la signature de `userId`.
+    // Les deux ne peuvent pas diverger, sans quoi un message partirait d'une
+    // boîte signé du nom d'un autre. Derrière le portillon /api/*, requireAuth
+    // pose req.session.userId, que getUserId lit en tête de sa chaîne : la
+    // valeur EST celle de la session, la même sous laquelle les routes de
+    // signature écrivent.
+    //
+    // UNE SIGNATURE QUI NE SE CHARGE PAS NE RETIENT PAS LE MESSAGE. Il part
+    // sans elle, et l'échec se lit dans les journaux. Un message qui ne part
+    // pas est pire qu'un message sans signature — c'est la doctrine déjà
+    // appliquée à la trace d'envoi qui ne s'écrit pas, quelques lignes plus
+    // bas. Le repli n'a rien à rétablir : l'affectation n'a pas lieu si l'appel
+    // jette, si bien que le message d'origine est toujours là, intact. Rien ne
+    // peut être apposé à moitié — apposeSignature ne rend qu'un triple complet.
+    let aEnvoyer = { body, html, attachments }
+    try {
+      aEnvoyer = await apposeSignature(db, userId, aEnvoyer)
+    } catch (e) {
+      console.error('[v2/mail:send] signature non apposée, message envoyé sans elle —', e.message)
+    }
+    const result = await mailServiceSendOne(db, userId, {
+      to,
+      subject,
+      body: aEnvoyer.body,
+      html: aEnvoyer.html,
+      attachments: aEnvoyer.attachments,
+      from_email: expediteur
+    })
     // Le message est parti : une trace qui ne s'écrit pas ne doit pas le faire
     // passer pour perdu. L'échec se lit dans les journaux, l'abonné garde sa
     // confirmation d'envoi.
+    //
+    // La trace porte le message APPOSÉ, pas celui saisi. Elle existe parce que
+    // ce message n'existe nulle part ailleurs : y consigner autre chose que ce
+    // qui est parti la viderait de sa raison d'être. Le logo y voyage en
+    // référence cid: sans la pièce qui la résout — la relecture d'un envoi
+    // Resend signé montre donc la signature avec une image absente. Réparer
+    // cela demande de toucher la lecture, hors de cette passe.
     if (result?.provider === 'resend') {
       try {
         await traceEnvoiResend(db, userId, {
-          from: result.from || expediteur, to, subject, body, html, messageId: result.messageId
+          from: result.from || expediteur, to, subject,
+          body: aEnvoyer.body, html: aEnvoyer.html, messageId: result.messageId
         })
       } catch (e) {
         console.error('[v2/mail:send] envoi remis mais trace non écrite —', e.message)

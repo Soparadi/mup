@@ -2072,254 +2072,472 @@ app.post('/api/pipeline', async (req, res) => {
   }
 })
 
-// ── POST /api/pipeline/from-lead — matérialise un prospect en UNE transaction :
-// société + dirigeants (contacts) + carte pipeline. Autorité serveur sur la
-// provenance (source:'prospection' posée ici, non spoofable côté client) ;
-// lève la dette du double POST plat + source hardcodée (cf. POST /api/pipeline).
+// ── Matérialisation d'un prospect — société + dirigeants (contacts) + carte
+// pipeline en UNE transaction. Autorité serveur sur la provenance
+// (source:'prospection' posée ici, non spoofable côté client) ; lève la dette
+// du double POST plat + source hardcodée (cf. POST /api/pipeline).
 //
 // Ordre strict : 400 siret manquant -> 403 opt-out (AVANT toute écriture) ->
-// re-fetch dirigeants HORS transaction (dégradé gracieux) -> dédup SIRET ->
-// transaction unique. Société déjà existante (findSocieteBySiret) : SKIP
-// création société + dirigeants, carte créée seulement si pas déjà au pipeline.
+// dirigeants (portés par la fiche, sinon re-fetch HORS transaction, dégradé
+// gracieux) -> dédup SIRET -> transaction unique. Société déjà existante
+// (findSocieteBySiret) : SKIP création société + dirigeants, carte créée
+// seulement si pas déjà au pipeline.
 // Échec re-fetch : société/carte créées quand même, dirigeants_crees:0.
+//
+// Servi à l'unité par POST /api/pipeline/from-lead, et par lot par
+// POST /api/pipeline/from-leads — même cœur, mêmes règles, deux entrées.
+
+// Les trois refus possibles de la matérialisation, avec leur code et leur
+// libellé. Table unique pour que la route unitaire et la route de lot parlent
+// exactement le même langage : l'une les rend en HTTP, l'autre les compte.
+// Le 400 ne porte pas de message (forme d'origine préservée à l'octet près).
+const REFUS_PROSPECT = {
+  siren_manquant: { http: 400, error: 'siren_requis' },
+  opt_out: {
+    http: 403,
+    error: 'opt_out',
+    message: "Cette entreprise n'est pas disponible pour prospection."
+  },
+  etablissement_ferme: {
+    http: 409,
+    error: 'etablissement_ferme',
+    message: "Cette entreprise n'est plus en activité et ne peut pas être ajoutée au suivi."
+  }
+}
+function corpsRefus(refus) {
+  const r = REFUS_PROSPECT[refus]
+  return r.message ? { error: r.error, message: r.message } : { error: r.error }
+}
+
+// ── Cœur partagé de la matérialisation d'un prospect ──────────────────────
+// Extrait de POST /api/pipeline/from-lead sans rien y changer : même ordre de
+// contrôles (SIREN requis -> opt-out -> dirigeants -> établissement
+// fermé -> dédup société -> dédup carte), mêmes écritures, même transaction
+// unique. Seuls les TROIS lookups de dédoublonnage / opposition sont injectés
+// par l'appelant :
+//   estOptOut(siret)             -> bool   (rempart RGPD)
+//   trouverSociete(siren)        -> record société | null
+//   estDejaPipeline(siren,siret) -> bool
+// La route unitaire passe les lookups directs — une requête chacun, exactement
+// comme avant. La route de lot passe des lookups servis par un cache chargé UNE
+// fois pour tout le lot et tenu à jour au fil des créations : sans ça, 188
+// fiches feraient 188 x 3 allers-retours, et deux établissements d'un même
+// SIREN présents dans le même lot se dédoubleraient (le lookup ne voit pas ce
+// que la fiche précédente vient d'écrire).
+//
+// Retour : { ok:false, refus } pour un refus, sinon { ok:true, societe_id,
+// dirigeants_crees, dedup, societe_creee, carte_creee }. L'appelant tranche :
+// la route unitaire répond en HTTP, la route de lot écarte et poursuit.
+async function materialiserProspect(userId, body, lookups) {
+  // 1. SIREN requis (identifiant de dédup : une société = une unité légale).
+  //    SIRET conservé pour le stockage / l'opt-out, mais n'est plus la
+  //    condition de rejet.
+  const siret = String(body.siret || '').replace(/\s+/g, '')
+  const siren = String(body.siren || '').replace(/\s+/g, '')
+  if (!siren) return { ok: false, refus: 'siren_manquant' }
+  // Recherche d'origine — l'identifiant minté par la page au lancement, porté
+  // par la fiche depuis qu'elle est entrée au buffer. Recopié tel quel sur les
+  // trois enregistrements créés ici : c'est le seul lien exact entre « ce que
+  // l'abonnée a cherché » et « ce qu'elle en a tiré ». Vide (ajout hors
+  // Prospection, recherche par identifiant, page antérieure) : rien n'est
+  // rattaché, et rien n'est deviné par horodatage.
+  const searchId = nettoyerSearchId(body.search_id)
+  // 2. Rempart opt-out RGPD — refus dur AVANT toute écriture.
+  if (await lookups.estOptOut(siret)) {
+    return { ok: false, refus: 'opt_out' }
+  }
+  // 3. Dirigeants + identité INSEE. DEUX voies, une seule règle de forme.
+  //    a) La fiche PORTE déjà ses dirigeants : la recherche vient de les
+  //       ramener (chemin Etalab comme chemin cache de /api/search), la page
+  //       les transmet avec la fiche. On les emploie, ZÉRO appel réseau. C'est
+  //       ce qui rend l'ajout en bloc tenable : 188 fiches ne redemandent plus
+  //       à Etalab 188 fois ce qu'on a déjà sous la main.
+  //    b) Sinon (ajout hors Prospection, recherche par identifiant, fiche
+  //       d'une page antérieure, corps sans dirigeants) : re-fetch Etalab HORS
+  //       transaction, exactement comme avant. Dégradé gracieux assuré par le
+  //       helper : vide si 429/erreur, jamais throw.
+  //    Dans les deux cas c'est normaliserDirigeants qui a tranché la forme —
+  //    les contacts créés par l'une ou l'autre voie sont indiscernables.
+  //
+  //    Ce que la voie (a) ne rapporte pas : effectif et statut_diffusion, qui
+  //    ne voyagent pas avec la fiche — ils restent vides sur le record société,
+  //    comme lorsque le re-fetch dégrade. etat_administratif, lui, voyage : le
+  //    filtre d'activité juste en dessous le lit à l'identique, à la même
+  //    place, avec la même tolérance sur l'inconnu.
+  const dirigeantsFournis = Array.isArray(body.dirigeants) ? body.dirigeants : []
+  const dd = dirigeantsFournis.length
+    ? {
+        dirigeants: normaliserDirigeants(dirigeantsFournis),
+        effectif: '',
+        etat_administratif: typeof body.etat_administratif === 'string' ? body.etat_administratif : '',
+        statut_diffusion: ''
+      }
+    : await refetchDirigeants(siren)
+  // Filtre d'activité — matérialisation vers le suivi. L'état (unité légale) vient
+  // d'être refetché juste au-dessus ; on le TESTE ici, avant toute écriture. Un
+  // établissement fermé ne doit pas entrer au suivi : état CONNU et ≠ 'A' → 409,
+  // aucune société / carte créée. État INCONNU ('' : refetch dégradé sur 429/réseau)
+  // → on laisse passer (le dégradé gracieux du helper est préservé, jamais de blocage
+  // sur incertitude). Test volontairement AVANT getDb : rien n'est touché en base.
+  if (dd.etat_administratif && dd.etat_administratif !== 'A') {
+    return { ok: false, refus: 'etablissement_ferme' }
+  }
+
+  const db = await getDb()
+  // 4. Dédup société par SIREN (une société = une unité légale ; deux
+  //    établissements d'un même SIREN → UNE fiche). societe_id stocké SANS
+  //    préfixe de table (cohérent avec genId / ecrireImport).
+  const existing = await lookups.trouverSociete(siren)
+  const neuve = !existing
+  const societeId = existing
+    ? String(existing.id).replace(/^societes:/, '')
+    : genId('s_')
+
+  // Carte pipeline : créée sauf si la société est déjà au board (dédup
+  // siren/siret). Lookup unique avant la transaction (fail-fast lecture).
+  const dejaPipeline = await lookups.estDejaPipeline(siren, siret)
+
+  const now = new Date().toISOString()
+  const raison = body.raison_sociale || ''
+  // Enseigne (nom commercial) persistée à part du nom juridique — sert à
+  // composer le titre de fiche côté abonné (module partagé _mup-nom.js).
+  const enseigne = String(body.enseigne || '').trim()
+  // raison_sociale nettoyée : le nom juridique SEUL. Quand le client s'est
+  // rabattu sur nom_complet (nom_raison_sociale absent), la chaîne embarque
+  // l'enseigne entre parenthèses en fin — on la retire pour ne stocker que le
+  // nom juridique. Repli sur la valeur brute si le nettoyage vide tout.
+  const raisonClean = raison.replace(/\s*\([^()]*\)\s*$/, '').trim() || raison
+  // Adresse « voie » (numéro + type + libellé) pour le record société et la
+  // face société dupliquée ; adresse « complète » (+ CP + ville) pour la carte.
+  let adresse = [body.adresse_numero_voie, body.adresse_type_voie, body.adresse_libelle_voie]
+    .filter(Boolean).join(' ').trim()
+  // Repli (option A) : les matching_etablissements de recherche-entreprises ne
+  // portent PAS les champs voie structurés (numero/type/libelle), seulement
+  // l'adresse agrégée. Si la voie est vide mais qu'un body.address agrégé
+  // existe, on extrait la rue en retirant « <CP 5 chiffres> <ville> » de la
+  // fin. Pas de match -> on garde l'agrégé complet (jamais de perte).
+  if (!adresse && body.address) {
+    const agg = String(body.address).trim()
+    adresse = agg.replace(/\s+\d{5}\s+.+$/, '').trim() || agg
+  }
+  const zip = body.adresse_code_postal || ''
+  const ville = body.adresse_libelle_commune || ''
+  const adresseComplete = [adresse, zip, ville].filter(Boolean).join(' ').trim()
+  const formeLib = libelleFormeJuridique(body.forme)
+  // Siège social (transporté par le client depuis r.siege Etalab, sans appel
+  // réseau). Persisté sur le record société ET dupliqué sur la face société du
+  // contact (la fiche lit la face depuis le record contact, pas societes) pour
+  // que le bandeau « siège ailleurs » puisse comparer siege_siret au siret.
+  const siegeAdresse = body.siege_adresse || ''
+  const siegeSiret = body.siege_siret || ''
+  const nombreEtablissements = body.nombre_etablissements != null ? body.nombre_etablissements : null
+  // Face société dupliquée sur chaque contact (dette ch.3 : la fiche lit la
+  // face société depuis le record contact, pas depuis la table societes).
+  const faceSociete = {
+    website: '',
+    adresse,
+    zip,
+    ville,
+    societe_email: '',
+    societe_tel: '',
+    societe_linkedin: '',
+    forme_juridique: formeLib,
+    note_societe: '',
+    siege_adresse: siegeAdresse,
+    siege_siret: siegeSiret,
+    nombre_etablissements: nombreEtablissements
+  }
+
+  const stmts = ['BEGIN TRANSACTION;']
+  const params = {}
+
+  // [si neuve] CREATE société.
+  if (neuve) {
+    params.sid = societeId
+    params.sbody = {
+      userId,
+      raison_sociale: raisonClean,
+      enseigne,
+      cle_normalisee: normaliserSociete(raisonClean),
+      siret,
+      siren,
+      naf: body.naf || '',
+      naf_libelle: body.naf_libelle || '',
+      forme_juridique_code: body.forme || '',
+      forme_juridique: formeLib,
+      date_creation: body.date_creation || '',
+      capital: body.capital || '',
+      effectif: dd.effectif || '',
+      etat_administratif: dd.etat_administratif || '',
+      statut_diffusion: dd.statut_diffusion || '',
+      adresse,
+      zip,
+      ville,
+      siege_adresse: siegeAdresse,
+      siege_siret: siegeSiret,
+      nombre_etablissements: nombreEtablissements,
+      lat: body.lat != null ? body.lat : null,
+      lng: body.lng != null ? body.lng : null,
+      source: 'prospection',
+      search_id: searchId,
+      created_at: now,
+      updated_at: now
+    }
+    stmts.push('CREATE type::record("societes", $sid) CONTENT $sbody;')
+  }
+
+  // [si neuve] CREATE un contact par dirigeant physique (RGPD : pas
+  // d'email/mobile/linkedin, coordonnées laissées vides).
+  let dirigeantsCrees = 0
+  if (neuve) {
+    let di = 0
+    for (const d of dd.dirigeants) {
+      const contactNom = [d.prenom, d.nom_personne].filter(Boolean).join(' ').trim()
+      params['cid' + di] = genId('c_')
+      params['cbody' + di] = normalizePersonFields({
+        userId,
+        nom: raisonClean,
+        enseigne,
+        contact_nom: contactNom,
+        prenom: d.prenom || '',
+        nom_personne: d.nom_personne || '',
+        poste: d.poste || '',
+        email: '',
+        phone: '',
+        linkedin: '',
+        siren,
+        siret,
+        naf: body.naf || '',
+        code_naf: body.naf || '',
+        ...faceSociete,
+        societe_id: societeId,
+        statut: 'pro',
+        source: 'prospection',
+        search_id: searchId,
+        entity_origine: 'mup',
+        status: 'new',
+        created_at: now,
+        updated_at: now
+      })
+      stmts.push(`CREATE type::record("contacts", $cid${di}) CONTENT $cbody${di};`)
+      di++
+      dirigeantsCrees++
+    }
+  }
+
+  // CREATE carte pipeline (sauf société déjà au board). Titre = raison
+  // sociale ; contact = 1er dirigeant (vide si dégradé).
+  if (!dejaPipeline) {
+    const premier = dd.dirigeants[0]
+    const contactCarte = premier
+      ? [premier.prenom, premier.nom_personne].filter(Boolean).join(' ').trim()
+      : ''
+    params.pbody = {
+      userId,
+      company: raisonClean,
+      co: raisonClean,
+      name: raisonClean,
+      enseigne,
+      siren,
+      siret,
+      sector: body.naf_libelle || '',
+      address: adresseComplete,
+      contact: contactCarte,
+      email: '',
+      phone: '',
+      website: '',
+      col: 'prospects',
+      val: 0,
+      days: 0,
+      activity: [],
+      source: 'prospection',
+      search_id: searchId,
+      societe_id: societeId,
+      // La carte reçoit la même date de création que le record société et les
+      // records dirigeants créés dans cette transaction. Son omission ici
+      // était le défaut du chemin nominal d'ajout depuis la Prospection.
+      created_at: now
+    }
+    stmts.push('CREATE pipeline CONTENT $pbody;')
+  }
+
+  stmts.push('COMMIT TRANSACTION;')
+  // hasWrites : société neuve OU carte à créer. Si société existante ET déjà
+  // au pipeline -> aucune écriture, on évite une transaction vide.
+  if (neuve || !dejaPipeline) {
+    await db.query(stmts.join('\n'), params)
+  }
+
+  return {
+    ok: true,
+    societe_id: societeId,
+    dirigeants_crees: dirigeantsCrees,
+    dedup: !neuve,
+    // Ce qui a RÉELLEMENT été écrit — la route unitaire n'en avait pas besoin
+    // (son 201/200 le dit déjà), le décompte du lot en vit.
+    societe_creee: neuve,
+    carte_creee: !dejaPipeline
+  }
+}
+
+// Les trois lookups en direct : une requête chacun, à chaque fiche. C'est ce
+// que faisait la route unitaire avant l'extraction, mot pour mot.
+function lookupsDirects(userId) {
+  return {
+    estOptOut: (siret) => checkBlocklistOne(siret),
+    trouverSociete: (siren) => findSocieteBySiren(siren, userId),
+    estDejaPipeline: async (siren, siret) => {
+      const db = await getDb()
+      const pres = await db.query('SELECT siren, siret FROM pipeline WHERE userId = $userId', { userId })
+      return (pres[0] || []).some(c =>
+        (siren && String(c.siren) === siren) || (siret && String(c.siret) === siret)
+      )
+    }
+  }
+}
+
 app.post('/api/pipeline/from-lead', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   try {
-    const body = req.body || {}
-    // 1. SIREN requis (identifiant de dédup : une société = une unité légale).
-    //    SIRET conservé pour le stockage / l'opt-out, mais n'est plus la
-    //    condition de rejet.
-    const siret = String(body.siret || '').replace(/\s+/g, '')
-    const siren = String(body.siren || '').replace(/\s+/g, '')
-    if (!siren) return res.status(400).json({ error: 'siren_requis' })
-    // Recherche d'origine — l'identifiant minté par la page au lancement, porté
-    // par la fiche depuis qu'elle est entrée au buffer. Recopié tel quel sur les
-    // trois enregistrements créés ici : c'est le seul lien exact entre « ce que
-    // l'abonnée a cherché » et « ce qu'elle en a tiré ». Vide (ajout hors
-    // Prospection, recherche par identifiant, page antérieure) : rien n'est
-    // rattaché, et rien n'est deviné par horodatage.
-    const searchId = nettoyerSearchId(body.search_id)
-    // 2. Rempart opt-out RGPD — refus dur AVANT toute écriture.
-    if (await checkBlocklistOne(siret)) {
-      return res.status(403).json({
-        error: 'opt_out',
-        message: "Cette entreprise n'est pas disponible pour prospection."
-      })
-    }
-    // 3. Re-fetch dirigeants + identité INSEE, HORS transaction (réseau lent).
-    //    Dégradé gracieux assuré par le helper : vide si 429/erreur, jamais throw.
-    const dd = await refetchDirigeants(siren)
-    // Filtre d'activité — matérialisation vers le suivi. L'état (unité légale) vient
-    // d'être refetché juste au-dessus ; on le TESTE ici, avant toute écriture. Un
-    // établissement fermé ne doit pas entrer au suivi : état CONNU et ≠ 'A' → 409,
-    // aucune société / carte créée. État INCONNU ('' : refetch dégradé sur 429/réseau)
-    // → on laisse passer (le dégradé gracieux du helper est préservé, jamais de blocage
-    // sur incertitude). Test volontairement AVANT getDb : rien n'est touché en base.
-    if (dd.etat_administratif && dd.etat_administratif !== 'A') {
-      return res.status(409).json({
-        error: 'etablissement_ferme',
-        message: "Cette entreprise n'est plus en activité et ne peut pas être ajoutée au suivi."
-      })
-    }
-
-    const db = await getDb()
-    // 4. Dédup société par SIREN (une société = une unité légale ; deux
-    //    établissements d'un même SIREN → UNE fiche). societe_id stocké SANS
-    //    préfixe de table (cohérent avec genId / ecrireImport).
-    const existing = await findSocieteBySiren(siren, userId)
-    const neuve = !existing
-    const societeId = existing
-      ? String(existing.id).replace(/^societes:/, '')
-      : genId('s_')
-
-    // Carte pipeline : créée sauf si la société est déjà au board (dédup
-    // siren/siret). Lookup unique avant la transaction (fail-fast lecture).
-    const pres = await db.query('SELECT siren, siret FROM pipeline WHERE userId = $userId', { userId })
-    const dejaPipeline = (pres[0] || []).some(c =>
-      (siren && String(c.siren) === siren) || (siret && String(c.siret) === siret)
-    )
-
-    const now = new Date().toISOString()
-    const raison = body.raison_sociale || ''
-    // Enseigne (nom commercial) persistée à part du nom juridique — sert à
-    // composer le titre de fiche côté abonné (module partagé _mup-nom.js).
-    const enseigne = String(body.enseigne || '').trim()
-    // raison_sociale nettoyée : le nom juridique SEUL. Quand le client s'est
-    // rabattu sur nom_complet (nom_raison_sociale absent), la chaîne embarque
-    // l'enseigne entre parenthèses en fin — on la retire pour ne stocker que le
-    // nom juridique. Repli sur la valeur brute si le nettoyage vide tout.
-    const raisonClean = raison.replace(/\s*\([^()]*\)\s*$/, '').trim() || raison
-    // Adresse « voie » (numéro + type + libellé) pour le record société et la
-    // face société dupliquée ; adresse « complète » (+ CP + ville) pour la carte.
-    let adresse = [body.adresse_numero_voie, body.adresse_type_voie, body.adresse_libelle_voie]
-      .filter(Boolean).join(' ').trim()
-    // Repli (option A) : les matching_etablissements de recherche-entreprises ne
-    // portent PAS les champs voie structurés (numero/type/libelle), seulement
-    // l'adresse agrégée. Si la voie est vide mais qu'un body.address agrégé
-    // existe, on extrait la rue en retirant « <CP 5 chiffres> <ville> » de la
-    // fin. Pas de match -> on garde l'agrégé complet (jamais de perte).
-    if (!adresse && body.address) {
-      const agg = String(body.address).trim()
-      adresse = agg.replace(/\s+\d{5}\s+.+$/, '').trim() || agg
-    }
-    const zip = body.adresse_code_postal || ''
-    const ville = body.adresse_libelle_commune || ''
-    const adresseComplete = [adresse, zip, ville].filter(Boolean).join(' ').trim()
-    const formeLib = libelleFormeJuridique(body.forme)
-    // Siège social (transporté par le client depuis r.siege Etalab, sans appel
-    // réseau). Persisté sur le record société ET dupliqué sur la face société du
-    // contact (la fiche lit la face depuis le record contact, pas societes) pour
-    // que le bandeau « siège ailleurs » puisse comparer siege_siret au siret.
-    const siegeAdresse = body.siege_adresse || ''
-    const siegeSiret = body.siege_siret || ''
-    const nombreEtablissements = body.nombre_etablissements != null ? body.nombre_etablissements : null
-    // Face société dupliquée sur chaque contact (dette ch.3 : la fiche lit la
-    // face société depuis le record contact, pas depuis la table societes).
-    const faceSociete = {
-      website: '',
-      adresse,
-      zip,
-      ville,
-      societe_email: '',
-      societe_tel: '',
-      societe_linkedin: '',
-      forme_juridique: formeLib,
-      note_societe: '',
-      siege_adresse: siegeAdresse,
-      siege_siret: siegeSiret,
-      nombre_etablissements: nombreEtablissements
-    }
-
-    const stmts = ['BEGIN TRANSACTION;']
-    const params = {}
-
-    // [si neuve] CREATE société.
-    if (neuve) {
-      params.sid = societeId
-      params.sbody = {
-        userId,
-        raison_sociale: raisonClean,
-        enseigne,
-        cle_normalisee: normaliserSociete(raisonClean),
-        siret,
-        siren,
-        naf: body.naf || '',
-        naf_libelle: body.naf_libelle || '',
-        forme_juridique_code: body.forme || '',
-        forme_juridique: formeLib,
-        date_creation: body.date_creation || '',
-        capital: body.capital || '',
-        effectif: dd.effectif || '',
-        etat_administratif: dd.etat_administratif || '',
-        statut_diffusion: dd.statut_diffusion || '',
-        adresse,
-        zip,
-        ville,
-        siege_adresse: siegeAdresse,
-        siege_siret: siegeSiret,
-        nombre_etablissements: nombreEtablissements,
-        lat: body.lat != null ? body.lat : null,
-        lng: body.lng != null ? body.lng : null,
-        source: 'prospection',
-        search_id: searchId,
-        created_at: now,
-        updated_at: now
-      }
-      stmts.push('CREATE type::record("societes", $sid) CONTENT $sbody;')
-    }
-
-    // [si neuve] CREATE un contact par dirigeant physique (RGPD : pas
-    // d'email/mobile/linkedin, coordonnées laissées vides).
-    let dirigeantsCrees = 0
-    if (neuve) {
-      let di = 0
-      for (const d of dd.dirigeants) {
-        const contactNom = [d.prenom, d.nom_personne].filter(Boolean).join(' ').trim()
-        params['cid' + di] = genId('c_')
-        params['cbody' + di] = normalizePersonFields({
-          userId,
-          nom: raisonClean,
-          enseigne,
-          contact_nom: contactNom,
-          prenom: d.prenom || '',
-          nom_personne: d.nom_personne || '',
-          poste: d.poste || '',
-          email: '',
-          phone: '',
-          linkedin: '',
-          siren,
-          siret,
-          naf: body.naf || '',
-          code_naf: body.naf || '',
-          ...faceSociete,
-          societe_id: societeId,
-          statut: 'pro',
-          source: 'prospection',
-          search_id: searchId,
-          entity_origine: 'mup',
-          status: 'new',
-          created_at: now,
-          updated_at: now
-        })
-        stmts.push(`CREATE type::record("contacts", $cid${di}) CONTENT $cbody${di};`)
-        di++
-        dirigeantsCrees++
-      }
-    }
-
-    // CREATE carte pipeline (sauf société déjà au board). Titre = raison
-    // sociale ; contact = 1er dirigeant (vide si dégradé).
-    if (!dejaPipeline) {
-      const premier = dd.dirigeants[0]
-      const contactCarte = premier
-        ? [premier.prenom, premier.nom_personne].filter(Boolean).join(' ').trim()
-        : ''
-      params.pbody = {
-        userId,
-        company: raisonClean,
-        co: raisonClean,
-        name: raisonClean,
-        enseigne,
-        siren,
-        siret,
-        sector: body.naf_libelle || '',
-        address: adresseComplete,
-        contact: contactCarte,
-        email: '',
-        phone: '',
-        website: '',
-        col: 'prospects',
-        val: 0,
-        days: 0,
-        activity: [],
-        source: 'prospection',
-        search_id: searchId,
-        societe_id: societeId,
-        // La carte reçoit la même date de création que le record société et les
-        // records dirigeants créés dans cette transaction. Son omission ici
-        // était le défaut du chemin nominal d'ajout depuis la Prospection.
-        created_at: now
-      }
-      stmts.push('CREATE pipeline CONTENT $pbody;')
-    }
-
-    stmts.push('COMMIT TRANSACTION;')
-    // hasWrites : société neuve OU carte à créer. Si société existante ET déjà
-    // au pipeline -> aucune écriture, on évite une transaction vide.
-    if (neuve || !dejaPipeline) {
-      await db.query(stmts.join('\n'), params)
-    }
-
-    return res.status(neuve ? 201 : 200).json({
+    const r = await materialiserProspect(userId, req.body || {}, lookupsDirects(userId))
+    if (!r.ok) return res.status(REFUS_PROSPECT[r.refus].http).json(corpsRefus(r.refus))
+    return res.status(r.societe_creee ? 201 : 200).json({
       ok: true,
-      societe_id: societeId,
-      dirigeants_crees: dirigeantsCrees,
-      dedup: !neuve
+      societe_id: r.societe_id,
+      dirigeants_crees: r.dirigeants_crees,
+      dedup: r.dedup
     })
   } catch (err) {
     console.error('[pipeline:from-lead]', err)
     res.status(500).json({ error: 'Impossible de matérialiser le prospect' })
+  }
+})
+
+// ── POST /api/pipeline/from-leads — le même geste, sur un lot ─────────────
+// Reçoit un TABLEAU de fiches au contrat de corps de la route unitaire (soit
+// { fiches: [...] }, soit le tableau nu) et les matérialise l'une après
+// l'autre par materialiserProspect. UN SEUL appel HTTP pour tout le lot : le
+// rate-limit global de 60/min n'est pas approché, et rien ne l'exempte.
+//
+// AUCUN ARRÊT GLOBAL SUR UN REFUS UNITAIRE : une fiche en opposition RGPD, un
+// établissement fermé, un SIREN manquant, une panne isolée — la fiche est
+// écartée, le lot continue. La réponse est un décompte, jamais une erreur.
+//
+// Les trois lookups sont chargés UNE fois pour tout le lot puis tenus à jour
+// au fil des créations : sans ça, 188 fiches feraient 188 lectures de la
+// blocklist, 188 SELECT societes et 188 SELECT pipeline — et deux
+// établissements d'un même SIREN présents dans le même lot créeraient deux
+// sociétés (le lookup ne voit pas ce que la fiche précédente vient d'écrire).
+// Les règles de dédoublonnage, elles, sont identiques à l'unitaire.
+app.post('/api/pipeline/from-leads', async (req, res) => {
+  const userId = requireUserId(req, res)
+  if (!userId) return
+  const t0 = Date.now()
+  try {
+    const body = req.body
+    const fiches = Array.isArray(body) ? body : (Array.isArray(body?.fiches) ? body.fiches : null)
+    if (!fiches) return res.status(400).json({ error: 'tableau_requis' })
+
+    const decompte = {
+      total: fiches.length,
+      ajoutees: 0,
+      deja_presentes: 0,
+      ecartees: 0,
+      motifs: { opt_out: 0, etablissement_ferme: 0, siren_manquant: 0, erreur: 0 },
+      societes_creees: 0,
+      dirigeants_crees: 0
+    }
+    if (!fiches.length) {
+      return res.json({ ok: true, ...decompte, duree_ms: Date.now() - t0 })
+    }
+
+    // Opposition RGPD — UNE lecture de blocklist pour tout le lot.
+    // checkBlocklistOne n'est rien d'autre que checkBlocklistBatch sur une
+    // seule entrée : même clé (hash SIRET + hash SIREN dérivé), même
+    // fail-closed (erreur DB -> tout le lot est réputé opposé).
+    const bloques = await checkBlocklistBatch(
+      fiches.map(f => String(f?.siret || '').replace(/\s+/g, '')).filter(Boolean)
+    )
+
+    const db = await getDb()
+    // Sociétés déjà connues de l'abonné, indexées par SIREN. Le cœur ne lit que
+    // `.id` du record rendu — on n'en garde donc que ça.
+    const sres = await db.query('SELECT id, siren FROM societes WHERE userId = $userId', { userId })
+    const societesParSiren = new Map()
+    for (const s of (sres[0] || [])) {
+      if (s?.siren) societesParSiren.set(String(s.siren), { id: s.id })
+    }
+    // Cartes déjà au board : les deux clés du test unitaire, chacune en Set.
+    const pres = await db.query('SELECT siren, siret FROM pipeline WHERE userId = $userId', { userId })
+    const pipelineSirens = new Set()
+    const pipelineSirets = new Set()
+    for (const c of (pres[0] || [])) {
+      if (c?.siren) pipelineSirens.add(String(c.siren))
+      if (c?.siret) pipelineSirets.add(String(c.siret))
+    }
+
+    const lookupsLot = {
+      estOptOut: (siret) => bloques.has(siret),
+      trouverSociete: (siren) => societesParSiren.get(siren) || null,
+      estDejaPipeline: (siren, siret) =>
+        (!!siren && pipelineSirens.has(siren)) || (!!siret && pipelineSirets.has(siret))
+    }
+
+    // Séquentiel, fiche après fiche. Les fiches qui portent leurs dirigeants
+    // (le cas nominal depuis la Prospection) ne touchent plus le réseau du
+    // tout ; celles qui n'en portent pas retombent sur le re-fetch Etalab, et
+    // c'est pour elles que la boucle reste séquentielle — paralléliser
+    // saturerait l'IP de sortie (429), le même écueil que le déroulement de la
+    // recherche.
+    for (const fiche of fiches) {
+      const f = fiche || {}
+      try {
+        const r = await materialiserProspect(userId, f, lookupsLot)
+        if (!r.ok) {
+          decompte.ecartees++
+          decompte.motifs[r.refus]++
+          continue
+        }
+        // Le cache voit ce que cette fiche vient d'écrire : la suivante, si
+        // elle porte le même SIREN, sera dédupliquée comme elle l'aurait été
+        // par une relecture en base.
+        const siren = String(f.siren || '').replace(/\s+/g, '')
+        const siret = String(f.siret || '').replace(/\s+/g, '')
+        if (r.societe_creee) {
+          decompte.societes_creees++
+          societesParSiren.set(siren, { id: 'societes:' + r.societe_id })
+        }
+        if (r.carte_creee) {
+          decompte.ajoutees++
+          if (siren) pipelineSirens.add(siren)
+          if (siret) pipelineSirets.add(siret)
+        } else {
+          decompte.deja_presentes++
+        }
+        decompte.dirigeants_crees += r.dirigeants_crees
+      } catch (e) {
+        // Panne d'UNE fiche (SurrealDB, données aberrantes) : elle est écartée,
+        // le lot ne s'arrête pas. Journalisée pour ne pas disparaître.
+        console.error('[pipeline:from-leads] fiche écartée', f.siren || '', e)
+        decompte.ecartees++
+        decompte.motifs.erreur++
+      }
+    }
+
+    const duree = Date.now() - t0
+    console.log(
+      `[pipeline:from-leads] ${decompte.total} fiches en ${duree} ms `
+      + `(${Math.round(duree / decompte.total)} ms/fiche) — `
+      + `${decompte.ajoutees} ajoutées, ${decompte.deja_presentes} déjà présentes, `
+      + `${decompte.ecartees} écartées `
+      + `(opt-out ${decompte.motifs.opt_out}, fermé ${decompte.motifs.etablissement_ferme}, `
+      + `sans SIREN ${decompte.motifs.siren_manquant}, erreur ${decompte.motifs.erreur})`
+    )
+    return res.json({ ok: true, ...decompte, duree_ms: duree })
+  } catch (err) {
+    console.error('[pipeline:from-leads]', err)
+    res.status(500).json({ error: 'Impossible de matérialiser le lot de prospects' })
   }
 })
 
@@ -2625,6 +2843,59 @@ async function findSocieteBySiren(siren, userId) {
   return result[0]?.[0] || null
 }
 
+// ── Normalisation des dirigeants — LA règle, en UN seul endroit ──────────
+// Trois passes, dans cet ordre : on ne garde que les personnes physiques
+// identifiées, on les mappe aux champs contacts, on dédoublonne les mandats
+// répétés.
+//   prénom  : PREMIER MOT seulement (Etalab empile tous les prénoms d'état
+//             civil — « FABIENNE FRANCOISE MARIE-JOSEPHE » → « FABIENNE »)
+//   nom     : brut (nom de naissance + nom d'usage entre parenthèses gardés)
+//   poste   : qualite
+//   dédup   : clé prénom(1er mot) + nom, insensible à la casse ; Etalab répète
+//             la même personne sur plusieurs mandats (périodes distinctes),
+//             on garde la 1re occurrence
+// Les personnes morales (type_dirigeant ≠ 'personne physique', portant une
+// denomination) sont rejetées : on ne matérialise que des contacts physiques.
+//
+// SERT AUX DEUX VOIES : le re-fetch Etalab ci-dessous, ET les dirigeants que
+// la page transmet avec la fiche (déjà ramenés par la recherche). Une seule
+// règle, donc une seule forme de contact, quelle que soit la voie d'entrée —
+// sans quoi les contacts créés par un ajout en bloc n'auraient pas la même
+// forme que ceux créés jusqu'ici.
+//
+// DEUX FORMES EN ENTRÉE, aucune supposée : le chemin Etalab de /api/search
+// rend `prenoms` (tous les prénoms, séparés par des espaces) et `qualite` ; le
+// chemin cache (referentielRowToFiche) rend `prenom` ET `prenoms` (la même
+// valeur) plus `qualite`. On lit `prenoms` d'abord, `prenom` en repli — le
+// premier mot est pris dans les deux cas, le résultat est le même.
+//
+// Le filtre « au moins un nom ou un prénom » est appliqué APRÈS le mapping
+// (prenom vide ⟺ source des prénoms vide, nom_personne vide ⟺ nom vide) :
+// même population retenue, une seule lecture des champs d'entrée.
+function normaliserDirigeants(liste) {
+  const brut = (Array.isArray(liste) ? liste : [])
+    .filter(d => d && typeof d === 'object')
+    .filter(d => d.type_dirigeant === 'personne physique')
+    .map(d => {
+      const prenomsSrc = typeof d.prenoms === 'string' && d.prenoms.trim()
+        ? d.prenoms
+        : (typeof d.prenom === 'string' ? d.prenom : '')
+      return {
+        prenom: prenomsSrc.trim().split(/\s+/)[0] || '',
+        nom_personne: typeof d.nom === 'string' ? d.nom.trim() : '',
+        poste: typeof d.qualite === 'string' ? d.qualite.trim() : ''
+      }
+    })
+    .filter(d => d.prenom || d.nom_personne)
+  const vus = new Set()
+  return brut.filter(d => {
+    const cle = (d.prenom + '|' + d.nom_personne).toLowerCase().trim()
+    if (vus.has(cle)) return false
+    vus.add(cle)
+    return true
+  })
+}
+
 // ── Re-fetch dirigeants Etalab par SIREN (matérialisation d'un prospect) ──
 // Au passage d'un lead en société on recharge la fiche complète recherche-
 // entreprises pour récupérer, en UN SEUL appel (zéro requête en plus) :
@@ -2661,27 +2932,9 @@ async function refetchDirigeants(siren) {
       const data = await r.json()
       const fiche = Array.isArray(data.results) ? data.results[0] : null
       if (!fiche) return vide
-      // Prénom : premier mot seulement (Etalab empile tous les prénoms d'état
-      // civil — « FABIENNE FRANCOISE MARIE-JOSEPHE » → « FABIENNE »). Nom laissé
-      // brut (nom de naissance + nom d'usage entre parenthèses conservés).
-      const dirigeantsRaw = (Array.isArray(fiche.dirigeants) ? fiche.dirigeants : [])
-        .filter(d => d && d.type_dirigeant === 'personne physique')
-        .filter(d => (typeof d.nom === 'string' && d.nom.trim()) || (typeof d.prenoms === 'string' && d.prenoms.trim()))
-        .map(d => ({
-          prenom: typeof d.prenoms === 'string' ? (d.prenoms.trim().split(/\s+/)[0] || '') : '',
-          nom_personne: typeof d.nom === 'string' ? d.nom.trim() : '',
-          poste: typeof d.qualite === 'string' ? d.qualite.trim() : ''
-        }))
-      // Dédup personne : Etalab répète la même personne sur plusieurs mandats
-      // (périodes distinctes). Clé = prénom(1er mot) + nom, insensible à la casse.
-      // On garde la 1re occurrence.
-      const vus = new Set()
-      const dirigeants = dirigeantsRaw.filter(d => {
-        const cle = (d.prenom + '|' + d.nom_personne).toLowerCase().trim()
-        if (vus.has(cle)) return false
-        vus.add(cle)
-        return true
-      })
+      // Forme des dirigeants : la règle commune, pas une deuxième écriture
+      // (prénom au 1er mot, nom brut, poste depuis qualite, dédup des mandats).
+      const dirigeants = normaliserDirigeants(fiche.dirigeants)
       return {
         dirigeants,
         effectif: typeof fiche.tranche_effectif_salarie === 'string' ? fiche.tranche_effectif_salarie : '',

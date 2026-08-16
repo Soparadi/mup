@@ -799,6 +799,11 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
         <strong id="ctx-label"></strong>
         —&nbsp;<span id="ctx-geo-label">Région&nbsp;:</span>
         <strong id="ctx-region"></strong>
+        <!-- Ajout en bloc. ABSENT (pas grisé) tant que la recherche n'a pas
+             convergé : c'est maybeFinishSearch, et lui seul, qui le fait
+             paraître. Masqué de nouveau au lancement de toute recherche. -->
+        <button class="ss-edit" type="button" id="btn-add-all"
+                style="display:none" onclick="addAllToPipeline()">Tout ajouter au pipeline</button>
       </div>
       <!-- Barre d'indicateurs : sortie de la carte, elle devient l'en-tête de la
            colonne fiches, au format vitrine « Aperçu · N résultat » (index.html:4064). -->
@@ -2508,6 +2513,15 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
         // de l'ajout : une fiche reste attribuée à la recherche qui l'a
         // rapportée, même si l'abonnée en a relancé une autre entre-temps.
         search_id: S.searchId || '',
+        // Dirigeants TELS QUE LA RECHERCHE LES A RAMENÉS (chemin Etalab :
+        // prenoms + qualite ; chemin cache : prenom + prenoms + qualite) et
+        // état administratif de l'unité légale. Deux champs que la fiche
+        // recevait puis jetait, et que le serveur redemandait ensuite à Etalab
+        // à chaque ajout. Conservés bruts ici, transmis par _corpsFiche : le
+        // serveur les normalise lui-même, avec la règle qui vaut aussi pour
+        // son propre re-fetch.
+        dirigeants: dirigeants,
+        etat_administratif: r.etat_administratif || '',
         complete: false, source: 'SIRENE'
       });
     });
@@ -2759,6 +2773,7 @@ async function loadPage(page) {
     document.getElementById('skel').classList.add('show');
     document.getElementById('empty').classList.remove('show');
     document.getElementById('res-context').classList.remove('show');
+    masquerAjoutTotal();   // nouvelle recherche : l'ajout en bloc disparaît
     document.getElementById('cards').innerHTML = '';
     var prospectsEl0 = document.getElementById('kpi-prospects-count');
     if (prospectsEl0) prospectsEl0.textContent = '0';
@@ -3307,6 +3322,9 @@ function maybeFinishSearch(gen) {
     // plus aucun fetch (l'aspiration au référentiel est assurée page par page
     // par /api/search pendant le déroulement).
     _tweenMarketTo(S.buffer.length);
+    // C'EST ICI, et nulle part ailleurs, que « Tout ajouter au pipeline »
+    // paraît : au seul point de convergence de la recherche.
+    afficherAjoutTotal();
   }
 }
 
@@ -3426,47 +3444,35 @@ function onRegionChange() {
 }
 
 
-function showToast(msg) {
+// ms optionnel : le décompte d'un ajout en bloc est plus long à lire qu'un
+// « ajouté ✓ ». Appels existants inchangés (2200 ms par défaut), même apparence.
+function showToast(msg, ms) {
   var t = document.createElement('div');
   t.style.cssText = 'position:fixed;bottom:88px;left:50%;transform:translateX(-50%);background:var(--black);color:white;padding:10px 20px;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:600;z-index:9999;pointer-events:none;';
   t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(function(){ t.remove(); }, 2200);
+  setTimeout(function(){ t.remove(); }, ms || 2200);
 }
 
 function cp(v, label) {
   navigator.clipboard.writeText(v).then(function(){ showToast(label+' copié ✓'); });
 }
 
-async function addToPipeline(leadId) {
-  var lead = S.buffer.find(function(l){ return l.id === leadId; });
-  if(!lead) return;
-  var cards = [];
-  try {
-    var resp = await fetch('/api/pipeline');
-    if(resp.ok){
-      cards = await resp.json();
-    } else {
-      throw new Error('Pipeline API unavailable');
-    }
-  } catch(e) {
-    console.warn('[Leads] addToPipeline pipeline fetch failed, fallback localStorage', e);
-    try { var r = localStorage.getItem('mup_pipeline'); if(r) cards = JSON.parse(r); } catch(e2){}
-  }
-  if(cards.find(function(c){ return (lead.siren && String(c.siren) === String(lead.siren)) || (lead.siret && String(c.siret) === String(lead.siret)); })) {
-    showToast('Déjà dans le pipeline');
-    return;
-  }
-  // Contrat de body — clés lues par POST /api/pipeline/from-lead (commit 2) :
-  //   siret, siren, raison_sociale(lead.name), naf, naf_libelle(lead.nafLabel),
-  //   forme(lead.forme), date_creation(lead.created), capital, lat, lng,
-  //   adresse_numero_voie / _type_voie / _libelle_voie / _code_postal /
-  //   _libelle_commune (posés au buffer par fetchLeads, commit 3).
-  // Le serveur pose source:'prospection' (autorité serveur, non spoofable),
-  // re-fetch les dirigeants et matérialise société + contacts + carte en UNE
-  // transaction. Remplace l'ancien double POST (/api/pipeline plat +
-  // /api/contacts) : plus de dédup contacts client, le serveur orchestre tout.
-  var body = {
+// Contrat de body — clés lues par POST /api/pipeline/from-lead, et à
+// l'identique par chaque entrée du tableau de POST /api/pipeline/from-leads :
+//   siret, siren, raison_sociale(lead.name), naf, naf_libelle(lead.nafLabel),
+//   forme(lead.forme), date_creation(lead.created), capital, lat, lng,
+//   adresse_numero_voie / _type_voie / _libelle_voie / _code_postal /
+//   _libelle_commune (posés au buffer par fetchLeads, commit 3).
+// Le serveur pose source:'prospection' (autorité serveur, non spoofable) et
+// matérialise société + contacts + carte en UNE transaction — à partir des
+// dirigeants transmis ici, ou par re-fetch Etalab si la fiche n'en porte pas.
+// Remplace l'ancien double POST (/api/pipeline plat +
+// /api/contacts) : plus de dédup contacts client, le serveur orchestre tout.
+// Une seule définition pour l'ajout à l'unité et l'ajout en bloc : les deux
+// envoient exactement la même fiche.
+function _corpsFiche(lead) {
+  return {
     siret: lead.siret || '',
     siren: lead.siren || '',
     // raison_sociale = raison sociale (devis/factures), JAMAIS l'enseigne de
@@ -3498,8 +3504,39 @@ async function addToPipeline(leadId) {
     // Recherche d'origine — prise SUR LA FICHE (posée au moment où elle est
     // entrée au buffer), jamais sur l'état courant. Le serveur la recopie sur la
     // société, ses contacts et sa carte.
-    search_id: lead.search_id || ''
+    search_id: lead.search_id || '',
+    // Dirigeants ramenés par la recherche, transmis TELS QUELS (non
+    // normalisés : c'est le serveur qui tranche la forme, une seule règle pour
+    // les deux voies). Non vides, ils évitent au serveur de redemander à
+    // Etalab ce que la recherche a déjà rapporté. Absents (fiche d'une page
+    // antérieure, lead sans le champ), le serveur re-fetche comme avant.
+    dirigeants: Array.isArray(lead.dirigeants) ? lead.dirigeants : [],
+    // État administratif de l'unité légale — le filtre d'activité serveur le
+    // lit là où il lisait celui du re-fetch. Vide = inconnu, jamais bloquant.
+    etat_administratif: lead.etat_administratif || ''
   };
+}
+
+async function addToPipeline(leadId) {
+  var lead = S.buffer.find(function(l){ return l.id === leadId; });
+  if(!lead) return;
+  var cards = [];
+  try {
+    var resp = await fetch('/api/pipeline');
+    if(resp.ok){
+      cards = await resp.json();
+    } else {
+      throw new Error('Pipeline API unavailable');
+    }
+  } catch(e) {
+    console.warn('[Leads] addToPipeline pipeline fetch failed, fallback localStorage', e);
+    try { var r = localStorage.getItem('mup_pipeline'); if(r) cards = JSON.parse(r); } catch(e2){}
+  }
+  if(cards.find(function(c){ return (lead.siren && String(c.siren) === String(lead.siren)) || (lead.siret && String(c.siret) === String(lead.siret)); })) {
+    showToast('Déjà dans le pipeline');
+    return;
+  }
+  var body = _corpsFiche(lead);
   try {
     var apiResp = await fetch('/api/pipeline/from-lead', {
       method: 'POST',
@@ -3591,6 +3628,107 @@ async function addToPipeline(leadId) {
     console.error('[Leads] addToPipeline API failed', e);
     showToast('Erreur ajout pipeline');
     return;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// AJOUT EN BLOC — « Tout ajouter au pipeline »
+// ════════════════════════════════════════════════════════════════
+// Le bouton n'existe à l'écran qu'à la CONVERGENCE de la recherche : c'est
+// maybeFinishSearch, et lui seul, qui appelle afficherAjoutTotal(). Tant que
+// le déroulement automatique tourne, le bouton est ABSENT — pas grisé, absent.
+// Corollaire assumé : le déroulement s'arrête quand l'onglet passe en
+// arrière-plan ; la convergence n'arrive alors pas et le bouton ne paraît pas.
+// Rien ici ne cherche à rattraper ce cas.
+function afficherAjoutTotal() {
+  var b = document.getElementById('btn-add-all');
+  if (!b) return;
+  if (!S.finished || !S.buffer.length) { b.style.display = 'none'; return; }
+  // Le nombre annoncé est celui des fiches QUE LA PAGE DÉTIENT (S.buffer),
+  // jamais le marché annoncé (S.market), qui n'est qu'une estimation upstream.
+  b.textContent = 'Tout ajouter au pipeline (' + S.buffer.length.toLocaleString('fr-FR') + ')';
+  b.disabled = false;
+  b.style.display = '';
+}
+function masquerAjoutTotal() {
+  var b = document.getElementById('btn-add-all');
+  if (b) b.style.display = 'none';
+}
+
+async function addAllToPipeline() {
+  // Le bouton est absent avant la convergence, mais la règle ne se repose pas
+  // sur l'absence d'un élément du DOM.
+  if (!S.finished) return;
+  var fiches = S.buffer.slice();
+  if (!fiches.length) return;
+  var n = fiches.length;
+  var mot = (n > 1 ? ' fiches' : ' fiche');
+  if (!window.confirm(
+    'Ajouter ' + n.toLocaleString('fr-FR') + mot + ' au pipeline ?\n\n'
+    + 'Les entreprises déjà présentes ne seront pas ajoutées en double, et '
+    + "celles qui se sont opposées à la prospection sont écartées."
+  )) return;
+
+  var b = document.getElementById('btn-add-all');
+  if (b) { b.disabled = true; b.textContent = 'Ajout en cours…'; }
+  showToast('Ajout de ' + n.toLocaleString('fr-FR') + mot + ' en cours…');
+  try {
+    // UN SEUL appel HTTP pour tout le lot : le rate-limit global de 60/min
+    // n'est jamais approché, et rien ne l'exempte.
+    var resp = await fetch('/api/pipeline/from-leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fiches: fiches.map(_corpsFiche) })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var d = await resp.json();
+    console.log('[Leads] addAllToPipeline', d);
+
+    _siretsCache = null;
+    _siretsCacheTime = 0;
+    _contactsCache = null;
+    _contactsCacheTime = 0;
+
+    // ── Effets KPI, sur les décomptes rendus par le serveur ──────────
+    var pipEl = document.getElementById('kpi-pipeline-count');
+    if (pipEl && d.ajoutees > 0) {
+      var pipN = parseInt(pipEl.textContent.replace(/\D/g, ''), 10);
+      pipEl.textContent = ((isNaN(pipN) ? 0 : pipN) + d.ajoutees).toLocaleString('fr-FR');
+    }
+    var conEl = document.getElementById('kpi-contacts-count');
+    if (conEl && d.dirigeants_crees > 0) {
+      var conN = parseInt(conEl.textContent.replace(/\D/g, ''), 10);
+      conEl.textContent = ((isNaN(conN) ? 0 : conN) + d.dirigeants_crees).toLocaleString('fr-FR');
+    }
+    if (d.ajoutees > 0) {
+      sessionAdds += d.ajoutees;
+      var saEl = document.getElementById('kpi-session-adds');
+      if (saEl) saEl.textContent = String(sessionAdds);
+    }
+
+    // ── Le décompte rendu à l'abonnée, motifs compris ────────────────
+    var m = d.motifs || {};
+    var motifs = [];
+    if (m.opt_out > 0)             motifs.push(m.opt_out + ' opposée' + (m.opt_out > 1 ? 's' : '') + ' à la prospection');
+    if (m.etablissement_ferme > 0) motifs.push(m.etablissement_ferme + ' fermée' + (m.etablissement_ferme > 1 ? 's' : ''));
+    if (m.siren_manquant > 0)      motifs.push(m.siren_manquant + ' sans SIREN');
+    if (m.erreur > 0)              motifs.push(m.erreur + ' en erreur');
+    var parts = [d.ajoutees + ' ajoutée' + (d.ajoutees > 1 ? 's' : '')];
+    if (d.deja_presentes > 0) parts.push(d.deja_presentes + ' déjà présente' + (d.deja_presentes > 1 ? 's' : ''));
+    if (d.ecartees > 0) {
+      parts.push(d.ecartees + ' écartée' + (d.ecartees > 1 ? 's' : '')
+        + (motifs.length ? ' (' + motifs.join(', ') + ')' : ''));
+    }
+    showToast(d.total.toLocaleString('fr-FR') + ' fiches : ' + parts.join(', '), 6000);
+
+    if (b) { b.disabled = true; b.textContent = 'Ajouté au pipeline'; }
+    // Les fiches à l'écran gardent leur bouton d'ajout : le serveur ne dit pas
+    // LESQUELLES ont été écartées, seulement combien. Un nouvel ajout unitaire
+    // sur une fiche déjà passée est sans effet (dédup serveur).
+  } catch(e) {
+    console.error('[Leads] addAllToPipeline failed', e);
+    showToast("Erreur pendant l'ajout au pipeline");
+    afficherAjoutTotal();   // le bouton reprend son libellé et redevient cliquable
   }
 }
 
@@ -3767,6 +3905,7 @@ async function searchById() {
   document.getElementById('skel').classList.add('show');
   document.getElementById('empty').classList.remove('show');
   document.getElementById('res-context').classList.remove('show');
+  masquerAjoutTotal();   // recherche par identifiant : l'ajout en bloc disparaît
   document.getElementById('cards').innerHTML = '';
   hideError();
 

@@ -1766,6 +1766,14 @@ var CLUSTER_THR = 200;                // switch to clustering above this
 var GEO_PFX     = 'geo3_';
 var GEO_TTL     = 30 * 24 * 60 * 60 * 1000;
 
+// Rouge de la colonne Prospects du Kanban. Leaflet pose fillColor en attribut
+// SVG, où var(--red) ne résout pas : la variable doit être lue une fois ici,
+// et non à chaque point. Ce script est dans <body>, après le <style> du <head>
+// et ses feuilles liées (toutes bloquantes) : la valeur calculée est déjà
+// disponible. Repli sur le littéral si elle revenait vide.
+var MARKER_RED  = (getComputedStyle(document.documentElement)
+                     .getPropertyValue('--red') || '').trim() || '#CC0000';
+
 // ════════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════════
@@ -2617,7 +2625,9 @@ function addMarker(lead) {
   if(!lead.lat || !lead.lng) return;
   // Sourcing : tous les pins uniformes. La qualification (priorité) se fait
   // en aval dans Pipeline, pas ici.
-  var color = '#94a3b8';
+  // Couleur reprise de --red, le rouge de la colonne Prospects, lue une seule
+  // fois au niveau du script (MARKER_RED).
+  var color = MARKER_RED;
   var r     = 7;
 
   // Popup Leaflet : utilise MUPCard (sprint fiche unifiée). Variante popup

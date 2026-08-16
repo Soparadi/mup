@@ -6375,13 +6375,25 @@ async function requireSessionOwnerId(req, res) {
 // /auth/<fournisseur> : non configuré, celui-ci répond 503 en pleine page, donc
 // hors de l'application. Ne renvoie qu'un booléen par fournisseur — jamais les
 // identifiants, ni le détail des variables d'environnement manquantes.
+//
+// S'y ajoute googleAppVerified, qui ne dit rien de la configuration mais de
+// l'état de notre dossier chez Google : tant que la validation n'a pas abouti,
+// Google intercale un écran d'avertissement entre le clic et le consentement.
+// La page s'en sert pour préparer l'abonné à cet écran. Le jour où la
+// validation aboutit, poser GOOGLE_APP_VERIFIED=true suffit à retirer la
+// préparation — l'absence de variable vaut « pas encore validée ».
 app.get('/api/mail/oauth-providers', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   try {
     const { isGoogleReady } = await import('./lib/oauth-google.js')
     const { isMicrosoftReady } = await import('./lib/oauth-microsoft.js')
-    res.json({ google: isGoogleReady(), microsoft: isMicrosoftReady() })
+    const verified = String(process.env.GOOGLE_APP_VERIFIED || '').trim().toLowerCase()
+    res.json({
+      google: isGoogleReady(),
+      microsoft: isMicrosoftReady(),
+      googleAppVerified: verified === 'true' || verified === '1'
+    })
   } catch (err) {
     console.error('[oauth-providers]', err.message)
     res.status(500).json({ error: 'Disponibilité des fournisseurs indisponible' })

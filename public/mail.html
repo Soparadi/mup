@@ -568,7 +568,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
             </div>
             <div class="empty-state-title">Connectez votre boîte mail</div>
-            <div class="empty-state-sub">Pour envoyer et recevoir vos messages depuis MUP, connectez d'abord votre boîte professionnelle. Connexion sécurisée OAuth en 1 clic.</div>
+            <div class="empty-state-sub">Pour envoyer et recevoir vos messages depuis MUP, connectez d'abord votre boîte professionnelle. La connexion passe par Google ou Microsoft, sans jamais nous confier votre mot de passe.</div>
             <div class="empty-state-actions">
               <div class="notice notice-warn oauth-notice" style="display:none;text-align:left;"></div>
               <button class="oauth-btn" data-oauth="google" onclick="oauthGoogle()">
@@ -872,6 +872,44 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   </div>
 </div>
 
+<!-- ────── FENÊTRE « AVANT GOOGLE » ──────
+     S'interpose au seul point de passage des trois boutons Google de la page
+     (startOauth), tant que GOOGLE_APP_VERIFIED n'est pas posée côté serveur.
+     Elle décrit une étape du parcours Google, pas un défaut de MovUP, et nomme
+     les deux clics dans l'ordre où ils se présenteront. -->
+<div class="modal-overlay" id="google-prelude-modal" onclick="if(event.target===this)fermerPreludeGoogle()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="gp-title" style="max-width:480px;">
+    <div class="modal-head">
+      <span class="modal-title" id="gp-title">Le parcours chez Google, en deux clics de plus</span>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 14px;font-size:13px;line-height:1.6;">
+        Google vous montrera d'abord un écran d'avertissement : MovUP est une jeune
+        application, et son examen par Google est en cours. Voici les deux clics qui
+        vous mènent au bout.
+      </p>
+      <ol style="margin:0 0 14px;padding-left:20px;font-size:13px;line-height:1.6;">
+        <li style="margin-bottom:8px;">Cliquez sur <strong>Paramètres avancés</strong>, en bas de l'écran.</li>
+        <li>Cliquez sur le lien qui apparaît alors : <strong>Accéder à movup.io (non sécurisé)</strong>.</li>
+      </ol>
+      <div class="notice" style="margin-bottom:14px;">
+        <strong>« Non sécurisé » parle de l'application, pas de la connexion.</strong>
+        Google désigne ainsi une application qu'il n'a pas encore examinée. L'échange
+        avec Google, lui, est chiffré comme n'importe quel autre.
+      </div>
+      <p style="margin:0;font-size:13px;line-height:1.6;">
+        Google vous demandera ensuite d'autoriser MovUP à lire et envoyer vos messages.
+        Vous gardez la main : déconnecter votre boîte depuis vos Paramètres retire cette
+        autorisation chez Google.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-sm" onclick="fermerPreludeGoogle()">Annuler</button>
+      <button class="btn btn-dark btn-sm" id="gp-continuer" onclick="partirVersGoogle()">Continuer vers Google</button>
+    </div>
+  </div>
+</div>
+
 <!-- ────── MODALES CAMPAGNES (création + détail) ────── -->
 <div class="modal-overlay" id="campaign-modal" onclick="if(event.target===this)closeCampaignModal()">
   <div class="modal" style="max-width:680px;">
@@ -969,7 +1007,8 @@ var STATE = {
   listToken: 0,            // ignore la réponse d'un dossier qu'on a quitté
   bodyToken: 0,            // idem pour le corps d'un message
   welcomePollTimer: null,
-  oauthProviders: null     // { google, microsoft } — null tant que non interrogé
+  oauthProviders: null,    // { google, microsoft } — null tant que non interrogé
+  googleAppVerified: false // dossier validé chez Google ? faux tant qu'on ne sait pas
 };
 
 // ────────────────────────────────────────────────
@@ -1847,6 +1886,10 @@ async function fetchOauthProviders(){
     if(!r.ok) return null;
     var d = await r.json() || {};
     STATE.oauthProviders = { google: d.google === true, microsoft: d.microsoft === true };
+    // Une réponse muette sur ce point vaut « pas encore validée » : mieux vaut
+    // préparer l'abonné à un écran qu'il ne verra pas que le laisser tomber
+    // dessus sans prévenir.
+    STATE.googleAppVerified = d.googleAppVerified === true;
     return STATE.oauthProviders;
   } catch(e){ return null; }
 }
@@ -1923,11 +1966,47 @@ async function startOauth(provider){
     toast('Connexion ' + OAUTH_LABELS[provider] + ' momentanément indisponible', 'error');
     return;
   }
+  // Tant que notre dossier n'est pas validé chez Google, l'abonné rencontrera
+  // un écran d'avertissement qu'il n'attend pas. On le lui décrit ici, au seul
+  // endroit par où passent les trois boutons Google de la page, et on part.
+  // Microsoft ne connaît pas cet écran : rien ne s'interpose sur sa route.
+  if(provider === 'google' && !STATE.googleAppVerified){
+    ouvrirPreludeGoogle();
+    return;
+  }
   window.location.href = '/auth/' + provider;
 }
 
 async function oauthGoogle(){ return startOauth('google'); }
 async function oauthMicrosoft(){ return startOauth('microsoft'); }
+
+// ── Le passage par l'écran d'avertissement de Google ──
+// La fenêtre ne retient pas : elle annonce, puis laisse partir ou renoncer.
+// Aucune mémoire d'un passage précédent — Google force le consentement à
+// chaque connexion (prompt=consent, exigé pour obtenir un refresh_token), donc
+// l'écran revient à chaque fois, reconnexion d'une boîte déjà autorisée
+// comprise. Une fenêtre qui ne s'afficherait qu'une fois laisserait l'abonné
+// seul devant lui la fois suivante.
+function ouvrirPreludeGoogle(){
+  document.getElementById('google-prelude-modal').classList.add('open');
+  var btn = document.getElementById('gp-continuer');
+  if(btn) btn.focus();
+}
+
+function fermerPreludeGoogle(){
+  document.getElementById('google-prelude-modal').classList.remove('open');
+}
+
+function partirVersGoogle(){
+  fermerPreludeGoogle();
+  window.location.href = '/auth/google';
+}
+
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Escape') return;
+  var m = document.getElementById('google-prelude-modal');
+  if(m && m.classList.contains('open')) fermerPreludeGoogle();
+});
 
 async function loadAccounts(){
   try {

@@ -96,6 +96,15 @@ import {
   isVerifiedResendSender,
   htmlToText
 } from './lib/mail-service.js'
+import {
+  chargeSignature,
+  signatureEnSortie,
+  motifLogoRefuse,
+  DISPOSITIONS,
+  TEXTE_LONGUEUR_MAX,
+  LOGO_LARGEUR_ENCODEE_MAX,
+  LOGO_HAUTEUR_ENCODEE_MAX
+} from './lib/mail-signature.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -4606,6 +4615,135 @@ app.delete('/api/mail/settings/:userId', async (req, res) => {
   }
 })
 
+// ── SIGNATURE D'ABONNÉ ────────────────────────────────────────────────
+// Table `mail_signature`, tenue à l'écart de mail_settings juste au-dessus —
+// et c'est tout son objet. Deux mécanismes de cette table-là rendraient la
+// cohabitation dangereuse :
+//   - l'enregistrement passe par upsertRecord, dont la branche de mise à jour
+//     fait UPDATE … CONTENT : un remplacement intégral, pas une fusion. Un
+//     enregistrement de signature aux champs SMTP/IMAP vides effacerait le mot
+//     de passe chiffré de la boîte et la débrancherait en silence ;
+//   - la suppression y est totale : « je supprime ma signature » emporterait
+//     la boîte, et symétriquement déconnecter une boîte emporterait la
+//     signature.
+// Séparées, les deux vies ne peuvent plus se marcher dessus par construction.
+//
+// Rien de chiffré ne traverse ces routes : tout ce que porte la table est
+// destiné à partir en clair dans les messages de l'abonné. Il n'y a donc pas
+// d'équivalent de stripSettingsSecrets à appliquer avant de la rendre.
+//
+// L'IDENTITÉ VIENT DE req.userId, que seul requireAuth pose, depuis la session
+// vérifiée — et non de requireUserId, dont la chaîne de repli lit l'en-tête
+// x-user-id, la query et le corps (cf. lib/auth.js et la note SEC 1 plus bas,
+// qui la dit spoofable). Cette table porte le logo et le texte qui partiront
+// signés du nom de l'abonné dans chacun de ses courriels : l'identité doit se
+// lire dans la route, sans dépendre de l'ordre d'un middleware à des milliers
+// de lignes d'ici. Ne pas revenir à requireUserId ici.
+//
+// La garde est explicite parce que String(undefined) vaut « undefined », qui
+// serait un identifiant d'enregistrement parfaitement valide : une requête
+// atteignant ces routes hors du portillon partagerait alors un même espace de
+// signature avec toutes les autres. Absente, l'identité vaut 401, sans qu'une
+// seule lecture ni écriture ait lieu.
+
+const SIGNATURE_VIDE = {
+  active: false,
+  texte: '',
+  disposition: 'dessus',
+  logo_data_url: null,
+  logo_width: null,
+  logo_height: null,
+  updated_at: null
+}
+
+// Une dimension de logo est une métadonnée d'affichage, pas une donnée de
+// confiance. Hors bornes, non entière ou absente, elle est mise à null : le
+// balisage retombe alors sur son plafond en style, qui tient les proportions
+// sans connaître la taille. Rien à refuser ici — il n'y a rien à protéger
+// qu'un plafond ne tienne déjà.
+function dimensionLogo(valeur, max) {
+  const n = Number(valeur)
+  if (!Number.isInteger(n) || n <= 0 || n > max) return null
+  return n
+}
+
+app.get('/api/mail/signature', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  try {
+    const db = await getDb()
+    // N'avoir aucune signature est un état normal, pas une erreur : la page
+    // reçoit le formulaire vide plutôt qu'un 404 à interpréter.
+    res.json(signatureEnSortie(await chargeSignature(db, userId)) || SIGNATURE_VIDE)
+  } catch (err) {
+    console.error('[mail/signature:get]', err.message)
+    res.status(500).json({ error: 'Lecture de votre signature impossible' })
+  }
+})
+
+app.put('/api/mail/signature', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  const body = req.body || {}
+  // Ce qui est reçu est du texte, jamais du balisage : le HTML de la signature
+  // est construit à l'envoi, à partir de ce texte et de cette disposition.
+  const texte = typeof body.texte === 'string' ? body.texte : ''
+  if (texte.length > TEXTE_LONGUEUR_MAX) {
+    return res.status(400).json({ error: `Votre texte de signature dépasse ${TEXTE_LONGUEUR_MAX} caractères.` })
+  }
+  const disposition = DISPOSITIONS.includes(body.disposition) ? body.disposition : 'dessus'
+  // Le logo arrive mis au format par la page. Le serveur le relit quand même,
+  // sans croire ni le type annoncé ni le poids déclaré : motifLogoRefuse
+  // tranche sur les octets décodés, et rend le motif tel qu'il sera lu.
+  let logo = null
+  if (body.logo_data_url) {
+    const motif = motifLogoRefuse(body.logo_data_url)
+    if (motif) return res.status(400).json({ error: motif })
+    logo = String(body.logo_data_url)
+  }
+  // Un interrupteur ne s'allume pas sur du vide : il annoncerait une signature
+  // qui ne s'apposerait jamais, et l'abonné chercherait la panne à l'envoi.
+  if (body.active === true && !texte.trim() && !logo) {
+    return res.status(400).json({ error: 'Écrivez un texte ou téléversez un logo avant d\'activer votre signature.' })
+  }
+  try {
+    const db = await getDb()
+    // Ici le remplacement intégral d'upsertRecord est la bonne opération, et
+    // non le piège qu'il est sur mail_settings : ce payload EST la signature
+    // entière. Retirer son logo doit effacer le champ, pas le laisser en place.
+    const payload = {
+      userId,
+      active: body.active === true,
+      texte,
+      disposition,
+      logo_data_url: logo,
+      logo_width: logo ? dimensionLogo(body.logo_width, LOGO_LARGEUR_ENCODEE_MAX) : null,
+      logo_height: logo ? dimensionLogo(body.logo_height, LOGO_HAUTEUR_ENCODEE_MAX) : null,
+      updated_at: new Date().toISOString()
+    }
+    const { record, status } = await upsertRecord(db, 'mail_signature', userId, payload)
+    res.status(status).json(signatureEnSortie(record) || SIGNATURE_VIDE)
+  } catch (err) {
+    console.error('[mail/signature:put]', err.message)
+    res.status(500).json({ error: 'Enregistrement de votre signature impossible' })
+  }
+})
+
+// Supprime la signature, et rien d'autre : aucune boîte connectée n'est
+// concernée par cette route.
+app.delete('/api/mail/signature', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  try {
+    const db = await getDb()
+    await db.query('DELETE type::record("mail_signature", $id)', { id: userId })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[mail/signature:delete]', err.message)
+    res.status(500).json({ error: 'Suppression de votre signature impossible' })
+  }
+})
+
 app.post('/api/mail/test-smtp', async (req, res) => {
   if (!requireCrypto(res)) return
   const body = req.body || {}
@@ -7121,6 +7259,8 @@ app.use((req, res) => {
   try {
     const db = await getDb()
     await db.query('DEFINE TABLE IF NOT EXISTS mail_settings SCHEMALESS')
+    // Distincte de mail_settings à dessein — cf. le bloc SIGNATURE D'ABONNÉ.
+    await db.query('DEFINE TABLE IF NOT EXISTS mail_signature SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS mail SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS visio_settings SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS visio_log SCHEMALESS')

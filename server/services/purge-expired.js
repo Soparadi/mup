@@ -104,6 +104,11 @@ const TABLES_SCHEMALESS = [
   'agenda',
   'mail',
   'mail_settings',
+  // Table à part de mail_settings, donc ligne à part ici : le logo et le texte
+  // de signature sont des données personnelles comme les autres, et la
+  // séparation qui les protège d'une écriture de configuration ne doit pas les
+  // faire survivre à la suppression du compte.
+  'mail_signature',
   'visio_settings',
   'visio_log',
   'visio_draft',

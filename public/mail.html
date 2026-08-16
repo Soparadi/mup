@@ -206,6 +206,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .settings-section .row:last-child{border-bottom:none;}
 .row-label{font-size:13px;font-weight:600;color:var(--text);}
 .row-value{font-size:12.5px;color:var(--muted);font-family:var(--mono);}
+/* Signature — onglet dédié */
+.sig-switch-row{display:flex;align-items:flex-start;gap:12px;padding-bottom:18px;border-bottom:1px solid var(--border);margin-bottom:18px;}
+.sig-switch{position:relative;display:inline-flex;flex-shrink:0;cursor:pointer;margin-top:1px;}
+.sig-switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;}
+.sig-switch-piste{display:block;width:40px;height:23px;border-radius:12px;background:var(--border2);transition:background .15s;}
+.sig-switch-bouton{display:block;width:19px;height:19px;border-radius:50%;background:#fff;margin:2px;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25);}
+.sig-switch input:checked + .sig-switch-piste{background:var(--green);}
+.sig-switch input:checked + .sig-switch-piste .sig-switch-bouton{transform:translateX(17px);}
+.sig-switch input:focus-visible + .sig-switch-piste{outline:2px solid var(--text);outline-offset:2px;}
+.sig-logo-pose{display:flex;align-items:center;gap:14px;padding:12px;border:1.5px dashed var(--border);border-radius:10px;background:var(--surface);flex-wrap:wrap;}
+.sig-logo-pose img{max-width:160px;max-height:80px;height:auto;display:block;background:#fff;border-radius:4px;}
+.sig-logo-dim{font-size:11px;color:var(--muted);font-family:var(--mono);}
+.sig-dispositions{display:flex;gap:10px;flex-wrap:wrap;}
+.sig-dispo{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--muted);}
+.sig-dispo input{margin:0;accent-color:var(--text);}
+.sig-dispo:has(input:checked){border-color:var(--text);color:var(--text);background:var(--surface);}
+.sig-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:18px;}
+.sig-apercu{width:100%;min-height:190px;border:1px solid var(--border);border-radius:9px;background:#fff;display:block;}
 .link-secondary{display:inline-block;font-size:12px;color:var(--muted);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;font-family:var(--font);}
 .link-secondary:disabled{opacity:.45;cursor:not-allowed;text-decoration:none;}
 .link-secondary:hover{color:var(--text);}
@@ -471,6 +489,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     <div class="subtabs" role="tablist">
       <button class="subtab active" role="tab" data-tab="inbox">Boîte de réception</button>
       <button class="subtab" role="tab" data-tab="campaigns">Campagnes</button>
+      <button class="subtab" role="tab" data-tab="signature">Signature</button>
       <button class="subtab" role="tab" data-tab="settings">Paramètres</button>
     </div>
   </div>
@@ -677,6 +696,63 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       </div></div>
     </div>
 
+    <!-- ────── SIGNATURE ────── -->
+    <div class="tab-pane" id="tab-signature" role="tabpanel">
+      <div class="tab-scroll"><div class="tab-scroll-inner">
+
+        <div class="card">
+          <h3>Votre signature</h3>
+          <p class="card-sub">Elle s'ajoute à la fin des messages que vous envoyez depuis MovUP. Vous écrivez le texte, MovUP le met en forme.</p>
+
+          <div class="sig-switch-row">
+            <label class="sig-switch">
+              <input type="checkbox" id="sig-active" onchange="majApercuSignature()" />
+              <span class="sig-switch-piste"><span class="sig-switch-bouton"></span></span>
+            </label>
+            <div>
+              <div class="row-label">Apposer ma signature à mes messages</div>
+              <div class="field-hint" id="sig-active-hint">Sans signature retenue, rien ne change à vos envois.</div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Logo</label>
+            <div id="sig-logo-zone"></div>
+            <input type="file" id="sig-logo-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+            <div class="field-hint">PNG, JPEG, WEBP ou GIF. Votre image est mise au format sur cette page avant d'être transmise ; elle s'affichera au plus à 160 × 80 pixels.</div>
+            <div class="notice notice-warn" id="sig-logo-erreur" style="display:none;margin-top:10px;margin-bottom:0;"></div>
+          </div>
+
+          <div class="field">
+            <label for="sig-texte">Texte</label>
+            <textarea id="sig-texte" rows="5" maxlength="2000" placeholder="Cordialement,&#10;Prénom NOM&#10;Entreprise&#10;06 12 34 56 78"></textarea>
+            <div class="field-hint"><span id="sig-compteur">0</span> / 2000 caractères. Vos retours à la ligne sont conservés ; rien d'autre n'est interprété.</div>
+          </div>
+
+          <div class="field">
+            <label>Disposition</label>
+            <div class="sig-dispositions">
+              <label class="sig-dispo"><input type="radio" name="sig-dispo" value="dessus" onchange="majApercuSignature()" checked /><span>Logo au-dessus du texte</span></label>
+              <label class="sig-dispo"><input type="radio" name="sig-dispo" value="cote" onchange="majApercuSignature()" /><span>Logo à côté du texte</span></label>
+            </div>
+          </div>
+
+          <div class="sig-actions">
+            <button class="btn btn-dark btn-sm" id="sig-enregistrer" onclick="enregistrerSignature()">Retenir ma signature</button>
+            <button class="btn btn-outline btn-sm" id="sig-supprimer" onclick="supprimerSignature()">Supprimer ma signature</button>
+            <span class="field-hint" id="sig-etat" style="margin:0;"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Aperçu</h3>
+          <p class="card-sub">Ce que votre destinataire verra à la fin de votre message, logo compris.</p>
+          <iframe id="sig-apercu" class="sig-apercu" sandbox="" referrerpolicy="no-referrer" title="Aperçu de votre signature"></iframe>
+        </div>
+
+      </div></div>
+    </div>
+
     <!-- ────── PARAMÈTRES ────── -->
     <div class="tab-pane" id="tab-settings" role="tabpanel">
       <div class="tab-scroll"><div class="tab-scroll-inner">
@@ -706,13 +782,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             </button>
             <button class="link-secondary" onclick="openImapModal()" style="margin-top:6px;">Ajouter un fournisseur (IMAP)</button>
           </div>
-        </div>
-
-        <div class="card">
-          <h3>Signature email</h3>
-          <p class="card-sub">Bloc de signature pour vos messages 1:1.</p>
-          <div class="field"><textarea id="signature-input" rows="4" disabled placeholder="Cordialement,&#10;Prénom NOM&#10;Entreprise"></textarea></div>
-          <button class="btn btn-outline btn-sm" disabled>Enregistrer</button>
         </div>
 
       </div></div>
@@ -817,6 +886,7 @@ document.querySelectorAll('.subtab').forEach(function(btn){
     document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.toggle('active', p.id === 'tab-' + name); });
     if(name === 'inbox'){ setPhonePane('list'); refreshInboxIfReady(); }
     if(name === 'campaigns') loadCampaignsTab();
+    if(name === 'signature') ouvrirOngletSignature();
     if(name === 'settings') loadAccounts();
   });
 });
@@ -2175,6 +2245,378 @@ async function saveImap(){
 // ────────────────────────────────────────────────
 function escHtml(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function escAttr(s){ return escHtml(s); }
+// ────────────────────────────────────────────────
+// SIGNATURE
+// ────────────────────────────────────────────────
+//
+// BORNES — lib/mail-signature.js en est l'autorité. Cette page tourne dans le
+// navigateur et ne peut pas importer un module du serveur ; les valeurs sont
+// donc REPRISES, pas redéfinies. Toute divergence dégrade le confort — un
+// refus qui arrive après l'aller-retour plutôt qu'avant — jamais la sûreté :
+// le serveur relit le logo, tranche sur les octets décodés et refuse pour son
+// propre compte. Ces trois nombres sont LOGO_LARGEUR_ENCODEE_MAX,
+// LOGO_HAUTEUR_ENCODEE_MAX et LOGO_OCTETS_MAX ; le quatrième est
+// TEXTE_LONGUEUR_MAX, repris aussi dans le maxlength du champ.
+var SIG_LOGO_L_MAX = 320;
+var SIG_LOGO_H_MAX = 160;
+var SIG_LOGO_OCTETS_MAX = 300 * 1024;
+var SIG_TEXTE_MAX = 2000;
+var SIG_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+// Le logo est encodé au double de sa taille d'affichage, pour rester net sur
+// écran dense. Le serveur écrit dans le balisage la moitié des dimensions
+// reçues : ce facteur est la convention qui relie les deux.
+var SIG_DENSITE = 2;
+
+// L'état de travail de l'onglet. `logo` vaut null ou
+// { dataUrl, width, height } — dimensions ENCODÉES, celles que le serveur
+// divisera par SIG_DENSITE.
+var signatureEtat = { active: false, texte: '', disposition: 'dessus', logo: null };
+var signaturePromesse = null;
+
+// Et non escHtml() de cette page, qui laisse passer l'apostrophe. Celui-ci
+// doit rendre exactement ce que rend echappeHtml() du serveur, apostrophe
+// comprise — sans quoi « l'entreprise » ne s'écrirait pas pareil des deux
+// côtés. Les deux formes s'affichent de la même façon, mais un jumeau qui
+// diverge sur un caractère n'est plus un jumeau, et c'est par là que les
+// écarts commencent.
+function echappeSignature(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ── Le balisage de l'aperçu ──
+// JUMEAU de construitSignatureHtml (lib/mail-signature.js). Ce n'est pas un
+// choix : l'aperçu doit montrer le balisage AVANT enregistrement, et aucune
+// route ne rend ce balisage — la page n'a donc rien d'autre à afficher que ce
+// qu'elle construit elle-même. Les deux doivent rester identiques ; si l'un
+// change, l'autre doit changer dans la même passe, sans quoi l'abonné retient
+// une signature d'après un aperçu qui n'est plus le sien.
+function baliseLogoSignature(source, largeurEncodee, hauteurEncodee){
+  var l = Number(largeurEncodee), h = Number(hauteurEncodee);
+  var styleImg = 'height:auto;border:0;outline:none;text-decoration:none;display:block;';
+  if(isFinite(l) && l > 0 && isFinite(h) && h > 0){
+    var L = Math.max(1, Math.round(l / SIG_DENSITE));
+    var H = Math.max(1, Math.round(h / SIG_DENSITE));
+    return '<img src="' + echappeSignature(source) + '" alt="" width="' + L + '" height="' + H
+      + '" style="width:' + L + 'px;height:' + H + 'px;' + styleImg + '">';
+  }
+  return '<img src="' + echappeSignature(source) + '" alt="" style="max-width:'
+    + Math.round(SIG_LOGO_L_MAX / SIG_DENSITE) + 'px;max-height:'
+    + Math.round(SIG_LOGO_H_MAX / SIG_DENSITE) + 'px;' + styleImg + '">';
+}
+
+function construitSignatureHtmlPage(texte, disposition, logoSrc, largeur, hauteur){
+  var styleTexte = 'font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55;color:#333333;';
+  var corps = echappeSignature(texte || '').replace(/\r\n|\r|\n/g, '<br>');
+  var img = logoSrc ? baliseLogoSignature(logoSrc, largeur, hauteur) : '';
+  if(!img) return '<div style="' + styleTexte + '">' + corps + '</div>';
+  if(disposition === 'cote'){
+    return '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">'
+      + '<tr>'
+      + '<td style="padding:0 14px 0 0;vertical-align:top;">' + img + '</td>'
+      + '<td style="padding:0;vertical-align:top;' + styleTexte + '">' + corps + '</td>'
+      + '</tr></table>';
+  }
+  return '<div><div style="margin:0 0 10px 0;">' + img + '</div><div style="' + styleTexte + '">' + corps + '</div></div>';
+}
+
+// ── L'aperçu ──
+// Rendu dans un cadre isolé, jamais dans la page. Deux raisons, dont la
+// première suffirait :
+//
+// FIDÉLITÉ — la feuille de style de MovUP habille tout ce qui vit dans la
+// page. Un aperçu posé en innerHTML hériterait de nos polices, de nos
+// couleurs, de nos marges, et montrerait donc autre chose que ce que verra le
+// destinataire — c'est-à-dire l'inverse de ce qu'on lui demande. Le cadre
+// n'apporte que le document minimal de documentCadre() : le balisage s'y rend
+// sur ses seuls styles en ligne, comme dans un client mail.
+//
+// ISOLEMENT — sandbox sans allow-scripts ni allow-same-origin : aucun script
+// ne s'exécute, pas même un onerror d'image, et le document est d'origine
+// opaque — ni nos cookies, ni notre session, ni accès au reste de l'écran.
+// C'est là que tient la sûreté, et non dans l'échappement. Celui-ci reste,
+// mais comme ceinture : posé en innerHTML, ce balisage ne dépendrait que de
+// lui, et une seule faille future dans construitSignatureHtml deviendrait du
+// script exécuté dans la session de l'abonné. Le sandbox rend cette classe
+// d'erreur inoffensive au lieu de la rendre improbable.
+//
+// C'est le cadre qui sert déjà à lire un message reçu : l'abonné voit sa
+// signature là où MovUP affiche le courrier, pas dans un rendu à part.
+function majApercuSignature(){
+  var cadre = document.getElementById('sig-apercu');
+  if(!cadre) return;
+  signatureEtat.active = document.getElementById('sig-active').checked;
+  signatureEtat.texte = document.getElementById('sig-texte').value;
+  var choisi = document.querySelector('input[name="sig-dispo"]:checked');
+  signatureEtat.disposition = choisi ? choisi.value : 'dessus';
+
+  var compteur = document.getElementById('sig-compteur');
+  if(compteur) compteur.textContent = String(signatureEtat.texte.length);
+
+  var vide = !signatureEtat.texte.trim() && !signatureEtat.logo;
+  var indice = document.getElementById('sig-active-hint');
+  if(indice){
+    indice.textContent = vide
+      ? 'Écrivez un texte ou téléversez un logo : une signature vide ne peut pas être apposée.'
+      : (signatureEtat.active
+          ? 'Vos prochains messages la porteront, en fin de courriel.'
+          : 'Votre signature est conservée mais ne s\'appose pas.');
+  }
+
+  var interieur = vide
+    ? '<p style="font:13px/1.6 Arial,Helvetica,sans-serif;color:#8a8a8e;margin:0;">Votre signature apparaîtra ici.</p>'
+    : construitSignatureHtmlPage(
+        signatureEtat.texte,
+        signatureEtat.disposition,
+        signatureEtat.logo ? signatureEtat.logo.dataUrl : null,
+        signatureEtat.logo ? signatureEtat.logo.width : null,
+        signatureEtat.logo ? signatureEtat.logo.height : null
+      );
+  cadre.srcdoc = documentCadre(interieur);
+}
+
+// ── Le logo ──
+// La mise au format est faite ici, avant transmission, sur le modèle de la
+// photo de frais. La toile est aussi ce qui assainit : quoi qu'on lui donne à
+// décoder, il en ressort des pixels réencodés en PNG — jamais le fichier
+// d'origine. Le PNG, et non le JPEG de la photo de frais, parce qu'un logo a
+// besoin de sa transparence et n'a rien à gagner d'une compression avec perte.
+function octetsDataUrl(url){
+  var v = String(url).split(',')[1] || '';
+  var rembourrage = (v.slice(-2).match(/=/g) || []).length;
+  return Math.floor(v.length * 3 / 4) - rembourrage;
+}
+
+function metLogoAuFormat(fichier){
+  return new Promise(function(resolve, reject){
+    // Refus nommé avant tout le reste : un SVG est un document — scripts,
+    // liens externes, feuilles de style — et pas une image.
+    if(/svg/i.test(fichier.type) || /\.svg$/i.test(fichier.name)){
+      reject('Un fichier SVG est un document, pas une image : il n\'est pas accepté comme logo. Fournissez un PNG, un JPEG, un WEBP ou un GIF.');
+      return;
+    }
+    if(SIG_TYPES.indexOf(fichier.type) < 0){
+      reject('Ce fichier n\'est pas une image reconnue. Formats acceptés : PNG, JPEG, WEBP, GIF.');
+      return;
+    }
+    var lecteur = new FileReader();
+    lecteur.onerror = function(){ reject('Ce fichier n\'a pas pu être lu.'); };
+    lecteur.onload = function(e){
+      var img = new Image();
+      img.onerror = function(){ reject('Ce fichier ne s\'ouvre pas comme une image. Formats acceptés : PNG, JPEG, WEBP, GIF.'); };
+      img.onload = function(){
+        var l = img.naturalWidth, h = img.naturalHeight;
+        if(!l || !h){ reject('Ce fichier ne s\'ouvre pas comme une image.'); return; }
+        // La taille d'AFFICHAGE se déduit d'abord : l'image tient dans
+        // 160 × 80 sans jamais être agrandie au-delà de sa taille naturelle.
+        // L'encodage est ensuite le double de cet affichage — soit au plus
+        // 320 × 160, les bornes du module. Un petit logo est donc doublé, ce
+        // qui l'adoucit un peu mais lui donne la bonne taille à l'écran ;
+        // l'agrandissement ne dépasse jamais deux fois.
+        var r = Math.min(1, (SIG_LOGO_L_MAX / SIG_DENSITE) / l, (SIG_LOGO_H_MAX / SIG_DENSITE) / h);
+        var L = Math.max(1, Math.round(l * r * SIG_DENSITE));
+        var H = Math.max(1, Math.round(h * r * SIG_DENSITE));
+        var toile = document.createElement('canvas');
+        toile.width = L; toile.height = H;
+        toile.getContext('2d').drawImage(img, 0, 0, L, H);
+        var url = toile.toDataURL('image/png');
+        var octets = octetsDataUrl(url);
+        if(octets > SIG_LOGO_OCTETS_MAX){
+          reject('Votre logo pèse ' + Math.round(octets / 1024) + ' Ko après mise au format, au-delà des '
+            + Math.round(SIG_LOGO_OCTETS_MAX / 1024) + ' Ko admis. Choisissez une image moins détaillée.');
+          return;
+        }
+        resolve({ dataUrl: url, width: L, height: H });
+      };
+      img.src = e.target.result;
+    };
+    lecteur.readAsDataURL(fichier);
+  });
+}
+
+function erreurLogoSignature(motif){
+  var el = document.getElementById('sig-logo-erreur');
+  if(!el) return;
+  el.textContent = motif || '';
+  el.style.display = motif ? 'block' : 'none';
+}
+
+function rendZoneLogoSignature(){
+  var zone = document.getElementById('sig-logo-zone');
+  if(!zone) return;
+  zone.innerHTML = '';
+  if(!signatureEtat.logo){
+    var choisir = document.createElement('button');
+    choisir.className = 'btn btn-outline btn-sm';
+    choisir.type = 'button';
+    choisir.textContent = 'Choisir une image';
+    choisir.onclick = function(){ document.getElementById('sig-logo-input').click(); };
+    zone.appendChild(choisir);
+    return;
+  }
+  var pose = document.createElement('div');
+  pose.className = 'sig-logo-pose';
+  var vignette = document.createElement('img');
+  vignette.src = signatureEtat.logo.dataUrl;
+  vignette.alt = '';
+  pose.appendChild(vignette);
+  var dim = document.createElement('span');
+  dim.className = 'sig-logo-dim';
+  dim.textContent = Math.round(signatureEtat.logo.width / SIG_DENSITE) + ' × '
+    + Math.round(signatureEtat.logo.height / SIG_DENSITE) + ' px à l\'écran';
+  pose.appendChild(dim);
+  var remplacer = document.createElement('button');
+  remplacer.className = 'btn btn-outline btn-sm';
+  remplacer.type = 'button';
+  remplacer.textContent = 'Remplacer';
+  remplacer.onclick = function(){ document.getElementById('sig-logo-input').click(); };
+  pose.appendChild(remplacer);
+  var retirer = document.createElement('button');
+  retirer.className = 'link-secondary';
+  retirer.type = 'button';
+  retirer.textContent = 'Retirer le logo';
+  retirer.onclick = retirerLogoSignature;
+  pose.appendChild(retirer);
+  zone.appendChild(pose);
+}
+
+// Retire le logo de l'état de travail. Rien n'est écrit tant que l'abonné n'a
+// pas retenu sa signature — l'enregistrement suivant porte logo_data_url à
+// null, et le remplacement intégral côté serveur efface le champ.
+function retirerLogoSignature(){
+  signatureEtat.logo = null;
+  erreurLogoSignature('');
+  document.getElementById('sig-logo-input').value = '';
+  rendZoneLogoSignature();
+  majApercuSignature();
+  etatSignature('Logo retiré — retenez votre signature pour l\'enregistrer.');
+}
+
+function etatSignature(texte){
+  var el = document.getElementById('sig-etat');
+  if(el) el.textContent = texte || '';
+}
+
+// ── Aller-retour avec le serveur ──
+function appliqueSignature(d){
+  signatureEtat.active = Boolean(d && d.active);
+  signatureEtat.texte = (d && d.texte) || '';
+  signatureEtat.disposition = (d && d.disposition === 'cote') ? 'cote' : 'dessus';
+  signatureEtat.logo = (d && d.logo_data_url)
+    ? { dataUrl: d.logo_data_url, width: d.logo_width, height: d.logo_height }
+    : null;
+}
+
+function remplitFormulaireSignature(){
+  document.getElementById('sig-active').checked = signatureEtat.active;
+  document.getElementById('sig-texte').value = signatureEtat.texte;
+  var radio = document.querySelector('input[name="sig-dispo"][value="' + signatureEtat.disposition + '"]');
+  if(radio) radio.checked = true;
+  rendZoneLogoSignature();
+  majApercuSignature();
+}
+
+// Une seule lecture par chargement de page. Elle n'est pas lancée au
+// démarrage : le logo peut peser quelques centaines de kilo-octets, que la
+// boîte de réception n'a aucune raison de payer.
+function assureSignatureChargee(){
+  if(signaturePromesse) return signaturePromesse;
+  signaturePromesse = fetch('/api/mail/signature')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ if(d) appliqueSignature(d); return signatureEtat; })
+    .catch(function(){ return signatureEtat; });
+  return signaturePromesse;
+}
+
+function ouvrirOngletSignature(){
+  etatSignature('');
+  erreurLogoSignature('');
+  assureSignatureChargee().then(remplitFormulaireSignature);
+}
+
+async function enregistrerSignature(){
+  var btn = document.getElementById('sig-enregistrer');
+  if(btn && btn.disabled) return;
+  majApercuSignature();
+  if(btn) btn.disabled = true;
+  etatSignature('Enregistrement…');
+  try {
+    var r = await fetch('/api/mail/signature', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        active: signatureEtat.active,
+        texte: signatureEtat.texte,
+        disposition: signatureEtat.disposition,
+        logo_data_url: signatureEtat.logo ? signatureEtat.logo.dataUrl : null,
+        logo_width: signatureEtat.logo ? signatureEtat.logo.width : null,
+        logo_height: signatureEtat.logo ? signatureEtat.logo.height : null
+      })
+    });
+    var d = null;
+    try { d = await r.json(); } catch(e){ /* pas de corps JSON */ }
+    if(!r.ok){
+      // Le serveur relit le logo et le texte pour son propre compte : son
+      // refus porte le motif, qui part tel quel à l'abonné.
+      etatSignature('');
+      toast((d && d.error) || 'Enregistrement refusé (code ' + r.status + ').', 'error');
+      return;
+    }
+    appliqueSignature(d);
+    remplitFormulaireSignature();
+    etatSignature('Signature retenue.');
+    toast('Signature retenue', 'ok');
+  } catch(e){
+    etatSignature('');
+    toast('Connexion interrompue — votre signature n\'est pas enregistrée.', 'error');
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+
+async function supprimerSignature(){
+  if(!confirm('Supprimer votre signature — texte et logo ? Vos messages repartiront sans elle.')) return;
+  var btn = document.getElementById('sig-supprimer');
+  if(btn && btn.disabled) return;
+  if(btn) btn.disabled = true;
+  etatSignature('Suppression…');
+  try {
+    var r = await fetch('/api/mail/signature', { method: 'DELETE' });
+    if(!r.ok){ etatSignature(''); toast('Suppression impossible (code ' + r.status + ').', 'error'); return; }
+    appliqueSignature(null);
+    document.getElementById('sig-logo-input').value = '';
+    erreurLogoSignature('');
+    remplitFormulaireSignature();
+    etatSignature('');
+    toast('Signature supprimée', 'ok');
+  } catch(e){
+    etatSignature('');
+    toast('Connexion interrompue — votre signature n\'est pas supprimée.', 'error');
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+
+document.getElementById('sig-texte').addEventListener('input', majApercuSignature);
+document.getElementById('sig-logo-input').addEventListener('change', function(e){
+  var fichier = e.target.files && e.target.files[0];
+  if(!fichier) return;
+  erreurLogoSignature('');
+  etatSignature('Mise au format…');
+  metLogoAuFormat(fichier).then(function(logo){
+    signatureEtat.logo = logo;
+    rendZoneLogoSignature();
+    majApercuSignature();
+    etatSignature('Logo prêt — retenez votre signature pour l\'enregistrer.');
+  }, function(motif){
+    // Le fichier refusé ne remplace pas celui déjà en place.
+    e.target.value = '';
+    erreurLogoSignature(motif);
+    etatSignature('');
+  });
+});
+
 function toast(msg, type){
   var el = document.getElementById('toast'); el.textContent = msg;
   el.className = 'toast show ' + (type === 'ok' ? 'ok' : type === 'error' ? 'error' : '');

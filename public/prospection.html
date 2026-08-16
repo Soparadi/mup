@@ -365,9 +365,19 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 #map { flex: 1; height: 100%; min-height: 0; }
 /* ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite de la carte ── */
 .kpi-group{display:flex;align-items:stretch;background:var(--surface);border-bottom:1px solid var(--border);overflow:hidden;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;flex-shrink:0}
-.kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-right:1px solid var(--border);transition:background .12s;flex-shrink:0;scroll-snap-align:start}
-.kpi-chip:last-child{border-right:none}
+/* Séparateur porté à GAUCHE (et non à droite) : la dernière cellule de la bande
+   est « Tout ajouter au pipeline », absente tant que la recherche n'a pas
+   convergé. Avec un séparateur à droite, la cellule qui la précède garderait un
+   trait pendant dans le vide pendant tout le déroulement. À l'écran, lignes
+   identiques quand tout est visible. */
+.kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-left:1px solid var(--border);transition:background .12s;flex-shrink:0;scroll-snap-align:start}
+.kpi-chip:first-child{border-left:none}
 .kpi-chip:hover{background:var(--surface2)}
+/* « Tout ajouter au pipeline » est une cellule KPI à part entière, pas un bouton
+   posé dans la bande : l'habillage natif du <button> est retiré pour qu'il
+   s'aligne exactement sur ses voisines (hauteur par align-items:stretch). */
+button.kpi-chip{appearance:none;-webkit-appearance:none;font:inherit;color:inherit;background:none;border-top:0;border-right:0;border-bottom:0;text-align:left;cursor:pointer}
+button.kpi-chip:disabled{cursor:default}
 .kpi-num{font-size:22px;font-weight:900;line-height:1;letter-spacing:-.5px}
 .kpi-lbl{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
 .geo-bar {
@@ -799,11 +809,6 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
         <strong id="ctx-label"></strong>
         —&nbsp;<span id="ctx-geo-label">Région&nbsp;:</span>
         <strong id="ctx-region"></strong>
-        <!-- Ajout en bloc. ABSENT (pas grisé) tant que la recherche n'a pas
-             convergé : c'est maybeFinishSearch, et lui seul, qui le fait
-             paraître. Masqué de nouveau au lancement de toute recherche. -->
-        <button class="ss-edit" type="button" id="btn-add-all"
-                style="display:none" onclick="addAllToPipeline()">Tout ajouter au pipeline</button>
       </div>
       <!-- Barre d'indicateurs : sortie de la carte, elle devient l'en-tête de la
            colonne fiches, au format vitrine « Aperçu · N résultat » (index.html:4064). -->
@@ -824,6 +829,16 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
           <div><div class="kpi-num" id="kpi-session-adds" style="color:#7C3AED">0</div><div class="kpi-lbl">Contacts ajoutés</div></div>
         </div>
+        <!-- Ajout en bloc, en dernière cellule de la bande. ABSENT (pas grisé)
+             tant que la recherche n'a pas convergé : c'est maybeFinishSearch, et
+             lui seul, qui le fait paraître. Masqué de nouveau au lancement de
+             toute recherche. Icône et couleur reprises telles quelles de la
+             cellule « Pipeline ». -->
+        <button class="kpi-chip" type="button" id="btn-add-all"
+                style="display:none" onclick="addAllToPipeline()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+          <div><div class="kpi-num" id="btn-add-all-num" style="color:#1D8348">0</div><div class="kpi-lbl" id="btn-add-all-lbl">Tout ajouter au pipeline</div></div>
+        </button>
       </div>
       <div class="res-panel" id="res-panel">
         <!-- skeleton -->
@@ -3646,7 +3661,11 @@ function afficherAjoutTotal() {
   if (!S.finished || !S.buffer.length) { b.style.display = 'none'; return; }
   // Le nombre annoncé est celui des fiches QUE LA PAGE DÉTIENT (S.buffer),
   // jamais le marché annoncé (S.market), qui n'est qu'une estimation upstream.
-  b.textContent = 'Tout ajouter au pipeline (' + S.buffer.length.toLocaleString('fr-FR') + ')';
+  // Il occupe le .kpi-num de la cellule, le libellé son .kpi-lbl.
+  var n = document.getElementById('btn-add-all-num');
+  var l = document.getElementById('btn-add-all-lbl');
+  if (n) n.textContent = S.buffer.length.toLocaleString('fr-FR');
+  if (l) l.textContent = 'Tout ajouter au pipeline';
   b.disabled = false;
   b.style.display = '';
 }
@@ -3670,7 +3689,9 @@ async function addAllToPipeline() {
   )) return;
 
   var b = document.getElementById('btn-add-all');
-  if (b) { b.disabled = true; b.textContent = 'Ajout en cours…'; }
+  var bLbl = document.getElementById('btn-add-all-lbl');
+  if (b) b.disabled = true;
+  if (bLbl) bLbl.textContent = 'Ajout en cours…';
   showToast('Ajout de ' + n.toLocaleString('fr-FR') + mot + ' en cours…');
   try {
     // UN SEUL appel HTTP pour tout le lot : le rate-limit global de 60/min
@@ -3721,7 +3742,8 @@ async function addAllToPipeline() {
     }
     showToast(d.total.toLocaleString('fr-FR') + ' fiches : ' + parts.join(', '), 6000);
 
-    if (b) { b.disabled = true; b.textContent = 'Ajouté au pipeline'; }
+    if (b) b.disabled = true;
+    if (bLbl) bLbl.textContent = 'Ajouté au pipeline';
     // Les fiches à l'écran gardent leur bouton d'ajout : le serveur ne dit pas
     // LESQUELLES ont été écartées, seulement combien. Un nouvel ajout unitaire
     // sur une fiche déjà passée est sans effet (dédup serveur).

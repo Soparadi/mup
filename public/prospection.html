@@ -644,6 +644,7 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
+  <link rel="stylesheet" href="/styles/mup-confirm.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -1734,6 +1735,7 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 <script src="/_mup-card.js"></script>
 <script src="/js/sector-appellations.js"></script>
 <script src="/js/sector-search.js"></script>
+<script src="/js/mup-confirm.js"></script>
 <script>
 'use strict';
 /*
@@ -3711,17 +3713,29 @@ async function addAllToPipeline() {
   if (!fiches.length) return;
   var n = fiches.length;
   var mot = (n > 1 ? ' fiches' : ' fiche');
-  if (!window.confirm(
-    'Ajouter ' + n.toLocaleString('fr-FR') + mot + ' au pipeline ?\n\n'
-    + 'Les entreprises déjà présentes ne seront pas ajoutées en double, et '
-    + "celles qui se sont opposées à la prospection sont écartées."
-  )) return;
 
-  // Le bouton passe en creux (désactivé) et le reste : seul le libellé bouge,
-  // le chiffre demeure affiché tel quel.
+  // confirm() bloquait le fil d'exécution, et avec lui tout second clic ;
+  // la fenêtre MovUP, elle, rend la main aussitôt. Le bouton est donc mis
+  // hors d'atteinte AVANT l'ouverture, et ne revient que si l'abonné
+  // renonce. La question tient au bandeau, les deux réserves au corps.
   var b = document.getElementById('btn-add-all');
   var bLbl = document.getElementById('btn-add-all-lbl');
   if (b) b.disabled = true;
+  var ok = await mupConfirm(
+    'Ajouter ' + n.toLocaleString('fr-FR') + mot + ' au pipeline ?',
+    [
+      'Les entreprises déjà présentes ne seront pas ajoutées en double.',
+      "Celles qui se sont opposées à la prospection sont écartées."
+    ],
+    'Ajouter', 'Annuler'
+  );
+  if (!ok) {
+    if (b) b.disabled = false;
+    return;
+  }
+
+  // Le bouton passe en creux (désactivé) et le reste : seul le libellé bouge,
+  // le chiffre demeure affiché tel quel.
   if (bLbl) bLbl.textContent = 'Ajout en cours…';
   showToast('Ajout de ' + n.toLocaleString('fr-FR') + mot + ' en cours…');
   try {

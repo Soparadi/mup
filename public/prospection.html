@@ -366,18 +366,31 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 /* ── KPI CHIPS (DA dashboard) — overlay flottant coin haut-droite de la carte ── */
 .kpi-group{display:flex;align-items:stretch;background:var(--surface);border-bottom:1px solid var(--border);overflow:hidden;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;flex-shrink:0}
 /* Séparateur porté à GAUCHE (et non à droite) : la dernière cellule de la bande
-   est « Tout ajouter au pipeline », absente tant que la recherche n'a pas
+   est « Ajouter au pipeline », absente tant que la recherche n'a pas
    convergé. Avec un séparateur à droite, la cellule qui la précède garderait un
    trait pendant dans le vide pendant tout le déroulement. À l'écran, lignes
    identiques quand tout est visible. */
 .kpi-chip{display:flex;align-items:center;gap:8px;padding:10px 18px;border-left:1px solid var(--border);transition:background .12s;flex-shrink:0;scroll-snap-align:start}
 .kpi-chip:first-child{border-left:none}
 .kpi-chip:hover{background:var(--surface2)}
-/* « Tout ajouter au pipeline » est une cellule KPI à part entière, pas un bouton
-   posé dans la bande : l'habillage natif du <button> est retiré pour qu'il
-   s'aligne exactement sur ses voisines (hauteur par align-items:stretch). */
-button.kpi-chip{appearance:none;-webkit-appearance:none;font:inherit;color:inherit;background:none;border-top:0;border-right:0;border-bottom:0;text-align:left;cursor:pointer}
-button.kpi-chip:disabled{cursor:default}
+/* « Ajouter au pipeline » n'est plus un indicateur : la dernière cellule de la
+   bande porte un TEXTE SEUL, dans l'orangé déjà employé par « Prospects
+   trouvés ». Ni contour, ni pastille, ni fond : le fond de la bande passe au
+   travers, en repos comme au survol, où seul un soulignement du texte répond.
+   La géométrie, elle, reste celle d'un bouton — 36px de hauteur et 16px de
+   retrait latéral tiennent dans la bande sans l'étirer ; le centrage vertical
+   vient du align-items:center de .kpi-chip qui l'entoure. */
+.kpi-cta{
+  display:inline-flex;align-items:center;
+  height:36px;padding:0 16px;
+  border:none;background:none;color:#B84C00;
+  font-family:var(--font);font-size:12.5px;font-weight:700;
+  white-space:nowrap;cursor:pointer;flex-shrink:0;
+}
+.kpi-cta:hover{text-decoration:underline}
+.kpi-cta:disabled{cursor:default;text-decoration:none}
+/* Le survol appartient au texte : la cellule qui le porte ne se teinte pas. */
+.kpi-chip-cta:hover{background:none}
 .kpi-num{font-size:22px;font-weight:900;line-height:1;letter-spacing:-.5px}
 .kpi-lbl{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
 .geo-bar {
@@ -831,14 +844,13 @@ button.kpi-chip:disabled{cursor:default}
         </div>
         <!-- Ajout en bloc, en dernière cellule de la bande. ABSENT (pas grisé)
              tant que la recherche n'a pas convergé : c'est maybeFinishSearch, et
-             lui seul, qui le fait paraître. Masqué de nouveau au lancement de
-             toute recherche. Icône et couleur reprises telles quelles de la
-             cellule « Pipeline ». -->
-        <button class="kpi-chip" type="button" id="btn-add-all"
-                style="display:none" onclick="addAllToPipeline()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1D8348" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
-          <div><div class="kpi-num" id="btn-add-all-num" style="color:#1D8348">0</div><div class="kpi-lbl" id="btn-add-all-lbl">Tout ajouter au pipeline</div></div>
-        </button>
+             lui seul, qui la fait paraître. Masquée de nouveau au lancement de
+             toute recherche. La cellule n'est pas un indicateur : ni icône, ni
+             couple .kpi-num/.kpi-lbl — un texte cliquable, sur une ligne. -->
+        <div class="kpi-chip kpi-chip-cta" id="cell-add-all" style="display:none">
+          <button class="kpi-cta" type="button" id="btn-add-all"
+                  onclick="addAllToPipeline()">Ajouter au pipeline</button>
+        </div>
       </div>
       <div class="res-panel" id="res-panel">
         <!-- skeleton -->
@@ -3337,7 +3349,7 @@ function maybeFinishSearch(gen) {
     // plus aucun fetch (l'aspiration au référentiel est assurée page par page
     // par /api/search pendant le déroulement).
     _tweenMarketTo(S.buffer.length);
-    // C'EST ICI, et nulle part ailleurs, que « Tout ajouter au pipeline »
+    // C'EST ICI, et nulle part ailleurs, que « Ajouter au pipeline »
     // paraît : au seul point de convergence de la recherche.
     afficherAjoutTotal();
   }
@@ -3647,7 +3659,7 @@ async function addToPipeline(leadId) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// AJOUT EN BLOC — « Tout ajouter au pipeline »
+// AJOUT EN BLOC — « Ajouter au pipeline »
 // ════════════════════════════════════════════════════════════════
 // Le bouton n'existe à l'écran qu'à la CONVERGENCE de la recherche : c'est
 // maybeFinishSearch, et lui seul, qui appelle afficherAjoutTotal(). Tant que
@@ -3656,22 +3668,21 @@ async function addToPipeline(leadId) {
 // arrière-plan ; la convergence n'arrive alors pas et le bouton ne paraît pas.
 // Rien ici ne cherche à rattraper ce cas.
 function afficherAjoutTotal() {
+  var cell = document.getElementById('cell-add-all');
   var b = document.getElementById('btn-add-all');
-  if (!b) return;
-  if (!S.finished || !S.buffer.length) { b.style.display = 'none'; return; }
-  // Le nombre annoncé est celui des fiches QUE LA PAGE DÉTIENT (S.buffer),
-  // jamais le marché annoncé (S.market), qui n'est qu'une estimation upstream.
-  // Il occupe le .kpi-num de la cellule, le libellé son .kpi-lbl.
-  var n = document.getElementById('btn-add-all-num');
-  var l = document.getElementById('btn-add-all-lbl');
-  if (n) n.textContent = S.buffer.length.toLocaleString('fr-FR');
-  if (l) l.textContent = 'Tout ajouter au pipeline';
+  if (!cell || !b) return;
+  if (!S.finished || !S.buffer.length) { cell.style.display = 'none'; return; }
+  // Le libellé est fixe : aucun nombre à composer. La seule écriture remet le
+  // bouton dans son état nominal — l'ajout précédent a pu le laisser sur
+  // « Ajouté au pipeline » ou « Ajout en cours… », et la cellule reparaît telle
+  // quelle à la recherche suivante comme au rattrapage d'erreur.
+  b.textContent = 'Ajouter au pipeline';
   b.disabled = false;
-  b.style.display = '';
+  cell.style.display = '';
 }
 function masquerAjoutTotal() {
-  var b = document.getElementById('btn-add-all');
-  if (b) b.style.display = 'none';
+  var cell = document.getElementById('cell-add-all');
+  if (cell) cell.style.display = 'none';
 }
 
 async function addAllToPipeline() {
@@ -3689,9 +3700,7 @@ async function addAllToPipeline() {
   )) return;
 
   var b = document.getElementById('btn-add-all');
-  var bLbl = document.getElementById('btn-add-all-lbl');
-  if (b) b.disabled = true;
-  if (bLbl) bLbl.textContent = 'Ajout en cours…';
+  if (b) { b.disabled = true; b.textContent = 'Ajout en cours…'; }
   showToast('Ajout de ' + n.toLocaleString('fr-FR') + mot + ' en cours…');
   try {
     // UN SEUL appel HTTP pour tout le lot : le rate-limit global de 60/min
@@ -3742,8 +3751,7 @@ async function addAllToPipeline() {
     }
     showToast(d.total.toLocaleString('fr-FR') + ' fiches : ' + parts.join(', '), 6000);
 
-    if (b) b.disabled = true;
-    if (bLbl) bLbl.textContent = 'Ajouté au pipeline';
+    if (b) { b.disabled = true; b.textContent = 'Ajouté au pipeline'; }
     // Les fiches à l'écran gardent leur bouton d'ajout : le serveur ne dit pas
     // LESQUELLES ont été écartées, seulement combien. Un nouvel ajout unitaire
     // sur une fiche déjà passée est sans effet (dédup serveur).

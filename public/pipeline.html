@@ -137,6 +137,9 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .flabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)}
 .finput{border:1.5px solid var(--border);border-radius:9px;padding:9px 12px;font-size:13px;font-family:var(--font);color:var(--text);background:var(--surface);width:100%;outline:none;transition:border-color .15s}
 .finput:focus{border-color:var(--text);background:var(--card)}
+/* Le champ de valeur estimée ne montre que le montant : ni flèches de pas,
+   ni bouton de remplissage automatique de Safari avec son chevron. */
+#d-val-input::-webkit-inner-spin-button,#d-val-input::-webkit-outer-spin-button,#d-val-input::-webkit-contacts-auto-fill-button,#d-val-input::-webkit-credentials-auto-fill-button{display:none!important;visibility:hidden;pointer-events:none;margin:0;width:0;height:0}
 .f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .modal-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
 .btn-save{background:var(--text);color:#fff;border:none;border-radius:9px;padding:9px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)}
@@ -1186,7 +1189,7 @@ function startEditVal(){
   const c = cards.find(x => x.id === currentId);
   if(!c) return;
   const original = c.val || 0;
-  valBox.innerHTML = '<input id="d-val-input" type="number" min="0" step="0.01" value="'+(original||'')+'" placeholder="0" style="width:100%;border:1px solid var(--text);border-radius:6px;padding:4px 8px;font-family:var(--mono);font-size:12px;font-weight:600;outline:none;box-sizing:border-box;background:#fff;">';
+  valBox.innerHTML = '<input id="d-val-input" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" value="'+(original||'')+'" placeholder="0" style="width:100%;border:1px solid var(--text);border-radius:6px;padding:4px 8px;font-family:var(--mono);font-size:12px;font-weight:600;outline:none;box-sizing:border-box;background:#fff;">';
   const input = document.getElementById('d-val-input');
   input.focus();
   input.select();

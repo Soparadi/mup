@@ -297,7 +297,12 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .focus-header-black{display:block;background:#1D1D1F;color:#fff;padding:20px 24px;position:relative}
 .focus-header-cat{display:inline-flex;align-items:center;gap:8px;font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.7);margin-bottom:12px}
 .focus-header-icon{color:rgba(255,255,255,0.7)}
-.focus-close-btn{position:absolute;top:16px;right:16px;width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.1);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.12s}
+/* La croix est masquée ici, et nulle part ailleurs : sur /pipeline le voile
+   et la touche Échap ferment déjà le tiroir. Elle n'est rétablie que dans la
+   feuille injectée par bootstrapFicheEmbed pour embed=panel — le seul cas où
+   l'iframe recouvre tout le voile du parent et ne laisse aucune autre issue.
+   Ces deux règles servent donc encore : ne pas les retirer. */
+.focus-close-btn{position:absolute;top:16px;right:16px;width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.1);border:none;color:#fff;cursor:pointer;display:none;align-items:center;justify-content:center;transition:background 0.12s}
 .focus-close-btn:hover{background:rgba(255,255,255,0.2)}
 .focus-header-name{font-size:24px;font-weight:800;letter-spacing:-0.3px;margin-bottom:4px;text-transform:uppercase}
 .focus-header-sub{font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:16px}
@@ -2468,7 +2473,12 @@ function importFromProspects() {
         + 'main,.main,.kanban-shell,.app,.layout{display:block!important;padding:0!important;margin:0!important;width:100%!important;height:100%!important}'
         + '.detail-overlay{display:none!important}'
         + '.detail-panel{position:static!important;width:100%!important;max-width:none!important;height:100vh!important;transform:none!important;box-shadow:none!important;border-left:none!important;left:auto!important;right:auto!important;margin:0!important;display:flex!important;flex-direction:column!important}'
-        + '.detail-panel .detail-body{flex:1;overflow-y:auto}';
+        + '.detail-panel .detail-body{flex:1;overflow-y:auto}'
+        // Seule issue en mode panel : l'iframe couvre tout le voile du parent,
+        // et sur un téléphone étroit rien d'autre ne ferme la fiche. La croix
+        // est rendue ici, et dans ce mode seulement (en embed=overlay, fermer
+        // ne laisserait qu'une page vide).
+        + '.focus-close-btn{display:flex!important}';
     } else {
       s.textContent = ''
         + 'aside#sidebar,aside#sidebar.sidebar,#sidebar,.sidebar,.topbar,.kanban-wrap,.kanban-toolbar{display:none!important}'
@@ -2541,6 +2551,48 @@ function importFromProspects() {
   // ── INIT après chargement DOM ──
   function init(){
     bootstrapFicheEmbed();
+
+    // ── ÉCHAP FERME LE TIROIR ──
+    // Reprend au clavier ce que la croix portait sur /pipeline. Cinq gardes,
+    // sans lesquelles l'écouteur détruirait une saisie ou volerait la touche
+    // à qui la tient déjà :
+    //   1. mode intégré — l'Échap y est déjà tenu par la page parente ;
+    //   2. tiroir fermé — il n'y a rien à fermer ;
+    //   3. cible saisissable (input, textarea, select, éditable) — une note en
+    //      cours de frappe ne doit jamais être perdue par une touche Échap ;
+    //   4. édition en ligne de la valeur estimée — elle a déjà son propre
+    //      Échap (annulation), qui ne doit pas déclencher aussi la fermeture ;
+    //   5. fenêtre modale ou confirmation MovUP ouverte — Échap appartient
+    //      alors à la fenêtre, pas au tiroir.
+    document.addEventListener('keydown', function(e){
+      if(e.key !== 'Escape' && e.key !== 'Esc') return;
+
+      if(window.MUP_FICHE_EMBED) return;
+
+      var panel = document.getElementById('detail-panel');
+      if(!panel || !panel.classList.contains('open')) return;
+
+      var cible = e.target;
+      if(cible){
+        var tag = String(cible.tagName || '').toUpperCase();
+        if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if(cible.isContentEditable) return;
+        if(typeof cible.closest === 'function' && cible.closest('[contenteditable="true"],[contenteditable=""]')) return;
+      }
+
+      // L'édition de la valeur estimée peut avoir rendu la main au document
+      // (le champ existe encore, sans le focus) : sa seule présence suffit.
+      if(document.getElementById('d-val-input')) return;
+
+      // .mupc-overlay et #tem-modal-overlay ne sont dans le document que
+      // pendant qu'ils sont ouverts ; les deux autres se cachent sur place.
+      if(document.querySelector('.modal-overlay.open, .mupc-overlay, #tem-modal-overlay')) return;
+      var actionOv = document.getElementById('action-confirm-overlay');
+      if(actionOv && actionOv.style.display !== 'none') return;
+
+      e.preventDefault();
+      if(typeof window.closeDetail === 'function') window.closeDetail();
+    });
 
     // Téléphone société : reformatage à la SORTIE du champ (blur), jamais
     // pendant la frappe — reformater au fil des touches déplacerait le

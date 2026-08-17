@@ -143,14 +143,20 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }))
 
-// Rate-limit global sur /api/* — 60 req/min/IP par défaut. Skips :
+// Rate-limit global sur /api/* — 200 req/min/IP par défaut. Skips :
 //   - /health (liveness probe)
 //   - /stripe/webhook (signature HMAC, peut burst sur événements Stripe)
 //   - /v2/webhooks/* (Resend, Svix HMAC vérifié)
 // Note : req.path est relatif au mount '/api' → skip avec paths sans préfixe.
 // Rate-limit existant sur /api/auth/* (5/15min, plus strict, custom in-memory)
 // reste actif et empile au-dessus de celui-ci.
-const RATE_LIMIT_GLOBAL_MAX = parseInt(process.env.RATE_LIMIT_GLOBAL_MAX || '60', 10)
+// 200 = 54 × 3. 54 : une minute de navigation réelle sur les pages les plus
+// lourdes (tableau de bord 10 + visio 25 + fiche contact 11 + un retour
+// d'onglet 8). ×3 : la clé de comptage est l'ADRESSE, pas le compte — trois
+// abonnés derrière une même connexion, ou un abonné avec trois onglets,
+// partagent ce plafond. L'ancienne valeur de 60 était dépassée par une seule
+// minute d'usage normal.
+const RATE_LIMIT_GLOBAL_MAX = parseInt(process.env.RATE_LIMIT_GLOBAL_MAX || '200', 10)
 const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10)
 
 const globalApiLimiter = rateLimit({

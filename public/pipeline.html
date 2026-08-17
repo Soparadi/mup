@@ -592,7 +592,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
       <!-- CARTE LEAFLET -->
       <div class="detail-section" id="d-map-section" style="display:none">
-        <div class="detail-section-title">Localisation</div>
         <div id="detail-map"></div>
       </div>
 
@@ -1636,7 +1635,6 @@ async function openDetail(id) {
   let infoHtml = '';
   if(c.email) infoHtml += `<div class="info-item"><div class="info-item-label">Email</div><div class="info-item-val"><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div></div>`;
   if(c.tel) infoHtml += `<div class="info-item"><div class="info-item-label">Téléphone</div><div class="info-item-val"><a href="tel:${window.MUPTel.lien(c.tel)}">${esc(window.MUPTel.format(c.tel))}</a></div></div>`;
-  if(c.address) infoHtml += `<div class="info-item"><div class="info-item-label">Localisation</div><div class="info-item-val">${esc(c.address)}</div></div>`;
   // Code postal : champ enregistré à part, que la ligne Localisation ne lit pas
   // (elle n'affiche que c.address). On le montre donc — sauf quand l'adresse le
   // contient déjà en toutes lettres, où une case de plus le répéterait.

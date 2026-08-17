@@ -171,10 +171,11 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    quitté le cartouche noir pour le corps clair de la fiche, ses styles
    inline deviennent donc une règle, en variables et non en valeurs.
    border-color et non border:none — la bague de .d-btn est ce que son
-   survol teint, la supprimer éteindrait aussi le survol. align-self parce
-   que .detail-body est une colonne flex : sans lui le bouton s'étirerait
-   sur toute la largeur. */
-.d-btn.enrich{background:var(--orange);color:var(--bg);border-color:var(--orange);align-self:flex-start}
+   survol teint, la supprimer éteindrait aussi le survol. Aucun align-self :
+   .detail-body est une colonne flex dont les enfants s'étirent par défaut,
+   le bouton prend donc toute la largeur de la fiche, jusqu'au bord droit
+   des champs. */
+.d-btn.enrich{background:var(--orange);color:var(--bg);border-color:var(--orange)}
 .d-btn.enrich:hover{border-color:var(--text)}
 /* « Déjà enrichi » : refreshEnrichButtonState pose disabled ET opacity:.4 en
    inline. Sur le noir, l'orange s'y éteignait ; sur le fond clair, un libellé

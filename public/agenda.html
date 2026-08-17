@@ -158,6 +158,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
+  <link rel="stylesheet" href="/styles/mup-confirm.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -296,6 +297,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   </div>
 </div>
 
+<script src="/js/mup-confirm.js"></script>
 <script>
 var _pipelineCache = null;
 var _pipelineCacheTime = 0;
@@ -893,22 +895,32 @@ async function saveEvent() {
 
 // ── DELETE ──
 // Suppression ciblée d'un event de la table agenda + retrait local + re-render.
-// Confirmation native (confirm) — UX simple, conforme au brief.
+// Confirmation par la fenêtre MovUP partagée.
 async function deleteEvent() {
   if (!editingId) return;
-  if (!window.confirm('Supprimer cet événement ?')) return;
+  // La fenêtre ne bloque plus le fil : le bouton se ferme avant qu'elle
+  // s'ouvre, et se rouvre à tout renoncement comme à tout échec.
+  var btn = document.getElementById('btn-delete');
+  if (btn) btn.disabled = true;
+  if (!await mupConfirm('Supprimer cet événement ?', null, 'Supprimer', 'Annuler')) {
+    if (btn) btn.disabled = false;
+    return;
+  }
   var localId = editingId;
   var cleanId = String(localId).replace(/^agenda:/, '');
   try {
     var resp = await fetch('/api/agenda/' + encodeURIComponent(cleanId), { method: 'DELETE' });
     if (!resp.ok && resp.status !== 404) {
-      window.alert('Suppression impossible (HTTP ' + resp.status + '). Réessayez.');
+      mupAlert('Suppression impossible', 'HTTP ' + resp.status + '. Réessayez.', 'Fermer');
+      if (btn) btn.disabled = false;
       return;
     }
   } catch (e) {
-    window.alert('Erreur réseau lors de la suppression. Réessayez.');
+    mupAlert('Erreur réseau lors de la suppression', 'Réessayez.', 'Fermer');
+    if (btn) btn.disabled = false;
     return;
   }
+  if (btn) btn.disabled = false;
   events = events.filter(function(x){ return _normAgendaId(x.id) !== cleanId; });
   if (typeof _agendaCache !== 'undefined') { _agendaCache = null; _agendaCacheTime = 0; }
   closeModal();

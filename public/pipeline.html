@@ -406,6 +406,7 @@ body.focus-mode .col-select{padding:10px 14px;font-size:13.5px;border-radius:10p
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
+  <link rel="stylesheet" href="/styles/mup-confirm.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -760,7 +761,7 @@ body.focus-mode .col-select{padding:10px 14px;font-size:13.5px;border-radius:10p
     <!-- ACTIONS FICHE -->
     <div class="detail-actions" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
       <button class="d-btn" onclick="editCurrentCard()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Modifier</button>
-      <button class="d-btn" style="color:var(--red);border-color:rgba(204,0,0,.2)" onclick="deleteCurrentCard()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg> Supprimer</button>
+      <button class="d-btn" style="color:var(--red);border-color:rgba(204,0,0,.2)" onclick="deleteCurrentCard(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg> Supprimer</button>
     </div>
 
   </div>
@@ -1404,7 +1405,7 @@ function renderCard(c, color) {
     <div class="kcard-bar" style="background:${color}"></div>
     <div class="kcard-actions">
       <button class="kcard-btn" onclick="event.stopPropagation();editCard('${c.id}')" title="Modifier"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-      <button class="kcard-btn" onclick="event.stopPropagation();confirmDeleteCard('${c.id}')" title="Supprimer"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
+      <button class="kcard-btn" onclick="event.stopPropagation();confirmDeleteCard('${c.id}', this)" title="Supprimer"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
     </div>
     <div class="kcard-name">${esc(_nomC.titre)}</div>
     <div class="kcard-co">${esc(_nomC.sousTitre)}</div>
@@ -1538,9 +1539,14 @@ function saveCard() {
 }
 // La corbeille du Kanban enlève la fiche DU PIPELINE. Elle ne supprime pas le
 // contact : ce sont deux gestes distincts, et le second appartient à Contacts.
-function confirmDeleteCard(id) {
-  if(confirm('Voulez-vous enlever cette fiche du pipeline ?')) {
+// Asynchrone depuis le passage à mupConfirm : ses deux appelants sont des
+// onclick de balisage, qui ne lisent pas la valeur rendue.
+async function confirmDeleteCard(id, btn) {
+  if(btn) btn.disabled = true;                 // la fenêtre ne bloque plus le fil
+  if(await mupConfirm('Voulez-vous enlever cette fiche du pipeline ?', null, 'Enlever', 'Annuler')) {
     deleteCard(id);
+  } else if(btn) {
+    btn.disabled = false;
   }
 }
 async function deleteCard(id) {
@@ -1555,7 +1561,7 @@ async function deleteCard(id) {
   // réseau la carte reste à l'écran : sinon elle disparaîtrait tout en restant
   // sur le serveur, et reviendrait au prochain chargement.
   if (!pipelineOk) {
-    alert('Suppression non confirmée par le serveur. La fiche est conservée.');
+    mupAlert('Suppression non confirmée par le serveur', 'La fiche est conservée.', 'Fermer');
     return;
   }
   cards = cards.filter(c=>String(c.id)!==String(id));
@@ -2198,7 +2204,7 @@ function onRdvTypeChange() {
 }
 
 async function saveRdv() {
-  if(!rdvSelectedDate) { alert('Sélectionnez une date dans le calendrier'); return; }
+  if(!rdvSelectedDate) { mupAlert('Sélectionnez une date dans le calendrier', null, 'Fermer'); return; }
   if(!currentId) return;
   const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
@@ -2221,7 +2227,7 @@ async function saveRdv() {
   const labelEnregistre = labelEnregistreMap[actionType] || labelEnregistreMap.rdv;
   const timeInput = document.getElementById('rdv-time-input');
   const time = timeInput ? timeInput.value : '14:00';
-  if(!time) { alert('Sélectionnez une heure'); return; }
+  if(!time) { mupAlert('Sélectionnez une heure', null, 'Fermer'); return; }
 
   const yyyy = rdvSelectedDate.getFullYear();
   const mm = String(rdvSelectedDate.getMonth() + 1).padStart(2, '0');
@@ -2250,11 +2256,11 @@ async function saveRdv() {
       body: JSON.stringify(evtBody)
     });
     if (!resp.ok) {
-      alert('Impossible d\'enregistrer le RDV (HTTP ' + resp.status + ')');
+      mupAlert('Impossible d\'enregistrer le RDV', 'HTTP ' + resp.status, 'Fermer');
       return;
     }
   } catch (e) {
-    alert('Erreur réseau lors de l\'enregistrement du RDV');
+    mupAlert('Erreur réseau lors de l\'enregistrement du RDV', null, 'Fermer');
     return;
   }
 
@@ -2504,7 +2510,13 @@ function moveCard(colId) {
 function editCurrentCard() { closeDetail(); editCard(currentId); }
 // Même geste que la corbeille du Kanban, donc même libellé : « Supprimer cette
 // fiche ? » annonçait plus que ce qui se passe.
-function deleteCurrentCard() { if(confirm('Voulez-vous enlever cette fiche du pipeline ?')) { deleteCard(currentId); } }
+// Asynchrone : son unique appelant est un onclick de balisage, qui ne lit pas
+// la valeur rendue.
+async function deleteCurrentCard(btn) {
+  if(btn) btn.disabled = true;
+  if(await mupConfirm('Voulez-vous enlever cette fiche du pipeline ?', null, 'Enlever', 'Annuler')) { deleteCard(currentId); }
+  else if(btn) { btn.disabled = false; }
+}
 // Une entrée d'activité porte désormais de quoi être relue par une machine :
 // type (nature du geste), toCol (colonne d'arrivée d'un déplacement, sinon
 // null) et ts en ISO. txt et date restent : ils sont ce que l'écran affiche,
@@ -2892,7 +2904,7 @@ function toggleDictation(){
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SR){
-    alert('La dictée vocale n\'est pas supportée par ce navigateur. Utilisez Chrome, Edge ou Safari.');
+    mupAlert('La dictée vocale n\'est pas supportée par ce navigateur', 'Utilisez Chrome, Edge ou Safari.', 'Fermer');
     return;
   }
 
@@ -2921,7 +2933,7 @@ function toggleDictation(){
 
   dictationRecognition.onerror = function(e){
     if(e.error === 'not-allowed'){
-      alert('Accès au microphone refusé. Autorisez-le dans les paramètres du navigateur.');
+      mupAlert('Accès au microphone refusé', 'Autorisez-le dans les paramètres du navigateur.', 'Fermer');
     }
     stopDictationUI();
   };
@@ -3399,6 +3411,7 @@ async function createActionFromDetection(type, dateStr, time){
 <script src="/js/auth-401-handler.js" defer></script>
 <script src="/js/agenda-sync.js"></script>
 <script src="/js/quota-kpi.js"></script>
+<script src="/js/mup-confirm.js"></script>
 <script>
   // Cross-tab agenda sync : si une fiche est ouverte (currentId non null),
   // ré-appelle openDetail() qui re-trigger loadAgendaForFiche() en interne.

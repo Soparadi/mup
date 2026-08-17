@@ -620,6 +620,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
+  <link rel="stylesheet" href="/styles/mup-confirm.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -958,6 +959,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
 <script src="/_fiche-client.js"></script>
+<script src="/js/mup-confirm.js"></script>
 <script>
 /* ————————————————————————————————————————————————
    MUP VISIO v4 — briefing, docs persistants, raccourcis, T-5
@@ -1650,7 +1652,10 @@ $('endRdvBtn').addEventListener('click', function(){
 
 async function endCurrentRdv(){
   if(!activeRdv) return;
-  if(!confirm('Terminer ce RDV ? La durée et les notes seront enregistrées.')) return;
+  const btnFin = $('endRdvBtn');
+  if(btnFin) btnFin.disabled = true;           // la fenêtre ne bloque plus le fil
+  const ok = await mupConfirm('Terminer ce RDV ?', 'La durée et les notes seront enregistrées.', 'Terminer', 'Annuler');
+  if(!ok){ if(btnFin) btnFin.disabled = false; return; }
 
   const duree = Math.floor((Date.now() - timerStart) / 60000);
   const notes = $('rdvNotes').value;
@@ -1681,6 +1686,7 @@ async function endCurrentRdv(){
   showToast(`RDV enregistré · ${duree} min`);
   clearInterval(timerInterval);
   activeRdv = null;
+  if(btnFin) btnFin.disabled = false;          // rendu au RDV suivant
   $('emptyState').style.display = 'flex';
   $('visioActive').style.display = 'none';
   renderDocsList();
@@ -1861,13 +1867,14 @@ function renderCustomBgThumb(){
     slot.classList.add('custom-bg');
     slot.dataset.bg = 'custom';
     slot.style.backgroundImage = `url("${data}")`;
-    slot.innerHTML = `<button onclick="event.stopPropagation();removeCustomBg()" style="position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0;z-index:3" title="Supprimer">&times;</button>`;
+    slot.innerHTML = `<button onclick="event.stopPropagation();removeCustomBg(this)" style="position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0;z-index:3" title="Supprimer">&times;</button>`;
     slot.onclick = (e) => { if(e.target.tagName === 'BUTTON') return; selectBackground('custom'); };
   }
 }
 
-window.removeCustomBg = async function(){
-  if(!confirm('Supprimer le fond personnalisé ?')) return;
+window.removeCustomBg = async function(btn){
+  if(btn) btn.disabled = true;
+  if(!await mupConfirm('Supprimer le fond personnalisé ?', null, 'Supprimer', 'Annuler')){ if(btn) btn.disabled = false; return; }
   _state.bgCustom = null;
   await api.deleteBgCustom();
   const active = _state.settings.bg_active || 'none';
@@ -2111,7 +2118,7 @@ function renderDocsList(){
   list.querySelectorAll('.doc-action-delete').forEach(btn=>{
     btn.addEventListener('click', e=>{
       e.stopPropagation();
-      deleteDoc(btn.dataset.docId);
+      deleteDoc(btn.dataset.docId, btn);
     });
   });
 }
@@ -2209,10 +2216,11 @@ async function togglePin(docId){
   renderDocsList();
 }
 
-async function deleteDoc(docId){
+async function deleteDoc(docId, btn){
   const doc = (_state.docs || []).find(m => m.id === docId);
   if(!doc) return;
-  if(!confirm(`Supprimer "${doc.name}" ?`)) return;
+  if(btn) btn.disabled = true;
+  if(!await mupConfirm(`Supprimer "${doc.name}" ?`, null, 'Supprimer', 'Annuler')){ if(btn) btn.disabled = false; return; }
   const blobKey = doc.indexedDb_local_id || doc.id;
   await dbDelete(blobKey);
   await api.deleteDoc(docId);
@@ -2419,8 +2427,10 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
   renderRdvList();
 
   if($('prospectEmail').value){
-    setTimeout(()=>{
-      if(confirm("Envoyer l'invitation par email maintenant ?")){
+    // Rappel asynchrone : setTimeout ne lit pas ce que rend son rappel, la
+    // promesse de mupConfirm peut donc s'attendre ici.
+    setTimeout(async ()=>{
+      if(await mupConfirm("Envoyer l'invitation par email maintenant ?", null, 'Envoyer', 'Annuler')){
         const subject = encodeURIComponent(`Invitation visio — ${prospectName}`);
         const dateStr = new Date(dateISO).toLocaleString('fr-FR',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
         const body = encodeURIComponent(`Bonjour,\n\nJe vous propose un RDV en visioconférence le ${dateStr}.\n\nLien : ${link}\n\n${_state.settings.signature || 'àtrès bientôt'}`);

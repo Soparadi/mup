@@ -225,6 +225,7 @@
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
+  <link rel="stylesheet" href="/styles/mup-confirm.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -491,6 +492,7 @@
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
+<script src="/js/mup-confirm.js"></script>
 <script>
 (function(){
   /* ============ TVA TABLE ============ */
@@ -741,11 +743,14 @@
   function bindRowActions(){
     document.querySelectorAll('[data-del]').forEach(function(b){
       b.addEventListener('click', async function(){
-        var id = this.dataset.del;
+        var btn = this;
+        var id = btn.dataset.del;
         var f = frais.find(function(x){ return x.id === id; });
         if(!f) return;
-        var msg = f.recurrentId ? 'Supprimer cette occurrence ? Le frais récurrent ne sera pas généré ce mois-ci.' : 'Supprimer ce frais ?';
-        if(!confirm(msg)) return;
+        var titre = f.recurrentId ? 'Supprimer cette occurrence ?' : 'Supprimer ce frais ?';
+        var detail = f.recurrentId ? 'Le frais récurrent ne sera pas généré ce mois-ci.' : null;
+        btn.disabled = true;                   // la fenêtre ne bloque plus le fil
+        if(!await mupConfirm(titre, detail, 'Supprimer', 'Annuler')){ btn.disabled = false; return; }
         if(f.recurrentId){
           var rule = recurrents.find(function(r){ return r.id === f.recurrentId; });
           if(rule){
@@ -891,8 +896,10 @@
     document.querySelectorAll('[data-edit-rec]').forEach(function(b){ b.addEventListener('click', function(){ openRecDrawer(this.dataset.editRec); }); });
     document.querySelectorAll('[data-del-rec]').forEach(function(b){
       b.addEventListener('click', async function(){
-        var id = this.dataset.delRec;
-        if(!confirm('Supprimer ce frais récurrent et toutes ses occurrences générées ?')) return;
+        var btn = this;
+        var id = btn.dataset.delRec;
+        btn.disabled = true;                   // la fenêtre ne bloque plus le fil
+        if(!await mupConfirm('Supprimer ce frais récurrent et toutes ses occurrences générées ?', null, 'Supprimer', 'Annuler')){ btn.disabled = false; return; }
         var fraisToDelete = frais.filter(function(f){ return f.recurrentId === id; });
         recurrents = recurrents.filter(function(r){ return r.id !== id; });
         frais = frais.filter(function(f){ return f.recurrentId !== id; });
@@ -1061,9 +1068,9 @@
   document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
 
   document.getElementById('drawer-save').addEventListener('click', async function(){
-    if(!currentCategory){ alert('Sélectionner une catégorie'); return; }
+    if(!currentCategory){ mupAlert('Sélectionner une catégorie', null, 'Fermer'); return; }
     var amount = parseFloat(document.getElementById('f-amount').value);
-    if(!amount || amount <= 0){ alert('Saisir un montant valide'); return; }
+    if(!amount || amount <= 0){ mupAlert('Saisir un montant valide', null, 'Fermer'); return; }
     var date = document.getElementById('f-date').value || todayISO();
 
     if(editingId){
@@ -1149,13 +1156,13 @@
   document.getElementById('rec-overlay').addEventListener('click', closeRecDrawer);
 
   document.getElementById('rec-save').addEventListener('click', async function(){
-    if(!currentRecCategory){ alert('Sélectionner une catégorie'); return; }
+    if(!currentRecCategory){ mupAlert('Sélectionner une catégorie', null, 'Fermer'); return; }
     var amount = parseFloat(document.getElementById('rec-amount').value);
-    if(!amount || amount <= 0){ alert('Saisir un montant valide'); return; }
+    if(!amount || amount <= 0){ mupAlert('Saisir un montant valide', null, 'Fermer'); return; }
     var day = parseInt(document.getElementById('rec-day').value, 10);
-    if(!day || day < 1 || day > 28){ alert('Jour entre 1 et 28'); return; }
+    if(!day || day < 1 || day > 28){ mupAlert('Jour entre 1 et 28', null, 'Fermer'); return; }
     var desc = document.getElementById('rec-desc').value.trim();
-    if(!desc){ alert('Description obligatoire'); return; }
+    if(!desc){ mupAlert('Description obligatoire', null, 'Fermer'); return; }
 
     if(editingRecId){
       var idx = recurrents.findIndex(function(r){ return r.id === editingRecId; });
@@ -1230,7 +1237,7 @@
 
   /* ============ EXPORT CSV ============ */
   document.getElementById('btn-export').addEventListener('click', function(){
-    if(frais.length === 0){ alert('Aucun frais à exporter'); return; }
+    if(frais.length === 0){ mupAlert('Aucun frais à exporter', null, 'Fermer'); return; }
     var headers = ['Date','Catégorie','Description','Prospect','Montant TTC','Montant HT','TVA','TVA récupérable','Type','Photo'];
     var rows = frais.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); }).map(function(f){
       var card = pipeline.find(function(c){ return c.id === f.cardId; });

@@ -10,6 +10,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/styles/app-footer.css">
 <link rel="stylesheet" href="/styles/cookies-banner.css">
+<link rel="stylesheet" href="/styles/mup-confirm.css">
 <link rel="stylesheet" href="/styles/sidebar.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1566,9 +1567,9 @@ async function proposerActionDeLaNote(text){
   const pad = (n) => String(n).padStart(2, '0');
   const dateStr = d.date.getFullYear() + '-' + pad(d.date.getMonth()+1) + '-' + pad(d.date.getDate());
   const quand = d.date.getDate() + ' ' + MOIS_COURTS[d.date.getMonth()] + ' à ' + d.time;
-  const question = 'Cette note annonce ' + (ACTION_ARTICLE[d.type] || 'une action')
-    + ' le ' + quand + '.\n\nL\'inscrire à l\'agenda ?';
-  if (!confirm(question)) return;
+  const constat = 'Cette note annonce ' + (ACTION_ARTICLE[d.type] || 'une action')
+    + ' le ' + quand + '.';
+  if (!await mupConfirm('L\'inscrire à l\'agenda ?', constat, 'Inscrire', 'Annuler')) return;
   const pose = await poserRendezVous({
     type: d.type,
     dateStr: dateStr,
@@ -1588,11 +1589,11 @@ async function proposerTelephoneDeLaNote(text){
   // qu'une note mentionne au passage.
   if (!champ || champ.value.trim()) return;
   const numero = window.MUPTel.format(m[0]);
-  if (!confirm('Cette note contient un numéro : ' + numero
-    + '\n\nL\'enregistrer comme téléphone de la société ?')) return;
+  if (!await mupConfirm('L\'enregistrer comme téléphone de la société ?',
+    'Cette note contient un numéro : ' + numero, 'Enregistrer', 'Annuler')) return;
   champ.value = numero;
   // Le champ est posé par script, mais la valeur vient de la note de l'abonnée et
-  // le confirm() ci-dessus EST le geste : on l'inscrit au registre, sans quoi
+  // la confirmation ci-dessus EST le geste : on l'inscrit au registre, sans quoi
   // captureFields l'ignorerait et le toast annoncerait un enregistrement qui
   // n'aurait pas eu lieu.
   champsSaisis.add('f-societe-tel');
@@ -1622,7 +1623,7 @@ function wireConsignation(){
 
 async function consignerGeste(type, nomGeste, qui){
   const avec = qui && qui !== '—' ? ' à ' + qui : '';
-  if (!confirm('Consigner ' + (type === 'phone' ? 'cet appel' : 'ce mail') + avec + ' dans le fil ?')) return;
+  if (!await mupConfirm('Consigner ' + (type === 'phone' ? 'cet appel' : 'ce mail') + avec + ' dans le fil ?', null, 'Consigner', 'Annuler')) return;
   const pose = await MUPFil.ecrire({ ancrage: contactId, type: type, texte: nomGeste + avec });
   if (!pose) { toast('Activité non enregistrée, réessayez'); return; }
   renderTimeline();
@@ -1654,8 +1655,15 @@ function wireDropdowns(){
 
 // Suppression contact
 function wireDelete(){
-  document.getElementById('qa-delete').addEventListener('click', async () => {
-    if (!confirm('Supprimer définitivement ce contact ?\n\nCette action est irréversible.')) return;
+  document.getElementById('qa-delete').addEventListener('click', async function(){
+    // La fenêtre ne bloque plus le fil : le bouton se ferme d'abord, et se
+    // rouvre au renoncement comme à l'échec.
+    const btn = this;
+    btn.disabled = true;
+    if (!await mupConfirm('Supprimer définitivement ce contact ?', 'Cette action est irréversible.', 'Supprimer', 'Annuler')) {
+      btn.disabled = false;
+      return;
+    }
     try {
       const resp = await fetch('/api/contacts/' + encodeURIComponent(contactId), { method: 'DELETE' });
       if (!resp.ok && resp.status !== 404) throw new Error('HTTP ' + resp.status);
@@ -1668,6 +1676,7 @@ function wireDelete(){
     } catch (e) {
       console.error('[contact-societe] delete', e);
       toast('Erreur lors de la suppression');
+      btn.disabled = false;
     }
   });
 }
@@ -1730,8 +1739,8 @@ async function societeDeLaFiche(){
   const nom = (document.getElementById('f-nom').value || '').trim()
     || contact.nom || contact.company || contact.name || '';
   if (!nom) { toast('Renseignez la raison sociale avant d\'ajouter une personne'); return null; }
-  if (!confirm('Cette fiche n\'est rattachée à aucune société.\n\nCréer « ' + nom
-    + ' » comme société, pour y rattacher la personne ?')) {
+  if (!await mupConfirm('Créer « ' + nom + ' » comme société, pour y rattacher la personne ?',
+    'Cette fiche n\'est rattachée à aucune société.', 'Créer', 'Annuler')) {
     societeCreationRefusee = true;
     toast('Personne non enregistrée : aucune société de rattachement');
     return null;
@@ -2082,7 +2091,8 @@ async function carteOuCreation(){
     return null;
   }
   if (carte) { _carte = carte; _carteLue = true; majColonne(); return MUPFil.localId(carte.id); }
-  if (!confirm('Cette entreprise n\'a pas de fiche au pipeline.\n\nLa créer en colonne RDV pour y rattacher le rendez-vous ?')) return null;
+  if (!await mupConfirm('La créer en colonne RDV pour y rattacher le rendez-vous ?',
+    'Cette entreprise n\'a pas de fiche au pipeline.', 'Créer', 'Annuler')) return null;
   const cree = await creerCarte('rdv');
   if (!cree) return null;
   _carte = cree;
@@ -2201,7 +2211,8 @@ async function deplacerCarte(col){
   sel.disabled = true;
   try {
     if (!_carte) {
-      if (!confirm('Cette entreprise n\'a pas de fiche au pipeline.\n\nLa créer en colonne ' + def.name + ' ?')) return;
+      if (!await mupConfirm('La créer en colonne ' + def.name + ' ?',
+        'Cette entreprise n\'a pas de fiche au pipeline.', 'Créer', 'Annuler')) return;
       const cree = await creerCarte(col);
       if (!cree) return;
       _carte = cree;
@@ -2428,6 +2439,7 @@ async function rechargerFiche(){
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
 <script src="/js/agenda-sync.js"></script>
+<script src="/js/mup-confirm.js"></script>
 <script>
   attachAgendaSync({
     reloadFn: async function () {

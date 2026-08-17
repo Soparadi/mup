@@ -368,6 +368,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
+  <link rel="stylesheet" href="/styles/mup-confirm.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -1141,7 +1142,7 @@ async function init(){
           init();
         }
       } catch (e) {
-        alert('Erreur lors de l\'import : ' + e.message);
+        mupAlert('Erreur lors de l\'import', e.message, 'Fermer');
       }
     };
     document.body.appendChild(importBtn);
@@ -2120,6 +2121,7 @@ window.addEventListener('keydown', function(e) {
 <script src="/_fiche-client.js"></script>
 <script src="/js/agenda-sync.js"></script>
 <script src="/js/quota-kpi.js"></script>
+<script src="/js/mup-confirm.js"></script>
 <script>
   // Wiring infra Sprint A — listener actif dès maintenant.
   // reloadFn vide volontairement : la timeline contact (Sprint D) viendra

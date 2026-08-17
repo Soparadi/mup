@@ -156,6 +156,7 @@
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
+  <link rel="stylesheet" href="/styles/mup-confirm.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -399,6 +400,7 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js"></script>
+<script src="/js/mup-confirm.js"></script>
 <script>
 (async function(){
   if(typeof pdfjsLib !== 'undefined'){ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js'; }
@@ -1354,7 +1356,9 @@
       renderList(); renderPreview();
     };
     document.getElementById('e-delete').onclick = async function(){
-      if(!confirm('Supprimer cette facture ?')) return;
+      var btn = this;
+      btn.disabled = true;                     // la fenêtre ne bloque plus le fil
+      if(!await mupConfirm('Supprimer cette facture ?', null, 'Supprimer', 'Annuler')){ btn.disabled = false; return; }
       var rid = String(f.id).replace(/^facture:/, '').replace(/^⟨+|⟩+$/g, '');
       await fetch('/api/factures/' + encodeURIComponent(rid), { method:'DELETE' });
       factures = factures.filter(function(x){ return x.id !== f.id; });
@@ -1479,7 +1483,7 @@
 
   document.getElementById('new-save').addEventListener('click', async function(){
     var clientNom = document.getElementById('new-client-nom').value.trim();
-    if(!clientNom){ alert('Nom du client requis'); return; }
+    if(!clientNom){ mupAlert('Nom du client requis', null, 'Fermer'); return; }
     var rows = document.querySelectorAll('#new-lignes-body tr');
     var lignes = [];
     rows.forEach(function(tr){
@@ -1489,7 +1493,7 @@
       var p = parseFloat(tr.querySelector('.ln-pu').value) || 0;
       lignes.push({ designation: desc, date: tr.querySelector('.ln-date').value || null, quantite: q, prix_unitaire: p, total: round2(q * p) });
     });
-    if(lignes.length === 0){ alert('Au moins une ligne avec désignation requise'); return; }
+    if(lignes.length === 0){ mupAlert('Au moins une ligne avec désignation requise', null, 'Fermer'); return; }
     var totalHt = round2(lignes.reduce(function(s,l){ return s + l.total; }, 0));
     // Régime figé à l'émission depuis le sélecteur de la fenêtre (initialisé au
     // réglage de compte) : la facture porte ce taux, elle ne le recalcule jamais.
@@ -1575,11 +1579,11 @@
           var ws = wb.Sheets[wb.SheetNames[0]];
           var rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
           showCSVPreview(rows);
-        } catch(err){ alert('Erreur lecture Excel: '+err.message); }
+        } catch(err){ mupAlert('Erreur lecture Excel', err.message, 'Fermer'); }
       };
       reader.readAsArrayBuffer(file);
     } else {
-      Papa.parse(file, { header:true, skipEmptyLines:true, complete:function(res){ showCSVPreview(res.data); }, error:function(err){ alert('Erreur CSV: '+err.message); } });
+      Papa.parse(file, { header:true, skipEmptyLines:true, complete:function(res){ showCSVPreview(res.data); }, error:function(err){ mupAlert('Erreur CSV', err.message, 'Fermer'); } });
     }
   }
   function showCSVPreview(rows){
@@ -1634,7 +1638,7 @@
     await saveJSON('mup_factures', factures);
     document.getElementById('modal-import-csv').classList.remove('show');
     refreshYearFilter(); renderList();
-    alert(added + ' facture' + (added>1?'s':'') + ' importée' + (added>1?'s':'') + '.');
+    mupAlert('Import terminé', added + ' facture' + (added>1?'s':'') + ' importée' + (added>1?'s':'') + '.', 'Fermer');
   });
 
   // ── IMPORT PDF ──
@@ -1859,7 +1863,7 @@
       } catch(e){ console.error('Sync échec', e); }
     }
     console.log('Sync contacts :', contactsCreated, 'créés/MAJ,', geocoded, 'géocodés');
-    alert(added + ' facture' + (added>1?'s':'') + ' importée' + (added>1?'s':'') + ' depuis PDF.');
+    mupAlert('Import terminé', added + ' facture' + (added>1?'s':'') + ' importée' + (added>1?'s':'') + ' depuis PDF.', 'Fermer');
   });
 
   // ── HIGHLIGHT (depuis ?highlight=NUMERO) ──
@@ -1873,7 +1877,7 @@
 
   // ── SYNC CONTACTS RÉTROACTIF ──
   document.getElementById('btn-sync-contacts').addEventListener('click', async function(){
-    if(factures.length === 0){ alert('Aucune facture à synchroniser.'); return; }
+    if(factures.length === 0){ mupAlert('Aucune facture à synchroniser', null, 'Fermer'); return; }
     var btn = this;
     var originalLabel = btn.textContent;
     var created = 0, geocodedN = 0;
@@ -1885,17 +1889,21 @@
       } catch(e){ console.error('Sync échec', e); }
     }
     btn.textContent = originalLabel;
-    alert(created + ' contact' + (created>1?'s':'') + ' créé/MAJ, ' + geocodedN + ' géocodé' + (geocodedN>1?'s':'') + ' avec succès.');
+    mupAlert('Synchronisation terminée', created + ' contact' + (created>1?'s':'') + ' créé/MAJ, ' + geocodedN + ' géocodé' + (geocodedN>1?'s':'') + ' avec succès.', 'Fermer');
   });
 
   // ── PURGE BASE DE TEST ──
-  async function purgeTestFactures(){
-    if(!confirm('Vider toute la base de factures ? Cette action est irréversible.')) return;
+  async function purgeTestFactures(btn){
+    if(btn) btn.disabled = true;               // la fenêtre ne bloque plus le fil
+    if(!await mupConfirm('Vider toute la base de factures ?', 'Cette action est irréversible.', 'Vider', 'Annuler')){
+      if(btn) btn.disabled = false;
+      return;
+    }
     await deleteAllFactures();
     window.location.reload();
   }
-  document.getElementById('btn-purge').addEventListener('click', purgeTestFactures);
-  document.getElementById('test-banner-purge').addEventListener('click', purgeTestFactures);
+  document.getElementById('btn-purge').addEventListener('click', function(){ purgeTestFactures(this); });
+  document.getElementById('test-banner-purge').addEventListener('click', function(){ purgeTestFactures(this); });
 
   // ── INIT ──
   // Bootstrap data API d'abord, puis lance les renders

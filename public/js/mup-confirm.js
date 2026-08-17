@@ -1,13 +1,19 @@
 /* ══════════════════════════════════════════════════════════════════
    FENÊTRE DE CONFIRMATION MOVUP — comportement partagé
    ------------------------------------------------------------------
-   Une seule fonction, mupConfirm(), rendant une promesse résolue à
-   vrai (validation) ou à faux (les trois renoncements). Elle remplace
-   window.confirm() partout où le produit pose une question fermée.
+   Deux fonctions pour un seul vêtement, toutes deux servies par le
+   même constructeur privé fenetre() :
 
-   Elle ne connaît aucune page : ni identifiant, ni variable, ni
-   fonction d'appelant. Elle fabrique son propre balisage à
-   l'ouverture et le retire à la fermeture, écouteurs compris.
+     mupConfirm() — question fermée, deux boutons, promesse résolue à
+     vrai (validation) ou à faux (les trois renoncements). Elle
+     remplace window.confirm().
+
+     mupAlert() — information, un seul bouton, promesse résolue à la
+     fermeture quelle qu'en soit la voie. Elle remplace window.alert().
+
+   Elles ne connaissent aucune page : ni identifiant, ni variable, ni
+   fonction d'appelant. Elles fabriquent leur propre balisage à
+   l'ouverture et le retirent à la fermeture, écouteurs compris.
 
    Habillage : /styles/mup-confirm.css, à charger par la page hôte.
 
@@ -16,6 +22,8 @@
        ['Première phrase.', 'Seconde phrase.'],
        'Ajouter', 'Annuler'
      );
+
+     await mupAlert('Import impossible', 'Le fichier est illisible.', 'Fermer');
 
    Le corps accepte une chaîne (un paragraphe) ou un tableau de
    chaînes (un paragraphe par entrée). Le texte est posé en
@@ -28,7 +36,11 @@
   var CROIX = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">'
             + '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 
-  function mupConfirm(titre, corps, libelleValider, libelleAnnuler) {
+  // Constructeur unique. `avecAnnuler` dit si le pied porte le second
+  // bouton : c'est la seule différence entre une question et une
+  // information. Tout le reste — bandeau, corps, sorties, nettoyage —
+  // est commun aux deux.
+  function fenetre(titre, corps, libelleValider, libelleAnnuler, avecAnnuler) {
     return new Promise(function (resolve) {
       var overlay = document.createElement('div');
       overlay.className = 'mupc-overlay';
@@ -77,7 +89,7 @@
       btnValider.type = 'button';
       btnValider.className = 'mupc-btn mupc-btn-dark mupc-btn-sm';
       btnValider.textContent = libelleValider || 'Confirmer';
-      foot.appendChild(btnAnnuler);
+      if (avecAnnuler) foot.appendChild(btnAnnuler);
       foot.appendChild(btnValider);
 
       modal.appendChild(head);
@@ -126,5 +138,18 @@
     });
   }
 
+  // Question fermée : deux boutons, vrai ou faux.
+  function mupConfirm(titre, corps, libelleValider, libelleAnnuler) {
+    return fenetre(titre, corps, libelleValider || 'Confirmer', libelleAnnuler || 'Annuler', true);
+  }
+
+  // Information : un seul bouton. Les quatre sorties rendent faux,
+  // la validation rend vrai ; ni l'un ni l'autre ne dit rien ici, et
+  // l'appelante n'a que la fermeture à attendre.
+  function mupAlert(titre, corps, libelleFermer) {
+    return fenetre(titre, corps, libelleFermer || 'Fermer', null, false).then(function () {});
+  }
+
   window.mupConfirm = mupConfirm;
+  window.mupAlert = mupAlert;
 })();

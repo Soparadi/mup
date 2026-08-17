@@ -469,6 +469,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
+  <link rel="stylesheet" href="/styles/mup-confirm.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -930,7 +931,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     <div class="modal-foot">
       <button class="btn btn-outline btn-sm" onclick="closeCampaignModal()">Annuler</button>
       <button class="btn btn-dark btn-sm" onclick="saveCampaignDraft()">Enregistrer brouillon</button>
-      <button class="btn btn-dark btn-sm" onclick="sendCampaignNow()">Envoyer maintenant</button>
+      <button class="btn btn-dark btn-sm" onclick="sendCampaignNow(this)">Envoyer maintenant</button>
     </div>
   </div>
 </div>
@@ -963,6 +964,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 
 <div class="toast" id="toast"></div>
 
+<script src="/js/mup-confirm.js"></script>
 <script>
 // ────────────────────────────────────────────────
 // SOUS-ONGLETS
@@ -2028,7 +2030,7 @@ async function loadAccounts(){
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px;">'
         + '<div><div style="font-size:13.5px;font-weight:700;color:var(--text);">' + escHtml(a.email) + legacyBadge + '</div>'
         + '<div style="font-size:11.5px;color:' + providerColor + ';font-weight:600;text-transform:uppercase;letter-spacing:1.2px;margin-top:3px;">' + providerLabel + '</div></div>'
-        + '<button class="btn btn-outline btn-sm" onclick="disconnectAccount(' + JSON.stringify(a.provider).replace(/"/g, '&quot;') + ', ' + JSON.stringify(a.email).replace(/"/g, '&quot;') + ')">Déconnecter</button>'
+        + '<button class="btn btn-outline btn-sm" onclick="disconnectAccount(' + JSON.stringify(a.provider).replace(/"/g, '&quot;') + ', ' + JSON.stringify(a.email).replace(/"/g, '&quot;') + ', this)">Déconnecter</button>'
         + '</div>';
     }).join('');
     // La liste qu'on vient d'écrire est celle que la mention désigne : « ci-dessus ».
@@ -2036,14 +2038,18 @@ async function loadAccounts(){
   } catch(e){}
 }
 
-async function disconnectAccount(provider, email){
+async function disconnectAccount(provider, email, btn){
   // MASQUAGE — débrancher une boîte connectée en manuel est sans retour tant
   // que la fenêtre IMAP est masquée : on le dit avant, pas après. À retirer
   // avec le bloc de masquage de la feuille de style.
   var sansRetour = provider === 'imap'
-    ? '\n\nVous ne pourrez pas la rebrancher de la même façon : seules les connexions Google et Microsoft sont proposées.'
-    : '';
-  if(!confirm('Déconnecter ' + email + ' (' + provider + ') ?' + sansRetour)) return;
+    ? 'Vous ne pourrez pas la rebrancher de la même façon : seules les connexions Google et Microsoft sont proposées.'
+    : null;
+  if(btn) btn.disabled = true;                 // la fenêtre ne bloque plus le fil
+  if(!await mupConfirm('Déconnecter ' + email + ' (' + provider + ') ?', sansRetour, 'Déconnecter', 'Annuler')){
+    if(btn) btn.disabled = false;
+    return;
+  }
   try {
     if(provider === 'google'){
       var r = await fetch('/auth/google/disconnect', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email }) });
@@ -2189,7 +2195,11 @@ function loadCampaignRecipients(){
   preview.innerHTML = recipients.slice(0, 10).map(function(r){ return r.email + (r.prenom ? ' (' + r.prenom + ')' : '') + (r.entreprise ? ' — ' + r.entreprise : ''); }).join('<br/>') + (recipients.length > 10 ? '<br/>… +' + (recipients.length - 10) + ' autres' : '');
 }
 async function saveCampaignDraft(){ await submitCampaign(false); }
-async function sendCampaignNow(){ if(!confirm('Envoyer la campagne maintenant ?')) return; await submitCampaign(true); }
+async function sendCampaignNow(btn){
+  if(btn) btn.disabled = true;                 // la fenêtre ne bloque plus le fil
+  if(!await mupConfirm('Envoyer la campagne maintenant ?', null, 'Envoyer', 'Annuler')){ if(btn) btn.disabled = false; return; }
+  try { await submitCampaign(true); } finally { if(btn) btn.disabled = false; }
+}
 async function submitCampaign(sendNow){
   var name = document.getElementById('cm-name').value.trim();
   var subject = document.getElementById('cm-subject').value.trim();
@@ -2861,10 +2871,15 @@ async function enregistrerSignature(){
 }
 
 async function supprimerSignature(){
-  if(!confirm('Supprimer votre signature — texte et logo ? Vos messages repartiront sans elle.')) return;
+  // Le verrou passe AVANT la fenêtre : elle ne bloque plus le fil, et sans lui
+  // deux clics rapides ouvriraient deux fenêtres et lanceraient deux DELETE.
   var btn = document.getElementById('sig-supprimer');
   if(btn && btn.disabled) return;
   if(btn) btn.disabled = true;
+  if(!await mupConfirm('Supprimer votre signature — texte et logo ?', 'Vos messages repartiront sans elle.', 'Supprimer', 'Annuler')){
+    if(btn) btn.disabled = false;
+    return;
+  }
   etatSignature('Suppression…');
   try {
     var r = await fetch('/api/mail/signature', { method: 'DELETE' });

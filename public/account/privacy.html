@@ -62,6 +62,7 @@
 <link rel="stylesheet" href="/styles/sidebar.css">
 <link rel="stylesheet" href="/styles/app-footer.css">
 <link rel="stylesheet" href="/styles/cookies-banner.css">
+<link rel="stylesheet" href="/styles/mup-confirm.css">
 </head>
 <body>
 <aside class="sidebar" id="sidebar"></aside>
@@ -134,6 +135,7 @@ Pour confirmer, saisissez SUPPRIMER ci-dessous :</p>
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
+<script src="/js/mup-confirm.js"></script>
 <script>
 (function() {
   var STATE_1 = document.getElementById('delete-state-1');
@@ -228,14 +230,20 @@ Pour confirmer, saisissez SUPPRIMER ci-dessous :</p>
     })
     .catch(function(e) {
       console.error('[privacy] delete request', e);
-      alert('Une erreur est survenue. Veuillez réessayer.');
+      mupAlert('Une erreur est survenue', 'Veuillez réessayer.', 'Fermer');
       BTN_CONFIRM.disabled = false;
     });
   });
 
-  BTN_CANCEL_DEL.addEventListener('click', function() {
-    if (!confirm('Annuler votre demande de suppression de compte ?')) return;
+  // Écouteur asynchrone : addEventListener ne lit pas ce que rend son rappel,
+  // la promesse de mupConfirm peut donc s'attendre ici. Le verrou passe AVANT
+  // la fenêtre, qui ne bloque plus le fil.
+  BTN_CANCEL_DEL.addEventListener('click', async function() {
     BTN_CANCEL_DEL.disabled = true;
+    if (!await mupConfirm('Annuler votre demande de suppression de compte ?', null, 'Annuler la demande', 'Annuler')) {
+      BTN_CANCEL_DEL.disabled = false;
+      return;
+    }
     fetch('/api/account/delete', {
       method: 'DELETE',
       credentials: 'same-origin'
@@ -248,7 +256,7 @@ Pour confirmer, saisissez SUPPRIMER ci-dessous :</p>
     .then(function(d) { if (d && d.cancelled) loadStatus(); })
     .catch(function(e) {
       console.error('[privacy] cancel deletion', e);
-      alert('Une erreur est survenue. Veuillez réessayer.');
+      mupAlert('Une erreur est survenue', 'Veuillez réessayer.', 'Fermer');
       BTN_CANCEL_DEL.disabled = false;
     });
   });

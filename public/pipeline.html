@@ -159,6 +159,17 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .detail-body{flex:1;overflow-y:auto;padding:16px 20px 20px;display:flex;flex-direction:column;gap:16px}
 .detail-section{display:flex;flex-direction:column;gap:8px}
 .detail-section-title{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted2);margin-bottom:2px}
+/* Bandeau — variante de .detail-section-title, posée sur ce seul titre : la
+   casse, la graisse et l'interlettrage restent ceux du titre, seuls le fond
+   et la boîte changent. Rayon et remplissage vertical sont ceux de
+   .detail-col-select, pour que le bandeau ait la forme du contrôle de colonne
+   au-dessus et du bouton Enrichir en dessous ; le remplissage droit y est
+   symétrique du gauche, les 34px du select ne réservant la place que d'un
+   chevron qu'un titre n'a pas. Pleine largeur sans width : les enfants de
+   .detail-section s'étirent déjà. margin-bottom remis à zéro — l'écart vient
+   du gap:8px de .detail-section, le 2px du titre décalerait le texte dans
+   le noir. */
+.detail-section-title.bandeau{background:var(--text);color:var(--bg);border-radius:9px;padding:8px 12px;margin-bottom:0}
 .detail-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text)}
 .detail-row a{color:var(--blue);text-decoration:none}
 .detail-row a:hover{text-decoration:underline}
@@ -565,7 +576,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
     <!-- 1) INFORMATIONS SOCIÉTÉ -->
     <div class="detail-section">
-      <div class="detail-section-title">Informations société</div>
+      <div class="detail-section-title bandeau">Informations société</div>
       <div class="info-grid" id="d-info-grid"></div>
     </div>
 

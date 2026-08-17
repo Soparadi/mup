@@ -1743,8 +1743,42 @@ async function openDetail(id) {
           detailMap.setView([lat, lon], 14);
           if(detailMarker) { try { detailMap.removeLayer(detailMarker); } catch(e){} }
           var icon = createMupMarker(lat, lon, colColor);
-          detailMarker = L.marker([lat, lon], { icon: icon }).addTo(detailMap).bindPopup(esc(label)).openPopup();
+
+          // Le redimensionnement passe AVANT la mesure et avant l'ouverture.
+          // Il était appelé après openPopup : le recentrage automatique de
+          // Leaflet calculait la place disponible, puis l'instruction suivante
+          // lui annonçait que le conteneur n'avait pas cette taille. Le calcul
+          // n'était jamais rejoué, et la bulle restait là où elle ne tenait pas.
           detailMap.invalidateSize();
+          var cadre = detailMap.getSize();
+
+          // Bulle bornée par le cadre, jamais par les défauts de Leaflet.
+          // Sans option, bindPopup applique maxWidth:300, auxquels s'ajoutent
+          // les 44 px de marges de .leaflet-popup-content : 346 px de bulle dans
+          // une carte large de 340. La bulle sortait donc par les côtés, et
+          // l'adresse — privée de largeur — se repliait sur une deuxième ligne
+          // qui la poussait par le haut d'un cadre haut de 180 px seulement.
+          // Les deux bornes sont mesurées sur le conteneur, jamais écrites en
+          // constantes : le panneau passe en pleine largeur sous 900 px et à
+          // l'impression, la carte suit, les bornes suivent avec elle.
+          //   — largeur : la place utile moins les 44 px de marges internes et
+          //     les deux fois 10 px d'autoPanPadding ;
+          //   — hauteur : la place utile moins les 26 px de marges verticales du
+          //     contenu, les 20 px de margin-bottom de .leaflet-popup et le même
+          //     autoPanPadding.
+          // Au-delà de cette hauteur, Leaflet fait défiler le contenu de la
+          // bulle (leaflet-popup-scrolled) : une adresse plus longue encore que
+          // celle-ci reste entière et lisible, sans troncature ni ellipse.
+          // Choisi en options plutôt qu'en CSS : le positionnement de la bulle
+          // est calculé par Leaflet à partir de ces mêmes valeurs, une règle de
+          // feuille les contredirait au lieu de les lui apprendre.
+          detailMarker = L.marker([lat, lon], { icon: icon }).addTo(detailMap)
+            .bindPopup(esc(label), {
+              maxWidth: Math.max(140, cadre.x - 64),
+              maxHeight: Math.max(40, cadre.y - 66),
+              autoPanPadding: [10, 10]
+            });
+          detailMarker.openPopup();
         }
 
         // Les deux causes d'échec, distinctes à l'écran : le service a répondu

@@ -6,6 +6,13 @@
 <title>MovUP — Carte</title>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<!-- MarkerCluster — même version et mêmes sources que Prospection
+     (prospection.html:13-15). Les DEUX feuilles sont requises : MarkerCluster.css
+     porte l'animation d'éclatement, MarkerCluster.Default.css les jambes
+     (.leaflet-cluster-spider-leg) qui relient les marqueurs éclatés à leur
+     pastille. Sans elles, le clic éclate sans rien dessiner. -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <link rel="stylesheet" href="/styles/sidebar.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -409,6 +416,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
 // Index agenda events par ficheId — alimenté par loadAllAgenda() au boot.
 // Source unique de vérité : table agenda en SurrealDB.
@@ -601,6 +609,53 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
   subdomains:'abcd', maxZoom:20, opacity:0.85
 }).addTo(map);
 
+// ── REGROUPEMENT DES FICHES ──
+// Les fiches partageant une adresse tombaient sur la même coordonnée et se
+// recouvraient ; on les écartait d'un décalage linéaire (±0,0004°, soit une
+// trentaine de mètres) qui mentait au registre : `markers[id].latlng` portait la
+// position décalée, donc le cadrage, les distances du panneau RDV et
+// l'itinéraire de tournée travaillaient sur une position fausse. Le
+// regroupement remplace ce mensonge : la fiche est posée à sa coordonnée exacte,
+// et c'est l'AFFICHAGE — non la donnée — qui rassemble les points confondus dans
+// une pastille, éclatée au clic.
+//
+// LE RAYON EST EN PIXELS, pas en mètres : maxClusterRadius est une distance
+// écran, mesurée entre les points projetés au zoom courant (elle accepte aussi
+// une fonction du zoom, qui rend encore des pixels). Les 20 m de l'accueil ne
+// sont donc pas transposables ici — l'accueil regroupe lui-même, en dur, par
+// distance géodésique.
+//
+// 30 px : le cas qui dimensionne le seuil n'est pas deux points isolés côte à
+// côte, mais un point isolé au bord d'une pastille. Le point isolé est un disque
+// de 14 px (createMupMarker), rayon 7 ; la plus grosse pastille fait 44 px
+// (palier « au-delà de 50 » ci-dessous), rayon 22. Tant que leurs centres sont
+// distants de moins de 22 + 7 = 29 px, le point mord la pastille et masque le
+// chiffre. Le seuil vaut donc au moins 29, arrondi à 30 — en deçà de 30 px d'un
+// groupe, un point est absorbé dans le groupe plutôt que posé sur son bord.
+// C'est le plus petit rayon qui règle le problème posé (des fiches empilées et
+// des points qui mangent les chiffres), pas un regroupement de confort.
+//
+// Options de clic laissées par défaut : une pastille dont les fiches sont
+// strictement confondues ne peut pas se séparer par le zoom, la bibliothèque le
+// détecte et l'éclate (spiderfy) au clic ; une pastille mixte zoome sur son
+// contenu.
+var ficheGroupe = L.markerClusterGroup({
+  maxClusterRadius: 30,
+  showCoverageOnHover: false,
+  iconCreateFunction: function(cluster){
+    // Apparence reprise telle quelle de l'accueil (index.html) : mêmes paliers
+    // de taille (< 10, < 50, au-delà), même couleur (--stage-prospects, #CC0000,
+    // que carte.html nomme --red), même graisse de chiffre (11 px, 700, blanc).
+    var n = cluster.getChildCount();
+    var sz = n < 10 ? 32 : n < 50 ? 38 : 44;
+    return L.divIcon({
+      html: '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:var(--red);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-size:11px;font-weight:700;color:#fff;">'+n+'</div>',
+      className: '', iconSize: [sz, sz], iconAnchor: [sz/2, sz/2]
+    });
+  }
+});
+map.addLayer(ficheGroupe);
+
 function migrateCard(c){
   if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
   if(!c.company&&c.contact)c.company=c.contact;if(c.tel&&!c.phone)c.phone=c.tel;
@@ -760,7 +815,11 @@ function placeCard(c, clat, clng){
   // visible du triangle). Pour un disque de rayon R, l'apex touche le bord haut
   // quand offset.y = 11 − R ; ici R = 7, donc 4. Mesuré au rendu, pas déduit :
   // avec l'ancien −10 la bulle flottait 13 px au-dessus du disque.
-  var m=L.marker([clat,clng],{icon:icon,zIndexOffset:isRdv?500:0}).addTo(map).bindPopup(popup,{maxWidth:240,closeButton:true,offset:[0,4],autoPanPadding:[24,24]});
+  // Versé dans le groupe, non posé sur la carte : c'est le groupe qui décide de
+  // montrer le marqueur ou de le compter dans une pastille. Les marqueurs de
+  // CONTACTS restent hors du groupe, posés directement (cf. plus bas).
+  var m=L.marker([clat,clng],{icon:icon,zIndexOffset:isRdv?500:0}).bindPopup(popup,{maxWidth:240,closeButton:true,offset:[0,4],autoPanPadding:[24,24]});
+  ficheGroupe.addLayer(m);
   markers[String(c.id)]={marker:m,card:c,latlng:[clat,clng]};
 }
 
@@ -786,17 +845,10 @@ function placeCard(c, clat, clng){
     }
   });
 
-  // a. Placement direct des cartes déjà résolues — AUCUN appel réseau. Jitter
-  //    pour déstacker celles partageant exactement les mêmes coordonnées.
-  var storedByKey={};
-  withStored.forEach(function(s){ var k=s.lat+','+s.lng; (storedByKey[k]=storedByKey[k]||[]).push(s); });
-  Object.keys(storedByKey).forEach(function(k){
-    var grp=storedByKey[k];
-    grp.forEach(function(s,idx){
-      var jitter=grp.length>1?(idx-grp.length/2)*0.0004:0;
-      placeCard(s.c, s.lat+jitter, s.lng+jitter);
-    });
-  });
+  // a. Placement direct des cartes déjà résolues — AUCUN appel réseau. Chacune
+  //    est posée à SA coordonnée, sans décalage : le déstackage des points
+  //    confondus est le travail du regroupement (cf. REGROUPEMENT DES FICHES).
+  withStored.forEach(function(s){ placeCard(s.c, s.lat, s.lng); });
 
   var addrs=Object.keys(addrMap);
   var pending=addrs.length;
@@ -847,9 +899,14 @@ function placeCard(c, clat, clng){
     }
     var info=markers[cle];
     cadrerSur(info.latlng, 14);
-    // Ouverture directe. Aucun délai n'est établi ici, et en inventer un
-    // reconduirait le symptôme du chemin ?contact_siret=.
-    info.marker.openPopup();
+    // Un marqueur avalé dans une pastille n'est PAS sur la carte : openPopup y
+    // échouait en silence — la vue tombait au bon endroit, sans bulle.
+    // zoomToShowLayer est le helper de la bibliothèque pour ce cas : il rend le
+    // marqueur visible — un simple pan s'il l'est déjà, un zoom sur le contenu
+    // de la pastille, ou son éclatement quand le zoom ne peut pas la séparer —
+    // puis rappelle. Toujours aucun délai inventé : c'est la bibliothèque qui
+    // dit quand le marqueur est là.
+    ficheGroupe.zoomToShowLayer(info.marker, function(){ info.marker.openPopup(); });
   }
 
   function finish(){
@@ -885,11 +942,13 @@ function placeCard(c, clat, clng){
     })
     .then(function(geo){
       if(geo){
-        var grp=addrMap[addr];
-        grp.forEach(function(c,idx){
-          var jitter=grp.length>1?(idx-grp.length/2)*0.0004:0;
-          placeCard(c, geo.lat+jitter, geo.lng+jitter);
-          persistCoords(c, geo.lat, geo.lng); // c. écriture, base non jittérée
+        // Toutes les cartes d'une même adresse partagent la coordonnée géocodée,
+        // sans décalage : elles se rassemblent en pastille à l'affichage, et le
+        // registre porte enfin la position réellement géocodée — la même que
+        // celle écrite par persistCoords.
+        addrMap[addr].forEach(function(c){
+          placeCard(c, geo.lat, geo.lng);
+          persistCoords(c, geo.lat, geo.lng); // c. écriture
         });
       }
       // d. geo null → aucun marqueur, aucune écriture
@@ -1108,7 +1167,10 @@ function flyTo(id){
   var info=markers[String(id)];
   if(!info) return;
   map.setView(info.latlng,13);
-  info.marker.openPopup();
+  // Même échec silencieux que le récepteur de ?fiche= : depuis le panneau, un
+  // clic sur une fiche groupée déplaçait la vue sans jamais ouvrir de bulle.
+  // zoomToShowLayer rend d'abord le marqueur visible, puis rappelle.
+  ficheGroupe.zoomToShowLayer(info.marker, function(){ info.marker.openPopup(); });
 }
 
 // Cible cherchée AVANT d'ouvrir le panneau : une fiche posée sur la carte mais

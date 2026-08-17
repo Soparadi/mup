@@ -1823,6 +1823,11 @@ var S = {
 
   // convergence compteur « Prospects trouvés » vers les points réellement posés
   finished:     false,
+  // Cadrage sur les points posés : consommé UNE fois par recherche, à la
+  // convergence. Ré-armé au lancement (loadPage page 1). Sans lui, la carte
+  // repartirait en vol à chaque nouvelle visite du point de convergence —
+  // celui-ci n'étant pas à passage unique (cf. maybeFinishSearch).
+  cadrageConvergence: false,
   // Repli du bloc de recherche EN ATTENTE : posé au lancement ('metier' | 'id'),
   // consommé seulement à la fin réelle. Tant qu'il est posé, la barre reste
   // dépliée et le bouton visible en « Chargement… ».
@@ -2610,7 +2615,19 @@ function _resetMapLayers() {
 function _ensureCluster() {
   if(!mcGroup) {
     mcGroup = L.markerClusterGroup({
-      maxClusterRadius: 50,
+      // 30 px : même règle que la Carte — le cas qui dimensionne le seuil n'est
+      // pas deux points isolés côte à côte, mais un point isolé au bord d'une
+      // pastille. Tant que leurs centres sont distants de moins de la somme de
+      // leurs rayons, le point mord la pastille et masque le chiffre. La
+      // géométrie, elle, est celle de cette page : la plus grosse pastille fait
+      // 44 px (palier « au-delà de 50 » ci-dessous, box-sizing:border-box, bordure
+      // comprise), rayon 22 ; le point isolé n'est pas le divIcon de 14 px de la
+      // Carte mais un circleMarker SVG de rayon 7 dont le trait de 2 px est
+      // centré sur le tracé — 1 px déborde, l'emprise réelle vaut donc rayon 8,
+      // soit 16 px de diamètre (addMarker ci-dessous). 22 + 8 = 30 : le seuil
+      // tombe juste, sans arrondi. En deçà de 30 px d'un groupe, un point est
+      // absorbé dans le groupe plutôt que posé sur son bord.
+      maxClusterRadius: 30,
       showCoverageOnHover: false,
       iconCreateFunction: function(cluster) {
         var n = cluster.getChildCount();
@@ -2657,6 +2674,50 @@ function addMarker(lead) {
   var m = L.circleMarker([lead.lat,lead.lng],{radius:r,fillColor:color,color:'#fff',weight:2,opacity:1,fillOpacity:.88});
   m.bindPopup(popup,{maxWidth:300});
   mcGroup.addLayer(m);
+}
+
+// ── Cadrage sur les points RÉELLEMENT POSÉS (convergence, une seule fois).
+// Le geste est celui de la démonstration de l'accueil : vol animé vers les
+// bornes, mêmes rembourrage, plafond et durée (constantes recopiées de
+// DEMO_FIT_* d'index.html). Mouvement réduit → cadrage sec, mêmes bornes.
+// Aucune liste de coordonnées n'est tenue en propre sur cette page : les
+// points ne vivent que dans le groupe de regroupement. On les lui demande —
+// getLayers() est surchargé par markercluster et rend TOUS les marqueurs,
+// absorbés dans une pastille ou non.
+var FIT_POINTS_PADDING  = [24, 24];
+var FIT_POINTS_MAX_ZOOM = 15;
+var FIT_POINTS_DURATION = 1.2;
+// Le repli de la barre, consommé au même point de convergence, fait grandir
+// #map et remesure Leaflet à +300 ms ; ce remesurage panne la vue de la moitié
+// de l'écart de taille. On part APRÈS lui — sinon le vol arriverait décalé.
+var FIT_POINTS_DELAY_MS = 340;
+
+function cadrerSurPointsPoses() {
+  if (!mcGroup) return;   // aucun point posé : on ne touche pas à la vue
+  var pts = [];
+  try {
+    mcGroup.getLayers().forEach(function(l) {
+      var ll = l.getLatLng && l.getLatLng();
+      if (ll && Number.isFinite(ll.lat) && Number.isFinite(ll.lng)) pts.push([ll.lat, ll.lng]);
+    });
+  } catch(e) {
+    console.warn('[Leads] lecture des points posés', e && e.message);
+    return;
+  }
+  if (!pts.length) return;
+  var b = L.latLngBounds(pts);
+  if (!b.isValid()) return;
+  // Un seul point : les bornes sont ponctuelles, le vol s'arrête donc au
+  // plafond (15) centré dessus — pas de division par une étendue nulle.
+  setTimeout(function() {
+    try {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        map.fitBounds(b, { padding: FIT_POINTS_PADDING, maxZoom: FIT_POINTS_MAX_ZOOM });
+      } else {
+        map.flyToBounds(b, { padding: FIT_POINTS_PADDING, maxZoom: FIT_POINTS_MAX_ZOOM, duration: FIT_POINTS_DURATION });
+      }
+    } catch(e) { console.warn('[Leads] cadrage de convergence', e && e.message); }
+  }, FIT_POINTS_DELAY_MS);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2880,6 +2941,7 @@ async function loadPage(page) {
       S.nGeoFail      = 0;
       S.finished      = false;   // nouvelle recherche : le compteur reprend sa progression
       S.amorceLancee  = false;   // amorçage Overpass : ré-armé pour cette recherche
+      S.cadrageConvergence = false;   // nouvelle recherche : le vol de convergence est ré-armé
       S.buffer        = keptItems;
       S.loaded        = 0;
       S.page          = 1;
@@ -3368,6 +3430,16 @@ function maybeFinishSearch(gen) {
     // C'EST ICI, et nulle part ailleurs, que « Ajouter au pipeline »
     // paraît : au seul point de convergence de la recherche.
     afficherAjoutTotal();
+    // Et c'est ici seulement que la carte vole vers les points posés. Ce point
+    // de convergence n'est PAS à passage unique : la fin d'auto-roll et la fin
+    // de file de points y mènent toutes deux, et un scroll au-delà de 80 %
+    // relance un auto-roll qui s'éteint aussitôt et y revient. Le drapeau,
+    // ré-armé au lancement, garantit un seul vol par recherche — jamais un
+    // recadrage à chaque vague de points.
+    if (!S.cadrageConvergence) {
+      S.cadrageConvergence = true;
+      cadrerSurPointsPoses();
+    }
   }
 }
 

@@ -183,7 +183,29 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    sourds du panneau, que le .4 assourdit sans les effacer. */
 .d-btn.enrich:disabled{background:var(--surface2);color:var(--text);border-color:var(--border2)}
 .d-btn.enrich:disabled:hover{border-color:var(--border2)}
-.col-select{border:1.5px solid var(--border);border-radius:9px;padding:8px 12px;font-family:var(--font);font-size:13px;color:var(--text);background:var(--surface);width:100%;outline:none;cursor:pointer}
+/* Contrôle de colonne — premier enfant de .detail-body, sans marge propre :
+   l'espacement vient du gap:16px du conteneur.
+   appearance:none (et son préfixe webkit) est ce qui autorise le fond : sans
+   lui, Safari repeint le contrôle avec son propre chrome et la couleur de
+   colonne ne se voit pas. Le chevron natif disparaît avec l'apparence, on le
+   redessine donc — deux dégradés en currentColor, qui suivent d'eux-mêmes la
+   couleur posée en inline, sans valeur en dur ni image à charger. Le
+   padding-right lui réserve sa place.
+   background-image / -position / -size / -repeat, jamais la propriété
+   raccourcie : refletColonneFiche écrit background-color en inline, un
+   `background:` la remettrait à zéro à chaque repeint.
+   Les <option> ne sont pas habillées : le menu déroulé n'est pas stylable sur
+   Safari macOS ni iOS. La couleur ne vit que sur la boîte fermée. */
+.detail-col-select{
+  appearance:none;-webkit-appearance:none;
+  border:1.5px solid var(--border);border-radius:9px;padding:8px 34px 8px 12px;
+  font-family:var(--font);font-size:13px;font-weight:600;
+  color:var(--text);background-color:var(--surface);width:100%;outline:none;cursor:pointer;
+  background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+  background-position:right 17px center,right 12px center;
+  background-size:5px 5px,5px 5px;
+  background-repeat:no-repeat;
+}
 .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .info-item{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border-radius:9px;background:var(--surface)}
 .info-item-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)}
@@ -532,6 +554,15 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   </div>
   <div class="detail-body">
 
+    <!-- COLONNE — le seul endroit où la colonne se lit ET se change. La
+         pastille de l'en-tête noir la disait sans permettre de la changer, la
+         section « Déplacer vers » la changeait sans la dire, tout en bas de la
+         fiche : deux endroits pour un seul état. Ils tiennent ici, sous le
+         bandeau, en premier enfant de .detail-body.
+         Sans <option> écrites à la main : refletColonneFiche les engendre
+         depuis COLS, seul porteur de la table des colonnes. -->
+    <select class="detail-col-select" id="d-col" onchange="moveCard(this.value)"></select>
+
     <!-- 1) INFOS CONTACT -->
     <div class="detail-section">
       <div class="detail-section-title">Informations de contact</div>
@@ -649,23 +680,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
           </button>
         </div>
       </div>
-    </div>
-
-    <!-- DÉPLACER -->
-    <div class="detail-section">
-      <div class="detail-section-title">Déplacer vers</div>
-      <select class="col-select" id="d-move" onchange="moveCard(this.value)">
-        <option value="prospects">Prospects</option>
-        <option value="linkedin">LinkedIn</option>
-        <option value="mailing">Mailing</option>
-        <option value="phoning">Phoning</option>
-        <option value="visio">Visio</option>
-        <option value="rdv">RDV</option>
-        <option value="devis">Devis</option>
-        <option value="nego">Négociation</option>
-        <option value="won">Gagné ✓</option>
-        <option value="lost">Disqualifié</option>
-      </select>
     </div>
 
     <!-- ACTIONS FICHE -->
@@ -1365,6 +1379,9 @@ function onDrop(e, colId) {
     var now = new Date();
     var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     logActivity(dragId, 'Déplacé vers ' + COLS.find(c=>c.id===colId)?.name+' à '+timeStr, 'move', colId);
+    // La carte glissée peut être celle dont la fiche est ouverte : sans ce
+    // rappel, son contrôle continuerait d'annoncer la colonne d'avant.
+    if(String(currentId) === String(card.id)) refletColonneFiche(card);
   }
   dragId = null;
 }
@@ -1582,13 +1599,12 @@ async function openDetail(id) {
   document.getElementById('d-focus-cat').textContent = c.sector || c.naf_label || c.naf || '—';
   document.getElementById('d-focus-name').textContent = _nomD.titre || '—';
   document.getElementById('d-focus-sub').textContent = _nomD.sousTitre;
-  // La pastille neutre n'est qu'un séparateur devant le J+N : sans J+N elle
-  // fermerait la rangée sur un tiret qui n'annonce plus rien. Elle suit donc.
-  // La pastille de colonne tire sa couleur de COLS comme les badges plus haut :
-  // fond atténué, texte éclairci pour tenir sur le noir de l'en-tête. Sans col,
-  // aucun style n'est fabriqué et la pastille retombe sur la règle de base.
-  const _pillColD = col?.color ? ` style="background:${col.color}66;color:hsl(from ${col.color} h s 85%)"` : '';
-  document.getElementById('d-focus-pills').innerHTML = `<span class="pill"${_pillColD}>${esc(col?.name || 'Prospects')}</span>${_joursD === null ? '' : `<span class="pill">—</span><span class="pill pill-day">J+${_joursD}</span>`}`;
+  // La pastille de colonne a quitté le bandeau : elle disait un état sans
+  // permettre de le changer, le contrôle posé sous le bandeau fait les deux.
+  // La pastille neutre « — » la suit : elle n'était qu'un séparateur devant le
+  // J+N, et sans rien à sa gauche elle ouvrirait la rangée sur un tiret qui
+  // n'annonce plus rien. Reste le J+N, seul dans le conteneur.
+  document.getElementById('d-focus-pills').innerHTML = _joursD === null ? '' : `<span class="pill pill-day">J+${_joursD}</span>`;
 
   // Info grid
   let infoHtml = '';
@@ -1633,8 +1649,8 @@ async function openDetail(id) {
   poserLienSocial('d-facebook-link', c.facebook);
   poserLienSocial('d-instagram-link', c.instagram);
 
-  // Move select
-  document.getElementById('d-move').value = c.col||'prospects';
+  // Colonne courante — le contrôle et la visibilité de la section RDV.
+  refletColonneFiche(c);
 
   // Timeline — le fil de l'entreprise, pas le journal de cette seule carte.
   // Il juxtaposait trois morceaux sans les trier ensemble : les notes d'abord,
@@ -1656,19 +1672,16 @@ async function openDetail(id) {
   const noteInput = document.getElementById('d-notes-input');
   if(noteInput) noteInput.value = '';
 
-  // RDV section — calendrier inline + heure + bouton enregistrer
-  // Toujours visible sauf pour les colonnes terminales (Gagné, Disqualifié)
-  var rdvSection = document.getElementById('d-rdv-section');
-  var showRdv = ['won','lost'].indexOf(c.col) === -1;
-  if(showRdv) {
-    rdvSection.style.display = '';
+  // RDV section — calendrier inline + heure + bouton enregistrer.
+  // Sa visibilité dépend de la colonne et suit donc chaque déplacement : elle
+  // est posée par refletColonneFiche, plus haut. Ce qui reste ici dépend de la
+  // fiche et non de sa colonne — le calendrier ne se remonte qu'à l'ouverture.
+  if(!colonneTerminale(c.col)) {
     rdvCalDate = new Date();
     rdvSelectedDate = null;
     var timeInput = document.getElementById('rdv-time-input');
     if(timeInput) timeInput.value = c.rdvTime || '14:00';
     renderRdvCalendar();
-  } else {
-    rdvSection.style.display = 'none';
   }
 
   // Map
@@ -2361,10 +2374,42 @@ async function enrichDetail() {
   }
 }
 
+// Gagné et Disqualifié ferment l'affaire : rien ne s'y planifie.
+function colonneTerminale(colId) { return ['won','lost'].indexOf(colId) !== -1; }
+
+// Ce que la colonne de la fiche ouverte commande à l'écran, et rien d'autre :
+// la couleur du contrôle qui la porte, et la visibilité de la section RDV.
+// Les deux gestes tiennent ici pour qu'openDetail et tout déplacement — au
+// contrôle comme au glisser du Kanban — les rejouent à l'identique, sans
+// rejouer le reste de la fiche : ni l'agenda, ni le fil, ni la carte, ni la
+// note en cours de frappe.
+function refletColonneFiche(c) {
+  if(!c) return;
+  const col = COLS.find(x => x.id === c.col);
+  const sel = document.getElementById('d-col');
+  if(sel) {
+    // Options engendrées depuis COLS, jamais écrites à la main : la table des
+    // colonnes n'a qu'un porteur. Une seule fois — la liste ne varie pas.
+    if(!sel.options.length) sel.innerHTML = COLS.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+    sel.value = c.col || 'prospects';
+    // Même mécanique que la pastille qu'il remplace : fond et texte tirés de
+    // col.color, aucune valeur de couleur en dur. Le sens de l'écart suit le
+    // fond — la pastille tenait sur le noir du bandeau et éclaircissait son
+    // texte, le contrôle tient sur le blanc du corps et assombrit le sien.
+    // Sans col, les trois inlines sont vidés et la règle reprend la main ;
+    // le chevron, en currentColor, suit sans qu'on le touche.
+    sel.style.backgroundColor = col?.color ? col.color + '22' : '';
+    sel.style.borderColor     = col?.color ? col.color + '55' : '';
+    sel.style.color           = col?.color ? `hsl(from ${col.color} h s 32%)` : '';
+  }
+  const rdvSection = document.getElementById('d-rdv-section');
+  if(rdvSection) rdvSection.style.display = colonneTerminale(c.col) ? 'none' : '';
+}
+
 function moveCard(colId) {
   if(!currentId) return;
   const c = cards.find(x=>x.id===currentId);
-  if(c) { noterEtapeVie(c, colId); c.col=colId; var now = new Date(); var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); logActivity(currentId,'Déplacé vers '+COLS.find(x=>x.id===colId)?.name+' à '+timeStr, 'move', colId); save(); renderKanban(); }
+  if(c) { noterEtapeVie(c, colId); c.col=colId; var now = new Date(); var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); logActivity(currentId,'Déplacé vers '+COLS.find(x=>x.id===colId)?.name+' à '+timeStr, 'move', colId); save(); renderKanban(); refletColonneFiche(c); }
 }
 function editCurrentCard() { closeDetail(); editCard(currentId); }
 // Même geste que la corbeille du Kanban, donc même libellé : « Supprimer cette

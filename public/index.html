@@ -4852,8 +4852,8 @@ async function fetchCommuneBounds(codeINSEE) {
 }
 
 // ── Orchestrateur zoom carte selon le filtre actif ────────────────────
-// Divergence assumée avec le moteur (animate:false) : ici la carte est le visuel
-// d'accroche, on anime (animate:true) pour rester cohérent avec le recentrage au lancement.
+// Cadrage animé (animate:true). Le moteur (Prospection) anime désormais le même
+// cadrage : les deux pages ne divergent plus sur ce point.
 async function applyMapZoom() {
   // Adaptation vitrine : map → leadsMap (instance de la vitrine).
   if (!leadsMap) return;

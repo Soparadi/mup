@@ -1762,7 +1762,6 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 // ════════════════════════════════════════════════════════════════
 var API_BASE    = '/api'; // proxy local
 var PAGE_SIZE   = 25;
-var CLUSTER_THR = 200;                // switch to clustering above this
 var GEO_PFX     = 'geo3_';
 var GEO_TTL     = 30 * 24 * 60 * 60 * 1000;
 
@@ -1827,10 +1826,7 @@ var S = {
   // Repli du bloc de recherche EN ATTENTE : posé au lancement ('metier' | 'id'),
   // consommé seulement à la fin réelle. Tant qu'il est posé, la barre reste
   // dépliée et le bouton visible en « Chargement… ».
-  pendingCollapse: null,
-
-  // map
-  useCluster:   false
+  pendingCollapse: null
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -1847,8 +1843,12 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
   maxZoom: 20
 }).addTo(map);
 
-var mcGroup = null;   // MarkerClusterGroup (lazy init)
-var plainGrp = L.layerGroup().addTo(map);
+// SEULE couche de marqueurs de la page : tout point posé y entre, du premier au
+// dernier. Le regroupement est donc permanent, comme sur la démonstration de
+// l'accueil — deux points confondus donnent une pastille « 2 », sans attendre de
+// palier. Init paresseuse : la couche naît au premier point (_ensureCluster) et
+// meurt à chaque nouvelle recherche (_resetMapLayers).
+var mcGroup = null;
 
 var REGIONS = {
   'ile-de-france':          { center:[48.85,2.35],  zoom:10, label:'Île-de-France' },
@@ -2349,6 +2349,9 @@ async function fetchCommuneBounds(codeINSEE) {
 // Priorité descendante : ville > dept > région > France.
 // Tout fallback est silencieux : si geo.api timeout/down, on garde le
 // zoom courant (pas de saut visuel ni d'erreur affichée).
+// Cadrage ANIMÉ (animate:true), comme la démonstration de l'accueil : le
+// mouvement dit d'où la vue part et où elle arrive. Un saut sec laissait
+// l'abonnée sans repère quand la recherche changeait de département.
 async function applyMapZoom() {
   var ville = (document.getElementById('sel-ville')?.value || '').trim();
   var dept = (document.getElementById('sel-dept')?.value || '').trim();
@@ -2363,11 +2366,11 @@ async function applyMapZoom() {
     if (villeCode) {
       var res = await fetchCommuneBounds(villeCode);
       if (res && res.type === 'bounds') {
-        map.fitBounds([res.bounds.sw, res.bounds.ne], { padding: [40,40], maxZoom: 14, animate: false });
+        map.fitBounds([res.bounds.sw, res.bounds.ne], { padding: [40,40], maxZoom: 14, animate: true });
         return;
       }
       if (res && res.type === 'center') {
-        map.setView([res.center.lat, res.center.lng], res.center.zoom || 14, { animate: false });
+        map.setView([res.center.lat, res.center.lng], res.center.zoom || 14, { animate: true });
         return;
       }
     }
@@ -2377,11 +2380,11 @@ async function applyMapZoom() {
   if (dept) {
     var resD = await fetchDeptBounds(dept);
     if (resD && resD.type === 'bounds') {
-      map.fitBounds([resD.bounds.sw, resD.bounds.ne], { padding: [40,40], animate: false });
+      map.fitBounds([resD.bounds.sw, resD.bounds.ne], { padding: [40,40], animate: true });
       return;
     }
     if (resD && resD.type === 'center') {
-      map.setView([resD.center.lat, resD.center.lng], resD.center.zoom || 9, { animate: false });
+      map.setView([resD.center.lat, resD.center.lng], resD.center.zoom || 9, { animate: true });
       return;
     }
   }
@@ -2389,12 +2392,12 @@ async function applyMapZoom() {
   if (region) {
     var rd = REGIONS[region];
     if (rd) {
-      map.setView(rd.center, rd.zoom, { animate: false });
+      map.setView(rd.center, rd.zoom, { animate: true });
       return;
     }
   }
 
-  map.setView([46.5, 2.5], 6, { animate: false });
+  map.setView([46.5, 2.5], 6, { animate: true });
 }
 
 // ── Câblage défensif ceinture-bretelles : event listeners JS en plus des
@@ -2597,10 +2600,11 @@ async function fetchLeads(naf, nafLabel, region, page, pageSize, onlyComplete) {
 // ════════════════════════════════════════════════════════════════
 // MAP HELPERS
 // ════════════════════════════════════════════════════════════════
+// Remise à zéro entre deux recherches : la couche est retirée de la carte ET
+// oubliée (mcGroup = null). Aucun marqueur de la recherche précédente ne peut
+// donc survivre — la suivante repart d'un groupe neuf, créé par _ensureCluster.
 function _resetMapLayers() {
   if(mcGroup) { map.removeLayer(mcGroup); mcGroup = null; }
-  plainGrp.clearLayers();
-  S.useCluster = false;
 }
 
 function _ensureCluster() {
@@ -2646,26 +2650,13 @@ function addMarker(lead) {
     address: lead.address || ''
   }, { state: 'lead', popup: true }) : '<div>'+esc(lead.name)+'</div>';
 
-  if(S.useCluster) {
-    _ensureCluster();
-    var m = L.circleMarker([lead.lat,lead.lng],{radius:r,fillColor:color,color:'#fff',weight:2,opacity:1,fillOpacity:.88});
-    m.bindPopup(popup,{maxWidth:300});
-    mcGroup.addLayer(m);
-  } else {
-    var m2 = L.circleMarker([lead.lat,lead.lng],{radius:r,fillColor:color,color:'#fff',weight:2,opacity:1,fillOpacity:.88});
-    m2.bindPopup(popup,{maxWidth:300});
-    plainGrp.addLayer(m2);
-  }
-}
-
-function switchToCluster() {
-  if(S.useCluster) return;
-  S.useCluster = true;
+  // Chemin unique : le groupe accueille le point DÈS LE PREMIER. Plus de couche
+  // nue ni de transvasement à mi-parcours — la pastille paraît dès que deux
+  // points se confondent, et non d'un coup au franchissement d'un palier.
   _ensureCluster();
-  // Move all existing plain markers into cluster
-  var lyrs = [];
-  plainGrp.eachLayer(function(l){ lyrs.push(l); });
-  lyrs.forEach(function(l){ plainGrp.removeLayer(l); mcGroup.addLayer(l); });
+  var m = L.circleMarker([lead.lat,lead.lng],{radius:r,fillColor:color,color:'#fff',weight:2,opacity:1,fillOpacity:.88});
+  m.bindPopup(popup,{maxWidth:300});
+  mcGroup.addLayer(m);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2696,13 +2687,12 @@ async function _runGeoQueue() {
 
     // Coords Etalab déjà présentes → point posé DIRECTEMENT, sans géocodage réseau
     // ni throttle : apparition rapide. Reproduit tous les effets de bord du chemin
-    // succès (compteur, marqueur, cluster, badge, geo-bar). Coords jamais écrasées.
+    // succès (compteur, marqueur, badge, geo-bar). Coords jamais écrasées.
     if(lead.lat && lead.lng) {
       lead.geoStatus = 'ok';
       if(!lead.geoSrc) lead.geoSrc = 'api';
       S.nGeoOk++;
       addMarker(lead);
-      if(!S.useCluster && S.nGeoOk > CLUSTER_THR) switchToCluster();
       var badgeApi = document.getElementById('geo-'+lead.id);
       if(badgeApi){ badgeApi.className='badge b-geo-ok'; badgeApi.innerHTML='<svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align:-2px;margin-right:3px"><path d="M7 1.5c-2.2 0-4 1.8-4 4 0 2.8 4 7 4 7s4-4.2 4-7c0-2.2-1.8-4-4-4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7" cy="5.5" r="1.3" stroke="currentColor" stroke-width="1.5"/></svg> '+lead.geoSrc; }
       document.getElementById('st-geo').textContent   = S.nGeoOk;
@@ -2719,8 +2709,6 @@ async function _runGeoQueue() {
       lead.lat = res.lat; lead.lng = res.lng; lead.geoSrc = res.src; lead.geoStatus = 'ok';
       S.nGeoOk++;
       addMarker(lead);
-      // switch to cluster if threshold crossed
-      if(!S.useCluster && S.nGeoOk > CLUSTER_THR) switchToCluster();
       var badge = document.getElementById('geo-'+lead.id);
       if(badge){ badge.className='badge b-geo-ok'; badge.innerHTML='<svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align:-2px;margin-right:3px"><path d="M7 1.5c-2.2 0-4 1.8-4 4 0 2.8 4 7 4 7s4-4.2 4-7c0-2.2-1.8-4-4-4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7" cy="5.5" r="1.3" stroke="currentColor" stroke-width="1.5"/></svg> '+res.src; }
     } else {

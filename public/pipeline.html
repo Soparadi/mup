@@ -1649,7 +1649,7 @@ async function openDetail(id) {
   poserLienSocial('d-facebook-link', c.facebook);
   poserLienSocial('d-instagram-link', c.instagram);
 
-  // Colonne courante — le contrôle et la visibilité de la section RDV.
+  // Colonne courante — le contrôle qui la porte.
   refletColonneFiche(c);
 
   // Timeline — le fil de l'entreprise, pas le journal de cette seule carte.
@@ -1673,16 +1673,13 @@ async function openDetail(id) {
   if(noteInput) noteInput.value = '';
 
   // RDV section — calendrier inline + heure + bouton enregistrer.
-  // Sa visibilité dépend de la colonne et suit donc chaque déplacement : elle
-  // est posée par refletColonneFiche, plus haut. Ce qui reste ici dépend de la
-  // fiche et non de sa colonne — le calendrier ne se remonte qu'à l'ouverture.
-  if(!colonneTerminale(c.col)) {
-    rdvCalDate = new Date();
-    rdvSelectedDate = null;
-    var timeInput = document.getElementById('rdv-time-input');
-    if(timeInput) timeInput.value = c.rdvTime || '14:00';
-    renderRdvCalendar();
-  }
+  // La section est disponible sur toutes les colonnes, Gagné et Disqualifié
+  // compris : le calendrier se remonte donc sans condition, à chaque ouverture.
+  rdvCalDate = new Date();
+  rdvSelectedDate = null;
+  var timeInput = document.getElementById('rdv-time-input');
+  if(timeInput) timeInput.value = c.rdvTime || '14:00';
+  renderRdvCalendar();
 
   // Map
   const mapSection = document.getElementById('d-map-section');
@@ -2374,15 +2371,13 @@ async function enrichDetail() {
   }
 }
 
-// Gagné et Disqualifié ferment l'affaire : rien ne s'y planifie.
-function colonneTerminale(colId) { return ['won','lost'].indexOf(colId) !== -1; }
-
 // Ce que la colonne de la fiche ouverte commande à l'écran, et rien d'autre :
-// la couleur du contrôle qui la porte, et la visibilité de la section RDV.
-// Les deux gestes tiennent ici pour qu'openDetail et tout déplacement — au
-// contrôle comme au glisser du Kanban — les rejouent à l'identique, sans
-// rejouer le reste de la fiche : ni l'agenda, ni le fil, ni la carte, ni la
-// note en cours de frappe.
+// la couleur du contrôle qui la porte. Le geste tient ici pour qu'openDetail et
+// tout déplacement — au contrôle comme au glisser du Kanban — le rejouent à
+// l'identique, sans rejouer le reste de la fiche : ni l'agenda, ni le fil, ni la
+// carte, ni la note en cours de frappe. La section Rendez-vous, elle, ne dépend
+// plus de la colonne : gagner ouvre la relation client — réunion de lancement,
+// visios de suivi, points d'étape — et se planifie comme le reste.
 function refletColonneFiche(c) {
   if(!c) return;
   const col = COLS.find(x => x.id === c.col);
@@ -2402,8 +2397,6 @@ function refletColonneFiche(c) {
     sel.style.borderColor     = col?.color ? col.color + '55' : '';
     sel.style.color           = col?.color ? `hsl(from ${col.color} h s 32%)` : '';
   }
-  const rdvSection = document.getElementById('d-rdv-section');
-  if(rdvSection) rdvSection.style.display = colonneTerminale(c.col) ? 'none' : '';
 }
 
 function moveCard(colId) {

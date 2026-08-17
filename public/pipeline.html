@@ -303,7 +303,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .focus-header-sub{font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:16px}
 .focus-header-pills{display:flex;gap:6px;flex-wrap:wrap}
 .focus-header-pills .pill{font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;background:rgba(255,255,255,0.15);color:#fff}
-.focus-header-pills .pill-phoning{background:rgba(67,56,202,0.4);color:#C7D2FE}
 .focus-header-pills .pill-day{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.6)}
 
 /* Animation douce */
@@ -1558,7 +1557,11 @@ async function openDetail(id) {
   document.getElementById('d-focus-sub').textContent = _nomD.sousTitre;
   // La pastille neutre n'est qu'un séparateur devant le J+N : sans J+N elle
   // fermerait la rangée sur un tiret qui n'annonce plus rien. Elle suit donc.
-  document.getElementById('d-focus-pills').innerHTML = `<span class="pill pill-phoning">${esc(col?.name || 'Prospects')}</span>${_joursD === null ? '' : `<span class="pill pill-neutral">—</span><span class="pill pill-day">J+${_joursD}</span>`}`;
+  // La pastille de colonne tire sa couleur de COLS comme les badges plus haut :
+  // fond atténué, texte éclairci pour tenir sur le noir de l'en-tête. Sans col,
+  // aucun style n'est fabriqué et la pastille retombe sur la règle de base.
+  const _pillColD = col?.color ? ` style="background:${col.color}66;color:hsl(from ${col.color} h s 85%)"` : '';
+  document.getElementById('d-focus-pills').innerHTML = `<span class="pill"${_pillColD}>${esc(col?.name || 'Prospects')}</span>${_joursD === null ? '' : `<span class="pill">—</span><span class="pill pill-day">J+${_joursD}</span>`}`;
 
   // Info grid
   let infoHtml = '';

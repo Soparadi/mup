@@ -1635,11 +1635,14 @@ async function openDetail(id) {
   let infoHtml = '';
   if(c.email) infoHtml += `<div class="info-item"><div class="info-item-label">Email</div><div class="info-item-val"><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div></div>`;
   if(c.tel) infoHtml += `<div class="info-item"><div class="info-item-label">Téléphone</div><div class="info-item-val"><a href="tel:${window.MUPTel.lien(c.tel)}">${esc(window.MUPTel.format(c.tel))}</a></div></div>`;
-  // Code postal : champ enregistré à part, que la ligne Localisation ne lit pas
-  // (elle n'affiche que c.address). On le montre donc — sauf quand l'adresse le
-  // contient déjà en toutes lettres, où une case de plus le répéterait.
+  // Code postal : sans condition dès qu'il est enregistré. Il se taisait jadis
+  // quand c.address le contenait déjà en toutes lettres, pour ne pas doubler la
+  // case Localisation posée juste à côté ; cette case est partie et le seul
+  // porteur restant de l'adresse est la bulle du marqueur, qui n'existe que si
+  // le géocodage aboutit. La règle faisait donc disparaître le code postal de
+  // la fiche entière dès que la carte échouait.
   const zipTxt = String(c.zip||'').trim();
-  if(zipTxt && !String(c.address||'').includes(zipTxt)) infoHtml += caseInfo('Code postal', zipTxt);
+  if(zipTxt) infoHtml += caseInfo('Code postal', zipTxt);
   // Identité juridique : enregistrée par la fenêtre « Modifier », relue ici en
   // lecture seule. SIRET groupé comme sur la fiche société.
   infoHtml += caseInfo('Forme juridique', c.forme);

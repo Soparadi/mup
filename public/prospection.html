@@ -2611,8 +2611,11 @@ function _ensureCluster() {
       iconCreateFunction: function(cluster) {
         var n = cluster.getChildCount();
         var sz = n < 10 ? 32 : n < 50 ? 38 : 44;
+        // Fond au rouge des points de la page (MARKER_RED, lu depuis --red),
+        // et opaque comme sur la Carte et l'accueil : un rouge translucide
+        // sur fond de carte clair ne rendrait pas la couleur des marqueurs.
         return L.divIcon({
-          html: '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:rgba(29,29,31,.75);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-size:11px;font-weight:700;color:#fff">'+n+'</div>',
+          html: '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+MARKER_RED+';border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-size:11px;font-weight:700;color:#fff">'+n+'</div>',
           className:'', iconSize:[sz,sz]
         });
       }

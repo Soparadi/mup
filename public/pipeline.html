@@ -577,16 +577,26 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
          depuis COLS, seul porteur de la table des colonnes. -->
     <select class="detail-col-select" id="d-col" onchange="moveCard(this.value)"></select>
 
-    <!-- 1) INFORMATIONS SOCIÉTÉ -->
+    <!-- 1) INFORMATIONS SOCIÉTÉ — la carte est dedans, entre le bandeau et la
+         grille, et non scindée en deux sections encadrant une carte autonome :
+         le bandeau et la grille resteraient alors séparés par le gap:16px de
+         .detail-body au lieu du gap:8px de leur section, et s'écarteraient
+         l'un de l'autre sur toutes les fiches sans adresse — celles-là même
+         où la carte n'est pas là pour justifier l'écart.
+         #d-map-section garde son display:none inline et reste seul porteur du
+         masquage : un enfant retiré du flux ne consomme pas le gap de sa
+         colonne flex, une fiche sans adresse retrouve donc exactement le
+         bandeau puis la grille à 8px, comme avant. -->
     <div class="detail-section">
       <div class="detail-section-title bandeau">Informations société</div>
-      <div class="info-grid" id="d-info-grid"></div>
-    </div>
 
-    <!-- 2) CARTE LEAFLET -->
-    <div class="detail-section" id="d-map-section" style="display:none">
-      <div class="detail-section-title">Localisation</div>
-      <div id="detail-map"></div>
+      <!-- CARTE LEAFLET -->
+      <div class="detail-section" id="d-map-section" style="display:none">
+        <div class="detail-section-title">Localisation</div>
+        <div id="detail-map"></div>
+      </div>
+
+      <div class="info-grid" id="d-info-grid"></div>
     </div>
 
     <!-- COORDONNÉES SOCIÉTÉ (jeu de champs distinct du contact ; toujours affiché — un bloc vide invite à Enrichir) -->

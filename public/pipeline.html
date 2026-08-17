@@ -167,6 +167,21 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .d-btn:hover{border-color:var(--text)}
 .d-btn.primary{background:var(--text);color:#fff;border-color:var(--text)}
 .d-btn.primary:hover{background:#000}
+/* Enrichir — variante de .d-btn, sur le modèle de .primary : le bouton a
+   quitté le cartouche noir pour le corps clair de la fiche, ses styles
+   inline deviennent donc une règle, en variables et non en valeurs.
+   border-color et non border:none — la bague de .d-btn est ce que son
+   survol teint, la supprimer éteindrait aussi le survol. align-self parce
+   que .detail-body est une colonne flex : sans lui le bouton s'étirerait
+   sur toute la largeur. */
+.d-btn.enrich{background:var(--orange);color:var(--bg);border-color:var(--orange);align-self:flex-start}
+.d-btn.enrich:hover{border-color:var(--text)}
+/* « Déjà enrichi » : refreshEnrichButtonState pose disabled ET opacity:.4 en
+   inline. Sur le noir, l'orange s'y éteignait ; sur le fond clair, un libellé
+   blanc à .4 se perdrait dans le blanc. L'état terminal reprend donc les tons
+   sourds du panneau, que le .4 assourdit sans les effacer. */
+.d-btn.enrich:disabled{background:var(--surface2);color:var(--text);border-color:var(--border2)}
+.d-btn.enrich:disabled:hover{border-color:var(--border2)}
 .col-select{border:1.5px solid var(--border);border-radius:9px;padding:8px 12px;font-family:var(--font);font-size:13px;color:var(--text);background:var(--surface);width:100%;outline:none;cursor:pointer}
 .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .info-item{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border-radius:9px;background:var(--surface)}
@@ -513,10 +528,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     <div class="focus-header-name" id="d-focus-name">—</div>
     <div class="focus-header-sub" id="d-focus-sub"></div>
     <div class="focus-header-pills" id="d-focus-pills"></div>
-    <button class="d-btn" id="d-enrich" type="button" onclick="enrichDetail()" style="margin-top:14px;background:var(--orange);color:#fff;border:none">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M19 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L19 14z"/></svg>
-      <span id="d-enrich-label">Enrichir</span>
-    </button>
   </div>
   <div class="detail-body">
 
@@ -553,6 +564,16 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
         </div>
       </div>
     </div>
+
+    <!-- ENRICHIR — sorti du cartouche noir, posé dans le corps clair de la
+         fiche. Frère PRÉCÉDENT de #d-map-section, jamais son descendant :
+         cette section est masquée quand la fiche n'a pas d'adresse, et le
+         bouton disparaîtrait avec elle. L'espacement vient du gap:16px de
+         .detail-body — plus de margin-top, qui s'y ajouterait. -->
+    <button class="d-btn enrich" id="d-enrich" type="button" onclick="enrichDetail()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M19 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L19 14z"/></svg>
+      <span id="d-enrich-label">Enrichir</span>
+    </button>
 
     <!-- 2) CARTE LEAFLET -->
     <div class="detail-section" id="d-map-section" style="display:none">

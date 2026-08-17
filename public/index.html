@@ -4622,10 +4622,14 @@ function onRegionChange() {
   applyMapZoom();   // câblage zoom : niveau région
 }
 
-// onVilleChange — zoom seul (repris du moteur, sans updateHint/hideError).
-// La ville ne conditionne pas le bouton (facultative) : pas de checkLaunchBtn.
+// onVilleChange — zoom, puis réévaluation du bouton (repris du moteur, sans
+// hideError). La ville reste facultative partout SAUF sur les départements à
+// arrondissements (75/69/13), où elle conditionne le lancement : le bouton doit
+// donc s'activer dès qu'un arrondissement est choisi. Miroir de l'appel à
+// updateHint dans onVilleChange du moteur.
 function onVilleChange() {
   applyMapZoom();
+  checkLaunchBtn();
 }
 
 // Cache communes par département (évite de refetch geo.api à chaque changement).
@@ -4649,6 +4653,13 @@ var PLM_ARR_UI = {
   '69123': { ville: 'Lyon',      start: 69381, n: 9  },
   '13055': { ville: 'Marseille', start: 13201, n: 16 },
 };
+// Départements à arrondissements municipaux, DÉRIVÉS des clés PLM_ARR_UI
+// (75056→75, 69123→69, 13055→13). Source unique de vérité : pas de nouvelle
+// liste en dur. Sur ces départements, la ville devient obligatoire
+// (§checkLaunchBtn) — sans elle la démonstration partirait sur le département
+// entier, c'est-à-dire Paris entier, gisement démesuré. Même règle que le
+// moteur (prospection.html §PLM_DEPTS).
+var PLM_DEPTS = Object.keys(PLM_ARR_UI).map(function(c){ return c.slice(0, 2); });
 function plmArrOptions(code, nomVille) {
   var m = PLM_ARR_UI[code];
   if (!m) return null;
@@ -4931,8 +4942,16 @@ function resetDemoToInitial() {
 // Autocomplete secteur — instance partagée avec prospection.html (composant réutilisable)
 let sectorAC = null;
 function checkLaunchBtn() {
-  // Bouton actif sur secteur + région + département. La ville reste facultative.
-  const ok = !!(sectorAC && sectorAC.value && regionEl.value && deptEl.value);
+  // Bouton actif sur secteur + région + département. La ville reste facultative,
+  // SAUF sur les départements à arrondissements (75/69/13) : là, la commune
+  // globale n'est qu'une étiquette inerte et une recherche départementale
+  // vaudrait « Paris entier ». Tant qu'aucun arrondissement n'est choisi, le
+  // bouton reste éteint — le seul retour d'état de la vitrine (pas de bandeau
+  // d'aide ici, contrairement au moteur).
+  const dept = (deptEl.value || '').trim();
+  const ville = (villeEl.value || '').trim();
+  const needVille = PLM_DEPTS.indexOf(dept) !== -1 && !ville;
+  const ok = !!(sectorAC && sectorAC.value && regionEl.value && dept && !needVille);
   launchBtn.disabled = !ok;
 }
 
@@ -5214,7 +5233,13 @@ launchBtn.addEventListener('click', () => {
   if (!secteur || !regionSlug) return;
   const regionCode = REGION_CODES[regionSlug];
   if (!regionCode) return;
-  runDemoSearch({ naf: secteur, region: regionCode, dept: deptEl.value, commune: villeEl.value });
+  // Départements à arrondissements : ville obligatoire (miroir de checkLaunchBtn,
+  // comme startSearch double la garde d'updateHint dans le moteur). Le bouton est
+  // déjà éteint dans ce cas ; ceci ferme le clic programmatique.
+  const dept = (deptEl.value || '').trim();
+  const ville = (villeEl.value || '').trim();
+  if (PLM_DEPTS.indexOf(dept) !== -1 && !ville) return;
+  runDemoSearch({ naf: secteur, region: regionCode, dept: dept, commune: ville });
 });
 
 // ── Démonstration jouée d'elle-même au chargement ──────────────────────────

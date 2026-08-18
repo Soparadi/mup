@@ -2547,6 +2547,102 @@ app.post('/api/pipeline/from-leads', async (req, res) => {
   }
 })
 
+// ── Pont coordonnées société entre les deux fiches d'un même établissement ──
+//
+// Un même établissement existe couramment deux fois chez le MÊME abonné : une
+// carte `pipeline` et une (ou plusieurs) fiche(s) `contacts`. Les trois champs
+// ci-dessous sont des coordonnées d'ENTREPRISE, pas de personne : saisis d'un
+// côté, ils valent de l'autre. Le pont les y recopie.
+const CHAMPS_PONT_SOCIETE = ['website', 'societe_email', 'societe_tel']
+
+// Valeur d'un champ du pont, vue comme une chaîne comparable : absent, null et
+// chaîne vide sont un seul et même « pas renseigné ».
+const valeurPont = (v) => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v).trim()))
+
+// Ce qu'un PUT fait réellement bouger parmi les trois champs du pont —
+// comparaison de l'enregistrement AVANT (`rec`, déjà relu par les deux routes)
+// au corps qui va le remplacer. Deux filtres, dans cet ordre :
+//
+//   • VIDE NON RETENU — effacer une case d'un côté ne vide PAS l'autre. Limite
+//     assumée et voulue : le pont propage la saisie, jamais la suppression.
+//     Sans ce filtre, un formulaire qui n'envoie simplement pas la clé effacerait
+//     la fiche jumelle à chaque geste.
+//   • INCHANGÉ NON RETENU — c'est la garde de déclenchement. Les pages
+//     enregistrent en continu et la quasi-totalité de leurs PUT ne touchent
+//     aucun des trois champs (colonne déplacée, note, rendez-vous). Patch vide
+//     → le pont ne cherche rien et n'écrit rien.
+//
+// Le patch ne porte donc QUE les champs modifiés, jamais les trois en bloc.
+function patchPontSociete(rec, body) {
+  const patch = {}
+  for (const k of CHAMPS_PONT_SOCIETE) {
+    const apres = valeurPont(body?.[k])
+    if (!apres) continue
+    if (valeurPont(rec?.[k]) === apres) continue
+    patch[k] = apres
+  }
+  return patch
+}
+
+// Recopie les coordonnées société modifiées sur les enregistrements du MÊME
+// SIRET appartenant au MÊME abonné, dans la table jumelle.
+//
+// CLÉ : LE SIRET SEUL — ni `siren`, ni `societe_id`. Les deux sont à la maille
+// de l'unité légale (`societe_id` est dédupliqué par `findSocieteBySiren`) et
+// feraient descendre le téléphone du siège sur l'agence. SIRET normalisé comme
+// ailleurs (espaces retirés, cf. findSocieteBySiret) ; SIRET vide → aucun pont.
+//
+// TOUS LES JUMEAUX, jamais le premier trouvé : un abonné a couramment plusieurs
+// contacts pour un même SIRET, un par dirigeant. Ces trois champs sont ceux de
+// l'entreprise, ils valent pour chacun d'eux — d'où l'UPDATE … WHERE, sans LIMIT.
+//
+// LE `WHERE` PORTE LUI-MÊME `userId` : la garde d'appartenance de la route
+// protège le record désigné par l'URL, jamais celui qu'on va chercher. Même
+// motif que le `DELETE agenda WHERE userId = $userId AND ficheId = $ficheId`
+// de la route voisine.
+//
+// ÉCRITURE DIRECTE EN BASE, JAMAIS PAR LA ROUTE JUMELLE : un SET ciblé sur les
+// seuls champs modifiés, sur le modèle d'enrichReferentielActionnable. Ne pas
+// traverser de route règle d'un coup la réentrance (le pont ne se rappelle pas
+// lui-même), le doublement de `trackContactEdit` et l'application à contretemps
+// de `normalizePersonFields`. Corollaire : le pont N'APPELLE PAS
+// `trackContactEdit` — cette fonction n'est pas idempotente (un CREATE par
+// appel) et ses lignes sont lues (agrégation par recherche, export RGPD) : une
+// saisie unique compterait double, et autant de fois qu'il y a de jumeaux.
+//
+// Contrairement au référentiel mutualisé, le pont ÉCRASE : entre deux
+// enregistrements du même abonné, la saisie la plus récente fait foi.
+//
+// FIRE-AND-FORGET, NO-THROW : appelée sans await, tout échec avalé et loggé —
+// le pont ne doit jamais faire échouer l'enregistrement qui l'a déclenché.
+// Aucun jumeau trouvé → 0 ligne modifiée, silence, pas erreur.
+async function ponterCoordonneesSociete({ userId, siret, table, patch }) {
+  try {
+    if (!userId) return
+    const cleanSiret = String(siret || '').replace(/\s+/g, '')
+    if (!cleanSiret) return
+    const params = { siret: cleanSiret, userId }
+    const assigns = []
+    for (const k of CHAMPS_PONT_SOCIETE) {
+      // Liste blanche stricte : seul un nom de champ du pont est interpolé dans
+      // le SQL, jamais une valeur (toujours passée en paramètre).
+      if (!(k in (patch || {}))) continue
+      assigns.push(`${k} = $${k}`)
+      params[k] = patch[k]
+    }
+    if (!assigns.length) return
+    const db = await getDb()
+    // Table jamais en variable Surreal — on switch sur 2 SQL hardcodés
+    // (cf. selectContactRecord).
+    const sql = table === 'pipeline'
+      ? `UPDATE pipeline SET ${assigns.join(', ')} WHERE userId = $userId AND siret = $siret`
+      : `UPDATE contacts SET ${assigns.join(', ')} WHERE userId = $userId AND siret = $siret`
+    await db.query(sql, params)
+  } catch (e) {
+    console.warn('[pont-societe]', String(e?.message || e).slice(0, 80))
+  }
+}
+
 app.put('/api/pipeline/:id', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
@@ -2589,6 +2685,14 @@ app.put('/api/pipeline/:id', async (req, res) => {
       societe_email: cleanBody.societe_email,
       societe_tel: cleanBody.societe_tel,
       societe_linkedin: cleanBody.linkedin || cleanBody.societe_linkedin
+    })
+    // Pont coordonnées société — la carte vient d'être écrite, le jumeau à
+    // rejoindre est donc du côté `contacts`. FIRE-AND-FORGET (sans await).
+    ponterCoordonneesSociete({
+      userId,
+      siret: cleanBody.siret,
+      table: 'contacts',
+      patch: patchPontSociete(rec, cleanBody)
     })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
@@ -2791,6 +2895,16 @@ app.put('/api/contacts/:id', async (req, res) => {
       societe_email: cleanBody.societe_email,
       societe_tel: cleanBody.societe_tel,
       societe_linkedin: cleanBody.societe_linkedin
+    })
+    // Pont coordonnées société — cette route est polymorphe : elle vient
+    // d'écrire l'une OU l'autre table selon le préfixe de l'id. Le jumeau à
+    // rejoindre est donc dans L'AUTRE, déterminée par celle qu'on vient
+    // d'écrire. FIRE-AND-FORGET (sans await).
+    ponterCoordonneesSociete({
+      userId,
+      siret: cleanBody.siret,
+      table: tb === 'pipeline' ? 'contacts' : 'pipeline',
+      patch: patchPontSociete(rec, cleanBody)
     })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {

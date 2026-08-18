@@ -1416,7 +1416,7 @@ function renderKanban() {
   kb.innerHTML = COLS.map(col => {
     const colCards = sourceCards.filter(c => c.col === col.id);
     const total = colCards.reduce((s,c)=>s+(c.val||0),0);
-    const totalStr = total >= 1000 ? Math.round(total/1000)+'k€' : (total ? total+'€' : '—');
+    const totalStr = total ? fmtVal(total) : '—';
     return `<div class="col${col.cls?' '+col.cls:''}" id="col-${col.id}" 
         ondragover="onDragOver(event,'${col.id}')" 
         ondrop="onDrop(event,'${col.id}')"

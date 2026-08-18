@@ -362,10 +362,20 @@ async function _loadAgenda(){
   return _agendaCache;
 }
 
+// Création quand l'objet n'a PAS de champ id — le serveur l'attribue. Sinon
+// modification, et l'identifiant doit en être un : un PUT sur « null » tombe en
+// 404, et le repli POST créait alors un DOUBLON au lieu de modifier l'évènement
+// visé. Le repli ne sert plus qu'au cas pour lequel il existe : un identifiant
+// valide dont l'enregistrement a disparu de la base.
 async function _saveAgendaEvent(ev){
-  var hasId = ev && ev.id && typeof ev.id === 'string';
-  var url = hasId ? '/api/agenda/' + encodeURIComponent(ev.id.replace(/^agenda:/, '')) : '/api/agenda';
-  var method = hasId ? 'PUT' : 'POST';
+  if(!ev || typeof ev !== 'object') return null;
+  var aUnId = ev.id !== undefined;
+  var url = aUnId ? _urlAgendaEvenement(ev.id) : '/api/agenda';
+  if(!url){
+    console.warn('[Agenda] identifiant invalide, aucune écriture envoyée', ev && ev.id);
+    return null;
+  }
+  var method = aUnId ? 'PUT' : 'POST';
   try {
     var resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ev) });
     if(!resp.ok){
@@ -428,6 +438,37 @@ let events = [];
 // quand l'id local ("eXXX") diffère de l'id serveur ("agenda:eXXX").
 function _normAgendaId(id) {
   return String(id == null ? '' : id).replace(/^agenda:/, '');
+}
+
+// Un identifiant d'évènement, ou rien. Les valeurs fausses ne sont pas les
+// seules à écarter : String(null) rend la CHAÎNE « null », une interpolation de
+// gabarit `${e.id}` sur un id absent rend « null » ou « undefined », et ces
+// chaînes-là sont vraies. Elles passaient les gardes `if (!id)`, composaient une
+// URL, et le serveur répondait 404 sur un évènement qui existait pourtant.
+// Un identifiant est une chaîne non vide qui n'est aucune de ces trois-là.
+function _idAgendaValide(id) {
+  if (typeof id !== 'string') return null;
+  var nu = _normAgendaId(id).trim();
+  if (!nu || nu === 'null' || nu === 'undefined') return null;
+  return nu;
+}
+
+// Le SEUL endroit de cette page qui compose une URL /api/agenda/:id. Rend null
+// quand l'identifiant n'en est pas un : aucune requête d'écriture ne part, et
+// l'appelante interrompt le geste en le disant à l'écran.
+function _urlAgendaEvenement(id) {
+  var nu = _idAgendaValide(id);
+  return nu ? '/api/agenda/' + encodeURIComponent(nu) : null;
+}
+
+// Relecture depuis le serveur, cache purgé. Après un échec d'écriture, c'est
+// elle qui remet l'écran d'accord avec la base : si l'évènement a été supprimé
+// ailleurs il disparaît, s'il est toujours là il reste visible.
+async function _relireAgenda() {
+  _agendaCache = null; _agendaCacheTime = 0;
+  await loadEvents();
+  renderCal();
+  renderDay();
 }
 
 async function loadEvents() {
@@ -820,11 +861,24 @@ async function saveEvent() {
   const sel = document.getElementById('m-pipeline-card');
   const ficheId = _normFicheId(modalFicheId || (sel && sel.value) || '');
 
+  // Même relevé qu'à la suppression : le mode est saisi AVANT toute attente. Relu
+  // après l'écriture, il pouvait avoir été remis à zéro entre-temps, et une
+  // modification repartait alors dans la branche « création » — un doublon de
+  // plus dans events[].
+  const enEdition = !!editingId;
+
   let target;
-  if (editingId) {
+  if (enEdition) {
     var nid = _normAgendaId(editingId);
     target = events.find(x => _normAgendaId(x.id) === nid);
     if (!target) { closeModal(); return; }
+    // Le geste s'interrompt ici plutôt que de partir sur un identifiant qui n'en
+    // est pas un : sans cette garde, le PUT tombait en 404 et le repli POST
+    // créait un second évènement à côté de celui qu'on voulait modifier.
+    if (!_idAgendaValide(target.id)) {
+      if (typeof showAgendaToast === 'function') showAgendaToast("Identifiant d'évènement invalide, rechargez l'agenda");
+      return;
+    }
     target.title = title;
     target.contact = contactVal;
     target.date = dateVal;
@@ -852,12 +906,12 @@ async function saveEvent() {
   const saved = await _saveAgendaEvent(target);
   if (!saved || !saved.id) {
     if (typeof showAgendaToast === 'function') {
-      showAgendaToast(editingId ? 'Échec mise à jour, réessayez' : 'Création échouée, réessayez');
+      showAgendaToast(enEdition ? 'Échec mise à jour, réessayez' : 'Création échouée, réessayez');
     }
     return;
   }
 
-  if (!editingId) {
+  if (!enEdition) {
     target.id = String(saved.id).replace(/^agenda:/, '');
     events.push(target);
 
@@ -897,7 +951,18 @@ async function saveEvent() {
 // Suppression ciblée d'un event de la table agenda + retrait local + re-render.
 // Confirmation par la fenêtre MovUP partagée.
 async function deleteEvent() {
-  if (!editingId) return;
+  // L'identifiant et son URL sont saisis AVANT toute attente. editingId était
+  // relu après la confirmation, et d'ici là closeModal() avait pu le remettre à
+  // null — String(null) rendant la chaîne « null », c'est elle qui partait sur
+  // le réseau, où le serveur répondait 404 sur un évènement bien présent.
+  var cleanId = _idAgendaValide(editingId);
+  var url = _urlAgendaEvenement(cleanId);
+  if (!url) {
+    mupAlert('Suppression impossible',
+      "Cet évènement n'a pas d'identifiant exploitable. Rechargez l'agenda, puis réessayez.",
+      'Fermer');
+    return;
+  }
   // La fenêtre ne bloque plus le fil : le bouton se ferme avant qu'elle
   // s'ouvre, et se rouvre à tout renoncement comme à tout échec.
   var btn = document.getElementById('btn-delete');
@@ -906,13 +971,20 @@ async function deleteEvent() {
     if (btn) btn.disabled = false;
     return;
   }
-  var localId = editingId;
-  var cleanId = String(localId).replace(/^agenda:/, '');
   try {
-    var resp = await fetch('/api/agenda/' + encodeURIComponent(cleanId), { method: 'DELETE' });
-    if (!resp.ok && resp.status !== 404) {
-      mupAlert('Suppression impossible', 'HTTP ' + resp.status + '. Réessayez.', 'Fermer');
+    var resp = await fetch(url, { method: 'DELETE' });
+    // Le 404 n'est plus une tolérance : annoncer une suppression qui n'a pas eu
+    // lieu est pire que de perdre le cas « déjà supprimé ailleurs ». Toute
+    // réponse non-ok laisse la ligne en place et fait relire l'agenda — si
+    // l'évènement avait été supprimé ailleurs, la relecture le fait disparaître
+    // de toute façon, et l'écran dit la vérité dans les deux cas.
+    if (!resp.ok) {
       if (btn) btn.disabled = false;
+      await _relireAgenda();
+      if (!events.some(function(x){ return _normAgendaId(x.id) === cleanId; })) closeModal();
+      mupAlert('Suppression impossible',
+        'Le serveur a répondu ' + resp.status + '. La liste vient d’être relue.',
+        'Fermer');
       return;
     }
   } catch (e) {
@@ -929,9 +1001,18 @@ async function deleteEvent() {
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(_){}
 }
 
-// Fermer modal en cliquant outside
+// Fermer modal en cliquant outside.
+// Un clic né DANS la modale ne ferme pas la modale. Le clic sur « Supprimer »
+// poursuivait sa propagation jusqu'ici, où l'identité de nœud ne le protégeait
+// pas : la fermeture remettait editingId à zéro PENDANT que deleteEvent
+// attendait la confirmation, et l'URL, composée après l'attente, portait
+// « null ». La garde compare la cible au CONTENEUR par appartenance — elle vaut
+// pour tout ce que la modale contient, présent ou futur, sans qu'aucun bouton
+// n'ait à arrêter la propagation pour son propre compte.
 document.getElementById('modal-overlay').addEventListener('click', function(e) {
-  if(e.target === this) closeModal();
+  var boite = this.querySelector('.modal');
+  if (boite && e.target instanceof Node && boite.contains(e.target)) return;
+  closeModal();
 });
 
 // Init
@@ -1079,11 +1160,19 @@ async function _updateAgendaEvent(eventId, patch) {
   var nid = _normAgendaId(eventId);
   var ev = events.find(function(e){ return _normAgendaId(e.id) === nid; });
   if (!ev) return false;
+  // Même règle que les deux autres portes : l'id vient d'un attribut data-*,
+  // donc d'une interpolation, et « null » y est une chaîne comme une autre.
+  // Rend null — et non false — pour que l'appelante ne surcharge pas d'un
+  // « Erreur réseau » un refus déjà dit à l'écran.
+  var url = _urlAgendaEvenement(ev.id);
+  if (!url) {
+    showAgendaToast("Identifiant d'évènement invalide, rechargez l'agenda");
+    return null;
+  }
   var body = Object.assign({}, ev, patch);
   delete body.id;
-  var cleanId = nid;
   try {
-    var resp = await fetch('/api/agenda/' + encodeURIComponent(cleanId), {
+    var resp = await fetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -1105,8 +1194,8 @@ async function updateEventDate(eventId, newDate) {
     return;
   }
   var ok = await _updateAgendaEvent(eventId, { date: newDate });
-  if (ok) { renderCal(); renderDay(); }
-  else showAgendaToast('Erreur réseau, réessayez');
+  if (ok === true) { renderCal(); renderDay(); }
+  else if (ok === false) showAgendaToast('Erreur réseau, réessayez');
 }
 
 async function updateEventTime(eventId, newStart, newEnd) {
@@ -1119,8 +1208,8 @@ async function updateEventTime(eventId, newStart, newEnd) {
     return;
   }
   var ok = await _updateAgendaEvent(eventId, { start: newStart, end: newEnd });
-  if (ok) { renderCal(); renderDay(); }
-  else showAgendaToast('Erreur réseau, réessayez');
+  if (ok === true) { renderCal(); renderDay(); }
+  else if (ok === false) showAgendaToast('Erreur réseau, réessayez');
 }
 
 // Listeners délégués sur cal-grid + timeline (re-binding idempotent via flag).

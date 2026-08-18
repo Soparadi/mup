@@ -1581,8 +1581,10 @@ function renderCard(c, color) {
       ondragend="onDragEnd(event)"
       onclick="openDetail('${c.id}')">
     <div class="kcard-bar" style="background:${color}"></div>
+    <!-- Plus de crayon ici : hors création, une carte du Pipeline se modifie
+         par sa FICHE, qui porte désormais tous les champs éditables. Reste la
+         corbeille, seule occupante de .kcard-actions. -->
     <div class="kcard-actions">
-      <button class="kcard-btn" onclick="event.stopPropagation();editCard('${c.id}')" title="Modifier"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
       <button class="kcard-btn" onclick="event.stopPropagation();confirmDeleteCard('${c.id}', this)" title="Supprimer"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
     </div>
     <div class="kcard-name">${esc(_nomC.titre)}</div>
@@ -1641,39 +1643,16 @@ function onDrop(e, colId) {
 }
 
 // ── MODAL ──
-let editingId = null;
+// La fenêtre à seize champs ne sert plus qu'à la CRÉATION, par le + en tête de
+// colonne. Le crayon de la carte, son unique autre appelant, est parti : une
+// fiche existante se modifie dans la fiche, champ par champ.
 const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-linkedin','m-facebook','m-instagram','m-societe-email','m-societe-tel','m-notes'];
 function openModal(colId) {
-  editingId = null;
   MODAL_FIELDS.forEach(fid => document.getElementById(fid).value = '');
   document.getElementById('m-col').value = colId || 'prospects';
   document.getElementById('modal-title').textContent = 'Nouvelle fiche';
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(() => document.getElementById('m-raison').focus(), 100);
-}
-function editCard(id) {
-  const c = cards.find(x=>String(x.id)===String(id));
-  if(!c) return;
-  editingId = id;
-  document.getElementById('m-raison').value = c.co||c.name||'';
-  document.getElementById('m-forme').value = c.forme||'';
-  document.getElementById('m-siren').value = c.siren||'';
-  document.getElementById('m-siret').value = c.siret||'';
-  document.getElementById('m-naf').value = c.naf||'';
-  document.getElementById('m-sector').value = c.sector||'';
-  document.getElementById('m-website').value = c.website||'';
-  document.getElementById('m-val').value = c.val||'';
-  document.getElementById('m-addr').value = c.address||'';
-  document.getElementById('m-zip').value = c.zip||'';
-  document.getElementById('m-linkedin').value = c.linkedin||'';
-  document.getElementById('m-facebook').value = c.facebook||'';
-  document.getElementById('m-instagram').value = c.instagram||'';
-  document.getElementById('m-societe-email').value = c.societe_email||'';
-  document.getElementById('m-societe-tel').value = c.societe_tel||'';
-  document.getElementById('m-notes').value = c.notes||'';
-  document.getElementById('m-col').value = c.col||'prospects';
-  document.getElementById('modal-title').textContent = 'Modifier la fiche';
-  document.getElementById('modal-overlay').classList.add('open');
 }
 function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
 function saveCard() {
@@ -1698,22 +1677,17 @@ function saveCard() {
     notes: document.getElementById('m-notes').value.trim(),
     col: document.getElementById('m-col').value
   };
-  if(editingId) {
-    const c = cards.find(x=>x.id===editingId);
-    if(c) { noterEtapeVie(c, fields.col); Object.assign(c, fields); }
-  } else {
-    const nouvelle = {
-      id: String('c'+Date.now()),
-      ...fields,
-      created_at: new Date().toISOString(),
-      src: 'Manuel',
-      entity_origine: 'mup',
-      activity: [],
-      noteEntries: []
-    };
-    if(nouvelle.col === 'won') nouvelle.wonAt = nouvelle.created_at;
-    cards.push(nouvelle);
-  }
+  const nouvelle = {
+    id: String('c'+Date.now()),
+    ...fields,
+    created_at: new Date().toISOString(),
+    src: 'Manuel',
+    entity_origine: 'mup',
+    activity: [],
+    noteEntries: []
+  };
+  if(nouvelle.col === 'won') nouvelle.wonAt = nouvelle.created_at;
+  cards.push(nouvelle);
   save(); closeModal(); renderKanban();
   // Notifie les autres onglets (Contacts notamment) d'un changement
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
@@ -1876,8 +1850,10 @@ async function openDetail(id) {
   });
   if(c.email) infoHtml += `<div class="info-item"><div class="info-item-label">Email</div><div class="info-item-val"><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div></div>`;
   if(c.tel) infoHtml += `<div class="info-item"><div class="info-item-label">Téléphone</div><div class="info-item-val"><a href="tel:${window.MUPTel.lien(c.tel)}">${esc(window.MUPTel.format(c.tel))}</a></div></div>`;
-  // Identité juridique : enregistrée par la fenêtre « Modifier », relue ici en
-  // lecture seule. SIRET groupé comme sur la fiche société.
+  // Identité juridique : posée à la création ou par le référentiel, relue ici en
+  // lecture seule — comme sur contact-societe.html, où ces quatre champs sont
+  // readonly et non câblés à l'enregistrement. SIRET groupé comme sur la fiche
+  // société.
   infoHtml += caseInfo('Forme juridique', c.forme);
   infoHtml += caseInfo('SIREN', c.siren);
   infoHtml += caseInfo('SIRET', siretFormat(c.siret));

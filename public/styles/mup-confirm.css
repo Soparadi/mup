@@ -14,7 +14,40 @@
    toutes les pages du produit.
    ══════════════════════════════════════════════════════════════════ */
 
-.mupc-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px);}
+/* ══════════════════════════════════════════════════════════════════
+   ÉCHELLE DES COUCHES — quatre paliers, un seul endroit
+   ------------------------------------------------------------------
+   Une fenêtre de confirmation est un dialogue SYSTÈME : elle se pose
+   au-dessus de toute modale de page, sur toutes les pages. Elle
+   portait 200, quand l'agenda et le pipeline empilent leurs modales à
+   500, les factures à 900, les frais à 950, la visio et la
+   confidentialité à 1000 — la confirmation passait donc DERRIÈRE, et
+   l'écran paraissait figé jusqu'à ce que la modale de page se ferme.
+
+   Les quatre paliers sont relevés sur l'existant, pas inventés :
+
+     contenu     — 1     le contenu des pages et le pied fixe (5)
+     modale-page — 1000  le plus haut fond de modale relevé
+                         (visio.html, account/privacy.html)
+     dialogue    — 50000 au-dessus du panneau fiche (9000/9001) et du
+                         bandeau cookies (10000), sous les blocages
+                         d'abonnement (99998/99999) qui doivent, eux,
+                         rester devant tout
+     toast       — 100000 toasts et bandeaux système, qui restent
+                         lisibles par-dessus un dialogue ouvert
+
+   Un palier laisse toute la place au suivant : une page qui monte sa
+   modale n'a aucune raison d'approcher 50000. Aucune valeur n'est
+   posée page par page — c'est cette échelle qui fait autorité.
+   ══════════════════════════════════════════════════════════════════ */
+:root{
+  --mupz-contenu: 1;
+  --mupz-modale-page: 1000;
+  --mupz-dialogue: 50000;
+  --mupz-toast: 100000;
+}
+
+.mupc-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:var(--mupz-dialogue,50000);align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px);}
 .mupc-overlay.open{display:flex;}
 
 .mupc-modal{background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;font-family:var(--font);}
@@ -29,6 +62,9 @@
 .mupc-body p:last-child{margin:0;}
 
 .mupc-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+/* Sans corps, le pied suit le bandeau : les deux filets se cumulaient en un
+   trait de 2px. Le bandeau porte déjà le sien, le pied s'efface. */
+.mupc-head + .mupc-foot{border-top:none;}
 
 .mupc-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;border:none;}
 .mupc-btn-sm{padding:7px 12px;font-size:12px;}

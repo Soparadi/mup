@@ -68,6 +68,10 @@
       head.appendChild(croix);
 
       // ── Corps : un paragraphe par phrase confiée ───────────────────
+      // Sans phrase à porter, le bloc n'est PAS construit : il s'affichait
+      // alors en bande blanche vide entre le bandeau et les boutons, sur
+      // toutes les confirmations appelées sans corps — la suppression d'un
+      // évènement d'agenda comme le retrait d'une fiche du Pipeline.
       var body = document.createElement('div');
       body.className = 'mupc-body';
       var phrases = Array.isArray(corps) ? corps : (corps == null ? [] : [corps]);
@@ -93,7 +97,7 @@
       foot.appendChild(btnValider);
 
       modal.appendChild(head);
-      modal.appendChild(body);
+      if (body.childNodes.length) modal.appendChild(body);
       modal.appendChild(foot);
       overlay.appendChild(modal);
 

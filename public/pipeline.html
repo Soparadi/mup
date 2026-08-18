@@ -595,13 +595,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
         <div id="detail-map"></div>
       </div>
 
+      <!-- La grille porte AUSSI les trois coordonnées société (site, email, tél),
+           écrites à part dans #d-societe-grid — cf. openDetail. Le bandeau noir
+           les couvre à juste titre : ce sont des données de l'entreprise. -->
       <div class="info-grid" id="d-info-grid"></div>
-    </div>
-
-    <!-- COORDONNÉES SOCIÉTÉ (jeu de champs distinct du contact ; toujours affiché — un bloc vide invite à Enrichir) -->
-    <div class="detail-section" id="d-societe-section">
-      <div class="detail-section-title">Coordonnées société</div>
-      <div class="info-grid" id="d-societe-grid"></div>
     </div>
 
     <!-- RÉSEAUX SOCIAUX -->
@@ -1147,9 +1144,15 @@ function caseInfo(label, valeur){
   return v ? `<div class="info-item"><div class="info-item-label">${esc(label)}</div><div class="info-item-val">${esc(v)}</div></div>` : '';
 }
 
-// Bloc « Coordonnées société ». Peint depuis un seul endroit parce qu'il a deux
-// appelants (le rendu de la fiche, puis la restitution silencieuse quand le
-// SIRET est déjà payé) : sans ça le second effacerait ce que le premier a posé.
+// Coordonnées société. Peint depuis un seul endroit parce qu'il a trois
+// appelants (le rendu de la fiche, la restitution silencieuse quand le SIRET est
+// déjà payé, le bouton Enrichir) : sans ça l'un effacerait ce qu'un autre a posé.
+// Ces trois cases vivent dans la MÊME grille que les informations société, dont
+// elles ferment la rangée, mais gardent leur propre conteneur #d-societe-grid :
+// il est en display:contents (posé par openDetail), donc transparent pour la
+// grille — ses enfants en sont des items directs, à la géométrie inchangée — et
+// il donne à la restitution un emplacement à réécrire sans toucher aux cases
+// posées par le rendu de la fiche, ni à l'écouteur de #d-val-cell.
 // Le SITE n'est PAS décomptable — il se peint toujours, au même titre que les
 // réseaux sociaux, alors que l'email et le téléphone société restent derrière
 // enrichedSirets. L'adresse reste lisible même sans schéma ; seule la flèche
@@ -1654,15 +1657,21 @@ async function openDetail(id) {
     : `<span class="info-item-placeholder">Cliquer pour ajouter</span>${editIco}`;
   infoHtml += `<div class="info-item editable" id="d-val-cell" title="Cliquer pour éditer"><div class="info-item-label">Valeur estimée</div><div class="info-item-val">${valDisplay}</div></div>`;
   if(!infoHtml) infoHtml = '<div style="font-size:12px;color:var(--muted2);font-style:italic">Aucune info</div>';
-  document.getElementById('d-info-grid').innerHTML = infoHtml;
+  // Emplacement des coordonnées société, posé en DERNIER enfant : leurs trois
+  // cases suivent donc celles ci-dessus dans leur ordre, Site web tombant à côté
+  // de Valeur estimée. display:contents → le conteneur ne compte pas comme item,
+  // ses enfants sont directement ceux de la grille. Il est ré-écrit seul par
+  // peindreGrilleSociete, y compris longtemps après ce rendu.
+  document.getElementById('d-info-grid').innerHTML =
+    infoHtml + '<div id="d-societe-grid" style="display:contents"></div>';
   const valCell = document.getElementById('d-val-cell');
   if(valCell) valCell.addEventListener('click', startEditVal);
 
-  // Coordonnées société — bloc DISTINCT du contact (jeu de champs séparé
-  // website / societe_email / societe_tel). TOUJOURS affiché : un bloc vide est
-  // le signal qui incite à cliquer sur Enrichir. Champ manquant → libellé
-  // visible + valeur en gris d'attente (.info-item-placeholder), sur le patron
-  // d'état vide des réseaux sociaux de la même fiche.
+  // Coordonnées société — jeu de champs DISTINCT du contact (website /
+  // societe_email / societe_tel). TOUJOURS affichées : trois cases vides sont le
+  // signal qui incite à cliquer sur Enrichir. Champ manquant → libellé visible +
+  // valeur en gris d'attente (.info-item-placeholder), sur le patron d'état vide
+  // des réseaux sociaux de la même fiche.
   peindreGrilleSociete(c.website, c.societe_email, c.societe_tel);
   refreshEnrichButtonState(c.siret); // état terminal du bouton, après le rendu du bloc société
 

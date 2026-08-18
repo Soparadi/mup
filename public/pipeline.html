@@ -1924,10 +1924,15 @@ async function openDetail(id) {
   // deux choses, et elles seules : la restitution silencieuse, pour ne pas
   // rappeler /api/enrich à chaque re-render, et la remise à zéro du composeur
   // d'activités, pour ne pas effacer une saisie que personne n'a validée.
+  // Rend VRAI si la carte a été trouvée et peinte, FAUX sinon. Personne ne le
+  // lisait tant que la fiche n'avait qu'un seul chemin d'ouverture — un clic sur
+  // une carte, donc une carte qui existe. Le mode intégré, lui, reçoit un
+  // identifiant venu d'ailleurs (un RDV de la page Visio) : il lui faut savoir
+  // si la fiche s'est réellement peinte, sinon il ouvre un gabarit vide.
   const estOuvertureFraiche = String(currentId) !== String(id);
   currentId = id;
   const c = cards.find(x=>String(x.id)===String(id));
-  if(!c) return;
+  if(!c) return false;
   // Charge les events agenda liés à cette fiche AVANT le render (calendrier).
   await loadAgendaForFiche(id);
   const col = COLS.find(x=>x.id===c.col);
@@ -2260,6 +2265,7 @@ async function openDetail(id) {
   }
 
   if(estOuvertureFraiche) autoEnrichOnOpen(c); // restitution silencieuse (lecture seule), sans attendre
+  return true;
 }
 
 // Restitution silencieuse à l'ouverture — cf. doctrine en tête. LECTURE SEULE :
@@ -2938,8 +2944,18 @@ function importFromProspects() {
   } catch(e) {}
 }
 
-// Vider le cache si les données mockées ont changé
-(async () => {
+// ── DÉMARRAGE DE LA PAGE, ET LA PROMESSE QUE LE RESTE ATTEND ──
+// Le démarrage n'a pas changé : mêmes appels, même ordre, /api/pipeline lu UNE
+// fois et une seule. Ce qui est nouveau, c'est que la séquence porte désormais
+// un nom : tout ce qui a besoin des CARTES l'attend, au lieu de sonder
+// l'existence d'une FONCTION. Une fonction déclarée existe dès l'analyse du
+// script ; les cartes, elles, n'arrivent qu'après le réseau — c'est tout
+// l'écart où la fiche intégrée s'ouvrait sur un gabarit vide.
+// Le .catch tient la promesse : elle se règle même si une étape échoue, et
+// l'attente ne reste jamais suspendue. load() ne rejette pas (il se rabat sur
+// le cache local et le dit à l'écran) ; les étapes suivantes, elles, pourraient.
+const pipelinePret = (async () => {
+  // Vider le cache si les données mockées ont changé
   const MOCK_VERSION = '3';
   if(localStorage.getItem('mup_pipeline_v') !== MOCK_VERSION) {
     localStorage.removeItem('mup_pipeline');
@@ -2950,7 +2966,7 @@ function importFromProspects() {
   migratePipelineFromContacts();
   importFromProspects();
   renderKanban();
-})();
+})().catch(err => { console.error('[pipeline] démarrage :', err); });
 
 // ═══════════════════════════════════════════════════════
 // FICHE : ROUTAGE PAR HASH + MODE IFRAME (?fiche=ID)
@@ -2971,7 +2987,15 @@ function importFromProspects() {
     }
   }
 
-  function restoreFromHash(){
+  // `cards` et `currentId` sont deux `let` racine de CE bloc de script (861-862),
+  // et un `let` racine ne vit PAS sur window : `window.cards` y était toujours
+  // undefined, `window.currentId` aussi. La liste lue était donc vide à chaque
+  // fois, la fiche jamais retrouvée, et la restauration depuis #/card/ID morte.
+  // Les deux se lisent directement — cette fonction est dans le même bloc que la
+  // déclaration, elle les voit par portée. Rien n'est exposé sur window pour
+  // autant : y poser `cards` en ferait une seconde source de vérité à tenir à
+  // jour à chaque écriture, pour un besoin que la portée couvre déjà.
+  async function restoreFromHash(){
     const hash = window.location.hash || '';
     // Le suffixe /full est celui des URL de l'ancien mode agrandi. Il reste
     // toléré pour qu'un lien partagé ou un signet ouvre encore la fiche, qui
@@ -2979,23 +3003,29 @@ function importFromProspects() {
     const m = hash.match(/^#\/card\/([^\/]+)(\/full)?$/);
     if(!m) return;
     const cardId = m[1];
-    const list = window.cards || [];
-    const card = list.find(c => String(c.id) === String(cardId));
+    // Même raison qu'au mode intégré : au DOMContentLoaded les cartes ne sont
+    // pas encore arrivées. L'attente remplace le sursis de 50 ms qui tenait lieu
+    // de synchronisation — et qui, posé APRÈS la recherche de la carte, ne
+    // servait de toute façon à rien.
+    await pipelinePret;
+    const card = cards.find(c => String(c.id) === String(cardId));
     if(!card) return;
     // Éviter la boucle si la fiche est déjà ouverte
-    if(String(window.currentId) === String(cardId)) return;
-    setTimeout(() => {
-      if(typeof window.openDetail === 'function'){
-        window.openDetail(cardId);
-      }
-    }, 50);
+    if(String(currentId) === String(cardId)) return;
+    window.openDetail(cardId);
   }
 
   // ── HOOK sur openDetail : porte l'URL de la fiche ouverte ──
+  // Le hook RELAIE ce que openDetail rend — une promesse de booléen, la fiche
+  // étant asynchrone. Sans ce relais, tout appelant qui interroge le résultat
+  // lirait undefined, donc « carte introuvable », y compris quand elle a été
+  // peinte. syncHashFromState reste appelée tout de suite après le départ de la
+  // fiche, sans attendre sa fin : c'est déjà ce qu'elle faisait.
   const originalOpenDetail = window.openDetail;
   window.openDetail = function(id){
-    if(originalOpenDetail) originalOpenDetail(id);
+    const rendu = originalOpenDetail ? originalOpenDetail(id) : false;
     syncHashFromState();
+    return rendu;
   };
 
   // ── HOOK sur closeDetail : retire l'URL de la fiche fermée ──
@@ -3022,7 +3052,17 @@ function importFromProspects() {
         + 'html,body{background:transparent!important;overflow:hidden!important;margin:0!important;padding:0!important;width:100%!important;height:100%!important}'
         + 'main,.main,.kanban-shell,.app,.layout{display:block!important;padding:0!important;margin:0!important;width:100%!important;height:100%!important}'
         + '.detail-overlay{display:none!important}'
-        + '.detail-panel{position:static!important;width:100%!important;max-width:none!important;height:100vh!important;transform:none!important;box-shadow:none!important;border-left:none!important;left:auto!important;right:auto!important;margin:0!important;display:flex!important;flex-direction:column!important}'
+        // Le panneau ne se montre QUE lorsque la fiche est peinte. Sa règle
+        // portait `display:flex!important` sans condition : le gabarit statique
+        // de #detail-panel — libellés, cases vides, en-tête noir — s'affichait
+        // donc dès l'injection de cette feuille, avant même que les cartes
+        // soient arrivées. C'est cet écran-là qui a été vu depuis la page Visio.
+        // Le témoin est posé sur <html> par l'ouverture réussie, et n'est jamais
+        // retiré : closeDetail ôte `.open` pour glisser le panneau hors champ,
+        // et gager l'affichage là-dessus viderait l'iframe d'un coup au milieu
+        // de la fermeture, pendant que le parent la fait encore glisser.
+        + '.detail-panel{display:none!important}'
+        + 'html.mup-fiche-peinte .detail-panel{position:static!important;width:100%!important;max-width:none!important;height:100vh!important;transform:none!important;box-shadow:none!important;border-left:none!important;left:auto!important;right:auto!important;margin:0!important;display:flex!important;flex-direction:column!important}'
         + '.detail-panel .detail-body{flex:1;overflow-y:auto}'
         // Seule issue en mode panel : l'iframe couvre tout le voile du parent,
         // et sur un téléphone étroit rien d'autre ne ferme la fiche. La croix
@@ -3038,64 +3078,27 @@ function importFromProspects() {
         + '.detail-panel{box-shadow:none!important;width:100%!important;max-width:780px;left:0!important;right:0!important;margin:0 auto;border-left:none!important}';
     }
     document.head.appendChild(s);
-    // Fallback : si l'ID existe dans mup_contacts mais pas mup_pipeline, le créer
-    function ensureCardExists(id){
-      if(!Array.isArray(window.cards)) return;
-      var found = window.cards.find(function(x){ return String(x.id) === String(id); });
-      if(found) return;
-      var contacts = [];
-      try { contacts = JSON.parse(localStorage.getItem('mup_contacts') || '[]'); } catch(e){}
-      var ct = contacts.find(function(x){ return String(x.id) === String(id); });
-      if(!ct) return;
-      var newCard = {
-        id: String(ct.id),
-        name: ct.contact || ct.nom || ct.name || '',
-        co: ct.company || ct.societe || ct.nom || '',
-        email: ct.email || '',
-        tel: ct.tel || ct.telephone || ct.phone || '',
-        address: ct.adresse || ct.address || '',
-        linkedin: ct.linkedin || '',
-        facebook: ct.facebook || '',
-        instagram: ct.instagram || '',
-        col: ct.col || 'leads',
-        val: 0,
-        created_at: ct.created_at || ct.createdAt || new Date().toISOString(),
-        src: ct.source || 'contacts',
-        activity: ct.activity || [],
-        noteEntries: ct.noteEntries || []
-      };
-      // Ajout en memoire uniquement (affichage embed) : pas d'ecriture mup_pipeline
-      // hors API. SurrealDB reste la seule source de verite ; le cache n'est ecrit
-      // que par save() apres confirmation serveur.
-      window.cards.push(newCard);
-    }
-    function tryOpen(retry){
-      if(typeof window.openDetail === 'function'){
-        ensureCardExists(ficheId);
-        window.openDetail(ficheId);
-        // Mode panel : forcer .open immédiatement (sans animation)
-        if(embedMode === 'panel'){
-          setTimeout(function(){
-            var panel = document.getElementById('detail-panel');
-            if(panel && !panel.classList.contains('open')){
-              panel.classList.add('open');
-            }
-            var ovl = document.getElementById('detail-overlay');
-            if(ovl) ovl.classList.remove('open');
-          }, 50);
-        }
-        // Si la fiche n'a pas trouvé de carte, signaler pour fermer le wrap côté parent
-        setTimeout(function(){
-          var panel = document.getElementById('detail-panel');
-          if(!panel || !panel.classList.contains('open')){
-            try { window.parent.postMessage({ type:'mup-fiche-not-found', id: ficheId }, '*'); } catch(e){}
-          }
-        }, 60);
-      } else if(retry < 30){
-        setTimeout(function(){ tryOpen(retry+1); }, 50);
+
+    // La feuille ci-dessus est posée TOUT DE SUITE, avant toute attente : elle
+    // est ce qui cache le kanban et le gabarit de la fiche. L'ouverture, elle,
+    // attend les cartes.
+    (async function ouvrir(){
+      await pipelinePret;
+      // La sonde ne devine plus : elle demande. openDetail rend vrai si elle a
+      // peint la fiche — les 50 ms qui posaient `.open` sans condition, et les
+      // 60 ms qui allaient ensuite le relire, ont disparu avec le devinement.
+      // La seconde ne pouvait que conclure « trouvée », puisque la première
+      // venait de poser ce qu'elle s'apprêtait à lire.
+      var peinte = await window.openDetail(ficheId);
+      if(peinte){
+        document.documentElement.classList.add('mup-fiche-peinte');
+        return;
       }
-    }
-    tryOpen(0);
+      // Rien à montrer : la page parente referme son panneau et le dit.
+      if(window.parent !== window){
+        try { window.parent.postMessage({ type:'mup-fiche-not-found', id: ficheId }, '*'); } catch(e){}
+      }
+    })();
   }
 
   // ── INIT après chargement DOM ──

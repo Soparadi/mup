@@ -1433,6 +1433,11 @@ async function renderRdvList(){
 
   // Mise à jour bandeau urgent
   updateUrgentBanner(rdvs, now);
+
+  // Les rendez-vous lus, rendus à l'appelant. Le bloc d'init en a besoin juste
+  // après pour purger les rappels écartés : sans ça il refaisait pipeline +
+  // agenda pour relire, à la milliseconde près, ce qui vient d'être affiché.
+  return rdvs;
 }
 
 /* ————————————————————————————————————————————————
@@ -2712,12 +2717,13 @@ setInterval(renderRdvList, 30000); // 30s pour le bandeau T-5
   // au moment de l'ouverture du mode test. Pas de binding init-time ici.
   applyBackground();
   renderDocsList();
-  await renderRdvList();
+  const allRdvs = await renderRdvList();
   updateQuota();
 
-  // Nettoyer dismissed expirés (RDV passés)
+  // Nettoyer dismissed expirés (RDV passés). La liste est celle que
+  // renderRdvList() vient de lire — non filtrée par la recherche, donc la même
+  // que rendait collectVisioRdvs() ici.
   const dismissed = _state.settings.urgent_dismissed || [];
-  const allRdvs = await collectVisioRdvs();
   const validIds = new Set(allRdvs.filter(r => new Date(r.date) > new Date()).map(r=>r.id));
   const cleanDismissed = dismissed.filter(id => validIds.has(id));
   if(cleanDismissed.length !== dismissed.length){

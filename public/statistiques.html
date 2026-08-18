@@ -1363,16 +1363,31 @@
 </script>
 
 <script>
+// UNE lecture de /api/factures pour les deux blocs qui suivent — la facturation
+// 2026 et l'historique pluriannuel. Ils la faisaient chacun de leur côté, au
+// parse : deux appels partis au même instant, pour la même table, rendant la
+// même réponse.
+//
+// CE N'EST PAS UN CACHE. Sa vie est celle du chargement de la page : elle est
+// posée ici, consommée par les deux blocs au démarrage, et rien ne la rejoue
+// sur un geste ultérieur. Elle n'a donc rien à invalider, et personne à
+// prévenir quand une facture change — une facture qui change arrive sur une
+// page qui n'existe plus. C'est une lecture, avec deux lecteurs.
+//
+// La bannière d'erreur se pose ici, UNE fois pour les deux, au lieu d'une fois
+// par bloc. Un échec rend [] : les deux corps traitent déjà la liste vide.
+const facturesLues = fetch('/api/factures')
+  .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+  .catch(function(){
+    if(typeof window.__statsError !== 'undefined') window.__statsError = true;
+    var b = document.getElementById('stats-error-banner');
+    if(b) b.style.display = 'block';
+    return [];
+  });
+
 // Facturation 2026 — KPIs + bar chart + entity donut + top 5 clients
 (async function(){
-  var factures = [];
-  try {
-    var resp = await fetch('/api/factures');
-    if(resp.ok) factures = await resp.json();
-    else if(typeof window !== 'undefined' && typeof window.__statsError !== 'undefined'){ window.__statsError = true; var b=document.getElementById('stats-error-banner'); if(b) b.style.display='block'; }
-  } catch(e){
-    if(typeof window !== 'undefined' && typeof window.__statsError !== 'undefined'){ window.__statsError = true; var b=document.getElementById('stats-error-banner'); if(b) b.style.display='block'; }
-  }
+  var factures = await facturesLues;
   function fmtEur(n){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0); }
   function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   var ENTITY_LBL = { ei:'EI', graphic_factor:'Graphic Factor', nouvellevagues:'Nouvelles Vagues', mup:'MovUP' };
@@ -1485,19 +1500,24 @@
     topEl.innerHTML = rows;
   }
 })();
-</script>
 
-<script>
 // Historique pluriannuel — analyses comparatives multi-années depuis /api/factures
 (function(){
-  async function calculerHistoriquePluriannuel(){
-    var factures = [];
-    try {
-      var resp = await fetch('/api/factures');
-      if(resp.ok) factures = await resp.json();
-      else { var b=document.getElementById('stats-error-banner'); if(b) b.style.display='block'; }
-    } catch(e){
-      var b=document.getElementById('stats-error-banner'); if(b) b.style.display='block';
+  // `liste` fournie = la lecture partagée du démarrage. Sans argument, la
+  // fonction lit elle-même : c'est la voie de l'écouteur `storage` plus bas, un
+  // geste, et un geste ne doit pas se voir servir ce qui a été lu au
+  // chargement.
+  async function calculerHistoriquePluriannuel(liste){
+    var factures = liste;
+    if(!factures){
+      factures = [];
+      try {
+        var resp = await fetch('/api/factures');
+        if(resp.ok) factures = await resp.json();
+        else { var b=document.getElementById('stats-error-banner'); if(b) b.style.display='block'; }
+      } catch(e){
+        var b=document.getElementById('stats-error-banner'); if(b) b.style.display='block';
+      }
     }
     var parAnnee = {};
     factures.forEach(function(f){
@@ -1713,14 +1733,14 @@
     tableEl.innerHTML = html;
   }
 
-  async function initHistoriquePluriannuel(){
-    var parAnnee = await calculerHistoriquePluriannuel();
+  async function initHistoriquePluriannuel(liste){
+    var parAnnee = await calculerHistoriquePluriannuel(liste);
     renderHistoriqueKpis(parAnnee);
     renderHistoriqueChart(parAnnee);
     renderHistoriqueTable(parAnnee);
   }
 
-  initHistoriquePluriannuel();
+  facturesLues.then(initHistoriquePluriannuel);
 
   // TODO V2 : remplacer par polling/websocket — depuis migration SurrealDB, mup_factures
   // n'est plus écrit en localStorage donc cet événement ne se déclenche plus.

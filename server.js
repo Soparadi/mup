@@ -2550,36 +2550,81 @@ app.post('/api/pipeline/from-leads', async (req, res) => {
 // ── Pont coordonnées société entre les deux fiches d'un même établissement ──
 //
 // Un même établissement existe couramment deux fois chez le MÊME abonné : une
-// carte `pipeline` et une (ou plusieurs) fiche(s) `contacts`. Les trois champs
-// ci-dessous sont des coordonnées d'ENTREPRISE, pas de personne : saisis d'un
+// carte `pipeline` et une (ou plusieurs) fiche(s) `contacts`. Les champs
+// ci-dessous sont ceux de l'ENTREPRISE, pas de la personne : saisis d'un
 // côté, ils valent de l'autre. Le pont les y recopie.
-const CHAMPS_PONT_SOCIETE = ['website', 'societe_email', 'societe_tel']
+//
+// TABLE DE CORRESPONDANCE EXPLICITE ET ORIENTÉE — une entrée par champ, portant
+// sa clé de chaque côté. Les deux tables ne nomment pas tout pareil et la
+// symétrie implicite serait DESTRUCTRICE : sur `contacts`, `linkedin` est celui
+// de la PERSONNE (il figure dans PERSON_FIELDS) et le LinkedIn d'entreprise s'y
+// appelle `societe_linkedin`. Un pont qui recopierait `linkedin` sous le même
+// nom effacerait le profil du dirigeant à chaque enregistrement d'une carte.
+// D'où : en écrivant vers `contacts`, `linkedin` de la carte devient
+// `societe_linkedin` ; en écrivant vers `pipeline`, `societe_linkedin` de la
+// fiche redevient `linkedin`. Aucune autre lecture possible, aucune boucle.
+//
+// C'est aussi de cette table, et d'elle seule, que se dérive la liste blanche
+// du SQL : un nom de champ interpolé vient toujours d'ici, jamais d'une clé
+// reçue dans un corps de requête.
+//
+// HORS PÉRIMÈTRE, volontairement : l'adresse (les deux tables ne la découpent
+// pas pareil — un bloc d'un côté, voie/CP/ville de l'autre), la raison sociale
+// (ses alias sont réécrits par `migrateCard` à chaque chargement), `siret` et
+// `siren` (ils sont la CLÉ du pont, ils ne voyagent pas) et tout champ de
+// personne.
+const CHAMPS_PONT_SOCIETE = [
+  // même nom des deux côtés
+  { pipeline: 'sector', contacts: 'sector' },
+  { pipeline: 'website', contacts: 'website' },
+  { pipeline: 'societe_email', contacts: 'societe_email' },
+  { pipeline: 'societe_tel', contacts: 'societe_tel' },
+  { pipeline: 'facebook', contacts: 'facebook' },
+  { pipeline: 'instagram', contacts: 'instagram' },
+  { pipeline: 'enseigne', contacts: 'enseigne' },
+  // le nom change selon la table
+  { pipeline: 'forme', contacts: 'forme_juridique' },
+  { pipeline: 'naf', contacts: 'code_naf' },
+  { pipeline: 'notes', contacts: 'note_societe' },
+  { pipeline: 'linkedin', contacts: 'societe_linkedin' }
+]
+
+// Clé d'un champ du pont dans la table visée — l'unique lecture autorisée de la
+// table de correspondance, orientée par la table et jamais par le corps reçu.
+const clePont = (champ, table) => (table === 'pipeline' ? champ.pipeline : champ.contacts)
 
 // Valeur d'un champ du pont, vue comme une chaîne comparable : absent, null et
 // chaîne vide sont un seul et même « pas renseigné ».
 const valeurPont = (v) => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v).trim()))
 
-// Ce qu'un PUT fait réellement bouger parmi les trois champs du pont —
-// comparaison de l'enregistrement AVANT (`rec`, déjà relu par les deux routes)
-// au corps qui va le remplacer. Deux filtres, dans cet ordre :
+// Ce qu'un PUT fait réellement bouger parmi les champs du pont — comparaison de
+// l'enregistrement AVANT (`rec`, déjà relu par les deux routes) au corps qui va
+// le remplacer. `source` est la table qu'on vient d'écrire : elle décide sous
+// quel nom lire, la table de correspondance décidant sous quel nom rendre.
+// Deux filtres, dans cet ordre :
 //
 //   • VIDE NON RETENU — effacer une case d'un côté ne vide PAS l'autre. Limite
 //     assumée et voulue : le pont propage la saisie, jamais la suppression.
 //     Sans ce filtre, un formulaire qui n'envoie simplement pas la clé effacerait
 //     la fiche jumelle à chaque geste.
-//   • INCHANGÉ NON RETENU — c'est la garde de déclenchement. Les pages
-//     enregistrent en continu et la quasi-totalité de leurs PUT ne touchent
-//     aucun des trois champs (colonne déplacée, note, rendez-vous). Patch vide
-//     → le pont ne cherche rien et n'écrit rien.
+//   • INCHANGÉ NON RETENU — c'est la garde de déclenchement, et elle porte sur
+//     les onze champs : aucun d'eux modifié, patch vide, le pont ne cherche rien
+//     et n'écrit rien. Les pages enregistrent en continu et la quasi-totalité de
+//     leurs PUT ne touchent aucun de ces champs (colonne déplacée, note de
+//     personne, rendez-vous). C'est cette garde qui tient le coût, la table
+//     jumelle étant balayée sans index.
 //
-// Le patch ne porte donc QUE les champs modifiés, jamais les trois en bloc.
-function patchPontSociete(rec, body) {
+// Le patch est rendu DÉJÀ TRADUIT — clés de la table de DESTINATION — et ne
+// porte que les champs modifiés, jamais les onze en bloc.
+function patchPontSociete(rec, body, source) {
   const patch = {}
-  for (const k of CHAMPS_PONT_SOCIETE) {
-    const apres = valeurPont(body?.[k])
+  const destination = source === 'pipeline' ? 'contacts' : 'pipeline'
+  for (const champ of CHAMPS_PONT_SOCIETE) {
+    const lu = clePont(champ, source)
+    const apres = valeurPont(body?.[lu])
     if (!apres) continue
-    if (valeurPont(rec?.[k]) === apres) continue
-    patch[k] = apres
+    if (valeurPont(rec?.[lu]) === apres) continue
+    patch[clePont(champ, destination)] = apres
   }
   return patch
 }
@@ -2593,7 +2638,7 @@ function patchPontSociete(rec, body) {
 // ailleurs (espaces retirés, cf. findSocieteBySiret) ; SIRET vide → aucun pont.
 //
 // TOUS LES JUMEAUX, jamais le premier trouvé : un abonné a couramment plusieurs
-// contacts pour un même SIRET, un par dirigeant. Ces trois champs sont ceux de
+// contacts pour un même SIRET, un par dirigeant. Ces champs sont ceux de
 // l'entreprise, ils valent pour chacun d'eux — d'où l'UPDATE … WHERE, sans LIMIT.
 //
 // LE `WHERE` PORTE LUI-MÊME `userId` : la garde d'appartenance de la route
@@ -2623,9 +2668,12 @@ async function ponterCoordonneesSociete({ userId, siret, table, patch }) {
     if (!cleanSiret) return
     const params = { siret: cleanSiret, userId }
     const assigns = []
-    for (const k of CHAMPS_PONT_SOCIETE) {
-      // Liste blanche stricte : seul un nom de champ du pont est interpolé dans
-      // le SQL, jamais une valeur (toujours passée en paramètre).
+    for (const champ of CHAMPS_PONT_SOCIETE) {
+      // Liste blanche stricte, DÉRIVÉE DE LA TABLE DE CORRESPONDANCE : on
+      // parcourt la table et non les clés du patch, si bien que le nom interpolé
+      // dans le SQL vient toujours d'ici — jamais d'une valeur reçue. La clé
+      // retenue est celle de la table VISÉE, `table` étant la destination.
+      const k = clePont(champ, table)
       if (!(k in (patch || {}))) continue
       assigns.push(`${k} = $${k}`)
       params[k] = patch[k]
@@ -2692,7 +2740,7 @@ app.put('/api/pipeline/:id', async (req, res) => {
       userId,
       siret: cleanBody.siret,
       table: 'contacts',
-      patch: patchPontSociete(rec, cleanBody)
+      patch: patchPontSociete(rec, cleanBody, 'pipeline')
     })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
@@ -2904,7 +2952,7 @@ app.put('/api/contacts/:id', async (req, res) => {
       userId,
       siret: cleanBody.siret,
       table: tb === 'pipeline' ? 'contacts' : 'pipeline',
-      patch: patchPontSociete(rec, cleanBody)
+      patch: patchPontSociete(rec, cleanBody, tb)
     })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {

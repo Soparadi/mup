@@ -658,8 +658,32 @@ let personDirty = {};       // re-save demandé pendant un save en vol (coalesci
 // soit celle affichée à l'écran.
 //
 // Vidé à chaque populate() : la fiche vient d'être repeinte depuis le record,
-// plus rien à l'écran n'est une saisie en attente.
+// plus rien à l'écran n'est une saisie en attente. Vidé aussi à chaque
+// enregistrement confirmé — ce qui est en base n'est plus en attente, et un
+// registre jamais purgé ferait renvoyer éternellement la même vieille valeur.
 const champsSaisis = new Set();
+
+// Compteur de frappes. Sert à UNE seule chose : savoir si une saisie est
+// arrivée PENDANT un enregistrement en vol, pour ne pas purger le registre
+// d'une frappe que le serveur n'a pas reçue (cf. autoSave). Incrémenté par les
+// mêmes écouteurs que le registre, et par eux seuls.
+let saisieGen = 0;
+
+// Champs posés par un GESTE, sans champ de formulaire à leur nom : le registre
+// ci-dessus est indexé par id DOM, et ceux-là n'en ont pas — le rattachement à
+// une société, et la face personne du record courant (blocs .pf-*, sans id).
+// Même nature que champsSaisis (ce que l'abonnée a fait bouger), même durée de
+// vie, versé au même corps.
+//
+// CE N'EST PAS UNE COPIE DU RECORD : rien ne s'y compare, la valeur reste sur
+// `contact` et seule la CLÉ est retenue. Il n'y a toujours qu'une base de
+// comparaison dans cette page, et c'est le registre des gestes.
+const champsPoses = new Set();
+function poserChamp(cle, valeur){
+  contact[cle] = valeur;
+  champsPoses.add(cle);
+  saisieGen++;
+}
 
 // ── Restitution silencieuse à l'ouverture — DOCTRINE (tranchée le 3 juillet) ──
 // Le décompte porte sur l'apport d'un MOYEN DE CONTACT — email ou téléphone —
@@ -893,8 +917,10 @@ async function refreshEnrichButtonState(){
 function populate(){
   const c = contact;
   // Tout ce qui suit repeint les champs depuis le record : aucune saisie n'est
-  // plus en attente (cf. champsSaisis).
+  // plus en attente (cf. champsSaisis). Les champs posés par un geste suivent
+  // le même sort : ce qui vient d'être relu du serveur n'est plus à lui envoyer.
   champsSaisis.clear();
+  champsPoses.clear();
   // Titre = enseigne si présente, sinon nom juridique (module partagé). Le nom
   // juridique s'affiche en sous-titre quand il diffère du titre.
   const _nom = window.MUPNom
@@ -1255,62 +1281,114 @@ function setAutosaveState(state){
   else if (state === 'error') { dot.classList.add('error'); txt.textContent = 'Erreur de sauvegarde'; }
 }
 
-// Reporte sur le record ce que l'abonnée a SAISI, et rien d'autre — cf.
-// champsSaisis. Un champ jamais touché n'est même pas lu : la valeur du record
-// tient, y compris quand l'écran en affiche une autre (projection du
-// référentiel). Effacer un champ reste une saisie : le champ est marqué, la
-// chaîne vide part, l'effacement persiste.
+// Reporte sur le record ce que l'abonnée a SAISI, et rend LE CORPS À ENVOYER —
+// les seules clés qu'un geste a fait bouger, jamais le record entier. Un champ
+// jamais touché n'est même pas lu : la valeur en base tient, y compris quand
+// l'écran en affiche une autre (projection du référentiel), et y compris quand
+// c'est un autre onglet qui l'a écrite.
+//
+// ── « NON ENVOYÉ » N'EST PAS « VIDÉ », ET C'EST LE REGISTRE QUI LE PORTE ──
+// Aucune sentinelle, aucune convention : c'est la PRÉSENCE DE LA CLÉ qui dit
+// tout, et le serveur n'écrit que les clés qu'il reçoit.
+//
+//   • champ auquel l'abonnée n'a pas touché — absent de champsSaisis, donc
+//     ABSENT DU CORPS. La base garde sa valeur, quelle qu'elle soit et qui que
+//     ce soit qui l'ait écrite depuis l'ouverture de l'onglet.
+//   • champ que l'abonnée a EFFACÉ — une frappe l'a inscrit au registre, donc
+//     la CHAÎNE VIDE part dans le corps, et l'effacement est persisté.
+//
+// Les deux cas produisaient jusqu'ici la même chose côté serveur (le record
+// entier partait avec une chaîne vide dans les deux) ; ils sont désormais deux
+// gestes distincts, et un seul des deux écrit.
 function captureFields(){
   const c = contact;
-  const saisi = (id, poser) => {
+  const patch = {};
+  // Poser un champ : sur le record en mémoire ET dans le corps. Tout ce qui
+  // passe par ici part au serveur, tout ce qui n'y passe pas reste en base.
+  const poser = (cle, val) => { c[cle] = val; patch[cle] = val; };
+  const saisi = (id, ecrire) => {
     if (!champsSaisis.has(id)) return;
     const el = document.getElementById(id);
-    if (el) poser(el.value);
+    if (el) ecrire(el.value);
   };
-  saisi('f-nom', v => { c.nom = v.trim() || c.nom; });
-  saisi('f-sector', v => { c.sector = v.trim(); });
-  saisi('f-website', v => { c.website = v.trim(); });
-  saisi('f-societe-email', v => { c.societe_email = v.trim(); });
-  saisi('f-societe-tel', v => { c.societe_tel = window.MUPTel.format(v); });
-  saisi('f-adresse', v => { c.adresse = v.trim(); });
-  saisi('f-zip', v => { c.zip = v.trim(); });
-  saisi('f-ville', v => { c.ville = v.trim(); });
-  saisi('f-note-societe', v => { c.note_societe = v.trim(); });
+  // La raison sociale est le seul champ qui ne se vide pas : effacée, elle
+  // n'est ni posée ni envoyée, et la base garde la sienne. Ses deux alias
+  // legacy ne bougent qu'avec elle — jamais recalculés à sec, sans quoi ils
+  // partiraient à `undefined` sur un record qui ne porte que la forme ancienne.
+  saisi('f-nom', v => {
+    const nom = v.trim();
+    if (!nom) return;
+    poser('nom', nom); poser('name', nom); poser('company', nom);
+  });
+  saisi('f-sector', v => poser('sector', v.trim()));
+  saisi('f-website', v => poser('website', v.trim()));
+  saisi('f-societe-email', v => poser('societe_email', v.trim()));
+  saisi('f-societe-tel', v => poser('societe_tel', window.MUPTel.format(v)));
+  // Même règle pour les trois noms de l'adresse : ils voyagent ensemble ou pas
+  // du tout (une carte pipeline porte `address`, une fiche `adresse`).
+  saisi('f-adresse', v => {
+    const a = v.trim();
+    poser('adresse', a); poser('address', a); poser('location', a);
+  });
+  saisi('f-zip', v => poser('zip', v.trim()));
+  saisi('f-ville', v => poser('ville', v.trim()));
+  saisi('f-note-societe', v => poser('note_societe', v.trim()));
   // f-linkedin = LinkedIn SOCIÉTÉ -> societe_linkedin (le LinkedIn personne est
   // géré dans le bloc personne via pf-linkedin, jamais écrasé ici).
-  saisi('f-linkedin', v => { c.societe_linkedin = v.trim(); });
-  saisi('f-facebook', v => { c.facebook = v.trim(); });
-  saisi('f-instagram', v => { c.instagram = v.trim(); });
-  // Prochaine action via contenteditable — jamais peinte par la projection.
-  const naText = document.getElementById('next-action-text');
-  if (naText && !naText.classList.contains('empty')) {
-    c.prochaine_action = naText.textContent.trim();
+  saisi('f-linkedin', v => poser('societe_linkedin', v.trim()));
+  saisi('f-facebook', v => poser('facebook', v.trim()));
+  saisi('f-instagram', v => poser('instagram', v.trim()));
+  // Prochaine action : contenteditable, sans écouteur de frappe jusqu'ici et
+  // donc capturée à CHAQUE enregistrement, touchée ou non. Sous écriture
+  // ciblée, elle aurait écrasé à chaque frappe d'un autre champ celle qu'un
+  // autre onglet venait d'écrire — elle s'inscrit désormais au registre comme
+  // les autres (wireForm). Le placeholder n'est pas une valeur : champ rendu au
+  // vide, chaîne vide envoyée, effacement persisté.
+  if (champsSaisis.has('next-action-text')) {
+    const naText = document.getElementById('next-action-text');
+    if (naText) poser('prochaine_action', naText.classList.contains('empty') ? '' : naText.textContent.trim());
   }
-  // Aliases legacy, recalculés SEULEMENT quand leur source vient d'être saisie.
-  // Les recalculer à sec les poserait à `undefined` sur un record qui ne porte
-  // que la forme ancienne (une carte pipeline porte `address`, pas `adresse`) :
-  // la clé disparaîtrait du corps, et l'UPDATE … CONTENT du serveur effacerait
-  // l'adresse au premier enregistrement d'un autre champ.
-  if (champsSaisis.has('f-nom')) { c.name = c.nom; c.company = c.nom; }
-  if (champsSaisis.has('f-adresse')) { c.address = c.adresse; c.location = c.adresse; }
-  c.updated_at = new Date().toISOString();
+  // Champs posés par un geste, sans champ de formulaire à leur nom : leur
+  // valeur est déjà sur le record, seule leur présence au corps se déclare ici.
+  for (const cle of champsPoses) patch[cle] = c[cle];
+  return patch;
 }
 
 // Rend true si le record a bien été écrit. Les appelants qui déclenchent une
 // écriture sur un GESTE — et non sur une frappe — s'en servent pour dire à
 // l'écran ce qui est enregistré et ce qui ne l'est pas.
+//
+// N'ENVOIE QUE LE CORPS PARTIEL rendu par captureFields, JAMAIS `contact`. Cet
+// objet-là date de l'ouverture de la page : le renvoyer entier à un serveur qui
+// écrivait en remplacement intégral écrasait en silence tout ce qu'un autre
+// onglet, le pont inter-fiches ou un autre appareil avait écrit depuis — y
+// compris des champs que cet onglet n'avait jamais affichés, et sans que rien
+// ne le signale. Un onglet ne peut plus rien écraser de ce qu'il ignore : ce
+// qu'il n'a pas modifié, il ne l'envoie pas.
 async function autoSave(){
   if (!contact || !contactId) return false;
+  const patch = captureFields();
+  // Rien n'a bougé : aucune requête. L'écran dit vrai — il n'y a rien à
+  // enregistrer, ce n'est pas une écriture ratée.
+  if (!Object.keys(patch).length) { setAutosaveState('saved'); return true; }
   setAutosaveState('saving');
-  captureFields();
+  patch.updated_at = new Date().toISOString();
+  // Instantané du compteur de frappes AVANT l'envoi. Le registre n'est purgé au
+  // retour que si RIEN n'a été saisi pendant le vol ; sinon il reste entier et
+  // l'enregistrement suivant remportera la frappe arrivée entre-temps. Au pire
+  // un champ envoyé une fois de trop, jamais une saisie perdue.
+  const gen = saisieGen;
   try {
     const resp = await fetch('/api/contacts/' + encodeURIComponent(contactId), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(contact)
+      body: JSON.stringify(patch)
     });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     setAutosaveState('saved');
+    // Purge sur CONFIRMATION seulement : un échec garde le registre, et la
+    // saisie repart au prochain enregistrement.
+    if (saisieGen === gen) { champsSaisis.clear(); champsPoses.clear(); }
     try {
       const stamp = String(Date.now()) + ':' + contactId;
       localStorage.setItem('mup_contact_sync', stamp);
@@ -1339,12 +1417,18 @@ function wireForm(){
     // et n'ont jamais alimenté captureFields, qui ne lit que la face société.
     el.addEventListener(evt, () => {
       if (el.id) champsSaisis.add(el.id);
+      saisieGen++;
       scheduleAutoSave();
     });
   });
 
   // Prochaine action contenteditable
   const naText = document.getElementById('next-action-text');
+  // Elle s'inscrit au registre par la FRAPPE, comme tous les autres champs. Le
+  // blur ci-dessous suffit à déclencher un enregistrement, il ne dit pas que
+  // quelque chose a changé — sans cet écouteur, la prochaine action partirait
+  // dans chaque corps partiel et écraserait celle des autres onglets.
+  naText.addEventListener('input', () => { champsSaisis.add('next-action-text'); saisieGen++; });
   naText.addEventListener('focus', () => {
     if (naText.classList.contains('empty')) {
       naText.textContent = '';
@@ -1707,7 +1791,28 @@ function capturePersonBlock(idx){
   p.note_personne = note ? note.value.trim() : '';
   // contact_nom maintenu pour compat (Prénom Nom complet).
   p.contact_nom = [p.prenom, p.nom_personne].filter(Boolean).join(' ').trim() || p.contact_nom || '';
+  // Quand ce bloc EST le record ouvert, ses valeurs viennent d'être posées sur
+  // `contact` et partiront par l'autosave société (cf. schedulePersonSave). Les
+  // champs .pf-* n'ont pas d'id : ils ne s'inscrivent pas au registre des
+  // saisies, et le corps partiel les perdrait purement et simplement. Ils se
+  // déclarent donc ici, au registre des gestes.
+  //
+  // GRANULARITÉ : LE BLOC, PAS LE CHAMP. capturePersonBlock relit tout le bloc
+  // à chaque frappe — les treize clés partent donc ensemble dès qu'une seule
+  // bouge. La fenêtre d'écrasement se referme sur la face personne du seul
+  // record ouvert, au lieu du record entier : c'est un ordre de grandeur gagné,
+  // pas la perfection. Descendre au champ demanderait un registre par bloc,
+  // et c'est un autre lot.
+  if (p === contact) CLES_BLOC_PERSONNE.forEach(k => champsPoses.add(k));
 }
+
+// Les clés que capturePersonBlock pose, et elles seules — `rgpd_consent_personne`
+// n'en est pas (aucun champ ne l'édite dans le bloc), les champs société non plus.
+const CLES_BLOC_PERSONNE = [
+  'civilite', 'prenom', 'nom_personne', 'poste', 'anniversaire',
+  'emails', 'email', 'telephones', 'phone',
+  'linkedin', 'instagram_perso', 'facebook_perso', 'note_personne', 'contact_nom'
+];
 
 function schedulePersonSave(idx){
   // SOURCE DE VÉRITÉ UNIQUE pour le record courant : si ce bloc EST le record
@@ -1774,11 +1879,14 @@ async function societeDeLaFiche(){
   // serveur le pose (genId) et que socKey le compare.
   const sid = creee && creee.id ? MUPFil.localId(creee.id) : '';
   if (!sid) { toast('Société non créée, personne non enregistrée'); return null; }
-  contact.societe_id = sid;
   // Le contact courant porte le rattachement, sans quoi la société existerait
-  // et la fiche l'ignorerait au prochain chargement.
+  // et la fiche l'ignorerait au prochain chargement. `societe_id` n'a pas de
+  // champ de formulaire à son nom : il se déclare au registre des gestes, sans
+  // quoi le corps partiel ne le porterait pas et l'écriture partirait à vide.
+  poserChamp('societe_id', sid);
   if (!await autoSave()) {
     contact.societe_id = null;
+    champsPoses.delete('societe_id');   // l'écriture a échoué : rien à renvoyer
     toast('Rattachement non enregistré, personne non créée');
     return null;
   }
@@ -1838,6 +1946,7 @@ function wirePeople(){
     if (!block) return;
     const idx = parseInt(block.getAttribute('data-pidx'), 10);
     if (isNaN(idx)) return;
+    saisieGen++;
     capturePersonBlock(idx);
     schedulePersonSave(idx);
   };

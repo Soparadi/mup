@@ -2842,20 +2842,68 @@ function memeValeur(a, b) {
 }
 
 // Champs qu'un PUT fait réellement bouger sur un contact — comparaison de
-// l'enregistrement AVANT au corps qui va le remplacer (UPDATE … CONTENT :
-// une clé absente du corps disparaît, c'est donc aussi une modification).
+// l'enregistrement AVANT aux clés que le corps apporte.
+//
+// LA COMPARAISON NE PORTE QUE SUR LES CLÉS PRÉSENTES DANS LE CORPS. Elle
+// parcourait l'union des deux jeux de clés, parce que l'écriture était un
+// remplacement intégral : une clé absente du corps disparaissait de la base,
+// c'était donc bien une modification. L'écriture est devenue CIBLÉE (MERGE) et
+// cette prémisse est tombée — une clé absente n'est plus touchée. La garder
+// aurait compté la quarantaine de champs non envoyés comme autant de
+// modifications à chaque frappe, dans des lignes qui sont LUES (agrégation par
+// recherche, export RGPD).
+//
 // Les quatre clés ignorées ne disent rien de ce que l'abonnée a saisi :
 // `updated_at` est réécrit par la page à chaque enregistrement, et un contact
 // serait « modifié » à chaque passage sans qu'un seul caractère ait changé.
 const CHAMPS_HORS_MODIF = new Set(['id', 'userId', 'created_at', 'updated_at'])
 function champsModifies(avant, apres) {
-  const cles = new Set([...Object.keys(avant || {}), ...Object.keys(apres || {})])
   const bouges = []
-  for (const c of cles) {
+  for (const c of Object.keys(apres || {})) {
     if (CHAMPS_HORS_MODIF.has(c)) continue
     if (!memeValeur(avant?.[c], apres?.[c])) bouges.push(c)
   }
   return bouges
+}
+
+// Face personne d'un corps PARTIEL — cf. normalizePersonFields (lib/person-fields.js).
+//
+// Cette fonction-là GARANTIT LA PRÉSENCE des quinze champs personne, valeurs
+// vides comprises. C'était sans conséquence tant que le client envoyait le
+// record entier ; appliquée telle quelle à un corps partiel, elle y injecterait
+// quinze clés vides que l'écriture ciblée poserait en base — la face personne
+// serait effacée à chaque enregistrement d'un champ société.
+//
+// On la fait donc travailler sur le record FUSIONNÉ (l'existant relu, recouvert
+// du corps), et on ne retient de son résultat que les clés que le corps portait
+// déjà. Ce qu'elle apporte alors, ce sont ses COERCIONS (civilité en chaîne,
+// consentement en booléen, listes nettoyées et dédoublonnées) — pas des clés
+// supplémentaires.
+//
+// SEULE EXCEPTION, et c'est tout l'objet de la normalisation : les deux couples
+// liste/valeur-unique. Envoyer `emails` fait écrire `email`, et réciproquement ;
+// idem pour `telephones`/`phone`. C'est le seul endroit où le serveur écrit une
+// clé que le client ne lui a pas envoyée, et il le fait parce que les deux
+// formes sont une seule donnée.
+function normaliserFacePersonnePartielle(rec, corps) {
+  const base = { ...(rec || {}) }
+  // Le corps fait autorité sur la donnée qu'il porte. S'il n'envoie que la forme
+  // unique (`email`, `phone`) sans sa liste, la liste de l'existant ne doit pas
+  // la recouvrir : cleanList retiendrait la liste et ignorerait la valeur reçue.
+  if ('email' in corps && !('emails' in corps)) delete base.emails
+  if ('phone' in corps && !('telephones' in corps)) delete base.telephones
+  const complet = normalizePersonFields({ ...base, ...corps })
+  const retenu = {}
+  for (const k of Object.keys(corps)) retenu[k] = complet[k]
+  if ('emails' in corps || 'email' in corps) {
+    retenu.emails = complet.emails
+    retenu.email = complet.email
+  }
+  if ('telephones' in corps || 'phone' in corps) {
+    retenu.telephones = complet.telephones
+    retenu.phone = complet.phone
+  }
+  return retenu
 }
 
 // ── Helpers /api/contacts/:id polymorphes (Sprint 3.5) ──
@@ -2914,12 +2962,53 @@ app.put('/api/contacts/:id', async (req, res) => {
     if ('societe_id' in cleanBody && !(typeof cleanBody.societe_id === 'string' && cleanBody.societe_id.trim())) {
       cleanBody.societe_id = null
     }
+    // Corps sans aucune donnée (seul l'userId forcé ci-dessus) : rien à écrire.
+    // On rend l'enregistrement relu — pour l'appelant, un enregistrement sans
+    // rien à enregistrer est un succès, pas une panne.
+    if (Object.keys(cleanBody).length <= 1) return res.json(rec)
     // Brique A — face personne (table contacts uniquement, jamais pipeline).
-    if (tb === 'contacts') Object.assign(cleanBody, normalizePersonFields(cleanBody))
+    if (tb === 'contacts') Object.assign(cleanBody, normaliserFacePersonnePartielle(rec, cleanBody))
+
+    // ── ÉCRITURE CIBLÉE : LES SEULES CLÉS REÇUES, JAMAIS LE RECORD ENTIER ──
+    //
+    // `CONTENT` remplaçait le record par le corps. Un client qui tenait une copie
+    // datée — un onglet resté ouvert — écrasait donc en silence tout ce qu'un
+    // autre onglet, le pont inter-fiches ou un autre appareil avait écrit depuis,
+    // y compris des champs qu'il n'avait jamais affichés. Rien ne le signalait,
+    // ni à l'écran ni au journal.
+    //
+    // `MERGE` n'écrit que les clés présentes dans le corps ; une clé absente
+    // n'est pas touchée. La distinction que porte la page — clé absente = champ
+    // non modifié, clé à chaîne vide = champ effacé par l'abonnée — arrive donc
+    // intacte en base, sans sentinelle ni convention : la présence de la clé dit
+    // tout.
+    //
+    // POURQUOI MERGE ET NON LE `SET k = $k` À LISTE BLANCHE du pont
+    // (ponterCoordonneesSociete) ou du référentiel (enrichReferentielActionnable) :
+    // ces deux-là écrivent un jeu de champs FERMÉ et énumérable, et interpolent
+    // donc des noms tirés d'une constante du serveur. `contacts` est SCHEMALESS,
+    // son jeu de champs est ouvert, et aucune liste blanche honnête n'y est
+    // possible. MERGE tient la même exigence par un chemin plus court : le corps
+    // est un PARAMÈTRE LIÉ, aucun nom de champ n'est interpolé dans le SQL, donc
+    // aucun ne peut venir d'une valeur reçue. Même verbe et même raison qu'à
+    // PUT /api/user-settings, « pour que Frais et Statistiques cohabitent sans
+    // s'écraser ».
+    //
+    // Acquis au passage : `created_at` n'est plus effacé par un client qui
+    // l'omet — il n'est simplement plus touché. La réinjection que fait la route
+    // pipeline voisine n'a plus lieu d'être de ce côté.
     const sql = tb === 'pipeline'
-      ? 'UPDATE type::record("pipeline", $id) CONTENT $body'
-      : 'UPDATE type::record("contacts", $id) CONTENT $body'
+      ? 'UPDATE type::record("pipeline", $id) MERGE $body'
+      : 'UPDATE type::record("contacts", $id) MERGE $body'
     const result = await db.query(sql, { id, body: cleanBody })
+    // SIRET de l'écriture, pour les deux appels qui suivent : le corps s'il le
+    // porte, sinon l'enregistrement relu. Le corps est devenu PARTIEL et le
+    // SIRET n'est pas modifiable depuis la fiche (champ readonly) : il n'y
+    // figure quasiment jamais, et continuer à le lire là seulement aurait éteint
+    // d'un coup l'enrichissement du référentiel ET le pont, tous deux clés sur
+    // lui. Le corps garde la priorité — une écriture délibérée du SIRET fait
+    // autorité sur l'état d'avant.
+    const siretEcriture = cleanBody.siret || rec.siret
     // Trace d'usage — UNE LIGNE PAR MODIFICATION RÉELLE, jamais par requête. La
     // fiche société enregistre en continu (autosave) et la plupart de ses PUT ne
     // changent rien : la comparaison avant/après tranche, liste vide → aucune
@@ -2938,7 +3027,12 @@ app.put('/api/contacts/:id', async (req, res) => {
     // Enrichissement additif du référentiel mutualisé (clé SIRET) depuis la saisie
     // abonné — FIRE-AND-FORGET (sans await) : ne bloque pas la réponse déjà servie,
     // no-op silencieux si le SIRET est absent du référentiel. Additif strict côté DB.
-    enrichReferentielActionnable(cleanBody.siret, {
+    //
+    // Le corps étant partiel, les quatre valeurs ne sont plus renvoyées à chaque
+    // enregistrement mais à la SEULE saisie qui les concerne. L'enrichissement
+    // n'écrivant que sur les champs vides, le résultat en base est le même —
+    // c'est le bruit qui disparaît, pas un apport.
+    enrichReferentielActionnable(siretEcriture, {
       website: cleanBody.website,
       societe_email: cleanBody.societe_email,
       societe_tel: cleanBody.societe_tel,
@@ -2948,9 +3042,15 @@ app.put('/api/contacts/:id', async (req, res) => {
     // d'écrire l'une OU l'autre table selon le préfixe de l'id. Le jumeau à
     // rejoindre est donc dans L'AUTRE, déterminée par celle qu'on vient
     // d'écrire. FIRE-AND-FORGET (sans await).
+    //
+    // Le corps partiel ne change RIEN à ce que patchPontSociete produit : un
+    // champ non envoyé y passe par le filtre « vide non retenu » (valeurPont
+    // d'une clé absente rend la chaîne vide), là où un champ envoyé inchangé
+    // passait par le filtre « inchangé non retenu ». Deux portes, même sortie —
+    // le patch est celui d'avant, aux mêmes conditions de déclenchement.
     ponterCoordonneesSociete({
       userId,
-      siret: cleanBody.siret,
+      siret: siretEcriture,
       table: tb === 'pipeline' ? 'contacts' : 'pipeline',
       patch: patchPontSociete(rec, cleanBody, tb)
     })

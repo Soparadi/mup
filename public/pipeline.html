@@ -1992,6 +1992,22 @@ async function openDetail(id) {
   document.getElementById('detail-overlay').classList.add('open');
   document.getElementById('detail-panel').classList.add('open');
 
+  // Le panneau s'ouvre en haut. .detail-body est le conteneur à défilement de
+  // la fiche et il vit d'une ouverture à l'autre : sans remise à zéro, la
+  // fiche suivante s'ouvre là où la précédente avait été laissée, au milieu du
+  // calendrier ou au bas des notes.
+  // Sous estOuvertureFraiche, et seulement là : openDetail est rejouée à
+  // chaque re-render de la fiche DÉJÀ ouverte (enregistrement d'une note ou
+  // d'un RDV, resynchro agenda, reprise de focus). Remettre à zéro sans garde
+  // renverrait l'abonné en haut de la fiche au milieu de son travail.
+  // Posé après l'ouverture du panneau : le conteneur est déjà peint — il l'est
+  // en permanence, la fiche fermée n'étant que translatée hors champ — donc
+  // scrollTop y est réellement écrit.
+  if(estOuvertureFraiche) {
+    const corpsFiche = document.querySelector('#detail-panel .detail-body');
+    if(corpsFiche) corpsFiche.scrollTop = 0;
+  }
+
   if(estOuvertureFraiche) autoEnrichOnOpen(c); // restitution silencieuse (lecture seule), sans attendre
 }
 

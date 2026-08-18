@@ -256,6 +256,12 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .rdv-card .name{font-weight:600;font-size:12px;color:var(--text);margin-bottom:1px}
 .rdv-card .societe{font-size:10.5px;color:var(--muted)}
 .rdv-card .live-dot{position:absolute;top:11px;right:11px;width:6px;height:6px;border-radius:50%;background:#FF3B30;animation:pulse 1.4s infinite}
+/* Le geste se pose en bout de la ligne d'entête, après le badge — discret au
+   repos, franc au survol. Jamais masqué : une carte tactile n'a pas de survol,
+   un accès en opacité nulle y serait introuvable. */
+.rdv-card .rdv-edit{margin-left:6px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;border:none;background:transparent;border-radius:5px;color:var(--muted2);cursor:pointer;transition:background .12s,color .12s}
+.rdv-card .rdv-edit:hover{background:var(--surface2);color:var(--text)}
+.rdv-card .rdv-edit:focus-visible{outline:2px solid var(--visio);outline-offset:1px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .empty-list{padding:30px 16px;text-align:center;color:var(--muted2);font-size:11.5px;line-height:1.5}
 
@@ -544,6 +550,9 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .btn-primary{padding:9px 16px;background:var(--text);color:#fff;border-radius:9px;font-size:12px;font-weight:700}
 .btn-primary:disabled{background:var(--surface2);color:var(--muted2);cursor:not-allowed;pointer-events:none}
 .btn-primary:hover{background:#000}
+.btn-danger{padding:9px 14px;background:transparent;color:var(--red);border-radius:9px;font-size:12px;font-weight:600}
+.btn-danger:hover{background:rgba(163,45,45,.08)}
+.btn-danger:disabled{color:var(--muted2);cursor:not-allowed;pointer-events:none}
 .provider-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .provider-opt{padding:11px 8px;border:2px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;transition:all .12s}
 .provider-opt:hover{border-color:var(--border2)}
@@ -862,6 +871,31 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
   </div>
 </div>
 
+<!-- MODALE MODIFIER RDV
+     Quatre champs, et quatre seulement : ce que porte l'évènement d'agenda.
+     La fiche rattachée ne s'y change pas — elle déplacerait d'un coup le lien
+     de séance, le fournisseur, l'email, le téléphone, l'adresse et le briefing,
+     qui viennent tous de la carte Pipeline et non de l'évènement. -->
+<div class="overlay" id="editRdvModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Modifier le rendez-vous</h2>
+    <div class="sub" id="editRdvWho">—</div>
+    <div class="row-2">
+      <div class="field"><label>Date</label><input type="date" id="editRdvDate"></div>
+      <div class="field"><label>Heure</label><input type="time" id="editRdvTime"></div>
+    </div>
+    <div class="row-2">
+      <div class="field"><label>Durée</label><select id="editRdvDuration"></select></div>
+      <div class="field"><label>Sujet</label><input type="text" id="editRdvSubject" placeholder="ex : Présentation offre"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-danger" id="deleteRdvBtn" style="margin-right:auto">Annuler le RDV</button>
+      <button class="btn-secondary" data-close="editRdvModal">Fermer</button>
+      <button class="btn-primary" id="saveEditRdvBtn">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODALE INVITATION -->
 <div class="overlay" id="inviteModal">
   <div class="modal">
@@ -1039,6 +1073,14 @@ function normFicheId(id){
   return s || null;
 }
 
+// Même règle pour l'id d'un évènement : il se lit tantôt nu, tantôt préfixé
+// selon la porte qui l'a écrit, et les routes PUT/DELETE de l'agenda n'acceptent
+// que la forme nue. C'est la normalisation que l'Agenda applique déjà.
+function normAgendaId(id){
+  const s = String(id == null ? '' : id).replace(/^agenda:/, '');
+  return s || null;
+}
+
 const api = {
   // Pipeline / Agenda / Contacts (lecture seule, APIs déjà migrées)
   async getPipeline(){
@@ -1128,6 +1170,10 @@ async function bootstrapVisio(){
   _state.docOpens = Array.isArray(opens) ? opens : [];
 }
 const fmt2 = n => String(n).padStart(2,'0');
+// Les mois courts du fil d'activité. Une seule copie pour les trois écrivains
+// de la page — création, déplacement, annulation : trois libellés d'une même
+// date ne doivent pas pouvoir diverger.
+const MOIS_COURTS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
 const uid = () => Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
 const escapeHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtSize = b => b < 1024 ? b+'B' : b < 1048576 ? (b/1024).toFixed(0)+'Ko' : (b/1048576).toFixed(1)+'Mo';
@@ -1356,8 +1402,14 @@ async function collectVisioRdvs(){
     const fid = normFicheId(e.ficheId);
     const p = fid ? fichesById[fid] : null;
     const noms = _nomsRdv(e, p);
+    // L'id de l'enregistrement d'agenda, sous la forme nue qu'attendent les
+    // routes d'écriture, et null quand l'évènement n'en porte pas : `id`, plus
+    // bas, se replie alors sur une valeur fabriquée qui ne désigne aucun
+    // enregistrement. Les gestes de modification s'y refusent.
+    const idAgenda = normAgendaId(e.id);
     rdvs.push({
       id: e.id || 'a_' + uid(),
+      agendaId: idAgenda,
       prospectId: fid,
       prospectName: noms.titre,
       societe: noms.second,
@@ -1369,7 +1421,13 @@ async function collectVisioRdvs(){
       provider: (p && p.visio_provider) || detectProvider((p && p.visio_link) || ''),
       link: (p && p.visio_link) || '',
       status: (p && p.visio_status) || 'planned',
-      sujet: e.notes || (p && p.sujet) || ''
+      // `notes` est le champ unique du sujet d'un rendez-vous : c'est celui que
+      // l'Agenda saisit et affiche, et celui que la porte de création écrit
+      // désormais. `sujet` est l'ancienne forme, écrite un temps par cette page
+      // seule et lue par personne ; la lecture la tolère le temps qu'elle
+      // s'éteigne, comme la lecture serveur tolère les deux formes de ficheId.
+      // Rien n'est réécrit.
+      sujet: e.notes || e.sujet || (p && p.sujet) || ''
     });
   });
 
@@ -1464,6 +1522,9 @@ async function renderRdvList(){
             <span class="time">${time}</span>
             <span class="duration">· ${r.duree}min</span>
             <span class="badge-provider ${r.provider}">${PROVIDERS[r.provider]?.label || r.provider}</span>
+            ${r.agendaId ? `<button class="rdv-edit" data-edit-id="${r.id}" title="Modifier ce rendez-vous" aria-label="Modifier le rendez-vous de ${escapeHtml(r.prospectName)}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+            </button>` : ''}
           </div>
           <div class="name">${escapeHtml(r.prospectName)}</div>
           <div class="societe">${escapeHtml(r.societe || r.sujet || '')}</div>
@@ -1493,6 +1554,16 @@ async function renderRdvList(){
     });
   });
 
+  // Le geste de modification vit DANS la carte, dont le clic ouvre la séance et
+  // la fiche : sans stopPropagation, ouvrir le panneau démarrerait aussi le RDV.
+  list.querySelectorAll('[data-edit-id]').forEach(el=>{
+    el.addEventListener('click', e=>{
+      e.stopPropagation();
+      const rdv = rdvs.find(r => r.id === el.dataset.editId);
+      if(rdv) ouvrirModifRdv(rdv);
+    });
+  });
+
   // Mise à jour bandeau urgent
   updateUrgentBanner(rdvs, now);
 
@@ -1501,6 +1572,256 @@ async function renderRdvList(){
   // agenda pour relire, à la milliseconde près, ce qui vient d'être affiché.
   return rdvs;
 }
+
+/* ————————————————————————————————————————————————
+   MODIFIER / ANNULER UN RDV
+   ———————————————————————————————————————————————— */
+
+// Le rendez-vous ouvert dans le panneau. C'est la projection de la liste : elle
+// sert à nommer et à préremplir, jamais à composer ce qui part au serveur.
+let rdvEnEdition = null;
+
+const DUREES_RDV = [15, 30, 45, 60, 90];
+
+// La propagation acquise : l'Agenda émet ce signal après chaque écriture, et
+// cette page comme les autres onglets l'écoutent déjà sous LS.AGENDA. Ces deux
+// gestes-ci ne s'en dispensent pas.
+function signalerAgendaModifie(){
+  try { window.dispatchEvent(new StorageEvent('storage', { key: LS.AGENDA })); }
+  catch(e){ console.warn('[visio] signal agenda', e); }
+}
+
+// « 12 mars à 14:00 » — le format que la porte de création écrit déjà dans le fil.
+function libelleCreneau(d){
+  if(!(d instanceof Date) || isNaN(d.getTime())) return '';
+  return d.getDate() + ' ' + MOIS_COURTS[d.getMonth()] + ' à ' + fmt2(d.getHours()) + ':' + fmt2(d.getMinutes());
+}
+
+// Le créneau tel que l'évènement le porte : date YYYY-MM-DD + start HH:MM.
+function creneauEvt(dateStr, startStr){
+  return new Date(String(dateStr || '') + 'T' + (startStr || '00:00') + ':00');
+}
+
+// L'unique porte d'écriture de cette page sur la table agenda : la modification
+// l'appelle avec un patch, l'annulation avec null. Ni l'une ni l'autre ne touche
+// au balisage — elles passent un état, elles reçoivent un verdict.
+//
+// PUT /api/agenda/:id est un UPDATE … CONTENT, donc un REMPLACEMENT TOTAL. Le
+// corps part de l'enregistrement ENTIER relu par son id, jamais de l'objet rendu
+// par collectVisioRdvs : cette projection a perdu title, contact, end, notes,
+// type et createdAt, et sept de ses champs (email, tel, adresse, provider, link,
+// status, et le sujet en repli) appartiennent à la carte Pipeline, pas à
+// l'évènement. Les recopier dans agenda le contaminerait en silence.
+//
+// Rien n'est intercepté : chaque échec remonte tel quel à l'appelante, qui le
+// dit à l'écran et n'écrit rien dans le fil.
+async function ecrireGesteRdv(idRdv, patch){
+  const id = normAgendaId(idRdv);
+  if(!id) return { ok:false, message:'Rendez-vous introuvable' };
+
+  // Il n'existe pas de GET /api/agenda/:id : la relecture passe par la liste,
+  // filtrée sur l'id normalisé. Sans api.getAgenda(), qui rend un tableau vide
+  // à tout échec — ici un agenda illisible ne doit pas se dire « introuvable ».
+  let agenda;
+  try {
+    const r = await fetch('/api/agenda');
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    agenda = await r.json();
+  } catch(e){
+    console.warn('[visio] relecture agenda', e);
+    return { ok:false, message:"L'agenda n'a pas pu être relu. Réessayez." };
+  }
+  const evt = (Array.isArray(agenda) ? agenda : []).find(e => normAgendaId(e.id) === id);
+  if(!evt) return { ok:false, message:"Ce rendez-vous n'existe plus dans l'agenda." };
+
+  if(patch === null){
+    try {
+      const r = await fetch('/api/agenda/' + encodeURIComponent(id), { method:'DELETE' });
+      if(!r.ok) return { ok:false, message:'Le serveur a répondu ' + r.status + '. Réessayez.' };
+    } catch(e){
+      console.warn('[visio] DELETE agenda', e);
+      return { ok:false, message:"Le réseau n'a pas répondu. Réessayez." };
+    }
+    signalerAgendaModifie();
+    return { ok:true, avant: evt };
+  }
+
+  // ficheId part EXPLICITEMENT, sous sa forme nue : sans lui, CONTENT l'efface
+  // et le rendez-vous sort de la fiche Pipeline, de la Carte et de « prochaine
+  // action » de Contacts. createdAt, link, provider, societe, email et status
+  // passent à l'identique, portés par l'enregistrement relu.
+  const corps = Object.assign({}, evt, patch, { ficheId: normFicheId(evt.ficheId) });
+  delete corps.id;
+  // `sujet` ne survit pas au remplacement. La lecture est `e.notes || e.sujet` :
+  // sur un évènement créé avant ce lot, vider le sujet écrirait notes:'' — une
+  // valeur fausse — et le repli ferait réapparaître l'ancien sujet, effacé puis
+  // enregistré, sans explication. Rien n'est réécrit à la lecture, mais un
+  // enregistrement qu'on remplace en entier, on le laisse propre : le repli ne
+  // sert plus qu'aux évènements jamais modifiés.
+  delete corps.sujet;
+  try {
+    const r = await fetch('/api/agenda/' + encodeURIComponent(id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps)
+    });
+    if(!r.ok) return { ok:false, message:'Le serveur a répondu ' + r.status + '. Réessayez.' };
+  } catch(e){
+    console.warn('[visio] PUT agenda', e);
+    return { ok:false, message:"Le réseau n'a pas répondu. Réessayez." };
+  }
+  signalerAgendaModifie();
+  return { ok:true, avant: evt };
+}
+
+// Le fil est un journal en ajout seul : l'entrée d'origine n'est jamais corrigée
+// ni supprimée, chaque geste y ajoute sa ligne. Ancrage identique à celui de la
+// création — fiche nue, type visio. Sans fiche il n'y a rien à ancrer.
+async function ecrireFilRdv(ficheId, texte){
+  const ancrage = normFicheId(ficheId);
+  if(!ancrage || !window.MUPFil) return;
+  await MUPFil.ecrire({ ancrage, type: 'visio', texte });
+}
+
+// La seule garde. L'évènement de la séance en cours porte un minuteur qui tourne
+// et un brouillon qui s'écrit dessous : c'est le seul geste qui casse quelque
+// chose d'observable, il se nomme avant de s'appliquer. Aucune autre
+// interdiction — pas de minimum sur la date, le produit cache le passé sans le
+// protéger, et pas de contrôle de créneau, qui n'existe que sur le glisser-
+// déposer de l'Agenda.
+function estSeanceEnCours(rdv){
+  return !!(activeRdv && rdv && activeRdv.id === rdv.id);
+}
+
+function ouvrirModifRdv(rdv){
+  if(!rdv || !rdv.agendaId) return;
+  rdvEnEdition = rdv;
+  const d = new Date(rdv.date);
+  $('editRdvWho').textContent = rdv.prospectName + (rdv.societe ? ' — ' + rdv.societe : '')
+    + (estSeanceEnCours(rdv) ? ' · séance en cours' : '');
+  $('editRdvDate').value = d.getFullYear() + '-' + fmt2(d.getMonth()+1) + '-' + fmt2(d.getDate());
+  $('editRdvTime').value = fmt2(d.getHours()) + ':' + fmt2(d.getMinutes());
+  // L'Agenda écrit d'autres durées que les cinq d'ici. Celle qui est relue entre
+  // dans la liste plutôt que d'être remplacée en silence à l'ouverture.
+  const durees = DUREES_RDV.includes(rdv.duree) ? DUREES_RDV.slice() : DUREES_RDV.concat([rdv.duree]).sort((a,b)=>a-b);
+  $('editRdvDuration').innerHTML = durees.map(m =>
+    `<option value="${m}"${m === rdv.duree ? ' selected' : ''}>${m} min</option>`).join('');
+  $('editRdvSubject').value = rdv.sujet || '';
+  $('editRdvModal').classList.add('show');
+}
+
+// La liste et ce qui en dérive — compteur du jour, « Prochain RDV », bandeau T-5
+// — sont tous rendus par renderRdvList. Le briefing, lui, tient de l'objet actif :
+// il se recompose sur la valeur qui vient d'être écrite. Pas de rechargement.
+async function rafraichirApresGeste(rdv, patch){
+  if(estSeanceEnCours(rdv)){
+    if(patch){
+      activeRdv = Object.assign({}, activeRdv, {
+        date: creneauEvt(patch.date, patch.start).toISOString(),
+        duree: patch.duree,
+        sujet: patch.notes
+      });
+      renderBriefing(activeRdv);
+    } else {
+      // La séance annulée ne peut pas rester ouverte. Le minuteur s'arrête et la
+      // page revient à son état vide — rien n'est journalisé, ce rendez-vous n'a
+      // pas eu lieu, il n'est pas « terminé ».
+      clearInterval(timerInterval);
+      activeRdv = null;
+      $('emptyState').style.display = 'flex';
+      $('visioActive').style.display = 'none';
+      renderDocsList();
+    }
+  }
+  await renderRdvList();
+}
+
+$('saveEditRdvBtn').addEventListener('click', async ()=>{
+  const rdv = rdvEnEdition;
+  if(!rdv || !rdv.agendaId) return;
+  const date = $('editRdvDate').value;
+  const time = $('editRdvTime').value;
+  if(!date || !time){ showToast('Date et heure requises'); return; }
+  const dStart = creneauEvt(date, time);
+  if(isNaN(dStart.getTime())){ showToast('Date ou heure invalide'); return; }
+  const duree = parseInt($('editRdvDuration').value, 10) || 30;
+
+  // end ET duree ensemble : _dureeRdv dérive end - start en priorité, une durée
+  // écrite seule serait contredite au premier rendu.
+  const dEnd = new Date(dStart.getTime() + duree * 60000);
+  const patch = {
+    date,
+    start: time,
+    end: fmt2(dEnd.getHours()) + ':' + fmt2(dEnd.getMinutes()),
+    duree,
+    notes: $('editRdvSubject').value.trim()
+  };
+
+  const btn = $('saveEditRdvBtn');
+  btn.disabled = true;                          // la fenêtre ne bloque plus le fil
+  if(estSeanceEnCours(rdv)){
+    const ok = await mupConfirm(
+      'Modifier la séance en cours ?',
+      `${rdv.prospectName} — ${libelleCreneau(new Date(rdv.date))} est la séance ouverte en ce moment. Son minuteur continue de tourner et vos notes restent en place.`,
+      'Modifier', 'Renoncer');
+    if(!ok){ btn.disabled = false; return; }
+  }
+
+  // L'agenda d'abord, le fil ensuite. Si le PUT échoue, rien n'est écrit dans
+  // le fil et l'échec est dit à l'écran.
+  const res = await ecrireGesteRdv(rdv.agendaId, patch);
+  btn.disabled = false;
+  if(!res.ok){ mupAlert('Modification impossible', res.message, 'Fermer'); return; }
+
+  // La ligne dit ce qui s'est réellement passé : « déplacé » quand le créneau a
+  // bougé, « modifié » sinon. Un journal en ajout seul n'a pas de repentir : une
+  // ligne fausse y reste pour toujours.
+  const deplace = res.avant.date !== patch.date || String(res.avant.start || '') !== patch.start;
+  await ecrireFilRdv(res.avant.ficheId, deplace
+    ? 'RDV déplacé au ' + libelleCreneau(dStart)
+    : 'RDV du ' + libelleCreneau(dStart) + ' modifié');
+
+  $('editRdvModal').classList.remove('show');
+  rdvEnEdition = null;
+  showToast(deplace ? 'RDV déplacé' : 'RDV modifié');
+  await rafraichirApresGeste(rdv, patch);
+});
+
+$('deleteRdvBtn').addEventListener('click', async ()=>{
+  const rdv = rdvEnEdition;
+  if(!rdv || !rdv.agendaId) return;
+  const btn = $('deleteRdvBtn');
+  btn.disabled = true;
+  const creneau = libelleCreneau(new Date(rdv.date));
+  const ok = estSeanceEnCours(rdv)
+    ? await mupConfirm('Annuler la séance en cours ?',
+        `${rdv.prospectName} — ${creneau} est la séance ouverte en ce moment. Son minuteur s'arrête et le rendez-vous disparaît de l'agenda.`,
+        'Annuler le RDV', 'Renoncer')
+    : await mupConfirm('Annuler ce rendez-vous ?',
+        `${rdv.prospectName} — ${creneau}. L'évènement est retiré de l'agenda.`,
+        'Annuler le RDV', 'Renoncer');
+  if(!ok){ btn.disabled = false; return; }
+
+  const res = await ecrireGesteRdv(rdv.agendaId, null);
+  btn.disabled = false;
+  if(!res.ok){ mupAlert('Annulation impossible', res.message, 'Fermer'); return; }
+
+  await ecrireFilRdv(res.avant.ficheId,
+    'RDV du ' + libelleCreneau(creneauEvt(res.avant.date, res.avant.start)) + ' annulé');
+
+  // Le brouillon de notes a pour clé l'id du rendez-vous : l'évènement supprimé,
+  // aucune page ne peut plus l'atteindre. Ce n'est pas la cascade générale des
+  // orphelins — les visio_log sont l'historique et restent — c'est le seul cas
+  // où notre propre geste rend une donnée inaccessible. La route rend ok même
+  // sans brouillon, et api.deleteDraft n'élève rien : une annulation réussie ne
+  // peut pas échouer ici.
+  await api.deleteDraft(rdv.id);
+
+  $('editRdvModal').classList.remove('show');
+  rdvEnEdition = null;
+  showToast('RDV annulé');
+  await rafraichirApresGeste(rdv, null);
+});
 
 /* ————————————————————————————————————————————————
    BANDEAU T-5
@@ -2470,7 +2791,12 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
     ficheId: normFicheId(prospectId),
     email: $('prospectEmail').value,
     date: dateStr, start: startStr, end: endStr, duree,
-    provider, link, sujet: $('rdvSubject').value,
+    // Le sujet s'écrit dans `notes`, champ unique du sujet d'un rendez-vous :
+    // c'est celui que l'Agenda saisit et affiche, et celui que la liste d'ici
+    // relit. Écrit dans `sujet`, il n'était lu par personne — un sujet saisi à
+    // la création restait invisible alors qu'un sujet saisi à la modification
+    // s'affichait, deux comportements pour un même champ dans un même écran.
+    provider, link, notes: $('rdvSubject').value,
     status: 'planned', createdAt: new Date().toISOString()
   };
   try {
@@ -2481,11 +2807,10 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
   // choisie : elle se lira sur la fiche Pipeline comme sur la fiche contact.
   // Sans prospect sélectionné il n'y a rien à ancrer.
   if(prospectId && window.MUPFil){
-    const mois = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
     await MUPFil.ecrire({
       ancrage: prospectId,
       type: 'visio',
-      texte: 'Visio planifiée le ' + dStart.getDate() + ' ' + mois[dStart.getMonth()] + ' à ' + startStr
+      texte: 'Visio planifiée le ' + dStart.getDate() + ' ' + MOIS_COURTS[dStart.getMonth()] + ' à ' + startStr
     });
   }
 

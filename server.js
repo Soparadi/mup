@@ -5990,6 +5990,20 @@ async function _generateSequenceUnsafe(db, userId, type) {
   return { numero: `${prefix}-${year}-${padded}`, seq: nextSeq, year }
 }
 
+// Arrondi comptable à deux décimales, même règle que les pages : chaque ligne
+// d'abord, puis le total. N'arrondir que le total laisserait les décimales
+// tronquées des lignes s'additionner et diverger d'un centime de la somme des
+// lignes imprimées sur le document.
+function round2(n) {
+  const v = Number.parseFloat(n)
+  return Number.isFinite(v) ? Math.round((v + Number.EPSILON) * 100) / 100 : 0
+}
+
+function numOrZero(v) {
+  const n = Number.parseFloat(v)
+  return Number.isFinite(n) ? n : 0
+}
+
 // ── DEVIS ──
 app.get('/api/devis', async (req, res) => {
   const userId = requireUserId(req, res)
@@ -6195,12 +6209,37 @@ app.post('/api/factures/from-devis/:devisId', async (req, res) => {
   if (!userId) return
   try {
     const db = await getDb()
-    const { devisId } = req.params
+    // La page renvoie l'id tel que l'API le lui a servi ('devis:xxx') : même
+    // normalisation que les autres routes devis, sans quoi type::record() ne
+    // trouve rien et la conversion tombe en 404 quel que soit l'état du devis.
+    const devisId = cleanRecordId('devis', req.params.devisId) || req.params.devisId
     const dResult = await db.query('SELECT * FROM type::record("devis", $id)', { id: devisId })
     const devis = dResult[0]?.[0]
     if (!devis || devis.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
     if (devis.statut && devis.statut !== 'accepte' && devis.status !== 'accepted') {
       return res.status(412).json({ error: 'Le devis doit être accepté avant conversion' })
+    }
+    // Idempotence : un devis ne produit qu'une facture, et la garde est ici.
+    // Le contrôle de la page ne tient pas contre un double-clic, un onglet resté
+    // ouvert sur un devis déjà converti, ou un appel direct de l'API.
+    if (devis.facture_id) {
+      return res.status(409).json({ error: 'Devis déjà converti en facture', facture: devis.facture_id })
+    }
+
+    // Réservation atomique AVANT la génération du numéro : un UPDATE ... WHERE
+    // qui ne matche pas retourne [], donc le second appel concurrent repart en
+    // 409 sans avoir consommé un numéro de séquence pour une facture qui ne
+    // naîtra pas. Les trois formes de vide sont testées : un devis écrit par la
+    // page peut porter un champ absent (NONE), null, ou la chaîne vide.
+    const claimNow = new Date().toISOString()
+    const claim = await db.query(
+      `UPDATE type::record("devis", $id) SET conversion_at = $now
+       WHERE (conversion_at = NONE OR conversion_at = NULL OR conversion_at = '')
+         AND (facture_id = NONE OR facture_id = NULL OR facture_id = '')`,
+      { id: devisId, now: claimNow }
+    )
+    if (!claim[0]?.[0]) {
+      return res.status(409).json({ error: 'Conversion déjà en cours ou déjà effectuée' })
     }
 
     // Génère le numéro de facture séquentiel
@@ -6210,11 +6249,55 @@ app.post('/api/factures/from-devis/:devisId', async (req, res) => {
     // émis sous un régime (son taux `tva`), la facture le fige à l'identique.
     const tauxDevis = Number(devis.tva) || 0
     const tvaApplicable = tauxDevis > 0
+
+    // La facture doit porter les champs que factures.html lit. Sans client{},
+    // lignes[] et les trois totaux, elle s'affiche à 0 € dans la liste et tombe
+    // dans le prédicat « facture fantôme » qui arme le bouton « Vider la base de
+    // test ». Lecture tolérante des deux formes du devis : la forme plate
+    // historique (name/co/addr/lines[desc,qty,pu]) et la forme unifiée.
+    const lignesSrc = Array.isArray(devis.lignes) && devis.lignes.length
+      ? devis.lignes
+      : (Array.isArray(devis.lines) ? devis.lines : [])
+    const lignes = lignesSrc.map(l => {
+      const quantite = numOrZero(l.quantite ?? l.qty)
+      const prixUnitaire = numOrZero(l.prix_unitaire ?? l.pu)
+      const ligne = {
+        designation: String(l.designation ?? l.desc ?? ''),
+        quantite,
+        prix_unitaire: prixUnitaire,
+        total: round2(quantite * prixUnitaire)
+      }
+      if (l.unite) ligne.unite = l.unite
+      if (l.date) ligne.date = l.date
+      return ligne
+    })
+    const totalHt = round2(lignes.reduce((s, l) => s + l.total, 0))
+    const montantTva = round2(totalHt * tauxDevis / 100)
+    const totalTtc = round2(totalHt + montantTva)
+
+    const clientSrc = devis.client || {}
+    const siret = String(clientSrc.siret || devis.client_siret || devis.siret || '').replace(/\D/g, '')
+    const client = {
+      nom: clientSrc.nom || devis.co || devis.name || '',
+      adresse: clientSrc.adresse || devis.addr || '',
+      siret,
+      // Le SIREN est les neuf premiers chiffres du SIRET : une identité, pas une
+      // inférence. Rien n'est composé si le SIRET n'a pas ses quatorze chiffres.
+      siren: clientSrc.siren || (siret.length === 14 ? siret.slice(0, 9) : ''),
+      email: clientSrc.email || devis.email || ''
+    }
+
     const facturePayload = {
       ...devis,
       userId,
       id: undefined,
+      type: 'facture',
       numero, numero_seq: seq, numero_year: year,
+      client,
+      lignes,
+      total_ht: totalHt,
+      montant_tva: montantTva,
+      total_ttc: totalTtc,
       tva_applicable: tvaApplicable,
       taux_tva: tauxDevis,
       mention_tva: tvaApplicable ? '' : 'TVA non applicable, art. 293 B du CGI',
@@ -6226,13 +6309,28 @@ app.post('/api/factures/from-devis/:devisId', async (req, res) => {
       updated_at: now
     }
     delete facturePayload.id
-    const result = await db.query('CREATE facture CONTENT $body', { body: facturePayload })
-    const created = result[0]?.[0] || result[0] || null
+    // Champs du devis qui mentiraient sur la facture : `num` doublerait `numero`
+    // avec le numéro du DEVIS, `status` doublerait `statut` avec 'accepted',
+    // `conversion_at` n'a de sens que sur le devis réservé.
+    delete facturePayload.num
+    delete facturePayload.status
+    delete facturePayload.conversion_at
+
+    let created = null
+    try {
+      const result = await db.query('CREATE facture CONTENT $body', { body: facturePayload })
+      created = result[0]?.[0] || result[0] || null
+    } catch (createErr) {
+      // Réservation relâchée : sans cela le devis resterait converti à vide et
+      // aucune reprise ne serait possible.
+      await db.query('UPDATE type::record("devis", $id) SET conversion_at = NONE', { id: devisId })
+        .catch(() => {})
+      throw createErr
+    }
 
     // Marque le devis transformé
-    const devisIdRaw = String(devis.id).replace(/^devis:/, '')
     await db.query('UPDATE type::record("devis", $id) SET statut = "accepte", facture_id = $fid, updated_at = $now',
-      { id: devisIdRaw, fid: created?.numero || numero, now })
+      { id: devisId, fid: created?.numero || numero, now })
 
     res.status(201).json(created)
   } catch (err) {

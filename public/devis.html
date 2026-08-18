@@ -400,6 +400,15 @@ function statusLabel(s) {
   return map[s] || s;
 }
 
+// Un 0 saisi est une donnée, pas une absence. `||` prenait le repli sur 0 et
+// écrivait en base un taux ou une quantité que l'abonné n'a jamais choisis :
+// une franchise de TVA repartait à 20 %, une ligne à 0 unité repartait à 1.
+// Seule une valeur non numérique (champ vide, élément absent) prend le repli.
+function numOr(v, fallback){
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 // Arrondi comptable à deux décimales. Chaque ligne d'abord, puis le total :
 // n'arrondir que le total laisserait les décimales tronquées des lignes
 // s'additionner et diverger d'un centime de la somme des lignes affichées.
@@ -512,8 +521,8 @@ function addLine(desc='', qty=1, pu='') {
   div.id = 'line-'+id;
   div.innerHTML = `
     <input type="text" placeholder="Description" value="${esc(desc)}" oninput="liveUpdate()">
-    <input type="number" placeholder="1" value="${qty||1}" min="0" oninput="liveUpdate()" style="text-align:center">
-    <input type="number" placeholder="0" value="${pu||''}" min="0" step="0.01" oninput="liveUpdate()" style="text-align:right">
+    <input type="number" placeholder="1" value="${numOr(qty, 1)}" min="0" oninput="liveUpdate()" style="text-align:center">
+    <input type="number" placeholder="0" value="${numOr(pu, '')}" min="0" step="0.01" oninput="liveUpdate()" style="text-align:right">
     <button class="line-del" onclick="removeLine(${id})">×</button>
   `;
   document.getElementById('lines-container').appendChild(div);
@@ -531,7 +540,7 @@ function getLines() {
   const lines = [];
   document.querySelectorAll('#lines-container .line-item').forEach(el => {
     const inputs = el.querySelectorAll('input');
-    lines.push({ desc:inputs[0].value, qty:parseFloat(inputs[1].value)||1, pu:parseFloat(inputs[2].value)||0 });
+    lines.push({ desc:inputs[0].value, qty:numOr(inputs[1].value, 1), pu:numOr(inputs[2].value, 0) });
   });
   return lines;
 }
@@ -631,7 +640,10 @@ function liveUpdate() {
   d.addr = document.getElementById('e-addr').value;
   d.date = document.getElementById('e-date').value;
   d.validity = parseInt(document.getElementById('e-validity').value)||30;
-  d.tva = parseFloat(document.getElementById('e-tva').value)||20;
+  // Le select porte toujours une valeur, 0 compris : un 0 est le choix de la
+  // franchise, pas une absence de saisie. Repli sur le régime du compte, jamais
+  // sur un 20 en dur qui contredirait le défaut lu plus haut.
+  d.tva = numOr(document.getElementById('e-tva').value, accountDefaultTva);
   d.status = document.getElementById('e-status').value;
   d.notes = document.getElementById('e-notes').value;
   d.lines = getLines();
@@ -732,9 +744,14 @@ function showToast(msg) {
   renderList();
   // Sélectionner le premier par défaut
   if(docs.length) selectDoc(docs[0].id);
-  else { document.getElementById('e-tva').value = accountDefaultTva; updateTotals(); }
-  // Date par défaut
-  document.getElementById('e-date').value = new Date().toISOString().split('T')[0];
+  else {
+    document.getElementById('e-tva').value = accountDefaultTva;
+    // Date du jour SEULEMENT quand aucun devis n'est chargé. Posée après
+    // selectDoc, elle écrasait dans l'éditeur la date du devis sélectionné :
+    // la première saisie suivante réenregistrait le devis à la date du jour.
+    document.getElementById('e-date').value = new Date().toISOString().split('T')[0];
+    updateTotals();
+  }
 })();
 </script>
 <script src="/sidebar.js"></script>

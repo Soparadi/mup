@@ -229,6 +229,15 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .info-item.editable .info-item-val{display:flex;align-items:center;gap:6px;justify-content:space-between}
 .info-item-placeholder{color:var(--muted2);font-weight:400}
 .info-item-edit-ico{color:var(--muted2);flex-shrink:0}
+/* Case pleine largeur dans la grille à deux colonnes — Notes société. */
+.info-item--large{grid-column:1/-1}
+/* Notes société, et elle seule : le texte y est libre, sur plusieurs lignes.
+   pre-wrap garde les retours à la ligne saisis, break-word remplace le
+   break-all de .info-item-val qui couperait au milieu des mots. */
+#d-notes-societe-cell .info-item-val{white-space:pre-wrap;word-break:break-word}
+/* Sans quoi le space-between de .info-item.editable centrerait verticalement le
+   crayon d'invite sur toute la hauteur de la case. */
+#d-notes-societe-cell.editable .info-item-val{align-items:flex-start}
 .info-item a{color:var(--blue);text-decoration:none}
 /* Toast — porté à l'identique de contact-societe.html (notification enrich / opt-out) */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;font-weight:600;z-index:300;transition:transform .25s cubic-bezier(.34,1.56,.64,1);box-shadow:0 4px 16px rgba(0,0,0,.18);display:flex;align-items:center;gap:8px}
@@ -1318,6 +1327,129 @@ function startEditVal(){
   });
 }
 
+// ── LES CINQ CHAMPS DE LA CARTE QUI S'ÉDITENT DANS LA FICHE ──
+// Raison sociale, secteur, adresse, code postal et notes société ne se
+// modifiaient que par la fenêtre à seize champs, ouverte depuis le crayon de la
+// carte du Kanban. Ce crayon est parti : la fiche est désormais le seul chemin
+// d'édition du Pipeline, et ces cinq cases s'y éditent en ligne.
+// Éditeur GÉNÉRIQUE, partagé par les cinq, parce qu'ils n'ont ni la conversion
+// numérique de « Valeur estimée » (startEditVal) ni la frontière entre valeur
+// possédée et valeur restituée des coordonnées société (startEditSociete) :
+// aucun enrichissement ne les peint, leur graine vient donc de la CARTE et
+// d'elle seule. Ces deux voisins ne sont PAS absorbés ici — les paramètres
+// qu'il faudrait leur ajouter ne serviraient chacun qu'à un seul appelant.
+//
+// Le descripteur :
+//   cell       id de la case, unique dans la fiche
+//   libelle    en-tête de la case
+//   prop       champ de la carte : graine de l'éditeur ET cible de l'écriture
+//   mode       inputmode de la case d'une seule ligne
+//   attente    gris d'invite quand le champ est vide
+//   multiligne <textarea> plutôt qu'<input> ; Entrée y insère un saut de ligne
+//   large      case pleine largeur, posée en QUEUE de grille, après #d-societe-grid
+//   apres      appelé après l'écriture du champ et AVANT save() : ce qu'il
+//              touche part donc dans le même PUT
+const ICO_CRAYON = '<svg class="info-item-edit-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+const CHAMPS_CARTE = [
+  // `co` et `company` s'écrivent ENSEMBLE, jamais l'un sans l'autre :
+  // migrateCard réimpose `c.co = c.company` à chaque load() et save() PUT
+  // l'objet entier — `co` seul serait perdu au premier rechargement. La
+  // comparaison de la garde, elle, porte sur `co`, la valeur affichée.
+  { cell:'d-raison-cell', libelle:'Raison sociale', prop:'co', mode:'text', attente:'Raison sociale',
+    apres: function(c, v){ c.company = v; renderKanban(); repeindreBandeauFiche(c); } },
+  { cell:'d-sector-cell', libelle:'Secteur', prop:'sector', mode:'text', attente:"Secteur d'activité",
+    apres: function(c){ renderKanban(); repeindreBandeauFiche(c); } },
+  // Adresse corrigée → coordonnées effacées. La branche « a » du bloc carte fait
+  // primer c.lat/c.lng, écrites par la Carte, sur l'adresse : sans cet
+  // effacement une adresse rectifiée garderait le marqueur de l'ancienne À VIE,
+  // et pas seulement jusqu'à la réouverture de la fiche. Aucun regéocodage
+  // immédiat ici : la prochaine ouverture repasse par la branche « c ».
+  { cell:'d-address-cell', libelle:'Adresse', prop:'address', mode:'text', attente:'Adresse',
+    apres: function(c){ c.lat = null; c.lng = null; } },
+  { cell:'d-zip-cell', libelle:'Code postal', prop:'zip', mode:'numeric', attente:'Code postal' },
+  // « Notes société », jamais « Notes » tout court : #d-notes-input — le fil de
+  // la table `activites` — est un homonyme disjoint dans la même fiche.
+  { cell:'d-notes-societe-cell', libelle:'Notes société', prop:'notes', attente:'Notes société',
+    multiligne:true, large:true }
+];
+
+// Le contenu d'une case, décrit à UN SEUL endroit : openDetail le pose, la
+// repeinte du commit le repose. Seul l'INTÉRIEUR est réécrit — l'écouteur de
+// clic vit sur la case elle-même et survit donc à la repeinte, qui n'a ainsi
+// aucune raison de rejouer openDetail en entier.
+function caseCarteInner(ch, c){
+  const v = String(c[ch.prop] || '').trim();
+  const val = v
+    ? `<span>${esc(v)}</span>`
+    : `<span class="info-item-placeholder">${esc(ch.attente)}</span>${ICO_CRAYON}`;
+  return `<div class="info-item-label">${esc(ch.libelle)}</div><div class="info-item-val">${val}</div>`;
+}
+function caseCarteHtml(ch, c){
+  return `<div class="info-item editable${ch.large ? ' info-item--large' : ''}" id="${ch.cell}" title="Cliquer pour éditer">${caseCarteInner(ch, c)}</div>`;
+}
+
+function startEditCarte(ch){
+  if(!currentId) return;
+  const cell = document.getElementById(ch.cell);
+  if(!cell) return;
+  const valBox = cell.querySelector('.info-item-val');
+  if(!valBox) return;
+  const c = cards.find(x => String(x.id) === String(currentId));
+  if(!c) return;
+  if(document.getElementById('d-carte-input')) return; // une seule case en édition à la fois
+  const original = String(c[ch.prop] || '');
+  const style = 'width:100%;border:1px solid var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-weight:600;color:var(--text);outline:none;box-sizing:border-box;background:#fff;';
+  valBox.innerHTML = ch.multiligne
+    ? '<textarea id="d-carte-input" rows="4" autocomplete="off" spellcheck="false" placeholder="' + esc(ch.attente) + '" style="' + style + 'font-family:inherit;line-height:1.45;resize:vertical;"></textarea>'
+    : '<input id="d-carte-input" type="text" inputmode="' + ch.mode + '" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="' + esc(ch.attente) + '" style="' + style + '">';
+  const input = document.getElementById('d-carte-input');
+  input.value = original; // par la propriété, jamais par l'attribut : esc() ne protège pas les guillemets
+  input.focus();
+  input.select();
+  let cancelled = false;
+  function repeindre(){ cell.innerHTML = caseCarteInner(ch, c); }
+  function commit(){
+    const v = input.value.trim();
+    // Rien n'a bougé → aucune écriture. Ici la garde ne tient PAS la frontière
+    // entre valeur possédée et valeur restituée des cases société : ces cinq
+    // champs sont possédés par la carte, personne d'autre ne les peint. Elle
+    // épargne le réseau — save() boucle sur TOUTES les cartes et émet un PUT
+    // par carte, un commit à vide coûterait donc N requêtes pour rien.
+    if(v === original){ repeindre(); return; }
+    c[ch.prop] = v;
+    if(ch.apres) ch.apres(c, v);
+    save(); // même chemin que les autres champs de la fiche (PUT /api/pipeline/:id)
+    repeindre();
+  }
+  function cancel(){ cancelled = true; repeindre(); }
+  input.addEventListener('blur', function(){ if(!cancelled) commit(); });
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){ e.preventDefault(); cancel(); return; }
+    if(e.key !== 'Enter') return;
+    // Case d'une seule ligne : Entrée valide. Case multiligne : Entrée écrit un
+    // saut de ligne, et c'est Cmd/Ctrl+Entrée qui valide.
+    if(ch.multiligne && !(e.metaKey || e.ctrlKey)) return;
+    e.preventDefault();
+    input.blur();
+  });
+}
+
+// Bandeau noir de la fiche, repeint seul après édition de la raison sociale ou
+// du secteur — les deux seuls des cinq champs qu'il affiche. Le bandeau reste en
+// LECTURE : MUPNom.compose y met `enseigne` dès qu'elle existe, une saisie prise
+// depuis le titre écrirait donc un autre champ que celui qu'on croit éditer.
+function repeindreBandeauFiche(c){
+  const n = window.MUPNom
+    ? window.MUPNom.compose({ enseigne: c.enseigne, nomJuridique: c.co || c.name })
+    : { titre: c.co || c.name || '', sousTitre: c.co ? c.name : '' };
+  const cat = document.getElementById('d-focus-cat');
+  const nom = document.getElementById('d-focus-name');
+  const sub = document.getElementById('d-focus-sub');
+  if(cat) cat.textContent = c.sector || c.naf_label || c.naf || '—';
+  if(nom) nom.textContent = n.titre || '—';
+  if(sub) sub.textContent = n.sousTitre;
+}
+
 function totalInProgress() {
   const active = ['prospects','linkedin','mailing','phoning','visio','rdv','devis','nego'];
   const t = cards.filter(c=>active.includes(c.col)).reduce((s,c)=>s+(c.val||0),0);
@@ -1729,17 +1861,21 @@ async function openDetail(id) {
   document.getElementById('d-focus-pills').innerHTML = _joursD === null ? '' : `<span class="pill pill-day">J+${_joursD}</span>`;
 
   // Info grid
-  let infoHtml = '';
+  // Les cinq cases éditables de la carte ouvrent la grille — sauf celle qui
+  // porte `large`, pleine largeur, qui la ferme après #d-societe-grid. Elles
+  // sont TOUJOURS présentes, même vides : une case vide montre son libellé, son
+  // gris d'attente et son crayon d'invite, ce qui est justement ce qui appelle
+  // au clic. Le code postal cesse ainsi d'être conditionnel — il se taisait
+  // jadis quand c.address le contenait en toutes lettres, pour ne pas doubler
+  // une case Localisation depuis partie ; la règle le faisait disparaître de la
+  // fiche entière dès que le géocodage échouait, seul autre porteur.
+  let infoHtml = '', queueHtml = '';
+  CHAMPS_CARTE.forEach(function(ch){
+    if(ch.large) queueHtml += caseCarteHtml(ch, c);
+    else infoHtml += caseCarteHtml(ch, c);
+  });
   if(c.email) infoHtml += `<div class="info-item"><div class="info-item-label">Email</div><div class="info-item-val"><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div></div>`;
   if(c.tel) infoHtml += `<div class="info-item"><div class="info-item-label">Téléphone</div><div class="info-item-val"><a href="tel:${window.MUPTel.lien(c.tel)}">${esc(window.MUPTel.format(c.tel))}</a></div></div>`;
-  // Code postal : sans condition dès qu'il est enregistré. Il se taisait jadis
-  // quand c.address le contenait déjà en toutes lettres, pour ne pas doubler la
-  // case Localisation posée juste à côté ; cette case est partie et le seul
-  // porteur restant de l'adresse est la bulle du marqueur, qui n'existe que si
-  // le géocodage aboutit. La règle faisait donc disparaître le code postal de
-  // la fiche entière dès que la carte échouait.
-  const zipTxt = String(c.zip||'').trim();
-  if(zipTxt) infoHtml += caseInfo('Code postal', zipTxt);
   // Identité juridique : enregistrée par la fenêtre « Modifier », relue ici en
   // lecture seule. SIRET groupé comme sur la fiche société.
   infoHtml += caseInfo('Forme juridique', c.forme);
@@ -1750,16 +1886,24 @@ async function openDetail(id) {
     ? `<strong>${esc(fmtVal(c.val))}</strong>`
     : `<span class="info-item-placeholder">Cliquer pour ajouter</span>${editIco}`;
   infoHtml += `<div class="info-item editable" id="d-val-cell" title="Cliquer pour éditer"><div class="info-item-label">Valeur estimée</div><div class="info-item-val">${valDisplay}</div></div>`;
-  if(!infoHtml) infoHtml = '<div style="font-size:12px;color:var(--muted2);font-style:italic">Aucune info</div>';
-  // Emplacement des coordonnées société, posé en DERNIER enfant : leurs trois
-  // cases suivent donc celles ci-dessus dans leur ordre, Site web tombant à côté
-  // de Valeur estimée. display:contents → le conteneur ne compte pas comme item,
-  // ses enfants sont directement ceux de la grille. Il est ré-écrit seul par
+  // Emplacement des coordonnées société, posé en AVANT-DERNIER enfant : leurs
+  // trois cases suivent donc celles ci-dessus dans leur ordre, Site web tombant
+  // à côté de Valeur estimée, et seule la case pleine largeur des notes société
+  // les suit. display:contents → le conteneur ne compte pas comme item, ses
+  // enfants sont directement ceux de la grille. Il est ré-écrit seul par
   // peindreGrilleSociete, y compris longtemps après ce rendu.
   document.getElementById('d-info-grid').innerHTML =
-    infoHtml + '<div id="d-societe-grid" style="display:contents"></div>';
+    infoHtml + '<div id="d-societe-grid" style="display:contents"></div>' + queueHtml;
   const valCell = document.getElementById('d-val-cell');
   if(valCell) valCell.addEventListener('click', startEditVal);
+  // Écouteurs des cinq cases éditables de la carte : ici, au même endroit que
+  // celui de #d-val-cell et pour la même raison — #d-info-grid n'a que cet
+  // auteur, et peindreGrilleSociete ne réécrit que #d-societe-grid, donc rien
+  // ne viendra plus tard emporter ces écouteurs.
+  CHAMPS_CARTE.forEach(function(ch){
+    const cell = document.getElementById(ch.cell);
+    if(cell) cell.addEventListener('click', function(){ startEditCarte(ch); });
+  });
 
   // Coordonnées société — jeu de champs DISTINCT du contact (website /
   // societe_email / societe_tel). TOUJOURS affichées : trois cases vides sont le

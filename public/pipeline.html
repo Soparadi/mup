@@ -1157,25 +1157,120 @@ function caseInfo(label, valeur){
 // réseaux sociaux, alors que l'email et le téléphone société restent derrière
 // enrichedSirets. L'adresse reste lisible même sans schéma ; seule la flèche
 // sortante apparaît, et uniquement pour du http(s) (filtrage de poserLienSocial).
+// Les trois cases s'éditent au clic, dans la fiche, sur le patron de « Valeur
+// estimée » (startEditVal) et non sur celui des réseaux sociaux : l'input est
+// TRANSITOIRE, l'affichage est repeint après, donc les liens mailto:, tel: et la
+// flèche du site restent cliquables entre deux éditions — ce que des inputs
+// permanents feraient perdre. Les écouteurs se posent ICI, après l'écriture de
+// innerHTML : la grille étant réécrite en bloc par trois appelants dont un
+// arrive longtemps après le rendu, tout écouteur posé ailleurs mourrait à la
+// première repeinte.
 function peindreGrilleSociete(site, email, tel){
   const grid = document.getElementById('d-societe-grid');
   if(!grid) return;
   const siteTxt = String(site||'').trim();
+  const emailTxt = String(email||'').trim();
+  const telTxt = String(tel||'').trim();
+  // Mémoire de ce qui est PEINT — pas de ce que porte la carte. C'est la graine
+  // que l'éditeur reprend et à laquelle il se compare (cf. startEditSociete).
+  // Sans elle, la garde « n'écrire que si ça a changé » échouerait exactement
+  // là où elle sert : carte vide + valeur restituée par autoEnrichOnOpen à
+  // l'écran, ouvrir puis refermer la case suffirait à recopier sur la carte une
+  // coordonnée décomptable que personne n'a payée.
+  grid.dataset.site = siteTxt;
+  grid.dataset.email = emailTxt;
+  grid.dataset.tel = telTxt;
   const siteVal = siteTxt
     ? `<span>${esc(siteTxt)}</span>`
     : `<span class="info-item-placeholder">Adresse du site</span>`;
   const lienIco = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
-  const emailVal = String(email||'').trim()
-    ? `<a href="mailto:${esc(email)}">${esc(email)}</a>`
-    : `<span class="info-item-placeholder">Adresse email</span>`;
-  const telVal = String(tel||'').trim()
-    ? `<a href="tel:${window.MUPTel.lien(tel)}">${esc(window.MUPTel.format(tel))}</a>`
-    : `<span class="info-item-placeholder">Numéro de téléphone</span>`;
+  // Crayon d'invite sur case vide, comme « Valeur estimée » : le gris d'attente
+  // appelle au clic, le crayon dit qu'il y a quelque chose à faire. Case pleine
+  // → rien, la valeur et son lien restent seuls.
+  const editIco = '<svg class="info-item-edit-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  const emailVal = emailTxt
+    ? `<a href="mailto:${esc(emailTxt)}">${esc(emailTxt)}</a>`
+    : `<span class="info-item-placeholder">Adresse email</span>${editIco}`;
+  const telVal = telTxt
+    ? `<a href="tel:${window.MUPTel.lien(telTxt)}">${esc(window.MUPTel.format(telTxt))}</a>`
+    : `<span class="info-item-placeholder">Numéro de téléphone</span>${editIco}`;
+  // .info-item.editable met la case en flex space-between : la valeur du site et
+  // sa flèche sont réunies dans un seul <span> pour que la flèche reste collée au
+  // texte comme avant, et que seul le crayon parte à droite.
   grid.innerHTML =
-    `<div class="info-item"><div class="info-item-label">Site web</div><div class="info-item-val">${siteVal}<a id="d-website-link" href="#" target="_blank" rel="noopener" style="display:none;margin-left:6px;vertical-align:-2px">${lienIco}</a></div></div>`
-    + `<div class="info-item"><div class="info-item-label">Email société</div><div class="info-item-val">${emailVal}</div></div>`
-    + `<div class="info-item"><div class="info-item-label">Téléphone société</div><div class="info-item-val">${telVal}</div></div>`;
+    `<div class="info-item editable" id="d-site-cell" title="Cliquer pour éditer"><div class="info-item-label">Site web</div><div class="info-item-val"><span>${siteVal}<a id="d-website-link" href="#" target="_blank" rel="noopener" style="display:none;margin-left:6px;vertical-align:-2px">${lienIco}</a></span>${siteTxt ? '' : editIco}</div></div>`
+    + `<div class="info-item editable" id="d-societe-email-cell" title="Cliquer pour éditer"><div class="info-item-label">Email société</div><div class="info-item-val">${emailVal}</div></div>`
+    + `<div class="info-item editable" id="d-societe-tel-cell" title="Cliquer pour éditer"><div class="info-item-label">Téléphone société</div><div class="info-item-val">${telVal}</div></div>`;
   poserLienSocial('d-website-link', siteTxt); // href seulement si http(s), sinon lien masqué
+  CHAMPS_SOCIETE.forEach(function(ch){
+    const cell = document.getElementById(ch.cell);
+    if(!cell) return;
+    cell.addEventListener('click', function(e){
+      // Le lien passe d'abord : cliquer mailto:, tel: ou la flèche du site ouvre
+      // le lien ; cliquer ailleurs dans la case ouvre l'éditeur.
+      if(e.target && typeof e.target.closest === 'function' && e.target.closest('a')) return;
+      startEditSociete(ch);
+    });
+  });
+}
+
+// Les trois coordonnées société éditables. `cle` désigne l'entrée de
+// grid.dataset (la valeur affichée), `prop` le champ de la carte, `format` la
+// mise en forme appliquée À L'ENREGISTREMENT — jamais pendant la frappe, qui
+// déplacerait le curseur, et jamais avant la comparaison, qui ferait passer un
+// numéro restitué non formaté pour une saisie (cf. startEditSociete).
+const CHAMPS_SOCIETE = [
+  { cell: 'd-site-cell',          cle: 'site',  prop: 'website',       mode: 'url',   attente: 'Adresse du site' },
+  { cell: 'd-societe-email-cell', cle: 'email', prop: 'societe_email', mode: 'email', attente: 'Adresse email' },
+  { cell: 'd-societe-tel-cell',   cle: 'tel',   prop: 'societe_tel',   mode: 'tel',   attente: 'Numéro de téléphone',
+    format: function(v){ return window.MUPTel.format(v); } }
+];
+
+// Édition en ligne d'une case société — calque de startEditVal, à trois écarts
+// près, tous imposés par la frontière entre valeur possédée et valeur restituée :
+//   • la graine vient de grid.dataset (ce qui est AFFICHÉ), pas de la carte : la
+//     restitution silencieuse peint des valeurs du référentiel sans les écrire ;
+//   • RIEN N'EST ÉCRIT si la saisie est identique à cette graine — c'est la
+//     garde qui protège la frontière, et elle couvre aussi bien l'ouverture sans
+//     frappe que la frappe annulée à la main ;
+//   • la restitution repeint le SEUL bloc société, pas la fiche entière : un
+//     openDetail repartirait de la carte et effacerait de l'écran les deux
+//     autres valeurs restituées.
+function startEditSociete(ch){
+  if(!currentId) return;
+  const grid = document.getElementById('d-societe-grid');
+  const cell = document.getElementById(ch.cell);
+  if(!grid || !cell) return;
+  const valBox = cell.querySelector('.info-item-val');
+  if(!valBox) return;
+  const c = cards.find(x => String(x.id) === String(currentId));
+  if(!c) return;
+  if(document.getElementById('d-societe-input')) return; // une seule case en édition à la fois
+  const original = String(grid.dataset[ch.cle] || '');
+  valBox.innerHTML = '<input id="d-societe-input" type="text" inputmode="' + ch.mode + '" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="' + esc(ch.attente) + '" style="width:100%;border:1px solid var(--text);border-radius:6px;padding:4px 8px;font-size:12px;outline:none;box-sizing:border-box;background:#fff;">';
+  const input = document.getElementById('d-societe-input');
+  input.value = original; // par la propriété, jamais par l'attribut : esc() ne protège pas les guillemets
+  input.focus();
+  input.select();
+  let cancelled = false;
+  function repeindre(){
+    peindreGrilleSociete(grid.dataset.site, grid.dataset.email, grid.dataset.tel);
+  }
+  function commit(){
+    const brut = input.value.trim();
+    if(brut === original){ repeindre(); return; } // rien n'a bougé → aucune écriture, aucun PUT
+    const v = (brut && ch.format) ? ch.format(brut) : brut;
+    c[ch.prop] = v;
+    grid.dataset[ch.cle] = v;
+    save(); // même chemin que les autres champs de la fiche (PUT /api/pipeline/:id)
+    repeindre();
+  }
+  function cancel(){ cancelled = true; repeindre(); }
+  input.addEventListener('blur', function(){ if(!cancelled) commit(); });
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); input.blur(); }
+    else if(e.key === 'Escape'){ e.preventDefault(); cancel(); }
+  });
 }
 
 function createMupMarker(lat, lng, color){

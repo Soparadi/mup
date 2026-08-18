@@ -954,6 +954,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 <div class="toast" id="toast"></div>
 
 <script src="/_mup-tel.js"></script>
+<script src="/_mup-nom.js"></script>
 <script src="/_mup-fil.js"></script>
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
@@ -1288,6 +1289,54 @@ $('launchMeet').addEventListener('click', ()=>launchExternal('meet'));
 /* ————————————————————————————————————————————————
    COLLECTE RDV
    ———————————————————————————————————————————————— */
+
+// "HH:MM" -> minutes depuis minuit. Même lecture que l'Agenda, qui écrit start
+// et end sous cette forme.
+function _hhmmToMin(hhmm){
+  if(!hhmm) return null;
+  const p = String(hhmm).split(':');
+  const h = parseInt(p[0], 10), m = parseInt(p[1], 10);
+  if(!Number.isFinite(h)) return null;
+  return h * 60 + (Number.isFinite(m) ? m : 0);
+}
+
+// Durée réelle du rendez-vous, en minutes. L'ordre suit la fiabilité de la
+// source : `end` est la seule borne que l'abonné saisit lui-même dans l'Agenda,
+// vient ensuite une durée portée par l'évènement, puis celle de la fiche, et le
+// repli 30 en tout dernier ressort. Cette valeur n'est pas décorative : c'est
+// elle qui décide de la fin du RDV, donc de sa sortie de la liste.
+function _dureeRdv(e, p){
+  const debut = _hhmmToMin(e.start || '14:00');
+  const fin = _hhmmToMin(e.end);
+  if(fin != null && debut != null && fin > debut) return fin - debut;
+  const dEvt = Number(e.duree);
+  if(Number.isFinite(dEvt) && dEvt > 0) return dEvt;
+  const dCard = p ? Number(p.duree) : NaN;
+  if(Number.isFinite(dCard) && dCard > 0) return dCard;
+  return 30;
+}
+
+// Titre et second niveau, composés une fois pour toutes ici : la carte de la
+// liste, l'encart « Prochain RDV », le panneau de briefing et le bandeau T-5
+// les lisent tels quels, sans recomposer chacun de son côté.
+//
+// Le doublon (même chaîne affichée sur les deux lignes) venait de `societe`,
+// qui repliait sur `co` — soit exactement le titre. La garde est la comparaison,
+// pas la confiance : `contact` de l'évènement ne passe que s'il DIFFÈRE du
+// titre. Quand un écrivain y a rangé la raison sociale, il l'égale et tombe de
+// lui-même ; c'est la règle que MUPNom applique déjà à son propre sous-titre.
+function _nomsRdv(e, p){
+  const nom = window.MUPNom
+    ? window.MUPNom.compose({ enseigne: p && p.enseigne, nomJuridique: (p && (p.co || p.name)) || '' })
+    : { titre: (p && (p.co || p.name)) || '', sousTitre: '' };
+  const titre = nom.titre || String(e.title || '').trim() || 'Sans nom';
+  const contact = String(e.contact || '').trim();
+  const second = (contact && contact.toLowerCase() !== titre.toLowerCase())
+    ? contact
+    : (nom.sousTitre || '');
+  return { titre, second };
+}
+
 async function collectVisioRdvs(){
   // Source unique de vérité : table agenda en SurrealDB.
   // Les fiches pipeline sont chargées en parallèle pour enrichir contact/societe/visio_link via ficheId.
@@ -1306,16 +1355,17 @@ async function collectVisioRdvs(){
     // Lecture tolérante : l'existant porte encore la forme préfixée.
     const fid = normFicheId(e.ficheId);
     const p = fid ? fichesById[fid] : null;
+    const noms = _nomsRdv(e, p);
     rdvs.push({
       id: e.id || 'a_' + uid(),
       prospectId: fid,
-      prospectName: (p && (p.co || p.nom || p.name)) || e.title || e.contact || 'Sans nom',
-      societe: (p && (p.societe || p.co)) || '',
+      prospectName: noms.titre,
+      societe: noms.second,
       email: (p && p.email) || '',
       tel: (p && (p.tel || p.telephone)) || '',
       adresse: (p && (p.address || p.adresse)) || '',
       date: dateIso,
-      duree: 30,
+      duree: _dureeRdv(e, p),
       provider: (p && p.visio_provider) || detectProvider((p && p.visio_link) || ''),
       link: (p && p.visio_link) || '',
       status: (p && p.visio_status) || 'planned',
@@ -1339,7 +1389,19 @@ async function renderRdvList(){
   const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
   const sections = { today:[], tomorrow:[], thisWeek:[], later:[] };
 
-  rdvs.filter(r => !search || (r.prospectName + ' ' + r.societe + ' ' + r.sujet).toLowerCase().includes(search))
+  // La liste ne montre que ce qui reste devant. La coupure se fait à la FIN du
+  // rendez-vous, pas à son début : un RDV en cours doit rester affiché pendant
+  // qu'il se tient — c'est celui qu'on est en train de mener.
+  //
+  // Pas de section « Passés » ici, et c'est délibéré : quatre surfaces coupent
+  // déjà le passé (contacts, fiche contact, tableau de bord, carte), la trace
+  // du passé a déjà deux dépôts (le fil et les journaux de visio), et sans
+  // statut « tenu » sur l'évènement une telle section ne saurait pas distinguer
+  // une visio menée d'un lapin — elle mentirait.
+  const estDevant = r => new Date(r.date).getTime() + (r.duree || 30) * 60000 > now.getTime();
+
+  rdvs.filter(estDevant)
+    .filter(r => !search || (r.prospectName + ' ' + r.societe + ' ' + r.sujet).toLowerCase().includes(search))
     .forEach(r=>{
       const d = new Date(r.date);
       if(d >= today && d < tomorrow) sections.today.push(r);

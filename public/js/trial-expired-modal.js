@@ -409,23 +409,42 @@
     else document.addEventListener('DOMContentLoaded', function () { buildQuotaToast(info) }, { once: true })
   }
 
-  // ── Bootcheck (H5b) — discrimine sur data.app_state, source unique H5a ─
+  // ── Bootcheck (H5b) — discrimine sur app_state, source unique H5a ──────
+  function appliquerEtat(etat) {
+    if (!etat) return
+    if (etat === 'trial_expired' || etat === 'grace_expired') {
+      show(etat)
+    } else if (etat === 'grace_active') {
+      showBanner()
+    } else if (etat === 'past_due_locked') {
+      showPastDueBanner()
+    }
+    // 'active' et 'trial_active' : aucune UI.
+  }
+
+  // L'état est DÉJÀ dans la page. window.__USER__ est injecté serveur-side sur
+  // les routes app (server.js), et son app_state sort du même deriveAppState
+  // que celui de /api/user/me, posé au même instant : le redemander au réseau
+  // ne rend rien de plus frais, seulement un appel de plus — sur chaque page.
+  //
+  // Le fetch n'est PAS retiré, il cesse d'être la voie normale. Il reste le
+  // repli, à l'identique, pour les cas où __USER__ manque : page servie sans le
+  // middleware d'injection, onglet restauré, cookie expiré. Un __USER__ sans
+  // app_state exploitable retombe dessus au même titre qu'un __USER__ absent.
   function checkStatus() {
+    var u = window.__USER__
+    if (u && u.app_state) {
+      appliquerEtat(u.app_state)
+      return
+    }
     fetch('/api/user/me', { credentials: 'same-origin' })
       .then(function (r) {
         if (!r.ok) return null
         return r.json()
       })
       .then(function (data) {
-        if (!data || !data.app_state) return
-        if (data.app_state === 'trial_expired' || data.app_state === 'grace_expired') {
-          show(data.app_state)
-        } else if (data.app_state === 'grace_active') {
-          showBanner()
-        } else if (data.app_state === 'past_due_locked') {
-          showPastDueBanner()
-        }
-        // 'active' et 'trial_active' : aucune UI.
+        if (!data) return
+        appliquerEtat(data.app_state)
       })
       .catch(function () { /* silencieux : pas de réseau, pas d'UI */ })
   }

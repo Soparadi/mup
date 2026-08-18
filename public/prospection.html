@@ -3635,19 +3635,13 @@ function _corpsFiche(lead) {
 async function addToPipeline(leadId) {
   var lead = S.buffer.find(function(l){ return l.id === leadId; });
   if(!lead) return;
-  var cards = [];
-  try {
-    var resp = await fetch('/api/pipeline');
-    if(resp.ok){
-      cards = await resp.json();
-    } else {
-      throw new Error('Pipeline API unavailable');
-    }
-  } catch(e) {
-    console.warn('[Leads] addToPipeline pipeline fetch failed, fallback localStorage', e);
-    try { var r = localStorage.getItem('mup_pipeline'); if(r) cards = JSON.parse(r); } catch(e2){}
-  }
-  if(cards.find(function(c){ return (lead.siren && String(c.siren) === String(lead.siren)) || (lead.siret && String(c.siret) === String(lead.siret)); })) {
+  // Garde de déduplication. _getExistingSirets() lit la MÊME table, avec le même
+  // repli localStorage, et en tient déjà l'index par siren et par siret : la
+  // lecture qui était faite ici la doublait pour reconstruire à la main la
+  // réponse que cet index donne directement. L'index est invalidé plus bas,
+  // après l'ajout — cette page reste donc à jour de ses propres écritures.
+  var existants = await _getExistingSirets();
+  if((lead.siren && existants[lead.siren]) || (lead.siret && existants[lead.siret])) {
     showToast('Déjà dans le pipeline');
     return;
   }

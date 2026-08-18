@@ -173,6 +173,15 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    du gap:8px de .detail-section, le 2px du titre décalerait le texte dans
    le noir. */
 .detail-section-title.bandeau{background:var(--text);color:var(--bg);border-radius:9px;padding:8px 12px;margin-bottom:0}
+/* Seconde ligne du bandeau, sous le titre — « Dernière activité : … », à
+   l'image du .card-subtitle de l'en-tête noir de la fiche contact. VARIANTE
+   de la règle ci-dessus, qui ne lui retire rien : rayon, remplissage, casse,
+   graisse et interlettrage du titre restent ceux qu'elle pose, le bandeau
+   gagne seulement de quoi porter une seconde ligne. Casse et interlettrage y
+   sont ceux d'un texte courant : c'est une date, pas un intitulé de section.
+   Elle n'est posée que sur ce bandeau-là, et seulement quand le fil porte une
+   entrée datée — cf. majDerniereActivite. */
+.detail-section-title.bandeau .bandeau-sous{display:block;margin-top:3px;font-size:10.5px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted2)}
 .detail-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text)}
 .detail-row a{color:var(--blue);text-decoration:none}
 .detail-row a:hover{text-decoration:underline}
@@ -287,17 +296,29 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 #d-timeline .timeline-body{flex:1;min-width:0}
 #d-timeline .timeline-event{font-size:13px;font-weight:600;margin-bottom:2px}
 #d-timeline .timeline-note{background:var(--readonly);padding:10px 12px;border-radius:var(--radius-xs);margin-top:6px;font-size:13px;line-height:1.55;color:var(--text);white-space:pre-wrap}
-.notes-input-wrap{display:flex;flex-direction:column;gap:8px}
-.notes-input-wrap textarea{width:100%;border:1px solid #E8E8ED;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;min-height:80px;box-sizing:border-box}
-.notes-input-wrap textarea:focus{outline:none;border-color:#1D1D1F}
-.notes-save-btn{align-self:flex-end;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1D1D1F;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:opacity 0.12s}
-.notes-save-btn:hover{opacity:0.85}
-.notes-save-btn:disabled{opacity:0.4;cursor:not-allowed}
-.notes-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
-.notes-mic-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;font-family:inherit}
-.notes-mic-btn:hover{border-color:var(--text);background:var(--surface)}
-.notes-mic-btn.recording{background:#A32D2D;color:#fff;border-color:#A32D2D;animation:micPulse 1.2s ease-in-out infinite}
-@keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(163,45,45,.4)}50%{box-shadow:0 0 0 8px rgba(163,45,45,0)}}
+/* ── COMPOSEUR D'ACTIVITÉS ──
+   Repris de la fiche contact, dans les variables de cette page : --readonly y
+   devient --surface, --text-on-dark devient --bg, --muted devient --muted2 et
+   les rayons nommés deviennent les 8-9px du Pipeline. Le fil qu'il alimente
+   était déjà celui de la fiche contact (cf. #d-timeline ci-dessus) ; ce qui
+   l'alimente l'est maintenant aussi.
+   margin-bottom, et non le seul gap:8px de .detail-section : le composeur et
+   le fil sont deux objets, pas deux lignes d'un même bloc — 20px les sépare
+   là-bas, 20px les sépare ici. */
+.activity-composer{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:14px;margin-bottom:12px;transition:border-color .15s}
+.activity-composer:focus-within{border-color:var(--text)}
+.activity-types{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.activity-type{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surface);border:1px solid transparent;border-radius:8px;font-family:var(--font);font-size:12px;font-weight:600;color:var(--text);cursor:pointer;transition:all .15s}
+.activity-type:hover{background:var(--border)}
+.activity-type.active{background:var(--text);color:var(--bg)}
+.activity-type svg{width:12px;height:12px;stroke-width:2;fill:none;stroke:currentColor}
+.activity-textarea{width:100%;min-height:70px;padding:0;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:13px;line-height:1.5;resize:vertical}
+.activity-textarea:focus{outline:none}
+.activity-textarea::placeholder{color:var(--muted2)}
+.activity-actions{display:flex;align-items:center;justify-content:flex-end;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.activity-submit{padding:7px 14px;background:var(--text);color:var(--bg);border:1px solid var(--text);border-radius:8px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:opacity .15s}
+.activity-submit:hover{opacity:.85}
+.activity-submit:disabled{opacity:.3;cursor:not-allowed}
 .rdv-section{display:flex;flex-direction:column;gap:12px}
 .rdv-calendar-wrap{background:#F5F5F7;border-radius:8px;padding:12px}
 .rdv-cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -682,35 +703,63 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       </div>
     </div>
 
-    <!-- 3) TIMELINE -->
+    <!-- 3) ACTIVITÉS — le fil, et ce qui l'alimente, dans UNE section.
+         « Timeline » et « Notes » étaient deux titres pour un seul objet : le
+         champ écrivait dans la table que le fil lisait juste au-dessus. Et
+         « Notes » faisait homonyme avec la case « Notes société » de la
+         grille, alors que l'une se corrige et que l'autre est définitive.
+         Le bloc est celui de la fiche contact, qui lit déjà le même fil. -->
     <div class="detail-section">
-      <div class="detail-section-title">Timeline</div>
-      <!-- Le rail à pastilles disparaît avec le rendu qu'il portait : chaque
-           entrée du fil porte désormais sa propre icône, celle de la fiche
-           contact. -->
-      <div id="d-timeline"></div>
-    </div>
+      <div class="detail-section-title bandeau">
+        Activités
+        <!-- Masquée tant que le fil ne porte aucune entrée datée : sans
+             activité, il n'y a pas de dernière activité à annoncer, et pas de
+             date de repli à inventer. Posée par majDerniereActivite(), qui lit
+             LE FIL — jamais updated_at, que le moindre déplacement de colonne
+             fait bouger, ni lastContact, vide sur une carte de pipeline. -->
+        <span class="bandeau-sous" id="d-activite-derniere" style="display:none"></span>
+      </div>
 
-    <!-- 4) NOTES -->
-    <div class="detail-section">
-      <div class="detail-section-title">Notes</div>
-      <div class="notes-input-wrap">
-        <textarea id="d-notes-input" placeholder="Ajouter des notes… (cliquez sur le micro pour dicter)" rows="4" onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();saveNote();}"></textarea>
-        <div class="notes-actions">
-          <button class="notes-mic-btn" id="notes-mic-btn" onclick="toggleDictation()" type="button" title="Dictée vocale">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-            <span id="notes-mic-label">Dicter</span>
+      <!-- Quatre types, ceux de la fiche contact. Le fil en rend six : mail et
+           devis entrent par le sélecteur du calendrier au-dessus, qui les
+           PLANIFIE. Ici on CONSIGNE ce qui a eu lieu — d'où le libellé
+           d'invite, repris mot pour mot du modèle. -->
+      <div class="activity-composer">
+        <div class="activity-types">
+          <button class="activity-type active" data-type="note" type="button">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+            Note
           </button>
-          <button class="notes-mic-btn" onclick="applyCompteRendu()" type="button" title="Mettre en forme en compte-rendu">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="18" y2="18"/></svg>
-            Compte-rendu
+          <button class="activity-type" data-type="phone" type="button">
+            <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>
+            Appel
           </button>
-          <button class="notes-save-btn" onclick="saveNote()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Enregistrer
+          <button class="activity-type" data-type="visio" type="button">
+            <svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            Visio
+          </button>
+          <button class="activity-type" data-type="rdv" type="button">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            RDV
           </button>
         </div>
+        <!-- Cmd/Ctrl+Entrée passe par le clic du bouton, et non par un appel
+             direct : le bouton porte déjà la garde du champ vide, un clic
+             programmatique sur un bouton désactivé ne déclenche rien. Une
+             seule règle, un seul endroit. -->
+        <textarea class="activity-textarea" id="d-activite-input" placeholder="Saisissez une note, un compte-rendu d'appel, de visio ou de RDV…" onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();document.getElementById('d-activite-submit').click();}"></textarea>
+        <div class="activity-actions">
+          <button class="activity-submit" id="d-activite-submit" type="button" disabled>Ajouter</button>
+        </div>
       </div>
+
+      <!-- Le rail à pastilles a disparu avec le rendu qu'il portait : chaque
+           entrée du fil porte sa propre icône, celle de la fiche contact.
+           Vide au départ : tant que la lecture n'a pas répondu, on ne sait pas
+           si cette entreprise a des activités. Le message est posé par
+           renderTimelineFiche(), qui sait laquelle des deux absences il
+           annonce. -->
+      <div id="d-timeline"></div>
     </div>
 
     <!-- ACTIONS FICHE -->
@@ -1058,6 +1107,24 @@ function noterEtapeVie(card, nouvelleCol){
   if(nouvelleCol === 'lost') card.lostFromCol = card.col || null;
 }
 
+// Mois abrégés, en un SEUL endroit. Quatre fonctions en tenaient chacune leur
+// copie ; deux sont parties avec la dictée, les deux autres lisent celle-ci, et
+// « Dernière activité » aurait fait naître la cinquième.
+// Mêmes abréviations que le fr-FR de month:'short',
+// dont le fil se sert pour dater ses entrées : les deux lignes du bandeau et
+// du fil disent donc un même mois de la même façon.
+const MOIS_COURTS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+
+// Date longue d'une activité, au format de la fiche contact — même sortie que
+// son fmtDateLong. Sans repli : une date illisible rend une chaîne vide, et
+// c'est à l'appelant de décider quoi en faire. Pour « Dernière activité », la
+// réponse est de ne rien afficher du tout.
+function fmtDateLong(v){
+  const d = (v instanceof Date) ? v : new Date(v);
+  if(isNaN(d.getTime())) return '';
+  return String(d.getDate()).padStart(2,'0') + ' ' + MOIS_COURTS[d.getMonth()] + ' ' + d.getFullYear();
+}
+
 // Une date n'est retenue que si elle se parse ET tombe après 2020. La borne
 // écarte les 1970 fabriqués par un repli sur zéro et les identifiants
 // numériques pris pour des millisecondes.
@@ -1373,8 +1440,10 @@ const CHAMPS_CARTE = [
   { cell:'d-address-cell', libelle:'Adresse', prop:'address', mode:'text', attente:'Adresse',
     apres: function(c){ c.lat = null; c.lng = null; } },
   { cell:'d-zip-cell', libelle:'Code postal', prop:'zip', mode:'numeric', attente:'Code postal' },
-  // « Notes société », jamais « Notes » tout court : #d-notes-input — le fil de
-  // la table `activites` — est un homonyme disjoint dans la même fiche.
+  // « Notes société », jamais « Notes » tout court. L'homonyme du bas de fiche
+  // a disparu — le titre de section « Notes » y désignait en réalité le fil —
+  // mais le nom reste juste et le restera : cette case porte une note SUR la
+  // société, qui se corrige, quand le fil consigne des gestes, définitifs.
   { cell:'d-notes-societe-cell', libelle:'Notes société', prop:'notes', attente:'Notes société',
     multiligne:true, large:true }
 ];
@@ -1771,13 +1840,31 @@ const FIL_ECHEC = `<div class="timeline-empty">Le fil n'a pas pu être chargé. 
 // jeton écarte la réponse d'une fiche que l'abonné a déjà quittée.
 function renderTimelineFiche(c){
   const root = document.getElementById('d-timeline');
-  if(!root || !c || !window.MUPFil) return;
+  if(!root || !c) return;
+  // MUPFil absent : le fil n'est pas vide, il est illisible. Un return muet
+  // laissait à l'écran le fil de la fiche précédente, ou rien du tout, sans
+  // que personne ait de quoi s'en douter. Même issue que la branche d'erreur.
+  if(!window.MUPFil){
+    _filCourant = [];
+    root.innerHTML = FIL_ECHEC;
+    majDerniereActivite(null);
+    return;
+  }
   const jeton = ++_filJeton;
   const cible = String(c.id);
   // Changement de fiche : le fil précédent est oublié tout de suite, sinon le
   // calendrier de la nouvelle porterait un instant les pastilles de l'autre.
   // Un simple re-render de la même fiche garde le sien, qui ne clignote pas.
-  if(_filFiche !== cible){ _filCourant = []; _filFiche = cible; }
+  //
+  // La date part avec eux, et pour une raison que le fil ne partage pas. Le
+  // fil, lui, RESTE à l'écran pendant l'attente : le vider ferait clignoter un
+  // « pas encore d'historique » que la réponse dément aussitôt, et ce qu'il
+  // montre entre-temps est au pire périmé de quelques centaines de
+  // millisecondes. Une DATE ne se prête pas au même traitement — celle de la
+  // fiche précédente n'est pas en retard, elle est FAUSSE dès l'instant où la
+  // fiche change, et l'entreprise ouverte porterait la dernière activité d'une
+  // autre. Sans rien à dater, la ligne s'efface : c'est aussi ce qu'elle dit.
+  if(_filFiche !== cible){ _filCourant = []; _filFiche = cible; majDerniereActivite(null); }
   // LECTURE PURE : la date d'entrée est calculée à l'affichage et passée au
   // fil comme une entrée de plus. Elle n'est posée sur aucun enregistrement.
   const entree = dateCreation(c);
@@ -1792,6 +1879,7 @@ function renderTimelineFiche(c){
       // ni activité, ni date d'entrée exploitable : le fil est vide et la
       // section se réduirait à son titre. Elle dit alors l'état.
       root.innerHTML = MUPFil.rendre(items) || FIL_VIDE;
+      majDerniereActivite(items);
       // Le calendrier a été rendu avant que le fil n'arrive : ses pastilles de
       // notes lui manquaient. On le redessine une fois, s'il est à l'écran.
       var sect = document.getElementById('d-rdv-section');
@@ -1803,14 +1891,39 @@ function renderTimelineFiche(c){
       // peut pas l'annoncer comme une fiche sans historique.
       _filCourant = [];
       root.innerHTML = FIL_ECHEC;
+      majDerniereActivite(null);
     });
+}
+
+// La seconde ligne du bandeau date la dernière ACTIVITÉ, et la lit DANS LE
+// FIL. Elle ne peut pas lire updated_at : c'est l'horloge d'enregistrement du
+// record, que le moindre déplacement de colonne, la moindre case éditée et
+// l'auto-advance de saveRdv font bouger — et que MUPFil.ecrire, lui, ne touche
+// jamais. Elle ne peut pas lire lastContact non plus : une carte de pipeline
+// ne le porte pas. Même correction que la fiche contact, qui lit le même fil.
+// Sans entrée datée, il n'y a rien à dater : la ligne est omise, sans repli.
+// Même borne à 2020 que le rendu du fil, qui affiche « — » en deçà.
+function majDerniereActivite(items){
+  const el = document.getElementById('d-activite-derniere');
+  if(!el) return;
+  let recente = null;
+  (items || []).forEach(it => {
+    if(!it || !it.ts) return;
+    const d = new Date(it.ts);
+    if(isNaN(d.getTime()) || d.getFullYear() < 2020) return;
+    if(!recente || d > recente) recente = d;
+  });
+  if(!recente){ el.textContent = ''; el.style.display = 'none'; return; }
+  el.textContent = 'Dernière activité : ' + fmtDateLong(recente);
+  el.style.display = '';
 }
 
 async function openDetail(id) {
   // Ouverture « fraîche » = changement de fiche, pas un simple re-render de la
-  // fiche déjà ouverte (saveNote, saveRdv, sync agenda…). Seule une ouverture
-  // fraîche déclenche la restitution silencieuse, pour ne pas rappeler
-  // /api/enrich à chaque re-render.
+  // fiche déjà ouverte (saveRdv, enrichissement, sync agenda…). Elle commande
+  // deux choses, et elles seules : la restitution silencieuse, pour ne pas
+  // rappeler /api/enrich à chaque re-render, et la remise à zéro du composeur
+  // d'activités, pour ne pas effacer une saisie que personne n'a validée.
   const estOuvertureFraiche = String(currentId) !== String(id);
   currentId = id;
   const c = cards.find(x=>String(x.id)===String(id));
@@ -1932,9 +2045,13 @@ async function openDetail(id) {
   // entrée parmi les autres, à sa place chronologique.
   renderTimelineFiche(c);
 
-  // Notes (legacy textarea — éléments removed; reset new note input)
-  const noteInput = document.getElementById('d-notes-input');
-  if(noteInput) noteInput.value = '';
+  // Composeur d'activités : vidé SEULEMENT sur ouverture fraîche. openDetail()
+  // est rejoué à chaque enregistrement, à chaque retour d'enrichissement et à
+  // chaque resynchro agenda — un simple retour de focus sur la fenêtre suffit.
+  // Le vider à chaque passage effaçait la note en cours de frappe, ce que les
+  // deux helpers de brouillon ne rattrapent que là où ils sont appelés. Le
+  // type retombe sur « Note » avec le champ : c'est la même remise à zéro.
+  if(estOuvertureFraiche) reinitComposeurActivite();
 
   // RDV section — calendrier inline + heure + bouton enregistrer.
   // La section est disponible sur toutes les colonnes, Gagné et Disqualifié
@@ -2243,56 +2360,117 @@ function closeDetail() {
 
 function formatNoteDate(isoDate) {
   const d = new Date(isoDate);
-  const months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
   const day = d.getDate();
-  const month = months[d.getMonth()];
+  const month = MOIS_COURTS[d.getMonth()];
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
   return day + ' ' + month + ' à ' + hours + ':' + minutes;
 }
 
-async function saveNote() {
-  const input = document.getElementById('d-notes-input');
+// ── COMPOSEUR D'ACTIVITÉS ──
+// Le champ « Notes » écrivait dans la table que la timeline lisait juste
+// au-dessus : deux titres, un seul objet. C'est le composeur de la fiche
+// contact qui le remplace — quatre types plutôt qu'un seul, et le geste dit
+// enfin sa nature au lieu de la laisser deviner au texte.
+let typeActivite = 'note';
+
+function wireComposeurActivite(){
+  document.querySelectorAll('.activity-type').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.activity-type').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      typeActivite = btn.dataset.type;
+    });
+  });
+  const input = document.getElementById('d-activite-input');
+  const submit = document.getElementById('d-activite-submit');
+  if(!input || !submit) return;
+  // « Ajouter » n'est cliquable que sur un champ non vide. C'est aussi la
+  // garde du raccourci Cmd/Ctrl+Entrée, qui passe par ce bouton.
+  input.addEventListener('input', function(){
+    submit.disabled = input.value.trim().length === 0;
+  });
+  submit.addEventListener('click', envoyerActivite);
+}
+
+// Remise à zéro du composeur — champ vidé, type revenu sur « Note », bouton
+// réarmé sur son état de champ vide. Appelée à l'ouverture fraîche d'une fiche
+// et après une écriture confirmée, jamais sur un simple re-render.
+function reinitComposeurActivite(){
+  const input = document.getElementById('d-activite-input');
+  if(input) input.value = '';
+  const submit = document.getElementById('d-activite-submit');
+  if(submit) submit.disabled = true;
+  typeActivite = 'note';
+  document.querySelectorAll('.activity-type').forEach(function(b){
+    b.classList.toggle('active', b.dataset.type === 'note');
+  });
+}
+
+async function envoyerActivite(){
+  const input = document.getElementById('d-activite-input');
+  const submit = document.getElementById('d-activite-submit');
   const text = input ? input.value.trim() : '';
   if(!text || !currentId) return;
 
   const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
 
-  // La note part dans le fil, pas dans la fiche. Écrite ici, elle se lit aussi
-  // sur la fiche contact de la même entreprise — ce qu'un noteEntries[] posé
-  // à l'intérieur de la carte ne pouvait pas faire.
-  const pose = await MUPFil.ecrire({ ancrage: c.id, type: 'note', texte: text });
+  if(submit) submit.disabled = true;
+  // L'activité part dans le fil, pas dans la fiche, et à sa nature réelle —
+  // un appel entre comme un appel. Ancrée sur la carte : l'ancrage ne change
+  // pas, c'est la LECTURE qui rassemble les records d'une même entreprise.
+  // Écrite ici, elle se lit donc aussi sur la fiche contact.
+  const pose = await MUPFil.ecrire({ ancrage: c.id, type: typeActivite, texte: text });
+  // Le champ n'est vidé qu'une fois l'écriture confirmée : un texte effacé sur
+  // un enregistrement raté serait perdu, et l'abonné n'aurait rien à retaper.
   if(!pose){
-    toast('Note non enregistrée — réessayez');
+    if(submit) submit.disabled = false;
+    toast('Activité non enregistrée — réessayez');
     return;
   }
 
-  // Capture automatique d'un numéro de téléphone français
-  let ficheModifiee = false;
-  const telMatch = text.match(/\b(0[1-9])(?:[\s.\-]?(\d{2})){4}\b/);
-  if(telMatch){
-    const normalized = telMatch[0].replace(/[^\d+]/g, '').replace(/^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/, '$1 $2 $3 $4 $5');
-    if(!c.tel || c.tel.trim() === ''){
-      c.tel = normalized;
-      c.phone = normalized;
-      ficheModifiee = true;
-    }
-  }
+  reinitComposeurActivite();
+  // Le SEUL fil est rafraîchi, pas la fiche entière : openDetail() recharge
+  // l'agenda, repeint la grille, le bandeau, les réseaux sociaux et redessine
+  // le calendrier deux fois, pour une activité qui ne les concerne pas. Le
+  // calendrier, lui, est bien remis à jour — renderTimelineFiche() repose
+  // _filCourant puis le redessine, c'est le même chemin qu'avant.
+  renderTimelineFiche(c);
+  toast('Activité ajoutée');
 
-  // La fiche n'est enregistrée que si la note y a changé quelque chose — le
-  // téléphone capturé. La note elle-même n'y est plus : la sauver à chaque
-  // saisie ferait repartir toutes les cartes en PUT pour rien.
-  if(ficheModifiee) save();
+  // L'activité est écrite ; ce qu'elle ANNONCE se propose ensuite, jamais
+  // avant — et jamais en silence.
+  await proposerTelephoneDeLaNote(c, text);
+}
 
-  if(input){
-    input.value = '';
-    input.dataset.rawVersion = '';
-    input.dataset.crVersion = '';
-    input.dataset.viewMode = 'raw';
-  }
-
-  if(typeof openDetail === 'function') openDetail(currentId);
+// Un numéro cité dans une note sur une entreprise est un numéro d'entreprise :
+// il va au TÉLÉPHONE SOCIÉTÉ de la grille, pas au téléphone du contact.
+// La capture existait déjà, mais elle écrivait sans rien dire, sur la carte,
+// et personne à l'écran n'avait de quoi s'en douter. Elle demande maintenant,
+// et un refus n'écrit rien.
+// « Si vide seulement » : un numéro déjà là n'est jamais remplacé par celui
+// qu'une note mentionne au passage. Le vide se juge sur ce qui est AFFICHÉ
+// (grid.dataset), et non sur la carte — la restitution silencieuse peint des
+// coordonnées du référentiel sans les écrire, et les recouvrir serait pire
+// que de ne rien faire.
+async function proposerTelephoneDeLaNote(c, text){
+  const m = text.match(/\b(0[1-9])(?:[\s.\-]?(\d{2})){4}\b/);
+  if(!m) return;
+  const grid = document.getElementById('d-societe-grid');
+  if(!grid || String(grid.dataset.tel || '').trim()) return;
+  const numero = window.MUPTel.format(m[0]);
+  if(!await mupConfirm('L\'enregistrer comme téléphone de la société ?',
+    'Cette note contient un numéro : ' + numero, 'Enregistrer', 'Annuler')) return;
+  // Même chemin d'écriture qu'une case éditée à la main (cf. startEditSociete) :
+  // la carte, la mémoire de ce qui est peint, le PUT, puis la repeinte du seul
+  // bloc société — un openDetail repartirait de la carte et effacerait de
+  // l'écran les valeurs restituées des deux autres cases.
+  c.societe_tel = numero;
+  grid.dataset.tel = numero;
+  const ok = await save();
+  peindreGrilleSociete(grid.dataset.site, grid.dataset.email, grid.dataset.tel);
+  toast(ok ? 'Téléphone enregistré' : 'Téléphone non enregistré');
 }
 
 // ── CALENDRIER RDV INLINE ──
@@ -2503,11 +2681,10 @@ async function saveRdv() {
   // Trace du geste dans le fil, à sa nature réelle — un RDV planifié entre
   // comme un RDV, pas comme une note. L'agenda garde le rendez-vous lui-même :
   // le fil dit qu'il a été pris, il ne le remplace pas.
-  const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
   await MUPFil.ecrire({
     ancrage: c.id,
     type: actionType,
-    texte: labelVerbe + ' le ' + rdvSelectedDate.getDate() + ' ' + monthsShort[rdvSelectedDate.getMonth()] + ' à ' + time
+    texte: labelVerbe + ' le ' + rdvSelectedDate.getDate() + ' ' + MOIS_COURTS[rdvSelectedDate.getMonth()] + ' à ' + time
   });
 
   // Auto-advance colonne pipeline (RDV et Visio uniquement)
@@ -2925,6 +3102,11 @@ function importFromProspects() {
   function init(){
     bootstrapFicheEmbed();
 
+    // Composeur d'activités : ses boutons et son champ vivent en permanence
+    // dans le panneau, jamais réécrits par openDetail — les écouteurs se
+    // posent donc une seule fois, ici, et non à chaque ouverture de fiche.
+    wireComposeurActivite();
+
     // ── ÉCHAP FERME LE TIROIR ──
     // Reprend au clavier ce que la croix portait sur /pipeline. Cinq gardes,
     // sans lesquelles l'écouteur détruirait une saisie ou volerait la touche
@@ -2965,10 +3147,10 @@ function importFromProspects() {
       if(panel.querySelector('.inline-editor')) return;
 
       // .mupc-overlay et #tem-modal-overlay ne sont dans le document que
-      // pendant qu'ils sont ouverts ; les deux autres se cachent sur place.
+      // pendant qu'ils sont ouverts ; .modal-overlay se cache sur place.
+      // La fenêtre « Action détectée » n'est plus interrogée ici : elle est
+      // partie avec la dictée, seule porte qui l'ouvrait.
       if(document.querySelector('.modal-overlay.open, .mupc-overlay, #tem-modal-overlay')) return;
-      var actionOv = document.getElementById('action-confirm-overlay');
-      if(actionOv && actionOv.style.display !== 'none') return;
 
       e.preventDefault();
       if(typeof window.closeDetail === 'function') window.closeDetail();
@@ -3008,414 +3190,21 @@ function importFromProspects() {
   }
 })();
 
-// ── DICTÉE VOCALE + CORRECTION TYPO FR ──
-const isSafari = /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent);
-let dictationRecognition = null; let dictationActive = false; let dictationBaseText = ''; let dictationFinalBuffer = ''; let dictationUserStopped = false;
-
-function toggleDictation(){
-  const btn = document.getElementById('notes-mic-btn');
-  const lbl = document.getElementById('notes-mic-label');
-  const input = document.getElementById('d-notes-input');
-  if(!btn || !input) return;
-
-  if(dictationActive){
-    dictationUserStopped = true;
-    if(dictationRecognition) dictationRecognition.stop();
-    return;
-  }
-
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR){
-    mupAlert('La dictée vocale n\'est pas supportée par ce navigateur', 'Utilisez Chrome, Edge ou Safari.', 'Fermer');
-    return;
-  }
-
-  dictationRecognition = new SR();
-  dictationRecognition.lang = 'fr-FR';
-  dictationRecognition.continuous = true;
-  dictationRecognition.interimResults = true;
-
-  dictationBaseText = input.value;
-  if(dictationBaseText && !/[\s\n]$/.test(dictationBaseText)) dictationBaseText += ' ';
-  dictationFinalBuffer = '';
-  dictationUserStopped = false;
-
-  dictationRecognition.onresult = function(event){
-    let interim = '';
-    for(let i = event.resultIndex; i < event.results.length; i++){
-      const transcript = event.results[i][0].transcript;
-      if(event.results[i].isFinal){
-        dictationFinalBuffer += transcript;
-      } else {
-        interim += transcript;
-      }
-    }
-    input.value = dictationBaseText + dictationFinalBuffer + interim;
-  };
-
-  dictationRecognition.onerror = function(e){
-    if(e.error === 'not-allowed'){
-      mupAlert('Accès au microphone refusé', 'Autorisez-le dans les paramètres du navigateur.', 'Fermer');
-    }
-    stopDictationUI();
-  };
-
-  dictationRecognition.onend = function(){
-    if(isSafari && dictationActive && !dictationUserStopped){
-      dictationBaseText = (dictationBaseText + dictationFinalBuffer);
-      if(dictationBaseText && !/[\s\n]$/.test(dictationBaseText)) dictationBaseText += ' ';
-      dictationFinalBuffer = '';
-      try { dictationRecognition.start(); return; } catch(err){ console.warn('Dictation restart failed:', err); }
-    }
-    const fullText = dictationBaseText + dictationFinalBuffer;
-    const corrected = applyFrenchTypography(fullText);
-    input.value = corrected;
-    input.dataset.rawVersion = corrected;
-    input.dataset.crVersion = '';
-    input.dataset.viewMode = 'raw';
-    stopDictationUI();
-    const detected = detectActionInNote(corrected);
-    if(detected) openActionConfirmPopup(detected);
-  };
-
-  dictationRecognition.start();
-  dictationActive = true;
-  btn.classList.add('recording');
-  if(lbl) lbl.textContent = 'Stop';
-  btn.title = 'Arrêter la dictée';
-}
-
-function stopDictationUI(){
-  dictationActive = false;
-  const btn = document.getElementById('notes-mic-btn');
-  const lbl = document.getElementById('notes-mic-label');
-  if(btn){
-    btn.classList.remove('recording');
-    btn.title = 'Dictée vocale';
-  }
-  if(lbl) lbl.textContent = 'Dicter';
-}
-
-// Correction typographique française
-function applyFrenchTypography(text){
-  if(!text) return text;
-  let t = text;
-
-  // Espaces multiples
-  t = t.replace(/[ \t]+/g, ' ');
-  // Espaces avant retour ligne
-  t = t.replace(/ +\n/g, '\n').replace(/\n +/g, '\n');
-
-  // Espace insécable avant : ; ! ? » (règle FR)
-  t = t.replace(/\s*([:;!?»])/g, '\u00a0$1');
-  // Espace insécable après «
-  t = t.replace(/«\s*/g, '«\u00a0');
-
-  // Pas d'espace avant , .
-  t = t.replace(/\s+([,.])/g, '$1');
-  // Espace après , si suivi d'une lettre
-  t = t.replace(/,(?=\S)/g, ', ');
-  // Espace après . si suivi d'une lettre (pas pour les nombres : 3.14)
-  t = t.replace(/\.(?=[A-Za-z\u00C0-\u017F])/g, '. ');
-
-  // Capitalisation : première lettre + après . ! ?
-  t = t.replace(/(^|[.!?]\s+)([a-zà-ÿ])/g, function(_, p1, p2){
-    return p1 + p2.toUpperCase();
-  });
-  if(t.length) t = t.charAt(0).toUpperCase() + t.slice(1);
-
-  // Apostrophe typographique
-  t = t.replace(/(\w)'(\w)/g, '$1\u2019$2');
-
-  // Remplacer mots dictés littéralement par leur ponctuation (cas fréquents)
-  const dictPunct = [
-    [/\s*\bvirgule\b\s*/gi, ', '],
-    [/\s*\bpoint\b(?!\s*virgule|\s*d['’]exclamation|\s*d['’]interrogation)\s*/gi, '. '],
-    [/\s*\bpoint d['’]?exclamation\b\s*/gi, '\u00a0! '],
-    [/\s*\bpoint d['’]?interrogation\b\s*/gi, '\u00a0? '],
-    [/\s*\bpoint virgule\b\s*/gi, '\u00a0; '],
-    [/\s*\bdeux points\b\s*/gi, '\u00a0: '],
-    [/\s*\b(à la ligne|nouvelle ligne|saut de ligne)\b\s*/gi, '\n'],
-    [/\s*\bouvrez les guillemets\b\s*/gi, ' «\u00a0'],
-    [/\s*\bfermez les guillemets\b\s*/gi, '\u00a0» '],
-    [/\s*\bouvrez la parenthèse\b\s*/gi, ' ('],
-    [/\s*\bfermez la parenthèse\b\s*/gi, ') ']
-  ];
-  dictPunct.forEach(function(rule){ t = t.replace(rule[0], rule[1]); });
-
-  // Re-passe espaces multiples après remplacements
-  t = t.replace(/[ \t]+/g, ' ').replace(/ +\n/g, '\n');
-
-  // Re-capitaliser après les nouveaux . ! ?
-  t = t.replace(/([.!?]\s+)([a-zà-ÿ])/g, function(_, p1, p2){
-    return p1 + p2.toUpperCase();
-  });
-
-  // Trim final
-  t = t.replace(/\s+$/, '');
-
-  return t;
-}
-
-// ── STRUCTURATION AUTO EN COMPTE-RENDU COMMERCIAL ──
-function structureCommercialNote(rawText){
-  if(!rawText || !rawText.trim()) return rawText;
-  let cleaned = rawText.trim();
-
-  // 1. Découpage par ponctuation forte
-  let sentences = cleaned.split(/(?<=[.!?])\s+/);
-
-  // 2. Si peu de phrases, découper sur les frontières sémantiques (commerce FR)
-  if(sentences.length < 3){
-    const boundaries = /(?:^|\s)(?=(?:il|elle|ils|elles|on|nous|le client|la cliente|mais|cependant|toutefois|néanmoins|donc|ensuite|puis|après|enfin|en plus|par ailleurs|d['’]ailleurs|aussi|et il|et elle|car|parce que|afin)\b)/gi;
-    sentences = cleaned.split(boundaries).filter(s => s && s.trim().length > 3);
-  }
-
-  // 3. Repli : couper les phrases très longues (>180 caractères) sur les virgules
-  const expanded = [];
-  sentences.forEach(s => {
-    s = s.trim();
-    if(s.length <= 180){ expanded.push(s); return; }
-    const parts = s.split(/(?<=,)\s+/);
-    parts.forEach(p => expanded.push(p.trim()));
-  });
-  sentences = expanded.filter(s => s.length > 0);
-
-  if(sentences.length === 0) sentences = [cleaned];
-
-  const sections = {
-    contexte: [],
-    besoins: [],
-    freins: [],
-    budget: [],
-    decisions: [],
-    actions: [],
-    autres: []
-  };
-
-  const patterns = {
-    freins: /\b(trop cher|pas le budget|hesit|pas sur|inquiet|reticent|probleme|frein|bloqu|crainte|peur de|pas convaincu|deja sous contrat|engage avec|fidele a|n[' ’]a pas besoin|reflechi|attendre|attente)/i,
-    besoins: /\b(cherche|veut|besoin|souhait|voudrait|aimerait|recherche|interesse par|envisage|projet de|pense que|necessaire|communiquer)/i,
-    budget: /\b(\d+\s*(€|euros?|k€|keuros|mille)|forfait|budget|enveloppe|cout|prix|tarif|montant|investissement)/i,
-    decisions: /\b(decid|valid|on part sur|on retient|on prend|accord|sign|confirm|on y va|on lance|ok pour|prendra sa decision|prendre le forfait|passe)/i,
-    actions: /\b(a faire|il faut|faut|envoyer|relancer|rappeler|preparer|recontact|prevoir|programmer|planifier|envoie|relance|j['’ ]envoie|expert[- ]comptable|rdv|rendez|visite|visio|appel|mail|devis)/i,
-    contexte: /\b(rencontre|reunion|echang|discut|presentation|demo|premier contact|recommande par|vient de|reseau|aujourd|hier|matin|après[- ]midi|client|jean)/i
-  };
-
-  function normalize(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
-
-  sentences.forEach(s => {
-    const n = normalize(s);
-    let placed = false;
-    if(patterns.freins.test(n)){ sections.freins.push(s); placed = true; }
-    else if(patterns.decisions.test(n)){ sections.decisions.push(s); placed = true; }
-    else if(patterns.actions.test(n)){ sections.actions.push(s); placed = true; }
-    else if(patterns.budget.test(n)){ sections.budget.push(s); placed = true; }
-    else if(patterns.besoins.test(n)){ sections.besoins.push(s); placed = true; }
-    else if(patterns.contexte.test(n)){ sections.contexte.push(s); placed = true; }
-    if(!placed) sections.autres.push(s);
-  });
-
-  // Capitaliser et ajouter un point final si manquant
-  function polish(s){
-    let t = s.trim();
-    if(!t) return t;
-    t = t.charAt(0).toUpperCase() + t.slice(1);
-    if(!/[.!?]$/.test(t)) t += '.';
-    return t;
-  }
-
-  const lines = [];
-  function addSection(title, items){
-    if(!items.length) return;
-    // Casse normale (le rendu timeline mettra le titre en gras)
-    lines.push(title);
-    items.forEach(s => lines.push('• ' + polish(s)));
-    lines.push('');
-  }
-
-  const now = new Date();
-  const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
-  const dateStr = now.getDate() + ' ' + monthsShort[now.getMonth()] + ' ' + now.getFullYear();
-  lines.push('Compte-rendu — ' + dateStr);
-  lines.push('');
-
-  addSection('Contexte', sections.contexte);
-  addSection('Besoins exprimés', sections.besoins);
-  addSection('Freins / objections', sections.freins);
-  addSection('Budget', sections.budget);
-  addSection('Décisions', sections.decisions);
-  addSection('Prochaines étapes', sections.actions);
-  addSection('Autres points', sections.autres);
-
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-}
-
-function applyCompteRendu(){
-  const input = document.getElementById('d-notes-input');
-  if(!input || !input.value.trim()) return;
-
-  const mode = input.dataset.viewMode || 'raw';
-
-  if(mode === 'raw'){
-    // Passer en compte-rendu : générer si pas déjà fait, sinon réutiliser
-    if(!input.dataset.rawVersion) input.dataset.rawVersion = input.value;
-    if(!input.dataset.crVersion){
-      input.dataset.crVersion = structureCommercialNote(input.dataset.rawVersion);
-    }
-    input.value = input.dataset.crVersion;
-    input.dataset.viewMode = 'cr';
-  } else {
-    // Retour au brut
-    input.value = input.dataset.rawVersion || input.value;
-    input.dataset.viewMode = 'raw';
-  }
-  input.focus();
-}
-
-// Synchronise la version brute quand l'utilisateur tape manuellement (mode raw)
-(function(){
-  function bind(){
-    const input = document.getElementById('d-notes-input');
-    if(!input || input.dataset.boundCrSync === '1') return;
-    input.dataset.boundCrSync = '1';
-    input.addEventListener('input', function(){
-      if((input.dataset.viewMode || 'raw') === 'raw'){
-        input.dataset.rawVersion = input.value;
-        input.dataset.crVersion = ''; // invalide le compte-rendu (sera regenéré au prochain clic)
-      }
-    });
-  }
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
-  else bind();
-})();
-
-// ── DÉTECTION D'ACTION DANS UNE NOTE ──
-function detectActionInNote(text){
-  if(!text || text.length < 8) return null;
-  const lower = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-
-  // Type d'action
-  let type = null;
-  // Visio en priorité (avant 'appel' qui matcherait aussi)
-  if(/\b(visio|visioconference|teams|zoom|meet|appel video|en visio)\b/.test(lower)) type = 'visio';
-  else if(/\b(devis|proposition commerciale|chiffrage|propose un devis)\b/.test(lower)) type = 'devis';
-  else if(/\b(envoyer (un )?(mail|email|courriel)|relance(r)? par mail|mailing\b|email\b|envoyer un mail)\b/.test(lower)) type = 'mail';
-  else if(/\b(rdv|rendez[- ]vous|visite|rencontre|reunion|appeler|rappeler|telephoner|recontacter|contacter|joindre|me rappelle|le rappeler|me contacter)\b/.test(lower)) type = 'rdv';
-  if(!type) return null;
-
-  // Date
-  const date = parseFrenchDate(lower);
-  if(!date) return null;
-
-  // Heure
-  const time = parseFrenchTime(lower) || '14:00';
-
-  return { type, date, time, sourceText: text };
-}
-
-function parseFrenchDate(lower){
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  const y = today.getFullYear();
-
-  // « aujourd'hui »
-  if(/\baujourd[' ]?hui\b/.test(lower)) return new Date(today);
-  // « demain »
-  if(/\bdemain\b/.test(lower)){ const d=new Date(today); d.setDate(d.getDate()+1); return d; }
-  // « après-demain »
-  if(/\bapres[- ]?demain\b/.test(lower)){ const d=new Date(today); d.setDate(d.getDate()+2); return d; }
-
-  // « lundi prochain » / « mardi prochain » ...
-  const jours = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
-  const joursMatch = lower.match(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(\s+prochain)?\b/);
-  if(joursMatch){
-    const targetDay = jours.indexOf(joursMatch[1]);
-    const d = new Date(today);
-    let diff = (targetDay - d.getDay() + 7) % 7;
-    if(diff === 0 || joursMatch[2]) diff = diff || 7;
-    d.setDate(d.getDate() + diff);
-    return d;
-  }
-
-  // « le 6 mai » / « 6 mai » / « le 12 » (mois courant)
-  const moisMap = {janvier:0,fevrier:1,mars:2,avril:3,mai:4,juin:5,juillet:6,aout:7,septembre:8,octobre:9,novembre:10,decembre:11};
-  const dateMatch = lower.match(/\b(?:le\s+)?(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\b/);
-  if(dateMatch){
-    const day = parseInt(dateMatch[1], 10);
-    const month = moisMap[dateMatch[2]];
-    if(day && month !== undefined){
-      let yr = y;
-      const candidate = new Date(yr, month, day);
-      if(candidate < today) yr++; // l'année prochaine si la date est passée
-      return new Date(yr, month, day);
-    }
-  }
-
-  // « le 12/05 » ou « 12/05/2026 »
-  const slashMatch = lower.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
-  if(slashMatch){
-    const day = parseInt(slashMatch[1],10);
-    const month = parseInt(slashMatch[2],10) - 1;
-    let yr = slashMatch[3] ? parseInt(slashMatch[3],10) : y;
-    if(yr < 100) yr += 2000;
-    if(day && month >= 0){
-      const d = new Date(yr, month, day);
-      if(d >= today || slashMatch[3]) return d;
-      return new Date(yr+1, month, day);
-    }
-  }
-
-  return null;
-}
-
-function parseFrenchTime(lower){
-  // « 14h30 » / « 14h » / « 14:30 » / « 14 heures 30 » / « 9 heures »
-  let m = lower.match(/\b(\d{1,2})\s*h\s*(\d{1,2})?\b/);
-  if(m) return String(m[1]).padStart(2,'0') + ':' + String(m[2]||'00').padStart(2,'0');
-  m = lower.match(/\b(\d{1,2}):(\d{2})\b/);
-  if(m) return String(m[1]).padStart(2,'0') + ':' + m[2];
-  m = lower.match(/\b(\d{1,2})\s*heures?\s*(\d{1,2})?\b/);
-  if(m) return String(m[1]).padStart(2,'0') + ':' + String(m[2]||'00').padStart(2,'0');
-  return null;
-}
-
-function openActionConfirmPopup(detected){
-  if(!detected || !currentId) return;
-  const ov = document.getElementById('action-confirm-overlay');
-  const sel = document.getElementById('action-confirm-type');
-  const dt = document.getElementById('action-confirm-date');
-  const tm = document.getElementById('action-confirm-time');
-  if(!ov || !sel || !dt || !tm) return;
-
-  sel.value = detected.type;
-  const d = detected.date;
-  dt.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  tm.value = detected.time;
-
-  ov.style.display = 'flex';
-
-  const close = () => { ov.style.display = 'none'; };
-  document.getElementById('action-confirm-cancel').onclick = close;
-  ov.onclick = (e) => { if(e.target === ov) close(); };
-  document.getElementById('action-confirm-ok').onclick = function(){
-    createActionFromDetection(sel.value, dt.value, tm.value);
-    close();
-  };
-}
-
-// Note en cours de frappe : openDetail() reconstruit #d-notes-input, donc tout
-// re-render perd la saisie. Ces deux helpers l'encadrent. Appelés par
-// createActionFromDetection et par la resynchro agenda (focus fenêtre,
-// visibilitychange, storage), qui re-render sans que l'abonné ait rien demandé.
+// Note en cours de frappe : openDetail() est rejoué sans que l'abonné ait rien
+// demandé — reprise de focus de la fenêtre, visibilitychange, storage. Le
+// composeur n'est plus vidé à chaque passage (cf. estOuvertureFraiche), mais
+// ces deux helpers restent : ils rendent aussi le CURSEUR et le FOCUS, qu'un
+// re-render de la fiche fait perdre au champ même quand son texte survit.
+// Retargés sur le composeur d'activités, seul champ de saisie libre du bas de
+// fiche depuis que #d-notes-input est parti. Les trois dataset qu'ils
+// portaient — rawVersion, crVersion, viewMode — servaient le bouton
+// « Compte-rendu », qui n'est plus là.
 function preserveNoteDraft(){
-  const el = document.getElementById('d-notes-input');
+  const el = document.getElementById('d-activite-input');
   if(!el) return null;
   return {
     value: el.value,
-    rawVersion: el.dataset.rawVersion || '',
-    crVersion: el.dataset.crVersion || '',
-    viewMode: el.dataset.viewMode || 'raw',
+    type: typeActivite,
     selectionStart: el.selectionStart,
     selectionEnd: el.selectionEnd,
     avaitFocus: document.activeElement === el
@@ -3423,108 +3212,24 @@ function preserveNoteDraft(){
 }
 function restoreNoteDraft(p){
   if(!p) return;
-  const el = document.getElementById('d-notes-input');
+  const el = document.getElementById('d-activite-input');
   if(!el) return;
   el.value = p.value;
-  el.dataset.rawVersion = p.rawVersion;
-  el.dataset.crVersion = p.crVersion;
-  el.dataset.viewMode = p.viewMode;
+  const submit = document.getElementById('d-activite-submit');
+  if(submit) submit.disabled = el.value.trim().length === 0;
+  // Le type choisi fait partie de la saisie : le rendre sans lui laisserait un
+  // compte-rendu d'appel prêt à partir en note.
+  typeActivite = p.type || 'note';
+  document.querySelectorAll('.activity-type').forEach(function(b){
+    b.classList.toggle('active', b.dataset.type === typeActivite);
+  });
   if(p.avaitFocus){
     el.focus();
     try { el.setSelectionRange(p.selectionStart, p.selectionEnd); } catch(_){}
   }
 }
 
-async function createActionFromDetection(type, dateStr, time){
-  const c = cards.find(x => String(x.id) === String(currentId));
-  if(!c) return;
-  const [yyyy, mm, dd] = dateStr.split('-').map(Number);
-  const [hh, mn] = time.split(':').map(Number);
-  const iso = new Date(yyyy, mm-1, dd, hh, mn, 0, 0);
-  const endHh = String(Math.min(23, (hh|0) + 1)).padStart(2, '0');
-
-  // POST /api/agenda — détection vocale crée un event lié à la fiche.
-  const evtBody = {
-    date: dateStr,
-    start: time,
-    end: endHh + ':' + String(mn|0).padStart(2,'0'),
-    title: c.co || c.name || '',
-    contact: c.name || '',
-    type: String(type).toLowerCase(),
-    notes: '',
-    ficheId: String(c.id)
-  };
-  // L'event agenda est la seule chose créée ici. S'il n'est pas créé, la note
-  // « RDV planifié » mentirait : rien n'a été planifié. On sort sans l'écrire.
-  try {
-    const resp = await fetch('/api/agenda', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(evtBody)
-    });
-    if (!resp.ok) {
-      console.warn('[createActionFromDetection] POST agenda failed', resp.status);
-      toast('Action non enregistrée dans l\'agenda');
-      return;
-    }
-  } catch (e) {
-    console.warn('[createActionFromDetection] network error', e && e.message);
-    toast('Action non enregistrée dans l\'agenda');
-    return;
-  }
-  await loadAgendaForFiche(currentId);
-
-  const monthsShort = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
-  const verbe = {rdv:'RDV planifié', visio:'Visio planifiée', mail:'Mail programmé', devis:'Devis planifié'}[type] || 'Action planifiée';
-  // Même geste que le calendrier inline, même trace : dans le fil, au type de
-  // l'action détectée.
-  await MUPFil.ecrire({
-    ancrage: c.id,
-    type: String(type).toLowerCase(),
-    texte: verbe + ' (auto) le ' + iso.getDate() + ' ' + monthsShort[iso.getMonth()] + ' à ' + time
-  });
-
-  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(_){}
-  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
-
-  // Préserver le texte de la note en cours de saisie avant le re-render
-  const preserved = preserveNoteDraft();
-
-  if(typeof openDetail === 'function') openDetail(currentId);
-
-  // Restaurer après re-render
-  restoreNoteDraft(preserved);
-}
-
 </script>
-<div id="action-confirm-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99999;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:14px;padding:24px;width:420px;max-width:92vw;font-family:Geist,-apple-system,sans-serif">
-    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6E6E73;margin-bottom:6px">Action détectée</div>
-    <div style="font-size:16px;font-weight:800;letter-spacing:-.3px;margin-bottom:16px">Créer cette action dans l'agenda ?</div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
-      <label style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6E6E73">Type
-        <select id="action-confirm-type" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid #E8E8ED;border-radius:8px;font-size:13px;font-family:inherit">
-          <option value="rdv">RDV</option>
-          <option value="visio">Visio</option>
-          <option value="mail">Mail</option>
-          <option value="devis">Devis</option>
-        </select>
-      </label>
-      <div style="display:flex;gap:8px">
-        <label style="flex:1;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6E6E73">Date
-          <input id="action-confirm-date" type="date" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid #E8E8ED;border-radius:8px;font-size:13px;font-family:inherit">
-        </label>
-        <label style="flex:1;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6E6E73">Heure
-          <input id="action-confirm-time" type="time" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid #E8E8ED;border-radius:8px;font-size:13px;font-family:inherit">
-        </label>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button id="action-confirm-cancel" type="button" style="padding:9px 16px;border:1px solid #E8E8ED;background:#fff;color:#1D1D1F;border-radius:8px;font-family:inherit;font-weight:600;font-size:12.5px;cursor:pointer">Annuler</button>
-      <button id="action-confirm-ok" type="button" style="padding:9px 16px;border:none;background:#1D1D1F;color:#fff;border-radius:8px;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer">Créer</button>
-    </div>
-  </div>
-</div>
 
 <div class="toast" id="toast"></div>
 

@@ -244,7 +244,11 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       <!-- Mention discrète : visible si l'event est lié à une fiche pipeline -->
       <div class="modal-pipeline-info" id="modal-pipeline-info" hidden>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-        <span>Lié à la fiche <strong id="modal-pipeline-info-name"></strong></span>
+        <!-- Les deux morceaux sont posés par refreshPipelineInfo() : l'amorce
+             porte l'espace final quand un nom suit, et le nom seul est en gras.
+             Rien n'est écrit ici, pour qu'aucun état ne puisse rester à l'écran
+             sans avoir été décidé par le script. -->
+        <span><span id="modal-pipeline-info-lead"></span><strong id="modal-pipeline-info-name"></strong></span>
       </div>
       <div class="frow">
         <div class="flabel">Titre</div>
@@ -670,21 +674,54 @@ function applyModalMode(mode) {
 }
 
 // Affiche la mention "Lié à la fiche X" en mode edit si ficheId présent.
-function refreshPipelineInfo() {
+//
+// Le nom vient des CARTES, plus des options du select. Le select n'est peuplé
+// que par openModal() — le chemin de création ; editEvent() ne le peuple
+// jamais. En édition la boucle ne trouvait donc rien et le bandeau retombait
+// sur « #qlyop1jglnmu0vnysgio » : une clé de base montrée à l'abonné, alors
+// que le nom de l'entreprise figurait deux champs plus bas.
+//
+// _loadPipeline() sert son cache de 30 s : la résolution ne coûte aucune
+// requête de plus dans le cas courant, la page ayant déjà lu /api/pipeline.
+// Faute de carte correspondante — corpus illisible, fiche disparue — le
+// bandeau porte un libellé neutre. Il ne montre JAMAIS d'identifiant.
+async function refreshPipelineInfo() {
   var info = document.getElementById('modal-pipeline-info');
+  var leadEl = document.getElementById('modal-pipeline-info-lead');
   var nameEl = document.getElementById('modal-pipeline-info-name');
-  if (!info || !nameEl) return;
-  if (!modalFicheId) { info.hidden = true; nameEl.textContent = ''; return; }
-  // Lookup nom de la fiche depuis le select déjà peuplé
-  var sel = document.getElementById('m-pipeline-card');
-  var label = '';
-  if (sel) {
-    for (var i = 0; i < sel.options.length; i++) {
-      if (String(sel.options[i].value) === String(modalFicheId)) { label = sel.options[i].textContent; break; }
-    }
+  if (!info || !leadEl || !nameEl) return;
+  if (!modalFicheId) {
+    info.hidden = true;
+    leadEl.textContent = '';
+    nameEl.textContent = '';
+    return;
   }
-  nameEl.textContent = label || ('#' + modalFicheId);
+
+  // Le bandeau s'affiche tout de suite dans sa forme neutre : la lecture des
+  // cartes peut attendre le réseau, l'abonné n'attend pas devant un vide.
+  var attendu = modalFicheId;
+  leadEl.textContent = 'Lié à une fiche du pipeline';
+  nameEl.textContent = '';
   info.hidden = false;
+
+  var nom = '';
+  try {
+    var cards = await _loadPipeline();
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      if (c && _normFicheId(c.id) === attendu) { nom = String(c.co || c.name || '').trim(); break; }
+    }
+  } catch (e) {
+    // Cartes illisibles : le libellé neutre déjà posé reste le bon.
+  }
+
+  // La modale a pu changer d'évènement — ou se fermer — pendant la lecture.
+  // Sans cette garde, le nom d'une fiche s'écrirait sous un autre évènement.
+  if (modalFicheId !== attendu) return;
+  if (nom) {
+    leadEl.textContent = 'Lié à la fiche ';
+    nameEl.textContent = nom;
+  }
 }
 
 async function openModal(hour) {
@@ -948,6 +985,25 @@ async function saveEvent() {
 }
 
 // ── DELETE ──
+// La phrase que lit l'abonné avant de trancher : ce qui va disparaître, quand,
+// et si la fiche liée le perd aussi. Une phrase, pas une liste. Rend null quand
+// l'évènement est introuvable — la fenêtre partagée n'affiche alors aucun corps
+// plutôt qu'une affirmation qu'on ne peut pas tenir.
+function _phraseSuppressionEvenement(ev) {
+  if (!ev) return null;
+  var titre = String(ev.title || '').trim();
+  var quoi = titre ? '« ' + titre + ' »' : 'Cet évènement';
+  var quand = '';
+  var jour = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ev.date || ''));
+  if (jour) {
+    var mois = MONTHS_FR[Number(jour[2]) - 1];
+    if (mois) quand = ' du ' + Number(jour[3]) + ' ' + mois.toLowerCase() + ' ' + jour[1];
+  }
+  if (ev.start) quand += ' à ' + ev.start;
+  var lie = _normFicheId(ev.ficheId) ? ', et disparaîtra aussi de la fiche liée' : '';
+  return quoi + quand + ' sera supprimé' + lie + '.';
+}
+
 // Suppression ciblée d'un event de la table agenda + retrait local + re-render.
 // Confirmation par la fenêtre MovUP partagée.
 async function deleteEvent() {
@@ -963,11 +1019,16 @@ async function deleteEvent() {
       'Fermer');
     return;
   }
+  // Relevé AVANT l'attente, au même titre que l'identifiant : c'est la ligne
+  // encore présente dans events[] qui fournit le titre, la date et l'heure.
+  var phrase = _phraseSuppressionEvenement(
+    events.find(function (x) { return _normAgendaId(x.id) === cleanId; })
+  );
   // La fenêtre ne bloque plus le fil : le bouton se ferme avant qu'elle
   // s'ouvre, et se rouvre à tout renoncement comme à tout échec.
   var btn = document.getElementById('btn-delete');
   if (btn) btn.disabled = true;
-  if (!await mupConfirm('Supprimer cet événement ?', null, 'Supprimer', 'Annuler')) {
+  if (!await mupConfirm('Supprimer cet événement ?', phrase, 'Supprimer', 'Annuler')) {
     if (btn) btn.disabled = false;
     return;
   }

@@ -1255,7 +1255,7 @@ function startEditSociete(ch){
   if(!c) return;
   if(document.getElementById('d-societe-input')) return; // une seule case en édition à la fois
   const original = String(grid.dataset[ch.cle] || '');
-  valBox.innerHTML = '<input id="d-societe-input" type="text" inputmode="' + ch.mode + '" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="' + esc(ch.attente) + '" style="width:100%;border:1px solid var(--text);border-radius:6px;padding:4px 8px;font-size:12px;outline:none;box-sizing:border-box;background:#fff;">';
+  valBox.innerHTML = '<input id="d-societe-input" class="inline-editor" type="text" inputmode="' + ch.mode + '" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="' + esc(ch.attente) + '" style="width:100%;border:1px solid var(--text);border-radius:6px;padding:4px 8px;font-size:12px;outline:none;box-sizing:border-box;background:#fff;">';
   const input = document.getElementById('d-societe-input');
   input.value = original; // par la propriété, jamais par l'attribut : esc() ne protège pas les guillemets
   input.focus();
@@ -1304,7 +1304,7 @@ function startEditVal(){
   const c = cards.find(x => x.id === currentId);
   if(!c) return;
   const original = c.val || 0;
-  valBox.innerHTML = '<input id="d-val-input" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" value="'+(original||'')+'" placeholder="0" style="width:100%;border:1px solid var(--text);border-radius:6px;padding:4px 8px;font-family:var(--mono);font-size:12px;font-weight:600;outline:none;box-sizing:border-box;background:#fff;">';
+  valBox.innerHTML = '<input id="d-val-input" class="inline-editor" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" value="'+(original||'')+'" placeholder="0" style="width:100%;border:1px solid var(--text);border-radius:6px;padding:4px 8px;font-family:var(--mono);font-size:12px;font-weight:600;outline:none;box-sizing:border-box;background:#fff;">';
   const input = document.getElementById('d-val-input');
   input.focus();
   input.select();
@@ -1347,6 +1347,7 @@ function startEditVal(){
 //   attente    gris d'invite quand le champ est vide
 //   multiligne <textarea> plutôt qu'<input> ; Entrée y insère un saut de ligne
 //   large      case pleine largeur, posée en QUEUE de grille, après #d-societe-grid
+//   oblig      champ qui ne se vide pas : saisie vide → rien n'est écrit
 //   apres      appelé après l'écriture du champ et AVANT save() : ce qu'il
 //              touche part donc dans le même PUT
 const ICO_CRAYON = '<svg class="info-item-edit-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
@@ -1355,7 +1356,12 @@ const CHAMPS_CARTE = [
   // migrateCard réimpose `c.co = c.company` à chaque load() et save() PUT
   // l'objet entier — `co` seul serait perdu au premier rechargement. La
   // comparaison de la garde, elle, porte sur `co`, la valeur affichée.
+  // Seul champ des cinq qui ne se vide pas — même règle que partout ailleurs :
+  // saveCard refuse une création sans raison sociale, et wireForm de
+  // contact-societe.html sort sur `if (!nom) return;`. Les quatre autres
+  // restent effaçables.
   { cell:'d-raison-cell', libelle:'Raison sociale', prop:'co', mode:'text', attente:'Raison sociale',
+    oblig: true,
     apres: function(c, v){ c.company = v; renderKanban(); repeindreBandeauFiche(c); } },
   { cell:'d-sector-cell', libelle:'Secteur', prop:'sector', mode:'text', attente:"Secteur d'activité",
     apres: function(c){ renderKanban(); repeindreBandeauFiche(c); } },
@@ -1399,9 +1405,12 @@ function startEditCarte(ch){
   if(document.getElementById('d-carte-input')) return; // une seule case en édition à la fois
   const original = String(c[ch.prop] || '');
   const style = 'width:100%;border:1px solid var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-weight:600;color:var(--text);outline:none;box-sizing:border-box;background:#fff;';
+  // .inline-editor : marqueur des champs de saisie TRANSITOIRES de la fiche, lu
+  // par le garde-fou Échap de init() — cf. startEditVal et startEditSociete, qui
+  // le portent aussi.
   valBox.innerHTML = ch.multiligne
-    ? '<textarea id="d-carte-input" rows="4" autocomplete="off" spellcheck="false" placeholder="' + esc(ch.attente) + '" style="' + style + 'font-family:inherit;line-height:1.45;resize:vertical;"></textarea>'
-    : '<input id="d-carte-input" type="text" inputmode="' + ch.mode + '" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="' + esc(ch.attente) + '" style="' + style + '">';
+    ? '<textarea id="d-carte-input" class="inline-editor" rows="4" autocomplete="off" spellcheck="false" placeholder="' + esc(ch.attente) + '" style="' + style + 'font-family:inherit;line-height:1.45;resize:vertical;"></textarea>'
+    : '<input id="d-carte-input" class="inline-editor" type="text" inputmode="' + ch.mode + '" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="' + esc(ch.attente) + '" style="' + style + '">';
   const input = document.getElementById('d-carte-input');
   input.value = original; // par la propriété, jamais par l'attribut : esc() ne protège pas les guillemets
   input.focus();
@@ -1410,6 +1419,11 @@ function startEditCarte(ch){
   function repeindre(){ cell.innerHTML = caseCarteInner(ch, c); }
   function commit(){
     const v = input.value.trim();
+    // Champ obligatoire vidé → rien n'est écrit, rien n'est envoyé, la valeur
+    // en base reste, et la repeinte remet à l'écran ce que porte la carte. La
+    // case se comporte donc comme la fenêtre de création et comme la fiche
+    // société, qui refusent l'une et l'autre une raison sociale vide.
+    if(ch.oblig && !v){ repeindre(); return; }
     // Rien n'a bougé → aucune écriture. Ici la garde ne tient PAS la frontière
     // entre valeur possédée et valeur restituée des cases société : ces cinq
     // champs sont possédés par la carte, personne d'autre ne les peint. Elle
@@ -2919,8 +2933,8 @@ function importFromProspects() {
     //   2. tiroir fermé — il n'y a rien à fermer ;
     //   3. cible saisissable (input, textarea, select, éditable) — une note en
     //      cours de frappe ne doit jamais être perdue par une touche Échap ;
-    //   4. édition en ligne de la valeur estimée — elle a déjà son propre
-    //      Échap (annulation), qui ne doit pas déclencher aussi la fermeture ;
+    //   4. une case en édition en ligne — elle a déjà son propre Échap
+    //      (annulation), qui ne doit pas déclencher aussi la fermeture ;
     //   5. fenêtre modale ou confirmation MovUP ouverte — Échap appartient
     //      alors à la fenêtre, pas au tiroir.
     document.addEventListener('keydown', function(e){
@@ -2939,9 +2953,16 @@ function importFromProspects() {
         if(typeof cible.closest === 'function' && cible.closest('[contenteditable="true"],[contenteditable=""]')) return;
       }
 
-      // L'édition de la valeur estimée peut avoir rendu la main au document
-      // (le champ existe encore, sans le focus) : sa seule présence suffit.
-      if(document.getElementById('d-val-input')) return;
+      // Une case en édition en ligne peut avoir rendu la main au document (le
+      // champ existe encore, sans le focus) : sa seule PRÉSENCE suffit, la
+      // garde ci-dessus ne couvrant que le cas où elle a encore le focus.
+      // Marqueur de classe plutôt qu'une liste d'id ici : les champs
+      // transitoires sont trois (valeur estimée, coordonnées société, champs de
+      // la carte) et le prochain se déclarera là où il naît, pas au fond
+      // d'init(). Il ne s'agit PAS d'interroger tous les champs du tiroir : les
+      // saisies permanentes — réseaux sociaux, note, sélecteur de colonne —
+      // vivent en permanence dans le panneau et interdiraient Échap à jamais.
+      if(panel.querySelector('.inline-editor')) return;
 
       // .mupc-overlay et #tem-modal-overlay ne sont dans le document que
       // pendant qu'ils sont ouverts ; les deux autres se cachent sur place.

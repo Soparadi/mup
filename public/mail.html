@@ -430,16 +430,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* ============================================================================
    MASQUAGE — RÉDUCTION AU LANCEMENT
    ----------------------------------------------------------------------------
-   La page se limite à connecter une boîte Google ou Microsoft, lire ses
-   messages et écrire à ses contacts. Ce qui déborde n'est PAS retiré du
-   document : le balisage, les fonctions et les routes restent en place et
-   redeviennent atteignables en supprimant ce seul bloc.
+   La page se limite à connecter une boîte Microsoft, lire ses messages et
+   écrire à ses contacts. Ce qui déborde n'est PAS retiré du document : le
+   balisage, les fonctions et les routes restent en place et redeviennent
+   atteignables en supprimant ce seul bloc.
 
    display:none, et non visibility ni opacity : un élément retiré du flux n'est
    plus focusable — la tabulation ne l'atteint pas, aucune de ces cibles ne peut
    être déclenchée au clavier faute d'être affichée.
 
-   Trois voies s'éteignent ici :
+   Quatre voies s'éteignent ici :
    — Campagnes : le sous-onglet, son panneau, et les trois fenêtres qui n'en
      relèvent que (création, détail, SIRET avant premier envoi) ;
    — les pastilles Mailing et Newsletter du bandeau, qui n'ouvraient rien
@@ -448,14 +448,36 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
      l'écran d'accueil, le bouton des Paramètres — et la fenêtre elle-même. Ces
      deux entrées sont les seuls .link-secondary de la page ; elles sont visées
      par leur emplacement, pour que rien n'ait à être marqué sur les éléments.
+   — la connexion Google : les trois boutons [data-oauth="google"] — celui de
+     l'accueil sans compte, celui de l'écran de reconnexion, celui des
+     Paramètres. Le sélecteur les couvre tous les trois et rien d'autre.
+
+   LA CAUSE DE CE QUATRIÈME RETRAIT N'EST PAS CELLE DES TROIS PREMIERS. Les
+   trois premiers écartent ce qui n'est pas prêt à être montré. Celui-ci
+   n'écarte rien d'inachevé : la voie Google fonctionne de bout en bout, mais
+   la validation de l'application par Google est en cours. Le bouton revient
+   avec elle — il n'y a rien d'autre à faire, le jour où elle est accordée, que
+   de retirer son sélecteur de la liste ci-dessous et de rétablir les textes
+   marqués MASQUAGE qui ne nomment plus qu'une voie. Rien du chemin Google
+   n'est démonté entre-temps : la route /auth/google, oauthGoogle(),
+   startOauth(), la fenêtre prélude, STATE.googleAppVerified et la boucle de
+   renderConnexionGate() sur les deux fournisseurs restent en place.
 
    Ce que ce bloc ne touche pas : la lecture IMAP côté serveur. Une boîte déjà
    connectée en manuel continue de se lire exactement comme avant — seule la
-   création d'une nouvelle est hors d'atteinte. Deux endroits du script tirent
-   la conséquence de ce cul-de-sac et portent le même mot MASQUAGE :
-   showInboxError(), qui offre une sortie quand une telle boîte cesse de
-   répondre, et disconnectAccount(), qui prévient avant de la débrancher.
+   création d'une nouvelle est hors d'atteinte. Il en va de même d'une boîte
+   Google déjà connectée : elle continue de se lire et de s'écrire, seul son
+   rebranchement depuis cette page est hors d'atteinte tant que le bouton est
+   masqué.
+
+   Cinq endroits du document tirent la conséquence de ces retraits et portent
+   le même mot MASQUAGE : l'accueil sans compte et showInboxError(), qui ne
+   nomment plus que la voie offerte ; motifConnexionFermee(), qui ne propose
+   plus un fournisseur en repli de l'autre ; disconnectAccount(), qui prévient
+   avant de débrancher une boîte qu'on ne rebranchera pas d'ici ; et
+   autodetectProvider(), dont la recommandation désigne un bouton masqué.
    ============================================================================ */
+[data-oauth="google"],
 .subtab[data-tab="campaigns"],
 #tab-campaigns,
 #campaign-modal,
@@ -569,7 +591,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
             </div>
             <div class="empty-state-title">Connectez votre boîte mail</div>
-            <div class="empty-state-sub">Pour envoyer et recevoir vos messages depuis MUP, connectez d'abord votre boîte professionnelle. La connexion passe par Google ou Microsoft, sans jamais nous confier votre mot de passe.</div>
+            <!-- MASQUAGE — ne nomme que la voie réellement offerte : le bouton
+                 Google est éteint par le bloc de la feuille de style, le temps
+                 de la validation de l'application. La promesse du mot de passe
+                 jamais confié reste vraie de la voie qui reste. À rétablir en
+                 même temps que le bouton. -->
+            <div class="empty-state-sub">Pour envoyer et recevoir vos messages depuis MUP, connectez d'abord votre boîte professionnelle. La connexion passe par Microsoft, sans jamais nous confier votre mot de passe.</div>
             <div class="empty-state-actions">
               <div class="notice notice-warn oauth-notice" style="display:none;text-align:left;"></div>
               <button class="oauth-btn" data-oauth="google" onclick="oauthGoogle()">
@@ -1229,18 +1256,23 @@ function showInboxError(message, code){
     reconnexion ? 'Reconnexion nécessaire' : 'Lecture impossible';
   // MASQUAGE — le motif du serveur renvoie vers les Paramètres, où la
   // connexion manuelle n'est plus proposée : une boîte IMAP ne s'y rebranche
-  // pas. On lui substitue la seule marche à suivre qui reste. À retirer avec
-  // le bloc de masquage de la feuille de style.
+  // pas. On lui substitue la seule marche à suivre qui reste, et elle ne nomme
+  // que la voie offerte — le bouton Google est éteint par le bloc de la
+  // feuille de style, le temps de la validation de l'application. À retirer
+  // avec lui.
   var imap = STATE.primaryAccount && STATE.primaryAccount.provider === 'imap';
   document.getElementById('empty-state-error-sub').textContent =
     (reconnexion && imap)
-      ? 'Votre boîte a refusé les identifiants enregistrés. Déconnectez-la dans Paramètres, puis connectez une boîte Google ou Microsoft.'
+      ? 'Votre boîte a refusé les identifiants enregistrés. Déconnectez-la dans Paramètres, puis connectez une boîte Microsoft.'
       : (message || 'La connexion à votre boîte a échoué. Réessayez dans un instant.');
   // Un écran d'erreur qui ne propose rien est un cul-de-sac : quand la boîte
   // demande à être rebranchée, la voie de son fournisseur est sous les yeux.
-  // Sauf pour une boîte IMAP : aucun des deux boutons ne la rebranche, et
+  // Sauf pour une boîte IMAP : aucun de ces boutons ne la rebranche, et
   // connecter l'un ou l'autre serait refusé tant qu'elle occupe la place. Le
   // texte ci-dessus porte alors seul la marche à suivre.
+  // MASQUAGE — une boîte Google connectée avant le masquage retrouve bien cet
+  // écran, mais son bouton de reconnexion y est éteint : elle attend le retour
+  // du bouton, ou sa déconnexion depuis Paramètres.
   var actions = document.getElementById('empty-state-error-actions');
   if(actions) actions.style.display = (reconnexion && !imap) ? 'flex' : 'none';
   renderConnexionGate();
@@ -1941,12 +1973,15 @@ function motifConnexionFermee(el, p, boite){
     return 'Votre boîte ' + boite.email + ' est déjà connectée. MovUP n\'en utilise qu\'une : déconnectez-la ci-dessus avant d\'en connecter une autre.';
   }
   if(!p) return '';
-  var absents = ['google','microsoft'].filter(function(k){ return !p[k]; });
-  if(absents.length === 2){
-    return 'Les connexions Google et Microsoft sont momentanément indisponibles. Aucune boîte ne peut être connectée pour l\'instant : réessayez plus tard.';
-  }
-  if(absents.length === 1){
-    return 'La connexion ' + OAUTH_LABELS[absents[0]] + ' est momentanément indisponible. Vous pouvez connecter votre boîte avec ' + OAUTH_LABELS[absents[0] === 'google' ? 'microsoft' : 'google'] + ', ou réessayer plus tard.';
+  // MASQUAGE — une seule voie est offerte : le bouton Google est éteint par le
+  // bloc de la feuille de style, le temps de la validation de l'application.
+  // La mention symétrique proposait l'autre fournisseur en repli ; elle
+  // désignerait aujourd'hui un bouton masqué — exactement le défaut corrigé
+  // par 994520f. Seule l'indisponibilité de Microsoft a encore un sens à se
+  // dire, et l'indisponibilité de Google n'en a plus aucun : son bouton n'est
+  // pas là. À rétablir avec lui, dans sa forme à deux fournisseurs.
+  if(!p.microsoft){
+    return 'La connexion Microsoft est momentanément indisponible. Aucune boîte ne peut être connectée pour l\'instant : réessayez plus tard.';
   }
   return '';
 }
@@ -2040,10 +2075,12 @@ async function loadAccounts(){
 
 async function disconnectAccount(provider, email, btn){
   // MASQUAGE — débrancher une boîte connectée en manuel est sans retour tant
-  // que la fenêtre IMAP est masquée : on le dit avant, pas après. À retirer
-  // avec le bloc de masquage de la feuille de style.
+  // que la fenêtre IMAP est masquée : on le dit avant, pas après. L'avis ne
+  // nomme que la voie offerte, le bouton Google étant lui aussi éteint le
+  // temps de la validation de l'application. À retirer avec le bloc de
+  // masquage de la feuille de style.
   var sansRetour = provider === 'imap'
-    ? 'Vous ne pourrez pas la rebrancher de la même façon : seules les connexions Google et Microsoft sont proposées.'
+    ? 'Vous ne pourrez pas la rebrancher de la même façon : seule la connexion Microsoft est proposée.'
     : null;
   if(btn) btn.disabled = true;                 // la fenêtre ne bloque plus le fil
   if(!await mupConfirm('Déconnecter ' + email + ' (' + provider + ') ?', sansRetour, 'Déconnecter', 'Annuler')){
@@ -2487,6 +2524,12 @@ async function autodetectProvider(){
   await loadPresets(); var preset = PRESETS[domain] || PRESETS._default; currentPreset = preset;
   var det = document.getElementById('im-detected'); var fields = document.getElementById('im-fields');
   var manual = document.getElementById('im-manual'); var hint = document.getElementById('im-password-hint');
+  // MASQUAGE — cette recommandation suppose le bouton « Connecter avec Google »
+  // visible ; il est éteint par le bloc de la feuille de style, le temps de la
+  // validation de l'application. Le texte n'est pas réécrit parce qu'il vit
+  // dans la fenêtre IMAP, elle-même masquée : personne ne le lit aujourd'hui.
+  // À revoir si la voie IMAP rouvre AVANT le bouton Google — la phrase
+  // désignerait alors un bouton absent.
   if(preset.provider === 'oauth-google'){ det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice">Connexion <strong>OAuth Google</strong> recommandée — bouton "Connecter avec Google".</div>'; det.style.display='block'; }
   else if(preset.provider === 'oauth-microsoft'){ det.innerHTML = '<div class="detected-pill"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice">Connexion <strong>OAuth Microsoft</strong> recommandée.</div>'; det.style.display='block'; }
   else if(preset.provider === 'imap-bridge'){ det.innerHTML = '<div class="detected-pill warn"><span class="dot"></span>' + preset.label + ' détecté</div><div class="notice notice-warn"><strong>Configuration spéciale.</strong> ' + (preset.note || '') + '</div>'; det.style.display='block'; }

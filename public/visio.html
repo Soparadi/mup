@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MovUP — Visio</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles/sidebar.css">
 <style>
 :root{
@@ -29,6 +30,30 @@
   --meet:#00805A;
   --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Geist",sans-serif;
+
+  /* —— VÊTEMENT DES COURRIELS MOVUP ——
+     Relevé dans server/templates/ et posé ICI, une seule fois. Les 21 gabarits
+     recopient chacun ces valeurs parce qu'un courriel n'a pas de feuille
+     partagée ; la page en a une, et n'ajoute donc pas une 22e copie éparpillée.
+     Seul le panneau de mise en service s'en sert : c'est lui qui parle au nom
+     du produit, pas l'application. */
+  --mes-fond:#f4f1ea;
+  --mes-carte:#ffffff;
+  --mes-bord:#d9d3c4;
+  --mes-rayon:16px;
+  --mes-surtitre:#8a8579;
+  --mes-titre:#0d0d0b;
+  --mes-corps:#5c574e;
+  --mes-bouton:#0d0d0b;
+  --mes-bouton-rayon:10px;
+  /* Le filet du COURRIEL, tranché : six bandes de 12 px DANS CET ORDRE. Celui
+     de l'accueil du site diverge et n'est pas touché par ce lot. */
+  --mes-filet-1:#B84C00;
+  --mes-filet-2:#4338CA;
+  --mes-filet-3:#7C3AED;
+  --mes-filet-4:#0BBCD4;
+  --mes-filet-5:#D97706;
+  --mes-filet-6:#1D8348;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:var(--surface)}
@@ -115,6 +140,28 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .my-link-field input::placeholder{color:var(--muted2);font-family:var(--font)}
 .my-link-field .save-mini{width:20px;height:20px;border-radius:5px;background:var(--visio);color:#fff;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
 .my-link-field.dirty .save-mini{opacity:1}
+/* —— LA BARRE SE DÉDUIT DE LA DONNÉE ——
+   Un champ RENSEIGNÉ reste visible avec son bouton de lancement ; un champ VIDE
+   passe derrière « ajouter un outil ». Rien n'est imposé : trois liens font
+   trois champs, un seul lien n'en fait qu'un. Le bouton lui-même s'efface quand
+   il n'y a plus rien à ajouter. La règle est écrite sur .has-link et .vide, que
+   le seul écrivain des liens tient à jour — aucune seconde vérité. */
+.launch-btn.zoom:not(.has-link),
+.launch-btn.teams:not(.has-link),
+.launch-btn.meet:not(.has-link),
+.my-link-field.vide{display:none}
+body.outils-deplies .launch-btn.zoom:not(.has-link),
+body.outils-deplies .launch-btn.teams:not(.has-link),
+body.outils-deplies .launch-btn.meet:not(.has-link){display:flex}
+body.outils-deplies .my-link-field.vide{display:flex}
+.btn-ajouter-outil{
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+  padding:8px 12px;border:1px dashed var(--border2);border-radius:9px;
+  font-size:11.5px;font-weight:600;color:var(--muted);
+}
+.btn-ajouter-outil:hover{border-color:var(--visio);color:var(--visio)}
+.btn-ajouter-outil:focus-visible{outline:2px solid var(--visio);outline-offset:2px}
+.btn-ajouter-outil.rien-a-ajouter{display:none}
 .launch-spacer{flex:1}
 .btn-new-rdv{background:var(--text);color:#fff;padding:9px 14px;border-radius:9px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;flex-shrink:0}
 .btn-new-rdv:hover{background:#000}
@@ -280,6 +327,10 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .empty-state p{color:var(--muted);font-size:12.5px;max-width:400px;line-height:1.5}
 .empty-state .hint{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11.5px;color:var(--muted);margin-top:8px}
 .empty-state .hint strong{color:var(--text)}
+/* Deux faces, et elles se déduisent. La page opérante annonce ce qu'elle sait
+   faire ; la page sans lien — l'abonné a remis sa mise en service à plus tard —
+   dit ce qui manque et rouvre le panneau. Rouvrir n'est pas fermer. */
+.empty-state .face{display:none;flex-direction:column;align-items:center;gap:14px}
 
 /* —— BRIEFING + VISIO + DOCS LAYOUT —— */
 /* Base de contenu, et surtout PAS min-height:0 : sa hauteur minimale reste
@@ -323,6 +374,25 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .stage-pill-inline{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:3px 8px;background:var(--surface);border-radius:6px}
 .stage-pill-inline .dot{width:6px;height:6px;border-radius:50%}
 .briefing-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+/* —— FICHE OUVERTE : LE BRIEFING NE SE RÉPÈTE PAS ——
+   Nom, société, courriel, téléphone, adresse : la fiche ancrée les porte déjà.
+   Le briefing se réduit alors à ce qu'elle ne porte PAS — l'heure et la durée du
+   rendez-vous — et reprend sa forme complète fiche fermée. La bascule est en
+   CSS : elle suit la classe que l'observateur pose sur .workspace, sans second
+   chemin et sans re-rendu. Elle ne vise que le briefing d'un RENDEZ-VOUS
+   (.briefing-rdv) : le mode préparation écrit dans le même panneau et doit
+   rester lisible, fiche ouverte ou non. */
+.briefing-creneau{
+  display:none;align-items:center;gap:12px;
+  font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text);
+}
+.briefing-creneau .duree{font-size:11.5px;font-weight:600;color:var(--muted)}
+.workspace.fiche-ouverte .briefing.briefing-rdv .briefing-avatar,
+.workspace.fiche-ouverte .briefing.briefing-rdv .briefing-name,
+.workspace.fiche-ouverte .briefing.briefing-rdv .briefing-soc,
+.workspace.fiche-ouverte .briefing.briefing-rdv .briefing-info,
+.workspace.fiche-ouverte .briefing.briefing-rdv .briefing-fiche{display:none}
+.workspace.fiche-ouverte .briefing.briefing-rdv .briefing-creneau{display:flex}
 .briefing-mini{
   padding:6px 12px;
   border-radius:8px;
@@ -365,6 +435,15 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
    engagerSeance sont les deux seuls à basculer. */
 .timer .live-dot{display:none;width:7px;height:7px;border-radius:50%;background:var(--red);animation:pulse 1.4s infinite}
 .timer.seance-engagee .live-dot{display:block}
+/* Le minuteur et « Terminer » n'appartiennent qu'à une séance ENGAGÉE : avant
+   elle, ils annoncent la fin de quelque chose qui n'a pas commencé. Ils se
+   retirent SEULS — #copyLinkBtn et #inviteBtn restent en place, les raccourcis
+   C et I les déclenchent par .click() et ne survivraient pas à leur retrait.
+   Le mode test garde son minuteur : « TEST » y dit le mode en cours, il ne
+   promet aucune fin — et .toolbar-end reste retirée dans ce cas comme dans
+   l'autre. */
+.timer:not(.seance-engagee):not(.en-test){display:none}
+.visio-toolbar:not(:has(.timer.seance-engagee)) .toolbar-end{display:none}
 .tool-btn{width:34px;height:34px;border-radius:9px;background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--text);transition:all .12s}
 .tool-btn:hover{background:var(--surface2)}
 .toolbar-end{margin-left:auto;display:flex;gap:8px}
@@ -596,51 +675,136 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .docs-quota.warn .bar-fill{background:var(--orange)}
 .docs-quota.critical .bar-fill{background:var(--red)}
 
-/* —— ACCUEIL PREMIÈRE VISIO ——
-   Un bandeau du flux principal, au même rang que la barre de lancement : il
-   n'interrompt rien, ne se ferme pas, et se retire de lui-même dès qu'un lien
-   est enregistré. Son champ de saisie est le sien — la barre du haut disparaît
-   sous 1100 px, y renvoyer laisserait l'abonné sans issue. */
-.accueil-visio{
-  background:var(--card);border-bottom:1px solid var(--border);
-  padding:16px 24px;flex-shrink:0;
+/* ══════════════════════════════════════════════════════════════════
+   MISE EN SERVICE — LE PANNEAU D'ACCUEIL
+   ------------------------------------------------------------------
+   Le VÊTEMENT de mup-confirm — voile, flou, carte centrée — et rien de
+   sa mécanique : .overlay et .mupc-overlay se referment toutes deux
+   sur un clic au fond et sur Échap, exactement ce qu'on ne veut pas.
+   Ce panneau ne se ferme sur aucun geste ; il se retire quand sa raison
+   d'être disparaît.
+
+   COUCHE : --mupz-dialogue (50000), le palier des dialogues système,
+   au-dessus de toute modale de page (1000). Deux voisins sont traités
+   plus bas : l'infobulle du rail (99999), neutralisée, et le bandeau
+   de consentement, remonté DEVANT le panneau.
+   ══════════════════════════════════════════════════════════════════ */
+.mes-voile{
+  position:fixed;inset:0;z-index:var(--mupz-dialogue,50000);
+  background:rgba(13,13,11,.55);backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;overflow-y:auto;
 }
-.accueil-visio h2{font-size:15px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px}
-.accueil-visio p{font-size:12.5px;color:var(--muted);line-height:1.55;max-width:780px}
-.accueil-choix{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.accueil-outil{
-  display:flex;align-items:center;gap:7px;
-  padding:9px 15px;border:2px solid var(--border);border-radius:10px;
-  font-size:12px;font-weight:700;transition:border-color .12s,background .12s;
+.mes-carte{
+  background:var(--mes-carte);border:1px solid var(--mes-bord);
+  border-radius:var(--mes-rayon);overflow:hidden;
+  width:100%;max-width:600px;max-height:calc(100vh - 48px);
+  display:flex;flex-direction:column;
+  box-shadow:0 24px 60px rgba(13,13,11,.28);
 }
-.accueil-outil:hover{border-color:var(--border2);background:var(--surface)}
-.accueil-outil:focus-visible{outline:2px solid var(--visio);outline-offset:2px}
-.accueil-outil .ld{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-/* L'outil retenu, nommé en clair au-dessus du mode d'emploi : l'abonné lit
-   « Teams », il ne le déduit pas de l'exemple d'adresse du champ. Sa règle
-   passe devant `.accueil-visio p`, qui grise et amincit tous les paragraphes
-   de l'encart. */
-.accueil-visio .accueil-outil-choisi{
-  display:flex;align-items:center;gap:7px;margin-bottom:7px;
-  font-size:13px;font-weight:800;letter-spacing:-.2px;color:var(--text);
+/* Six bandes de 12 px dans leur ordre, écrites une seule fois : ce sont des
+   arrêts de dégradé, pas six éléments à poser dans le balisage. */
+.mes-filet{
+  height:12px;flex-shrink:0;
+  background:linear-gradient(90deg,
+    var(--mes-filet-1) 0 16.6667%,        var(--mes-filet-2) 16.6667% 33.3333%,
+    var(--mes-filet-3) 33.3333% 50%,      var(--mes-filet-4) 50% 66.6667%,
+    var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
 }
-.accueil-visio .accueil-outil-choisi .ld{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.accueil-form{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
-.accueil-form input{
-  flex:1;min-width:220px;max-width:520px;
-  padding:9px 11px;border:1px solid var(--border);border-radius:9px;
-  font-family:var(--mono);font-size:12px;outline:none;background:#fff;
-  transition:border-color .15s;
+.mes-corps{padding:30px 34px 26px;overflow-y:auto}
+.mes-surtitre{
+  font-size:12px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--mes-surtitre);margin-bottom:14px;
 }
-.accueil-form input::placeholder{font-family:var(--font);color:var(--muted2)}
-.accueil-form input:focus{border-color:var(--visio)}
-.accueil-retour{
-  display:inline-block;margin-top:10px;
-  font-size:11.5px;font-weight:600;color:var(--muted);
+.mes-carte h2{
+  font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.15;
+  color:var(--mes-titre);margin-bottom:16px;
+}
+.mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
+.mes-carte p + p{margin-top:12px}
+.mes-carte strong{color:var(--mes-titre);font-weight:700}
+.mes-pied{
+  border-top:1px solid var(--mes-bord);background:var(--mes-fond);
+  padding:16px 34px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:16px;flex-wrap:wrap;
+}
+.mes-note{font-size:12px;line-height:1.5;color:var(--mes-surtitre);flex:1;min-width:180px}
+.mes-pied-actions{display:flex;align-items:center;gap:16px;flex-shrink:0}
+.mes-btn{
+  background:var(--mes-bouton);color:#fff;
+  padding:11px 20px;border-radius:var(--mes-bouton-rayon);
+  font-size:13px;font-weight:700;flex-shrink:0;
+}
+.mes-btn:hover{background:#000}
+.mes-lien{
+  font-size:12.5px;font-weight:600;color:var(--mes-corps);
   text-decoration:underline;text-underline-offset:3px;
 }
-.accueil-retour:hover{color:var(--text)}
-.accueil-retour:focus-visible{outline:2px solid var(--visio);outline-offset:2px;border-radius:4px}
+.mes-lien:hover{color:var(--mes-titre)}
+.mes-btn:focus-visible,.mes-lien:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+
+/* Les trois outils, les trois modes d'emploi et le champ miroir de la barre du
+   haut viennent de l'encart absorbé : mêmes classes, mêmes identifiants, mêmes
+   gestionnaires. Seul le vêtement change — celui des courriels. */
+.accueil-choix{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.accueil-outil{
+  display:flex;align-items:center;gap:8px;
+  padding:11px 18px;border:1px solid var(--mes-bord);border-radius:var(--mes-bouton-rayon);
+  background:var(--mes-fond);color:var(--mes-titre);
+  font-size:13px;font-weight:700;transition:border-color .12s,background .12s;
+}
+.accueil-outil:hover{border-color:var(--mes-titre);background:#fff}
+.accueil-outil:focus-visible{outline:2px solid var(--mes-titre);outline-offset:2px}
+.accueil-outil .ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+/* L'outil retenu, nommé en clair au-dessus du mode d'emploi : l'abonné lit
+   « Teams », il ne le déduit pas de l'exemple d'adresse du champ. Deux classes
+   pour passer devant `.mes-carte p`, qui tient tous les paragraphes du panneau. */
+.mes-carte .accueil-outil-choisi{
+  display:flex;align-items:center;gap:8px;margin:0 0 10px;
+  font-size:16px;font-weight:800;letter-spacing:-.3px;color:var(--mes-titre);
+}
+.mes-carte .accueil-outil-choisi .ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.accueil-form{display:flex;gap:10px;align-items:center;margin-top:20px;flex-wrap:wrap}
+.accueil-form input{
+  flex:1;min-width:240px;
+  padding:11px 13px;border:1px solid var(--mes-bord);border-radius:var(--mes-bouton-rayon);
+  font-family:var(--mono);font-size:13px;outline:none;background:#fff;color:var(--mes-titre);
+  transition:border-color .15s;
+}
+.accueil-form input::placeholder{font-family:var(--font);color:var(--mes-surtitre)}
+.accueil-form input:focus{border-color:var(--mes-titre)}
+.accueil-retour{
+  display:inline-block;margin-top:18px;
+  font-size:12.5px;font-weight:600;color:var(--mes-corps);
+  text-decoration:underline;text-underline-offset:3px;
+}
+.accueil-retour:hover{color:var(--mes-titre)}
+.accueil-retour:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+
+/* —— LA PAGE, DERRIÈRE ——
+   Le document ne défile déjà pas : html,body{overflow:hidden} est posé depuis
+   toujours et le défilement est confiné à quatre panneaux internes. Ce sont
+   EUX qu'on arrête. L'inertie du pointeur et du focus, elle, est posée en JS
+   sur les trois régions de la page. */
+body.mise-en-service .col-left,
+body.mise-en-service .col-center,
+body.mise-en-service .docs-drawer-body,
+body.mise-en-service #docsList{overflow:hidden}
+/* L'infobulle du rail vit à 99999 et passerait DEVANT le panneau entre 641 et
+   1440 px. Le rail est inerte sous le voile : une infobulle pour un rail inerte
+   est du bruit. On ne lui dispute pas sa couche, on la retire. */
+body.mise-en-service #sb-rail-flyout{display:none !important}
+
+/* Le consentement passe DEVANT la mise en service. Le panneau ne se retire qu'à
+   l'enregistrement d'un lien : un bandeau enfoui derrière lui resterait
+   inatteignable aussi longtemps, ce qui ne se défend pas. Écrit ici, dans la
+   seule page qui pose un panneau à cette hauteur — la feuille partagée n'est
+   pas touchée. */
+/* Sélecteurs qualifiés par body : cookies-banner.css est chargée APRÈS ce
+   bloc et gagnerait l'égalité de spécificité par l'ordre. */
+body #mup-cookie-banner{z-index:60000}
+body #mup-cookie-panel{z-index:60001}
 
 /* —— MODALES —— */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
@@ -716,7 +880,10 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 }
 .kbd-row .desc{font-size:12px;color:var(--text);flex:1}
 
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,.2);z-index:2000;transition:transform .25s;pointer-events:none}
+/* Le toast montait à 2000, sous le panneau de mise en service (50000) : le
+   verdict d'enregistrement que le panneau attend s'y serait affiché DERRIÈRE
+   lui. Il prend le palier prévu pour lui par l'échelle des couches. */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,.2);z-index:var(--mupz-toast,100000);transition:transform .25s;pointer-events:none}
 .toast.show{transform:translateX(-50%) translateY(0)}
 
 @media(max-width:1300px){
@@ -730,13 +897,22 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 @media(max-width:1100px){
   .workspace,.workspace.fiche-ouverte{grid-template-columns:220px 1fr}
   .col-fiche{display:none}
-  .my-links{display:none}
+  /* `.my-links{display:none}` escamotait ici les TROIS champs ensemble,
+     renseignés compris, sans surface de repli : un lien devenait incorrigible
+     sous ce seuil. Il est retiré. L'encombrement qui le motivait a disparu de
+     lui-même — un abonné à un seul lien n'affiche plus qu'un champ — et il ne
+     reste qu'à resserrer. Aucune largeur d'écran ne fait plus disparaître un
+     lien enregistré. */
+  .my-link-field input{width:120px}
+  .btn-ajouter-outil .lbl{display:none}
 }
 @media(max-width:900px){
   .workspace,.workspace.fiche-ouverte{grid-template-columns:1fr}
   .col-left,.col-fiche{display:none}
   .launch-bar{padding:10px 16px;gap:8px}
   .launch-providers{flex-wrap:wrap}
+  /* Elle retombe sur sa propre ligne ; elle ne disparaît pas. */
+  .my-links{flex-basis:100%}
 }
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
@@ -830,42 +1006,17 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
       </div>
     </div>
 
+    <button class="btn-ajouter-outil" id="btnAjouterOutil" aria-expanded="false" title="Afficher les outils que vous n'avez pas encore renseignés">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span class="lbl">ajouter un outil</span>
+    </button>
+
     <div class="launch-spacer"></div>
 
     <button class="btn-new-rdv" id="openNewRdvBtn">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Programmer RDV
     </button>
-  </div>
-
-  <!-- ACCUEIL PREMIÈRE VISIO
-       Vit tant qu'aucun lien n'est enregistré et se retire à la première
-       saisie : aucune croix, aucun « déjà vu » en base — sa raison d'être
-       disparaît avec le premier lien. Hors de #emptyState, que l'ouverture
-       masque dès qu'un rendez-vous est programmé. Caché en ligne comme
-       #visioActive : il ne paraît qu'après bootstrapVisio(), sans quoi il
-       clignoterait au chargement chez l'abonné déjà équipé. -->
-  <div class="accueil-visio" id="accueilVisio" style="display:none">
-    <h2>Votre première visio</h2>
-
-    <div id="accueilIntro">
-      <p>MovUP ne remplace pas votre outil de visioconférence : il tient le rendez-vous autour de l'appel — la fiche du prospect, vos notes, le journal de la séance et l'avancée au pipeline. Indiquez l'outil que vous utilisez.</p>
-      <div class="accueil-choix">
-        <button class="accueil-outil" data-accueil-outil="zoom"><span class="ld" style="background:var(--zoom)"></span>Zoom</button>
-        <button class="accueil-outil" data-accueil-outil="teams"><span class="ld" style="background:var(--teams)"></span>Teams</button>
-        <button class="accueil-outil" data-accueil-outil="meet"><span class="ld" style="background:var(--meet)"></span>Meet</button>
-      </div>
-    </div>
-
-    <div id="accueilSaisie" style="display:none">
-      <p class="accueil-outil-choisi"><span class="ld" id="accueilOutilPuce"></span><span id="accueilOutilNom">—</span></p>
-      <p id="accueilAide">—</p>
-      <div class="accueil-form">
-        <input type="url" id="accueilLien" placeholder="https://…">
-        <button class="btn-primary" id="accueilEnregistrer">Enregistrer</button>
-      </div>
-      <button class="accueil-retour" id="accueilRetour">Choisir un autre outil</button>
-    </div>
   </div>
 
   <!-- WORKSPACE -->
@@ -885,8 +1036,20 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
         <div class="icon-circle">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
         </div>
-        <h2>Prêt à lancer une visio</h2>
-        <p>Cliquez sur un provider en haut pour démarrer instantanément, ou sélectionnez un RDV programmé dans la liste.</p>
+        <!-- La face de la page OPÉRANTE : elle ne paraît qu'une fois un lien
+             enregistré. Avant, elle promettait un démarrage impossible. -->
+        <div class="face" id="emptyOperant">
+          <h2>Prêt à lancer une visio</h2>
+          <p>Cliquez sur l'un de vos outils en haut pour démarrer, ou sélectionnez un rendez-vous programmé dans la liste.</p>
+        </div>
+        <!-- La trace du report : l'abonné a dit n'utiliser aucun outil, la page
+             ne le retient plus, mais elle ne fait pas semblant d'être prête. Le
+             bouton ROUVRE le panneau — rouvrir n'est pas fermer. -->
+        <div class="face" id="emptyReport">
+          <h2>Aucun outil enregistré</h2>
+          <p>Vous avez remis votre mise en service à plus tard. Tant qu'aucun lien n'est enregistré, aucune visio ne peut être lancée depuis MovUP.</p>
+          <button class="btn-primary" id="reprendreMiseEnService">Reprendre la mise en service</button>
+        </div>
         <div id="nextRdvCard"></div>
         <div id="emptyDocsHint" class="hint" style="display:none">
           <strong id="emptyDocsCount">—</strong> · Touches <kbd style="font-family:var(--mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">1</kbd> <kbd style="font-family:var(--mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">2</kbd> <kbd style="font-family:var(--mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">3</kbd> pour ouvrir vos documents épinglés directement.
@@ -969,6 +1132,88 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
     <div class="col-fiche" id="ficheHost"></div>
   </div>
 </main>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MISE EN SERVICE DE LA PAGE VISIO
+     Ce n'est pas un encart qui explique un champ : la page n'est
+     pleinement opérante qu'après. Il ne se ferme sur AUCUN geste —
+     ni croix, ni clic au fond, ni Échap — et se retire parce que sa
+     raison d'être disparaît : un lien enregistré. Effacer son dernier
+     lien le fait revenir, et c'est juste.
+
+     Hors de <main> : c'est <main>, le rail et le pied que le panneau
+     rend inertes, et il ne peut pas se rendre inerte lui-même.
+
+     Masqué en style EN LIGNE, comme #visioActive : il n'est révélé
+     qu'après bootstrapVisio(), sans quoi il clignoterait au
+     chargement chez l'abonné déjà équipé.
+     ══════════════════════════════════════════════════════════════ -->
+<div class="mes-voile" id="panneauMiseEnService" style="display:none" role="dialog" aria-modal="true" aria-labelledby="mesTitre">
+  <div class="mes-carte">
+    <div class="mes-filet" aria-hidden="true"></div>
+
+    <div class="mes-corps">
+      <p class="mes-surtitre" id="mesSurtitre">Mise en service</p>
+      <h2 id="mesTitre">Bienvenue dans votre espace visio</h2>
+
+      <!-- PREMIER TEMPS — L'OUTIL. Un seul lien suffit à rendre la page
+           opérante et à retirer le panneau : un abonné ne choisit pas son
+           outil, il subit celui de son client, et n'en propose qu'un quand
+           c'est lui qui invite. -->
+      <div id="accueilIntro">
+        <p>MovUP ne remplace pas votre outil de visioconférence : il tient le rendez-vous autour de l'appel — la fiche du prospect, le journal de la séance et l'avancée au pipeline. Indiquez l'outil que vous utilisez.</p>
+        <div class="accueil-choix">
+          <button class="accueil-outil" data-accueil-outil="zoom"><span class="ld" style="background:var(--zoom)"></span>Zoom</button>
+          <button class="accueil-outil" data-accueil-outil="teams"><span class="ld" style="background:var(--teams)"></span>Teams</button>
+          <button class="accueil-outil" data-accueil-outil="meet"><span class="ld" style="background:var(--meet)"></span>Meet</button>
+        </div>
+        <button class="accueil-retour" id="mesAucunOutil">Je n'en utilise aucun</button>
+      </div>
+
+      <div id="accueilSaisie" style="display:none">
+        <p class="accueil-outil-choisi"><span class="ld" id="accueilOutilPuce"></span><span id="accueilOutilNom">—</span></p>
+        <p id="accueilAide">—</p>
+        <div class="accueil-form">
+          <input type="url" id="accueilLien" placeholder="https://…">
+          <button class="mes-btn" id="accueilEnregistrer">Enregistrer</button>
+        </div>
+        <button class="accueil-retour" id="accueilRetour">Choisir un autre outil</button>
+      </div>
+
+      <!-- QUATRIÈME ISSUE — elle CONSEILLE au lieu de renvoyer à un champ
+           vide. Meet est le conseil honnête : un compte Google suffit. Mais
+           l'abonné doit tout de même aller créer son évènement et revenir
+           coller le lien — on ne peut pas le faire à sa place, et cette
+           branche le dit plutôt que de le laisser devant trois boutons. -->
+      <div id="mesConseil" style="display:none">
+        <p class="accueil-outil-choisi"><span class="ld" style="background:var(--meet)"></span>Notre conseil : Google Meet</p>
+        <p>Un compte Google suffit, la création prend une minute, et c'est l'outil le plus répandu chez les petites structures — vos interlocuteurs sauront s'en servir.</p>
+        <p>Ouvrez Google Agenda, créez un évènement récurrent en y ajoutant une visioconférence, puis revenez coller son lien ici : il restera le même pour toutes les occurrences. Nous ne pouvons pas le créer à votre place.</p>
+        <div class="accueil-choix">
+          <button class="accueil-outil" data-accueil-outil="meet"><span class="ld" style="background:var(--meet)"></span>J'ai mon lien Meet</button>
+        </div>
+        <button class="accueil-retour" id="mesConseilRetour">Revenir au choix de l'outil</button>
+      </div>
+
+      <!-- SECOND TEMPS — LES DOCUMENTS. Il ne bloque pas : une visio se tient
+           très bien sans document, et un abonné pressé passe outre. -->
+      <div id="mesDocuments" style="display:none">
+        <p><strong>Ce que vous montrez pendant l'appel.</strong> Plaquette, grille tarifaire, démonstration : déposez-les depuis le poste avec lequel vous animez vos visios. Les fichiers restent sur cet appareil, dans ce navigateur ; seule leur description est enregistrée à votre compte.</p>
+      </div>
+    </div>
+
+    <div class="mes-pied">
+      <span class="mes-note" id="mesNote">—</span>
+      <div class="mes-pied-actions" id="mesPiedConseil" style="display:none">
+        <button class="mes-lien" id="mesConseilPlusTard">Je verrai plus tard</button>
+      </div>
+      <div class="mes-pied-actions" id="mesPiedDocs" style="display:none">
+        <button class="mes-lien" id="mesPlusTard">Je le ferai plus tard</button>
+        <button class="mes-btn" id="mesAjouterDoc">Ajouter un document</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- MODALE NOUVEAU RDV -->
 <div class="overlay" id="newRdvModal">
@@ -1152,7 +1397,12 @@ const LS = {
   VISIO_BG_CUSTOM:'mup_visio_bg_custom', VISIO_BG_ACTIVE:'mup_visio_bg_active',
   DOCS_META:'mup_visio_docs_meta',          // [{id, name, tag, mime, size, pinned, addedAt}]
   DOCS_OPEN_LOG:'mup_visio_docs_open_log',  // [{docId, prospectId, societe, openedAt}]
-  URGENT_DISMISSED:'mup_visio_urgent_dismissed' // [rdvId, ...]
+  URGENT_DISMISSED:'mup_visio_urgent_dismissed', // [rdvId, ...]
+  // Le report de mise en service. LOCAL, et local pour deux raisons : rien de
+  // nouveau ne part en base — ni champ, ni route — et un report qui passerait
+  // par une écriture pourrait échouer, enfermant l'abonné derrière le panneau
+  // qu'il vient d'accepter de quitter. Celui-ci ne peut pas échouer.
+  ACCUEIL_DIFFERE:'mup_visio_accueil_differe'
 };
 
 const PROVIDERS = {
@@ -1506,11 +1756,15 @@ async function saveMyLink(provider, value){
   const launchBtn = $(`launch${provider.charAt(0).toUpperCase() + provider.slice(1)}`);
   if(value.trim()) launchBtn.classList.add('has-link');
   else launchBtn.classList.remove('has-link');
-  // Seul écrivain des liens, donc seul endroit d'où l'encart d'accueil peut
+  // Un lien enregistré efface le report : il valait pour l'état où il a été
+  // pris. Sans cela, l'abonné qui reporte, s'équipe, puis efface son dernier
+  // lien ne reverrait jamais le panneau.
+  if(value.trim()) effacerReport();
+  // Seul écrivain des liens, donc seul endroit d'où la mise en service peut
   // changer d'état en cours de session — dans les deux sens : effacer son
-  // dernier lien le fait revenir, l'abonné n'a plus de quoi lancer une visio.
-  // Appelé sur l'écriture RÉELLE, jamais sur l'intention d'écrire.
-  refletAccueil();
+  // dernier lien fait revenir le panneau, l'abonné n'a plus de quoi lancer une
+  // visio. Appelé sur l'écriture RÉELLE, jamais sur l'intention d'écrire.
+  refletMiseEnService();
   return verdict;
 }
 
@@ -1543,10 +1797,7 @@ function aucunLienEnregistre(){
   return !['zoom','teams','meet'].some(p => String(liens[p] || '').trim());
 }
 
-function accueilEtapeChoix(){
-  $('accueilIntro').style.display = '';
-  $('accueilSaisie').style.display = 'none';
-}
+function accueilEtapeChoix(){ mesEtape('choix'); }
 
 // Un fournisseur à la fois : le mode d'emploi affiché est celui de l'outil
 // choisi, jamais les trois ensemble. Le repère de saisie est celui de la barre
@@ -1561,24 +1812,183 @@ function accueilEtapeSaisie(provider){
   champ.dataset.provider = provider;
   const miroir = document.querySelector(`input[data-link="${provider}"]`);
   champ.placeholder = miroir ? miroir.placeholder : 'https://…';
-  $('accueilIntro').style.display = 'none';
-  $('accueilSaisie').style.display = '';
+  mesEtape('saisie');
   champ.focus();
 }
 
-function refletAccueil(){
-  const bloc = $('accueilVisio');
-  const doitParaitre = aucunLienEnregistre();
-  const parait = bloc.style.display !== 'none';
-  if(doitParaitre === parait) return;
-  if(doitParaitre) accueilEtapeChoix();
-  bloc.style.display = doitParaitre ? '' : 'none';
+/* —— LE REPORT ——
+   « Je n'en utilise aucun » ne pose PAS un lien : il pose un report. Le report
+   est local (LS.ACCUEIL_DIFFERE) et ne gouverne QUE l'apparition du panneau.
+   aucunLienEnregistre() reste donc intact, et avec lui les refus de lancement
+   et de prise de rendez-vous : ils refusent par construction, pas par
+   précaution ajoutée.
+   Un report vaut pour l'ÉTAT où il a été pris, pas pour toujours — le premier
+   lien enregistré l'efface. Sans cela, l'abonné qui reporte, s'équipe, puis
+   efface son dernier lien ne reverrait jamais le panneau, alors qu'il n'a plus
+   de quoi lancer une visio. */
+function reportPris(){ try{ return localStorage.getItem(LS.ACCUEIL_DIFFERE) === '1' }catch{ return false } }
+function poserReport(){ try{ localStorage.setItem(LS.ACCUEIL_DIFFERE, '1') }catch{} }
+function effacerReport(){ try{ localStorage.removeItem(LS.ACCUEIL_DIFFERE) }catch{} }
+
+/* —— LES QUATRE VISAGES DU PANNEAU ——
+   Un seul état : l'étape courante. Chaque visage dit le bloc qu'il montre, le
+   sur-titre, le titre et ce que porte le pied. Rien d'autre n'en décide. */
+let mesEtapeCourante = 'choix';
+const MES_VISAGES = {
+  choix: {
+    bloc:'accueilIntro', surtitre:'Mise en service', titre:'Bienvenue dans votre espace visio',
+    note:"Un seul lien suffit à mettre la page en service. Les autres s'ajoutent plus tard, depuis la barre du haut."
+  },
+  saisie: {
+    bloc:'accueilSaisie', surtitre:'Mise en service', titre:'Bienvenue dans votre espace visio',
+    note:"Collez l'adresse complète, telle que votre outil vous la donne."
+  },
+  conseil: {
+    bloc:'mesConseil', surtitre:'Mise en service', titre:'Aucun outil ? Commencez par là',
+    note:''
+  },
+  documents: {
+    bloc:'mesDocuments', surtitre:'Second temps', titre:'Vos documents de visio',
+    note:"Ce temps ne bloque rien : une visio se tient très bien sans document."
+  }
+};
+function mesEtape(nom){
+  const visage = MES_VISAGES[nom];
+  if(!visage) return;
+  mesEtapeCourante = nom;
+  Object.keys(MES_VISAGES).forEach(k=>{
+    $(MES_VISAGES[k].bloc).style.display = (k === nom) ? '' : 'none';
+  });
+  $('mesSurtitre').textContent = visage.surtitre;
+  $('mesTitre').textContent = visage.titre;
+  $('mesNote').textContent = visage.note;
+  $('mesPiedConseil').style.display = (nom === 'conseil') ? 'flex' : 'none';
+  $('mesPiedDocs').style.display = (nom === 'documents') ? 'flex' : 'none';
+}
+
+function panneauTientLaPage(){ return $('panneauMiseEnService').style.display !== 'none'; }
+
+/* Trois conditions, toutes nécessaires. La lecture ABOUTIE d'abord : sur
+   'echec' on ne sait pas si l'abonné a des liens, et prendre la page en otage
+   pour un hoquet réseau est la pire des deux erreurs. */
+function panneauDoitParaitre(){
+  return lectureReglagesAboutie() && aucunLienEnregistre() && !reportPris();
+}
+
+// Inertie de la page derrière le voile : pointeur et focus. Le panneau vit hors
+// de <main> précisément pour pouvoir figer <main> sans se figer lui-même.
+function figerLaPage(fige){
+  [ $('sidebar'), document.querySelector('main'), document.querySelector('.mup-app-footer') ]
+    .forEach(el => { if(el) el.inert = fige; });
+}
+
+function ouvrirPanneau(){
+  if(panneauTientLaPage()) return;
+  mesEtape('choix');
+  $('panneauMiseEnService').style.display = 'flex';
+  document.body.classList.add('mise-en-service');
+  figerLaPage(true);
+}
+
+// Le panneau ne se ferme sur aucun GESTE ; il se retire quand sa raison d'être
+// disparaît, et les deux sorties du second temps l'appellent parce qu'à ce
+// stade un lien est déjà enregistré.
+function fermerPanneau(){
+  if(!panneauTientLaPage()) return;
+  $('panneauMiseEnService').style.display = 'none';
+  document.body.classList.remove('mise-en-service');
+  figerLaPage(false);
+}
+
+function refletPanneauAccueil(){
+  if(panneauDoitParaitre()){ ouvrirPanneau(); return; }
+  // La page est devenue opérante. Si le panneau la tient encore, c'est que le
+  // lien vient d'être enregistré DEPUIS lui : il passe au second temps plutôt
+  // que de disparaître sous les doigts. Sinon, il n'a rien à faire.
+  if(panneauTientLaPage() && mesEtapeCourante !== 'documents') mesEtape('documents');
+}
+
+/* La barre du haut se déduit de la donnée, jamais d'un réglage : un champ
+   renseigné reste visible avec son bouton de lancement, un champ vide passe
+   derrière « ajouter un outil », et le bouton lui-même s'efface quand il n'y a
+   plus rien à ajouter. */
+function refletBarreOutils(){
+  const liens = _state.settings.links || {};
+  let vides = 0;
+  document.querySelectorAll('input[data-link]').forEach(input=>{
+    const rempli = !!String(liens[input.dataset.link] || '').trim();
+    input.closest('.my-link-field').classList.toggle('vide', !rempli);
+    if(!rempli) vides++;
+  });
+  const btn = $('btnAjouterOutil');
+  if(btn) btn.classList.toggle('rien-a-ajouter', vides === 0);
+  if(vides === 0) deplierOutils(false);
+}
+
+function deplierOutils(ouvert){
+  document.body.classList.toggle('outils-deplies', ouvert);
+  const btn = $('btnAjouterOutil');
+  if(btn) btn.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+}
+
+/* L'état vide a deux faces, et ce qui les départage n'est PAS le report : un
+   abonné peut n'avoir aucun lien sans avoir rien reporté, et la face qui
+   l'annonce lui est due dans les deux cas. Ce qu'on teste est l'absence
+   AVÉRÉE d'outil — donc une lecture ABOUTIE : sur 'echec', la mémoire est vide
+   sans que cela dise quoi que ce soit des liens de l'abonné, et lui annoncer
+   qu'il n'a aucun outil serait un mensonge là où le silence suffit. */
+function refletEtatVide(){
+  const sansOutilAvere = lectureReglagesAboutie() && aucunLienEnregistre();
+  $('emptyOperant').style.display = sansOutilAvere ? 'none' : 'flex';
+  $('emptyReport').style.display  = sansOutilAvere ? 'flex' : 'none';
+}
+
+// Le seul reflet de la mise en service. Trois surfaces en dépendent, aucune ne
+// se peint seule, et le seul écrivain des liens l'appelle.
+function refletMiseEnService(){
+  refletBarreOutils();
+  refletEtatVide();
+  refletPanneauAccueil();
 }
 
 document.querySelectorAll('[data-accueil-outil]').forEach(btn=>{
   btn.addEventListener('click', ()=>accueilEtapeSaisie(btn.dataset.accueilOutil));
 });
 $('accueilRetour').addEventListener('click', accueilEtapeChoix);
+
+/* —— LES DEUX SORTIES, QUI NE SONT PAS LE MÊME MÉCANISME ——
+   PREMIER TEMPS : « je n'en utilise aucun » POSE le report, au moment du clic.
+   L'abonné vient de dire qu'il n'a pas d'outil ; la page n'a plus à le retenir,
+   même s'il ferme l'onglet devant le conseil. Rien n'est écrit en base, et
+   revenir au choix de l'outil efface ce report — il n'aura pas été pris. */
+$('mesAucunOutil').addEventListener('click', ()=>{ poserReport(); mesEtape('conseil'); });
+$('mesConseilRetour').addEventListener('click', ()=>{ effacerReport(); mesEtape('choix'); });
+$('mesConseilPlusTard').addEventListener('click', ()=>{ fermerPanneau(); refletEtatVide(); });
+
+/* SECOND TEMPS : « je le ferai plus tard » n'écrit RIEN. Un lien est déjà
+   enregistré à ce stade — le panneau n'a plus de raison d'être et se retire de
+   lui-même. Poser un report ici n'aurait rien à retenir. */
+$('mesPlusTard').addEventListener('click', fermerPanneau);
+
+// La porte des documents est celle qui existe déjà — le tiroir et sa modale
+// d'ajout, qui fonctionnent sans rendez-vous sélectionné. Le panneau se retire
+// D'ABORD : la modale d'ajout vit à 1000 et s'ouvrirait derrière le voile.
+$('mesAjouterDoc').addEventListener('click', ()=>{
+  fermerPanneau();
+  setTiroirDocs(true);
+  openUploadModal();
+});
+
+// Rouvrir n'est pas fermer : le report est effacé et la mise en service reprend
+// là où elle s'était arrêtée, au choix de l'outil.
+$('reprendreMiseEnService').addEventListener('click', ()=>{
+  effacerReport();
+  refletMiseEnService();
+});
+
+$('btnAjouterOutil').addEventListener('click', ()=>{
+  deplierOutils(!document.body.classList.contains('outils-deplies'));
+});
 
 $('accueilEnregistrer').addEventListener('click', async ()=>{
   const champ = $('accueilLien');
@@ -1637,6 +2047,9 @@ function launchExternal(provider){
   const link = _state.settings.links?.[provider];
 
   if(!link){
+    // Le champ visé peut être replié derrière « ajouter un outil » : y renvoyer
+    // sans le déplier désignerait une surface invisible.
+    deplierOutils(true);
     const input = document.querySelector(`input[data-link="${provider}"]`);
     if(input){
       input.focus();
@@ -2081,8 +2494,7 @@ async function rafraichirApresGeste(rdv, patch){
       rdvAffiche = null;
       refletCadreReduit();
       ouvrirFicheRdv(null);   // une fiche ouverte sur un RDV qui n'existe plus n'a pas de sens
-      $('emptyState').style.display = 'flex';
-      $('visioActive').style.display = 'none';
+      refletColonneCentre();
       renderDocsList();
     }
   }
@@ -2289,8 +2701,7 @@ function peindreRdv(rdv){
   if(activeRdv && activeRdv.id !== rdv.id) activeRdv = null;
   if(!activeRdv) resetTimer();
   rdvAffiche = rdv;
-  $('emptyState').style.display = 'none';
-  $('visioActive').style.display = 'flex';
+  refletColonneCentre();
   renderRdvList();
   renderBriefing(rdv);
   renderVideoFrame(rdv);
@@ -2330,9 +2741,25 @@ function refletCadreReduit(){
   const col = document.querySelector('.col-center');
   if(!col) return;
   const embarque = !!(activeRdv && PROVIDERS[activeRdv.provider]?.embed);
+  col.classList.toggle('cadre-reduit', !!activeRdv && !embarque && !testEnCours());
+}
+
+// Le mode test, jugé sur l'écran et pas seulement sur le drapeau : le panneau
+// de test survit à une erreur d'accès caméra alors que testCamOpen retombe à
+// faux. Sa présence dans le cadre compte donc autant que le drapeau.
+function testEnCours(){
   const frame = $('videoFrame');
-  const enTest = testCamOpen || !!(frame && frame.querySelector('.testcam-overlay-panel'));
-  col.classList.toggle('cadre-reduit', !!activeRdv && !embarque && !enTest);
+  return testCamOpen || !!(frame && frame.querySelector('.testcam-overlay-panel'));
+}
+
+// La colonne du centre n'a que deux visages, et ils se DÉDUISENT : quelque chose
+// occupe le cadre — un rendez-vous peint, ou un test caméra — ou rien ne
+// l'occupe. La règle était recopiée en six points ; elle n'est plus écrite
+// qu'ici, et chacun de ces points l'appelle.
+function refletColonneCentre(){
+  const occupee = !!rdvAffiche || testEnCours();
+  $('visioActive').style.display = occupee ? 'flex' : 'none';
+  $('emptyState').style.display  = occupee ? 'none' : 'flex';
 }
 
 async function renderBriefing(rdv){
@@ -2356,8 +2783,18 @@ async function renderBriefing(rdv){
   const diff = new Date(rdv.date) - new Date();
   const isImminent = diff > 0 && diff <= 10*60*1000;
 
+  // L'heure et la durée : la fiche ancrée ne les porte pas, et c'est à cela que
+  // le briefing se réduit quand elle est ouverte. Même lecture que la liste —
+  // `date` est un instant complet, `duree` des minutes.
+  const debut = new Date(rdv.date);
+  const heure = isNaN(debut.getTime()) ? '—' : `${fmt2(debut.getHours())}:${fmt2(debut.getMinutes())}`;
+  const dureeMin = Number(rdv.duree) > 0 ? Number(rdv.duree) : 30;
+
   const panel = $('briefingPanel');
   panel.classList.toggle('imminent', isImminent);
+  // La marque du briefing d'un RENDEZ-VOUS. Le mode préparation écrit dans le
+  // même panneau et ne la porte pas : lui seul échappe à la réduction.
+  panel.classList.add('briefing-rdv');
 
   let infoHtml = '';
   if(email){
@@ -2388,7 +2825,7 @@ async function renderBriefing(rdv){
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         Devis
       </button>
-      <button class="briefing-mini" onclick="ouvrirFicheRdv('${escapeHtml(String(rdv.prospectId))}')">
+      <button class="briefing-mini briefing-fiche" onclick="ouvrirFicheRdv('${escapeHtml(String(rdv.prospectId))}')">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         Fiche
       </button>
@@ -2401,6 +2838,7 @@ async function renderBriefing(rdv){
       <div class="briefing-name">${escapeHtml(rdv.prospectName)}</div>
       <div class="briefing-soc">${escapeHtml(rdv.societe || '—')}</div>
       <div class="briefing-info">${infoHtml}</div>
+      <div class="briefing-creneau"><span>${heure}</span><span class="duree">${dureeMin} min</span></div>
     </div>
     <div class="briefing-actions">${actionsHtml}</div>
   `;
@@ -2540,8 +2978,7 @@ async function endCurrentRdv(){
   refletCadreReduit();
   ouvrirFicheRdv(null);                        // plus de RDV sélectionné, plus de colonne
   if(btnFin) btnFin.disabled = false;          // rendu au RDV suivant
-  $('emptyState').style.display = 'flex';
-  $('visioActive').style.display = 'none';
+  refletColonneCentre();
   renderDocsList();
   renderRdvList();
 }
@@ -3245,7 +3682,7 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
   let link = '';
   if(['zoom','teams','meet'].includes(provider)){
     link = myLinks[provider] || '';
-    if(!link){ showToast(`Renseignez d'abord votre lien ${PROVIDERS[provider].label} en haut`); return; }
+    if(!link){ deplierOutils(true); showToast(`Renseignez d'abord votre lien ${PROVIDERS[provider].label} en haut`); return; }
   } else link = customLink;
 
   const dateISO = new Date(date + 'T' + time).toISOString();
@@ -3340,6 +3777,11 @@ let testCamOpen = false;
 function setTestCameraBtnState(active){
   testCamOpen = active;
   refletCadreReduit();   // le test reprend le cadre : la bascule se retire, puis revient
+  // Le minuteur ne paraît qu'à l'engagement d'une séance. Le mode test fait
+  // exception nommément : « TEST » y dit le mode en cours, il ne promet aucune
+  // fin — et « Terminer » reste retiré dans les deux cas.
+  const barre = $('timerBar');
+  if(barre) barre.classList.toggle('en-test', active);
   const btn = $('testCameraBtn');
   if(!btn) return;
   btn.classList.toggle('active-test', active);
@@ -3348,13 +3790,11 @@ function setTestCameraBtnState(active){
 }
 
 async function openTestCamera(){
-  // Réutilise visioActive comme surface de visio
-  $('emptyState').style.display = 'none';
-  $('visioActive').style.display = 'flex';
-
-  // 1) Briefing : header "Mode préparation"
+  // 1) Briefing : header "Mode préparation". Ce n'est pas le briefing d'un
+  // rendez-vous : il perd la marque qui autorise la réduction fiche ouverte,
+  // sans quoi il disparaîtrait entièrement derrière une fiche ancrée.
   const panel = $('briefingPanel');
-  panel.classList.remove('imminent');
+  panel.classList.remove('imminent','briefing-rdv');
   panel.innerHTML = `
     <div class="briefing-avatar" style="background:var(--visio)">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
@@ -3418,8 +3858,10 @@ async function openTestCamera(){
     </div>
   `;
 
-  // Le panneau est en place : le cadre reprend sa géométrie pleine sans attendre
+  // Le panneau est en place : la colonne montre le cadre — réutilisé comme
+  // surface de test — et le cadre reprend sa géométrie pleine sans attendre
   // l'autorisation caméra, qui peut rester en suspens plusieurs secondes.
+  refletColonneCentre();
   refletCadreReduit();
 
   // 3) Démarrer le flux
@@ -3493,14 +3935,11 @@ function closeTestCamera(){
   // Le test rendu, la colonne revient à ce qu'elle montrait : le rendez-vous
   // peint, s'il y en a un. Avec la sélection automatique au chargement, retomber
   // sur l'état vide effacerait un briefing que personne n'a demandé à quitter.
+  // Le reflet vient plus bas, APRÈS setTestCameraBtnState(false) : tant que le
+  // drapeau de test est haut, la colonne se croirait encore occupée.
   if(rdvAffiche){
     renderBriefing(rdvAffiche);
     renderVideoFrame(rdvAffiche);
-    $('emptyState').style.display = 'none';
-    $('visioActive').style.display = 'flex';
-  } else {
-    $('visioActive').style.display = 'none';
-    $('emptyState').style.display = 'flex';
   }
 
   // Le chronomètre d'une séance engagée continue de courir : il n'appartient pas
@@ -3508,6 +3947,7 @@ function closeTestCamera(){
   if(!activeRdv) resetTimer();
 
   setTestCameraBtnState(false);
+  refletColonneCentre();
   updateUrgentBannerHint();
 }
 
@@ -3526,6 +3966,12 @@ window.addEventListener('beforeunload', ()=>{
    RACCOURCIS CLAVIER
    ———————————————————————————————————————————————— */
 document.addEventListener('keydown', e=>{
+  // Le panneau de mise en service tient la page : aucun raccourci global ne
+  // traverse le voile. La garde d'origine ne couvre que INPUT/TEXTAREA/SELECT,
+  // si bien que `?`, 1/2/3, C, I et Échap agiraient sur une page inerte. Échap
+  // surtout : le panneau ne se ferme sur aucun geste.
+  if(panneauTientLaPage()) return;
+
   // Ignorer si focus dans un input/textarea
   const tag = e.target.tagName;
   const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
@@ -3621,7 +4067,7 @@ setInterval(renderRdvList, 30000); // 30s pour le bandeau T-5
 (async () => {
   await bootstrapVisio();
   loadMyLinks();
-  refletAccueil();
+  refletMiseEnService();
   // Note : sliders/fonds/customBgSlot/bgUpload sont injectés dynamiquement par
   // openTestCamera() — leurs handlers sont attachés via bindCalibration/Background
   // au moment de l'ouverture du mode test. Pas de binding init-time ici.

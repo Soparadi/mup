@@ -690,8 +690,10 @@ body.outils-deplies .my-link-field.vide{display:flex}
    de consentement, remonté DEVANT le panneau.
    ══════════════════════════════════════════════════════════════════ */
 .mes-voile{
-  position:fixed;inset:0;z-index:var(--mupz-dialogue,50000);
-  background:rgba(13,13,11,.55);backdrop-filter:blur(3px);
+  position:fixed;top:0;right:0;bottom:0;left:var(--sidebar-w);
+  z-index:var(--mupz-dialogue,50000);
+  background:rgba(13,13,11,.55);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
   display:flex;align-items:center;justify-content:center;
   padding:24px;overflow-y:auto;
 }
@@ -792,21 +794,24 @@ body.mise-en-service .col-center,
 body.mise-en-service .docs-drawer-body,
 body.mise-en-service #docsList{overflow:hidden}
 
-/* —— LE RAIL, DEVANT ——
+/* —— LE RAIL, DEVANT, EN TIROIR SEULEMENT ——
    Un panneau de mise en service tient une PAGE, jamais l'application : l'abonné
    qui ouvre Visio par curiosité doit pouvoir en repartir. Le rail est donc laissé
-   hors de figerLaPage. Mais le rail n'a pas de couche à lui (sticky sans z-index
-   au-dessus de 640 px, z-index:200 en tiroir en dessous) : le voile à 50000 le
-   recouvrirait et capterait ses clics. Le laisser vivant sans le remonter ne
-   changerait rien de visible. On remonte donc la bande du rail au-dessus du
-   voile, en conservant son ordre interne (bouton < scrim < rail) et en restant
-   sous l'infobulle (99999), le menu compte (99999) et le consentement (60000).
+   hors de figerLaPage.
+   Au-dessus de 640 px, le voile part de --sidebar-w : il s'arrête au rail, qui
+   n'est donc jamais recouvert et n'a plus à être remonté. En dessous, --sidebar-w
+   vaut 0 : le voile reprend tout l'écran, et le bouton qui ouvre le tiroir — la
+   seule sortie à cette largeur — doit rester atteignable. C'est là, et là seule,
+   qu'on remonte la bande du rail au-dessus du voile, en conservant son ordre
+   interne (bouton < scrim < rail) et en restant sous l'infobulle (99999), le menu
+   compte (99999) et le consentement (60000).
    Écrit ici, dans la seule page qui pose un panneau à cette hauteur — la feuille
-   partagée n'est pas touchée. Le rail paraît alors non voilé : c'est juste, une
-   sortie qui a l'air éteinte n'est pas une sortie. */
-body.mise-en-service #sb-drawer-toggle{z-index:50150}
-body.mise-en-service #sb-drawer-scrim{z-index:50190}
-body.mise-en-service aside#sidebar.sidebar{z-index:50200}
+   partagée n'est pas touchée. */
+@media (max-width:640px){
+  body.mise-en-service #sb-drawer-toggle{z-index:50150}
+  body.mise-en-service #sb-drawer-scrim{z-index:50190}
+  body.mise-en-service aside#sidebar.sidebar{z-index:50200}
+}
 
 /* Le consentement passe DEVANT la mise en service. Le panneau ne se retire qu'à
    l'enregistrement d'un lien : un bandeau enfoui derrière lui resterait

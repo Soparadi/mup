@@ -64,17 +64,38 @@ async function findCanceledUsersInWindow(from, to) {
   }
 }
 
-// Marque un user comme ayant reçu l'email <sentFlag>. Idempotent : si l'envoi
-// est ré-tenté plus tard pour ce même user, le SELECT préalable filtre déjà.
+// Marque un user comme ayant reçu l'email <sentFlag>. Rend TRUE si le drapeau
+// est réellement posé, FALSE sinon — l'appelant a besoin de la différence : un
+// email parti dont le drapeau n'est pas posé ressort du SELECT au passage
+// suivant et serait renvoyé.
+//
+// Contre quoi ce drapeau protège : DEUX PASSAGES DANS LA MÊME BANDE DE 24 H
+// (relance manuelle, redémarrage Railway, cron rejoué). Les fenêtres
+// successives pavent le temps sans se recouvrir — d'un tour à l'autre, un user
+// déjà traité est de toute façon sorti de la fenêtre ; ce n'est donc jamais du
+// tour suivant que vient le double envoi, mais du tour REJOUÉ.
+//
+// Deux façons d'échouer, toutes deux rendues false :
+//   — la requête lève (socket coupée, permission refusée) → catch ;
+//   — la requête passe mais ne touche AUCUN enregistrement, sans erreur :
+//     UPDATE n'upserte pas, un identifiant disparu entre le SELECT et l'envoi
+//     (compte supprimé, purgé) rend un tableau VIDE. Mesuré le 19/08/2026
+//     contre movup-prod (surrealdb 3.2.4) : [] sur identifiant inexistant.
 async function markEmailSent(userId, sentFlag) {
   const db = await getDb()
   try {
-    await db.query(
+    const r = await db.query(
       `UPDATE $id SET ${sentFlag} = time::now()`,
       { id: userId }
     )
+    if (!(r?.[0] || []).length) {
+      console.warn(`[trial-emails] markEmailSent ${sentFlag} : aucun enregistrement touché pour`, String(userId))
+      return false
+    }
+    return true
   } catch (e) {
     console.warn(`[trial-emails] markEmailSent ${sentFlag} échoué pour`, String(userId), ':', e.message)
+    return false
   }
 }
 
@@ -86,20 +107,28 @@ export async function sendTrialEndingSoonEmails() {
   const from = new Date(now + TWO_J - HALF)
   const to = new Date(now + TWO_J + HALF)
   const users = await findUsersInWindow(from, to, 'trial_email_j2_sent_at')
-  if (!users.length) return { sent: 0, total: 0 }
+  if (!users.length) return { sent: 0, flag_failed: 0, total: 0 }
   let sent = 0
+  let flagFailed = 0
   const errors = []
   for (const u of users) {
     try {
       await sendTrialEndingSoon({ prenom: u.prenom, nom: u.nom, email: u.email })
-      await markEmailSent(u.id, 'trial_email_j2_sent_at')
-      sent++
     } catch (e) {
       console.warn('[trial-emails] J-2 envoi échec :', u.email, e.message)
-      errors.push({ email: u.email, error: e.message })
+      errors.push({ email: u.email, stage: 'send', error: e.message })
+      continue
+    }
+    // L'email est PARTI : il compte comme envoyé, quel que soit le sort du
+    // drapeau. Le compteur qui suit dit l'autre chose — le drapeau manquant
+    // laisse l'user éligible au prochain SELECT, donc renvoyable.
+    sent++
+    if (!await markEmailSent(u.id, 'trial_email_j2_sent_at')) {
+      flagFailed++
+      errors.push({ email: u.email, stage: 'flag', error: 'trial_email_j2_sent_at non posé' })
     }
   }
-  return { sent, total: users.length, errors }
+  return { sent, flag_failed: flagFailed, total: users.length, errors }
 }
 
 // Envoi unique J-0 (fenêtre 24h autour de NOW).
@@ -109,20 +138,25 @@ export async function sendTrialEndingTodayEmails() {
   const from = new Date(now - HALF)
   const to = new Date(now + HALF)
   const users = await findUsersInWindow(from, to, 'trial_email_j0_sent_at')
-  if (!users.length) return { sent: 0, total: 0 }
+  if (!users.length) return { sent: 0, flag_failed: 0, total: 0 }
   let sent = 0
+  let flagFailed = 0
   const errors = []
   for (const u of users) {
     try {
       await sendTrialEndingToday({ prenom: u.prenom, nom: u.nom, email: u.email })
-      await markEmailSent(u.id, 'trial_email_j0_sent_at')
-      sent++
     } catch (e) {
       console.warn('[trial-emails] J-0 envoi échec :', u.email, e.message)
-      errors.push({ email: u.email, error: e.message })
+      errors.push({ email: u.email, stage: 'send', error: e.message })
+      continue
+    }
+    sent++
+    if (!await markEmailSent(u.id, 'trial_email_j0_sent_at')) {
+      flagFailed++
+      errors.push({ email: u.email, stage: 'flag', error: 'trial_email_j0_sent_at non posé' })
     }
   }
-  return { sent, total: users.length, errors }
+  return { sent, flag_failed: flagFailed, total: users.length, errors }
 }
 
 // Bascule active → expired pour les utilisateurs inactifs (qui ne se
@@ -148,14 +182,17 @@ export async function expireTrialAutomatically() {
 // la coupure définitive (= la veille de current_period_end + 7j). Calque
 // strict du pattern J-0 : findCanceledUsersInWindow + boucle séquentielle
 // + flag posé APRÈS envoi réussi (échec d'envoi → flag non posé → retry
-// au prochain run tant que l'user reste dans la fenêtre).
+// au prochain run, tant que l'user est encore dans une fenêtre).
 //
 // Fenêtre ±12h (vs ±1h pour J-0/J-2) : le cron tourne 1×/jour (0 8 * * *
 // Europe/Paris), il faut couvrir les 24h entre 2 runs sans rater un user
-// dont current_period_end tomberait hors d'une fenêtre étroite. La fenêtre
-// large + le flag grace_j_minus_1_sent_at IS NONE protège du double-envoi
-// si chevauchement entre 2 runs (l'user reçoit l'email au premier passage,
-// le flag exclut du SELECT au deuxième).
+// dont current_period_end tomberait hors d'une fenêtre étroite. Les fenêtres
+// de deux runs consécutifs ne se recouvrent pas — elles PAVENT le temps, un
+// user vu à un run est hors fenêtre au suivant. Ce dont le flag
+// grace_j_minus_1_sent_at IS NONE protège, c'est du DOUBLE PASSAGE DANS LA
+// MÊME BANDE DE 24 H (relance manuelle, redémarrage Railway, cron rejoué) :
+// l'user reçoit l'email au premier passage, le flag l'exclut du SELECT au
+// second.
 //
 // Le helper d'envoi vient d'email.js (sendSubscriptionGraceEndingTomorrow,
 // H4a) et utilise le wrapper sendStripeTransactional + template
@@ -167,8 +204,9 @@ export async function sendGraceEndingTomorrowEmails() {
   const from = new Date(now - SIX_J - HALF)
   const to = new Date(now - SIX_J + HALF)
   const users = await findCanceledUsersInWindow(from, to)
-  if (!users.length) return { sent: 0, total: 0 }
+  if (!users.length) return { sent: 0, flag_failed: 0, total: 0 }
   let sent = 0
+  let flagFailed = 0
   const errors = []
   for (const u of users) {
     try {
@@ -187,14 +225,18 @@ export async function sendGraceEndingTomorrowEmails() {
         grace_until_date: graceUntilIso,
         privacy_url: APP_URL + '/account/privacy'
       })
-      await markEmailSent(u.id, 'grace_j_minus_1_sent_at')
-      sent++
     } catch (e) {
       console.warn('[trial-emails] grace J-1 envoi échec :', u.email, e.message)
-      errors.push({ email: u.email, error: e.message })
+      errors.push({ email: u.email, stage: 'send', error: e.message })
+      continue
+    }
+    sent++
+    if (!await markEmailSent(u.id, 'grace_j_minus_1_sent_at')) {
+      flagFailed++
+      errors.push({ email: u.email, stage: 'flag', error: 'grace_j_minus_1_sent_at non posé' })
     }
   }
-  return { sent, total: users.length, errors }
+  return { sent, flag_failed: flagFailed, total: users.length, errors }
 }
 
 // Sélection des essais jamais convertis à avertir — 7 j avant la purge J+30,
@@ -248,9 +290,10 @@ async function findUnconvertedTrialsToWarn() {
 // serait mentir. Même helper que purgeExpiredTrials / deriveAppState.
 export async function sendTrialDataDeletionWarningEmails() {
   const users = await findUnconvertedTrialsToWarn()
-  if (!users.length) return { sent: 0, total: 0 }
+  if (!users.length) return { sent: 0, skipped: 0, flag_failed: 0, total: 0 }
   let sent = 0
   let skipped = 0
+  let flagFailed = 0
   const errors = []
   for (const u of users) {
     // Garde de sûreté : le filtre SQL bypass != true ne capte pas le
@@ -258,12 +301,20 @@ export async function sendTrialDataDeletionWarningEmails() {
     if (isVip(u)) { skipped++; continue }
     try {
       await sendTrialDataDeletionWarning({ prenom: u.prenom, nom: u.nom, email: u.email })
-      await markEmailSent(u.id, 'trial_purge_warning_sent_at')
-      sent++
     } catch (e) {
       console.warn('[trial-emails] avertissement purge envoi échec :', u.email, e.message)
-      errors.push({ email: u.email, error: e.message })
+      errors.push({ email: u.email, stage: 'send', error: e.message })
+      continue
+    }
+    // Drapeau CRITIQUE ici : c'est lui qui ancre la suppression 7 j plus tard
+    // (purgeExpiredTrials lit trial_purge_warning_sent_at). Non posé, l'user
+    // est réaverti au prochain run — jamais supprimé sans préavis, mais
+    // possiblement prévenu deux fois.
+    sent++
+    if (!await markEmailSent(u.id, 'trial_purge_warning_sent_at')) {
+      flagFailed++
+      errors.push({ email: u.email, stage: 'flag', error: 'trial_purge_warning_sent_at non posé' })
     }
   }
-  return { sent, skipped, total: users.length, errors }
+  return { sent, skipped, flag_failed: flagFailed, total: users.length, errors }
 }

@@ -14,6 +14,11 @@ import { isVip } from '../../lib/vip.js'
 
 const APP_URL = (process.env.APP_URL || 'https://movup.io').replace(/\/+$/, '')
 
+// Les bornes sont liées en chaîne ISO : comparer un champ `datetime` à une
+// `string` ne compare pas des instants — `>=` rend toujours true et `<` toujours
+// false, donc la fenêtre ne rendait personne ; `type::datetime()` reconvertit la
+// borne côté serveur et la comparaison redevient temporelle.
+//
 // Sélection des users dont trial_ends_at tombe dans une fenêtre [from, to]
 // ET qui n'ont pas déjà reçu l'email de la fenêtre concernée (flag DB).
 // La fenêtre temporelle reste un filtre primaire ; le flag DB garantit
@@ -25,7 +30,7 @@ async function findUsersInWindow(from, to, sentFlag) {
     const r = await db.query(
       `SELECT id, email, prenom, nom, trial_ends_at FROM user
        WHERE trial_status = 'active'
-         AND trial_ends_at >= $from AND trial_ends_at < $to
+         AND trial_ends_at >= type::datetime($from) AND trial_ends_at < type::datetime($to)
          AND ${sentFlag} IS NONE`,
       { from: from.toISOString(), to: to.toISOString() }
     )
@@ -48,7 +53,7 @@ async function findCanceledUsersInWindow(from, to) {
     const r = await db.query(
       `SELECT id, email, prenom, nom, plan, current_period_end FROM user
        WHERE subscription_status = 'canceled'
-         AND current_period_end >= $from AND current_period_end < $to
+         AND current_period_end >= type::datetime($from) AND current_period_end < type::datetime($to)
          AND grace_j_minus_1_sent_at IS NONE`,
       { from: from.toISOString(), to: to.toISOString() }
     )

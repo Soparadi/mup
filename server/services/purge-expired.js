@@ -49,9 +49,34 @@
 // le user est skipé avec log warning et compté dans skippedCount.
 
 import { getDb } from '../../lib/surreal.js'
+import { compterEcheances } from '../../lib/echeances.js'
 import { decryptMailToken } from '../../lib/crypto.js'
 import { revokeRefreshToken } from '../../lib/oauth-google.js'
 import { isVip } from '../../lib/vip.js'
+
+// ─── Clauses d'échéance ──────────────────────────────────────────────────────
+// Voir lib/echeances.js pour la réserve de lecture. Arithmétique native seule.
+//
+// Purge résiliés : la date d'action est current_period_end + 37d.
+const ECHEANCES_PURGE = `subscription_status = 'canceled'
+   AND current_period_end IS NOT NONE
+   AND current_period_end + 37d >  time::now()
+   AND current_period_end + 37d <= time::now() + 7d`
+
+// Purge essais : la date d'action est LA PLUS TARDIVE des deux ancres
+// (trial_ends_at + 30d, avertissement + 7d), écrite en comparaisons seules —
+// « les deux ancres sont échues d'ici 7 j, et l'une des deux ne l'est pas
+// encore ». Les NON AVERTIS sont hors compte : leur date d'action dépend d'un
+// envoi qui n'a pas eu lieu, elle n'est pas calculable.
+const ECHEANCES_PURGE_TRIAL = `subscription_status IS NONE
+   AND trial_status != 'converted'
+   AND trial_ends_at IS NOT NONE
+   AND bypass != true
+   AND trial_purge_warning_sent_at IS NOT NONE
+   AND trial_ends_at + 30d <= time::now() + 7d
+   AND trial_purge_warning_sent_at + 7d <= time::now() + 7d
+   AND (trial_ends_at + 30d > time::now()
+        OR trial_purge_warning_sent_at + 7d > time::now())`
 
 // Strip le préfixe 'user:' et les guillemets ⟨⟩ du Record ID SurrealDB
 // pour obtenir la string brute utilisée comme userId par les tables
@@ -325,7 +350,13 @@ async function purgeOneUser(db, user) {
   if (!cascade.userDeleted) {
     return { userId: uid, email: user.email, error: cascade.error, tablesPurgees: cascade.tablesPurgees, recordCount: cascade.recordCount }
   }
-  return { userId: uid, email: user.email, tablesPurgees: cascade.tablesPurgees, recordCount: cascade.recordCount }
+  // SUCCÈS — l'adresse ne suit PAS. Ce retour part dans metadata.details[] d'un
+  // audit_log conservé sans terme : y laisser l'adresse d'un compte supprimé au
+  // titre d'une règle de rétention reviendrait à effacer le compte et garder la
+  // personne. userId reste — c'est la pierre tombale, et elle suffit à relire.
+  // Les retours `skipped` et `error` ci-dessus gardent l'adresse : là, le compte
+  // existe toujours et l'adresse est la donnée sur laquelle on agit.
+  return { userId: uid, tablesPurgees: cascade.tablesPurgees, recordCount: cascade.recordCount }
 }
 
 // Job principal — sélectionne tous les candidats puis cascade purgeOneUser
@@ -333,14 +364,16 @@ async function purgeOneUser(db, user) {
 // Erreur sur un user n'interrompt pas la boucle : le user en échec est
 // loggé et compté dans errors[], les autres continuent.
 export async function purgeExpiredUsers() {
-  const db = await getDb()
+  const echeances_7j = await compterEcheances('purge', ECHEANCES_PURGE)
 
   // Sélection candidats — formule native SurrealDB : current_period_end
   // + 37d < time::now(). Cohérent avec la durée 37 j = 7 j grâce + 30 j
   // fenêtre. Filtre current_period_end IS NOT NONE par sécurité (un user
   // canceled sans period_end est ambigu, on ne le purge pas par défaut).
+  let db
   let candidates = []
   try {
+    db = await getDb()
     const r = await db.query(
       `SELECT id, email, current_period_end FROM user
        WHERE subscription_status = 'canceled'
@@ -355,7 +388,11 @@ export async function purgeExpiredUsers() {
       skippedCount: 0,
       totalRecordsDeleted: 0,
       candidates: 0,
-      errors: [{ stage: 'select', message: e.message }]
+      echeances_7j,
+      // `error` et non `message` : une seule clé pour dire la même chose dans
+      // tout le journal, sinon sa relecture demande deux vocabulaires.
+      errors: [{ stage: 'select', error: e.message }],
+      details: []
     }
   }
 
@@ -364,7 +401,10 @@ export async function purgeExpiredUsers() {
       purgedCount: 0,
       skippedCount: 0,
       totalRecordsDeleted: 0,
-      candidates: 0
+      candidates: 0,
+      echeances_7j,
+      errors: [],
+      details: []
     }
   }
 
@@ -398,6 +438,7 @@ export async function purgeExpiredUsers() {
     skippedCount,
     totalRecordsDeleted,
     candidates: candidates.length,
+    echeances_7j,
     errors,
     details
   }
@@ -510,13 +551,14 @@ async function purgeOneTrialUser(db, user) {
   if (!cascade.userDeleted) {
     return { userId: uid, email: user.email, error: cascade.error, tablesPurgees: cascade.tablesPurgees, recordCount: cascade.recordCount }
   }
-  return { userId: uid, email: user.email, tablesPurgees: cascade.tablesPurgees, recordCount: cascade.recordCount }
+  // SUCCÈS — l'adresse ne suit pas, même motif que purgeOneUser ci-dessus.
+  return { userId: uid, tablesPurgees: cascade.tablesPurgees, recordCount: cascade.recordCount }
 }
 
 // Job principal — jumeau de purgeExpiredUsers, ancré sur la fin d'essai.
 // Journalise purgedCount / skippedCount / totalRecordsDeleted sur le même motif.
 export async function purgeExpiredTrials() {
-  const db = await getDb()
+  const echeances_7j = await compterEcheances('purge_trial', ECHEANCES_PURGE_TRIAL)
 
   // Sélection candidats :
   //   subscription_status IS NONE      → jamais passé au paiement (écarte
@@ -537,8 +579,10 @@ export async function purgeExpiredTrials() {
   //                                       depuis la fin d'essai. Un averti tardif
   //                                       (cron manqué, fenêtre rattrapante)
   //                                       obtient toujours son préavis complet.
+  let db
   let candidates = []
   try {
+    db = await getDb()
     const r = await db.query(
       `SELECT id, email, trial_ends_at FROM user
        WHERE subscription_status IS NONE
@@ -557,7 +601,10 @@ export async function purgeExpiredTrials() {
       skippedCount: 0,
       totalRecordsDeleted: 0,
       candidates: 0,
-      errors: [{ stage: 'select', message: e.message }]
+      echeances_7j,
+      // `error` et non `message` — même motif qu'à purgeExpiredUsers.
+      errors: [{ stage: 'select', error: e.message }],
+      details: []
     }
   }
 
@@ -566,7 +613,10 @@ export async function purgeExpiredTrials() {
       purgedCount: 0,
       skippedCount: 0,
       totalRecordsDeleted: 0,
-      candidates: 0
+      candidates: 0,
+      echeances_7j,
+      errors: [],
+      details: []
     }
   }
 
@@ -600,6 +650,7 @@ export async function purgeExpiredTrials() {
     skippedCount,
     totalRecordsDeleted,
     candidates: candidates.length,
+    echeances_7j,
     errors,
     details
   }

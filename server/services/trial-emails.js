@@ -8,11 +8,57 @@
 //   await expireTrialAutomatically()    // bascule active → expired pour les inactifs
 
 import { getDb } from '../../lib/surreal.js'
+import { compterEcheances } from '../../lib/echeances.js'
 import { sendSubscriptionGraceEndingTomorrow, sendTrialDataDeletionWarning, sendTrialEndingSoon, sendTrialEndingToday } from './email.js'
 import { PLAN_LABELS } from '../../lib/stripe-config.js'
 import { isVip } from '../../lib/vip.js'
 
 const APP_URL = (process.env.APP_URL || 'https://movup.io').replace(/\/+$/, '')
+
+// ─── Clauses d'échéance ──────────────────────────────────────────────────────
+// Une par étape, posée à côté de la sélection qu'elle garde. Chacune compte les
+// comptes dont LA DATE D'ACTION DE L'ÉTAPE — pas le champ brut — tombe dans les
+// sept jours à venir. Arithmétique native exclusivement : c'est la condition
+// pour que le garde ne prenne pas le chemin qu'il garde (voir lib/echeances.js,
+// qui porte aussi la réserve de lecture de ces chiffres).
+//
+// J-2 : la date d'action est trial_ends_at - 2d.
+const ECHEANCES_J2 = `trial_status = 'active'
+   AND trial_email_j2_sent_at IS NONE
+   AND trial_ends_at IS NOT NONE
+   AND trial_ends_at - 2d >  time::now()
+   AND trial_ends_at - 2d <= time::now() + 7d`
+
+// J-0 : la date d'action est trial_ends_at lui-même.
+const ECHEANCES_J0 = `trial_status = 'active'
+   AND trial_email_j0_sent_at IS NONE
+   AND trial_ends_at IS NOT NONE
+   AND trial_ends_at >  time::now()
+   AND trial_ends_at <= time::now() + 7d`
+
+// Bascule automatique : même ancre que J-0, mais sur toute la population active
+// (aucun drapeau d'envoi ne la borne). Ce compteur est donc normalement ≥ celui
+// de J-0 — les deux ne s'égalent que si aucun J-0 n'est encore parti.
+const ECHEANCES_EXPIRE = `trial_status = 'active'
+   AND trial_ends_at IS NOT NONE
+   AND trial_ends_at >  time::now()
+   AND trial_ends_at <= time::now() + 7d`
+
+// Grâce J-1 : la date d'action est current_period_end + 6d.
+const ECHEANCES_GRACE_J1 = `subscription_status = 'canceled'
+   AND grace_j_minus_1_sent_at IS NONE
+   AND current_period_end IS NOT NONE
+   AND current_period_end + 6d >  time::now()
+   AND current_period_end + 6d <= time::now() + 7d`
+
+// Avertissement de purge : la date d'action est trial_ends_at + 23d.
+const ECHEANCES_PURGE_WARN = `subscription_status IS NONE
+   AND (trial_status = 'active' OR trial_status = 'expired')
+   AND trial_ends_at IS NOT NONE
+   AND trial_purge_warning_sent_at IS NONE
+   AND bypass != true
+   AND trial_ends_at + 23d >  time::now()
+   AND trial_ends_at + 23d <= time::now() + 7d`
 
 // Les bornes sont liées en chaîne ISO : comparer un champ `datetime` à une
 // `string` ne compare pas des instants — `>=` rend toujours true et `<` toujours
@@ -24,9 +70,15 @@ const APP_URL = (process.env.APP_URL || 'https://movup.io').replace(/\/+$/, '')
 // La fenêtre temporelle reste un filtre primaire ; le flag DB garantit
 // l'idempotence stricte (cron qui retourne 2× le même jour, redémarrage
 // Railway dans la fenêtre, etc.).
+//
+// REND SON ÉCHEC. `{ users, error }` et non un tableau nu : une sélection qui
+// échouait rendait `[]`, l'appelant sortait par son retour anticipé et l'audit
+// affichait une journée creuse — indiscernable d'une journée sans échéance.
+// C'est la cécité du 16 août. La connexion est prise DANS le try pour que même
+// une base injoignable sorte en bande, jamais en exception.
 async function findUsersInWindow(from, to, sentFlag) {
-  const db = await getDb()
   try {
+    const db = await getDb()
     const r = await db.query(
       `SELECT id, email, prenom, nom, trial_ends_at FROM user
        WHERE trial_status = 'active'
@@ -34,10 +86,10 @@ async function findUsersInWindow(from, to, sentFlag) {
          AND ${sentFlag} IS NONE`,
       { from: from.toISOString(), to: to.toISOString() }
     )
-    return r?.[0] || []
+    return { users: r?.[0] || [], error: null }
   } catch (e) {
     console.warn('[trial-emails] findUsersInWindow échoué :', e.message)
-    return []
+    return { users: [], error: e.message }
   }
 }
 
@@ -47,9 +99,10 @@ async function findUsersInWindow(from, to, sentFlag) {
 // findUsersInWindow mais sur le scope canceled (requête disjointe des jobs
 // trial : un canceled a trial_status='converted' résiduel mais ne sera
 // jamais sélectionné par findUsersInWindow qui filtre trial_status='active').
+// Rend son échec sur le même motif que findUsersInWindow.
 async function findCanceledUsersInWindow(from, to) {
-  const db = await getDb()
   try {
+    const db = await getDb()
     const r = await db.query(
       `SELECT id, email, prenom, nom, plan, current_period_end FROM user
        WHERE subscription_status = 'canceled'
@@ -57,10 +110,10 @@ async function findCanceledUsersInWindow(from, to) {
          AND grace_j_minus_1_sent_at IS NONE`,
       { from: from.toISOString(), to: to.toISOString() }
     )
-    return r?.[0] || []
+    return { users: r?.[0] || [], error: null }
   } catch (e) {
     console.warn('[trial-emails] findCanceledUsersInWindow échoué :', e.message)
-    return []
+    return { users: [], error: e.message }
   }
 }
 
@@ -81,9 +134,13 @@ async function findCanceledUsersInWindow(from, to) {
 //     UPDATE n'upserte pas, un identifiant disparu entre le SELECT et l'envoi
 //     (compte supprimé, purgé) rend un tableau VIDE. Mesuré le 19/08/2026
 //     contre movup-prod (surrealdb 3.2.4) : [] sur identifiant inexistant.
+//
+// La connexion est prise DANS le try : cette fonction est appelée hors du try
+// de la boucle appelante, une base injoignable y lèverait et emporterait les
+// envois restants au lieu de coûter un seul drapeau.
 async function markEmailSent(userId, sentFlag) {
-  const db = await getDb()
   try {
+    const db = await getDb()
     const r = await db.query(
       `UPDATE $id SET ${sentFlag} = time::now()`,
       { id: userId }
@@ -106,8 +163,15 @@ export async function sendTrialEndingSoonEmails() {
   const now = Date.now()
   const from = new Date(now + TWO_J - HALF)
   const to = new Date(now + TWO_J + HALF)
-  const users = await findUsersInWindow(from, to, 'trial_email_j2_sent_at')
-  if (!users.length) return { sent: 0, flag_failed: 0, total: 0 }
+  const { users, error: selectError } = await findUsersInWindow(from, to, 'trial_email_j2_sent_at')
+  // Compté À CHAQUE PASSAGE, y compris quand la sélection est vide ou cassée :
+  // c'est précisément là qu'il informe. Posé avant les retours anticipés pour
+  // que la forme des clés ne dépende pas du chemin pris.
+  const echeances_7j = await compterEcheances('j2', ECHEANCES_J2)
+  if (selectError) {
+    return { sent: 0, flag_failed: 0, total: 0, echeances_7j, errors: [{ stage: 'select', error: selectError }] }
+  }
+  if (!users.length) return { sent: 0, flag_failed: 0, total: 0, echeances_7j, errors: [] }
   let sent = 0
   let flagFailed = 0
   const errors = []
@@ -128,7 +192,7 @@ export async function sendTrialEndingSoonEmails() {
       errors.push({ email: u.email, stage: 'flag', error: 'trial_email_j2_sent_at non posé' })
     }
   }
-  return { sent, flag_failed: flagFailed, total: users.length, errors }
+  return { sent, flag_failed: flagFailed, total: users.length, echeances_7j, errors }
 }
 
 // Envoi unique J-0 (fenêtre 24h autour de NOW).
@@ -137,8 +201,12 @@ export async function sendTrialEndingTodayEmails() {
   const now = Date.now()
   const from = new Date(now - HALF)
   const to = new Date(now + HALF)
-  const users = await findUsersInWindow(from, to, 'trial_email_j0_sent_at')
-  if (!users.length) return { sent: 0, flag_failed: 0, total: 0 }
+  const { users, error: selectError } = await findUsersInWindow(from, to, 'trial_email_j0_sent_at')
+  const echeances_7j = await compterEcheances('j0', ECHEANCES_J0)
+  if (selectError) {
+    return { sent: 0, flag_failed: 0, total: 0, echeances_7j, errors: [{ stage: 'select', error: selectError }] }
+  }
+  if (!users.length) return { sent: 0, flag_failed: 0, total: 0, echeances_7j, errors: [] }
   let sent = 0
   let flagFailed = 0
   const errors = []
@@ -156,25 +224,29 @@ export async function sendTrialEndingTodayEmails() {
       errors.push({ email: u.email, stage: 'flag', error: 'trial_email_j0_sent_at non posé' })
     }
   }
-  return { sent, flag_failed: flagFailed, total: users.length, errors }
+  return { sent, flag_failed: flagFailed, total: users.length, echeances_7j, errors }
 }
 
 // Bascule active → expired pour les utilisateurs inactifs (qui ne se
 // connectent pas et ne déclenchent donc pas la bascule du middleware).
 // Doublon défensif du middleware — idempotent.
+//
+// REND SON ÉCHEC : le catch rendait `{ flipped: 0 }` nu, exactement la forme
+// d'une journée sans bascule. Une panne d'UPDATE s'affichait donc saine.
 export async function expireTrialAutomatically() {
-  const db = await getDb()
+  const echeances_7j = await compterEcheances('expire', ECHEANCES_EXPIRE)
   try {
+    const db = await getDb()
     const r = await db.query(
       `UPDATE user SET trial_status = 'expired'
        WHERE trial_status = 'active' AND trial_ends_at < time::now()
        RETURN BEFORE`
     )
     const flipped = (r?.[0] || []).length
-    return { flipped }
+    return { flipped, echeances_7j, errors: [] }
   } catch (e) {
     console.warn('[trial-emails] expireTrialAutomatically échoué :', e.message)
-    return { flipped: 0 }
+    return { flipped: 0, echeances_7j, errors: [{ stage: 'update', error: e.message }] }
   }
 }
 
@@ -203,8 +275,12 @@ export async function sendGraceEndingTomorrowEmails() {
   const now = Date.now()
   const from = new Date(now - SIX_J - HALF)
   const to = new Date(now - SIX_J + HALF)
-  const users = await findCanceledUsersInWindow(from, to)
-  if (!users.length) return { sent: 0, flag_failed: 0, total: 0 }
+  const { users, error: selectError } = await findCanceledUsersInWindow(from, to)
+  const echeances_7j = await compterEcheances('grace_j1', ECHEANCES_GRACE_J1)
+  if (selectError) {
+    return { sent: 0, flag_failed: 0, total: 0, echeances_7j, errors: [{ stage: 'select', error: selectError }] }
+  }
+  if (!users.length) return { sent: 0, flag_failed: 0, total: 0, echeances_7j, errors: [] }
   let sent = 0
   let flagFailed = 0
   const errors = []
@@ -236,7 +312,7 @@ export async function sendGraceEndingTomorrowEmails() {
       errors.push({ email: u.email, stage: 'flag', error: 'grace_j_minus_1_sent_at non posé' })
     }
   }
-  return { sent, flag_failed: flagFailed, total: users.length, errors }
+  return { sent, flag_failed: flagFailed, total: users.length, echeances_7j, errors }
 }
 
 // Sélection des essais jamais convertis à avertir — 7 j avant la purge J+30,
@@ -259,8 +335,8 @@ export async function sendGraceEndingTomorrowEmails() {
 //                                           superadmin ; isVip couvre en plus le
 //                                           propriétaire par email côté boucle).
 async function findUnconvertedTrialsToWarn() {
-  const db = await getDb()
   try {
+    const db = await getDb()
     const r = await db.query(
       `SELECT id, email, prenom, nom, bypass, trial_ends_at FROM user
        WHERE subscription_status IS NONE
@@ -270,10 +346,10 @@ async function findUnconvertedTrialsToWarn() {
          AND trial_purge_warning_sent_at IS NONE
          AND bypass != true`
     )
-    return r?.[0] || []
+    return { users: r?.[0] || [], error: null }
   } catch (e) {
     console.warn('[trial-emails] findUnconvertedTrialsToWarn échoué :', e.message)
-    return []
+    return { users: [], error: e.message }
   }
 }
 
@@ -289,8 +365,12 @@ async function findUnconvertedTrialsToWarn() {
 // drapeau bypass) — la boucle de purge ne les supprime jamais, les avertir
 // serait mentir. Même helper que purgeExpiredTrials / deriveAppState.
 export async function sendTrialDataDeletionWarningEmails() {
-  const users = await findUnconvertedTrialsToWarn()
-  if (!users.length) return { sent: 0, skipped: 0, flag_failed: 0, total: 0 }
+  const { users, error: selectError } = await findUnconvertedTrialsToWarn()
+  const echeances_7j = await compterEcheances('trial_purge_warn', ECHEANCES_PURGE_WARN)
+  if (selectError) {
+    return { sent: 0, skipped: 0, flag_failed: 0, total: 0, echeances_7j, errors: [{ stage: 'select', error: selectError }] }
+  }
+  if (!users.length) return { sent: 0, skipped: 0, flag_failed: 0, total: 0, echeances_7j, errors: [] }
   let sent = 0
   let skipped = 0
   let flagFailed = 0
@@ -316,5 +396,5 @@ export async function sendTrialDataDeletionWarningEmails() {
       errors.push({ email: u.email, stage: 'flag', error: 'trial_purge_warning_sent_at non posé' })
     }
   }
-  return { sent, skipped, flag_failed: flagFailed, total: users.length, errors }
+  return { sent, skipped, flag_failed: flagFailed, total: users.length, echeances_7j, errors }
 }

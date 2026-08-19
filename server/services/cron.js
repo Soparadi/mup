@@ -10,11 +10,15 @@
 // l'exécution, on relance simplement le lendemain — les flags filtrent
 // déjà les users ayant reçu l'email.
 //
-// Logging : chaque exécution écrit un audit_log avec event 'cron:trial:*'
-// et metadata { sent, total, errors[] }.
+// Logging : chaque exécution écrit un audit_log avec event 'cron:trial:*' et
+// metadata { …retour de l'étape, echeances_7j, duration_ms, ok }. Le passage
+// entier écrit en plus une ligne de clôture 'cron:trial:passage' — son ABSENCE
+// est la seule chose qui dise qu'un cron n'a pas tourné, un cron qui ne démarre
+// pas n'écrivant rien, et rien ressemblant à rien.
 
 import cron from 'node-cron'
 import { getDb } from '../../lib/surreal.js'
+import { compterEcheances } from '../../lib/echeances.js'
 import {
   sendTrialEndingSoonEmails,
   sendTrialEndingTodayEmails,
@@ -30,6 +34,13 @@ import { ramasserActualites } from './actualites.js'
 const SCHEDULE = process.env.CRON_TRIAL_SCHEDULE || '0 8 * * *'
 const TIMEZONE = process.env.CRON_TIMEZONE || 'Europe/Paris'
 const ACTUALITES_SCHEDULE = process.env.CRON_ACTUALITES_SCHEDULE || '*/15 * * * *'
+
+// Échéance de suppression de compte (art. 17) : la date d'action est
+// deletion_scheduled_at lui-même. Voir lib/echeances.js pour la réserve de
+// lecture — arithmétique native, aucune borne liée.
+const ECHEANCES_ACCOUNT_DELETION = `deletion_scheduled_at != NONE
+   AND deletion_scheduled_at >  time::now()
+   AND deletion_scheduled_at <= time::now() + 7d`
 
 // Helper d'audit cron — pattern aligné sur logAuditEvent de surreal-adapter
 // mais inline ici pour éviter une dépendance croisée. Échec silencieux :
@@ -52,6 +63,30 @@ async function logCronAudit(event, metadata) {
   }
 }
 
+// État d'une étape — le seul endroit où se décide ce que « sain » veut dire.
+//
+// DEUX SOURCES, et il en faut deux. L'exception attrapée par runStep n'est que
+// la première ; l'échec RENDU EN BANDE est la seconde, et c'est la plus
+// fréquente — aucune étape ne lève, toutes rattrapent. Sans la seconde, une
+// sélection en panne (purge, j2, expire…) s'afficherait saine, ce qui est
+// exactement la cécité que ce dispositif combat.
+//
+//   1. un retour qui n'est pas un objet — une étape qui ne rend rien ne dit
+//      rien de bon, on ne lui accorde pas le bénéfice du doute ;
+//   2. la clé `error` (chemin de l'exception, et retours en bande qui la
+//      portent) ;
+//   3. `errors[]` non vide — la forme des huit étapes trial ;
+//   4. `erreurs` > 0 — la forme du ramassage d'actualités, qui compte ses
+//      erreurs sans les lister. Sans cette branche, un flux à moitié en échec
+//      passerait pour un ramassage sans faute.
+function estOk(result) {
+  if (!result || typeof result !== 'object') return false
+  if (result.error) return false
+  if (Array.isArray(result.errors) && result.errors.length) return false
+  if (typeof result.erreurs === 'number' && result.erreurs > 0) return false
+  return true
+}
+
 // Wrapper try/catch par fonction : si une étape plante, les autres continuent.
 // Retourne le résumé pour log audit.
 //
@@ -65,45 +100,108 @@ async function runStep(name, fn, prefixe = 'cron:trial:') {
     const result = await fn()
     const ms = Date.now() - startedAt
     console.log(`[cron] ${name} terminé en ${ms}ms :`, JSON.stringify(result))
-    await logCronAudit(`${prefixe}${name}`, { ...result, duration_ms: ms })
+    // `ok` est posé APRÈS l'étalement, délibérément : une étape qui rendrait
+    // elle-même un `ok` ne peut pas maquiller son état, c'est ce wrapper qui
+    // tranche, sur le retour tel qu'il est arrivé.
+    const meta = { ...result, duration_ms: ms }
+    meta.ok = estOk(result)
+    await logCronAudit(`${prefixe}${name}`, meta)
     return result
   } catch (e) {
     const ms = Date.now() - startedAt
     console.error(`[cron] ${name} planté en ${ms}ms :`, e.message)
-    await logCronAudit(`${prefixe}${name}`, { error: e.message, duration_ms: ms })
+    await logCronAudit(`${prefixe}${name}`, { error: e.message, duration_ms: ms, ok: false })
     return { error: e.message }
   }
 }
 
-// Job principal — séquence J-2 → J-0 → expire. Aucun await bloquant entre
-// les 3 (pas d'inter-dépendance), mais séquentiel pour ne pas hammer la DB.
+// La séquence du passage quotidien, déclarée en liste : c'est elle qui donne le
+// nombre d'étapes ATTENDUES, sans quoi la ligne de clôture ne saurait pas
+// distinguer un passage complet d'un passage interrompu.
+//
+// L'ordre est celui d'avant, inchangé. `visites` reste EN DERNIER : c'est la
+// seule étape qui n'envoie rien et ne touche aucun compte, elle ne doit pas
+// retarder les relances.
+const ETAPES_TRIAL = [
+  ['j2', sendTrialEndingSoonEmails],
+  ['j0', sendTrialEndingTodayEmails],
+  ['trial_purge_warn', sendTrialDataDeletionWarningEmails],
+  ['expire', expireTrialAutomatically],
+  ['grace_j1', sendGraceEndingTomorrowEmails],
+  ['account_deletion', runAccountDeletions],
+  ['purge', purgeExpiredUsers],
+  ['purge_trial', purgeExpiredTrials],
+  ['visites', agregerVisitesJour]
+]
+
+// Job principal — séquentiel, pour ne pas hammer la DB.
+//
+// LIGNE DE CLÔTURE. Le passage écrit, en tout dernier, un 'cron:trial:passage'
+// qui répond à la question qu'aucune ligne ne posait : le cron a-t-il tourné ?
+// Elle est écrite dans un `finally`, donc même si toutes les étapes ont échoué.
+//
+// CE QUI SIGNALE UNE TOURNÉE INTERROMPUE, C'EST L'ABSENCE DE CETTE LIGNE, et
+// rien d'autre. Le mode d'interruption réel est l'instance Railway tuée en
+// cours de passage : le `finally` ne s'exécute pas, aucune ligne n'est écrite,
+// et c'est ce trou dans la série quotidienne qui le dit. D'où l'écriture
+// inconditionnelle de la ligne — elle fait de « pas de ligne » un fait lisible
+// plutôt qu'un silence ambigu.
+//
+// `etapes_jouees` ne prétend pas à ce rôle. La boucle n'a presque aucun chemin
+// pour lever — runStep attrape tout ce que rend l'étape, logCronAudit attrape
+// ses propres échecs — donc le compteur ne couvre qu'un cas résiduel. Il est
+// gardé pour ce qu'il coûte : rien, et il rendrait visible l'imprévu qui
+// arriverait quand même.
 async function runTrialJobs() {
+  const debutPassage = Date.now()
   console.log('[cron] Trial jobs déclenchés à', new Date().toISOString())
-  await runStep('j2', sendTrialEndingSoonEmails)
-  await runStep('j0', sendTrialEndingTodayEmails)
-  await runStep('trial_purge_warn', sendTrialDataDeletionWarningEmails)
-  await runStep('expire', expireTrialAutomatically)
-  await runStep('grace_j1', sendGraceEndingTomorrowEmails)
-  await runStep('account_deletion', runAccountDeletions)
-  await runStep('purge', purgeExpiredUsers)
-  await runStep('purge_trial', purgeExpiredTrials)
-  // Audience — agrège les journées révolues dans visite_jour puis purge le
-  // détail de plus de 90 jours. En DERNIER : c'est la seule étape qui n'envoie
-  // rien et ne touche aucun compte, elle ne doit pas retarder les relances.
-  await runStep('visites', agregerVisitesJour)
+  const joues = []
+  try {
+    for (const [nom, fn] of ETAPES_TRIAL) {
+      joues.push([nom, await runStep(nom, fn)])
+    }
+  } finally {
+    const ko = joues.filter(([, r]) => !estOk(r)).map(([nom]) => nom)
+    const complet = joues.length === ETAPES_TRIAL.length
+    await logCronAudit('cron:trial:passage', {
+      etapes: ETAPES_TRIAL.length,
+      etapes_jouees: joues.length,
+      etapes_ok: joues.length - ko.length,
+      etapes_ko: ko.length,
+      // Chaîne et non tableau : la clôture doit rester lisible d'un coup d'œil,
+      // et vide quand tout va bien — jamais absente, jamais null.
+      etapes_ko_noms: ko.join(','),
+      duration_ms: Date.now() - debutPassage,
+      ok: complet && ko.length === 0
+    })
+  }
 }
 
 // Suppression compte art. 17 (Phase 6 Étape 13) — exécute la cascade pour
 // tous les users dont deletion_scheduled_at est échue. L'email + le prenom
 // sont récupérés AVANT la cascade (impossible après le DELETE user). Échec
 // d'un user loggé et non bloquant pour les autres.
+//
+// REND SES ÉCHECS. Les échecs unitaires ne partaient qu'en console : l'audit
+// affichait `processed: 0, total: 3` sans un mot sur les trois cascades
+// tombées. Ils remontent désormais dans errors[], donc dans `ok`. Sans
+// adresse : ces comptes sont en cours de suppression, l'identifiant suffit.
 async function runAccountDeletions() {
-  const db = await getDb()
-  const overdue = await db.query(
-    'SELECT id, email, prenom, nom, deletion_requested_at FROM user'
-    + ' WHERE deletion_scheduled_at != NONE AND deletion_scheduled_at <= time::now()'
-  )
-  const users = overdue?.[0] || []
+  const echeances_7j = await compterEcheances('account_deletion', ECHEANCES_ACCOUNT_DELETION)
+  const errors = []
+  let db
+  let users = []
+  try {
+    db = await getDb()
+    const overdue = await db.query(
+      'SELECT id, email, prenom, nom, deletion_requested_at FROM user'
+      + ' WHERE deletion_scheduled_at != NONE AND deletion_scheduled_at <= time::now()'
+    )
+    users = overdue?.[0] || []
+  } catch (e) {
+    console.error('[account_deletion] SELECT échoué :', e.message)
+    return { processed: 0, total: 0, echeances_7j, errors: [{ stage: 'select', error: e.message }] }
+  }
   let processed = 0
   for (const u of users) {
     try {
@@ -118,14 +216,18 @@ async function runAccountDeletions() {
           })
         }
       } catch (mailErr) {
+        // La cascade a eu lieu ; seul le courriel de confirmation manque. Compté
+        // à part de l'échec de suppression : le compte EST supprimé.
         console.error('[account_deletion] mail confirmé échec', String(u.id), mailErr.message)
+        errors.push({ userId: String(u.id), stage: 'mail', error: mailErr.message })
       }
       processed++
     } catch (err) {
       console.error('[account_deletion]', String(u.id), err.message)
+      errors.push({ userId: String(u.id), stage: 'cascade', error: err.message })
     }
   }
-  return { processed, total: users.length }
+  return { processed, total: users.length, echeances_7j, errors }
 }
 
 // Ramassage du flux d'actualités. Une seule étape, sous le même wrapper que les

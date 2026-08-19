@@ -230,8 +230,14 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
   background:#000;display:block;
 }
 
-/* —— WORKSPACE —— */
-.workspace{flex:1;display:grid;grid-template-columns:280px 1fr 320px;min-height:0;overflow:hidden;transition:grid-template-columns .25s}
+/* —— WORKSPACE ——
+   Trois pistes, dont la dernière est la fiche du rendez-vous. Sans fiche
+   ouverte la piste vaut zéro et la vidéo reprend toute la largeur : la
+   colonne se replie, elle n'affiche pas un vide meublé. Le pilotage passe
+   par cette seule classe — la page n'a aucune géométrie calculée en JS et
+   n'a pas à en acquérir. */
+.workspace{flex:1;display:grid;grid-template-columns:280px 1fr 0;min-height:0;overflow:hidden;transition:grid-template-columns .25s}
+.workspace.fiche-ouverte{grid-template-columns:280px 1fr 380px}
 
 /* —— COL GAUCHE —— */
 .col-left{background:var(--card);border-right:1px solid var(--border);overflow-y:auto;padding:14px 0}
@@ -266,7 +272,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .empty-list{padding:30px 16px;text-align:center;color:var(--muted2);font-size:11.5px;line-height:1.5}
 
 /* —— COL CENTRE —— */
-.col-center{display:flex;flex-direction:column;background:var(--surface);overflow-y:auto;position:relative;padding:14px}
+.col-center{display:flex;flex-direction:column;gap:12px;background:var(--surface);overflow-y:auto;position:relative;padding:14px}
 
 .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center;gap:14px}
 .empty-state .icon-circle{width:72px;height:72px;border-radius:50%;background:var(--visio-light);display:flex;align-items:center;justify-content:center;color:var(--visio)}
@@ -349,7 +355,12 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 /* TOOLBAR */
 .visio-toolbar{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:11px 14px;display:flex;gap:10px;align-items:center;flex-shrink:0}
 .timer{font-family:var(--mono);font-size:16px;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:7px;padding-right:12px;border-right:1px solid var(--border)}
-.timer .live-dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:pulse 1.4s infinite}
+/* La pastille ne bat que pour une séance réellement engagée. Un battement
+   perpétuel à côté d'un 00:00 arrêté annonce une visio qui n'a pas commencé :
+   rien, puis rouge. Une seule classe, portée par la barre, que resetTimer et
+   engagerSeance sont les deux seuls à basculer. */
+.timer .live-dot{display:none;width:7px;height:7px;border-radius:50%;background:var(--red);animation:pulse 1.4s infinite}
+.timer.seance-engagee .live-dot{display:block}
 .tool-btn{width:34px;height:34px;border-radius:9px;background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--text);transition:all .12s}
 .tool-btn:hover{background:var(--surface2)}
 .toolbar-end{margin-left:auto;display:flex;gap:8px}
@@ -400,14 +411,40 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .upload-input{display:none}
 .upload-help{font-size:10px;color:var(--muted);line-height:1.4;margin-top:6px}
 
-/* —— COL DROITE : DOCS BIBLIOTHÉQUE —— */
-.col-right{background:var(--card);overflow-y:auto;display:flex;flex-direction:column;border-left:1px solid var(--border)}
+/* —— COL DROITE : LA FICHE DU RDV ——
+   L'hôte, et rien d'autre : la géométrie de l'iframe est posée par
+   MUPFiche en mode ancré. overflow:hidden fait le reste quand la piste
+   vaut zéro. */
+.col-fiche{background:var(--card);overflow:hidden;min-width:0}
+
+/* —— DOCS BIBLIOTHÈQUE : TIROIR PERMANENT EN PIED DE COLONNE ——
+   Replié, le tiroir n'occupe que sa ligne d'en-tête et ne se laisse pas
+   comprimer. Déplié, il prend au plus 30 vh ET redevient compressible :
+   c'est ce couple qui garantit qu'il ne pousse jamais la vidéo sous le
+   pli — quand la place manque, c'est lui qui rend du terrain, pas elle. */
+.docs-drawer{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  display:flex;flex-direction:column;overflow:hidden;flex:0 0 auto;
+}
+.docs-drawer.open{flex:0 1 auto;min-height:0}
+.docs-drawer-body{display:none}
+.docs-drawer.open .docs-drawer-body{
+  display:flex;flex-direction:column;flex:1;min-height:0;
+  max-height:min(30vh,260px);overflow-y:auto;
+  border-top:1px solid var(--border);
+}
 .docs-header{
-  padding:14px 16px 12px;
-  border-bottom:1px solid var(--border);
+  padding:10px 12px;
   display:flex;align-items:center;gap:8px;
 }
-.docs-header h3{font-size:13px;font-weight:800;letter-spacing:-.2px;flex:1}
+.docs-toggle{
+  flex:1;display:flex;align-items:center;gap:8px;
+  padding:0;background:none;border:none;text-align:left;color:inherit;
+}
+.docs-toggle .docs-title{font-size:13px;font-weight:800;letter-spacing:-.2px}
+.docs-toggle .chevron{color:var(--muted);transition:transform .18s;flex-shrink:0}
+.docs-drawer.open .docs-toggle .chevron{transform:rotate(90deg)}
+.docs-toggle:focus-visible{outline:2px solid var(--visio);outline-offset:2px;border-radius:6px}
 .docs-header .doc-count{font-family:var(--mono);font-size:10px;font-weight:700;background:var(--surface);color:var(--muted);padding:2px 7px;border-radius:5px}
 .btn-add-doc{
   width:28px;height:28px;border-radius:7px;
@@ -418,9 +455,9 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 
 .docs-filter{
   display:flex;gap:5px;
-  padding:10px 16px;
+  padding:10px 12px;
   border-bottom:1px solid var(--border);
-  flex-wrap:wrap;
+  flex-wrap:wrap;flex-shrink:0;
 }
 .filter-pill{
   font-size:10px;font-weight:600;
@@ -522,10 +559,10 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 }
 
 .docs-quota{
-  padding:8px 16px;
+  padding:8px 12px;
   font-size:9.5px;color:var(--muted2);
   border-top:1px solid var(--border);
-  display:flex;align-items:center;gap:8px;
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
 }
 .docs-quota .bar{
   flex:1;height:3px;background:var(--surface2);border-radius:2px;overflow:hidden;
@@ -533,6 +570,52 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .docs-quota .bar-fill{height:100%;background:var(--visio);transition:width .25s}
 .docs-quota.warn .bar-fill{background:var(--orange)}
 .docs-quota.critical .bar-fill{background:var(--red)}
+
+/* —— ACCUEIL PREMIÈRE VISIO ——
+   Un bandeau du flux principal, au même rang que la barre de lancement : il
+   n'interrompt rien, ne se ferme pas, et se retire de lui-même dès qu'un lien
+   est enregistré. Son champ de saisie est le sien — la barre du haut disparaît
+   sous 1100 px, y renvoyer laisserait l'abonné sans issue. */
+.accueil-visio{
+  background:var(--card);border-bottom:1px solid var(--border);
+  padding:16px 24px;flex-shrink:0;
+}
+.accueil-visio h2{font-size:15px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px}
+.accueil-visio p{font-size:12.5px;color:var(--muted);line-height:1.55;max-width:780px}
+.accueil-choix{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.accueil-outil{
+  display:flex;align-items:center;gap:7px;
+  padding:9px 15px;border:2px solid var(--border);border-radius:10px;
+  font-size:12px;font-weight:700;transition:border-color .12s,background .12s;
+}
+.accueil-outil:hover{border-color:var(--border2);background:var(--surface)}
+.accueil-outil:focus-visible{outline:2px solid var(--visio);outline-offset:2px}
+.accueil-outil .ld{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+/* L'outil retenu, nommé en clair au-dessus du mode d'emploi : l'abonné lit
+   « Teams », il ne le déduit pas de l'exemple d'adresse du champ. Sa règle
+   passe devant `.accueil-visio p`, qui grise et amincit tous les paragraphes
+   de l'encart. */
+.accueil-visio .accueil-outil-choisi{
+  display:flex;align-items:center;gap:7px;margin-bottom:7px;
+  font-size:13px;font-weight:800;letter-spacing:-.2px;color:var(--text);
+}
+.accueil-visio .accueil-outil-choisi .ld{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.accueil-form{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.accueil-form input{
+  flex:1;min-width:220px;max-width:520px;
+  padding:9px 11px;border:1px solid var(--border);border-radius:9px;
+  font-family:var(--mono);font-size:12px;outline:none;background:#fff;
+  transition:border-color .15s;
+}
+.accueil-form input::placeholder{font-family:var(--font);color:var(--muted2)}
+.accueil-form input:focus{border-color:var(--visio)}
+.accueil-retour{
+  display:inline-block;margin-top:10px;
+  font-size:11.5px;font-weight:600;color:var(--muted);
+  text-decoration:underline;text-underline-offset:3px;
+}
+.accueil-retour:hover{color:var(--text)}
+.accueil-retour:focus-visible{outline:2px solid var(--visio);outline-offset:2px;border-radius:4px}
 
 /* —— MODALES —— */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
@@ -612,17 +695,21 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .toast.show{transform:translateX(-50%) translateY(0)}
 
 @media(max-width:1300px){
-  .workspace{grid-template-columns:240px 1fr 280px}
+  .workspace{grid-template-columns:240px 1fr 0}
+  .workspace.fiche-ouverte{grid-template-columns:240px 1fr 340px}
   .my-link-field input{width:130px}
 }
+/* Sous 1100 px la colonne de fiche n'est plus tenable : elle disparaît de la
+   grille et la page revient au calque. Le seuil n'est écrit qu'ICI — le JS le
+   lit par matchMedia et n'en tient pas une seconde copie. */
 @media(max-width:1100px){
-  .workspace{grid-template-columns:220px 1fr}
-  .col-right{display:none}
+  .workspace,.workspace.fiche-ouverte{grid-template-columns:220px 1fr}
+  .col-fiche{display:none}
   .my-links{display:none}
 }
 @media(max-width:900px){
-  .workspace{grid-template-columns:1fr}
-  .col-left,.col-right{display:none}
+  .workspace,.workspace.fiche-ouverte{grid-template-columns:1fr}
+  .col-left,.col-fiche{display:none}
   .launch-bar{padding:10px 16px;gap:8px}
   .launch-providers{flex-wrap:wrap}
 }
@@ -726,6 +813,36 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
     </button>
   </div>
 
+  <!-- ACCUEIL PREMIÈRE VISIO
+       Vit tant qu'aucun lien n'est enregistré et se retire à la première
+       saisie : aucune croix, aucun « déjà vu » en base — sa raison d'être
+       disparaît avec le premier lien. Hors de #emptyState, que l'ouverture
+       masque dès qu'un rendez-vous est programmé. Caché en ligne comme
+       #visioActive : il ne paraît qu'après bootstrapVisio(), sans quoi il
+       clignoterait au chargement chez l'abonné déjà équipé. -->
+  <div class="accueil-visio" id="accueilVisio" style="display:none">
+    <h2>Votre première visio</h2>
+
+    <div id="accueilIntro">
+      <p>MovUP ne remplace pas votre outil de visioconférence : il tient le rendez-vous autour de l'appel — la fiche du prospect, vos notes, le journal de la séance et l'avancée au pipeline. Indiquez l'outil que vous utilisez.</p>
+      <div class="accueil-choix">
+        <button class="accueil-outil" data-accueil-outil="zoom"><span class="ld" style="background:var(--zoom)"></span>Zoom</button>
+        <button class="accueil-outil" data-accueil-outil="teams"><span class="ld" style="background:var(--teams)"></span>Teams</button>
+        <button class="accueil-outil" data-accueil-outil="meet"><span class="ld" style="background:var(--meet)"></span>Meet</button>
+      </div>
+    </div>
+
+    <div id="accueilSaisie" style="display:none">
+      <p class="accueil-outil-choisi"><span class="ld" id="accueilOutilPuce"></span><span id="accueilOutilNom">—</span></p>
+      <p id="accueilAide">—</p>
+      <div class="accueil-form">
+        <input type="url" id="accueilLien" placeholder="https://…">
+        <button class="btn-primary" id="accueilEnregistrer">Enregistrer</button>
+      </div>
+      <button class="accueil-retour" id="accueilRetour">Choisir un autre outil</button>
+    </div>
+  </div>
+
   <!-- WORKSPACE -->
   <div class="workspace" id="workspace">
 
@@ -750,7 +867,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
           <strong id="emptyDocsCount">—</strong> · Touches <kbd style="font-family:var(--mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">1</kbd> <kbd style="font-family:var(--mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">2</kbd> <kbd style="font-family:var(--mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">3</kbd> pour ouvrir vos documents épinglés directement.
         </div>
         <div class="hint">
-          <strong>Astuce</strong> · Saisissez vos liens Zoom/Teams/Meet une seule fois en haut. Touche <kbd style="font-family:var(--mono);background:var(--surface);padding:1px 5px;border-radius:3px;font-size:10px">?</kbd> pour les raccourcis.
+          <strong>Astuce</strong> · Touche <kbd style="font-family:var(--mono);background:var(--surface);padding:1px 5px;border-radius:3px;font-size:10px">?</kbd> pour les raccourcis.
         </div>
       </div>
 
@@ -763,7 +880,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 
         <!-- TOOLBAR -->
         <div class="visio-toolbar">
-          <div class="timer">
+          <div class="timer" id="timerBar">
             <span class="live-dot"></span>
             <span id="timerDisplay">00:00</span>
           </div>
@@ -792,35 +909,49 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
         </div>
       </div>
 
+      <!-- DOCS BIBLIOTHÈQUE — TIROIR PERMANENT
+           Dernier enfant de la colonne, et non plus de #visioActive : on range
+           et on ajoute ses documents quand aucun rendez-vous n'est en cours,
+           précisément le moment où il était invisible. Sous les notes pendant
+           une séance, sous l'état vide sinon. -->
+      <div class="docs-drawer" id="docsDrawer">
+        <div class="docs-header">
+          <button class="docs-toggle" id="docsToggle" aria-expanded="false" aria-controls="docsDrawerBody">
+            <svg class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <span class="docs-title">Mes documents</span>
+          </button>
+          <span class="doc-count" id="docCount">0</span>
+          <button class="btn-add-doc" id="addDocBtn" title="Ajouter un document">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+
+        <div class="docs-drawer-body" id="docsDrawerBody">
+          <div class="docs-filter" id="docsFilter">
+            <span class="filter-pill active" data-filter="all">tous</span>
+            <span class="filter-pill" data-filter="presentation">présentation</span>
+            <span class="filter-pill" data-filter="tarifs">tarifs</span>
+            <span class="filter-pill" data-filter="demo">démo</span>
+            <span class="filter-pill" data-filter="cas-client">cas client</span>
+            <span class="filter-pill" data-filter="legal">légal</span>
+            <span class="filter-pill" data-filter="autre">autre</span>
+          </div>
+
+          <div id="docsList" style="flex:1;overflow-y:auto"></div>
+
+          <div class="docs-quota" id="docsQuota">
+            <span id="docsQuotaText">—</span>
+            <div class="bar"><div class="bar-fill" id="docsQuotaBar" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
-    <!-- COL DROITE : DOCS BIBLIOTHÉQUE -->
-    <div class="col-right">
-      <div class="docs-header">
-        <h3>Mes documents</h3>
-        <span class="doc-count" id="docCount">0</span>
-        <button class="btn-add-doc" id="addDocBtn" title="Ajouter un document">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        </button>
-      </div>
-
-      <div class="docs-filter" id="docsFilter">
-        <span class="filter-pill active" data-filter="all">tous</span>
-        <span class="filter-pill" data-filter="presentation">présentation</span>
-        <span class="filter-pill" data-filter="tarifs">tarifs</span>
-        <span class="filter-pill" data-filter="demo">démo</span>
-        <span class="filter-pill" data-filter="cas-client">cas client</span>
-        <span class="filter-pill" data-filter="legal">légal</span>
-        <span class="filter-pill" data-filter="autre">autre</span>
-      </div>
-
-      <div id="docsList" style="flex:1;overflow-y:auto"></div>
-
-      <div class="docs-quota" id="docsQuota">
-        <span id="docsQuotaText">—</span>
-        <div class="bar"><div class="bar-fill" id="docsQuotaBar" style="width:0%"></div></div>
-      </div>
-    </div>
+    <!-- COL DROITE : FICHE DU RDV SÉLECTIONNÉ
+         Vide par défaut, et vide veut dire replié : c'est .workspace qui porte
+         l'état, pas cet élément. MUPFiche y pose son iframe en mode ancré. -->
+    <div class="col-fiche" id="ficheHost"></div>
   </div>
 </main>
 
@@ -832,9 +963,9 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
     <div class="field">
       <label>Provider</label>
       <div class="provider-grid">
-        <div class="provider-opt" data-provider="zoom"><div style="font-size:18px;color:var(--zoom)">—</div><div class="p-name">Zoom</div><div class="p-mini">Mon lien</div></div>
-        <div class="provider-opt" data-provider="teams"><div style="font-size:18px;color:var(--teams)">—</div><div class="p-name">Teams</div><div class="p-mini">Mon lien</div></div>
-        <div class="provider-opt selected" data-provider="meet"><div style="font-size:18px;color:var(--meet)">—</div><div class="p-name">Meet</div><div class="p-mini">Mon lien</div></div>
+        <div class="provider-opt" data-provider="zoom"><div style="font-size:18px;color:var(--zoom)">—</div><div class="p-name">Zoom</div><div class="p-mini">—</div></div>
+        <div class="provider-opt" data-provider="teams"><div style="font-size:18px;color:var(--teams)">—</div><div class="p-name">Teams</div><div class="p-mini">—</div></div>
+        <div class="provider-opt" data-provider="meet"><div style="font-size:18px;color:var(--meet)">—</div><div class="p-name">Meet</div><div class="p-mini">—</div></div>
         <div class="provider-opt" data-provider="custom"><div style="font-size:18px;color:var(--muted)">—</div><div class="p-name">Autre</div><div class="p-mini">Lien custom</div></div>
       </div>
     </div>
@@ -1017,6 +1148,11 @@ const PROVIDERS = {
   custom:{ embed:false, label:'Lien',  color:'#6E6E73' }
 };
 
+// Le libellé d'un outil se lit au registre, jamais à la clé technique. Les deux
+// surfaces qui enregistrent un lien — l'encart d'accueil et la barre du haut —
+// appellent cette ligne : la divergence ne peut plus s'installer.
+const libelleOutil = p => PROVIDERS[p]?.label || p;
+
 const PLACEHOLDERS = [
   { tag:'presentation', name:'PDF de présentation', mime:'application/pdf' },
   { tag:'tarifs',       name:'Grille tarifaire',     mime:'application/pdf' },
@@ -1193,6 +1329,12 @@ function showToast(msg){
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
+// Deux états, et non plus un seul. `rdvAffiche` est ce que l'écran MONTRE —
+// briefing, cadre vidéo, documents, fiche, brouillon de notes. `activeRdv` est
+// la séance ENGAGÉE, celle dont le chronomètre court. Les confondre faisait
+// qu'ouvrir la page à 9 h lançait un compteur pour un rendez-vous de 16 h 30,
+// et qu'un « Terminer » y inscrivait trois heures qui n'ont pas eu lieu.
+let rdvAffiche = null;
 let activeRdv = null;
 let timerInterval = null;
 let timerStart = null;
@@ -1287,7 +1429,88 @@ function saveMyLink(provider, value){
   const launchBtn = $(`launch${provider.charAt(0).toUpperCase() + provider.slice(1)}`);
   if(value.trim()) launchBtn.classList.add('has-link');
   else launchBtn.classList.remove('has-link');
+  // Seul écrivain des liens, donc seul endroit d'où l'encart d'accueil peut
+  // changer d'état en cours de session — dans les deux sens : effacer son
+  // dernier lien le fait revenir, l'abonné n'a plus de quoi lancer une visio.
+  refletAccueil();
 }
+
+/* ————————————————————————————————————————————————
+   ACCUEIL PREMIÈRE VISIO
+   ———————————————————————————————————————————————— */
+const ACCUEIL_AIDE = {
+  zoom:  "Votre salle personnelle Zoom convient telle quelle. Ouvrez Zoom, rubrique Réunions, section Salle personnelle, et copiez l'adresse d'invitation.",
+  teams: "Teams n'a pas de salle personnelle. Créez dans votre agenda Teams une réunion récurrente, à l'horaire de votre choix, et copiez son lien : il reste valable pour toutes ses occurrences.",
+  meet:  "Meet n'a pas de salle personnelle. Créez dans Google Agenda un événement récurrent avec visioconférence, et copiez son lien : il reste le même pour toutes les occurrences."
+};
+
+// Le seul juge de « pas encore équipé », et il juge sur la VALEUR : effacer un
+// champ écrit une chaîne vide et laisse la clé en base, compter les clés dirait
+// équipé un abonné qui ne l'est plus.
+function aucunLienEnregistre(){
+  const liens = _state.settings.links || {};
+  return !['zoom','teams','meet'].some(p => String(liens[p] || '').trim());
+}
+
+function accueilEtapeChoix(){
+  $('accueilIntro').style.display = '';
+  $('accueilSaisie').style.display = 'none';
+}
+
+// Un fournisseur à la fois : le mode d'emploi affiché est celui de l'outil
+// choisi, jamais les trois ensemble. Le repère de saisie est celui de la barre
+// du haut — une seule écriture de ces exemples d'adresse dans la page.
+function accueilEtapeSaisie(provider){
+  if(!ACCUEIL_AIDE[provider]) return;
+  $('accueilOutilNom').textContent = `Votre lien ${libelleOutil(provider)}`;
+  $('accueilOutilPuce').style.background = PROVIDERS[provider]?.color || 'var(--muted)';
+  $('accueilAide').textContent = ACCUEIL_AIDE[provider];
+  const champ = $('accueilLien');
+  champ.value = '';
+  champ.dataset.provider = provider;
+  const miroir = document.querySelector(`input[data-link="${provider}"]`);
+  champ.placeholder = miroir ? miroir.placeholder : 'https://…';
+  $('accueilIntro').style.display = 'none';
+  $('accueilSaisie').style.display = '';
+  champ.focus();
+}
+
+function refletAccueil(){
+  const bloc = $('accueilVisio');
+  const doitParaitre = aucunLienEnregistre();
+  const parait = bloc.style.display !== 'none';
+  if(doitParaitre === parait) return;
+  if(doitParaitre) accueilEtapeChoix();
+  bloc.style.display = doitParaitre ? '' : 'none';
+}
+
+document.querySelectorAll('[data-accueil-outil]').forEach(btn=>{
+  btn.addEventListener('click', ()=>accueilEtapeSaisie(btn.dataset.accueilOutil));
+});
+$('accueilRetour').addEventListener('click', accueilEtapeChoix);
+
+$('accueilEnregistrer').addEventListener('click', ()=>{
+  const champ = $('accueilLien');
+  const provider = champ.dataset.provider;
+  const valeur = champ.value.trim();
+  if(!provider) return;
+  if(!valeur){
+    champ.focus();
+    champ.style.borderColor = 'var(--red)';
+    setTimeout(()=>{ champ.style.borderColor = ''; }, 1500);
+    return;
+  }
+  // Même chemin d'écriture que la barre du haut, et la barre reprend la valeur :
+  // deux surfaces pour un seul lien, jamais deux vérités.
+  const miroir = document.querySelector(`input[data-link="${provider}"]`);
+  if(miroir) miroir.value = valeur;
+  saveMyLink(provider, valeur);
+  showToast(`Lien ${libelleOutil(provider)} enregistré`);
+});
+
+$('accueilLien').addEventListener('keydown', e=>{
+  if(e.key === 'Enter'){ e.preventDefault(); $('accueilEnregistrer').click(); }
+});
 
 document.querySelectorAll('input[data-link]').forEach(input=>{
   let timer;
@@ -1297,7 +1520,7 @@ document.querySelectorAll('input[data-link]').forEach(input=>{
     timer = setTimeout(()=>{
       saveMyLink(input.dataset.link, input.value);
       input.closest('.my-link-field').classList.remove('dirty');
-      showToast(`Lien ${input.dataset.link} enregistré`);
+      showToast(`Lien ${libelleOutil(input.dataset.link)} enregistré`);
     }, 700);
   });
 });
@@ -1320,12 +1543,19 @@ function launchExternal(provider){
   }
 
   const id = 'quick_' + uid();
-  selectRdv({
+  peindreRdv({
     id, prospectId:null, prospectName:`${PROVIDERS[provider].label} rapide`, societe:'', email:'',
     date: new Date().toISOString(), duree: 30,
     provider, link, status:'in_progress', sujet:'Visio rapide'
   });
-  setTimeout(()=>window.open(link, 'mup_visio_popup', 'width=1200,height=780,resizable=yes'), 200);
+  // Le chronomètre part au lancement, pas à la peinture — et seulement si la
+  // fenêtre s'est réellement ouverte : une visio bloquée par le navigateur n'a
+  // pas commencé.
+  setTimeout(()=>{
+    const w = window.open(link, 'mup_visio_popup', 'width=1200,height=780,resizable=yes');
+    if(w) engagerSeance();
+    else showToast('Veuillez autoriser les popups');
+  }, 200);
 }
 
 $('launchZoom').addEventListener('click', ()=>launchExternal('zoom'));
@@ -1479,7 +1709,7 @@ async function renderRdvList(){
     $('nextRdvTime').textContent = label;
     $('nextRdvLabel').style.display = 'inline';
 
-    if(!activeRdv){
+    if(!rdvAffiche){
       $('nextRdvCard').innerHTML = `
         <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-top:6px;display:flex;align-items:center;gap:16px;min-width:340px">
           <div>
@@ -1513,7 +1743,7 @@ async function renderRdvList(){
       const d = new Date(r.date);
       const time = `${fmt2(d.getHours())}:${fmt2(d.getMinutes())}`;
       const live = r.status === 'in_progress';
-      const isActive = activeRdv && activeRdv.id === r.id;
+      const isActive = rdvAffiche && rdvAffiche.id === r.id;
       const isImm = imminentIds.has(r.id);
       s += `
         <div class="rdv-card ${isActive?'active':''} ${isImm?'imminent':''}" data-rdv-id="${r.id}">
@@ -1544,18 +1774,22 @@ async function renderRdvList(){
 
   list.innerHTML = html;
   list.querySelectorAll('.rdv-card').forEach(el=>{
-    el.addEventListener('click', ()=>{
+    el.addEventListener('click', async ()=>{
       const id = el.dataset.rdvId;
       const rdv = rdvs.find(r=>r.id===id);
       if(!rdv) return;
-      selectRdv(rdv);
-      // Ouvre la fiche complète à droite, en parallèle de la visio
-      if(rdv.prospectId && window.MUPFiche) MUPFiche.open(rdv.prospectId);
+      // Cliquer une carte PEINT le rendez-vous — fiche comprise — et n'engage
+      // rien : consulter une fiche à 13 h ne démarre pas la séance de 16 h 30.
+      // Mais si une séance court sur un AUTRE rendez-vous, elle se perd ici :
+      // on le dit avant.
+      if(!await confirmerAbandonSeance(rdv)) return;
+      peindreRdv(rdv);
     });
   });
 
-  // Le geste de modification vit DANS la carte, dont le clic ouvre la séance et
-  // la fiche : sans stopPropagation, ouvrir le panneau démarrerait aussi le RDV.
+  // Le geste de modification vit DANS la carte, dont le clic peint le briefing
+  // et la fiche : sans stopPropagation, ouvrir le panneau changerait aussi la
+  // sélection sous les yeux de celui qui modifie.
   list.querySelectorAll('[data-edit-id]').forEach(el=>{
     el.addEventListener('click', e=>{
       e.stopPropagation();
@@ -1693,6 +1927,13 @@ function estSeanceEnCours(rdv){
   return !!(activeRdv && rdv && activeRdv.id === rdv.id);
 }
 
+// Le rendez-vous PEINT — engagé ou seulement sélectionné. C'est lui que le geste
+// doit rafraîchir : un rendez-vous simplement sélectionné se modifie et s'annule
+// aussi, et l'écran ne peut pas rester sur un évènement qui n'existe plus.
+function estRdvAffiche(rdv){
+  return !!(rdvAffiche && rdv && rdvAffiche.id === rdv.id);
+}
+
 function ouvrirModifRdv(rdv){
   if(!rdv || !rdv.agendaId) return;
   rdvEnEdition = rdv;
@@ -1714,20 +1955,25 @@ function ouvrirModifRdv(rdv){
 // — sont tous rendus par renderRdvList. Le briefing, lui, tient de l'objet actif :
 // il se recompose sur la valeur qui vient d'être écrite. Pas de rechargement.
 async function rafraichirApresGeste(rdv, patch){
-  if(estSeanceEnCours(rdv)){
+  if(estRdvAffiche(rdv)){
     if(patch){
-      activeRdv = Object.assign({}, activeRdv, {
+      rdvAffiche = Object.assign({}, rdvAffiche, {
         date: creneauEvt(patch.date, patch.start).toISOString(),
         duree: patch.duree,
         sujet: patch.notes
       });
-      renderBriefing(activeRdv);
+      // La séance engagée porte le même objet : elle suit, sans quoi le journal
+      // s'écrirait sur la version d'avant la modification.
+      if(estSeanceEnCours(rdv)) activeRdv = rdvAffiche;
+      renderBriefing(rdvAffiche);
     } else {
-      // La séance annulée ne peut pas rester ouverte. Le minuteur s'arrête et la
-      // page revient à son état vide — rien n'est journalisé, ce rendez-vous n'a
-      // pas eu lieu, il n'est pas « terminé ».
-      clearInterval(timerInterval);
+      // Le rendez-vous annulé ne peut pas rester à l'écran. Le minuteur s'arrête
+      // et la page revient à son état vide — rien n'est journalisé, ce
+      // rendez-vous n'a pas eu lieu, il n'est pas « terminé ».
+      resetTimer();
       activeRdv = null;
+      rdvAffiche = null;
+      ouvrirFicheRdv(null);   // une fiche ouverte sur un RDV qui n'existe plus n'a pas de sens
       $('emptyState').style.display = 'flex';
       $('visioActive').style.display = 'none';
       renderDocsList();
@@ -1841,9 +2087,10 @@ function updateUrgentBanner(rdvs, now){
     $('urgentCountdown').textContent = `${m}:${fmt2(s)}`;
     $('urgentName').textContent = imminent.prospectName;
     $('urgentSociete').textContent = imminent.societe ? '· ' + imminent.societe : '';
-    $('urgentOpenBtn').onclick = ()=>{
+    $('urgentOpenBtn').onclick = async ()=>{
+      if(!await confirmerAbandonSeance(imminent)) return;
       banner.classList.remove('show');
-      selectRdv(imminent);
+      peindreRdv(imminent);
     };
     $('urgentDismiss').onclick = ()=>{
       if(!_state.settings.urgent_dismissed) _state.settings.urgent_dismissed = [];
@@ -1870,20 +2117,101 @@ function updateUrgentBannerHint(){
 }
 
 /* ————————————————————————————————————————————————
-   SÉLECTION RDV + RENDU
+   LA FICHE, TROISIÈME COLONNE
    ———————————————————————————————————————————————— */
-function selectRdv(rdv){
+
+// Le seuil est écrit une seule fois, dans la feuille de style ; on le LIT ici.
+// Deux règles séparées finiraient par diverger — celle-ci ne peut pas.
+const MQ_FICHE_ANCREE = window.matchMedia('(min-width:1101px)');
+
+// Le seul chemin d'ouverture de la fiche depuis cette page. Sans prospect, la
+// colonne se vide : « rien » est un état légitime, et il ne se meuble pas.
+function ouvrirFicheRdv(prospectId){
+  if(!window.MUPFiche) return;
+  if(!prospectId){
+    if(document.getElementById('mup-fiche-iframe')) MUPFiche.close();
+    return;
+  }
+  const hote = MQ_FICHE_ANCREE.matches ? $('ficheHost') : null;
+  MUPFiche.open(prospectId, hote ? { hote } : undefined);
+}
+
+// La colonne est ouverte si, et seulement si, elle a quelque chose dedans.
+// L'observer tient cette équivalence pour TOUTES les provenances — clic sur une
+// carte, sélection par défaut, croix de la fiche, fin de rendez-vous — sans
+// qu'aucune d'elles n'ait à penser à la classe.
+(function(){
+  const hote = $('ficheHost');
+  const ws = $('workspace');
+  if(!hote || !ws) return;
+  new MutationObserver(function(){
+    ws.classList.toggle('fiche-ouverte', hote.childElementCount > 0);
+  }).observe(hote, { childList: true });
+})();
+
+// Franchir le seuil en cours de séance : la fiche doit changer de mode, sinon
+// elle resterait dans une colonne que la feuille de style vient de masquer.
+MQ_FICHE_ANCREE.addEventListener('change', function(){
+  if(rdvAffiche && rdvAffiche.prospectId) ouvrirFicheRdv(rdvAffiche.prospectId);
+});
+
+/* ————————————————————————————————————————————————
+   SÉLECTION RDV + RENDU
+
+   Sélectionner n'est pas démarrer. La durée portée au journal d'une visio est
+   une durée RÉELLE : la durée du rendez-vous d'agenda n'est qu'un souhait, la
+   séance dure 1 h 10 ou 35 min. Rien d'automatique ne lance ni n'arrête le
+   chronomètre — c'est le lancement de la visio qui l'engage, et l'action
+   d'arrêt qui fait foi.
+   ———————————————————————————————————————————————— */
+
+// Abandonner une séance en cours ne peut pas être silencieux : peindre un autre
+// rendez-vous pendant qu'un chronomètre court fait perdre une durée réelle sans
+// un mot. La garde vit chez les DEUX SEULS appelants qu'un humain déclenche —
+// le clic sur une carte de la liste, le bouton « Ouvrir la fiche » du bandeau
+// T-5 — et JAMAIS dans peindreRdv, qui reste synchrone. Les autres chemins de
+// peinture (sélection automatique au chargement, visio rapide de la barre du
+// haut) n'ont rien à demander et ne la subissent pas.
+async function confirmerAbandonSeance(rdv){
+  if(!activeRdv || !rdv || activeRdv.id === rdv.id) return true;
+  return await mupConfirm('Une séance est en cours',
+    'Elle ne sera pas enregistrée.', 'Quitter la séance', 'Rester');
+}
+
+// Peindre, et seulement peindre : la liste, le briefing, le cadre vidéo, les
+// documents, la fiche, le brouillon de notes. Aucun chronomètre, aucun
+// activeRdv. La sélection automatique du chargement n'emprunte que ce chemin.
+function peindreRdv(rdv){
   // Si un test caméra est en cours, le fermer proprement avant de basculer
   if(testCamOpen) closeTestCamera();
-  activeRdv = rdv;
+  // Peindre un AUTRE rendez-vous abandonne la séance engagée : sans cela le
+  // minuteur et « Terminer » resteraient accrochés à un rendez-vous que l'écran
+  // ne montre plus, et le journal s'écrirait sur le mauvais.
+  if(activeRdv && activeRdv.id !== rdv.id) activeRdv = null;
+  if(!activeRdv) resetTimer();
+  rdvAffiche = rdv;
   $('emptyState').style.display = 'none';
   $('visioActive').style.display = 'flex';
   renderRdvList();
   renderBriefing(rdv);
   renderVideoFrame(rdv);
   renderDocsList(); // refresh badges "déjà vu" pour ce prospect
-  startTimer();
+  // La fiche est liée au rendez-vous sélectionné : elle se peint ici, pour tous
+  // les appelants à la fois, et se vide quand le rendez-vous n'a pas de fiche.
+  ouvrirFicheRdv(rdv.prospectId);
   loadDraftNotes(rdv.id);
+}
+
+// L'engagement de la séance : le lancement de la visio, et lui seul. Relancer
+// une visio déjà engagée ne remet pas le compteur à zéro — c'est la même
+// séance, et la fenêtre a simplement été rouverte.
+function engagerSeance(){
+  if(!rdvAffiche || activeRdv) return;
+  activeRdv = rdvAffiche;
+  startTimer();
+  const barre = $('timerBar');
+  if(barre) barre.classList.add('seance-engagee');
+  renderRdvList();
 }
 
 async function renderBriefing(rdv){
@@ -1939,7 +2267,7 @@ async function renderBriefing(rdv){
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         Devis
       </button>
-      <button class="briefing-mini" onclick="MUPFiche.open('${escapeHtml(String(rdv.prospectId))}')">
+      <button class="briefing-mini" onclick="ouvrirFicheRdv('${escapeHtml(String(rdv.prospectId))}')">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         Fiche
       </button>
@@ -1984,6 +2312,7 @@ function renderVideoFrame(rdv){
 window.launchPopup = function(link){
   const w = window.open(link, 'mup_visio_popup', 'width=1200,height=780,resizable=yes');
   if(w){
+    engagerSeance();   // la visio est lancée : c'est ici que le chronomètre part
     const ps = $('popupState');
     if(ps) ps.classList.add('show');
     showToast('Visio ouverte');
@@ -1993,11 +2322,11 @@ window.launchPopup = function(link){
 };
 
 window.createDevisFromRdv = function(){
-  if(!activeRdv) return;
+  if(!rdvAffiche) return;
   // TODO: migrer en SurrealDB lors de la migration page Devis (handover éphémère cross-page)
   localStorage.setItem('mup_devis_prefill', JSON.stringify({
-    societe: activeRdv.societe, nom: activeRdv.prospectName,
-    email: activeRdv.email, source: 'visio', rdvId: activeRdv.id
+    societe: rdvAffiche.societe, nom: rdvAffiche.prospectName,
+    email: rdvAffiche.email, source: 'visio', rdvId: rdvAffiche.id
   }));
   window.location.href = '/devis';
 };
@@ -2005,6 +2334,18 @@ window.createDevisFromRdv = function(){
 /* ————————————————————————————————————————————————
    TIMER + NOTES
    ———————————————————————————————————————————————— */
+// Remettre le chronomètre à zéro est un geste de PEINTURE : tant qu'aucune
+// visio n'a été lancée, la barre affiche 00:00 et rien ne court.
+function resetTimer(){
+  clearInterval(timerInterval);
+  timerInterval = null;
+  timerStart = null;
+  const el = $('timerDisplay');
+  if(el) el.textContent = '00:00';
+  const barre = $('timerBar');
+  if(barre) barre.classList.remove('seance-engagee');
+}
+
 function startTimer(){
   clearInterval(timerInterval);
   timerStart = Date.now();
@@ -2022,10 +2363,10 @@ async function loadDraftNotes(rdvId){
 }
 
 $('rdvNotes').addEventListener('input', e=>{
-  if(!activeRdv) return;
+  if(!rdvAffiche) return;
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async ()=>{
-    await api.setDraft(activeRdv.id, e.target.value);
+    await api.setDraft(rdvAffiche.id, e.target.value);
     const ind = $('saveIndicator');
     ind.style.display = 'inline';
     setTimeout(()=>ind.style.display = 'none', 1500);
@@ -2038,24 +2379,35 @@ $('endRdvBtn').addEventListener('click', function(){
   endCurrentRdv();
 });
 
+// « Terminer » agit sur le rendez-vous AFFICHÉ, là où Échap n'agit que sur la
+// séance ENGAGÉE. Cette divergence est voulue, ne l'alignez pas : le bouton est
+// un geste délibéré, et l'abonné qui a tenu sa visio ailleurs et vient la clore
+// ici doit pouvoir le faire — c'est exactement le cas « durée nulle » que la
+// doctrine assume plus bas.
 async function endCurrentRdv(){
-  if(!activeRdv) return;
+  const rdv = rdvAffiche;
+  if(!rdv) return;
   const btnFin = $('endRdvBtn');
   if(btnFin) btnFin.disabled = true;           // la fenêtre ne bloque plus le fil
   const ok = await mupConfirm('Terminer ce RDV ?', 'La durée et les notes seront enregistrées.', 'Terminer', 'Annuler');
   if(!ok){ if(btnFin) btnFin.disabled = false; return; }
 
-  const duree = Math.floor((Date.now() - timerStart) / 60000);
+  // Ce qui fait foi, c'est l'action d'arrêt. La durée court du lancement de la
+  // visio à cet instant — jamais de la sélection, jamais de la durée prévue au
+  // rendez-vous. Terminer sans avoir jamais lancé consigne donc ZÉRO : le
+  // journal s'écrit quand même, c'est la durée qui est honnête.
+  const fin = Date.now();
+  const debut = timerStart || fin;
+  const duree = Math.floor((fin - debut) / 60000);
   const notes = $('rdvNotes').value;
-  const rdv = activeRdv;
 
   await api.addLog({
     rdvId: rdv.id,
     prospectId: rdv.prospectId,
     provider: rdv.provider,
     link: rdv.link || '',
-    started_at: new Date(timerStart).toISOString(),
-    ended_at: new Date().toISOString(),
+    started_at: new Date(debut).toISOString(),
+    ended_at: new Date(fin).toISOString(),
     duration_seconds: duree * 60,
     notes
   });
@@ -2072,8 +2424,10 @@ async function endCurrentRdv(){
   await api.deleteDraft(rdv.id);
 
   showToast(`RDV enregistré · ${duree} min`);
-  clearInterval(timerInterval);
+  resetTimer();
   activeRdv = null;
+  rdvAffiche = null;
+  ouvrirFicheRdv(null);                        // plus de RDV sélectionné, plus de colonne
   if(btnFin) btnFin.disabled = false;          // rendu au RDV suivant
   $('emptyState').style.display = 'flex';
   $('visioActive').style.display = 'none';
@@ -2517,8 +2871,8 @@ function renderDocCard(d, shortcutNum, logs){
 
   // Badge "déjà vu" pour le prospect actuel
   let seenBadge = '';
-  if(activeRdv && activeRdv.prospectId){
-    const seenLog = logs.find(l => l.docId === d.id && l.prospectId === activeRdv.prospectId);
+  if(rdvAffiche && rdvAffiche.prospectId){
+    const seenLog = logs.find(l => l.docId === d.id && l.prospectId === rdvAffiche.prospectId);
     if(seenLog){
       const date = new Date(seenLog.openedAt);
       const dateStr = `${fmt2(date.getDate())}/${fmt2(date.getMonth()+1)}`;
@@ -2572,13 +2926,13 @@ async function openDoc(docId){
     showToast(`${doc.name} ouvert`);
 
     // Log "doc ouvert pour ce prospect"
-    if(activeRdv && activeRdv.prospectId){
+    if(rdvAffiche && rdvAffiche.prospectId){
       const openedAt = new Date().toISOString();
       _state.docOpens.push({
-        docId, prospectId: activeRdv.prospectId,
-        societe: activeRdv.societe, openedAt
+        docId, prospectId: rdvAffiche.prospectId,
+        societe: rdvAffiche.societe, openedAt
       });
-      api.logDocOpen(docId, activeRdv.prospectId, activeRdv.societe);
+      api.logDocOpen(docId, rdvAffiche.prospectId, rdvAffiche.societe);
       setTimeout(renderDocsList, 50);
     }
 
@@ -2646,17 +3000,17 @@ async function updateQuota(){
    COPIER + INVITER
    ———————————————————————————————————————————————— */
 $('copyLinkBtn').addEventListener('click', ()=>{
-  if(!activeRdv?.link){ showToast('Aucun lien à copier'); return; }
-  navigator.clipboard.writeText(activeRdv.link).then(()=>showToast('Lien copié'));
+  if(!rdvAffiche?.link){ showToast('Aucun lien à copier'); return; }
+  navigator.clipboard.writeText(rdvAffiche.link).then(()=>showToast('Lien copié'));
 });
 
 $('inviteBtn').addEventListener('click', ()=>{
-  if(!activeRdv) return;
-  $('inviteRdvLabel').textContent = `${activeRdv.prospectName} — ${new Date(activeRdv.date).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'})}`;
-  $('inviteLinkCode').textContent = activeRdv.link || '—';
-  inviteEmails = activeRdv.email ? [activeRdv.email] : [];
+  if(!rdvAffiche) return;
+  $('inviteRdvLabel').textContent = `${rdvAffiche.prospectName} — ${new Date(rdvAffiche.date).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'})}`;
+  $('inviteLinkCode').textContent = rdvAffiche.link || '—';
+  inviteEmails = rdvAffiche.email ? [rdvAffiche.email] : [];
   renderInviteEmails();
-  $('inviteMessage').value = generateInviteMessage(activeRdv);
+  $('inviteMessage').value = generateInviteMessage(rdvAffiche);
   $('inviteModal').classList.add('show');
 });
 
@@ -2695,7 +3049,7 @@ $('copyInviteLink').addEventListener('click', ()=>{
 
 $('sendInviteBtn').addEventListener('click', ()=>{
   if(!inviteEmails.length){ showToast('Ajoutez au moins un destinataire'); return; }
-  const subject = encodeURIComponent(`Invitation visio — ${activeRdv?.prospectName || 'RDV'}`);
+  const subject = encodeURIComponent(`Invitation visio — ${rdvAffiche?.prospectName || 'RDV'}`);
   const body = encodeURIComponent($('inviteMessage').value);
   window.location.href = `mailto:${inviteEmails.join(',')}?subject=${subject}&body=${body}`;
   showToast('Ouverture client mail…');
@@ -2705,6 +3059,26 @@ $('sendInviteBtn').addEventListener('click', ()=>{
 /* ————————————————————————————————————————————————
    MODALE NOUVEAU RDV
    ———————————————————————————————————————————————— */
+// La fenêtre s'ouvre sur le fournisseur de l'abonné, jamais sur un défaut posé
+// en dur : elle relit ses liens enregistrés à chaque ouverture. Si plusieurs le
+// sont, l'ordre zoom, teams, meet tranche — règle fixe, donc rien de nouveau à
+// stocker ; aucun lien, aucune tuile présélectionnée, et le refus tombe avant
+// que le formulaire soit rempli plutôt qu'au dernier clic.
+function refletProvidersRdv(){
+  const liens = _state.settings.links || {};
+  let choisi = '';
+  ['zoom','teams','meet'].forEach(p=>{
+    const tuile = document.querySelector(`.provider-opt[data-provider="${p}"]`);
+    if(!tuile) return;
+    const enregistre = !!String(liens[p] || '').trim();
+    tuile.querySelector('.p-mini').textContent = enregistre ? 'Lien enregistré' : 'À renseigner';
+    if(enregistre && !choisi) choisi = p;
+  });
+  document.querySelectorAll('.provider-opt').forEach(o=>o.classList.remove('selected'));
+  if(choisi) document.querySelector(`.provider-opt[data-provider="${choisi}"]`).classList.add('selected');
+  $('customLinkField').style.display = 'none';
+}
+
 $('openNewRdvBtn').addEventListener('click', async ()=>{
   // Une seule source : les cartes pipeline, comme la page agenda. L'id posé en
   // ficheId est de la forme nue, sans préfixe de table — c'est la seule que la
@@ -2721,6 +3095,7 @@ $('openNewRdvBtn').addEventListener('click', async ()=>{
   const now = new Date();
   $('rdvDate').value = now.toISOString().slice(0,10);
   $('rdvTime').value = `${fmt2(now.getHours()+1)}:00`;
+  refletProvidersRdv();
   $('newRdvModal').classList.add('show');
 });
 
@@ -2741,7 +3116,8 @@ $('prospectSelect').addEventListener('change', async e=>{
 });
 
 $('saveRdvBtn').addEventListener('click', async ()=>{
-  const provider = document.querySelector('.provider-opt.selected')?.dataset.provider || 'meet';
+  const provider = document.querySelector('.provider-opt.selected')?.dataset.provider;
+  if(!provider){ showToast("Choisissez l'outil de la visio"); return; }
   const date = $('rdvDate').value;
   const time = $('rdvTime').value;
   if(!date || !time){ showToast('Date et heure requises'); return; }
@@ -2993,12 +3369,22 @@ function closeTestCamera(){
   const briefing = $('briefingPanel');
   if(briefing){ briefing.innerHTML = ''; briefing.classList.remove('imminent'); }
 
-  $('visioActive').style.display = 'none';
-  $('emptyState').style.display = 'flex';
+  // Le test rendu, la colonne revient à ce qu'elle montrait : le rendez-vous
+  // peint, s'il y en a un. Avec la sélection automatique au chargement, retomber
+  // sur l'état vide effacerait un briefing que personne n'a demandé à quitter.
+  if(rdvAffiche){
+    renderBriefing(rdvAffiche);
+    renderVideoFrame(rdvAffiche);
+    $('emptyState').style.display = 'none';
+    $('visioActive').style.display = 'flex';
+  } else {
+    $('visioActive').style.display = 'none';
+    $('emptyState').style.display = 'flex';
+  }
 
-  // Reset timer
-  const timerEl = document.getElementById('timerDisplay');
-  if(timerEl) timerEl.textContent = '00:00';
+  // Le chronomètre d'une séance engagée continue de courir : il n'appartient pas
+  // au test caméra, qui n'a pas à le remettre à zéro.
+  if(!activeRdv) resetTimer();
 
   setTestCameraBtnState(false);
   updateUrgentBannerHint();
@@ -3028,6 +3414,10 @@ document.addEventListener('keydown', e=>{
     const openOverlay = document.querySelector('.overlay.show');
     if(openOverlay){ openOverlay.classList.remove('show'); return; }
     if(testCamOpen && !inField){ closeTestCamera(); return; }
+    // Le pendant de la divergence documentée sur endCurrentRdv : Échap est une
+    // frappe qui part toute seule. Avec la peinture automatique au chargement,
+    // l'autoriser sur un rendez-vous simplement AFFICHÉ ressusciterait le
+    // défaut qu'on vient de retirer. Il reste donc sur la séance ENGAGÉE.
     if(activeRdv && !inField){ endCurrentRdv(); return; }
   }
 
@@ -3044,7 +3434,9 @@ document.addEventListener('keydown', e=>{
     return;
   }
 
-  if(!activeRdv) return;
+  // N, C, I portent sur le rendez-vous AFFICHÉ. Échap, plus haut, reste sur la
+  // séance engagée : rien ne se termine si rien n'a commencé.
+  if(!rdvAffiche) return;
 
   // N : focus notes
   if(e.key === 'n' || e.key === 'N'){
@@ -3082,12 +3474,21 @@ document.querySelectorAll('.overlay').forEach(ov=>{
   });
 });
 
+// Le tiroir de documents. Aucune commande existante ne le pilotait :
+// .btn-tools-toggle n'est porté par aucun élément de la page — trois règles CSS
+// sans propriétaire. Elle n'est donc pas détournée, la commande vit ici.
+$('docsToggle').addEventListener('click', ()=>{
+  const drawer = $('docsDrawer');
+  const ouvert = drawer.classList.toggle('open');
+  $('docsToggle').setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+});
+
 $('searchInput').addEventListener('input', renderRdvList);
 
 window.addEventListener('storage', e=>{
   if([LS.PIPELINE, LS.AGENDA, LS.CONTACTS, LS.DEVIS].includes(e.key) || e.key === 'mup_contact_sync' || e.key === 'mup_contact_deleted'){
     renderRdvList();
-    if(activeRdv) renderBriefing(activeRdv);
+    if(rdvAffiche) renderBriefing(rdvAffiche);
   }
 });
 
@@ -3099,6 +3500,7 @@ setInterval(renderRdvList, 30000); // 30s pour le bandeau T-5
 (async () => {
   await bootstrapVisio();
   loadMyLinks();
+  refletAccueil();
   // Note : sliders/fonds/customBgSlot/bgUpload sont injectés dynamiquement par
   // openTestCamera() — leurs handlers sont attachés via bindCalibration/Background
   // au moment de l'ouverture du mode test. Pas de binding init-time ici.
@@ -3106,6 +3508,19 @@ setInterval(renderRdvList, 30000); // 30s pour le bandeau T-5
   renderDocsList();
   const allRdvs = await renderRdvList();
   updateQuota();
+
+  // Le prochain rendez-vous est PEINT d'emblée, et sa fiche avec : la page
+  // s'ouvre sur le travail à venir plutôt que d'attendre un clic. Peint, pas
+  // démarré — le chronomètre reste à 00:00 tant que la visio n'est pas lancée.
+  // La coupure est celle de la liste — un RDV en cours reste « à venir » tant
+  // qu'il se tient. S'il n'y en a aucun : rien, et la colonne reste repliée.
+  if(!rdvAffiche){
+    const maintenant = Date.now();
+    const prochain = allRdvs.find(r =>
+      new Date(r.date).getTime() + (r.duree || 30) * 60000 > maintenant
+    );
+    if(prochain) peindreRdv(prochain);
+  }
 
   // Nettoyer dismissed expirés (RDV passés). La liste est celle que
   // renderRdvList() vient de lire — non filtrée par la recherche, donc la même

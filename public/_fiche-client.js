@@ -1,6 +1,12 @@
 /* ————————————————————————————————————————————————
-   MUPFiche — panneau latéral droit (380px) vers /pipeline?fiche=ID
-   Réutilise la fiche Pipeline depuis Visio + Contacts.
+   MUPFiche — la fiche /pipeline?fiche=ID rendue hors de Pipeline.
+   Deux modes, choisis par l'APPELANT :
+     · calque (défaut) — panneau fixe à droite, voile, glissement ;
+     · ancré — open(id, {hote}) pose la fiche EN FLUX dans l'élément
+       fourni, sans voile ni z-index. C'est /visio qui s'en sert pour
+       en faire sa troisième colonne.
+   Aucun appelant existant ne passe `hote` : leur comportement est
+   inchangé.
    ———————————————————————————————————————————————— */
 (function(){
   if(window.MUPFiche) return;
@@ -8,10 +14,12 @@
   var backdrop = null;
   var iframe = null;
   var lastTrigger = null;
+  // L'élément d'accueil en mode ancré, null en mode calque. C'est la seule
+  // variable qui distingue les deux modes : tout le reste en découle.
+  var hote = null;
 
-  function ensureUI(){
-    if(iframe) return;
-
+  function ensureBackdrop(){
+    if(backdrop) return;
     backdrop = document.createElement('div');
     backdrop.id = 'mup-fiche-backdrop';
     backdrop.style.cssText = 'position:fixed;inset:0;z-index:9000;'
@@ -21,20 +29,38 @@
       if(e.target === backdrop) MUPFiche.close();
     });
     document.body.appendChild(backdrop);
+  }
 
+  function ensureIframe(){
+    if(iframe) return;
     iframe = document.createElement('iframe');
     iframe.id = 'mup-fiche-iframe';
     iframe.setAttribute('title', 'Fiche client');
-    iframe.style.cssText = 'position:fixed;right:0;top:0;bottom:0;'
+  }
+
+  // Les deux géométries, chacune entière et lisible d'un bloc. Elles ne se
+  // concatènent pas : un panneau flottant et une colonne en flux n'ont aucune
+  // déclaration en commun qu'on gagnerait à factoriser.
+  function geometrieCalque(el){
+    el.style.cssText = 'position:fixed;right:0;top:0;bottom:0;'
       + 'width:380px;height:100vh;background:#FFFFFF;border:none;'
       + 'border-left:1px solid #E8E8ED;z-index:9001;display:none;'
       + 'transform:translateX(100%);transition:transform .25s ease;'
       + 'box-shadow:-8px 0 24px rgba(0,0,0,.10);';
-    document.body.appendChild(iframe);
+  }
+  function geometrieAncree(el){
+    el.style.cssText = 'position:static;width:100%;height:100%;'
+      + 'background:#FFFFFF;border:none;border-left:1px solid #E8E8ED;'
+      + 'display:none;';
   }
 
   function show(){
-    ensureUI();
+    if(hote){
+      // Une colonne permanente ne glisse pas : elle est là.
+      iframe.style.display = 'block';
+      return;
+    }
+    ensureBackdrop();
     backdrop.style.display = 'block';
     iframe.style.display = 'block';
     requestAnimationFrame(function(){
@@ -45,6 +71,15 @@
 
   function hide(){
     if(!iframe) return;
+    if(hote){
+      // Rien à attendre : sans animation, le délai de 250 ms n'aurait plus
+      // d'objet que de laisser une iframe morte dans la colonne.
+      iframe.style.display = 'none';
+      iframe.src = 'about:blank';
+      if(iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      hote = null;
+      return;
+    }
     backdrop.style.opacity = '0';
     iframe.style.transform = 'translateX(100%)';
     setTimeout(function(){
@@ -77,10 +112,20 @@
     messageTimer = setTimeout(function(){ el.style.display = 'none'; }, 4500);
   }
 
+  // Échap ne referme QUE le calque. En mode ancré la colonne est permanente :
+  // il n'y a rien à replier, et la touche appartient à la page.
+  // La propagation est coupée sur la frappe qui a servi : ce script est chargé
+  // avant le script inline de /visio, donc son écouteur passe le premier, et
+  // sans cette coupure la même frappe refermait la fiche PUIS terminait le
+  // rendez-vous en cours. Coupure immédiate et non simple stopPropagation :
+  // les deux écouteurs sont posés sur `document`, et seul
+  // stopImmediatePropagation empêche le second de s'exécuter sur ce nœud.
   document.addEventListener('keydown', function(e){
-    if(e.key === 'Escape' && iframe && iframe.style.display === 'block'){
-      MUPFiche.close();
-    }
+    if(e.key !== 'Escape') return;
+    if(hote) return;
+    if(!iframe || iframe.style.display !== 'block') return;
+    MUPFiche.close();
+    e.stopImmediatePropagation();
   });
 
   // Ce que fait cet écouteur, vérifié : sur les deux messages il appelle
@@ -108,7 +153,21 @@
   window.MUPFiche = {
     open: function(id, opts){
       if(!id) return;
-      ensureUI();
+      ensureIframe();
+      var accueil = (opts && opts.hote) || null;
+      if(accueil){
+        hote = accueil;
+        geometrieAncree(iframe);
+        if(iframe.parentNode !== hote) hote.appendChild(iframe);
+        // Un appel ancré après un appel calque : le voile ne doit pas survivre
+        // au changement de mode.
+        if(backdrop){ backdrop.style.opacity = '0'; backdrop.style.display = 'none'; }
+      } else {
+        hote = null;
+        ensureBackdrop();
+        geometrieCalque(iframe);
+        if(iframe.parentNode !== document.body) document.body.appendChild(iframe);
+      }
       lastTrigger = (opts && opts.trigger) || null;
       iframe.src = '/pipeline?fiche=' + encodeURIComponent(id) + '&embed=panel';
       show();

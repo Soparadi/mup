@@ -786,15 +786,27 @@ body.outils-deplies .my-link-field.vide{display:flex}
    Le document ne défile déjà pas : html,body{overflow:hidden} est posé depuis
    toujours et le défilement est confiné à quatre panneaux internes. Ce sont
    EUX qu'on arrête. L'inertie du pointeur et du focus, elle, est posée en JS
-   sur les trois régions de la page. */
+   sur <main> et le pied — pas sur le rail. */
 body.mise-en-service .col-left,
 body.mise-en-service .col-center,
 body.mise-en-service .docs-drawer-body,
 body.mise-en-service #docsList{overflow:hidden}
-/* L'infobulle du rail vit à 99999 et passerait DEVANT le panneau entre 641 et
-   1440 px. Le rail est inerte sous le voile : une infobulle pour un rail inerte
-   est du bruit. On ne lui dispute pas sa couche, on la retire. */
-body.mise-en-service #sb-rail-flyout{display:none !important}
+
+/* —— LE RAIL, DEVANT ——
+   Un panneau de mise en service tient une PAGE, jamais l'application : l'abonné
+   qui ouvre Visio par curiosité doit pouvoir en repartir. Le rail est donc laissé
+   hors de figerLaPage. Mais le rail n'a pas de couche à lui (sticky sans z-index
+   au-dessus de 640 px, z-index:200 en tiroir en dessous) : le voile à 50000 le
+   recouvrirait et capterait ses clics. Le laisser vivant sans le remonter ne
+   changerait rien de visible. On remonte donc la bande du rail au-dessus du
+   voile, en conservant son ordre interne (bouton < scrim < rail) et en restant
+   sous l'infobulle (99999), le menu compte (99999) et le consentement (60000).
+   Écrit ici, dans la seule page qui pose un panneau à cette hauteur — la feuille
+   partagée n'est pas touchée. Le rail paraît alors non voilé : c'est juste, une
+   sortie qui a l'air éteinte n'est pas une sortie. */
+body.mise-en-service #sb-drawer-toggle{z-index:50150}
+body.mise-en-service #sb-drawer-scrim{z-index:50190}
+body.mise-en-service aside#sidebar.sidebar{z-index:50200}
 
 /* Le consentement passe DEVANT la mise en service. Le panneau ne se retire qu'à
    l'enregistrement d'un lien : un bandeau enfoui derrière lui resterait
@@ -1141,14 +1153,17 @@ body #mup-cookie-panel{z-index:60001}
      raison d'être disparaît : un lien enregistré. Effacer son dernier
      lien le fait revenir, et c'est juste.
 
-     Hors de <main> : c'est <main>, le rail et le pied que le panneau
-     rend inertes, et il ne peut pas se rendre inerte lui-même.
+     Hors de <main> : c'est <main> et le pied que le panneau rend
+     inertes, et il ne peut pas se rendre inerte lui-même. Le rail,
+     lui, reste vivant — d'où role=dialog SANS aria-modal : la page
+     n'est pas modale, une sortie demeure, et l'annoncer inerte aux
+     lecteurs d'écran rétablirait pour eux l'enfermement qu'on retire.
 
      Masqué en style EN LIGNE, comme #visioActive : il n'est révélé
      qu'après bootstrapVisio(), sans quoi il clignoterait au
      chargement chez l'abonné déjà équipé.
      ══════════════════════════════════════════════════════════════ -->
-<div class="mes-voile" id="panneauMiseEnService" style="display:none" role="dialog" aria-modal="true" aria-labelledby="mesTitre">
+<div class="mes-voile" id="panneauMiseEnService" style="display:none" role="dialog" aria-labelledby="mesTitre">
   <div class="mes-carte">
     <div class="mes-filet" aria-hidden="true"></div>
 
@@ -1878,8 +1893,11 @@ function panneauDoitParaitre(){
 
 // Inertie de la page derrière le voile : pointeur et focus. Le panneau vit hors
 // de <main> précisément pour pouvoir figer <main> sans se figer lui-même.
+// Le RAIL est délibérément absent de cette liste : un panneau de mise en service
+// tient une page, jamais l'application. Le figer condamnerait toute sortie à
+// l'abonné venu voir Visio par curiosité.
 function figerLaPage(fige){
-  [ $('sidebar'), document.querySelector('main'), document.querySelector('.mup-app-footer') ]
+  [ document.querySelector('main'), document.querySelector('.mup-app-footer') ]
     .forEach(el => { if(el) el.inert = fige; });
 }
 

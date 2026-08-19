@@ -282,7 +282,11 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .empty-state .hint strong{color:var(--text)}
 
 /* —— BRIEFING + VISIO + DOCS LAYOUT —— */
-.center-stack{display:flex;flex-direction:column;gap:12px;min-height:0;flex:1}
+/* Base de contenu, et surtout PAS min-height:0 : sa hauteur minimale reste
+   celle de sa pile — briefing, cadre, barre. C'est ce plancher qui la fait
+   sortir de la phase de compression avant le tiroir, et qui empêche ses
+   propres enfants de déborder par-dessus lui. */
+.center-stack{display:flex;flex-direction:column;gap:12px;flex:1 1 auto}
 
 /* BRIEFING PROSPECT — visible avant et pendant la visio */
 .briefing{
@@ -367,13 +371,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .btn-end{background:var(--red);color:#fff;padding:8px 14px;border-radius:9px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px}
 .btn-end:hover{background:#8a2424}
 
-/* NOTES */
-.notes-zone{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;flex-shrink:0}
-.notes-zone label{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:5px;display:flex;align-items:center;gap:6px}
-.notes-zone label .save-indicator{font-size:9px;color:var(--green);font-weight:600;letter-spacing:0;text-transform:none}
-.notes-zone label .kbd-hint{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted2);font-weight:500;letter-spacing:.3px}
-.notes-zone textarea{width:100%;min-height:54px;max-height:130px;border:none;background:transparent;resize:vertical;font-size:12.5px;line-height:1.5;outline:none}
-
 /* —— RÉGLAGES (sliders + fond) — utilisés dans la modale Test caméra —— */
 .tool-section{background:var(--surface);border-radius:12px;padding:14px;margin-bottom:12px}
 .tool-section h3{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:7px}
@@ -419,9 +416,11 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 
 /* —— DOCS BIBLIOTHÈQUE : TIROIR PERMANENT EN PIED DE COLONNE ——
    Replié, le tiroir n'occupe que sa ligne d'en-tête et ne se laisse pas
-   comprimer. Déplié, il prend au plus 30 vh ET redevient compressible :
-   c'est ce couple qui garantit qu'il ne pousse jamais la vidéo sous le
-   pli — quand la place manque, c'est lui qui rend du terrain, pas elle. */
+   comprimer. Déplié, il prend au plus 30 vh ET redevient compressible.
+   Ce couple ne suffisait pas : tant que .center-stack avait une base nulle et
+   min-height:0, c'est ELLE qui rendait du terrain — jusqu'à passer sous sa
+   propre pile, qui débordait alors par-dessus le tiroir. La pile porte
+   désormais un plancher de contenu ; le tiroir est bien le dernier à céder. */
 .docs-drawer{
   background:var(--card);border:1px solid var(--border);border-radius:12px;
   display:flex;flex-direction:column;overflow:hidden;flex:0 0 auto;
@@ -433,6 +432,32 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
   max-height:min(30vh,260px);overflow-y:auto;
   border-top:1px solid var(--border);
 }
+
+/* —— SÉANCE ENGAGÉE SANS IMAGE : L'ÉLASTICITÉ CHANGE DE CAMP ——
+   Aucun fournisseur n'est embarqué : pendant une séance, le grand cadre ne
+   montre qu'un bouton déjà cliqué sur fond noir, alors que c'est précisément
+   le moment où l'abonné veut ouvrir un document. La classe est posée sur
+   .col-center — seul ancêtre commun de #visioActive et du tiroir — quand une
+   séance est engagée ET que son fournisseur n'est pas embarqué. Le jour où un
+   fournisseur embarqué arrive, le cadre porte une vraie image et la bascule
+   s'annule d'elle-même, sans qu'on y revienne.
+   Le tiroir refermé rend la place au cadre : l'inversion ne vaut qu'ouvert. */
+.col-center.cadre-reduit:has(.docs-drawer.open) #visioActive{flex:0 0 auto}
+.col-center.cadre-reduit:has(.docs-drawer.open) .video-frame-wrap{flex:0 0 auto;min-height:0}
+.col-center.cadre-reduit:has(.docs-drawer.open) .docs-drawer.open{flex:1 1 auto;min-height:0}
+.col-center.cadre-reduit:has(.docs-drawer.open) .docs-drawer.open .docs-drawer-body{max-height:none}
+
+/* Le lanceur se recompose en une ligne — libellé du fournisseur, bouton
+   d'ouverture, témoin de séance. Même balisage, aucun second rendu JS. */
+.col-center.cadre-reduit:has(.docs-drawer.open) .popup-launcher{
+  width:100%;padding:9px 14px;text-align:left;
+  display:flex;align-items:center;gap:12px;
+}
+.col-center.cadre-reduit:has(.docs-drawer.open) .popup-launcher .provider-logo,
+.col-center.cadre-reduit:has(.docs-drawer.open) .popup-launcher p{display:none}
+.col-center.cadre-reduit:has(.docs-drawer.open) .popup-launcher h3{font-size:13.5px;margin:0;white-space:nowrap}
+.col-center.cadre-reduit:has(.docs-drawer.open) .btn-launch{padding:8px 16px;font-size:12px;flex-shrink:0}
+.col-center.cadre-reduit:has(.docs-drawer.open) .popup-state{margin-top:0;margin-left:auto;flex-shrink:0}
 .docs-header{
   padding:10px 12px;
   display:flex;align-items:center;gap:8px;
@@ -897,23 +922,13 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
             </button>
           </div>
         </div>
-
-        <!-- NOTES -->
-        <div class="notes-zone">
-          <label>
-            Notes du RDV
-            <span class="save-indicator" id="saveIndicator" style="display:none">Enregistré</span>
-            <span class="kbd-hint">Touche N pour focus</span>
-          </label>
-          <textarea id="rdvNotes" placeholder="Prises de notes en direct, points clés, prochaine étape…"></textarea>
-        </div>
       </div>
 
       <!-- DOCS BIBLIOTHÈQUE — TIROIR PERMANENT
            Dernier enfant de la colonne, et non plus de #visioActive : on range
            et on ajoute ses documents quand aucun rendez-vous n'est en cours,
-           précisément le moment où il était invisible. Sous les notes pendant
-           une séance, sous l'état vide sinon. -->
+           précisément le moment où il était invisible. Sous la barre d'outils
+           pendant une séance, sous l'état vide sinon. -->
       <div class="docs-drawer" id="docsDrawer">
         <div class="docs-header">
           <button class="docs-toggle" id="docsToggle" aria-expanded="false" aria-controls="docsDrawerBody">
@@ -1104,7 +1119,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
       <div class="kbd-row"><div class="keys"><kbd>1</kbd></div><div class="desc">Ouvrir le 1<sup>er</sup> document épinglé <span style="color:var(--muted2);font-size:10px">(même sans RDV en cours)</span></div></div>
       <div class="kbd-row"><div class="keys"><kbd>2</kbd></div><div class="desc">Ouvrir le 2<sup>e</sup> document épinglé</div></div>
       <div class="kbd-row"><div class="keys"><kbd>3</kbd></div><div class="desc">Ouvrir le 3<sup>e</sup> document épinglé</div></div>
-      <div class="kbd-row"><div class="keys"><kbd>N</kbd></div><div class="desc">Focus sur les notes <span style="color:var(--muted2);font-size:10px">(pendant un RDV)</span></div></div>
       <div class="kbd-row"><div class="keys"><kbd>C</kbd></div><div class="desc">Copier le lien de la visio <span style="color:var(--muted2);font-size:10px">(pendant un RDV)</span></div></div>
       <div class="kbd-row"><div class="keys"><kbd>I</kbd></div><div class="desc">Ouvrir l'invitation par email <span style="color:var(--muted2);font-size:10px">(pendant un RDV)</span></div></div>
       <div class="kbd-row"><div class="keys"><kbd>?</kbd></div><div class="desc">Afficher cette aide</div></div>
@@ -1134,7 +1148,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 const LS = {
   PIPELINE:'mup_pipeline', AGENDA:'mup_agenda', CONTACTS:'mup_contacts', DEVIS:'mup_devis',
   VISIO_LOGS:'mup_visio_logs', VISIO_SETTINGS:'mup_settings_visio',
-  VISIO_CALIBRATION:'mup_visio_calibration', VISIO_DRAFT:'mup_visio_draft',
+  VISIO_CALIBRATION:'mup_visio_calibration',
   VISIO_BG_CUSTOM:'mup_visio_bg_custom', VISIO_BG_ACTIVE:'mup_visio_bg_active',
   DOCS_META:'mup_visio_docs_meta',          // [{id, name, tag, mime, size, pinned, addedAt}]
   DOCS_OPEN_LOG:'mup_visio_docs_open_log',  // [{docId, prospectId, societe, openedAt}]
@@ -1247,19 +1261,6 @@ const api = {
     } catch(e){ console.warn('[visio] putPipelineCard failed', e); }
     return null;
   },
-  // Drafts (per-prospect)
-  async getDraft(prospectId){
-    if(!prospectId) return null;
-    try { const r = await fetch('/api/visio/drafts/' + encodeURIComponent(prospectId)); return r.ok ? await r.json() : null; } catch(e){ return null; }
-  },
-  async setDraft(prospectId, content){
-    if(!prospectId) return null;
-    try { const r = await fetch('/api/visio/drafts/' + encodeURIComponent(prospectId), { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ content }) }); return r.ok ? await r.json() : null; } catch(e){ return null; }
-  },
-  async deleteDraft(prospectId){
-    if(!prospectId) return null;
-    try { return await fetch('/api/visio/drafts/' + encodeURIComponent(prospectId), { method:'DELETE' }); } catch(e){ return null; }
-  },
   // Logs
   async addLog(log){
     try { const r = await fetch('/api/visio/logs', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(log) }); return r.ok ? await r.json() : null; } catch(e){ return null; }
@@ -1330,15 +1331,14 @@ function showToast(msg){
 }
 
 // Deux états, et non plus un seul. `rdvAffiche` est ce que l'écran MONTRE —
-// briefing, cadre vidéo, documents, fiche, brouillon de notes. `activeRdv` est
-// la séance ENGAGÉE, celle dont le chronomètre court. Les confondre faisait
+// briefing, cadre vidéo, documents, fiche. `activeRdv` est la séance ENGAGÉE,
+// celle dont le chronomètre court. Les confondre faisait
 // qu'ouvrir la page à 9 h lançait un compteur pour un rendez-vous de 16 h 30,
 // et qu'un « Terminer » y inscrivait trois heures qui n'ont pas eu lieu.
 let rdvAffiche = null;
 let activeRdv = null;
 let timerInterval = null;
 let timerStart = null;
-let saveTimeout = null;
 let inviteEmails = [];
 let activeFilter = 'all';
 let pendingDoc = null;  // { file, tag }
@@ -1965,6 +1965,7 @@ async function rafraichirApresGeste(rdv, patch){
       // La séance engagée porte le même objet : elle suit, sans quoi le journal
       // s'écrirait sur la version d'avant la modification.
       if(estSeanceEnCours(rdv)) activeRdv = rdvAffiche;
+      refletCadreReduit();
       renderBriefing(rdvAffiche);
     } else {
       // Le rendez-vous annulé ne peut pas rester à l'écran. Le minuteur s'arrête
@@ -1973,6 +1974,7 @@ async function rafraichirApresGeste(rdv, patch){
       resetTimer();
       activeRdv = null;
       rdvAffiche = null;
+      refletCadreReduit();
       ouvrirFicheRdv(null);   // une fiche ouverte sur un RDV qui n'existe plus n'a pas de sens
       $('emptyState').style.display = 'flex';
       $('visioActive').style.display = 'none';
@@ -2008,7 +2010,7 @@ $('saveEditRdvBtn').addEventListener('click', async ()=>{
   if(estSeanceEnCours(rdv)){
     const ok = await mupConfirm(
       'Modifier la séance en cours ?',
-      `${rdv.prospectName} — ${libelleCreneau(new Date(rdv.date))} est la séance ouverte en ce moment. Son minuteur continue de tourner et vos notes restent en place.`,
+      `${rdv.prospectName} — ${libelleCreneau(new Date(rdv.date))} est la séance ouverte en ce moment. Son minuteur continue de tourner.`,
       'Modifier', 'Renoncer');
     if(!ok){ btn.disabled = false; return; }
   }
@@ -2054,14 +2056,6 @@ $('deleteRdvBtn').addEventListener('click', async ()=>{
 
   await ecrireFilRdv(res.avant.ficheId,
     'RDV du ' + libelleCreneau(creneauEvt(res.avant.date, res.avant.start)) + ' annulé');
-
-  // Le brouillon de notes a pour clé l'id du rendez-vous : l'évènement supprimé,
-  // aucune page ne peut plus l'atteindre. Ce n'est pas la cascade générale des
-  // orphelins — les visio_log sont l'historique et restent — c'est le seul cas
-  // où notre propre geste rend une donnée inaccessible. La route rend ok même
-  // sans brouillon, et api.deleteDraft n'élève rien : une annulation réussie ne
-  // peut pas échouer ici.
-  await api.deleteDraft(rdv.id);
 
   $('editRdvModal').classList.remove('show');
   rdvEnEdition = null;
@@ -2179,8 +2173,8 @@ async function confirmerAbandonSeance(rdv){
 }
 
 // Peindre, et seulement peindre : la liste, le briefing, le cadre vidéo, les
-// documents, la fiche, le brouillon de notes. Aucun chronomètre, aucun
-// activeRdv. La sélection automatique du chargement n'emprunte que ce chemin.
+// documents, la fiche. Aucun chronomètre, aucun activeRdv. La sélection
+// automatique du chargement n'emprunte que ce chemin.
 function peindreRdv(rdv){
   // Si un test caméra est en cours, le fermer proprement avant de basculer
   if(testCamOpen) closeTestCamera();
@@ -2195,11 +2189,11 @@ function peindreRdv(rdv){
   renderRdvList();
   renderBriefing(rdv);
   renderVideoFrame(rdv);
+  refletCadreReduit();   // peindre un autre RDV a pu abandonner la séance
   renderDocsList(); // refresh badges "déjà vu" pour ce prospect
   // La fiche est liée au rendez-vous sélectionné : elle se peint ici, pour tous
   // les appelants à la fois, et se vide quand le rendez-vous n'a pas de fiche.
   ouvrirFicheRdv(rdv.prospectId);
-  loadDraftNotes(rdv.id);
 }
 
 // L'engagement de la séance : le lancement de la visio, et lui seul. Relancer
@@ -2211,7 +2205,29 @@ function engagerSeance(){
   startTimer();
   const barre = $('timerBar');
   if(barre) barre.classList.add('seance-engagee');
+  // Le cadre n'a aucune image à montrer : la place passe aux documents. Le
+  // tiroir s'ouvre du même geste — lui donner toute la hauteur pour n'afficher
+  // qu'un en-tête n'aurait aucun sens. L'abonné garde la main : le refermer
+  // rend la place au cadre.
+  setTiroirDocs(true);
+  refletCadreReduit();
   renderRdvList();
+}
+
+// Le reflet de la bascule, en un seul endroit — chaque point qui touche à
+// activeRdv l'appelle, aucun ne réécrit la règle. La classe se DÉDUIT de
+// l'état : séance engagée, fournisseur non embarqué, et cadre libre du mode
+// test caméra, qui écrit dans ce même cadre en supposant sa géométrie pleine
+// (panneau de 340 px, vidéo en left:340px, vumètre en left:354px). Le panneau
+// de test survit à une erreur d'accès caméra alors que testCamOpen retombe à
+// faux : sa présence dans le cadre compte donc autant que le drapeau.
+function refletCadreReduit(){
+  const col = document.querySelector('.col-center');
+  if(!col) return;
+  const embarque = !!(activeRdv && PROVIDERS[activeRdv.provider]?.embed);
+  const frame = $('videoFrame');
+  const enTest = testCamOpen || !!(frame && frame.querySelector('.testcam-overlay-panel'));
+  col.classList.toggle('cadre-reduit', !!activeRdv && !embarque && !enTest);
 }
 
 async function renderBriefing(rdv){
@@ -2302,7 +2318,11 @@ function renderVideoFrame(rdv){
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           Ouvrir ${provider?.label || 'la visio'}
         </button>` : ''}
-        <div class="popup-state" id="popupState"><span class="live-dot"></span>Visio ouverte dans la fenêtre externe</div>
+        <!-- Le témoin se déduit de l'état, jamais d'une classe posée une fois :
+             closeTestCamera re-rend ce cadre alors que la séance court toujours,
+             et l'effaçait. Quand le cadre se réduit à une barre, il en est le
+             seul contenu utile. -->
+        <div class="popup-state${estSeanceEnCours(rdv) ? ' show' : ''}" id="popupState"><span class="live-dot"></span>Visio ouverte dans la fenêtre externe</div>
       </div>`;
   }
   applyCalibrationFilter(getCalibration());
@@ -2332,7 +2352,7 @@ window.createDevisFromRdv = function(){
 };
 
 /* ————————————————————————————————————————————————
-   TIMER + NOTES
+   TIMER
    ———————————————————————————————————————————————— */
 // Remettre le chronomètre à zéro est un geste de PEINTURE : tant qu'aucune
 // visio n'a été lancée, la barre affiche 00:00 et rien ne court.
@@ -2357,22 +2377,6 @@ function startTimer(){
   }, 1000);
 }
 
-async function loadDraftNotes(rdvId){
-  const draft = await api.getDraft(rdvId);
-  $('rdvNotes').value = (draft && draft.content) || '';
-}
-
-$('rdvNotes').addEventListener('input', e=>{
-  if(!rdvAffiche) return;
-  clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(async ()=>{
-    await api.setDraft(rdvAffiche.id, e.target.value);
-    const ind = $('saveIndicator');
-    ind.style.display = 'inline';
-    setTimeout(()=>ind.style.display = 'none', 1500);
-  }, 600);
-});
-
 $('endRdvBtn').addEventListener('click', function(){
   // Si on est en mode test caméra, fermer le test plutôt que terminer un RDV
   if(testCamStream){ closeTestCamera(); return; }
@@ -2389,7 +2393,7 @@ async function endCurrentRdv(){
   if(!rdv) return;
   const btnFin = $('endRdvBtn');
   if(btnFin) btnFin.disabled = true;           // la fenêtre ne bloque plus le fil
-  const ok = await mupConfirm('Terminer ce RDV ?', 'La durée et les notes seront enregistrées.', 'Terminer', 'Annuler');
+  const ok = await mupConfirm('Terminer ce RDV ?', 'La durée sera enregistrée.', 'Terminer', 'Annuler');
   if(!ok){ if(btnFin) btnFin.disabled = false; return; }
 
   // Ce qui fait foi, c'est l'action d'arrêt. La durée court du lancement de la
@@ -2399,8 +2403,12 @@ async function endCurrentRdv(){
   const fin = Date.now();
   const debut = timerStart || fin;
   const duree = Math.floor((fin - debut) / 60000);
-  const notes = $('rdvNotes').value;
 
+  // Le journal ne porte plus de texte : la zone de notes qui l'alimentait est
+  // retirée, et la prise de notes passe au champ Note du bloc Activités de la
+  // fiche. `notes` est simplement absent du corps — la route retombe sur sa
+  // valeur par défaut, chaîne vide, et le champ reste en place en base pour
+  // l'historique déjà écrit.
   await api.addLog({
     rdvId: rdv.id,
     prospectId: rdv.prospectId,
@@ -2408,8 +2416,7 @@ async function endCurrentRdv(){
     link: rdv.link || '',
     started_at: new Date(debut).toISOString(),
     ended_at: new Date(fin).toISOString(),
-    duration_seconds: duree * 60,
-    notes
+    duration_seconds: duree * 60
   });
 
   if(rdv.prospectId){
@@ -2421,12 +2428,11 @@ async function endCurrentRdv(){
     }
   }
 
-  await api.deleteDraft(rdv.id);
-
   showToast(`RDV enregistré · ${duree} min`);
   resetTimer();
   activeRdv = null;
   rdvAffiche = null;
+  refletCadreReduit();
   ouvrirFicheRdv(null);                        // plus de RDV sélectionné, plus de colonne
   if(btnFin) btnFin.disabled = false;          // rendu au RDV suivant
   $('emptyState').style.display = 'flex';
@@ -2869,10 +2875,11 @@ function renderDocCard(d, shortcutNum, logs){
   const cat = getMimeCategory(d.mime);
   const label = getMimeLabel(d.mime);
 
-  // Badge "déjà vu" pour le prospect actuel
+  // Badge "déjà vu" — sur la séance ENGAGÉE, pas sur le rendez-vous peint. Le
+  // badge dit ce que le journal a écrit : il suit la même règle qu'openDoc.
   let seenBadge = '';
-  if(rdvAffiche && rdvAffiche.prospectId){
-    const seenLog = logs.find(l => l.docId === d.id && l.prospectId === rdvAffiche.prospectId);
+  if(activeRdv && activeRdv.prospectId){
+    const seenLog = logs.find(l => l.docId === d.id && l.prospectId === activeRdv.prospectId);
     if(seenLog){
       const date = new Date(seenLog.openedAt);
       const dateStr = `${fmt2(date.getDate())}/${fmt2(date.getMonth()+1)}`;
@@ -2925,14 +2932,18 @@ async function openDoc(docId){
     }
     showToast(`${doc.name} ouvert`);
 
-    // Log "doc ouvert pour ce prospect"
-    if(rdvAffiche && rdvAffiche.prospectId){
+    // Log "doc ouvert pour ce prospect" — sur la séance ENGAGÉE. Le rendez-vous
+    // PEINT ne suffit pas : la sélection automatique du chargement peint le
+    // prochain rendez-vous, et un document consulté à 9 h serait consigné comme
+    // « vu » par le prospect de 16 h 30. Sans séance, on n'écrit rien — ni en
+    // mémoire, ni au serveur.
+    if(activeRdv && activeRdv.prospectId){
       const openedAt = new Date().toISOString();
       _state.docOpens.push({
-        docId, prospectId: rdvAffiche.prospectId,
-        societe: rdvAffiche.societe, openedAt
+        docId, prospectId: activeRdv.prospectId,
+        societe: activeRdv.societe, openedAt
       });
-      api.logDocOpen(docId, rdvAffiche.prospectId, rdvAffiche.societe);
+      api.logDocOpen(docId, activeRdv.prospectId, activeRdv.societe);
       setTimeout(renderDocsList, 50);
     }
 
@@ -3223,6 +3234,7 @@ let testCamOpen = false;
 
 function setTestCameraBtnState(active){
   testCamOpen = active;
+  refletCadreReduit();   // le test reprend le cadre : la bascule se retire, puis revient
   const btn = $('testCameraBtn');
   if(!btn) return;
   btn.classList.toggle('active-test', active);
@@ -3300,6 +3312,10 @@ async function openTestCamera(){
       <div class="audio-meter-label">Aucun enregistrement — test local uniquement</div>
     </div>
   `;
+
+  // Le panneau est en place : le cadre reprend sa géométrie pleine sans attendre
+  // l'autorisation caméra, qui peut rester en suspens plusieurs secondes.
+  refletCadreReduit();
 
   // 3) Démarrer le flux
   try {
@@ -3434,16 +3450,9 @@ document.addEventListener('keydown', e=>{
     return;
   }
 
-  // N, C, I portent sur le rendez-vous AFFICHÉ. Échap, plus haut, reste sur la
+  // C et I portent sur le rendez-vous AFFICHÉ. Échap, plus haut, reste sur la
   // séance engagée : rien ne se termine si rien n'a commencé.
   if(!rdvAffiche) return;
-
-  // N : focus notes
-  if(e.key === 'n' || e.key === 'N'){
-    e.preventDefault();
-    $('rdvNotes').focus();
-    return;
-  }
 
   // C : copier lien
   if(e.key === 'c' || e.key === 'C'){
@@ -3477,10 +3486,17 @@ document.querySelectorAll('.overlay').forEach(ov=>{
 // Le tiroir de documents. Aucune commande existante ne le pilotait :
 // .btn-tools-toggle n'est porté par aucun élément de la page — trois règles CSS
 // sans propriétaire. Elle n'est donc pas détournée, la commande vit ici.
-$('docsToggle').addEventListener('click', ()=>{
+// Le geste est nommé : le clic le retourne, engagerSeance l'ouvre, et l'état
+// annoncé aux technologies d'assistance suit le même chemin dans les deux cas.
+function setTiroirDocs(ouvert){
   const drawer = $('docsDrawer');
-  const ouvert = drawer.classList.toggle('open');
+  if(!drawer) return;
+  drawer.classList.toggle('open', ouvert);
   $('docsToggle').setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+}
+
+$('docsToggle').addEventListener('click', ()=>{
+  setTiroirDocs(!$('docsDrawer').classList.contains('open'));
 });
 
 $('searchInput').addEventListener('input', renderRdvList);

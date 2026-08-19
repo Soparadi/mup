@@ -1186,24 +1186,75 @@ const ls = {
    ———————————————————————————————————————————————— */
 const _state = {
   settings: { links:{}, calibration:{ lum:100, r:0, g:0, b:0 }, bg_active:'none', urgent_dismissed:[] },
+  // Témoin de lecture des réglages. 'attente' avant bootstrapVisio, puis :
+  //   'garni' — lus, et la base portait des réglages ;
+  //   'vide'  — lus, mais aucun record (200 {userId}) ou record sans réglage ;
+  //   'echec' — NON lus : statut non-200, corps illisible, réseau coupé.
+  // Sans lui, ces trois issues rendaient toutes le même _state.settings vide et
+  // rien ne les distinguait.
+  settingsRead: 'attente',
   bgCustom: null,         // base64 data URL string
   docs: [],
   docOpens: []
 };
 
+// La lecture a-t-elle abouti ? Seules 'garni' et 'vide' l'affirment. C'est la
+// garde de TOUTE écriture : le PUT remplace l'objet entier, donc écrire depuis
+// une mémoire que nulle lecture n'a alimentée effacerait ce que la base porte.
+// 'vide' autorise l'écriture — un record absent n'a rien à perdre ; 'echec' et
+// 'attente' l'interdisent, on ne sait pas ce qu'on écraserait.
+function lectureReglagesAboutie(){
+  return _state.settingsRead === 'garni' || _state.settingsRead === 'vide';
+}
+
 let _settingsPutTimer = null;
+let _settingsPutLot = null;   // { promise, resoudre } du lot pas encore parti
+
+// Rend le verdict de l'écriture, sans renoncer au débounce. Les appels
+// rapprochés se fondent toujours en une seule requête, et partagent désormais
+// la MÊME promesse, résolue quand cette requête a répondu. Un verdict unique
+// pour tout le lot est exact parce que le corps envoyé est l'objet entier au
+// moment du tir : le lot porte forcément l'état le plus récent. Un appel
+// survenant pendant qu'une requête vole ouvre un lot neuf — la requête en vol
+// ne porte pas les valeurs arrivées après elle.
+// Verdicts : { ok:true } | { ok:false, raison:'lecture'|'reponse'|'reseau', status? }
 function _schedulePutSettings(){
+  if(!lectureReglagesAboutie()) return Promise.resolve({ ok:false, raison:'lecture' });
+  if(!_settingsPutLot){
+    let resoudre;
+    const promise = new Promise(r => { resoudre = r; });
+    _settingsPutLot = { promise, resoudre };
+  }
+  const lot = _settingsPutLot;
   clearTimeout(_settingsPutTimer);
-  _settingsPutTimer = setTimeout(()=>{
+  _settingsPutTimer = setTimeout(async ()=>{
     _settingsPutTimer = null;
-    fetch('/api/visio/settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_state.settings) })
-      .catch(e => console.warn('[visio] PUT settings failed', e));
+    _settingsPutLot = null;
+    let verdict;
+    try {
+      const r = await fetch('/api/visio/settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_state.settings) });
+      if(r.ok) verdict = { ok:true };
+      else {
+        console.warn('[visio] PUT settings refusé', r.status);
+        verdict = { ok:false, raison:'reponse', status:r.status };
+      }
+    } catch(e){
+      console.warn('[visio] PUT settings failed', e);
+      verdict = { ok:false, raison:'reseau' };
+    }
+    lot.resoudre(verdict);
   }, 400);
+  return lot.promise;
 }
 
 // Flush avant fermeture/navigation : si un PUT settings est en attente, on
 // l'envoie immédiatement via sendBeacon (POST avec Content-Type JSON).
+// C'est le seul chemin dont personne ne peut lire la réponse : aucun verdict
+// n'en reviendra jamais. La garde de lecture est donc sa seule protection, et
+// elle est redoublée ici — un timer n'existe déjà plus quand elle a refusé,
+// mais ce départ-là ne doit dépendre d'aucun raisonnement à distance.
 window.addEventListener('beforeunload', () => {
+  if (!lectureReglagesAboutie()) return;
   if (_settingsPutTimer) {
     clearTimeout(_settingsPutTimer);
     _settingsPutTimer = null;
@@ -1289,18 +1340,32 @@ const api = {
 
 // Préchargement initial — appelé à DOMContentLoaded avant tout render
 async function bootstrapVisio(){
-  const [settings, bg, docs, opens] = await Promise.all([
-    fetch('/api/visio/settings').then(r => r.ok ? r.json() : null).catch(()=>null),
+  // La lecture des réglages rend désormais deux choses : la charge, et le fait
+  // qu'elle a été lue. Un 500 et un record absent rendaient jusqu'ici le même
+  // null ; ils se distinguent ici, et c'est le témoin qui porte la différence.
+  const [lecture, bg, docs, opens] = await Promise.all([
+    fetch('/api/visio/settings')
+      .then(async r => r.ok ? { lu:true, data: await r.json() } : { lu:false })
+      .catch(()=>({ lu:false })),
     fetch('/api/visio/bg-custom').then(r => r.ok ? r.json() : null).catch(()=>null),
     fetch('/api/visio/docs').then(r => r.ok ? r.json() : []).catch(()=>[]),
     fetch('/api/visio/doc-opens').then(r => r.ok ? r.json() : []).catch(()=>[])
   ]);
-  if(settings){
+  if(lecture.lu){
+    const settings = (lecture.data && typeof lecture.data === 'object') ? lecture.data : {};
+    // Le repli littéral reste ce qu'il était : mêmes valeurs, mêmes formes.
     _state.settings.links = settings.links || {};
     _state.settings.calibration = settings.calibration || { lum:100, r:0, g:0, b:0 };
     _state.settings.bg_active = settings.bg_active || 'none';
     _state.settings.urgent_dismissed = settings.urgent_dismissed || [];
     if(settings.signature) _state.settings.signature = settings.signature;
+    // Garni ou vide : la route rend { userId } tout court quand aucun record
+    // n'existe, et c'est l'absence de tout champ de réglage qui le dit.
+    const garni = ['links','calibration','bg_active','urgent_dismissed','signature']
+      .some(k => settings[k] != null);
+    _state.settingsRead = garni ? 'garni' : 'vide';
+  } else {
+    _state.settingsRead = 'echec';
   }
   _state.bgCustom = bg && bg.data_base64 ? bg.data_base64 : null;
   _state.docs = Array.isArray(docs) ? docs : [];
@@ -1422,17 +1487,43 @@ function loadMyLinks(){
   });
 }
 
-function saveMyLink(provider, value){
+// Rend le verdict de l'écriture : les deux surfaces de saisie l'attendent et
+// n'annoncent l'enregistrement qu'après lui. La mémoire est écrite d'avance —
+// elle doit l'être, c'est l'objet entier qui part — puis REMISE à sa valeur
+// d'avant si l'écriture n'a pas abouti : sans ce retour en arrière, le client
+// croirait équipé un abonné dont le lien n'est jamais parti, et l'encart
+// d'accueil s'éteindrait sur un enregistrement qui n'a pas eu lieu.
+async function saveMyLink(provider, value){
   if(!_state.settings.links) _state.settings.links = {};
+  const avant = _state.settings.links[provider];
   _state.settings.links[provider] = value.trim();
-  _schedulePutSettings();
+  const verdict = await _schedulePutSettings();
+  if(!verdict.ok){
+    if(avant === undefined) delete _state.settings.links[provider];
+    else _state.settings.links[provider] = avant;
+    return verdict;
+  }
   const launchBtn = $(`launch${provider.charAt(0).toUpperCase() + provider.slice(1)}`);
   if(value.trim()) launchBtn.classList.add('has-link');
   else launchBtn.classList.remove('has-link');
   // Seul écrivain des liens, donc seul endroit d'où l'encart d'accueil peut
   // changer d'état en cours de session — dans les deux sens : effacer son
   // dernier lien le fait revenir, l'abonné n'a plus de quoi lancer une visio.
+  // Appelé sur l'écriture RÉELLE, jamais sur l'intention d'écrire.
   refletAccueil();
+  return verdict;
+}
+
+// Un seul dire pour les deux surfaces de saisie. Sur 402 le mur payant est déjà
+// à l'écran (trial-expired-modal.js) : on ne double pas le message, mais on
+// n'annonce surtout pas un enregistrement qui n'a pas eu lieu.
+function direEchecLien(verdict){
+  if(verdict.raison === 'reponse' && verdict.status === 402) return;
+  if(verdict.raison === 'lecture'){
+    showToast('Vos réglages n\'ont pas pu être chargés : lien non enregistré, rechargez la page');
+    return;
+  }
+  showToast('Enregistrement impossible : votre lien n\'a pas été enregistré');
 }
 
 /* ————————————————————————————————————————————————
@@ -1489,7 +1580,7 @@ document.querySelectorAll('[data-accueil-outil]').forEach(btn=>{
 });
 $('accueilRetour').addEventListener('click', accueilEtapeChoix);
 
-$('accueilEnregistrer').addEventListener('click', ()=>{
+$('accueilEnregistrer').addEventListener('click', async ()=>{
   const champ = $('accueilLien');
   const provider = champ.dataset.provider;
   const valeur = champ.value.trim();
@@ -1504,8 +1595,9 @@ $('accueilEnregistrer').addEventListener('click', ()=>{
   // deux surfaces pour un seul lien, jamais deux vérités.
   const miroir = document.querySelector(`input[data-link="${provider}"]`);
   if(miroir) miroir.value = valeur;
-  saveMyLink(provider, valeur);
-  showToast(`Lien ${libelleOutil(provider)} enregistré`);
+  const verdict = await saveMyLink(provider, valeur);
+  if(verdict.ok) showToast(`Lien ${libelleOutil(provider)} enregistré`);
+  else direEchecLien(verdict);
 });
 
 $('accueilLien').addEventListener('keydown', e=>{
@@ -1514,13 +1606,26 @@ $('accueilLien').addEventListener('keydown', e=>{
 
 document.querySelectorAll('input[data-link]').forEach(input=>{
   let timer;
+  let frappe = 0;   // numéro de la dernière saisie, pour ignorer un verdict périmé
   input.addEventListener('input', ()=>{
     input.closest('.my-link-field').classList.add('dirty');
     clearTimeout(timer);
-    timer = setTimeout(()=>{
-      saveMyLink(input.dataset.link, input.value);
-      input.closest('.my-link-field').classList.remove('dirty');
-      showToast(`Lien ${libelleOutil(input.dataset.link)} enregistré`);
+    const monTour = ++frappe;
+    // Le débounce de frappe reste à 700 ms — c'est lui qui évite une requête
+    // par touche ; le verdict n'arrive qu'après, et ne coûte aucune requête de
+    // plus. Le repère « non enregistré » (.dirty) ne s'efface que sur succès,
+    // et seulement si la saisie qu'il marque est bien celle qui vient de partir :
+    // reprendre la frappe pendant l'aller-retour laisse le repère allumé pour la
+    // valeur nouvelle, dont l'écriture reste à venir.
+    timer = setTimeout(async ()=>{
+      const verdict = await saveMyLink(input.dataset.link, input.value);
+      if(monTour !== frappe) return;
+      if(verdict.ok){
+        input.closest('.my-link-field').classList.remove('dirty');
+        showToast(`Lien ${libelleOutil(input.dataset.link)} enregistré`);
+      } else {
+        direEchecLien(verdict);
+      }
     }, 700);
   });
 });
@@ -3546,6 +3651,8 @@ setInterval(renderRdvList, 30000); // 30s pour le bandeau T-5
   const cleanDismissed = dismissed.filter(id => validIds.has(id));
   if(cleanDismissed.length !== dismissed.length){
     _state.settings.urgent_dismissed = cleanDismissed;
+    // Entretien, pas geste d'abonné : la garde peut refuser ce départ, et rien
+    // ne doit paraître si elle refuse. Le verdict est donc délibérément ignoré.
     _schedulePutSettings();
   }
 })();

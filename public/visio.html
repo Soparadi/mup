@@ -1953,24 +1953,37 @@ function ouvrirPanneau(){
   $('panneauMiseEnService').style.display = 'flex';
   document.body.classList.add('mise-en-service');
   figerLaPage(true);
+  // La colonne du centre se tait : le panneau est LA carte. L'appel vient
+  // APRÈS l'affichage, parce que refletColonneCentre juge sur le panneau lui-même.
+  refletColonneCentre();
 }
 
 // Le panneau ne se ferme sur aucun GESTE ; il se retire quand sa raison d'être
-// disparaît, et les deux sorties du second temps l'appellent parce qu'à ce
-// stade un lien est déjà enregistré.
+// disparaît. Les deux sorties du second temps l'appellent parce qu'à ce stade un
+// lien est déjà enregistré, et « je verrai plus tard » du conseil l'appelle sur
+// un report posé.
 function fermerPanneau(){
   if(!panneauTientLaPage()) return;
   $('panneauMiseEnService').style.display = 'none';
   document.body.classList.remove('mise-en-service');
   figerLaPage(false);
+  // La colonne du centre lui est rendue, avec ses trois faces. L'appel est ICI
+  // et non dans les écouteurs : c'est le passage obligé des TROIS sorties — « je
+  // verrai plus tard », « je le ferai plus tard », « ajouter un document » — et
+  // une seule écriture les couvre toutes.
+  refletColonneCentre();
 }
 
 function refletPanneauAccueil(){
   if(panneauDoitParaitre()){ ouvrirPanneau(); return; }
-  // La page est devenue opérante. Si le panneau la tient encore, c'est que le
-  // lien vient d'être enregistré DEPUIS lui : il passe au second temps plutôt
-  // que de disparaître sous les doigts. Sinon, il n'a rien à faire.
-  if(panneauTientLaPage() && mesEtapeCourante !== 'documents') mesEtape('documents');
+  // Le panneau n'a plus à paraître, et cela pour DEUX raisons qui ne se valent
+  // pas : un lien enregistré, ou un report posé sans le moindre lien. Seule la
+  // première ouvre le second temps — le lien vient d'être enregistré DEPUIS le
+  // panneau, qui passe aux documents plutôt que de disparaître sous les doigts.
+  // Le report, lui, ne donne droit à rien : proposer « vos documents de visio » à
+  // qui n'a pas d'outil n'aurait aucun sens. La garde le dit désormais elle-même,
+  // au lieu de s'en remettre au graphe d'appel pour rester hors d'atteinte.
+  if(panneauTientLaPage() && !aucunLienEnregistre() && mesEtapeCourante !== 'documents') mesEtape('documents');
 }
 
 /* La barre du haut se déduit de la donnée, jamais d'un réglage : un champ
@@ -2027,8 +2040,20 @@ function refletMiseEnService(){
   refletPanneauAccueil();
 }
 
+/* Les boutons d'outil du premier temps ET « J'ai mon lien Meet » du conseil :
+   un seul chemin vers la saisie, pour tous. Celui du CONSEIL efface le report au
+   passage, exactement comme « Revenir au choix de l'outil » — quitter le conseil
+   vers un champ de saisie, c'est revenir se mettre en service, et un report pris
+   pour « je n'ai aucun outil » n'a plus rien à retenir. Sans cela, qui passe par
+   le conseil, dit tenir son lien Meet et ferme l'onglet avant de le coller
+   quittait la mise en service sans lien ET sans jamais y revenir.
+   L'origine se lit sur le bouton — où il vit — et non sur mesEtapeCourante :
+   c'est une propriété du balisage, pas d'un état qui bouge. */
 document.querySelectorAll('[data-accueil-outil]').forEach(btn=>{
-  btn.addEventListener('click', ()=>accueilEtapeSaisie(btn.dataset.accueilOutil));
+  btn.addEventListener('click', ()=>{
+    if(btn.closest('#mesConseil')) effacerReport();
+    accueilEtapeSaisie(btn.dataset.accueilOutil);
+  });
 });
 $('accueilRetour').addEventListener('click', accueilEtapeChoix);
 
@@ -2836,11 +2861,29 @@ function testEnCours(){
   return testCamOpen || !!(frame && frame.querySelector('.testcam-overlay-panel'));
 }
 
-// La colonne du centre n'a que deux visages, et ils se DÉDUISENT : quelque chose
-// occupe le cadre — un rendez-vous peint, ou un test caméra — ou rien ne
-// l'occupe. La règle était recopiée en six points ; elle n'est plus écrite
-// qu'ici, et chacun de ces points l'appelle.
+// LA COLONNE DU CENTRE — SEUL ÉCRIVAIN DE #visioActive ET #emptyState.
+// La règle était recopiée en six points ; elle n'est plus écrite qu'ici, et
+// chacun de ces points l'appelle. Elle tient en deux temps.
+//
+// D'ABORD LE PANNEAU. Tant qu'il tient la page, les DEUX surfaces se taisent :
+// une seule carte paraît à l'écran, la sienne. Le voile ne couvre pas, il
+// floute — ce qui reste peint dessous se lit encore, et l'état vide porte
+// justement le vêtement du panneau (.mes-bloc est .mes-carte moins le voile et
+// moins l'ombre) : deux cartes s'y voyaient, décalées de la demi-largeur de la
+// colonne de gauche. Un rendez-vous peint d'office au chargement y montrait
+// pire — briefing, cadre et barre d'outils, la page de travail entière.
+// Le juge est le PANNEAU, jamais l'existence d'un lien : au quatrième temps un
+// lien est enregistré et le panneau tient encore la page. Juger sur le lien y
+// ferait reparaître la seconde carte, en plein second temps.
+//
+// ENSUITE L'OCCUPATION, qui se DÉDUIT : quelque chose occupe le cadre — un
+// rendez-vous peint, ou un test caméra — ou rien ne l'occupe.
 function refletColonneCentre(){
+  if(panneauTientLaPage()){
+    $('visioActive').style.display = 'none';
+    $('emptyState').style.display  = 'none';
+    return;
+  }
   const occupee = !!rdvAffiche || testEnCours();
   $('visioActive').style.display = occupee ? 'flex' : 'none';
   $('emptyState').style.display  = occupee ? 'none' : 'flex';
@@ -4169,6 +4212,13 @@ setInterval(renderRdvList, 30000); // 30s pour le bandeau T-5
   await bootstrapVisio();
   loadMyLinks();
   refletMiseEnService();
+  // La colonne du centre est réglée par la RÈGLE, et non par le repli de la
+  // feuille de style : sans cet appel, #emptyState paraissait au chargement par
+  // le seul .empty-state{display:flex}, et refletColonneCentre ne parlait qu'au
+  // premier rendez-vous peint ou au premier test caméra. C'est-à-dire jamais au
+  // moment qui compte — celui où le panneau vient de prendre la page.
+  // APRÈS refletMiseEnService, qui est ce qui décide d'ouvrir le panneau.
+  refletColonneCentre();
   // Note : sliders/fonds/customBgSlot/bgUpload sont injectés dynamiquement par
   // openTestCamera() — leurs handlers sont attachés via bindCalibration/Background
   // au moment de l'ouverture du mode test. Pas de binding init-time ici.

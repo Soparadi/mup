@@ -216,7 +216,13 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    reprendrait à la feuille la largeur qu'on vient de lui donner — la
    refonte reviendrait par la porte de derrière. La réduction d'écran
    se fait par `zoom`, et par lui seul (cf. watchDocScale plus bas). */
-.doc-paper{width:210mm;min-height:297mm;padding:14mm;flex-shrink:0;zoom:var(--doc-zoom,1);background:#fff;border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.12);font-family:var(--font)}
+/* display:flex + flex-direction:column : la feuille devient une colonne,
+   ce qui donne aux conditions un pied de page en pur flux (cf. .doc-conditions,
+   quelques lignes plus bas). Le reste du gabarit y survit tel quel : la table
+   garde son width:100% par l’étirement transversal, et .doc-totals garde son
+   margin-left:auto, qui pousse le bloc à droite dès lors qu’il porte une
+   largeur propre. */
+.doc-paper{width:210mm;min-height:297mm;padding:14mm;flex-shrink:0;display:flex;flex-direction:column;zoom:var(--doc-zoom,1);background:#fff;border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.12);font-family:var(--font)}
 .doc-paper-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8.47mm;padding-bottom:6.35mm;border-bottom:2px solid var(--text)}
 .doc-logo{font-size:5.29mm;font-weight:900;letter-spacing:-.13mm;color:var(--text)}
 .doc-paper-type{text-align:right}
@@ -248,9 +254,15 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .doc-total-row{display:flex;justify-content:space-between;padding:1.32mm 0;font-size:3.31mm;color:var(--muted);border-bottom:1px solid var(--border)}
 .doc-total-row:last-child{border-bottom:none;padding-top:2.65mm;font-size:3.97mm;font-weight:800;color:var(--text);border-top:2px solid var(--text)}
 .doc-total-row:last-child span:last-child{font-family:var(--mono)}
-.doc-conditions{font-size:2.91mm;color:var(--muted2);line-height:1.7;padding-top:5.29mm;border-top:1px solid var(--border)}
+/* LE PIED DE FEUILLE. margin-top:auto, et rien d’autre : dans une colonne
+   flex, la marge automatique absorbe toute la hauteur libre et dépose le bloc
+   au ras du bas de la boîte, soit à 14mm du bord de la feuille, ses marges
+   intérieures. Sur une feuille bien remplie la hauteur libre tombe à zéro et
+   le bloc reprend sa place à la suite des totaux : c’est le flux qui décide,
+   là où une position absolue aurait figé les conditions à 297mm du haut, donc
+   au beau milieu d’un devis de deux pages. */
+.doc-conditions{font-size:2.91mm;color:var(--muted2);line-height:1.7;margin-top:auto;padding-top:5.29mm;border-top:1px solid var(--border)}
 .doc-conditions strong{color:var(--muted);font-weight:600}
-.doc-validity{display:inline-flex;align-items:center;gap:1.59mm;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:1.85mm;padding:1.59mm 3.18mm;font-size:2.91mm;font-weight:600;color:#92400e;margin-bottom:4.23mm}
 
 /* PANNEAU ÉDITION */
 .edit-col{display:flex;flex-direction:column;height:calc(100vh - var(--app-footer-h));overflow:hidden;background:var(--card)}
@@ -427,73 +439,63 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
   .mupc-overlay,
   #mup-toast { display: none !important; }
 
-  /* 3. Le décor d'écran part, et la hauteur minimale avec lui.
-     L'ombre portée et le rayon sont des affordances d'écran : ils
-     disent « ceci est une feuille » à qui regarde un écran, et n'ont
-     rien à dire à qui tient la feuille. Le zoom d'aperçu revient à 1
-     — il vaut la réduction de la COLONNE, laquelle n'existe pas ici ;
-     l'oublier imprimerait le devis à 70% dans un coin de la page.
-     Le margin:0 reste : à l'écran la feuille est un élément flex
-     centré, sur le papier elle doit être à fleur de page.
+  /* 3. Le décor d’écran part, la hauteur minimale reste, d’un cheveu
+     plus courte.
+     L’ombre portée et le rayon sont des affordances d’écran : ils disent
+     « ceci est une feuille » à qui regarde un écran, et ils restent muets
+     pour qui tient la feuille. Le zoom d’aperçu revient à 1 : il vaut la
+     réduction de la COLONNE, laquelle est absente ici, et l’oublier
+     imprimerait le devis à 70% dans un coin de la page. Le margin:0
+     reste : à l’écran la feuille est un élément flex centré, sur le
+     papier elle doit être à fleur de page.
 
-     Ce qui n'est PAS ici : width, max-width, padding. Ils y étaient
-     tant que le document était un bloc de 640px à marges en pixels,
-     qu'il fallait délier pour qu'il prenne la page. Il EST la page
-     désormais ; les rendre au papier serait le seul moyen de casser
-     ce que ce bloc est censé protéger.
+     Ce qui est ABSENT ici : width, max-width, padding. Ils y étaient tant
+     que le document était un bloc de 640px à marges en pixels, qu’il
+     fallait délier pour qu’il prenne la page. Il EST la page désormais ;
+     les rendre au papier serait le seul moyen de casser ce que ce bloc
+     est censé protéger.
 
-     La hauteur minimale, elle, tombe — et elle seule des quatre
-     mesures du gabarit. Sur le papier, 297mm n'est pas un plancher :
-     c'est la boîte de page elle-même, @page étant à marge nulle. Les
-     deux valent exactement la même chose, et une égalité stricte ne
-     survit pas à l'arrondi. 297mm font 1122,52px CSS, que le moteur
-     arrondit à 1123 : il suffit que la boîte de page, arrondie de son
-     côté, tombe sur 1122 pour que le pixel en trop parte sur une
-     deuxième feuille, blanche. C'est la même valeur des deux côtés,
-     et c'est précisément pour ça qu'aucun des deux n'a de marge.
+     Reste la hauteur minimale, qui perd 1mm et retrouve un rôle. Elle
+     l’a repris le jour où les conditions se sont posées en pied de
+     feuille : c’est la hauteur de la BOÎTE qui dit où ce pied se trouve,
+     et une feuille à hauteur de contenu remonterait les conditions sous
+     les totaux au lieu de les laisser en bas de la page. Ce bloc a donc
+     porté min-height:0 tout le temps que le dernier bloc du document se
+     contentait de suivre le précédent.
 
-     Un devis d'une ligne n'était donc pas trop long, il était trop
-     EXACT : son contenu mesure 173,6mm au rendu, soit près de 100mm
-     sous les 269mm utiles. Aucune marge résiduelle ne débordait non
-     plus. .doc-conditions, dernier bloc, n'en porte pas ; les 14mm de
-     padding-bas empêchent celle de .doc-totals de s'échapper ; et le
-     reset du haut de page met html et body à zéro. Il ne restait rien
-     à retirer que l'égalité.
+     Le millimètre retiré est le prix de cette hauteur. 297mm et la boîte
+     de page valent exactement la même chose, @page étant à marge nulle,
+     et une égalité stricte périt à l’arrondi : 297mm font 1122,52px CSS,
+     que le moteur arrondit à 1123 ; il suffit que la boîte de page,
+     arrondie de son côté, tombe sur 1122 pour que le pixel en trop parte
+     sur une deuxième feuille, blanche. 296mm font 1118,74px, soit 1119 :
+     trois points sous le pire des deux arrondis, et invisibles à l’œil,
+     puisque les conditions descendent à 15mm du bord au lieu de 14. Un
+     millimètre de marge basse contre une feuille blanche de plus,
+     l’échange est bon.
 
-     Ce que la feuille perd ici, elle ne le perd qu'ici. À l'écran les
-     297mm restent, parce que c'est là qu'ils servent : sans eux, un
-     devis d'une ligne se replierait sur sa propre hauteur et
-     n'aurait plus l'air d'une feuille. Sur le papier ils ne servent à
-     rien — la boîte de page fait déjà loi, et c'est au moteur de dire
-     combien de pages il faut.
-
-     Le cas long est intact, et il l'est par construction : dès que le
-     contenu dépasse 297mm, un plancher de 297mm est inerte. Vérifié
-     au rendu — à vingt comme à quarante lignes, le PDF produit avec
-     et sans cette ligne a des flux de page IDENTIQUES octet pour
-     octet. Deux feuilles dans les deux cas, coupées par le § 4 ; à
-     vingt lignes la seconde porte les totaux et les conditions, à
-     quarante le tableau se coupe pour de bon et son en-tête reparaît
-     en tête de la seconde. Cette déclaration ne touche donc que le
-     document court. */
+     Le cas long reste intact, et il l’est par construction : dès que le
+     contenu dépasse 296mm, un plancher de 296mm est inerte, et la marge
+     automatique des conditions se résout à zéro. Sur un devis de deux
+     feuilles les conditions suivent donc les totaux, là où elles
+     tombent : le pied de feuille est une promesse de document court, et
+     c’est le seul cas où elle a un sens. Les coupures restent l’affaire
+     du § 4. */
   .doc-paper {
-    min-height: 0;
+    min-height: 296mm;
     zoom: 1;
     margin: 0;
     box-shadow: none;
     border-radius: 0;
   }
 
-  /* Les fonds qui portent une INFORMATION doivent survivre au
-     blanchiment que les navigateurs appliquent par défaut : le
-     bandeau de validité, et toute pastille de statut que le document
-     porterait. La consigne est posée sur le document seul — le reste
-     de la page ne s'imprime pas, il n'a pas à la recevoir. */
-  #doc-paper,
-  #doc-paper * {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
+  /* print-color-adjust est parti avec le bandeau de validité. Il levait
+     le blanchiment que les navigateurs appliquent aux fonds, et le
+     bandeau ambre était le seul fond du document à porter une
+     information. Ce qui reste sur la feuille se dit en encre : filets,
+     graisses et corps, que l’impression rend d’office. Le jour où le
+     document reprendra un aplat porteur de sens, une pastille de statut
+     par exemple, la consigne reviendra avec lui. */
 
   /* 4. Coupures propres.
      Le tableau peut s'étendre sur plusieurs feuilles, mais jamais au
@@ -518,7 +520,6 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
   .doc-total-row,
   .doc-paper-hdr,
   .doc-parties,
-  .doc-validity,
   .doc-conditions {
     break-inside: avoid;
     page-break-inside: avoid;
@@ -742,6 +743,11 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 <script src="/js/mup-confirm.js"></script>
 <script>
 const MONTHS_FR = ['jan.','fév.','mar.','avr.','mai','jun.','jul.','aoû.','sep.','oct.','nov.','déc.'];
+// Les mois entiers, réservés au DOCUMENT. Une feuille qui sort de
+// l’application se lit comme une pièce écrite : « Émis le 21 août 2026 ».
+// Les abrégés ci-dessus gardent leur emploi à l’écran, dans la liste et
+// dans les champs, où chaque colonne compte ses pixels.
+const MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
 // ── DONNÉES ──
 const MOCK_DOCS = [];
@@ -821,6 +827,17 @@ function fmtDate(d) {
   if(!d) return '—';
   const dt = new Date(d);
   return dt.getDate() + ' ' + MONTHS_FR[dt.getMonth()] + ' ' + dt.getFullYear();
+}
+
+// La date telle que le DOCUMENT la porte, mois en toutes lettres. Toute date
+// écrite sur la feuille passe par ici ; la liste et les champs de saisie
+// restent à fmtDate. Le cas de la date vide est délégué à fmtDate, pour que
+// la feuille et l’écran aient le même mot quand la date manque : une seule
+// écriture du marqueur, à un seul endroit.
+function fmtDateDoc(d) {
+  if(!d) return fmtDate(d);
+  const dt = new Date(d);
+  return dt.getDate() + ' ' + MOIS_FR[dt.getMonth()] + ' ' + dt.getFullYear();
 }
 
 function statusLabel(s) {
@@ -1030,7 +1047,8 @@ function renderPreview(d) {
         <div class="doc-paper-type">
           <div class="doc-paper-type-label">${isInvoice?'FACTURE':'DEVIS'}</div>
           <div class="doc-paper-num">N° ${esc(d.num)}</div>
-          <div class="doc-paper-date">Émis le ${fmtDate(d.date)}</div>
+          <div class="doc-paper-date">Émis le ${fmtDateDoc(d.date)}</div>
+          ${validityDate && !isInvoice ? `<div class="doc-paper-date">Valide jusqu’au ${fmtDateDoc(validityDate.toISOString().split('T')[0])}</div>` : ''}
         </div>
       </div>
 
@@ -1047,8 +1065,6 @@ function renderPreview(d) {
           <div class="doc-party-info">${esc(d.name)}<br>${esc(d.email)}<br>${esc(d.addr)}</div>
         </div>
       </div>
-
-      ${validityDate && !isInvoice ? `<div class="doc-validity"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-.26mm;margin-right:1.06mm"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Validité : ${fmtDate(validityDate.toISOString().split('T')[0])}</div>` : ''}
 
       <table class="doc-table">
         <thead>

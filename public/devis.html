@@ -294,15 +294,18 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    Ils descendent ici, sous le numéro du document et ses champs, à
    côté des boutons qui le font vivre. Un seul lieu, une seule pièce.
 
-   Deux groupes, séparés d'un filet, parce qu'ils ne font pas la même
-   chose : au-dessus la SORTIE — ce qui envoie la pièce dehors, sur du
-   papier, en PDF, par courriel, sans jamais la changer. En dessous le
-   CYCLE DE VIE — ce qui la change : enregistrer, accepter, convertir,
-   et supprimer en dernier, parce qu'on ne met pas la porte de sortie
-   au milieu du couloir. */
+   L'ordre suit le geste. ENREGISTRER ouvre la marche : on écrit
+   d'abord la pièce, on l'imprime ou on l'envoie ensuite — sortir un
+   brouillon qu'on n'a pas enregistré, c'est mettre dehors du papier
+   qui ne correspond à rien. Le filet vient donc sous lui, et sépare
+   ce qui CHANGE la pièce de ce qui la SORT : en dessous du trait,
+   Imprimer, PDF, Envoyer, qui l'emmènent dehors — sur du papier, en
+   PDF, par courriel — sans jamais y toucher. Puis le reste du CYCLE
+   DE VIE : accepter, convertir, et supprimer en dernier, parce qu'on
+   ne met pas la porte de sortie au milieu du couloir. */
 .edit-actions{padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:10px}
-.edit-actions-out{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
-.edit-actions-life{display:flex;flex-direction:column;gap:7px;padding-top:10px;border-top:1px solid var(--border)}
+.edit-actions-out{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding-top:10px;border-top:1px solid var(--border)}
+.edit-actions-life{display:flex;flex-direction:column;gap:7px}
 .btn-out{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:9px 6px;border-radius:9px;border:1.5px solid var(--border);background:var(--card);font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s}
 .btn-out:hover:not(:disabled){border-color:var(--text)}
 /* Sans document sélectionné, la sortie n'a rien à sortir. Le bouton
@@ -705,6 +708,9 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
     </div>
     <div class="edit-actions">
 
+      <!-- ENREGISTRER — le geste qui vient avant tous les autres. -->
+      <button class="btn-action primary" onclick="saveDoc()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Enregistrer</button>
+
       <!-- SORTIE — ne change pas la pièce, l'emmène dehors. -->
       <div class="edit-actions-out">
         <button class="btn-out" id="btn-print" onclick="printDoc()" disabled>
@@ -721,9 +727,8 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
         </button>
       </div>
 
-      <!-- CYCLE DE VIE — change la pièce. Supprimer ferme la marche. -->
+      <!-- SUITE DU CYCLE DE VIE — change la pièce. Supprimer ferme la marche. -->
       <div class="edit-actions-life">
-        <button class="btn-action primary" onclick="saveDoc()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Enregistrer</button>
         <button class="btn-action success" onclick="markAccepted()">✓ Marquer comme accepté</button>
         <button class="btn-action secondary" onclick="convertToInvoice()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Convertir en facture</button>
         <button class="btn-action danger" onclick="deleteDoc(this)">Supprimer</button>

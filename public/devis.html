@@ -20,7 +20,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoothing:antialiased;display:flex}
 
 /* SIDEBAR */
-.sidebar{width:220px;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 10px;flex-shrink:0;height:100vh;overflow-y:auto}
+/* La largeur ne se déclare pas ici. sidebar.css la pose sur
+   `aside#sidebar.sidebar`, dont la spécificité (un id) l'emporte sur ce
+   sélecteur de classe quel que soit l'ordre des feuilles : le
+   `width:220px` qui vivait là était déjà SANS EFFET. Il ne coûtait pas
+   156px à la colonne d'aperçu — il donnait à lire une largeur fixe que
+   la page n'avait pas, ce qui est une autre façon de mentir. La largeur
+   effective est --sidebar-w : dépliée au-delà de 1441px, bande d'icônes
+   de 64px entre 641 et 1440, tiroir hors flux en deçà. Les autres
+   déclarations de cette règle sont logées à la même enseigne et sont
+   laissées telles quelles : hors du sujet de cette passe. */
+.sidebar{background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 10px;flex-shrink:0;height:100vh;overflow-y:auto}
 .sb-logo{display:flex;align-items:center;gap:10px;padding:12px 8px 14px;border-bottom:1px solid var(--border);margin-bottom:8px}
 .sb-logo-icon{width:28px;height:28px;background:var(--text);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sb-logo-name{font-size:14px;font-weight:800;letter-spacing:-.3px}
@@ -75,38 +85,104 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .preview-btn.primary{background:var(--text);color:#fff;border-color:var(--text)}
 .preview-btn.green{background:rgba(29,131,72,.1);color:var(--green);border-color:rgba(29,131,72,.2)}
 .preview-btn.green:hover{background:var(--green);color:#fff}
-.preview-scroll{flex:1;overflow-y:auto;padding:24px;display:flex;justify-content:center}
+/* align-items:flex-start est indispensable, pas cosmétique : en flex
+   row le défaut est `stretch`, qui étirait la feuille à la hauteur de
+   la colonne. Une feuille dont la hauteur est celle de l'écran n'est
+   pas une feuille. C'est min-height:297mm, et lui seul, qui doit la
+   donner. */
+.preview-scroll{flex:1;overflow-y:auto;padding:24px;display:flex;justify-content:center;align-items:flex-start}
 .preview-scroll::-webkit-scrollbar{width:3px}
 .preview-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
-/* DOCUMENT PDF PREVIEW */
-.doc-paper{width:100%;max-width:640px;background:#fff;border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.12);padding:40px 48px;font-family:var(--font)}
-.doc-paper-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:24px;border-bottom:2px solid var(--text)}
-.doc-logo{font-size:20px;font-weight:900;letter-spacing:-.5px;color:var(--text)}
+/* ================================================================ */
+/* LE DOCUMENT — UNE FEUILLE A4, DITE EN MILLIMÈTRES                */
+/*                                                                  */
+/* Ce qu'on voit à l'écran est ce qui sortira sur la feuille. Le     */
+/* document n'est plus un bloc élastique plafonné à 640px : c'est    */
+/* une page de 210mm de large, haute d'AU MOINS 297mm, marges        */
+/* intérieures comprises (box-sizing:border-box, posé tout en haut). */
+/*                                                                  */
+/* Elle s'allonge quand le contenu déborde. C'est une feuille        */
+/* unique qui grandit, jamais une deuxième feuille à l'écran : ni    */
+/* mesure du contenu, ni découpe, ni pagination. Les coupures        */
+/* restent l'affaire du moteur d'impression, guidées par le § 4 de   */
+/* la feuille d'impression plus bas. Il faut le savoir et l'assumer  */
+/* — au-delà de la première page, l'écran donne le format, pas les   */
+/* frontières.                                                       */
+/*                                                                  */
+/* Les 14mm de marge intérieure sont, au millimètre près, ceux que   */
+/* @page portait ce matin : la zone de texte reste à 182mm et la     */
+/* sortie papier ne change pas. Ce qui change, c'est qui les porte.  */
+/*                                                                  */
+/* ---------------------------------------------------------------- */
+/* LA CONVERSION — aucune échelle inventée.                          */
+/*                                                                  */
+/* Le pixel CSS vaut 1/96 de pouce, donc 25,4/96 = 0,264583mm, sur   */
+/* l'écran comme sur le papier. Chaque valeur ci-dessous est son     */
+/* ancienne valeur en pixels multipliée par ce nombre, arrondie au   */
+/* centième de millimètre :                                          */
+/*                                                                  */
+/*     0,5px → 0,13mm      9px → 2,38mm      14px → 3,70mm          */
+/*       1px → 0,26mm    9,5px → 2,51mm      15px → 3,97mm          */
+/*     1,5px → 0,40mm     10px → 2,65mm      16px → 4,23mm          */
+/*       2px → 0,53mm     11px → 2,91mm      20px → 5,29mm          */
+/*       3px → 0,79mm     12px → 3,18mm      22px → 5,82mm          */
+/*       5px → 1,32mm   12,5px → 3,31mm      24px → 6,35mm          */
+/*       6px → 1,59mm                        28px → 7,41mm          */
+/*       7px → 1,85mm                        32px → 8,47mm          */
+/*       8px → 2,12mm                       240px → 63,50mm         */
+/*                                                                  */
+/* La conversion est donc EXACTE, et c'est le point : elle ne change */
+/* rien au rendu, ni à l'écran ni sur le papier. Un corps de 12,5px  */
+/* et un corps de 3,31mm sont le même corps. Ce qu'elle change est   */
+/* la lecture — le document se dit désormais dans l'unité de la      */
+/* feuille, et l'on voit du premier coup d'œil qu'un bloc de totaux  */
+/* de 63,5mm occupe un peu plus du tiers des 182mm de la ligne, là   */
+/* où « 240px » ne disait rien de la page (il en occupait 44% quand  */
+/* la feuille faisait 640px, et 35% dès qu'elle en fait 210mm : la   */
+/* même déclaration, deux mises en page).                            */
+/*                                                                  */
+/* Restent en pixels, et seulement eux : l'ombre portée et le rayon  */
+/* de la feuille, que l'impression retire de toute façon, et         */
+/* l'épaisseur des filets, qui est affaire de rendu et non de mise   */
+/* en page — un filet se règle sur le point de l'écran, pas sur le   */
+/* millimètre du papier.                                             */
+/* ================================================================ */
+
+/* flex-shrink:0 n'est pas une précaution : sans lui, la colonne étant
+   plus étroite que 210mm sur presque tous les écrans, le flex
+   reprendrait à la feuille la largeur qu'on vient de lui donner — la
+   refonte reviendrait par la porte de derrière. La réduction d'écran
+   se fait par `zoom`, et par lui seul (cf. watchDocScale plus bas). */
+.doc-paper{width:210mm;min-height:297mm;padding:14mm;flex-shrink:0;zoom:var(--doc-zoom,1);background:#fff;border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.12);font-family:var(--font)}
+.doc-paper-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8.47mm;padding-bottom:6.35mm;border-bottom:2px solid var(--text)}
+.doc-logo{font-size:5.29mm;font-weight:900;letter-spacing:-.13mm;color:var(--text)}
 .doc-logo span{color:var(--muted2);font-weight:400}
 .doc-paper-type{text-align:right}
-.doc-paper-type-label{font-size:22px;font-weight:900;letter-spacing:-.5px;color:var(--text)}
-.doc-paper-num{font-size:12px;font-weight:600;font-family:var(--mono);color:var(--muted);margin-top:3px}
-.doc-paper-date{font-size:11px;color:var(--muted2);margin-top:1px}
-.doc-parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px}
-.doc-party-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted2);margin-bottom:6px}
-.doc-party-name{font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px}
-.doc-party-info{font-size:12px;color:var(--muted);line-height:1.6}
-.doc-table{width:100%;border-collapse:collapse;margin-bottom:24px}
-.doc-table th{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);padding:8px 10px;border-bottom:1.5px solid var(--border);text-align:left}
+.doc-paper-type-label{font-size:5.82mm;font-weight:900;letter-spacing:-.13mm;color:var(--text)}
+.doc-paper-num{font-size:3.18mm;font-weight:600;font-family:var(--mono);color:var(--muted);margin-top:.79mm}
+.doc-paper-date{font-size:2.91mm;color:var(--muted2);margin-top:.26mm}
+.doc-parties{display:grid;grid-template-columns:1fr 1fr;gap:6.35mm;margin-bottom:7.41mm}
+.doc-party-label{font-size:2.38mm;font-weight:700;text-transform:uppercase;letter-spacing:.4mm;color:var(--muted2);margin-bottom:1.59mm}
+.doc-party-name{font-size:3.7mm;font-weight:700;color:var(--text);margin-bottom:.53mm}
+.doc-party-info{font-size:3.18mm;color:var(--muted);line-height:1.6}
+.doc-table{width:100%;border-collapse:collapse;margin-bottom:6.35mm}
+.doc-table th{font-size:2.51mm;font-weight:700;text-transform:uppercase;letter-spacing:.26mm;color:var(--muted2);padding:2.12mm 2.65mm;border-bottom:1.5px solid var(--border);text-align:left}
 .doc-table th:last-child,.doc-table td:last-child{text-align:right}
 .doc-table th:nth-child(2),.doc-table td:nth-child(2){text-align:center}
 .doc-table th:nth-child(3),.doc-table td:nth-child(3){text-align:right}
-.doc-table td{font-size:12.5px;padding:10px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:top}
+.doc-table td{font-size:3.31mm;padding:2.65mm 2.65mm;border-bottom:1px solid var(--border);color:var(--text);vertical-align:top}
 .doc-table td:first-child{font-weight:500}
 .doc-table tr:last-child td{border-bottom:none}
-.doc-totals{margin-left:auto;width:240px;margin-bottom:28px}
-.doc-total-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;color:var(--muted);border-bottom:1px solid var(--border)}
-.doc-total-row:last-child{border-bottom:none;padding-top:10px;font-size:15px;font-weight:800;color:var(--text);border-top:2px solid var(--text)}
+/* 63,5mm — la conversion exacte des 240px, soit ce que ce bloc mesure
+   DÉJÀ sur le papier aujourd'hui. L'écran seul changeait d'avis. */
+.doc-totals{margin-left:auto;width:63.5mm;margin-bottom:7.41mm}
+.doc-total-row{display:flex;justify-content:space-between;padding:1.32mm 0;font-size:3.31mm;color:var(--muted);border-bottom:1px solid var(--border)}
+.doc-total-row:last-child{border-bottom:none;padding-top:2.65mm;font-size:3.97mm;font-weight:800;color:var(--text);border-top:2px solid var(--text)}
 .doc-total-row:last-child span:last-child{font-family:var(--mono)}
-.doc-conditions{font-size:11px;color:var(--muted2);line-height:1.7;padding-top:20px;border-top:1px solid var(--border)}
+.doc-conditions{font-size:2.91mm;color:var(--muted2);line-height:1.7;padding-top:5.29mm;border-top:1px solid var(--border)}
 .doc-conditions strong{color:var(--muted);font-weight:600}
-.doc-validity{display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:7px;padding:6px 12px;font-size:11px;font-weight:600;color:#92400e;margin-bottom:16px}
+.doc-validity{display:inline-flex;align-items:center;gap:1.59mm;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:1.85mm;padding:1.59mm 3.18mm;font-size:2.91mm;font-weight:600;color:#92400e;margin-bottom:4.23mm}
 
 /* PANNEAU ÉDITION */
 .edit-col{display:flex;flex-direction:column;height:calc(100vh - var(--app-footer-h));overflow:hidden;background:var(--card)}
@@ -164,17 +240,34 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 /* — rails compris — et coupe le document au bas de la première      */
 /* feuille, car 100vh y vaut la hauteur d'UNE page.                  */
 /*                                                                  */
-/* Ce bloc lève la cascade, retire tout ce qui n'est pas le          */
-/* document, et laisse celui-ci reprendre le flux normal : largeur   */
-/* de page, autant de feuilles qu'il en faut. Aucune valeur de       */
-/* couleur, de corps, de graisse ou de famille n'est réécrite ici :  */
-/* c'est le même document, rendu sur le papier.                      */
+/* Ce bloc lève la cascade et retire tout ce qui n'est pas le        */
+/* document. Il ne lui donne PLUS son format : depuis que .doc-paper */
+/* mesure 210 × 297mm et porte ses marges, le document arrive au     */
+/* papier déjà à la taille du papier. Il n'a rien à recevoir ici —   */
+/* ni largeur, ni marges — et tout ce qui prétendrait les lui donner */
+/* défairait le gabarit au moment précis où il sert. Aucune valeur   */
+/* de couleur, de corps, de graisse ou de famille n'est réécrite     */
+/* non plus : c'est le même document, rendu sur le papier.           */
 /* ================================================================ */
 @media print {
 
-  /* Les marges du papier. Le document n'a donc plus à porter les
-     siennes : son padding d'écran tombe plus bas. */
-  @page { margin: 14mm; }
+  /* Le papier n'a plus de marge — c'est le document qui porte les
+     siennes, 14mm sur ses quatre côtés, les mêmes qu'ici auparavant.
+     La zone de texte reste donc à 182mm et la sortie ne change pas ;
+     seul change qui décide.
+
+     Les laisser à 14mm ferait déborder chaque feuille : la zone
+     imprimable tomberait à 182 × 269mm quand le document, lui, mesure
+     210 × 297. 28mm de trop dans les deux sens, et les deux excédents
+     ne finissent pas de la même façon. En hauteur, le moteur reporte :
+     chaque page rend un fragment de la suivante, une bande de 28mm, et
+     un devis d'une page en fait deux. En largeur, il ne reporte pas —
+     il coupe. Les 28mm de droite disparaissent sans que rien ne le
+     signale, et c'est le bord où vivent les montants.
+
+     Les deux marges ne peuvent pas coexister. Celle qui reste est
+     celle qu'on voit à l'écran, puisque c'est la promesse. */
+  @page { margin: 0; }
 
   /* 1. La cascade de hauteurs et de débordements tombe.
      Chaque règle ci-dessous défait un verrou relevé à l'écran :
@@ -228,15 +321,23 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   .mupc-overlay,
   #mup-toast { display: none !important; }
 
-  /* 3. Le décor d'écran part, le document prend la page.
-     Ombre portée, rayon et padding d'écran s'en vont — les marges
-     sont désormais celles de @page. La largeur n'est plus bornée à
-     640px : c'est la feuille qui la fixe. */
+  /* 3. Le décor d'écran part. Rien d'autre.
+     L'ombre portée et le rayon sont des affordances d'écran : ils
+     disent « ceci est une feuille » à qui regarde un écran, et n'ont
+     rien à dire à qui tient la feuille. Le zoom d'aperçu revient à 1
+     — il vaut la réduction de la COLONNE, laquelle n'existe pas ici ;
+     l'oublier imprimerait le devis à 70% dans un coin de la page.
+     Le margin:0 reste : à l'écran la feuille est un élément flex
+     centré, sur le papier elle doit être à fleur de page.
+
+     Ce qui n'est PAS ici : width, max-width, padding. Ils y étaient
+     tant que le document était un bloc de 640px à marges en pixels,
+     qu'il fallait délier pour qu'il prenne la page. Il EST la page
+     désormais ; les rendre au papier serait le seul moyen de casser
+     ce que ce bloc est censé protéger. */
   .doc-paper {
-    width: auto;
-    max-width: none;
+    zoom: 1;
     margin: 0;
-    padding: 0;
     box-shadow: none;
     border-radius: 0;
   }
@@ -708,7 +809,7 @@ function renderPreview(d) {
       <div class="doc-paper-hdr">
         <div>
           <div class="doc-logo">MUP <span>by So Paradi</span></div>
-          <div style="font-size:11px;color:var(--muted2);margin-top:6px;line-height:1.6">{company_sender}<br>Combourg, Bretagne<br>contact@exemple.fr</div>
+          <div style="font-size:2.91mm;color:var(--muted2);margin-top:1.59mm;line-height:1.6">{company_sender}<br>Combourg, Bretagne<br>contact@exemple.fr</div>
         </div>
         <div class="doc-paper-type">
           <div class="doc-paper-type-label">${isInvoice?'FACTURE':'DEVIS'}</div>
@@ -730,7 +831,7 @@ function renderPreview(d) {
         </div>
       </div>
 
-      ${validityDate && !isInvoice ? `<div class="doc-validity"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Validité : ${fmtDate(validityDate.toISOString().split('T')[0])}</div>` : ''}
+      ${validityDate && !isInvoice ? `<div class="doc-validity"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-.26mm;margin-right:1.06mm"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Validité : ${fmtDate(validityDate.toISOString().split('T')[0])}</div>` : ''}
 
       <table class="doc-table">
         <thead>
@@ -747,7 +848,7 @@ function renderPreview(d) {
       <div class="doc-totals">
         <div class="doc-total-row"><span>Sous-total HT</span><span>${fmt(t.ht)}</span></div>
         <div class="doc-total-row"><span>${tva==0?'TVA non applicable (art. 293B CGI)':'TVA '+tva+'%'}</span><span>${tva==0?'—':fmt(t.tva)}</span></div>
-        <div class="doc-total-row" style="font-weight:800;font-size:14px;border-top:2px solid var(--text);padding-top:10px;margin-top:4px"><span>Total TTC</span><span style="font-family:var(--mono)">${fmt(t.ttc)}</span></div>
+        <div class="doc-total-row" style="font-weight:800;font-size:3.7mm;border-top:2px solid var(--text);padding-top:2.65mm;margin-top:1.06mm"><span>Total TTC</span><span style="font-family:var(--mono)">${fmt(t.ttc)}</span></div>
       </div>
 
       <div class="doc-conditions">
@@ -848,6 +949,69 @@ async function deleteDoc(btn) {
 
 function sendDoc() { showToast('Envoi email — disponible en v2'); }
 
+// ── L'ÉCHELLE D'ÉCRAN ──────────────────────────────────────────────
+// La feuille mesure 210mm, soit 793,7px. La colonne d'aperçu ne les a
+// presque jamais : elle vaut la largeur de fenêtre moins le rail, la
+// liste (300px), l'édition (380px) et ses propres 48px de marge — il
+// faut environ 1800px de fenêtre pour la loger à taille réelle. En
+// dessous, il faut réduire. Réduire la FEUILLE ENTIÈRE, texte compris,
+// comme une photocopie — et non la laisser refondre plus étroite avec
+// des corps restés à leur taille, ce qu'elle faisait jusqu'ici en
+// silence, sans que rien ne signale que le format affiché n'était plus
+// le format de sortie.
+//
+// Deux voies mènent là. Elles ont été pesées, pas départagées au sort :
+//
+//   • transform: scale(k) ne touche pas à la mise en page. La feuille
+//     est PEINTE réduite mais continue d'OCCUPER 210 × 297mm dans le
+//     flux : la colonne réserve la place du format réel, d'où une
+//     bande vide à droite, un centrage faux et un défilement vertical
+//     bien plus long que le document. Il faudrait compenser les deux.
+//     Celle en largeur se calcule ; celle en hauteur, non — la hauteur
+//     du document n'est connue qu'APRÈS rendu, et c'est exactement la
+//     mesure de contenu que le gabarit s'interdit. La voie se ferme là.
+//
+//   • zoom: k refait la mise en page. La feuille réduite occupe
+//     réellement la place qu'elle montre : centrage juste, défilement
+//     juste, aucune compensation, rien à tenir à jour. Le doute portait
+//     sur le support, il est levé : historique dans Chrome, Edge et
+//     Safari, et Firefox depuis la 126 (mai 2024) ; la propriété a
+//     rejoint le standard (CSS Viewport) et n'est plus l'extension
+//     propriétaire qu'elle a longtemps été.
+//
+// C'est zoom qui est retenu, parce qu'il est le seul des deux à ne rien
+// demander en échange.
+//
+// Le facteur, lui, ne peut pas se calculer en CSS : calc() ne divise
+// pas une longueur par une longueur, il n'existe donc pas de
+// « 100cqi / 210mm ». On le mesure ici. Ce qui est mesuré est la
+// largeur du CONTENEUR, jamais celle du contenu : aucune pagination
+// n'entre par cette porte.
+//
+// Plafond à 1. Sous 210mm on réduit ; au-dessus on ne grandit pas. Un
+// devis montré plus grand que nature n'aide personne et mentirait sur
+// le papier tout autant que la refonte qu'on vient de retirer.
+const A4_WIDTH_PX = 210 * 96 / 25.4;   // 793,70px
+
+function watchDocScale() {
+  const area = document.getElementById('preview-area');
+  if(!area) return;
+  // contentRect est la boîte de CONTENU : les 24px de marge de part et
+  // d'autre en sont déjà retirés, il n'y a donc pas de constante à
+  // tenir en double avec la feuille de style.
+  const ro = new ResizeObserver(entries => {
+    for(const e of entries) {
+      const w = e.contentRect.width;
+      // Une colonne de largeur nulle — page masquée, onglet en fond —
+      // donnerait un zoom nul, c'est-à-dire un document invisible. On
+      // garde alors la dernière échelle connue.
+      if(!(w > 0)) continue;
+      area.style.setProperty('--doc-zoom', String(Math.min(1, w / A4_WIDTH_PX)));
+    }
+  });
+  ro.observe(area);
+}
+
 // #doc-paper n'existe qu'une fois que renderPreview a écrit un document dans
 // la colonne d'aperçu. Sans lui, la feuille d'impression n'aurait rien à
 // rendre : le refus se dit dans la page plutôt que sur une page blanche.
@@ -871,6 +1035,10 @@ function showToast(msg) {
 
 // Init
 (async () => {
+  // Posé avant les await : l'observateur rend une première mesure dès
+  // qu'il observe, donc l'échelle est en place avant que le premier
+  // document ne soit écrit dans la colonne.
+  watchDocScale();
   await loadAccountRegime();
   await loadDocs();
   document.getElementById('filter-client-clear').addEventListener('click', () => {

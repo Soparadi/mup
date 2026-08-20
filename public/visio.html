@@ -335,8 +335,11 @@ body.outils-deplies .my-link-field.vide{display:flex}
    seule ferait sauter l'écran d'un habillage à l'autre selon l'état du compte.
    Leur titre et leur texte ne sont plus habillés ici : ils prennent les règles
    du panneau, .mes-carte h2 et .mes-carte p, étendues à .mes-bloc. Ne reste que
-   la gouttière, qui espace titre, texte et bouton. Rouvrir n'est pas fermer. */
-.empty-state .face{display:none;flex-direction:column;align-items:center;gap:14px}
+   la gouttière, qui espace titre, texte et bouton. Rouvrir n'est pas fermer.
+   Elles sont posées dans une .mes-pile : `display` ne les départage plus — ce
+   serait rendre la carte à la hauteur de la face du moment — c'est `.actif` qui
+   le fait, et la carte garde la hauteur de la face la plus longue. */
+.empty-state .face{display:flex;flex-direction:column;align-items:center;gap:14px}
 
 /* —— BRIEFING + VISIO + DOCS LAYOUT —— */
 /* Base de contenu, et surtout PAS min-height:0 : sa hauteur minimale reste
@@ -731,6 +734,26 @@ body.outils-deplies .my-link-field.vide{display:flex}
     var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
 }
 .mes-corps{padding:30px 34px 26px;overflow-y:auto}
+
+/* —— LA PILE : LA CARTE NE RESPIRE PLUS AU RYTHME DE SON CONTENU ——
+   Les quatre temps du panneau, ses deux groupes d'actions de pied et les trois
+   faces de l'état vide se remplacent tous AU MÊME ENDROIT. Chacun était retiré
+   du flux quand un autre paraissait (display:none) : la carte prenait la hauteur
+   de ce qu'elle montrait, et sautait d'un temps à l'autre comme d'une face à
+   l'autre.
+   Ils sont désormais empilés dans une seule cellule de grille. Tous y sont
+   mesurés ensemble, et c'est le PLUS LONG qui donne sa hauteur à la pile.
+   Aucune valeur n'est posée ici : la hauteur est prise sur le temps le plus
+   long, relevée par le navigateur à chaque largeur de carte. Un nombre écrit à
+   la main aurait été juste à 600 px et faux partout où le texte se replie
+   autrement.
+   Ce qui est caché l'est par VISIBILITÉ et non par affichage : c'est ce qui le
+   laisse occuper sa cellule — donc compter dans la mesure — tout en le retirant
+   de l'écran, de l'ordre de tabulation et des lecteurs d'écran. */
+.mes-pile{display:grid}
+.mes-pile > *{grid-area:1 / 1;visibility:hidden}
+.mes-pile > .actif{visibility:visible}
+
 .mes-surtitre{
   font-size:12px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
   color:var(--mes-surtitre);margin-bottom:14px;
@@ -752,6 +775,11 @@ body.outils-deplies .my-link-field.vide{display:flex}
   gap:16px;flex-wrap:wrap;
 }
 .mes-note{font-size:12px;line-height:1.5;color:var(--mes-surtitre);flex:1;min-width:180px}
+/* Le pied porte les DEUX groupes d'actions en permanence, empilés : sa hauteur
+   est celle du plus haut — le groupe des documents, qui a un bouton — et ne
+   varie donc plus selon le temps affiché. Les temps qui n'ont pas d'action
+   gardent le même pied, vide. */
+.mes-pied-pile{flex-shrink:0}
 .mes-pied-actions{display:flex;align-items:center;gap:16px;flex-shrink:0}
 .mes-btn{
   background:var(--mes-bouton);color:#fff;
@@ -1069,7 +1097,14 @@ body #mup-cookie-panel{z-index:60001}
 
     <!-- COL CENTRE : BRIEFING + VISIO -->
     <div class="col-center">
-      <div class="empty-state" id="emptyState">
+      <!-- Masqué en style EN LIGNE, comme #visioActive et comme le panneau, et
+           révélé par refletColonneCentre seul. La feuille de style le peignait
+           dès le premier rendu, avant que la lecture des réglages ait dit s'il
+           fallait ouvrir le panneau : on voyait passer sa carte — plus étroite,
+           parce que cadrée sur la colonne et non sur la page — puis le voile
+           tomber dessus. Le clignotement n'était pas dans le JS, il était dans
+           le repli de la feuille. -->
+      <div class="empty-state" id="emptyState" style="display:none">
         <!-- LA CARTE DE L'ÉTAT VIDE — le vêtement du panneau, moins le voile et
              moins l'ombre : un bloc de page, pas une fenêtre. Elle tient les
              TROIS faces ensemble, parce qu'elles se remplacent au même endroit.
@@ -1081,30 +1116,36 @@ body #mup-cookie-panel{z-index:60001}
             <div class="empty-icone" aria-hidden="true">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
             </div>
-            <!-- La face de la page OPÉRANTE : un lien est enregistré ET un
-                 rendez-vous en visio est programmé. C'est aussi la face du doute —
-                 elle n'affirme rien de l'abonné, elle propose. -->
-            <div class="face" id="emptyOperant">
-              <h2>Prêt à lancer une visio</h2>
-              <p>Cliquez sur l'un de vos outils en haut pour démarrer, ou sélectionnez un rendez-vous programmé dans la liste.</p>
-            </div>
-            <!-- La face de la page SANS OUTIL, d'un texte unique : elle dit ce que
-                 la page fera, que le report ait été pris ou pas, et l'offre de la
-                 mettre en service y tient sans conditionner la promesse. Le bouton
-                 ROUVRE le panneau — rouvrir n'est pas fermer. -->
-            <div class="face" id="emptyReport">
-              <h2>Vos visios partiront d’ici.</h2>
-              <p>Ajoutez l’adresse de votre salle quand vous voudrez : elle sera proposée à chaque rendez-vous, et la fiche du prospect restera à côté de l’appel.</p>
-              <button class="mes-btn" id="reprendreMiseEnService">Mettre en service</button>
-            </div>
-            <!-- La face de la page ÉQUIPÉE et encore sans rendez-vous : le lien est
-                 posé, la page ne demande plus rien de sa mise en service, il lui
-                 manque seulement de quoi travailler. Elle NOMME le bouton de la
-                 barre du haut au lieu d'en poser un second, et rien ne la voile :
-                 c'est une invitation, pas une prise en otage. -->
-            <div class="face" id="emptyPremierRdv">
-              <h2>Votre salle est en service.</h2>
-              <p>Programmez votre premier rendez-vous avec le bouton « Programmer RDV », en haut de la page : il rejoindra la liste de gauche, et votre lien y sera proposé d’office.</p>
+            <!-- LA PILE DES TROIS FACES. Elles se remplacent au même endroit :
+                 elles y sont donc posées ensemble, toutes mesurées, et la carte
+                 garde la hauteur de la plus longue quelle que soit celle qui
+                 paraît. C'est `.actif` qui les départage, jamais `display`. -->
+            <div class="mes-pile">
+              <!-- La face de la page OPÉRANTE : un lien est enregistré ET un
+                   rendez-vous en visio est programmé. C'est aussi la face du doute —
+                   elle n'affirme rien de l'abonné, elle propose. -->
+              <div class="face" id="emptyOperant">
+                <h2>Prêt à lancer une visio</h2>
+                <p>Cliquez sur l'un de vos outils en haut pour démarrer, ou sélectionnez un rendez-vous programmé dans la liste.</p>
+              </div>
+              <!-- La face de la page SANS OUTIL, d'un texte unique : elle dit ce que
+                   la page fera, que le report ait été pris ou pas, et l'offre de la
+                   mettre en service y tient sans conditionner la promesse. Le bouton
+                   ROUVRE le panneau — rouvrir n'est pas fermer. -->
+              <div class="face" id="emptyReport">
+                <h2>Vos visios partiront d’ici.</h2>
+                <p>Ajoutez l’adresse de votre salle quand vous voudrez : elle sera proposée à chaque rendez-vous, et la fiche du prospect restera à côté de l’appel.</p>
+                <button class="mes-btn" id="reprendreMiseEnService">Mettre en service</button>
+              </div>
+              <!-- La face de la page ÉQUIPÉE et encore sans rendez-vous : le lien est
+                   posé, la page ne demande plus rien de sa mise en service, il lui
+                   manque seulement de quoi travailler. Elle NOMME le bouton de la
+                   barre du haut au lieu d'en poser un second, et rien ne la voile :
+                   c'est une invitation, pas une prise en otage. -->
+              <div class="face" id="emptyPremierRdv">
+                <h2>Votre salle est en service.</h2>
+                <p>Programmez votre premier rendez-vous avec le bouton « Programmer RDV », en haut de la page : il rejoindra la liste de gauche, et votre lien y sera proposé d’office.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -1217,61 +1258,86 @@ body #mup-cookie-panel{z-index:60001}
       <p class="mes-surtitre" id="mesSurtitre">Mise en service</p>
       <h2 id="mesTitre">Vos visios, prêtes à l'emploi.</h2>
 
-      <!-- PREMIER TEMPS — L'OUTIL. Un seul lien suffit à rendre la page
-           opérante et à retirer le panneau : un abonné ne choisit pas son
-           outil, il subit celui de son client, et n'en propose qu'un quand
-           c'est lui qui invite. -->
-      <div id="accueilIntro">
-        <p>Collez l'adresse de votre salle de visioconférence : elle sera proposée à chaque rendez-vous, et reste modifiable en un instant. Le reste suit tout seul — la fiche du prospect à côté de l'appel, vos documents à portée, vos notes rangées sur la fiche, et le devis qui part de là.</p>
-        <p>Avec quel outil appelez-vous ?</p>
-        <div class="accueil-choix">
-          <button class="accueil-outil" data-accueil-outil="zoom"><span class="ld" style="background:var(--zoom)"></span>Zoom</button>
-          <button class="accueil-outil" data-accueil-outil="teams"><span class="ld" style="background:var(--teams)"></span>Teams</button>
-          <button class="accueil-outil" data-accueil-outil="meet"><span class="ld" style="background:var(--meet)"></span>Meet</button>
-        </div>
-        <button class="accueil-retour" id="mesAucunOutil">Découvrir les outils</button>
-      </div>
+      <!-- LA PILE DES QUATRE TEMPS. Ils se remplacent au même endroit : ils y
+           sont posés ensemble, tous mesurés, et la carte garde la hauteur du
+           temps le plus long quel que soit celui qui paraît. C'est `.actif` qui
+           les départage, jamais `display` — d'où l'absence de style en ligne sur
+           les trois qui ne paraissent pas d'abord : il gagnerait sur la règle.
+           Chacun se termine par le MÊME dernier rang, un .accueil-retour, qui
+           ramène au choix de l'outil (au premier temps, qui EST ce choix, il
+           ouvre le conseil). Aucun temps n'est un cul-de-sac. -->
+      <div class="mes-pile">
 
-      <div id="accueilSaisie" style="display:none">
-        <p class="accueil-outil-choisi"><span class="ld" id="accueilOutilPuce"></span><span id="accueilOutilNom">—</span></p>
-        <p id="accueilAide">—</p>
-        <div class="accueil-form">
-          <input type="url" id="accueilLien" placeholder="https://…">
-          <button class="mes-btn" id="accueilEnregistrer">Enregistrer</button>
+        <!-- PREMIER TEMPS — L'OUTIL. Un seul lien suffit à rendre la page
+             opérante et à retirer le panneau : un abonné ne choisit pas son
+             outil, il subit celui de son client, et n'en propose qu'un quand
+             c'est lui qui invite. -->
+        <div id="accueilIntro">
+          <p>Collez l'adresse de votre salle de visioconférence : elle sera proposée à chaque rendez-vous, et reste modifiable en un instant. Le reste suit tout seul — la fiche du prospect à côté de l'appel, vos documents à portée, vos notes rangées sur la fiche, et le devis qui part de là.</p>
+          <p>Avec quel outil appelez-vous ?</p>
+          <div class="accueil-choix">
+            <button class="accueil-outil" data-accueil-outil="zoom"><span class="ld" style="background:var(--zoom)"></span>Zoom</button>
+            <button class="accueil-outil" data-accueil-outil="teams"><span class="ld" style="background:var(--teams)"></span>Teams</button>
+            <button class="accueil-outil" data-accueil-outil="meet"><span class="ld" style="background:var(--meet)"></span>Meet</button>
+          </div>
+          <button class="accueil-retour" id="mesAucunOutil">Découvrir les outils</button>
         </div>
-        <button class="accueil-retour" id="accueilRetour">Choisir un autre outil</button>
-      </div>
 
-      <!-- QUATRIÈME ISSUE — elle CONSEILLE au lieu de renvoyer à un champ
-           vide. Meet est le conseil honnête : un compte Google suffit. Mais
-           l'abonné doit tout de même aller créer son évènement et revenir
-           coller le lien — on ne peut pas le faire à sa place, et cette
-           branche le dit plutôt que de le laisser devant trois boutons. -->
-      <div id="mesConseil" style="display:none">
-        <p class="accueil-outil-choisi"><span class="ld" style="background:var(--meet)"></span>Notre conseil : Google Meet</p>
-        <p>Un compte Google suffit, la création prend une minute, et c'est l'outil le plus répandu chez les petites structures — vos interlocuteurs sauront s'en servir.</p>
-        <p>Ouvrez Google Agenda, créez un évènement récurrent en y ajoutant une visioconférence, puis revenez coller son lien ici : il restera le même pour toutes les occurrences. Nous ne pouvons pas le créer à votre place.</p>
-        <div class="accueil-choix">
-          <button class="accueil-outil" data-accueil-outil="meet"><span class="ld" style="background:var(--meet)"></span>J'ai mon lien Meet</button>
+        <div id="accueilSaisie">
+          <p class="accueil-outil-choisi"><span class="ld" id="accueilOutilPuce"></span><span id="accueilOutilNom">—</span></p>
+          <p id="accueilAide">—</p>
+          <div class="accueil-form">
+            <input type="url" id="accueilLien" placeholder="https://…">
+            <button class="mes-btn" id="accueilEnregistrer">Enregistrer</button>
+          </div>
+          <button class="accueil-retour" id="accueilRetour">Choisir un autre outil</button>
         </div>
-        <button class="accueil-retour" id="mesConseilRetour">Revenir au choix de l'outil</button>
-      </div>
 
-      <!-- SECOND TEMPS — LES DOCUMENTS. Il ne bloque pas : une visio se tient
-           très bien sans document, et un abonné pressé passe outre. -->
-      <div id="mesDocuments" style="display:none">
-        <p><strong>Ce que vous montrez pendant l'appel.</strong> Plaquette, grille tarifaire, démonstration : déposez-les depuis le poste avec lequel vous animez vos visios. Les fichiers restent sur cet appareil, dans ce navigateur ; seule leur description est enregistrée à votre compte.</p>
-      </div>
+        <!-- QUATRIÈME ISSUE — elle CONSEILLE au lieu de renvoyer à un champ
+             vide. Meet est le conseil honnête : un compte Google suffit. Mais
+             l'abonné doit tout de même aller créer son évènement et revenir
+             coller le lien — on ne peut pas le faire à sa place, et cette
+             branche le dit plutôt que de le laisser devant trois boutons. -->
+        <div id="mesConseil">
+          <p class="accueil-outil-choisi"><span class="ld" style="background:var(--meet)"></span>Notre conseil : Google Meet</p>
+          <p>Un compte Google suffit, la création prend une minute, et c'est l'outil le plus répandu chez les petites structures — vos interlocuteurs sauront s'en servir.</p>
+          <p>Ouvrez Google Agenda, créez un évènement récurrent en y ajoutant une visioconférence, puis revenez coller son lien ici : il restera le même pour toutes les occurrences. Nous ne pouvons pas le créer à votre place.</p>
+          <div class="accueil-choix">
+            <button class="accueil-outil" data-accueil-outil="meet"><span class="ld" style="background:var(--meet)"></span>J'ai mon lien Meet</button>
+          </div>
+          <button class="accueil-retour" id="mesConseilRetour">Revenir au choix de l'outil</button>
+        </div>
+
+        <!-- SECOND TEMPS — LES DOCUMENTS. Il ne bloque pas : une visio se tient
+             très bien sans document, et un abonné pressé passe outre. -->
+        <div id="mesDocuments">
+          <p><strong>Ce que vous montrez pendant l'appel.</strong> Plaquette, grille tarifaire, démonstration : déposez-les depuis le poste avec lequel vous animez vos visios. Les fichiers restent sur cet appareil, dans ce navigateur ; seule leur description est enregistrée à votre compte.</p>
+          <!-- Le chemin du retour, qui manquait ici seul. Un lien enregistré se
+               change et s'en ajoute d'autres : arriver aux documents ne doit pas
+               fermer la porte de l'outil. Il n'efface rien et n'écrit rien — le
+               lien déjà enregistré reste ce qu'il est, en mémoire comme en base. -->
+          <button class="accueil-retour" id="mesDocumentsRetour">Revenir au choix de l'outil</button>
+        </div>
+
+      </div><!-- .mes-pile -->
     </div>
 
     <div class="mes-pied">
       <span class="mes-note" id="mesNote">—</span>
-      <div class="mes-pied-actions" id="mesPiedConseil" style="display:none">
-        <button class="mes-lien" id="mesConseilPlusTard">Je verrai plus tard</button>
-      </div>
-      <div class="mes-pied-actions" id="mesPiedDocs" style="display:none">
-        <button class="mes-lien" id="mesPlusTard">Je le ferai plus tard</button>
-        <button class="mes-btn" id="mesAjouterDoc">Ajouter un document</button>
+      <!-- LA PILE DES DEUX GROUPES D'ACTIONS. Le pied gardait la hauteur du
+           groupe affiché, et n'en avait aucun aux deux premiers temps : il
+           maigrissait de la hauteur d'un bouton d'un temps à l'autre. Les deux
+           groupes y sont maintenant posés ensemble, le pied prend la hauteur du
+           plus haut — celui des documents — et les temps sans action gardent le
+           même pied, vide. -->
+      <div class="mes-pile mes-pied-pile">
+        <div class="mes-pied-actions" id="mesPiedConseil">
+          <button class="mes-lien" id="mesConseilPlusTard">Je verrai plus tard</button>
+        </div>
+        <div class="mes-pied-actions" id="mesPiedDocs">
+          <button class="mes-lien" id="mesPlusTard">Je le ferai plus tard</button>
+          <button class="mes-btn" id="mesAjouterDoc">Ajouter un document</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1884,10 +1950,14 @@ function accueilEtapeSaisie(provider){
    aucunLienEnregistre() reste donc intact, et avec lui les refus de lancement
    et de prise de rendez-vous : ils refusent par construction, pas par
    précaution ajoutée.
-   Un report vaut pour l'ÉTAT où il a été pris, pas pour toujours — le premier
-   lien enregistré l'efface. Sans cela, l'abonné qui reporte, s'équipe, puis
-   efface son dernier lien ne reverrait jamais le panneau, alors qu'il n'a plus
-   de quoi lancer une visio. */
+   Un report vaut pour l'ÉTAT où il a été pris, pas pour toujours, et il tombe
+   donc dès qu'un lien EXISTE — pas seulement à l'instant où l'on en écrit un.
+   Deux endroits l'effacent, et il en faut deux : l'écriture d'un lien, qui
+   prend le report en cours de session ; et la fermeture du panneau sur une page
+   déjà équipée, qui prend celui qu'un abonné équipé vient de poser en repassant
+   par « Découvrir les outils ». Sans le second, ce report survivait au panneau
+   et empêchait son retour le jour où l'abonné efface son dernier lien — alors
+   qu'il n'a de nouveau plus de quoi lancer une visio. */
 function reportPris(){ try{ return localStorage.getItem(LS.ACCUEIL_DIFFERE) === '1' }catch{ return false } }
 function poserReport(){ try{ localStorage.setItem(LS.ACCUEIL_DIFFERE, '1') }catch{} }
 function effacerReport(){ try{ localStorage.removeItem(LS.ACCUEIL_DIFFERE) }catch{} }
@@ -1914,18 +1984,23 @@ const MES_VISAGES = {
     note:"Ce temps ne bloque rien : une visio se tient très bien sans document."
   }
 };
+/* Le visage se pose par CLASSE et non par `display` : les quatre temps et les
+   deux groupes d'actions du pied vivent dans des .mes-pile, où celui qui ne
+   paraît pas garde sa cellule pour que la carte se mesure sur le plus long.
+   Écrire `display` ici les retirerait du flux et rendrait la carte à la hauteur
+   de ce qu'elle montre — exactement ce dont on sort. */
 function mesEtape(nom){
   const visage = MES_VISAGES[nom];
   if(!visage) return;
   mesEtapeCourante = nom;
   Object.keys(MES_VISAGES).forEach(k=>{
-    $(MES_VISAGES[k].bloc).style.display = (k === nom) ? '' : 'none';
+    $(MES_VISAGES[k].bloc).classList.toggle('actif', k === nom);
   });
   $('mesSurtitre').textContent = visage.surtitre;
   $('mesTitre').textContent = visage.titre;
   $('mesNote').textContent = visage.note;
-  $('mesPiedConseil').style.display = (nom === 'conseil') ? 'flex' : 'none';
-  $('mesPiedDocs').style.display = (nom === 'documents') ? 'flex' : 'none';
+  $('mesPiedConseil').classList.toggle('actif', nom === 'conseil');
+  $('mesPiedDocs').classList.toggle('actif', nom === 'documents');
 }
 
 function panneauTientLaPage(){ return $('panneauMiseEnService').style.display !== 'none'; }
@@ -1967,6 +2042,13 @@ function fermerPanneau(){
   $('panneauMiseEnService').style.display = 'none';
   document.body.classList.remove('mise-en-service');
   figerLaPage(false);
+  // Le report tombe si un lien EXISTE, et pas seulement quand on vient d'en
+  // écrire un : la page est équipée, le report n'a plus rien à retenir. C'est
+  // le cas de l'abonné déjà équipé qui repasse par « Découvrir les outils »
+  // depuis les documents — il en poserait un au passage, et ce report survivrait
+  // au panneau jusqu'à lui interdire de revenir le jour où il efface son dernier
+  // lien. Jugé sur la VALEUR des liens, par le juge unique de « pas équipé ».
+  if(!aucunLienEnregistre()) effacerReport();
   // La colonne du centre lui est rendue, avec ses trois faces. L'appel est ICI
   // et non dans les écouteurs : c'est le passage obligé des TROIS sorties — « je
   // verrai plus tard », « je le ferai plus tard », « ajouter un document » — et
@@ -2027,9 +2109,12 @@ function refletEtatVide(){
   const reglagesLus     = lectureReglagesAboutie();
   const sansOutilAvere  = reglagesLus && aucunLienEnregistre();
   const premierRdvAvere = reglagesLus && !aucunLienEnregistre() && rdvsProgrammes === 0;
-  $('emptyReport').style.display     = sansOutilAvere  ? 'flex' : 'none';
-  $('emptyPremierRdv').style.display = premierRdvAvere ? 'flex' : 'none';
-  $('emptyOperant').style.display    = (sansOutilAvere || premierRdvAvere) ? 'none' : 'flex';
+  // Par CLASSE, pour la même raison que les temps du panneau : les trois faces
+  // vivent dans une .mes-pile et celle qui ne paraît pas garde sa cellule, sans
+  // quoi la carte reprendrait la hauteur de la face du moment.
+  $('emptyReport').classList.toggle('actif', sansOutilAvere);
+  $('emptyPremierRdv').classList.toggle('actif', premierRdvAvere);
+  $('emptyOperant').classList.toggle('actif', !(sansOutilAvere || premierRdvAvere));
 }
 
 // Le seul reflet de la mise en service. Trois surfaces en dépendent, aucune ne
@@ -2070,6 +2155,13 @@ $('mesConseilPlusTard').addEventListener('click', ()=>{ fermerPanneau(); refletE
    enregistré à ce stade — le panneau n'a plus de raison d'être et se retire de
    lui-même. Poser un report ici n'aurait rien à retenir. */
 $('mesPlusTard').addEventListener('click', fermerPanneau);
+
+/* LE RETOUR DU TEMPS DES DOCUMENTS. Il n'efface rien et n'écrit rien : ni le
+   lien enregistré, ni le report — il ne fait que ramener au choix de l'outil,
+   d'où l'on peut en changer ou en ajouter un second. C'est le seul des quatre
+   temps qui n'avait pas de chemin de retour, et arriver aux documents fermait
+   donc la porte de l'outil jusqu'à la sortie du panneau. */
+$('mesDocumentsRetour').addEventListener('click', ()=>mesEtape('choix'));
 
 // La porte des documents est celle qui existe déjà — le tiroir et sa modale
 // d'ajout, qui fonctionnent sans rendez-vous sélectionné. Le panneau se retire

@@ -15,6 +15,11 @@
   --green:#1D8348;--orange:#B84C00;--red:#CC0000;--blue:#0A66C2;
   --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
   --mono:'Geist Mono','SF Mono','Menlo',monospace;
+  /* Largeur de la bande étroite qui reste quand la liste se replie.
+     Elle vit ici parce que DEUX règles la lisent : la piste de grille
+     et la position de la liste rouverte en surimpression, qui se pose
+     juste à sa droite. Deux endroits, une valeur. */
+  --list-rail-w:52px;
 }
 html,body{height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoothing:antialiased;display:flex}
@@ -41,10 +46,45 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .sb-icon{width:22px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 
 /* SHELL */
-.shell{flex:1;display:grid;grid-template-columns:300px 1fr 380px;height:calc(100vh - var(--app-footer-h));overflow:hidden}
+/* La piste de gauche est une variable, pas une constante : c'est elle,
+   et elle SEULE, que le repli change. 300px dépliée, --list-rail-w
+   repliée. La piste d'aperçu, en 1fr, reçoit mécaniquement la
+   différence — ce qui suffit à faire recalculer l'échelle de la
+   feuille, puisque l'observateur mesure cette colonne (cf. § échelle
+   d'écran, tout en bas). */
+.shell{flex:1;display:grid;grid-template-columns:var(--list-w,300px) 1fr 380px;height:calc(100vh - var(--app-footer-h));overflow:hidden}
+body.list-folded .shell{--list-w:var(--list-rail-w)}
 
 /* LISTE GAUCHE */
+/* .list-slot est la case de grille ; la liste et sa bande vivent
+   dedans. Le conteneur ne porte AUCUN overflow : repliée puis
+   rouverte, la liste déborde volontairement de ses 52px pour passer
+   par-dessus le document, et un overflow:hidden posé ici la
+   retaillerait à la bande. */
+.list-slot{position:relative;min-width:0}
 .list-col{display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--card);height:calc(100vh - var(--app-footer-h));overflow:hidden}
+
+/* Repliée, la liste n'est plus là ; rouverte à la main, elle revient
+   EN SURIMPRESSION, à droite de la bande, sans reprendre sa piste :
+   la colonne d'aperçu ne bouge pas, donc l'échelle de la feuille ne
+   bouge pas non plus. C'est le but — rouvrir la liste pour choisir un
+   devis ne doit pas redessiner le document qu'on est en train de
+   lire. */
+body.list-folded .list-col{display:none}
+body.list-folded.list-open .list-col{display:flex;position:absolute;top:0;left:var(--list-rail-w);width:300px;z-index:40;box-shadow:0 10px 44px rgba(0,0,0,.20)}
+
+/* LA BANDE — elle dit ce qu'elle cache : le nombre de documents que la
+   liste contient (filtres compris, c'est bien cette liste-là qui est
+   masquée). Un seul bouton, qui ouvre et referme. « Nouveau » n'y
+   figure pas : il a rejoint l'en-tête de la colonne d'édition, où il
+   reste atteignable sans rouvrir quoi que ce soit. */
+.list-rail{display:none}
+body.list-folded .list-rail{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;height:calc(100vh - var(--app-footer-h));padding:16px 0;border:none;border-right:1px solid var(--border);background:var(--card);font-family:var(--font);color:var(--muted);cursor:pointer;transition:background .12s,color .12s}
+body.list-folded .list-rail:hover{background:var(--surface);color:var(--text)}
+.list-rail-chev{transition:transform .18s;flex-shrink:0}
+body.list-open .list-rail-chev{transform:rotate(180deg)}
+.list-rail-count{font-size:12.5px;font-weight:800;font-family:var(--mono);color:var(--text)}
+.list-rail-word{writing-mode:vertical-rl;font-size:9.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted2)}
 .list-hdr{padding:16px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
 .list-hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .list-title{font-size:16px;font-weight:800;letter-spacing:-.3px}
@@ -78,13 +118,12 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 /* APERÇU CENTRE */
 .preview-col{display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);overflow:hidden}
-.preview-toolbar{padding:10px 16px;border-bottom:1px solid var(--border);background:var(--card);flex-shrink:0;display:flex;align-items:center;gap:8px}
-.preview-title{font-size:12px;font-weight:700;color:var(--text);flex:1}
-.preview-btn{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;border:1.5px solid var(--border);background:var(--card);font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s}
-.preview-btn:hover{border-color:var(--text)}
-.preview-btn.primary{background:var(--text);color:#fff;border-color:var(--text)}
-.preview-btn.green{background:rgba(29,131,72,.1);color:var(--green);border-color:rgba(29,131,72,.2)}
-.preview-btn.green:hover{background:var(--green);color:#fff}
+/* La colonne d'aperçu n'a plus de barre. Les règles .preview-toolbar,
+   .preview-title et .preview-btn sont parties avec elle plutôt que de
+   rester à décrire un élément que la page n'écrit plus. Le titre
+   « Aperçu — Devis » qu'elle portait ne manque pas : la colonne
+   d'édition dit déjà, en tête, de quelle pièce il s'agit et sous quel
+   numéro. */
 /* align-items:flex-start est indispensable, pas cosmétique : en flex
    row le défaut est `stretch`, qui étirait la feuille à la hauteur de
    la colonne. Une feuille dont la hauteur est celle de l'écran n'est
@@ -198,8 +237,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 /* PANNEAU ÉDITION */
 .edit-col{display:flex;flex-direction:column;height:calc(100vh - var(--app-footer-h));overflow:hidden;background:var(--card)}
-.edit-hdr{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
-.edit-hdr-title{font-size:13px;font-weight:700}
+.edit-hdr{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.edit-hdr-id{display:flex;align-items:baseline;gap:8px;min-width:0}
+.edit-hdr-title{font-size:13px;font-weight:700;white-space:nowrap}
+.edit-hdr-num{font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--muted2)}
 .edit-scroll{flex:1;overflow-y:auto;padding:16px}
 .edit-scroll::-webkit-scrollbar{width:3px}
 .edit-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
@@ -226,8 +267,33 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .total-line.final{font-size:15px;font-weight:800;color:var(--text);padding-top:8px;margin-top:4px;border-top:1.5px solid var(--border2)}
 .total-line.final span:last-child{font-family:var(--mono)}
 
-/* ACTIONS BOTTOM */
-.edit-actions{padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:7px}
+/* ACTIONS BOTTOM — LE SEUL LIEU D'ACTION SUR LA PIÈCE
+   ------------------------------------------------------------------
+   Trois de ces boutons — Imprimer, PDF, Envoyer — vivaient dans une
+   barre posée au-dessus de l'aperçu. Ils agissaient pourtant sur le
+   document que la colonne d'ÉDITION tient ouvert, et depuis là-haut
+   ils ne disaient jamais duquel ils parlaient : deux endroits pour
+   commander une seule pièce, et aucun des deux ne nommait laquelle.
+   Ils descendent ici, sous le numéro du document et ses champs, à
+   côté des boutons qui le font vivre. Un seul lieu, une seule pièce.
+
+   Deux groupes, séparés d'un filet, parce qu'ils ne font pas la même
+   chose : au-dessus la SORTIE — ce qui envoie la pièce dehors, sur du
+   papier, en PDF, par courriel, sans jamais la changer. En dessous le
+   CYCLE DE VIE — ce qui la change : enregistrer, accepter, convertir,
+   et supprimer en dernier, parce qu'on ne met pas la porte de sortie
+   au milieu du couloir. */
+.edit-actions{padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:10px}
+.edit-actions-out{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.edit-actions-life{display:flex;flex-direction:column;gap:7px;padding-top:10px;border-top:1px solid var(--border)}
+.btn-out{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:9px 6px;border-radius:9px;border:1.5px solid var(--border);background:var(--card);font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s}
+.btn-out:hover:not(:disabled){border-color:var(--text)}
+/* Sans document sélectionné, la sortie n'a rien à sortir. Le bouton
+   le dit AVANT le clic, éteint, plutôt que d'accepter le geste pour
+   le refuser ensuite par un message. La garde de printDoc reste en
+   place derrière : elle protège les chemins qui ne passent pas par
+   ces boutons. */
+.btn-out:disabled{opacity:.4;cursor:not-allowed}
 .btn-action{padding:10px;border-radius:9px;border:none;font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;transition:all .15s;width:100%}
 .btn-action.primary{background:var(--text);color:#fff}
 .btn-action.primary:hover{background:#000}
@@ -314,14 +380,18 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
      Le rail, le pied applicatif fixed (qui se répéterait sur chaque
      feuille), les surcouches injectées par script — consentement,
      essai, confirmation, toasts — puis, dans le shell, la colonne de
-     liste avec son en-tête et ses filtres, la barre d'aperçu et la
-     colonne d'édition. L'état vide part aussi : sans document il n'y
-     a rien à imprimer, et printDoc refuse avant d'en arriver là.
+     liste : sa case de grille, la liste elle-même et la bande étroite
+     qui la remplace quand elle est repliée, l'un ou l'autre étant à
+     l'écran selon la largeur de fenêtre — et la colonne d'édition,
+     qui porte désormais toutes les commandes, y compris celle qui
+     lance cette impression. L'état vide part aussi : sans document il
+     n'y a rien à imprimer, et printDoc refuse avant d'en arriver là.
      Enfin le renvoi vers les réglages, seule commande à se tenir DANS
      le document : la phrase qui l'accompagne s'imprime, le bouton non. */
   .sidebar,
+  .list-slot,
   .list-col,
-  .preview-toolbar,
+  .list-rail,
   .preview-empty,
   .edit-col,
   .doc-emetteur-cta,
@@ -449,48 +519,43 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <div class="shell">
 
   <!-- LISTE -->
-  <div class="list-col">
-    <div class="list-hdr">
-      <div class="list-hdr-top">
-        <div class="list-title">Devis</div>
-        <button class="btn-new" onclick="newDoc()">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          Nouveau
-        </button>
+  <div class="list-slot" id="list-slot">
+
+    <!-- La bande. Elle n'existe qu'en dessous du seuil, et ne montre
+         que ce que la liste cache : combien de documents. Le bouton
+         « Nouveau » n'est plus ici — il vit dans l'en-tête de la
+         colonne d'édition, à droite, et créer un devis ne demande
+         donc pas de rouvrir la liste. -->
+    <button class="list-rail" id="list-rail-btn" type="button" onclick="toggleList()" aria-controls="doc-list" aria-expanded="false" title="Afficher la liste">
+      <svg class="list-rail-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="list-rail-count" id="list-rail-count">0</span>
+      <span class="list-rail-word">Devis</span>
+    </button>
+
+    <div class="list-col">
+      <div class="list-hdr">
+        <div class="list-hdr-top">
+          <div class="list-title">Devis</div>
+        </div>
+        <div class="status-tabs">
+          <button class="stab on" onclick="filterStatus('all',this)">Tous</button>
+          <button class="stab" onclick="filterStatus('draft',this)">Brouillon</button>
+          <button class="stab" onclick="filterStatus('sent',this)">Envoyé</button>
+          <button class="stab" onclick="filterStatus('accepted',this)">Accepté</button>
+          <button class="stab" onclick="filterStatus('refused',this)">Refusé</button>
+          <button class="stab" onclick="filterStatus('transformed',this)">Transformé</button>
+        </div>
       </div>
-      <div class="status-tabs">
-        <button class="stab on" onclick="filterStatus('all',this)">Tous</button>
-        <button class="stab" onclick="filterStatus('draft',this)">Brouillon</button>
-        <button class="stab" onclick="filterStatus('sent',this)">Envoyé</button>
-        <button class="stab" onclick="filterStatus('accepted',this)">Accepté</button>
-        <button class="stab" onclick="filterStatus('refused',this)">Refusé</button>
-        <button class="stab" onclick="filterStatus('transformed',this)">Transformé</button>
+      <div id="filter-client-banner" style="display:none;background:rgba(67,56,202,0.10);border-bottom:1px solid #4338CA;padding:10px 16px;font-size:11.5px;color:#4338CA;align-items:center;justify-content:space-between;gap:10px;">
+        <span id="filter-client-label">Filtre actif</span>
+        <button id="filter-client-clear" style="padding:5px 10px;border:none;background:#4338CA;color:#fff;border-radius:7px;font-family:var(--font);font-weight:700;font-size:10.5px;cursor:pointer;letter-spacing:.4px;">Retirer</button>
       </div>
+      <div class="list-scroll" id="doc-list"></div>
     </div>
-    <div id="filter-client-banner" style="display:none;background:rgba(67,56,202,0.10);border-bottom:1px solid #4338CA;padding:10px 16px;font-size:11.5px;color:#4338CA;align-items:center;justify-content:space-between;gap:10px;">
-      <span id="filter-client-label">Filtre actif</span>
-      <button id="filter-client-clear" style="padding:5px 10px;border:none;background:#4338CA;color:#fff;border-radius:7px;font-family:var(--font);font-weight:700;font-size:10.5px;cursor:pointer;letter-spacing:.4px;">Retirer</button>
-    </div>
-    <div class="list-scroll" id="doc-list"></div>
-  </div>
+  </div><!-- /.list-slot -->
 
   <!-- APERÇU -->
   <div class="preview-col">
-    <div class="preview-toolbar">
-      <div class="preview-title" id="preview-title">Aperçu</div>
-      <button class="preview-btn" onclick="printDoc()">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-        Imprimer
-      </button>
-      <button class="preview-btn" onclick="exportPDF()">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        PDF
-      </button>
-      <button class="preview-btn primary" onclick="sendDoc()">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        Envoyer
-      </button>
-    </div>
     <div class="preview-scroll" id="preview-area">
       <div class="preview-empty">
         <div style="opacity:.2"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div>
@@ -501,9 +566,20 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
   <!-- ÉDITION -->
   <div class="edit-col">
+    <!-- Cette colonne est écrite en dur et n'est jamais masquée : sans
+         document sélectionné — compte neuf, liste vide, dernier devis
+         supprimé — elle reste à l'écran avec ses champs, et « Nouveau »
+         avec elle. C'est ce qui permet de lui confier la porte d'entrée
+         que l'en-tête de la liste portait jusqu'ici. -->
     <div class="edit-hdr">
-      <div class="edit-hdr-title" id="edit-hdr-title">Nouveau devis</div>
-      <div style="font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--muted2)" id="edit-num">#—</div>
+      <div class="edit-hdr-id">
+        <div class="edit-hdr-title" id="edit-hdr-title">Nouveau devis</div>
+        <div class="edit-hdr-num" id="edit-num">#—</div>
+      </div>
+      <button class="btn-new" onclick="newDoc()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Nouveau
+      </button>
     </div>
     <div class="edit-scroll">
 
@@ -602,10 +678,31 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
     </div>
     <div class="edit-actions">
-      <button class="btn-action primary" onclick="saveDoc()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Enregistrer</button>
-      <button class="btn-action success" onclick="markAccepted()">✓ Marquer comme accepté</button>
-      <button class="btn-action secondary" onclick="convertToInvoice()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Convertir en facture</button>
-      <button class="btn-action danger" onclick="deleteDoc(this)">Supprimer</button>
+
+      <!-- SORTIE — ne change pas la pièce, l'emmène dehors. -->
+      <div class="edit-actions-out">
+        <button class="btn-out" id="btn-print" onclick="printDoc()" disabled>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Imprimer
+        </button>
+        <button class="btn-out" id="btn-pdf" onclick="exportPDF()" disabled>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          PDF
+        </button>
+        <button class="btn-out" id="btn-send" onclick="sendDoc()" disabled>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Envoyer
+        </button>
+      </div>
+
+      <!-- CYCLE DE VIE — change la pièce. Supprimer ferme la marche. -->
+      <div class="edit-actions-life">
+        <button class="btn-action primary" onclick="saveDoc()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Enregistrer</button>
+        <button class="btn-action success" onclick="markAccepted()">✓ Marquer comme accepté</button>
+        <button class="btn-action secondary" onclick="convertToInvoice()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Convertir en facture</button>
+        <button class="btn-action danger" onclick="deleteDoc(this)">Supprimer</button>
+      </div>
+
     </div>
   </div>
 
@@ -762,6 +859,12 @@ function filterStatus(s, btn) {
 function renderList() {
   let list = filterStat === 'all' ? docs : docs.filter(d => d.status === filterStat);
   if (clientSiretFilter) list = list.filter(d => devisSiret(d) === clientSiretFilter);
+  // La bande repliée annonce ce que la liste contient, filtres
+  // compris : c'est cette liste-là qu'elle masque, pas le fonds
+  // entier. Le compte se pose ICI, avant le retour anticipé de la
+  // liste vide, sinon la bande garderait le chiffre d'avant le filtre.
+  const railCount = document.getElementById('list-rail-count');
+  if(railCount) railCount.textContent = String(list.length);
   const el = document.getElementById('doc-list');
   if(!list.length) { el.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--muted2);font-style:italic;font-size:12.5px">Aucun document</div>'; return; }
   el.innerHTML = list.map(d => {
@@ -788,9 +891,11 @@ function selectDoc(id) {
   currentId = id;
   const d = docs.find(x => x.id === id);
   if(!d) return;
+  closeListOverlay();     // le choix est fait : la liste rend le document
   renderList();
   loadDocToEditor(d);
   renderPreview(d);
+  syncOutputButtons();
 }
 
 function loadDocToEditor(d) {
@@ -862,8 +967,6 @@ function renderPreview(d) {
   const tva = d.tva ?? accountDefaultTva;
   const validityDate = d.date ? new Date(new Date(d.date).getTime() + (d.validity||30)*24*3600*1000) : null;
   const isInvoice = d.type === 'facture';
-
-  document.getElementById('preview-title').textContent = isInvoice ? 'Aperçu — Facture' : 'Aperçu — Devis';
 
   const linesHtml = (d.lines||[]).map(l => {
     const total = (parseFloat(l.qty)||0) * (parseFloat(l.pu)||0);
@@ -971,9 +1074,11 @@ function newDoc() {
   docs.unshift(d);
   saveDocs();
   currentId = d.id;
+  closeListOverlay();     // le devis neuf est à l'écran, la liste n'a plus à couvrir
   renderList();
   loadDocToEditor(d);
   renderPreview(d);
+  syncOutputButtons();
   document.getElementById('e-name').focus();
 }
 
@@ -1027,10 +1132,94 @@ async function deleteDoc(btn) {
   renderList();
   document.getElementById('preview-area').innerHTML = '<div class="preview-empty"><div style="opacity:.2"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div><div style="font-size:13px">Sélectionnez ou créez un devis</div></div>';
   document.getElementById('edit-hdr-title').textContent = 'Nouveau devis';
+  document.getElementById('edit-num').textContent = '#—';
+  syncOutputButtons();                         // plus rien à imprimer ni à envoyer
   if(btn) btn.disabled = false;                // rendu au document suivant
 }
 
 function sendDoc() { showToast('Envoi email — disponible en v2'); }
+
+// ── LES BOUTONS DE SORTIE ──────────────────────────────────────────
+// Imprimer, PDF, Envoyer n'ont de sens qu'avec un document sélectionné.
+// Ils naissent éteints dans le balisage — l'état de départ de la page
+// est justement celui-là, aucun document choisi — et s'allument quand
+// currentId en désigne un. Le refus se dit ainsi AVANT le geste, par le
+// bouton lui-même, plutôt qu'après par un message.
+//
+// La garde de printDoc n'est pas retirée pour autant : elle couvre les
+// chemins qui n'ont pas de bouton — Ctrl+P, l'impression du navigateur,
+// un appel depuis la console — et un bouton éteint ne dit rien de ces
+// chemins-là.
+function syncOutputButtons() {
+  const on = !!currentId;
+  for(const id of ['btn-print','btn-pdf','btn-send']) {
+    const b = document.getElementById(id);
+    if(b) b.disabled = !on;
+  }
+}
+
+// ── LE REPLI DE LA LISTE ───────────────────────────────────────────
+// Le seuil ne s'invente pas, il se relève. La feuille mesure 793,70px ;
+// la colonne d'aperçu lui ajoute ses 48px de marge, le filet de 1px de
+// la colonne et les 3px de sa barre de défilement : la piste centrale
+// doit donc mesurer 845,70px pour montrer la feuille à taille réelle.
+// Avec les deux colonnes latérales dépliées (300 + 380), il faut
+// 1 525,70px de shell, plus le rail — 280px une fois son clamp au
+// plafond — soit 1 806px de fenêtre. Aucun portable courant ne les a.
+//
+// Avec la liste réduite à sa bande de 52px, le même besoin tombe à
+// 1 277,70px de shell : 1 342px de fenêtre tant que le rail vaut 64px,
+// 1 521px une fois le rail déplié — il grossit à 1441px et reprend
+// alors ~170px d'un coup.
+//
+// 1728 est le seuil retenu : c'est la largeur d'un MacBook Pro 16",
+// elle tombe entre les deux nombres, et de part et d'autre le repli
+// tient sa promesse — au-dessus les trois colonnes suffisent presque,
+// en dessous replier ramène la feuille à 1 partout où c'est possible.
+//
+// Ce qui suit ne décide RIEN d'autre : la classe sur <body>, et la
+// grille fait le reste.
+const LIST_FOLD_MQ = window.matchMedia('(max-width: 1727.98px)');
+
+// Le choix de l'abonné, quand il en a fait un. null = il n'a rien dit,
+// le seuil décide seul. Ce choix l'emporte sur le seuil jusqu'à ce que
+// la fenêtre change de LARGEUR — une fenêtre redimensionnée est une
+// autre fenêtre, et le calcul ci-dessus se refait sans elle.
+let listOpenChoice = null;
+let lastWinW = window.innerWidth;
+
+function applyListFold() {
+  const folded = LIST_FOLD_MQ.matches;
+  const open = folded && listOpenChoice === true;
+  document.body.classList.toggle('list-folded', folded);
+  document.body.classList.toggle('list-open', open);
+  const btn = document.getElementById('list-rail-btn');
+  if(btn) {
+    btn.setAttribute('aria-expanded', String(open));
+    btn.title = open ? 'Masquer la liste' : 'Afficher la liste';
+  }
+}
+
+function toggleList() {
+  listOpenChoice = !document.body.classList.contains('list-open');
+  applyListFold();
+}
+
+function closeListOverlay() {
+  if(!document.body.classList.contains('list-open')) return;
+  listOpenChoice = false;
+  applyListFold();
+}
+
+// La hauteur seule ne compte pas : sur mobile la barre d'URL qui se
+// rétracte déclenche un resize sans qu'aucune largeur ne bouge, et
+// oublier la garde effacerait le choix de l'abonné à chaque défilement.
+window.addEventListener('resize', () => {
+  if(window.innerWidth === lastWinW) return;
+  lastWinW = window.innerWidth;
+  listOpenChoice = null;
+  applyListFold();
+});
 
 // ── L'ÉCHELLE D'ÉCRAN ──────────────────────────────────────────────
 // La feuille mesure 210mm, soit 793,7px. La colonne d'aperçu ne les a
@@ -1094,6 +1283,14 @@ function watchDocScale() {
   });
   ro.observe(area);
 }
+// Le repli passe par --list-w, donc par la piste 1fr, donc par la
+// largeur de #preview-area : l'observateur ci-dessus se déclenche au
+// repli comme au dépliement, et la feuille est remise à l'échelle de
+// sa nouvelle colonne. Il n'y a rien à appeler à la main, et surtout
+// rien à recopier — l'échelle continue de n'être calculée qu'ici.
+// Rouvrir la liste EN SURIMPRESSION, à l'inverse, ne touche pas à la
+// piste : l'observateur ne se déclenche pas et la feuille ne bouge
+// pas. C'est voulu, et c'est ce qui justifie la surimpression.
 
 // #doc-paper n'existe qu'une fois que renderPreview a écrit un document dans
 // la colonne d'aperçu. Sans lui, la feuille d'impression n'aurait rien à
@@ -1122,6 +1319,9 @@ function showToast(msg) {
   // qu'il observe, donc l'échelle est en place avant que le premier
   // document ne soit écrit dans la colonne.
   watchDocScale();
+  // Avant tout await : la page ne doit pas s'afficher un instant en
+  // trois colonnes sur une fenêtre qui n'en tient pas trois.
+  applyListFold();
   await loadAccountRegime();
   await loadDocs();
   document.getElementById('filter-client-clear').addEventListener('click', () => {
@@ -1143,6 +1343,10 @@ function showToast(msg) {
     document.getElementById('e-date').value = new Date().toISOString().split('T')[0];
     updateTotals();
   }
+  // Après la branche, donc vrai dans les deux cas : un document a été
+  // sélectionné et la sortie s'allume, ou il n'y en avait aucun et elle
+  // reste éteinte.
+  syncOutputButtons();
 })();
 </script>
 <script src="/sidebar.js"></script>

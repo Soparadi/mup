@@ -277,7 +277,14 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .edit-section-title{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted2);margin-bottom:10px}
 .frow{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
 .flabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)}
-.finput{border:1.5px solid var(--border);border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:var(--font);color:var(--text);background:var(--surface);width:100%;outline:none;transition:border-color .15s}
+/* min-width:0 : le champ suit la largeur de sa piste, plutôt que de la
+   pousser depuis sa largeur intrinsèque. Un select mesure la sienne sur
+   son option la plus longue, un input sur ses vingt caractères par
+   défaut ; posés dans une piste 1fr, ils y installaient un plancher de
+   min-content supérieur à la place réelle, et la colonne partait en
+   défilement latéral. Le champ garde son width:100% : c’est la piste
+   qui décide, et lui qui la remplit. */
+.finput{border:1.5px solid var(--border);border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:var(--font);color:var(--text);background:var(--surface);width:100%;min-width:0;outline:none;transition:border-color .15s}
 .finput:focus{border-color:var(--text);background:#fff}
 .f2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 /* La garde d’unicité du numéro parle ici, sous le champ, et se tait le
@@ -286,8 +293,23 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .fwarn{font-size:10.5px;font-weight:600;color:var(--orange);line-height:1.35}
 
 /* LIGNES DEVIS */
-.line-item{display:grid;grid-template-columns:1fr 60px 80px 28px;gap:6px;align-items:center;margin-bottom:6px}
-.line-item input{border:1.5px solid var(--border);border-radius:7px;padding:6px 8px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--surface);outline:none;transition:border-color .15s;width:100%}
+/* La colonne d’édition offre 345 px utiles : 380 de piste, moins 3 pour
+   la barre verticale et 16 de marge intérieure de chaque côté. La rangée
+   en dépensait 186 d’avance (60 + 80 + 28 de largeurs figées, plus trois
+   gouttières de 6), laissant 159 px à la description quand le champ en
+   réclame 164 dès que le plancher de min-content s’applique. La grille
+   demandait 350 pour 345, et cinq px de trop suffisent à faire naître la
+   barre horizontale et à décaler les libellés.
+
+   Le figé se resserre donc à 152 px et la gouttière à 5, ce qui rend
+   19 px à la description : elle monte à 178, au-dessus de son plancher,
+   avec 14 px de réserve. La quantité y tient trois chiffres et le prix
+   unitaire six, ce que la saisie d’un devis demande. Les pistes vivent
+   dans .line-grid, que la ligne et son en-tête portent toutes deux :
+   un seul endroit règle les deux rangées, et elles restent alignées. */
+.line-grid{display:grid;grid-template-columns:1fr 52px 72px 28px;gap:5px}
+.line-item{align-items:center;margin-bottom:6px}
+.line-item input{border:1.5px solid var(--border);border-radius:7px;padding:6px 8px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--surface);outline:none;transition:border-color .15s;width:100%;min-width:0}
 .line-item input:focus{border-color:var(--text);background:#fff}
 .line-del{width:24px;height:24px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--muted2);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .12s}
 .line-del:hover{background:rgba(204,0,0,.08);color:var(--red)}
@@ -669,11 +691,16 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
           </div>
           <div class="frow">
             <div class="flabel">TVA</div>
+            <!-- Le menu nomme un régime au milieu de taux : « Franchise de TVA »
+                 tient dans sa piste, là où la mention légale entière réclamait
+                 246 px pour 168,5 offerts et se coupait à l’écran. Le document
+                 porte la formule complète, article compris, sous ses totaux.
+                 Les valeurs restent celles du calcul. -->
             <select class="finput" id="e-tva" onchange="liveUpdate()">
-              <option value="0">Non assujetti — TVA non applicable</option>
-              <option value="5.5">5,5% — Taux réduit</option>
-              <option value="10">10% — Taux intermédiaire</option>
-              <option value="20" selected>20% — Taux normal</option>
+              <option value="0">Franchise de TVA</option>
+              <option value="5.5">5,5 % réduit</option>
+              <option value="10">10 % intermédiaire</option>
+              <option value="20" selected>20 % normal</option>
             </select>
           </div>
         </div>
@@ -693,7 +720,7 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
       <!-- Lignes -->
       <div class="edit-section">
         <div class="edit-section-title">Prestations</div>
-        <div style="display:grid;grid-template-columns:1fr 60px 80px 28px;gap:6px;margin-bottom:4px">
+        <div class="line-grid" style="margin-bottom:4px">
           <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2)">Description</div>
           <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);text-align:center">Qté</div>
           <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);text-align:right">P.U. HT</div>
@@ -990,7 +1017,7 @@ function addLine(desc='', qty=1, pu='') {
   lineCount++;
   const id = lineCount;
   const div = document.createElement('div');
-  div.className = 'line-item';
+  div.className = 'line-item line-grid';
   div.id = 'line-'+id;
   div.innerHTML = `
     <input type="text" placeholder="Description" value="${esc(desc)}" oninput="liveUpdate()">

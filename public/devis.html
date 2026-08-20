@@ -73,6 +73,24 @@ body.list-folded .shell{--list-w:var(--list-rail-w)}
 body.list-folded .list-col{display:none}
 body.list-folded.list-open .list-col{display:flex;position:absolute;top:0;left:var(--list-rail-w);width:300px;z-index:40;box-shadow:0 10px 44px rgba(0,0,0,.20)}
 
+/* LE VOILE — ce qui manquait sous le tiroir. Rouverte par-dessus le
+   document, la liste ne posait RIEN derrière elle : le devis restait
+   lisible dessous, à pleine lumière, et la surimpression passait pour
+   un défaut d'affichage plutôt que pour une liste ouverte. Le voile
+   dit ce que l'ombre portée seule ne disait pas — ceci est au-dessus,
+   cela est en dessous et attend.
+   Les valeurs ne sont pas inventées : ce sont celles de .mupc-overlay
+   dans mup-confirm.css, le voile que le produit pose déjà sous ses
+   dialogues. Même noir, même flou — un seul voile pour l'abonné, quel
+   que soit ce qui se pose dessus. Le préfixe -webkit- accompagne le
+   flou : sans lui, Safari affiche un noir plat.
+   z-index:39 : sous le tiroir (40), au-dessus de tout le reste. Le
+   rail, lui, remonte à 41 — il porte le chevron qui referme, et un
+   bouton de fermeture sous le voile ne fermerait plus rien. */
+.list-scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:39;cursor:pointer}
+body.list-folded.list-open .list-scrim{display:block}
+body.list-folded.list-open .list-rail{position:relative;z-index:41}
+
 /* LA BANDE — elle dit ce qu'elle cache : le nombre de documents que la
    liste contient (filtres compris, c'est bien cette liste-là qui est
    masquée). Un seul bouton, qui ouvre et referme. « Nouveau » n'y
@@ -84,7 +102,6 @@ body.list-folded .list-rail:hover{background:var(--surface);color:var(--text)}
 .list-rail-chev{transition:transform .18s;flex-shrink:0}
 body.list-open .list-rail-chev{transform:rotate(180deg)}
 .list-rail-count{font-size:12.5px;font-weight:800;font-family:var(--mono);color:var(--text)}
-.list-rail-word{writing-mode:vertical-rl;font-size:9.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted2)}
 .list-hdr{padding:16px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
 .list-hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .list-title{font-size:16px;font-weight:800;letter-spacing:-.3px}
@@ -392,6 +409,7 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
   .list-slot,
   .list-col,
   .list-rail,
+  .list-scrim,
   .preview-empty,
   .edit-col,
   .doc-emetteur-cta,
@@ -529,8 +547,16 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
     <button class="list-rail" id="list-rail-btn" type="button" onclick="toggleList()" aria-controls="doc-list" aria-expanded="false" title="Afficher la liste">
       <svg class="list-rail-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       <span class="list-rail-count" id="list-rail-count">0</span>
-      <span class="list-rail-word">Devis</span>
     </button>
+
+    <!-- Le voile, entre le document et le tiroir. Il n'est visible que
+         quand la liste est ouverte par-dessus le document ; le CSS s'en
+         charge, le balisage ne le montre ni ne le cache. Cliquer dessus
+         referme — c'est le geste qu'on tente d'instinct quand une chose
+         s'est posée par-dessus ce qu'on lisait. aria-hidden : il ne dit
+         rien qu'un lecteur d'écran ait à entendre, et le chevron du
+         rail reste, lui, la commande annoncée. -->
+    <div class="list-scrim" id="list-scrim" onclick="closeListOverlay()" aria-hidden="true"></div>
 
     <div class="list-col">
       <div class="list-hdr">
@@ -1210,6 +1236,15 @@ function closeListOverlay() {
   listOpenChoice = false;
   applyListFold();
 }
+
+// Échap referme, comme le clic sur le voile. La garde de
+// closeListOverlay tient lieu de condition : sans tiroir ouvert la
+// touche ne fait rien, et l'écoute peut donc rester posée en
+// permanence sur le document plutôt que d'être branchée et débranchée
+// à chaque ouverture.
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape') closeListOverlay();
+});
 
 // La hauteur seule ne compte pas : sur mobile la barre d'URL qui se
 // rétracte déclenche un resize sans qu'aucune largeur ne bouge, et

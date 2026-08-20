@@ -110,6 +110,12 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 /* — au-delà de la première page, l'écran donne le format, pas les   */
 /* frontières.                                                       */
 /*                                                                  */
+/* Le minimum de 297mm est une mesure d'ÉCRAN, et il le reste :      */
+/* c'est lui qui donne son format à une feuille peu remplie. À       */
+/* l'impression il TOMBE — voir § 3 de la feuille d'impression.      */
+/* Là-bas la boîte de page vaut déjà 297mm, et deux 297mm            */
+/* strictement égaux ne survivent pas à l'arrondi du moteur.         */
+/*                                                                  */
 /* Les 14mm de marge intérieure sont, au millimètre près, ceux que   */
 /* @page portait ce matin : la zone de texte reste à 182mm et la     */
 /* sortie papier ne change pas. Ce qui change, c'est qui les porte.  */
@@ -157,7 +163,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .doc-paper{width:210mm;min-height:297mm;padding:14mm;flex-shrink:0;zoom:var(--doc-zoom,1);background:#fff;border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.12);font-family:var(--font)}
 .doc-paper-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8.47mm;padding-bottom:6.35mm;border-bottom:2px solid var(--text)}
 .doc-logo{font-size:5.29mm;font-weight:900;letter-spacing:-.13mm;color:var(--text)}
-.doc-logo span{color:var(--muted2);font-weight:400}
 .doc-paper-type{text-align:right}
 .doc-paper-type-label{font-size:5.82mm;font-weight:900;letter-spacing:-.13mm;color:var(--text)}
 .doc-paper-num{font-size:3.18mm;font-weight:600;font-family:var(--mono);color:var(--muted);margin-top:.79mm}
@@ -166,6 +171,13 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .doc-party-label{font-size:2.38mm;font-weight:700;text-transform:uppercase;letter-spacing:.4mm;color:var(--muted2);margin-bottom:1.59mm}
 .doc-party-name{font-size:3.7mm;font-weight:700;color:var(--text);margin-bottom:.53mm}
 .doc-party-info{font-size:3.18mm;color:var(--muted);line-height:1.6}
+/* Renvoi vers les réglages, posé dans le bloc émetteur quand le compte n'a
+   pas encore de société. C'est une commande de l'application, pas une mention
+   du document : elle reste à l'écran et le § 2 du bloc d'impression la retire
+   de la feuille. La phrase qui la précède, elle, s'imprime — un devis sorti
+   d'un compte incomplet doit dire de lui-même où son émetteur a passé. */
+.doc-emetteur-cta{display:inline-block;margin-top:2.12mm;padding:1.32mm 2.65mm;border:1px solid var(--border2);border-radius:1.32mm;font-size:2.91mm;font-weight:600;color:var(--text);text-decoration:none}
+.doc-emetteur-cta:hover{background:var(--surface2)}
 .doc-table{width:100%;border-collapse:collapse;margin-bottom:6.35mm}
 .doc-table th{font-size:2.51mm;font-weight:700;text-transform:uppercase;letter-spacing:.26mm;color:var(--muted2);padding:2.12mm 2.65mm;border-bottom:1.5px solid var(--border);text-align:left}
 .doc-table th:last-child,.doc-table td:last-child{text-align:right}
@@ -304,12 +316,15 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
      essai, confirmation, toasts — puis, dans le shell, la colonne de
      liste avec son en-tête et ses filtres, la barre d'aperçu et la
      colonne d'édition. L'état vide part aussi : sans document il n'y
-     a rien à imprimer, et printDoc refuse avant d'en arriver là. */
+     a rien à imprimer, et printDoc refuse avant d'en arriver là.
+     Enfin le renvoi vers les réglages, seule commande à se tenir DANS
+     le document : la phrase qui l'accompagne s'imprime, le bouton non. */
   .sidebar,
   .list-col,
   .preview-toolbar,
   .preview-empty,
   .edit-col,
+  .doc-emetteur-cta,
   .mup-app-footer,
   #mup-cookie-banner,
   #mup-cookie-panel,
@@ -321,7 +336,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   .mupc-overlay,
   #mup-toast { display: none !important; }
 
-  /* 3. Le décor d'écran part. Rien d'autre.
+  /* 3. Le décor d'écran part, et la hauteur minimale avec lui.
      L'ombre portée et le rayon sont des affordances d'écran : ils
      disent « ceci est une feuille » à qui regarde un écran, et n'ont
      rien à dire à qui tient la feuille. Le zoom d'aperçu revient à 1
@@ -334,8 +349,44 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
      tant que le document était un bloc de 640px à marges en pixels,
      qu'il fallait délier pour qu'il prenne la page. Il EST la page
      désormais ; les rendre au papier serait le seul moyen de casser
-     ce que ce bloc est censé protéger. */
+     ce que ce bloc est censé protéger.
+
+     La hauteur minimale, elle, tombe — et elle seule des quatre
+     mesures du gabarit. Sur le papier, 297mm n'est pas un plancher :
+     c'est la boîte de page elle-même, @page étant à marge nulle. Les
+     deux valent exactement la même chose, et une égalité stricte ne
+     survit pas à l'arrondi. 297mm font 1122,52px CSS, que le moteur
+     arrondit à 1123 : il suffit que la boîte de page, arrondie de son
+     côté, tombe sur 1122 pour que le pixel en trop parte sur une
+     deuxième feuille, blanche. C'est la même valeur des deux côtés,
+     et c'est précisément pour ça qu'aucun des deux n'a de marge.
+
+     Un devis d'une ligne n'était donc pas trop long, il était trop
+     EXACT : son contenu mesure 173,6mm au rendu, soit près de 100mm
+     sous les 269mm utiles. Aucune marge résiduelle ne débordait non
+     plus. .doc-conditions, dernier bloc, n'en porte pas ; les 14mm de
+     padding-bas empêchent celle de .doc-totals de s'échapper ; et le
+     reset du haut de page met html et body à zéro. Il ne restait rien
+     à retirer que l'égalité.
+
+     Ce que la feuille perd ici, elle ne le perd qu'ici. À l'écran les
+     297mm restent, parce que c'est là qu'ils servent : sans eux, un
+     devis d'une ligne se replierait sur sa propre hauteur et
+     n'aurait plus l'air d'une feuille. Sur le papier ils ne servent à
+     rien — la boîte de page fait déjà loi, et c'est au moteur de dire
+     combien de pages il faut.
+
+     Le cas long est intact, et il l'est par construction : dès que le
+     contenu dépasse 297mm, un plancher de 297mm est inerte. Vérifié
+     au rendu — à vingt comme à quarante lignes, le PDF produit avec
+     et sans cette ligne a des flux de page IDENTIQUES octet pour
+     octet. Deux feuilles dans les deux cas, coupées par le § 4 ; à
+     vingt lignes la seconde porte les totaux et les conditions, à
+     quarante le tableau se coupe pour de bon et son en-tête reparaît
+     en tête de la seconde. Cette déclaration ne touche donc que le
+     document court. */
   .doc-paper {
+    min-height: 0;
     zoom: 1;
     margin: 0;
     box-shadow: none;
@@ -571,19 +622,39 @@ let docs = [];
 let currentId = null;
 let filterStat = 'all';
 let lineCount = 0;
-// Taux de TVA par défaut d'un NOUVEAU devis, issu du régime du compte (user_settings) :
+// Réglages du compte (user_settings), lus une fois à l'init et retenus ENTIERS,
+// comme factures.html retient accountSettings. Ce record porte deux choses que
+// le devis consomme : le régime de TVA, et la société de l'abonné, qui est
+// l'émetteur du document. N'en garder qu'un champ obligerait à relire pour
+// l'autre, et à faire courir le rendu contre une seconde requête.
+let accountSettings = {};
+
+// Taux de TVA par défaut d'un NOUVEAU devis, issu du régime du compte :
 // 0 en franchise, sinon le taux par défaut (standard 20 %). Les devis déjà émis
 // gardent leur propre taux figé — ce défaut ne s'applique qu'à la création.
 let accountDefaultTva = 0;
+
 async function loadAccountRegime() {
   try {
     const r = await fetch('/api/user-settings');
     if(r.ok){
-      const s = await r.json() || {};
+      accountSettings = await r.json() || {};
       // ?? et non || : un taux enregistré à 0 est un choix de l'abonné, pas une absence.
-      accountDefaultTva = s.tvaAssujetti ? (s.tauxTvaDefaut ?? 20) : 0;
+      accountDefaultTva = accountSettings.tvaAssujetti ? (accountSettings.tauxTvaDefaut ?? 20) : 0;
     }
   } catch(e){ console.warn('[devis] user-settings load failed', e); }
+}
+
+// Émetteur du document, composé depuis le compte et de nulle part ailleurs.
+// La société est facultative dans les réglages : le rendu doit donc savoir
+// dire qu'elle manque plutôt qu'imprimer un émetteur vide (cf. renderPreview).
+function emetteurDuCompte() {
+  return {
+    nom: (accountSettings.raisonSociale || '').trim(),
+    adresse: (accountSettings.adresse || '').trim(),
+    siret: (accountSettings.siret || '').trim(),
+    tvaIntra: (accountSettings.tvaIntra || '').trim()
+  };
 }
 
 // API SurrealDB (V1 mono-utilisateur, scoping serveur via env MUP_DEFAULT_USER_ID)
@@ -804,12 +875,23 @@ function renderPreview(d) {
     </tr>`;
   }).join('');
 
+  // L'émetteur tient l'emplacement de la marque en tête de feuille et le bloc
+  // ÉMETTEUR sous la barre. Les deux lisent la MÊME société, celle du compte :
+  // la feuille sort au nom de l'abonné qui l'imprime, jamais au nom de l'outil.
+  // Le courriel ne figure nulle part — aucun champ des réglages ne le porte, et
+  // une ligne absente vaut mieux qu'une adresse fausse sur un document envoyé.
+  const em = emetteurDuCompte();
+  const emLignes = [
+    em.adresse,
+    em.siret ? 'SIRET : ' + em.siret : '',
+    em.tvaIntra ? 'TVA intracommunautaire : ' + em.tvaIntra : ''
+  ].filter(Boolean).map(esc).join('<br>');
+
   document.getElementById('preview-area').innerHTML = `
     <div class="doc-paper" id="doc-paper">
       <div class="doc-paper-hdr">
         <div>
-          <div class="doc-logo">MUP <span>by So Paradi</span></div>
-          <div style="font-size:2.91mm;color:var(--muted2);margin-top:1.59mm;line-height:1.6">{company_sender}<br>Combourg, Bretagne<br>contact@exemple.fr</div>
+          <div class="doc-logo">${esc(em.nom)}</div>
         </div>
         <div class="doc-paper-type">
           <div class="doc-paper-type-label">${isInvoice?'FACTURE':'DEVIS'}</div>
@@ -821,8 +903,9 @@ function renderPreview(d) {
       <div class="doc-parties">
         <div>
           <div class="doc-party-label">Émetteur</div>
-          <div class="doc-party-name">{company_sender}</div>
-          <div class="doc-party-info">Combourg, Bretagne<br>contact@exemple.fr<br>SIRET : — — —</div>
+          ${em.nom ? `<div class="doc-party-name">${esc(em.nom)}</div>
+          ${emLignes ? `<div class="doc-party-info">${emLignes}</div>` : ''}` : `<div class="doc-party-info">Votre société apparaîtra ici.</div>
+          <a class="doc-emetteur-cta" href="/frais?reglages=1">Renseigner ma société</a>`}
         </div>
         <div>
           <div class="doc-party-label">Destinataire</div>

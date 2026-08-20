@@ -277,10 +277,26 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 
 /* PANNEAU ÉDITION */
 .edit-col{display:flex;flex-direction:column;height:calc(100vh - var(--app-footer-h));overflow:hidden;background:var(--card)}
-.edit-hdr{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.edit-hdr{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;row-gap:8px}
 .edit-hdr-id{display:flex;align-items:baseline;gap:8px;min-width:0}
 .edit-hdr-title{font-size:13px;font-weight:700;white-space:nowrap}
 .edit-hdr-num{font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--muted2)}
+/* DEUX PORTES D'ENTRÉE dans l'en-tête, et non plus une. « Nouveau »
+   ouvre un devis vierge, « Charger un devis signé » fait entrer un devis
+   qui existe déjà sur le papier : deux gestes de CRÉATION, donc deux
+   boutons au même endroit. Aucun des deux dans le pied, qui n'agit que
+   sur le document déjà à l'écran.
+   Le groupe est ce qui permet à space-between de tenir : trois enfants
+   directs auraient écarté l'identité du document, le premier bouton et
+   le second à distance égale. Le retour à la ligne est prévu : 380px de
+   colonne ne tiennent pas toujours les deux libellés à côté du numéro,
+   et un numéro coupé en deux se lit plus mal qu'un en-tête sur deux
+   lignes. */
+.edit-hdr-actions{display:flex;align-items:center;gap:6px;margin-left:auto}
+/* La variante sourde du bouton de création : même gabarit, moins de
+   voix. « Nouveau » reste le geste courant, celui-ci l'exception. */
+.btn-new.ghost{background:var(--surface2);color:var(--text)}
+.btn-new.ghost:hover{background:var(--border2)}
 .edit-scroll{flex:1;overflow-y:auto;padding:16px}
 .edit-scroll::-webkit-scrollbar{width:3px}
 .edit-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
@@ -368,8 +384,6 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .btn-action.primary:hover:not(:disabled){background:#000}
 .btn-action.secondary{background:var(--surface2);color:var(--text)}
 .btn-action.secondary:hover:not(:disabled){background:var(--border2)}
-.btn-action.success{background:rgba(29,131,72,.1);color:var(--green);border:1.5px solid rgba(29,131,72,.2)}
-.btn-action.success:hover:not(:disabled){background:var(--green);color:#fff}
 .btn-action.danger{background:rgba(204,0,0,.06);color:var(--red);border:1.5px solid rgba(204,0,0,.15)}
 
 /* LE DEVIS SIGNÉ, FIGÉ À L'ÉCRAN. Un champ passé en lecture seule garde
@@ -660,10 +674,23 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
         <div class="edit-hdr-title" id="edit-hdr-title">Nouveau devis</div>
         <div class="edit-hdr-num" id="edit-num">#—</div>
       </div>
-      <button class="btn-new" onclick="newDoc()">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Nouveau
-      </button>
+      <div class="edit-hdr-actions">
+        <!-- CHARGER UN DEVIS SIGNÉ. Ce geste CRÉE un devis, il n'agit pas
+             sur celui qui est à l'écran : sa place est celle de la
+             création, à côté de « Nouveau », et non dans le pied. Il est
+             donc toujours actif, y compris sans document sélectionné, ce
+             que le pied ne s'autorise pas. À ne pas confondre avec
+             « Déposer le devis signé », plus bas, qui accroche une pièce
+             au devis OUVERT. -->
+        <button class="btn-new ghost" onclick="ouvreChargementSigne()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Charger un devis signé
+        </button>
+        <button class="btn-new" onclick="newDoc()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Nouveau
+        </button>
+      </div>
     </div>
     <div class="edit-scroll">
 
@@ -800,8 +827,6 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 
       <!-- SUITE DU CYCLE DE VIE — change la pièce. Supprimer ferme la marche. -->
       <div class="edit-actions-life">
-        <button class="btn-action success" id="btn-accept" onclick="markAccepted()">✓ Marquer comme accepté</button>
-
         <!-- LE DEVIS SIGNÉ, DÉPOSÉ. Avant Convertir, parce que c'est dans
              cet ordre que les choses arrivent : le client renvoie la pièce
              signée, et c'est elle qui rend le devis convertible. L'entrée
@@ -813,13 +838,76 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
         <button class="btn-action secondary" id="btn-piece" onclick="document.getElementById('piece-input').click()" disabled>Déposer le devis signé</button>
         <div class="piece-etat" id="piece-etat" hidden></div>
 
-        <button class="btn-action secondary" id="btn-convert" onclick="convertToInvoice()" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Convertir en facture</button>
+        <!-- CONVERTIR NAÎT ABSENT, et non éteint. Un bouton éteint est une
+             promesse : il dit « ce geste existe, il n'est pas pour
+             maintenant ». Celui-ci n'a rien à promettre tant que le devis
+             signé n'est pas là, et un bouton grisé de plus dans un pied
+             qui en compte déjà se lisait comme une panne. Son apparition
+             est réglée dans syncOutputButtons, par hidden : .btn-action ne
+             pose aucun display, la gouttière de .edit-actions-life se
+             referme donc d'elle-même. -->
+        <button class="btn-action secondary" id="btn-convert" onclick="convertToInvoice()" hidden><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Convertir en facture</button>
         <button class="btn-action danger" id="btn-delete" onclick="deleteDoc(this)">Supprimer</button>
       </div>
 
     </div>
   </div>
 
+</div>
+
+<!-- ══ LA FENÊTRE « CHARGER UN DEVIS SIGNÉ » ═══════════════════════════
+     Le VÊTEMENT est celui de mup-confirm.css, repris classe pour classe :
+     même voile, même bandeau noir, même pied, mêmes boutons. Un abonné
+     n'a pas à apprendre deux dialogues.
+     Le BALISAGE, lui, est écrit ici. mup-confirm.js ne sait porter que
+     des phrases, et ce n'est pas à lui de savoir porter des champs : il
+     sert toutes les pages du produit, et une fenêtre de saisie propre à
+     celle-ci n'a rien à y faire.
+     Les champs reprennent .frow / .flabel / .finput, déjà définis plus
+     haut pour l'éditeur : la mise en colonne des saisies existe, elle ne
+     se réécrit pas. Aucune CSS nouvelle pour cette fenêtre.
+     La feuille mup-confirm.css est déjà chargée par la page, et
+     .mupc-overlay figure déjà parmi ce que l'impression masque.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="mupc-overlay" id="chsg-overlay" onmousedown="chsgSurFond(event)">
+  <div class="mupc-modal" role="dialog" aria-modal="true" aria-labelledby="chsg-title">
+    <div class="mupc-head">
+      <span class="mupc-title" id="chsg-title">Charger un devis signé</span>
+      <button type="button" class="mupc-close" aria-label="Fermer" onclick="fermeChargementSigne()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="mupc-body">
+      <!-- LE FICHIER D'ABORD : c'est lui qui motive le geste, et c'est lui
+           qui peut le refuser. Les mêmes types que « Déposer le devis
+           signé », parce que c'est la même pièce et le même serveur. -->
+      <div class="frow">
+        <div class="flabel">Devis signé</div>
+        <input class="finput" type="file" id="chsg-fichier" accept="application/pdf,image/png,image/jpeg,image/webp">
+      </div>
+      <!-- LE CLIENT s'écrit dans `co`, la société : la liste comme le
+           document affichent d.co||d.name, et la fenêtre ne demande qu'un
+           nom. `name` reste vide. -->
+      <div class="frow">
+        <div class="flabel">Client</div>
+        <input class="finput" id="chsg-client" placeholder="Hôtel Le Grand" autocomplete="off">
+      </div>
+      <div class="frow">
+        <div class="flabel">Montant HT</div>
+        <input class="finput" id="chsg-montant" type="number" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="frow">
+        <div class="flabel">Date</div>
+        <input class="finput" id="chsg-date" type="date">
+      </div>
+      <div class="frow">
+        <div class="flabel">Numéro</div>
+        <input class="finput" id="chsg-num" placeholder="D-2026-042" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <div class="mupc-foot">
+      <button type="button" class="mupc-btn mupc-btn-outline mupc-btn-sm" onclick="fermeChargementSigne()">Annuler</button>
+      <button type="button" class="mupc-btn mupc-btn-dark mupc-btn-sm" id="chsg-valider" onclick="valideChargementSigne()">Charger</button>
+    </div>
+  </div>
 </div>
 
 <script src="/js/mup-confirm.js"></script>
@@ -977,6 +1065,24 @@ function estSigne(d){
 // que le serveur, elle n'a pas non plus à être plus permissive.
 function estConvertible(d){
   return !!d && (d.status === 'accepted' || d.statut === 'accepte' || estSigne(d));
+}
+
+// CE QUE L'ÉCRAN MONTRE, qui n'est pas ce que la garde autorise, et les
+// deux ont raison de différer.
+//
+// estConvertible, au-dessus, est le miroir déclaré de la garde serveur :
+// elle admet aussi le statut « accepté », posé à la main dans le
+// sélecteur, et elle reste la garde d'appel de convertToInvoice, qui n'a
+// pas à être plus stricte que le serveur qu'elle appelle.
+//
+// Ce prédicat-ci décide de l'APPARITION du bouton, et il ne retient que
+// le fait qui rend la conversion certaine : le devis porte la pièce
+// signée de son client. Un statut choisi dans un menu est une intention,
+// elle ne fait pas surgir un bouton dans le pied ; elle n'empêche
+// personne, non plus, de convertir par un autre chemin : la garde le
+// laisse passer, et le serveur avec elle.
+function montreConversion(d){
+  return !!d && estSigne(d);
 }
 
 // Chargé une fois à l'init, à côté de loadDocs. Sur panne, l'ensemble est
@@ -1181,6 +1287,210 @@ async function deposerPiece(input){
   }
 }
 
+// ── CHARGER UN DEVIS SIGNÉ ─────────────────────────────────────────
+// L'abonné arrive avec un devis DÉJÀ signé, établi hors de MovUP : sur
+// son ancien tableur, chez son comptable, à la main. Il n'a aucun devis
+// à l'écran auquel accrocher la pièce, et « Déposer le devis signé » ne
+// peut rien pour lui : ce bouton attache une pièce au devis OUVERT. Il
+// faut d'abord que le devis EXISTE. Ce geste-ci le crée, puis dépose la
+// pièce dans la foulée.
+//
+// Les deux boutons ne se recouvrent donc pas : celui du pied signe un
+// devis de la maison, celui de l'en-tête fait entrer un devis du dehors.
+
+// La désignation de la ligne de prestation. Un montant n'entre dans un
+// devis que sous cette forme, la page ne lisant un total que comme la
+// somme de ses lignes, et une ligne veut un libellé. Le mot est sobre
+// à dessein : il nomme la prestation sans prétendre la connaître.
+const CHSG_DESIGNATION = 'Prestation';
+
+function chsgVoile(){ return document.getElementById('chsg-overlay'); }
+
+function ouvreChargementSigne(){
+  const v = chsgVoile();
+  if(!v || v.classList.contains('open')) return;
+  // Vidée à chaque ouverture, sauf les deux valeurs que la page sait
+  // proposer : la suite de la série et la date du jour. Une saisie
+  // laissée d'une fois sur l'autre finirait sous le mauvais devis.
+  document.getElementById('chsg-fichier').value = '';
+  document.getElementById('chsg-client').value = '';
+  document.getElementById('chsg-montant').value = '';
+  document.getElementById('chsg-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('chsg-num').value = numeroSuivant();
+  document.getElementById('chsg-valider').disabled = false;
+  v.classList.add('open');
+  document.addEventListener('keydown', chsgSurTouche, true);
+  document.getElementById('chsg-fichier').focus();
+}
+
+function fermeChargementSigne(){
+  const v = chsgVoile();
+  if(!v) return;
+  v.classList.remove('open');
+  document.removeEventListener('keydown', chsgSurTouche, true);
+}
+
+// Le clic sur le voile, et lui seul : un clic dans la fenêtre remonte
+// jusqu'ici et ne doit rien fermer. Sur mousedown comme mup-confirm.js,
+// pour qu'une sélection de texte relâchée hors de la fenêtre ne la
+// referme pas.
+function chsgSurFond(e){ if(e.target === chsgVoile()) fermeChargementSigne(); }
+
+// ÉCHAP. L'écoute est posée sur le document, comme celle de
+// mup-confirm.js et pour la même raison : le focus peut être n'importe
+// où. Elle laisse passer la touche quand un dialogue s'est posé
+// PAR-DESSUS celui-ci, un refus, un motif : les deux écouteurs vivent
+// sur le même nœud, et rien n'y empêche l'un de partir quand l'autre
+// s'arrête. Sans ce contrôle, une seule touche fermerait le message ET
+// la saisie qu'il commente. Le dernier voile ouvert est celui qui
+// répond.
+function chsgSurTouche(e){
+  if(e.key !== 'Escape' && e.key !== 'Esc') return;
+  const voiles = document.querySelectorAll('.mupc-overlay.open');
+  if(voiles.length && voiles[voiles.length - 1] !== chsgVoile()) return;
+  e.preventDefault();
+  fermeChargementSigne();
+}
+
+// L'ENREGISTREMENT D'UN SEUL DEVIS, ciblé et ATTENDU, dont le code de
+// retour est lu. saveDocs ne convient pas ici : elle POSTe tout le
+// tableau et ne dit pas lequel est passé, alors que ce geste doit savoir
+// si CE devis précis est entré en base avant d'envoyer sa pièce. Le
+// serveur rend 404 sur la signature d'un devis qu'il ne connaît pas.
+async function enregistreUnDevis(d){
+  try {
+    const r = await fetch('/api/devis', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(d) });
+    if(r.ok) return { ok:true, motif:null };
+    // 402 : la fenêtre d'abonnement est déjà levée par
+    // trial-expired-modal.js, un second message ferait double emploi.
+    if(r.status === 402) return { ok:false, motif:null };
+    const err = await r.json().catch(() => ({}));
+    return { ok:false, motif: err.error || 'L\'enregistrement du devis a été refusé.' };
+  } catch(e){
+    console.warn('[devis] enregistrement du devis chargé', e);
+    return { ok:false, motif:'Erreur réseau lors de l\'enregistrement du devis.' };
+  }
+}
+
+// L'ORDRE EST IMPÉRATIF : le devis existe d'abord, la pièce ensuite.
+// Champs, création, enregistrement attendu, dépôt. Chaque marche a son
+// repli, et aucune ne laisse l'abonné devant un état qu'il ne peut pas
+// nommer.
+async function valideChargementSigne(){
+  const fichier = (document.getElementById('chsg-fichier').files || [])[0];
+  const client  = document.getElementById('chsg-client').value.trim();
+  const montant = parseFloat(String(document.getElementById('chsg-montant').value).replace(',', '.'));
+  const date    = document.getElementById('chsg-date').value;
+  const num     = document.getElementById('chsg-num').value.trim();
+
+  // a. LES CHAMPS. Le numéro n'est pas exigé : newDoc ne l'exige pas non
+  //    plus, et le champ arrive déjà rempli de la suite de la série.
+  if(!fichier){ mupAlert('Choisissez le devis signé à charger.', null, 'Fermer'); return; }
+  if(!client){ mupAlert('Indiquez le client de ce devis.', null, 'Fermer'); return; }
+  if(!(montant > 0)){ mupAlert('Indiquez le montant HT de ce devis.', null, 'Fermer'); return; }
+  if(!date){ mupAlert('Indiquez la date de ce devis.', null, 'Fermer'); return; }
+
+  const valider = document.getElementById('chsg-valider');
+  valider.disabled = true;
+
+  // LE FICHIER SE LIT AVEC LES CHAMPS, avant toute création : ses refus
+  // sont déjà rédigés pour l'abonné, et les entendre maintenant évite
+  // d'avoir à défaire un devis pour un SVG ou un fichier trop lourd.
+  // litPiecePourEnvoi est reprise telle quelle : elle ne dépend d'aucun
+  // currentId.
+  let dataUrl;
+  try {
+    dataUrl = await litPiecePourEnvoi(fichier);
+  } catch(motif){
+    valider.disabled = false;
+    mupAlert(String(motif), null, 'Fermer');
+    return;
+  }
+
+  // b. LE DEVIS, sur le patron de newDoc. Statut 'accepted' : un devis
+  //    signé n'est pas un brouillon, et la pièce vaut acceptation, c'est
+  //    ce que dit déjà le prédicat du serveur. Le taux prend
+  //    accountDefaultTva, comme un devis neuf : le sélecteur de l'éditeur
+  //    reste le lieu où l'abonné l'ajuste.
+  const nowIso = new Date().toISOString();
+  const d = {
+    id:'d'+Date.now(), type:'devis', num, name:'', co:client, email:'', addr:'',
+    date, validity:30, status:'accepted', tva:accountDefaultTva,
+    notes:'Paiement à 30 jours à réception de facture. Acompte de 30% à la signature.',
+    lines:[{ desc:CHSG_DESIGNATION, qty:1, pu:montant }],
+    createdAt: nowIso, updatedAt: nowIso
+  };
+  // Le numéro entre dans la SÉRIE, comme celui d'un devis neuf. Le devis
+  // chargé n'est pas hors comptabilité : le suivant reprendra sa forme.
+  if(num) d.numAt = nowIso;
+  docs.unshift(d);
+
+  // c. L'ENREGISTREMENT. d. S'il échoue, le devis n'a jamais existé : il
+  //    quitte le tableau, aucune pièce n'est envoyée. Mieux vaut ne rien
+  //    créer qu'un devis qui n'existe que sur l'écran.
+  const enr = await enregistreUnDevis(d);
+  if(!enr.ok){
+    docs = docs.filter(x => x.id !== d.id);
+    valider.disabled = false;
+    if(enr.motif) mupAlert(enr.motif, null, 'Fermer');
+    return;
+  }
+
+  // e. LA PIÈCE, par la route de deposerPiece. Le devis est en base, le
+  //    404 n'est plus possible.
+  let depotOk = false, depotMotif = null;
+  try {
+    const r = await fetch('/api/devis/' + encodeURIComponent(d.id) + '/signature', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contenu_data_url: dataUrl, filename: fichier.name })
+    });
+    if(r.ok){ pieceCourante = await r.json(); depotOk = true; }
+    else if(r.status !== 402){
+      const err = await r.json().catch(() => ({}));
+      depotMotif = err.error || 'Le dépôt du devis signé a été refusé.';
+    }
+  } catch(e){
+    console.error('[devis] dépôt du devis chargé', e);
+    depotMotif = 'Erreur réseau lors du dépôt du devis signé.';
+  }
+
+  // f. LE DEVIS RESTE, la pièce non. L'abonné doit savoir exactement où
+  //    il en est : le document est créé, il n'est PAS signé, il est donc
+  //    modifiable, et « Déposer le devis signé » l'attend dans le pied.
+  //    Il est porté à l'écran avant le message, pour que la phrase
+  //    désigne quelque chose de visible.
+  if(!depotOk){
+    fermeChargementSigne();
+    currentId = d.id;
+    renderList();
+    loadDocToEditor(d);
+    renderPreview(d);
+    syncOutputButtons();
+    if(depotMotif){
+      mupAlert('Le devis a été créé, mais la pièce signée n\'a pas pu être déposée', [
+        depotMotif,
+        'Le devis est à l\'écran, non signé et donc modifiable. Reprenez le dépôt avec « Déposer le devis signé », en bas de cette colonne.'
+      ], 'Fermer');
+    } else {
+      // 402 : la fenêtre d'abonnement est déjà levée. Reste à dire ce
+      // qu'elle ne dit pas : le devis, lui, est bien là.
+      showToast('Devis créé, pièce signée non déposée');
+    }
+    return;
+  }
+
+  // g. LES DEUX SONT PASSÉS.
+  devisSignes.add(clefDevis(d.id));
+  fermeChargementSigne();
+  currentId = d.id;
+  renderList();
+  loadDocToEditor(d);
+  renderPreview(d);
+  syncOutputButtons();
+  showToast('✓ Devis signé chargé');
+}
+
 // LE FIGEAGE, CÔTÉ ÉCRAN. Posé dans loadDocToEditor, seul point de passage
 // vers l'éditeur : aucun devis n'y entre sans traverser ce contrôle.
 //
@@ -1189,7 +1499,17 @@ async function deposerPiece(input){
 // qu'une pièce existe parce que sa lecture a échoué.
 const CHAMPS_EDITEUR = ['e-num','e-name','e-co','e-email','e-addr','e-date','e-validity','e-tva','e-status','e-notes'];
 
-function appliqueFigeage(fige){
+// LA RAISON, et non plus un booléen. Le title au survol dit POURQUOI le
+// champ ne se laisse pas écrire : il n'a donc lieu d'être que lorsqu'il y
+// a quelque chose à dire. Un éditeur INOCCUPÉ est éteint sans un mot :
+// « Ce devis a été signé par votre client » y serait faux, aucun devis
+// n'y étant, et l'écran dit déjà « Sélectionnez ou créez un devis ».
+//
+// Trois états pour un seul argument : la raison fige ET s'affiche au
+// survol ; true fige sans rien dire ; false rouvre.
+function appliqueFigeage(raison){
+  const fige = !!raison;
+  const motif = typeof raison === 'string' ? raison : '';
   for(const id of CHAMPS_EDITEUR){
     const el = document.getElementById(id);
     if(!el) continue;
@@ -1198,23 +1518,21 @@ function appliqueFigeage(fige){
     // copier ce que le devis porte.
     if(el.tagName === 'SELECT') el.disabled = fige;
     else el.readOnly = fige;
-    el.title = fige ? RAISON_FIGE : '';
+    el.title = motif;
   }
   document.querySelectorAll('#lines-container input').forEach(el => {
     el.readOnly = fige;
-    el.title = fige ? RAISON_FIGE : '';
+    el.title = motif;
   });
   document.querySelectorAll('#lines-container .line-del').forEach(el => { el.disabled = fige; });
-  // « Supprimer » s'éteint avec l'explication au survol. « Marquer comme
-  // accepté » s'éteint avec lui : il écrit le champ statut, par une autre
-  // porte que le sélecteur qu'on vient de fermer. Il ne manque à personne,
-  // la pièce signée valant déjà acceptation.
-  for(const id of ['btn-delete','btn-accept']){
-    const el = document.getElementById(id);
-    if(el){ el.disabled = fige; el.title = fige ? RAISON_FIGE : ''; }
-  }
+  // « Supprimer » s'éteint avec l'explication au survol, quand il y en a
+  // une. Il est seul dans ce paragraphe : « Marquer comme accepté » a été
+  // retiré du pied, la pièce signée valant déjà acceptation et le
+  // sélecteur de statut restant la porte de l'un comme de l'autre.
+  const suppr = document.getElementById('btn-delete');
+  if(suppr){ suppr.disabled = fige; suppr.title = motif; }
   const ajout = document.querySelector('.btn-add-line');
-  if(ajout){ ajout.disabled = fige; ajout.title = fige ? RAISON_FIGE : ''; }
+  if(ajout){ ajout.disabled = fige; ajout.title = motif; }
 }
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -1374,7 +1692,7 @@ function loadDocToEditor(d) {
   // LE FIGEAGE est posé ICI, et nulle part ailleurs : loadDocToEditor est
   // le seul chemin par lequel un devis entre dans l'éditeur. Après addLine,
   // parce que les lignes de prestation naissent ouvertes.
-  appliqueFigeage(estSigne(d));
+  appliqueFigeage(estSigne(d) && RAISON_FIGE);
   majZonePiece();
   chargePieceCourante(d);
 }
@@ -1663,15 +1981,6 @@ async function saveDoc() {
   else showToast('✓ Document enregistré');
 }
 
-function markAccepted() {
-  if(!currentId) return;
-  const d = docs.find(x => x.id === currentId);
-  // syncOutputButtons en fin de geste : le devis vient de devenir
-  // convertible, et le bouton doit s'en apercevoir sans attendre un clic
-  // ailleurs.
-  if(d) { d.status = 'accepted'; document.getElementById('e-status').value = 'accepted'; saveDocs(); renderList(); renderPreview(d); syncOutputButtons(); showToast('✓ Marqué comme accepté'); }
-}
-
 async function convertToInvoice() {
   if(!currentId) return;
   const d = docs.find(x => x.id === currentId);
@@ -1721,7 +2030,11 @@ async function deleteDoc(btn) {
   document.getElementById('e-num').value = '';   // le numéro part avec la pièce
   majAlerteNumero();
   syncOutputButtons();                         // plus rien à imprimer ni à envoyer
-  appliqueFigeage(false);                      // l'éditeur vide se rouvre
+  // L'éditeur ne se ROUVRE pas : il n'y a plus de devis à écrire. Il
+  // s'éteint, et sans raison au survol : le figeage n'en a une que
+  // lorsqu'un devis signé est à l'écran. Le mot est ailleurs, dans
+  // l'aperçu, qui vient de reprendre « Sélectionnez ou créez un devis ».
+  appliqueFigeage(true);
   majZonePiece();                              // et n'attend plus aucune pièce
   if(btn) btn.disabled = false;                // rendu au document suivant
 }
@@ -1745,13 +2058,13 @@ function syncOutputButtons() {
     const b = document.getElementById(id);
     if(b) b.disabled = !on;
   }
-  // CONVERTIR a son propre critère, plus riche que celui des trois
-  // ci-dessus : un document sélectionné ne suffit pas, il faut qu'il soit
-  // convertible, c'est-à-dire marqué accepté ou porteur de la pièce signée
-  // de son client. C'est le prédicat de la garde serveur, à la lettre.
-  // Une ligne à part, donc, et non un quatrième nom dans le tableau.
+  // CONVERTIR n'a pas le même sort que les trois ci-dessus : il ne
+  // s'éteint pas, il DISPARAÎT, et son critère est le sien. Une ligne à
+  // part, donc, et non un quatrième nom dans le tableau. hidden et non
+  // display : .btn-action ne pose aucun display, la gouttière de
+  // .edit-actions-life se referme d'elle-même.
   const conv = document.getElementById('btn-convert');
-  if(conv) conv.disabled = !estConvertible(on ? docs.find(x => x.id === currentId) : null);
+  if(conv) conv.hidden = !montreConversion(on ? docs.find(x => x.id === currentId) : null);
 }
 
 // ── LE REPLI DE LA LISTE ───────────────────────────────────────────
@@ -1950,6 +2263,10 @@ function showToast(msg) {
     // la première saisie suivante réenregistrait le devis à la date du jour.
     document.getElementById('e-date').value = new Date().toISOString().split('T')[0];
     updateTotals();
+    // Aucun devis à l'écran : l'éditeur est éteint, et sans raison au
+    // survol. Il n'y a pas de devis signé ici, il n'y a pas de devis du
+    // tout, et l'aperçu dit déjà « Sélectionnez ou créez un devis ».
+    appliqueFigeage(true);
   }
   // Après la branche, donc vrai dans les deux cas : un document a été
   // sélectionné et la sortie s'allume, ou il n'y en avait aucun et elle

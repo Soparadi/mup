@@ -4507,9 +4507,107 @@ app.get('/api/account/privacy/export', async (req, res) => {
       } catch (e) { return [] }
     }
 
+    // devis_signature : les devis signés que le client a renvoyés et que
+    // l'abonné a déposés. La charge fait jusqu'à 8 Mo par pièce (cf.
+    // PIECE_OCTETS_MAX dans lib/piece-signee.js) et l'export l'emporte en
+    // entier : sans garde, un abonné qui a numérisé cent devis fabriquerait un
+    // JSON de plusieurs centaines de mégaoctets, assemblé en mémoire vive sur
+    // une instance d'un gigaoctet PARTAGÉE par tous les abonnés.
+    //
+    // BUDGET CUMULÉ, et non un plafond par pièce : c'est le total assemblé qui
+    // rompt, jamais la pièce prise seule. Le pic vaut le double du budget, la
+    // sérialisation JSON doublant les octets déjà chargés ; 50 Mo tiennent donc
+    // la centaine de mégaoctets au pire moment. La couverture reste large : les
+    // images sont remises au format par la page avant envoi, et un devis signé
+    // numérisé pèse le plus souvent quelques centaines de kilooctets.
+    //
+    // ORDRE DÉTERMINISTE, la pièce la plus ancienne d'abord (first_deposited_at,
+    // puis devisId pour départager deux dates égales), et débordement par ARRÊT :
+    // les pièces retenues sont toujours les N plus anciennes, jamais un choix qui
+    // dépendrait du remplissage. Sans cet ordre, deux exports successifs ne
+    // rendraient pas les mêmes pièces et l'abonné ne saurait plus lesquelles il
+    // détient.
+    //
+    // DEUX PASSES : les métadonnées d'abord, qui ne pèsent rien et portent
+    // `octets` (le compte des octets DÉCODÉS, dont le base64 se déduit : il
+    // gonfle de 4/3) ; le budget se tranche dessus, et seules les pièces retenues
+    // voient leur charge rapatriée. Une passe unique aurait chargé toutes les
+    // pièces pour en écarter ensuite, c'est-à-dire exactement le pic qu'on évite.
+    const EXPORT_PIECES_BUDGET_BASE64 = 50 * 1024 * 1024
+
+    async function dumpDevisSignature() {
+      let metas = []
+      try {
+        const r = await db.query(
+          // L'ORDER BY ci-dessous tient parce que first_deposited_at est une
+          // chaîne ISO 8601 UTC (new Date().toISOString(), cf. PUT
+          // /api/devis/:id/signature), et non un datetime : à largeur fixe et
+          // même fuseau, l'ordre lexicographique EST l'ordre chronologique.
+          // Changer ce champ de type changerait donc l'ordre de cet export.
+          `SELECT devisId, content_type, octets, filename, deposited_at, first_deposited_at
+           FROM devis_signature WHERE userId = $uid
+           ORDER BY first_deposited_at ASC, devisId ASC`,
+          { uid: cleanUserId }
+        )
+        metas = r?.[0] || []
+      } catch (e) { return { pieces: [], omises: 0 } }
+
+      const retenues = []
+      let cumul = 0
+      for (const m of metas) {
+        const base64Estime = Math.ceil((Number(m?.octets) || 0) / 3) * 4
+        if (cumul + base64Estime > EXPORT_PIECES_BUDGET_BASE64) break
+        cumul += base64Estime
+        retenues.push(m)
+      }
+      const omises = metas.length - retenues.length
+      if (!retenues.length) return { pieces: [], omises }
+
+      const dids = retenues.map(m => String(m?.devisId || '')).filter(Boolean)
+      const charges = new Map()
+      try {
+        const r = await db.query(
+          `SELECT devisId, contenu_data_url FROM devis_signature
+           WHERE userId = $uid AND devisId IN $dids`,
+          { uid: cleanUserId, dids }
+        )
+        for (const row of (r?.[0] || [])) {
+          charges.set(String(row?.devisId || ''), row?.contenu_data_url || null)
+        }
+      } catch (e) { return { pieces: [], omises: metas.length } }
+
+      // L'ordre du SELECT ci-dessus n'est pas garanti par `IN` : la sortie est
+      // reconstruite depuis `retenues`, qui porte l'ordre chronologique décidé.
+      const pieces = retenues.map(m => ({
+        devisId: m?.devisId || null,
+        content_type: m?.content_type || null,
+        octets: Number(m?.octets) || 0,
+        filename: m?.filename || null,
+        deposited_at: m?.deposited_at || null,
+        first_deposited_at: m?.first_deposited_at || null,
+        contenu_data_url: charges.get(String(m?.devisId || '')) || null
+      }))
+      return { pieces, omises }
+    }
+    const devisSignes = await dumpDevisSignature()
+
+    // Le champ de tête, rédigé POUR L'ABONNÉ et placé avant tout le reste dans
+    // le fichier. Une pièce absente sans explication se lit comme une perte ;
+    // dite ainsi, elle est un second geste à faire, depuis le devis concerné.
+    //
+    // NULL, DONC CHAMP ABSENT, quand l'abonné n'a aucun devis signé : annoncer
+    // une pièce jointe à qui n'en a déposé aucune décrirait un fonds qui
+    // n'existe pas. Le champ ne paraît que s'il y a une pièce à commenter.
+    const devisSignesNote = devisSignes.omises > 0
+      ? `${devisSignes.omises} de vos devis signés figurent dans ce fichier sans leur pièce jointe : à elles seules, ces pièces dépassent la taille qu'un export peut porter. Rien n'est perdu. Chacune reste consultable et téléchargeable depuis son devis dans MovUP, par le lien qui ouvre le devis signé. Les pièces présentes ici sont les plus anciennes que vous ayez déposées.`
+      : (devisSignes.pieces.length
+        ? 'Vos devis signés figurent dans ce fichier avec leur pièce jointe.'
+        : null)
+
     const payload = {
       exported_at: new Date().toISOString(),
       export_version: 1,
+      ...(devisSignesNote ? { devis_signes_note: devisSignesNote } : {}),
       user: await dumpUserDirect(),
       contacts: await dump('contacts'),
       // societes — manquait depuis l'origine de la table : les raisons sociales
@@ -4519,10 +4617,19 @@ app.get('/api/account/privacy/export', async (req, res) => {
       pipeline: await dump('pipeline'),
       agenda: await dump('agenda'),
       devis: await dump('devis'),
+      // La pièce signée vit dans sa table à elle (cf. lib/piece-signee.js) : sans
+      // cette ligne, l'export rendait le devis sans ce que le client en a signé.
+      devis_signature: devisSignes.pieces,
       facture: await dump('facture'),
       frais: await dump('frais'),
       frais_recurrents: await dump('frais_recurrents'),
       user_settings: await dump('user_settings'),
+      // mail_signature : table à part de mail_settings, et manquante ici depuis
+      // l'origine : le logo et le texte de signature sont des données
+      // personnelles comme les autres. Aucun mécanisme de budget ne lui est
+      // nécessaire, son logo étant plafonné à 300 Ko par abonné (LOGO_OCTETS_MAX
+      // dans lib/mail-signature.js) et l'enregistrement unique par compte.
+      mail_signature: await dump('mail_signature'),
       mailbox_credentials: await dumpMailboxCreds(),
       search_history: await dumpParUserRecord('lead_search'),
       contact_edits: await dumpParUserRecord('lead_contact_edit'),

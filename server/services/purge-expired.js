@@ -21,6 +21,9 @@
 //   - devis filtrés    → seuls les devis NON convertis en facture sont
 //                        purgés (préserve devis_id pointé par les factures)
 //   - stripe_events_processed → NON purgée (anti-replay webhooks Stripe)
+//   - devis_signature  → suit son devis, pas le compte : la pièce d'un devis
+//                        préservé est préservée avec lui (elle justifie la
+//                        facture émise), celle d'un devis purgé part avec lui
 //
 // EXCLUSION RGPD OPT-OUT (Phase 9.16 cron purge + Phase 6 Étape 4 tables) :
 //   - optout_request   → NON purgée. Conservation 5 ans (prescription
@@ -49,6 +52,7 @@
 // le user est skipé avec log warning et compté dans skippedCount.
 
 import { getDb } from '../../lib/surreal.js'
+import { cleanRecordId } from '../../lib/db.js'
 import { compterEcheances } from '../../lib/echeances.js'
 import { decryptMailToken } from '../../lib/crypto.js'
 import { revokeRefreshToken } from '../../lib/oauth-google.js'
@@ -109,7 +113,7 @@ const TABLES_SCHEMAFULL = [
   'lead_enrichment'
 ]
 
-// 17 tables SCHEMALESS avec FK string brute userId — DELETE pattern :
+// 18 tables SCHEMALESS avec FK string brute userId. DELETE pattern :
 //   DELETE <table> WHERE userId = $uid
 // TRAITÉES HORS BOUCLE (voir deleteUserCascade) :
 //   - mailbox_credentials → révocation OAuth Google avant DELETE (par ownerId,
@@ -267,15 +271,55 @@ export async function deleteUserCascade(rawUid) {
 
   // devis filtrés — préserve les devis acceptés convertis en facture
   // (obligation comptable : la facture émise référence devis_id).
+  let devisSupprimes = []
   try {
     const r = await db.query(
       `DELETE devis WHERE userId = $uid AND (facture_id IS NONE OR statut != 'accepte') RETURN BEFORE`,
       { uid }
     )
-    const n = (r?.[0] || []).length
+    devisSupprimes = r?.[0] || []
+    const n = devisSupprimes.length
     if (n > 0) { tablesPurgees.push(`devis:${n}`); recordCount += n }
   } catch (e) {
     console.warn(`[purge] devis filtrés échec uid=${uid} :`, e.message)
+  }
+
+  // devis_signature : bloc à part, APRÈS les devis et VOLONTAIREMENT HORS de
+  // TABLES_SCHEMALESS. La boucle générique supprime sur userId : elle emporterait
+  // donc aussi les pièces des devis que le filtre comptable vient de préserver.
+  // Or une facture qui référence un devis accepté se justifie par le devis signé
+  // de la main du client ; la pièce suit son devis, pas le compte. Ne pas ajouter
+  // devis_signature à TABLES_SCHEMALESS.
+  //
+  // ALIMENTÉ PAR LE RETURN BEFORE ci-dessus : les pièces supprimées ici sont
+  // exactement celles des devis que ce DELETE vient d'emporter, pas une de plus.
+  //
+  // FORMAT : devisId est écrit par PUT /api/devis/:id/signature comme string
+  // BRUTE passée par cleanRecordId. Les ids rendus par RETURN BEFORE sont des
+  // objets RecordId, pas des chaînes, d'où String(rec.id) avant cleanRecordId,
+  // pour la raison même qui vaut à cleanCampaignId son String(raw) ci-dessus :
+  // sans lui la clause ne matcherait rien et laisserait les pièces orphelines.
+  //
+  // UNE SEULE REQUÊTE, sur `devisId IN $dids` : une requête par devis ferait
+  // autant d'allers-retours vers la base cloud que l'abonné a de devis purgés.
+  //
+  // GARDE DE COMPTE REDONDANTE, et conservée : les ids viennent du RETURN BEFORE
+  // déjà cadré sur l'abonné, donc rien ne fuirait sans elle. Aucune requête de
+  // ce fichier ne supprime sans son userId ; celle-ci ne fera pas l'exception.
+  const didsSupprimes = devisSupprimes
+    .map(rec => cleanRecordId('devis', String(rec?.id || '')))
+    .filter(Boolean)
+  if (didsSupprimes.length) {
+    try {
+      const r = await db.query(
+        `DELETE devis_signature WHERE userId = $uid AND devisId IN $dids RETURN BEFORE`,
+        { uid, dids: didsSupprimes }
+      )
+      const n = (r?.[0] || []).length
+      if (n > 0) { tablesPurgees.push(`devis_signature:${n}`); recordCount += n }
+    } catch (e) {
+      console.warn(`[purge] devis_signature échec uid=${uid} :`, e.message)
+    }
   }
 
   // Anonymisation audit_log (Option β) — UPDATE … SET user_id = NONE.
@@ -309,7 +353,7 @@ export async function deleteUserCascade(rawUid) {
     error,
     tablesPurgees,
     recordCount,
-    tables_preserved: ['facture', 'counter', 'frais', 'frais_recurrents', 'stripe_events_processed', 'devis(accepté→facture)'],
+    tables_preserved: ['facture', 'counter', 'frais', 'frais_recurrents', 'stripe_events_processed', 'devis(accepté→facture)', 'devis_signature(du devis préservé)'],
     anonymized
   }
 }

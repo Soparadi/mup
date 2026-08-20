@@ -280,6 +280,10 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .finput{border:1.5px solid var(--border);border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:var(--font);color:var(--text);background:var(--surface);width:100%;outline:none;transition:border-color .15s}
 .finput:focus{border-color:var(--text);background:#fff}
 .f2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+/* La garde d’unicité du numéro parle ici, sous le champ, et se tait le
+   reste du temps. Elle signale, puis laisse la main : la comptabilité de
+   l’abonné lui appartient, donc l’enregistrement reste ouvert. */
+.fwarn{font-size:10.5px;font-weight:600;color:var(--orange);line-height:1.35}
 
 /* LIGNES DEVIS */
 .line-item{display:grid;grid-template-columns:1fr 60px 80px 28px;gap:6px;align-items:center;margin-bottom:6px}
@@ -637,11 +641,24 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
       <!-- Devis -->
       <div class="edit-section">
         <div class="edit-section-title">Informations</div>
+        <!-- LE NUMÉRO, à côté de la date : les deux mentions que le
+             document porte en tête, saisies au même endroit. Le champ
+             est libre de format : l’abonné y écrit la référence de sa
+             propre comptabilité, et la page apprend cette forme pour
+             proposer la suite au devis suivant. Voir § LE NUMÉRO DU
+             DEVIS dans le script. -->
         <div class="f2">
+          <div class="frow">
+            <div class="flabel">Numéro</div>
+            <input class="finput" id="e-num" placeholder="D-2026-042" autocomplete="off" spellcheck="false" oninput="liveUpdate()">
+            <div class="fwarn" id="e-num-warn" hidden>Ce numéro figure déjà sur un autre devis.</div>
+          </div>
           <div class="frow">
             <div class="flabel">Date</div>
             <input class="finput" id="e-date" type="date" oninput="liveUpdate()">
           </div>
+        </div>
+        <div class="f2">
           <div class="frow">
             <div class="flabel">Validité</div>
             <select class="finput" id="e-validity" onchange="liveUpdate()">
@@ -650,8 +667,6 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
               <option value="90">90 jours</option>
             </select>
           </div>
-        </div>
-        <div class="f2">
           <div class="frow">
             <div class="flabel">TVA</div>
             <select class="finput" id="e-tva" onchange="liveUpdate()">
@@ -661,17 +676,17 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
               <option value="20" selected>20% — Taux normal</option>
             </select>
           </div>
-          <div class="frow">
-            <div class="flabel">Statut</div>
-            <select class="finput" id="e-status" onchange="liveUpdate()">
-              <option value="draft">Brouillon</option>
-              <option value="sent">Envoyé</option>
-              <option value="accepted">Accepté ✓</option>
-              <option value="refused">Refusé</option>
-              <option value="expired">Expiré</option>
-              <option value="invoice">Facture</option>
-            </select>
-          </div>
+        </div>
+        <div class="frow">
+          <div class="flabel">Statut</div>
+          <select class="finput" id="e-status" onchange="liveUpdate()">
+            <option value="draft">Brouillon</option>
+            <option value="sent">Envoyé</option>
+            <option value="accepted">Accepté ✓</option>
+            <option value="refused">Refusé</option>
+            <option value="expired">Expiré</option>
+            <option value="invoice">Facture</option>
+          </select>
         </div>
       </div>
 
@@ -921,7 +936,7 @@ function renderList() {
     const dateStr = fmtDate(d.date);
     return `<div class="doc-item${isActive?' active':''}" onclick="selectDoc('${d.id}')">
       <div class="doc-item-top">
-        <div class="doc-num">${d.type==='facture'?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>':'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'}${esc(d.num)}</div>
+        <div class="doc-num">${d.type==='facture'?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>':'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'}${esc(numeroDuDoc(d))}</div>
         <div class="doc-status s-${d.status}">${statusLabel(d.status)}</div>
       </div>
       <div class="doc-client">${esc(d.co||d.name)}</div>
@@ -947,8 +962,12 @@ function selectDoc(id) {
 }
 
 function loadDocToEditor(d) {
+  const numDoc = numeroDuDoc(d);
   document.getElementById('edit-hdr-title').textContent = d.type === 'facture' ? 'Facture' : 'Devis';
-  document.getElementById('edit-num').textContent = '#' + d.num;
+  document.getElementById('edit-num').textContent = numDoc ? '#' + numDoc : '#—';
+  // Le champ reste modifiable sur un devis déjà enregistré : la correction
+  // y devient la nouvelle référence de la série (cf. dernierNumero).
+  document.getElementById('e-num').value = numDoc;
   document.getElementById('e-name').value = d.name||'';
   document.getElementById('e-co').value = d.co||'';
   document.getElementById('e-email').value = d.email||'';
@@ -963,6 +982,7 @@ function loadDocToEditor(d) {
   document.getElementById('lines-container').innerHTML = '';
   (d.lines||[]).forEach(l => addLine(l.desc, l.qty, l.pu));
   updateTotals();
+  majAlerteNumero();
 }
 
 // ── LIGNES ──
@@ -1015,6 +1035,10 @@ function renderPreview(d) {
   const tva = d.tva ?? accountDefaultTva;
   const validityDate = d.date ? new Date(new Date(d.date).getTime() + (d.validity||30)*24*3600*1000) : null;
   const isInvoice = d.type === 'facture';
+  // Le numéro s’imprime tel qu’il est saisi. Tant qu’il reste vide, au
+  // premier devis d’un compte neuf, la ligne cède la place plutôt que
+  // d’annoncer un « N° » vide.
+  const numDoc = numeroDuDoc(d);
 
   const linesHtml = (d.lines||[]).map(l => {
     const total = (parseFloat(l.qty)||0) * (parseFloat(l.pu)||0);
@@ -1046,7 +1070,7 @@ function renderPreview(d) {
         </div>
         <div class="doc-paper-type">
           <div class="doc-paper-type-label">${isInvoice?'FACTURE':'DEVIS'}</div>
-          <div class="doc-paper-num">N° ${esc(d.num)}</div>
+          ${numDoc ? `<div class="doc-paper-num">N° ${esc(numDoc)}</div>` : ''}
           <div class="doc-paper-date">Émis le ${fmtDateDoc(d.date)}</div>
           ${validityDate && !isInvoice ? `<div class="doc-paper-date">Valide jusqu’au ${fmtDateDoc(validityDate.toISOString().split('T')[0])}</div>` : ''}
         </div>
@@ -1100,6 +1124,14 @@ function liveUpdate() {
   d.co = document.getElementById('e-co').value;
   d.email = document.getElementById('e-email').value;
   d.addr = document.getElementById('e-addr').value;
+  // Le numéro part du champ tel qu’il est saisi, dans la forme libre de
+  // l’abonné, et se réhorodate à chaque changement : cet horodatage, et
+  // lui seul, désigne la référence du devis suivant.
+  const numSaisi = document.getElementById('e-num').value.trim();
+  if(numSaisi !== numeroDuDoc(d)) d.numAt = new Date().toISOString();
+  d.num = numSaisi;
+  document.getElementById('edit-num').textContent = numSaisi ? '#' + numSaisi : '#—';
+  majAlerteNumero();
   d.date = document.getElementById('e-date').value;
   d.validity = parseInt(document.getElementById('e-validity').value)||30;
   // Le select porte toujours une valeur, 0 compris : un 0 est le choix de la
@@ -1112,12 +1144,101 @@ function liveUpdate() {
   renderPreview(d);
 }
 
+// ── LE NUMÉRO DU DEVIS ─────────────────────────────────────────────
+// Le numéro appartient à l’abonné. Il l’écrit dans la forme de sa
+// comptabilité : D-2026-042, 2026/07, 145. La page apprend cette forme
+// au lieu de lui en imposer une. La composition « 2026-NNN » depuis
+// docs.length est partie avec l’année en dur qu’elle portait : elle
+// rejouait un numéro déjà employé dès qu’un devis du milieu de la
+// série était supprimé, et elle interdisait à qui tenait déjà sa
+// propre série de la poursuivre ici.
+//
+// Ce qui vaut ici vaut pour le DEVIS seul. La facture garde son
+// compteur séquentiel à mutex côté serveur (nextSequenceNumber) : la
+// loi y impose une suite continue et pleine, qu’une saisie libre
+// briserait.
+
+// Le numéro affiché et retenu, quelle que soit la plume qui a écrit le
+// devis : `num` pour ceux que cette page crée, `numero` pour ceux que
+// l’API a numérotés seule. La saisie, elle, écrit toujours dans `num`.
+function numeroDuDoc(d){
+  return String((d && (d.num ?? d.numero)) || '').trim();
+}
+
+// L’horodatage de la SÉRIE, distinct d’updatedAt : il bouge quand le
+// numéro bouge, et lui seul. Retoucher le client ou une ligne d’un
+// vieux devis laisse donc la référence au dernier numéro écrit. Les
+// devis d’avant cette passe portent leur date de création, ce qui les
+// range dans l’ordre où ils sont arrivés.
+function horodateNumero(d){
+  return String((d && (d.numAt || d.createdAt || d.created_at)) || '');
+}
+
+// Le dernier numéro ÉCRIT, référence de la suite. Il se lit dans les
+// devis eux-mêmes plutôt que dans leur nombre : une suppression laisse
+// la série avancer là où elle en est. Une correction devient référence à
+// son tour, puisqu’elle réhorodate le devis corrigé : l’erreur de
+// saisie se rattrape donc en une fois.
+function dernierNumero(){
+  let ref = '', stamp = null;
+  for(const d of docs){
+    const n = numeroDuDoc(d);
+    if(!n) continue;
+    const h = horodateNumero(d);
+    if(stamp === null || h > stamp){ ref = n; stamp = h; }
+  }
+  return ref;
+}
+
+// La suite d’un numéro : le nombre qui le termine avance de un, tout le
+// reste tient. Préfixe, séparateurs et longueur du nombre sont rendus
+// tels quels : D-2026-042 donne D-2026-043, 2026/07 donne 2026/08, 145
+// donne 146. BigInt plutôt que Number : au-delà de seize chiffres, un
+// entier flottant arrondirait la référence de l’abonné.
+// Un numéro qui se termine autrement que par un nombre rend une chaîne
+// vide, et le champ reste alors libre : mieux vaut laisser écrire que
+// d’inventer une suite.
+function suiteDe(num){
+  const m = String(num || '').trim().match(/^(.*?)(\d+)$/);
+  if(!m) return '';
+  const chiffres = m[2];
+  return m[1] + (BigInt(chiffres) + 1n).toString().padStart(chiffres.length, '0');
+}
+
+function numeroSuivant(){
+  return suiteDe(dernierNumero());
+}
+
+// LA GARDE D’UNICITÉ. Elle compare à l’identique, casse et espaces de
+// bord mis de côté, et elle SIGNALE : l’enregistrement reste ouvert et
+// l’abonné tranche. Tous les devis chargés sont les siens, le serveur
+// les cadrant déjà sur son userId, la comparaison locale porte donc
+// sur la bonne population.
+function clefNumero(n){
+  return String(n || '').trim().toLowerCase();
+}
+
+function numeroDejaEmploye(num, id){
+  const k = clefNumero(num);
+  if(!k) return false;
+  return docs.some(x => x.id !== id && clefNumero(numeroDuDoc(x)) === k);
+}
+
+function majAlerteNumero(){
+  const warn = document.getElementById('e-num-warn');
+  if(!warn) return;
+  warn.hidden = !numeroDejaEmploye(document.getElementById('e-num').value, currentId);
+}
+
 // ── ACTIONS ──
 function newDoc() {
-  const num = '2026-' + String(docs.length + 1).padStart(3,'0');
+  // Le champ arrive rempli : l’abonné saisit sa forme une seule fois,
+  // au premier devis, et la page tient la série ensuite.
+  const num = numeroSuivant();
   const today = new Date().toISOString().split('T')[0];
   const nowIso = new Date().toISOString();
   const d = { id:'d'+Date.now(), type:'devis', num, name:'', co:'', email:'', addr:'', date:today, validity:30, status:'draft', tva:accountDefaultTva, notes:'Paiement à 30 jours à réception de facture. Acompte de 30% à la signature.', lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
+  if(num) d.numAt = nowIso;   // le numéro proposé entre dans la série dès l’enregistrement
   docs.unshift(d);
   saveDocs();
   currentId = d.id;
@@ -1180,6 +1301,8 @@ async function deleteDoc(btn) {
   document.getElementById('preview-area').innerHTML = '<div class="preview-empty"><div style="opacity:.2"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div><div style="font-size:13px">Sélectionnez ou créez un devis</div></div>';
   document.getElementById('edit-hdr-title').textContent = 'Nouveau devis';
   document.getElementById('edit-num').textContent = '#—';
+  document.getElementById('e-num').value = '';   // le numéro part avec la pièce
+  majAlerteNumero();
   syncOutputButtons();                         // plus rien à imprimer ni à envoyer
   if(btn) btn.disabled = false;                // rendu au document suivant
 }

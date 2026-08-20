@@ -327,9 +327,9 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .empty-state p{color:var(--muted);font-size:12.5px;max-width:400px;line-height:1.5}
 .empty-state .hint{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11.5px;color:var(--muted);margin-top:8px}
 .empty-state .hint strong{color:var(--text)}
-/* Deux faces, et elles se déduisent. La page opérante annonce ce qu'elle sait
-   faire ; la page sans lien — l'abonné a remis sa mise en service à plus tard —
-   dit ce qui manque et rouvre le panneau. Rouvrir n'est pas fermer. */
+/* Trois faces, une seule à la fois. La page sans outil offre sa mise en
+   service ; la page équipée et encore sans rendez-vous appelle le premier ; la
+   page opérante annonce ce qu'elle sait faire. Rouvrir n'est pas fermer. */
 .empty-state .face{display:none;flex-direction:column;align-items:center;gap:14px}
 
 /* —— BRIEFING + VISIO + DOCS LAYOUT —— */
@@ -1053,19 +1053,30 @@ body #mup-cookie-panel{z-index:60001}
         <div class="icon-circle">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
         </div>
-        <!-- La face de la page OPÉRANTE : elle ne paraît qu'une fois un lien
-             enregistré. Avant, elle promettait un démarrage impossible. -->
+        <!-- La face de la page OPÉRANTE : un lien est enregistré ET un
+             rendez-vous en visio est programmé. C'est aussi la face du doute —
+             elle n'affirme rien de l'abonné, elle propose. -->
         <div class="face" id="emptyOperant">
           <h2>Prêt à lancer une visio</h2>
           <p>Cliquez sur l'un de vos outils en haut pour démarrer, ou sélectionnez un rendez-vous programmé dans la liste.</p>
         </div>
-        <!-- La trace du report : l'abonné a dit n'utiliser aucun outil, la page
-             ne le retient plus, mais elle ne fait pas semblant d'être prête. Le
-             bouton ROUVRE le panneau — rouvrir n'est pas fermer. -->
+        <!-- La face de la page SANS OUTIL, d'un texte unique : elle dit ce que
+             la page fera, que le report ait été pris ou pas, et l'offre de la
+             mettre en service y tient sans conditionner la promesse. Le bouton
+             ROUVRE le panneau — rouvrir n'est pas fermer. -->
         <div class="face" id="emptyReport">
-          <h2>Aucun outil enregistré</h2>
-          <p>Vous avez remis votre mise en service à plus tard. Tant qu'aucun lien n'est enregistré, aucune visio ne peut être lancée depuis MovUP.</p>
-          <button class="btn-primary" id="reprendreMiseEnService">Reprendre la mise en service</button>
+          <h2>Vos visios partiront d’ici.</h2>
+          <p>Ajoutez l’adresse de votre salle quand vous voudrez : elle sera proposée à chaque rendez-vous, et la fiche du prospect restera à côté de l’appel.</p>
+          <button class="btn-primary" id="reprendreMiseEnService">Mettre en service</button>
+        </div>
+        <!-- La face de la page ÉQUIPÉE et encore sans rendez-vous : le lien est
+             posé, la page ne demande plus rien de sa mise en service, il lui
+             manque seulement de quoi travailler. Elle NOMME le bouton de la
+             barre du haut au lieu d'en poser un second, et rien ne la voile :
+             c'est une invitation, pas une prise en otage. -->
+        <div class="face" id="emptyPremierRdv">
+          <h2>Votre salle est en service.</h2>
+          <p>Programmez votre premier rendez-vous avec le bouton « Programmer RDV », en haut de la page : il rejoindra la liste de gauche, et votre lien y sera proposé d’office.</p>
         </div>
         <div id="nextRdvCard"></div>
         <div id="emptyDocsHint" class="hint" style="display:none">
@@ -1955,16 +1966,27 @@ function deplierOutils(ouvert){
   if(btn) btn.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
 }
 
-/* L'état vide a deux faces, et ce qui les départage n'est PAS le report : un
-   abonné peut n'avoir aucun lien sans avoir rien reporté, et la face qui
-   l'annonce lui est due dans les deux cas. Ce qu'on teste est l'absence
-   AVÉRÉE d'outil — donc une lecture ABOUTIE : sur 'echec', la mémoire est vide
-   sans que cela dise quoi que ce soit des liens de l'abonné, et lui annoncer
-   qu'il n'a aucun outil serait un mensonge là où le silence suffit. */
+/* —— LES TROIS RÉGIMES DE L'ÉTAT VIDE ——
+   Un seul état vide, trois faces, et ce qui les départage est le RENDEZ-VOUS,
+   jamais l'appel passé : sans outil, la page offre sa mise en service ; avec un
+   outil et aucun rendez-vous en visio, elle appelle le premier et nomme le
+   bouton qui le pose ; dès qu'un rendez-vous est programmé, elle laisse la page
+   faire son travail.
+
+   Les deux faces qui AFFIRMENT quelque chose de l'abonné exigent une
+   connaissance aboutie : sur 'echec' la mémoire des réglages est vide sans que
+   cela dise rien de ses liens, et tant que les rendez-vous n'ont pas été lus,
+   on ignore s'il en a. Dans le doute, c'est la face opérante qui paraît — elle
+   n'affirme rien, elle propose. */
+let rdvsProgrammes = null;   // rendez-vous en visio devant soi ; null tant qu'aucune lecture n'a abouti
+
 function refletEtatVide(){
-  const sansOutilAvere = lectureReglagesAboutie() && aucunLienEnregistre();
-  $('emptyOperant').style.display = sansOutilAvere ? 'none' : 'flex';
-  $('emptyReport').style.display  = sansOutilAvere ? 'flex' : 'none';
+  const reglagesLus     = lectureReglagesAboutie();
+  const sansOutilAvere  = reglagesLus && aucunLienEnregistre();
+  const premierRdvAvere = reglagesLus && !aucunLienEnregistre() && rdvsProgrammes === 0;
+  $('emptyReport').style.display     = sansOutilAvere  ? 'flex' : 'none';
+  $('emptyPremierRdv').style.display = premierRdvAvere ? 'flex' : 'none';
+  $('emptyOperant').style.display    = (sansOutilAvere || premierRdvAvere) ? 'none' : 'flex';
 }
 
 // Le seul reflet de la mise en service. Trois surfaces en dépendent, aucune ne
@@ -2071,16 +2093,16 @@ function launchExternal(provider){
   const link = _state.settings.links?.[provider];
 
   if(!link){
-    // Le champ visé peut être replié derrière « ajouter un outil » : y renvoyer
-    // sans le déplier désignerait une surface invisible.
-    deplierOutils(true);
-    const input = document.querySelector(`input[data-link="${provider}"]`);
-    if(input){
-      input.focus();
-      input.closest('.my-link-field').style.borderColor = 'var(--red)';
-      setTimeout(()=>{ input.closest('.my-link-field').style.borderColor = ''; }, 1500);
-    }
-    showToast(`Renseignez votre lien ${PROVIDERS[provider].label} ci-dessus`);
+    // Cliquer un outil DIT l'outil : la mise en service s'ouvre au temps de la
+    // saisie, sur ce fournisseur, plutôt que de désigner un champ replié
+    // derrière « ajouter un outil » et de laisser l'abonné le trouver.
+    // Le report tombe, comme il tombe sur « Mettre en service » : il valait
+    // pour l'état où il a été pris, et ce clic dit le contraire.
+    // Aucune seconde chaîne d'écriture n'est ouverte : c'est le champ du
+    // panneau qui enregistre, par saveMyLink, exactement comme la barre.
+    effacerReport();
+    ouvrirPanneau();
+    accueilEtapeSaisie(provider);
     return;
   }
 
@@ -2230,7 +2252,15 @@ async function renderRdvList(){
   // une visio menée d'un lapin — elle mentirait.
   const estDevant = r => new Date(r.date).getTime() + (r.duree || 30) * 60000 > now.getTime();
 
-  rdvs.filter(estDevant)
+  // Le seul endroit d'où la page apprend qu'elle a des rendez-vous : c'est
+  // collectVisioRdvs qui les lit, et cette liste-ci qui les tient déjà. L'état
+  // vide central s'en déduit, sans seconde lecture et sans témoin à écrire.
+  // Compté AVANT la recherche : chercher un nom absent ne vide pas l'agenda.
+  const devant = rdvs.filter(estDevant);
+  rdvsProgrammes = devant.length;
+  refletEtatVide();
+
+  devant
     .filter(r => !search || (r.prospectName + ' ' + r.societe + ' ' + r.sujet).toLowerCase().includes(search))
     .forEach(r=>{
       const d = new Date(r.date);
@@ -3657,6 +3687,23 @@ function refletProvidersRdv(){
 }
 
 $('openNewRdvBtn').addEventListener('click', async ()=>{
+  // Programmer un rendez-vous sans lien enregistré ne mène nulle part : la
+  // modale s'ouvrirait sans tuile présélectionnée et refuserait au dernier
+  // clic, formulaire déjà rempli. Le refus tombe ici, et il OUVRE la mise en
+  // service au lieu de laisser l'abonné devant un formulaire mort.
+  // Au temps du CHOIX, là où les trois outils de la barre ouvrent au temps de
+  // la saisie : ce bouton-ci ne dit aucun fournisseur. ouvrirPanneau porte ce
+  // temps par construction, il n'y a rien à lui répéter.
+  // Le report tombe, comme il tombe sur « Mettre en service » : il valait pour
+  // l'état où il a été pris, et ce clic dit le contraire. Aucune seconde chaîne
+  // d'écriture n'est ouverte : c'est le champ du panneau qui enregistre, par
+  // saveMyLink.
+  if(aucunLienEnregistre()){
+    effacerReport();
+    ouvrirPanneau();
+    return;
+  }
+
   // Une seule source : les cartes pipeline, comme la page agenda. L'id posé en
   // ficheId est de la forme nue, sans préfixe de table — c'est la seule que la
   // fiche pipeline sait relire. Un RDV rattaché à un contact n'apparaîtrait sur

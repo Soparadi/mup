@@ -106,6 +106,15 @@ import {
   LOGO_LARGEUR_ENCODEE_MAX,
   LOGO_HAUTEUR_ENCODEE_MAX
 } from './lib/mail-signature.js'
+import {
+  litPieceDataUrl,
+  motifPieceRefusee,
+  nettoieNomFichier,
+  pieceEnSortie,
+  chargePiece,
+  listeDevisSignes,
+  PIECE_CORPS_LIMITE
+} from './lib/piece-signee.js'
 import { controleAuthentification, redigeAnnonce } from './lib/mail-authentification.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -122,6 +131,40 @@ app.set('trust proxy', 1)
 // Si express.json() avait déjà tourné, le body serait parsé et la signature
 // invalidée. Cette route consomme uniquement le raw body.
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler)
+
+// ── Parseur étroit du dépôt de devis signé ────────────────────────────────
+// Monté AVANT le parseur global, et gardé par MÉTHODE et par CHEMIN : lui seul
+// accepte un corps au-delà des 10 Mo globaux, et seulement sur le dépôt d'une
+// pièce signée. Tout le reste de l'application garde son plafond.
+//
+// POURQUOI AVANT, et non au niveau de la route. body-parser ne parse qu'une
+// fois : le parseur global aurait déjà lu le corps (et posé req._body), un
+// second parseur posé sur la route ne verrait plus rien à faire. C'est
+// exactement ce qui arrive à visioBgJson, plus bas, qui ne desserre donc rien.
+// Un PDF de 8 Mo pèse 11 Mo une fois en base64 : sous le seul parseur global,
+// il finirait en 413 opaque, posé avant toute garde applicative, là où l'abonné
+// attend le motif rédigé par motifPieceRefusee.
+//
+// Le plafond vient de PIECE_CORPS_LIMITE, dérivé du plafond en octets décodés
+// (lib/piece-signee.js) : les deux valeurs ne peuvent pas diverger. La marge
+// entre les deux (8 Mo admis, 12 Mo de corps toléré) est là pour que tout
+// fichier REFUSÉ pour son poids le soit par motifPieceRefusee, en 400 rédigé,
+// et non par le parseur. Au-delà, le 413 redevient muet : c'est à la page de
+// mesurer le fichier avant de l'envoyer.
+//
+// Ce parseur tourne avant requireAuth, comme le global : il accepte donc de
+// lire ce corps avant de savoir qui appelle. C'est déjà le cas des 10 Mo
+// globaux, et le chemin gardé restreint la surface à une seule route.
+//
+// req.rawBody n'est pas capturé ici : il ne sert qu'à la validation HMAC des
+// webhooks Resend, qui n'empruntent pas ce chemin.
+const pieceSigneeJson = express.json({ limit: PIECE_CORPS_LIMITE })
+const CHEMIN_DEPOT_PIECE = /^\/api\/devis\/[^/]+\/signature\/?$/i
+app.use((req, res, next) => {
+  if (req.method !== 'PUT') return next()
+  if (!CHEMIN_DEPOT_PIECE.test(req.path)) return next()
+  return pieceSigneeJson(req, res, next)
+})
 
 // `verify` capture le rawBody pour la validation HMAC des webhooks Resend (Svix).
 // Ne change rien à `req.body` parsé — ajoute juste `req.rawBody` (string).
@@ -6017,6 +6060,172 @@ app.get('/api/devis', async (req, res) => {
   }
 })
 
+// ── DEVIS SIGNÉ PAR LE CLIENT ─────────────────────────────────────────────
+// L'abonné envoie son devis, le client le renvoie signé par courriel, et
+// l'abonné dépose ici cette pièce. Elle vit dans la table `devis_signature`,
+// un enregistrement par devis, id = id du devis (cf. lib/piece-signee.js pour
+// le pourquoi de la table séparée).
+//
+// CE QUE LA PIÈCE DÉCLENCHE, et qui n'est pas dans cette table :
+//   - le devis se fige (POST, PUT et DELETE le refusent en 409),
+//   - il devient convertible en facture, la pièce valant acceptation.
+//
+// L'IDENTITÉ VIENT DE req.userId, que seul requireAuth pose depuis la session
+// vérifiée, et non de requireUserId, dont la chaîne de repli lit l'en-tête
+// x-user-id, la query et le corps, et retombe sur 'default'. Ces routes portent
+// une pièce contractuelle signée d'un tiers : l'identité doit se lire dans la
+// route, sans dépendre de l'ordre d'un middleware à des milliers de lignes
+// d'ici. La garde est explicite parce que String(undefined) vaut « undefined »,
+// identifiant d'enregistrement parfaitement valide, qui ferait d'un espace de
+// signatures un bien commun.
+//
+// AUCUNE ROUTE DE SUPPRESSION, et c'est délibéré. Retirer la pièce rendrait au
+// devis toute sa mutabilité : ses lignes, ses montants et son numéro
+// redeviendraient modifiables alors qu'un client les a signés, et le numéro
+// déjà consommé serait libéré. Rien n'est perdu pour autant : la pièce reste
+// dans la boîte de courriel de l'abonné, et un nouveau dépôt remplace le
+// précédent. Ne pas ajouter de DELETE ici.
+//
+// Le dépôt est une ÉCRITURE : il passe donc le portillon d'abonnement, et un
+// essai expiré le voit en 402 comme toute autre écriture. Aucune exemption.
+
+// Présence d'une pièce signée, en une lecture qui ne rapatrie aucune charge :
+// c'est le prédicat du figeage et de la garde de conversion. queryOrEmpty ne
+// neutralise qu'un seul cas, la table jamais créée, qui ne porte alors aucune
+// pièce ; toute autre panne de lecture remonte à l'appelant et finit en 500,
+// jamais en « pas de pièce ». Un devis signé ne doit pas redevenir modifiable
+// parce qu'une requête a échoué.
+async function pieceSigneeExiste(db, devisId) {
+  const rows = await queryOrEmpty(db, 'SELECT id FROM type::record("devis_signature", $id)', { id: devisId })
+  return Boolean(rows[0])
+}
+
+// Message unique du refus, pour que les trois écritures gelées nomment la même
+// raison. Un 409 muet enverrait l'abonné chercher la panne dans son réseau.
+const DEVIS_FIGE = 'Ce devis a été signé par votre client, il n\'est plus modifiable'
+
+// DÉCLARÉE AVANT app.get('/api/devis/:id') : Express sert la première route
+// qui filtre, et ':id' attraperait 'signatures' comme un identifiant de devis.
+// Ne pas déplacer cette route plus bas.
+//
+// La LISTE des identifiants signés, et rien d'autre : la page l'appelle à
+// chaque ouverture pour poser une pastille sur les lignes concernées. Les
+// identifiants sont rendus nettoyés (sans le préfixe 'devis:'), forme sous
+// laquelle ils servent de clé.
+app.get('/api/devis/signatures', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  try {
+    const db = await getDb()
+    res.json(await listeDevisSignes(db, userId))
+  } catch (err) {
+    console.error('[devis:signatures]', err.message)
+    res.status(500).json({ error: 'Lecture des devis signés impossible' })
+  }
+})
+
+// Métadonnées de la pièce, charge exclue : de quoi écrire « PDF, 1,2 Mo, déposé
+// le 3 mars » et proposer le lien qui l'ouvre.
+app.get('/api/devis/:id/signature', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  try {
+    const db = await getDb()
+    const devisId = cleanRecordId('devis', req.params.id) || req.params.id
+    const piece = await chargePiece(db, devisId)
+    if (!piece || String(piece.userId) !== userId) {
+      return res.status(404).json({ error: 'Aucun devis signé déposé' })
+    }
+    res.json(pieceEnSortie(piece))
+  } catch (err) {
+    console.error('[devis:signature:get]', err.message)
+    res.status(500).json({ error: 'Lecture du devis signé impossible' })
+  }
+})
+
+// La charge, servie telle qu'elle est arrivée, pour ouvrir la pièce dans un
+// onglet. Le type sort de l'adresse data: relue ici, jamais d'un champ de la
+// base : nosniff interdit au navigateur d'en inventer un autre, et le nom du
+// fichier est refabriqué avant d'entrer dans l'en-tête. La liste des types
+// acceptés (PDF et images matricielles, jamais SVG) est ce qui rend cet
+// affichage sans danger.
+app.get('/api/devis/:id/signature/fichier', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  try {
+    const db = await getDb()
+    const devisId = cleanRecordId('devis', req.params.id) || req.params.id
+    const piece = await chargePiece(db, devisId)
+    if (!piece || String(piece.userId) !== userId) {
+      return res.status(404).json({ error: 'Aucun devis signé déposé' })
+    }
+    const lu = litPieceDataUrl(piece.contenu_data_url)
+    if (!lu) return res.status(500).json({ error: 'Le devis signé déposé est illisible' })
+    res.setHeader('Content-Type', lu.contentType)
+    res.setHeader('Content-Length', String(lu.octets.length))
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Cache-Control', 'private, no-store')
+    res.setHeader('Content-Disposition', `inline; filename="${nettoieNomFichier(piece.filename, lu.contentType)}"`)
+    res.send(lu.octets)
+  } catch (err) {
+    console.error('[devis:signature:fichier]', err.message)
+    res.status(500).json({ error: 'Lecture du devis signé impossible' })
+  }
+})
+
+// Dépôt et remplacement. Sous le parseur étroit monté en tête de fichier :
+// c'est la seule route de l'application qui accepte un corps au-delà de 10 Mo.
+app.put('/api/devis/:id/signature', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  try {
+    const db = await getDb()
+    const devisId = cleanRecordId('devis', req.params.id) || req.params.id
+    // Le devis doit exister et être le sien : une pièce ne s'accroche pas à un
+    // document absent, et l'appartenance se vérifie sur le devis, pas sur ce
+    // que le corps de la requête raconte.
+    const rows = await queryOrEmpty(db, 'SELECT userId FROM type::record("devis", $id)', { id: devisId })
+    const devis = rows[0]
+    if (!devis || String(devis.userId) !== userId) return res.status(404).json({ error: 'Devis introuvable' })
+
+    // Ni le type annoncé ni le poids déclaré par la page ne sont crus :
+    // motifPieceRefusee tranche sur les octets décodés et rend le motif tel
+    // qu'il sera lu à l'abonné.
+    const dataUrl = req.body?.contenu_data_url
+    const motif = motifPieceRefusee(dataUrl)
+    if (motif) return res.status(400).json({ error: motif })
+    const lu = litPieceDataUrl(dataUrl)
+
+    // PREMIER DÉPÔT RELU ET RÉINJECTÉ. upsertRecord écrit en UPDATE … CONTENT,
+    // qui REMPLACE l'enregistrement en entier : un champ absent de ce payload
+    // est un champ effacé. Sans cette relecture, chaque remplacement écraserait
+    // first_deposited_at par la date du remplacement, et la date à laquelle le
+    // client a signé serait perdue au premier renvoi de pièce.
+    const ancienne = await chargePiece(db, devisId)
+    const now = new Date().toISOString()
+
+    const payload = {
+      userId,
+      devisId,
+      contenu_data_url: String(dataUrl),
+      content_type: lu.contentType,
+      octets: lu.octets.length,
+      filename: nettoieNomFichier(req.body?.filename, lu.contentType),
+      deposited_at: now,
+      first_deposited_at: ancienne?.first_deposited_at || now
+    }
+    const { record, status } = await upsertRecord(db, 'devis_signature', devisId, payload)
+    // upsertRecord rend 404 quand l'enregistrement préexistant appartient à un
+    // autre compte. Le devis a déjà été contrôlé plus haut : ce cas ne devrait
+    // pas se produire, et s'il se produit il ne s'agit pas d'une pièce à rendre.
+    if (status === 404) return res.status(404).json({ error: 'Devis introuvable' })
+    res.status(status).json(pieceEnSortie(record))
+  } catch (err) {
+    console.error('[devis:signature:put]', err.message)
+    res.status(500).json({ error: 'Enregistrement du devis signé impossible' })
+  }
+})
+
 app.get('/api/devis/:id', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
@@ -6051,6 +6260,15 @@ app.post('/api/devis', async (req, res) => {
 
     const cleanId = cleanRecordId('devis', body.id)
     if (cleanId) {
+      // FIGEAGE. Cette route est un upsert : avec un id, elle REMPLACE un devis
+      // existant, et c'est par elle que passe l'enregistrement de la page. Un
+      // devis dont le client a renvoyé la pièce signée ne se réécrit plus.
+      //
+      // Dans cette branche seulement : sans id, il s'agit d'une création, et un
+      // document qui n'existe pas encore ne peut porter aucune pièce signée.
+      if (await pieceSigneeExiste(db, cleanId)) {
+        return res.status(409).json({ error: DEVIS_FIGE })
+      }
       const { record, status } = await upsertRecord(db, 'devis', cleanId, body)
       return res.status(status).json(record)
     }
@@ -6071,6 +6289,12 @@ app.put('/api/devis/:id', async (req, res) => {
     const existing = await db.query('SELECT * FROM type::record("devis", $id)', { id })
     const rec = existing[0]?.[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
+    // FIGEAGE, après la garde d'appartenance : un devis signé par le client ne
+    // se réécrit plus. L'ordre compte, un 409 posé avant elle dirait à un tiers
+    // qu'un devis signé existe sous cet identifiant.
+    if (await pieceSigneeExiste(db, id)) {
+      return res.status(409).json({ error: DEVIS_FIGE })
+    }
     const cleanBody = { ...(req.body || {}) }
     delete cleanBody.id
     cleanBody.userId = userId
@@ -6096,6 +6320,12 @@ app.delete('/api/devis/:id', async (req, res) => {
     const existing = await db.query('SELECT * FROM type::record("devis", $id)', { id })
     const rec = existing[0]?.[0]
     if (!rec || rec.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
+    // FIGEAGE, après la garde d'appartenance. Supprimer emporterait la pièce
+    // avec le document qu'elle engage, et libérerait un numéro déjà consommé
+    // par un devis que le client a signé.
+    if (await pieceSigneeExiste(db, id)) {
+      return res.status(409).json({ error: DEVIS_FIGE })
+    }
     await db.query('DELETE type::record("devis", $id)', { id })
     res.json({ ok: true })
   } catch (err) {
@@ -6216,8 +6446,23 @@ app.post('/api/factures/from-devis/:devisId', async (req, res) => {
     const dResult = await db.query('SELECT * FROM type::record("devis", $id)', { id: devisId })
     const devis = dResult[0]?.[0]
     if (!devis || devis.userId !== userId) return res.status(404).json({ error: 'Devis introuvable' })
-    if (devis.statut && devis.statut !== 'accepte' && devis.status !== 'accepted') {
-      return res.status(412).json({ error: 'Le devis doit être accepté avant conversion' })
+    // GARDE D'ACCEPTATION. La forme précédente s'ouvrait sur `devis.statut &&` :
+    // un devis sans champ `statut` (la forme plate écrite par la page ne porte
+    // que `status`) court-circuitait le test et se convertissait sans aucun
+    // contrôle. La garde ne gardait rien.
+    //
+    // Convertible à deux titres, dont un seul suffit :
+    //   - le devis est marqué accepté, dans l'une ou l'autre des deux formes ;
+    //   - une pièce signée est déposée, qui VAUT acceptation.
+    // Le second titre existe pour que l'abonné qui recueille la signature de son
+    // client n'ait pas à passer en plus par le sélecteur de statut ; le premier
+    // pour que celui qui n'en recueille jamais ne soit pas bloqué.
+    //
+    // Ceci RESTREINT un comportement jusqu'ici permissif : un devis ni accepté
+    // ni signé se convertit aujourd'hui, il ne se convertira plus.
+    const accepte = devis.statut === 'accepte' || devis.status === 'accepted'
+    if (!accepte && !(await pieceSigneeExiste(db, devisId))) {
+      return res.status(412).json({ error: 'Le devis doit être accepté, ou porter le devis signé de votre client, avant conversion' })
     }
     // Idempotence : un devis ne produit qu'une facture, et la garde est ici.
     // Le contrôle de la page ne tient pas contre un double-clic, un onglet resté
@@ -8033,6 +8278,9 @@ app.use((req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS visio_doc SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS visio_doc_open SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS devis SCHEMALESS')
+    // Distincte de devis à dessein, cf. le bloc DEVIS SIGNÉ PAR LE CLIENT : une
+    // écriture du devis remplace le document en entier et emporterait la pièce.
+    await db.query('DEFINE TABLE IF NOT EXISTS devis_signature SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS facture SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS counter SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS frais SCHEMALESS')
@@ -8071,7 +8319,7 @@ app.use((req, res) => {
     // Fil d'activité — toute lecture filtre userId, et la lecture d'une fiche
     // y ajoute la liste des ancrages équivalents.
     await db.query('DEFINE INDEX IF NOT EXISTS activites_user ON TABLE activites COLUMNS userId, ancrage')
-    console.log('[boot] tables ready (mail x2, visio x6, devis, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes, pipeline, contacts, agenda, activites + 11 indexes)')
+    console.log('[boot] tables ready (mail x2, visio x6, devis x2, facture, counter, frais x2, user_settings, user_plan x2, mail_v2 x3, mailbox_credentials, societes, pipeline, contacts, agenda, activites + 11 indexes)')
   } catch (e) {
     console.error('[boot] table init failed:', e.message)
   }

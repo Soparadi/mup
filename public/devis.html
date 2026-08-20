@@ -1078,8 +1078,9 @@ function renderPreview(d) {
   }).join('');
 
   // L'émetteur tient l'emplacement de la marque en tête de feuille et le bloc
-  // ÉMETTEUR sous la barre. Les deux lisent la MÊME société, celle du compte :
-  // la feuille sort au nom de l'abonné qui l'imprime, jamais au nom de l'outil.
+  // de gauche sous la barre, sans étiquette : sa place le désigne déjà. Les
+  // deux lisent la MÊME société, celle du compte : la feuille sort au nom de
+  // l'abonné qui l'imprime, jamais au nom de l'outil.
   // Le courriel ne figure nulle part — aucun champ des réglages ne le porte, et
   // une ligne absente vaut mieux qu'une adresse fausse sur un document envoyé.
   const em = emetteurDuCompte();
@@ -1105,7 +1106,6 @@ function renderPreview(d) {
 
       <div class="doc-parties">
         <div>
-          <div class="doc-party-label">Émetteur</div>
           ${em.nom ? `<div class="doc-party-name">${esc(em.nom)}</div>
           ${emLignes ? `<div class="doc-party-info">${emLignes}</div>` : ''}` : `<div class="doc-party-info">Votre société apparaîtra ici.</div>
           <a class="doc-emetteur-cta" href="/frais?reglages=1">Renseigner ma société</a>`}

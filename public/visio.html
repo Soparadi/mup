@@ -322,14 +322,20 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .col-center{display:flex;flex-direction:column;gap:12px;background:var(--surface);overflow-y:auto;position:relative;padding:14px}
 
 .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center;gap:14px}
-.empty-state .icon-circle{width:72px;height:72px;border-radius:50%;background:var(--visio-light);display:flex;align-items:center;justify-content:center;color:var(--visio)}
-.empty-state h2{font-size:20px;font-weight:800;letter-spacing:-.4px}
-.empty-state p{color:var(--muted);font-size:12.5px;max-width:400px;line-height:1.5}
+/* Le cercle violet est parti : il venait de la palette de l'application et
+   jurait avec l'encre chaude du vêtement. L'icône reste, à la couleur du
+   surtitre, et sa gouttière est celle que .mes-surtitre pose sous lui. */
+.empty-state .empty-icone{color:var(--mes-surtitre);margin-bottom:14px}
 .empty-state .hint{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11.5px;color:var(--muted);margin-top:8px}
 .empty-state .hint strong{color:var(--text)}
-/* Trois faces, une seule à la fois. La page sans outil offre sa mise en
-   service ; la page équipée et encore sans rendez-vous appelle le premier ; la
-   page opérante annonce ce qu'elle sait faire. Rouvrir n'est pas fermer. */
+/* Trois faces, une seule à la fois, dans une seule carte. La page sans outil
+   offre sa mise en service ; la page équipée et encore sans rendez-vous appelle
+   le premier ; la page opérante annonce ce qu'elle sait faire. Elles se
+   remplacent au même endroit et portent donc le MÊME vêtement : en habiller une
+   seule ferait sauter l'écran d'un habillage à l'autre selon l'état du compte.
+   Leur titre et leur texte ne sont plus habillés ici : ils prennent les règles
+   du panneau, .mes-carte h2 et .mes-carte p, étendues à .mes-bloc. Ne reste que
+   la gouttière, qui espace titre, texte et bouton. Rouvrir n'est pas fermer. */
 .empty-state .face{display:none;flex-direction:column;align-items:center;gap:14px}
 
 /* —— BRIEFING + VISIO + DOCS LAYOUT —— */
@@ -704,6 +710,17 @@ body.outils-deplies .my-link-field.vide{display:flex}
   display:flex;flex-direction:column;
   box-shadow:0 24px 60px rgba(13,13,11,.28);
 }
+/* LA MÊME CARTE, EN BLOC DE PAGE. L'état vide central porte le vêtement des
+   courriels comme le panneau, aux deux différences qui séparent un bloc d'une
+   fenêtre : aucun voile derrière lui, aucune ombre portée sous lui. Il n'a pas
+   de hauteur maximale non plus — rien ne le contraint, il n'a rien à confiner.
+   Tout le reste est celui de .mes-carte, et le filet comme le corps réemploient
+   ses règles telles quelles dans le balisage. */
+.mes-bloc{
+  background:var(--mes-carte);border:1px solid var(--mes-bord);
+  border-radius:var(--mes-rayon);overflow:hidden;
+  width:100%;max-width:600px;
+}
 /* Six bandes de 12 px dans leur ordre, écrites une seule fois : ce sont des
    arrêts de dégradé, pas six éléments à poser dans le balisage. */
 .mes-filet{
@@ -718,11 +735,14 @@ body.outils-deplies .my-link-field.vide{display:flex}
   font-size:12px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
   color:var(--mes-surtitre);margin-bottom:14px;
 }
-.mes-carte h2{
+.mes-carte h2,.mes-bloc h2{
   font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.15;
-  color:var(--mes-titre);margin-bottom:16px;
+  color:var(--mes-titre);
 }
-.mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
+/* La marge sous le titre appartient au panneau seul : dans le bloc, c'est la
+   gouttière de .face qui espace le titre du texte, et l'ajouter la doublerait. */
+.mes-carte h2{margin-bottom:16px}
+.mes-carte p,.mes-bloc p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
 .mes-carte p + p{margin-top:12px}
 .mes-carte strong{color:var(--mes-titre);font-weight:700}
 .mes-pied{
@@ -1050,33 +1070,43 @@ body #mup-cookie-panel{z-index:60001}
     <!-- COL CENTRE : BRIEFING + VISIO -->
     <div class="col-center">
       <div class="empty-state" id="emptyState">
-        <div class="icon-circle">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-        </div>
-        <!-- La face de la page OPÉRANTE : un lien est enregistré ET un
-             rendez-vous en visio est programmé. C'est aussi la face du doute —
-             elle n'affirme rien de l'abonné, elle propose. -->
-        <div class="face" id="emptyOperant">
-          <h2>Prêt à lancer une visio</h2>
-          <p>Cliquez sur l'un de vos outils en haut pour démarrer, ou sélectionnez un rendez-vous programmé dans la liste.</p>
-        </div>
-        <!-- La face de la page SANS OUTIL, d'un texte unique : elle dit ce que
-             la page fera, que le report ait été pris ou pas, et l'offre de la
-             mettre en service y tient sans conditionner la promesse. Le bouton
-             ROUVRE le panneau — rouvrir n'est pas fermer. -->
-        <div class="face" id="emptyReport">
-          <h2>Vos visios partiront d’ici.</h2>
-          <p>Ajoutez l’adresse de votre salle quand vous voudrez : elle sera proposée à chaque rendez-vous, et la fiche du prospect restera à côté de l’appel.</p>
-          <button class="btn-primary" id="reprendreMiseEnService">Mettre en service</button>
-        </div>
-        <!-- La face de la page ÉQUIPÉE et encore sans rendez-vous : le lien est
-             posé, la page ne demande plus rien de sa mise en service, il lui
-             manque seulement de quoi travailler. Elle NOMME le bouton de la
-             barre du haut au lieu d'en poser un second, et rien ne la voile :
-             c'est une invitation, pas une prise en otage. -->
-        <div class="face" id="emptyPremierRdv">
-          <h2>Votre salle est en service.</h2>
-          <p>Programmez votre premier rendez-vous avec le bouton « Programmer RDV », en haut de la page : il rejoindra la liste de gauche, et votre lien y sera proposé d’office.</p>
+        <!-- LA CARTE DE L'ÉTAT VIDE — le vêtement du panneau, moins le voile et
+             moins l'ombre : un bloc de page, pas une fenêtre. Elle tient les
+             TROIS faces ensemble, parce qu'elles se remplacent au même endroit.
+             Le filet et le corps sont les règles du panneau, réemployées telles
+             quelles : aucune de ces valeurs n'est retapée ici. -->
+        <div class="mes-bloc">
+          <div class="mes-filet" aria-hidden="true"></div>
+          <div class="mes-corps">
+            <div class="empty-icone" aria-hidden="true">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            </div>
+            <!-- La face de la page OPÉRANTE : un lien est enregistré ET un
+                 rendez-vous en visio est programmé. C'est aussi la face du doute —
+                 elle n'affirme rien de l'abonné, elle propose. -->
+            <div class="face" id="emptyOperant">
+              <h2>Prêt à lancer une visio</h2>
+              <p>Cliquez sur l'un de vos outils en haut pour démarrer, ou sélectionnez un rendez-vous programmé dans la liste.</p>
+            </div>
+            <!-- La face de la page SANS OUTIL, d'un texte unique : elle dit ce que
+                 la page fera, que le report ait été pris ou pas, et l'offre de la
+                 mettre en service y tient sans conditionner la promesse. Le bouton
+                 ROUVRE le panneau — rouvrir n'est pas fermer. -->
+            <div class="face" id="emptyReport">
+              <h2>Vos visios partiront d’ici.</h2>
+              <p>Ajoutez l’adresse de votre salle quand vous voudrez : elle sera proposée à chaque rendez-vous, et la fiche du prospect restera à côté de l’appel.</p>
+              <button class="mes-btn" id="reprendreMiseEnService">Mettre en service</button>
+            </div>
+            <!-- La face de la page ÉQUIPÉE et encore sans rendez-vous : le lien est
+                 posé, la page ne demande plus rien de sa mise en service, il lui
+                 manque seulement de quoi travailler. Elle NOMME le bouton de la
+                 barre du haut au lieu d'en poser un second, et rien ne la voile :
+                 c'est une invitation, pas une prise en otage. -->
+            <div class="face" id="emptyPremierRdv">
+              <h2>Votre salle est en service.</h2>
+              <p>Programmez votre premier rendez-vous avec le bouton « Programmer RDV », en haut de la page : il rejoindra la liste de gauche, et votre lien y sera proposé d’office.</p>
+            </div>
+          </div>
         </div>
         <div id="nextRdvCard"></div>
         <div id="emptyDocsHint" class="hint" style="display:none">

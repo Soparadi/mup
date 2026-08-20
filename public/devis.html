@@ -127,6 +127,17 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .s-refused{background:rgba(204,0,0,.08);color:var(--red)}
 .s-expired{background:rgba(184,76,0,.1);color:var(--orange)}
 .s-invoice{background:rgba(67,56,202,.1);color:#4338CA}
+/* LA PASTILLE DU DEVIS SIGNÉ. Elle se pose À CÔTÉ de celle du statut,
+   jamais à sa place : l'état signé n'est pas un statut, et une classe
+   dérivée de s-${d.status} le rendrait effaçable d'un coup de sélecteur.
+   Elle reprend l'aplat de .s-accepted, défini juste au-dessus, parce
+   qu'une pièce signée VAUT acceptation : les deux disent la même chose,
+   elles n'ont pas à le dire de deux couleurs.
+   Les deux pastilles voyagent dans une boîte à elles : .doc-item-top
+   répartit ses enfants aux deux bords, et une troisième les aurait
+   dispersés au lieu de tenir le numéro à gauche et les états à droite. */
+.doc-pastilles{display:flex;align-items:center;gap:4px}
+.doc-signe{background:rgba(29,131,72,.1);color:var(--green)}
 .doc-client{font-size:13px;font-weight:700;color:var(--text);margin-bottom:1px}
 .doc-co{font-size:11px;color:var(--muted)}
 .doc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
@@ -312,9 +323,9 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .line-item input{border:1.5px solid var(--border);border-radius:7px;padding:6px 8px;font-size:12px;font-family:var(--font);color:var(--text);background:var(--surface);outline:none;transition:border-color .15s;width:100%;min-width:0}
 .line-item input:focus{border-color:var(--text);background:#fff}
 .line-del{width:24px;height:24px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--muted2);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .12s}
-.line-del:hover{background:rgba(204,0,0,.08);color:var(--red)}
+.line-del:hover:not(:disabled){background:rgba(204,0,0,.08);color:var(--red)}
 .btn-add-line{display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:8px;border:1.5px dashed var(--border2);background:transparent;font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s;width:100%;justify-content:center;margin-top:4px}
-.btn-add-line:hover{border-color:var(--text);color:var(--text);background:var(--surface)}
+.btn-add-line:hover:not(:disabled){border-color:var(--text);color:var(--text);background:var(--surface)}
 
 /* TOTAL EDIT */
 .total-box{background:var(--surface);border-radius:10px;padding:12px 14px;margin-top:12px}
@@ -354,12 +365,29 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .btn-out:disabled{opacity:.4;cursor:not-allowed}
 .btn-action{padding:10px;border-radius:9px;border:none;font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;transition:all .15s;width:100%}
 .btn-action.primary{background:var(--text);color:#fff}
-.btn-action.primary:hover{background:#000}
+.btn-action.primary:hover:not(:disabled){background:#000}
 .btn-action.secondary{background:var(--surface2);color:var(--text)}
-.btn-action.secondary:hover{background:var(--border2)}
+.btn-action.secondary:hover:not(:disabled){background:var(--border2)}
 .btn-action.success{background:rgba(29,131,72,.1);color:var(--green);border:1.5px solid rgba(29,131,72,.2)}
-.btn-action.success:hover{background:var(--green);color:#fff}
+.btn-action.success:hover:not(:disabled){background:var(--green);color:#fff}
 .btn-action.danger{background:rgba(204,0,0,.06);color:var(--red);border:1.5px solid rgba(204,0,0,.15)}
+
+/* LE DEVIS SIGNÉ, FIGÉ À L'ÉCRAN. Un champ passé en lecture seule garde
+   sinon l'apparence d'un champ ouvert : il prend l'aplat inerte que
+   portent déjà .s-draft et la piste des filtres, et le curseur du refus
+   que porte déjà .btn-out:disabled. Aucune couleur nouvelle.
+   Les survols sont assortis d'un :not(:disabled), sur le modèle de
+   .btn-out:hover plus haut : sans lui, un bouton éteint reprenait sa
+   couleur pleine au passage de la souris et se donnait pour vivant. */
+.finput[readonly],.finput:disabled,.line-item input[readonly]{background:var(--surface2);cursor:not-allowed}
+.finput[readonly]:focus,.line-item input[readonly]:focus{border-color:var(--border);background:var(--surface2)}
+.btn-action:disabled,.btn-add-line:disabled,.line-del:disabled{opacity:.4;cursor:not-allowed}
+
+/* L'ÉTAT DE LA PIÈCE, sous le bouton qui la dépose : ce qu'elle est, ce
+   qu'elle pèse, quand elle est arrivée, et le lien qui l'ouvre. */
+.piece-etat{font-size:10.5px;color:var(--muted);line-height:1.45;text-align:center}
+.piece-etat a{color:var(--blue);font-weight:700;text-decoration:none}
+.piece-etat a:hover{text-decoration:underline}
 
 /* EMPTY STATE */
 .preview-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted2)}
@@ -772,9 +800,21 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 
       <!-- SUITE DU CYCLE DE VIE — change la pièce. Supprimer ferme la marche. -->
       <div class="edit-actions-life">
-        <button class="btn-action success" onclick="markAccepted()">✓ Marquer comme accepté</button>
-        <button class="btn-action secondary" onclick="convertToInvoice()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Convertir en facture</button>
-        <button class="btn-action danger" onclick="deleteDoc(this)">Supprimer</button>
+        <button class="btn-action success" id="btn-accept" onclick="markAccepted()">✓ Marquer comme accepté</button>
+
+        <!-- LE DEVIS SIGNÉ, DÉPOSÉ. Avant Convertir, parce que c'est dans
+             cet ordre que les choses arrivent : le client renvoie la pièce
+             signée, et c'est elle qui rend le devis convertible. L'entrée
+             de fichier est cachée, le bouton la déclenche : un input file
+             nu ne se laisse ni habiller ni nommer. Le bouton naît éteint,
+             comme ceux de la sortie : sans document sélectionné, il n'y a
+             rien à quoi accrocher une pièce. -->
+        <input type="file" id="piece-input" accept="application/pdf,image/png,image/jpeg,image/webp" style="display:none" onchange="deposerPiece(this)">
+        <button class="btn-action secondary" id="btn-piece" onclick="document.getElementById('piece-input').click()" disabled>Déposer le devis signé</button>
+        <div class="piece-etat" id="piece-etat" hidden></div>
+
+        <button class="btn-action secondary" id="btn-convert" onclick="convertToInvoice()" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>Convertir en facture</button>
+        <button class="btn-action danger" id="btn-delete" onclick="deleteDoc(this)">Supprimer</button>
       </div>
 
     </div>
@@ -845,18 +885,336 @@ async function loadDocs() {
   } catch(e){}
   docs = JSON.parse(JSON.stringify(MOCK_DOCS));
 }
+// LE CODE DE RETOUR EST LU. Cette boucle l'ignorait : un refus du serveur
+// finissait en « ✓ Document enregistré », et l'abonné repartait avec une
+// modification qui n'existait que sur son écran. Le bilan rendu ici est ce
+// que saveDoc affiche.
+//
+// Les devis signés sont ÉCARTÉS de la boucle : le serveur les refuse en 409,
+// et rien de ce que la page tient d'eux ne doit être renvoyé. Ils sont
+// comptés à part, pour que l'appelant sache dire pourquoi.
 async function saveDocs() {
   // Persistance API : chaque doc devient un POST upsert (idempotent grâce à upsertRecord serveur)
+  const bilan = { enregistres: 0, ignores: 0, refuses: 0 };
   for(const d of docs){
+    if(estSigne(d)){ bilan.ignores++; continue; }
     try {
-      await fetch('/api/devis', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(d) });
-    } catch(e){ console.warn('[devis] saveDocs failed for', d.id, e); }
+      const r = await fetch('/api/devis', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(d) });
+      if(r.ok) bilan.enregistres++;
+      else { bilan.refuses++; console.warn('[devis] enregistrement refusé pour', d.id, r.status); }
+    } catch(e){ bilan.refuses++; console.warn('[devis] saveDocs failed for', d.id, e); }
+  }
+  return bilan;
+}
+
+// Rend { ok, motif }. Le motif vaut null quand le refus s'est déjà annoncé
+// ailleurs : un 402 lève la fenêtre d'abonnement posée par
+// trial-expired-modal.js, et un second message par-dessus ferait deux.
+async function deleteDocApi(id){
+  if(!id) return { ok:false, motif:'Aucun document à supprimer.' };
+  try {
+    const r = await fetch('/api/devis/' + encodeURIComponent(id), { method:'DELETE' });
+    if(r.ok) return { ok:true, motif:null };
+    if(r.status === 402) return { ok:false, motif:null };
+    const err = await r.json().catch(() => ({}));
+    return { ok:false, motif: err.error || 'La suppression a été refusée.' };
+  } catch(e){
+    console.warn('[devis] DELETE failed', id, e);
+    return { ok:false, motif:'Erreur réseau lors de la suppression.' };
   }
 }
-async function deleteDocApi(id){
-  if(!id) return;
-  try { await fetch('/api/devis/' + encodeURIComponent(id), { method:'DELETE' }); }
-  catch(e){ console.warn('[devis] DELETE failed', id, e); }
+
+// ── LE DEVIS SIGNÉ PAR LE CLIENT ───────────────────────────────────
+// L'abonné envoie son devis, son client le lui renvoie signé, et il dépose
+// ici cette pièce. Elle vit dans sa propre table côté serveur, jamais dans
+// le devis, et c'est elle qui fige le document : un devis signé ne se
+// réécrit plus, ne se supprime plus, et devient convertible en facture.
+//
+// JUMEAUX de lib/piece-signee.js. La page tourne dans le navigateur et ne
+// peut pas importer le module ; ces trois valeurs sont donc écrites deux
+// fois. Toute modification là-bas doit être portée ici dans la même passe,
+// faute de quoi l'abonné se verrait refuser après coup un fichier que la
+// page lui a laissé choisir.
+const PIECE_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+const PIECE_OCTETS_MAX = 8 * 1024 * 1024;
+const PIECE_IMAGE_COTE_LONG_MAX = 2000;
+
+// Une signature est un trait fin. La photo de frais s'encode à 0,7, ce qui
+// convient à un ticket de caisse et empâterait un paraphe ; à 0,85 une page
+// de 2000 px reste sous le mégaoctet et le trait tient.
+const PIECE_IMAGE_QUALITE = 0.85;
+
+const RAISON_FIGE = 'Ce devis a été signé par votre client, il n\'est plus modifiable';
+
+// L'ensemble des devis signés, par CLÉ, et la pièce du devis à l'écran.
+let devisSignes = new Set();
+let pieceCourante = null;
+
+// La CLÉ d'un devis, des deux côtés de la comparaison. /api/devis/signatures
+// rend des identifiants nettoyés, tandis que les devis chargés portent la
+// forme servie par l'API, « devis:xxx », les chevrons compris quand l'id les
+// réclame. Comparer les chaînes brutes ne rapprocherait jamais les deux, et
+// la pastille ne s'afficherait nulle part. Même patron que cleanRecordId
+// (lib/db.js) : c'est lui qui décide de la forme stockée côté serveur.
+function clefDevis(id){
+  return String(id == null ? '' : id)
+    .replace(/^devis:/, '')
+    .replace(/^⟨+/, '')
+    .replace(/\\?⟩+$/, '')
+    .replace(/\\/g, '')
+    .trim();
+}
+
+// La question « ce devis est-il signé » n'a qu'une réponse, et elle passe
+// par ici. Nulle part ailleurs on ne compare d'identifiants à la main.
+function estSigne(d){
+  const k = clefDevis(d && d.id);
+  return !!k && devisSignes.has(k);
+}
+
+// Le même prédicat que la garde serveur, mot pour mot : accepté dans l'une
+// ou l'autre des deux formes, OU signé. La page n'a pas à être plus stricte
+// que le serveur, elle n'a pas non plus à être plus permissive.
+function estConvertible(d){
+  return !!d && (d.status === 'accepted' || d.statut === 'accepte' || estSigne(d));
+}
+
+// Chargé une fois à l'init, à côté de loadDocs. Sur panne, l'ensemble est
+// laissé tel quel : la page se croira devant des devis non signés, et c'est
+// le serveur qui refusera l'écriture. Elle se trompe alors dans le sens qui
+// affiche un refus, jamais dans celui qui efface une pièce.
+async function loadSignatures(){
+  try {
+    const r = await fetch('/api/devis/signatures');
+    if(r.ok){
+      const ids = await r.json();
+      devisSignes = new Set((Array.isArray(ids) ? ids : []).map(clefDevis));
+      return;
+    }
+  } catch(e){ console.warn('[devis] signatures load failed', e); }
+}
+
+// Les octets réels d'une adresse data:, déduits de la longueur du base64 et
+// de son rembourrage. Même mesure que le serveur, qui décode pour compter.
+function octetsDataUrl(url){
+  const v = String(url).split(',')[1] || '';
+  const rembourrage = (v.slice(-2).match(/=/g) || []).length;
+  return Math.floor(v.length * 3 / 4) - rembourrage;
+}
+
+// LA PAGE MESURE AVANT D'ENVOYER, et le serveur reste l'autorité. Ce
+// contrôle n'est pas une redite : au-delà de la douzaine de mégaoctets de
+// corps, le parseur tranche avant toute garde applicative et le 413 sort en
+// HTML, sans un mot lisible. Refuser ici, c'est garder au refus son motif.
+// Le texte est celui du serveur, pour que les deux ne se contredisent pas.
+function motifPoidsPiece(octets){
+  if(octets <= PIECE_OCTETS_MAX) return null;
+  const mo = (octets / (1024 * 1024)).toFixed(1).replace('.', ',');
+  const max = Math.round(PIECE_OCTETS_MAX / (1024 * 1024));
+  return 'Votre fichier pèse ' + mo + ' Mo, au-delà des ' + max + ' Mo admis. Numérisez en noir et blanc, ou à une définition plus basse.';
+}
+
+// Le fichier choisi, mis en état de partir. Rend une adresse data:, ou
+// rejette avec le motif tel qu'il sera lu à l'abonné.
+//
+// UN PDF PART TEL QUEL : le navigateur ne sait pas le réencoder, et c'est
+// pour lui que le plafond de 8 Mo est là. UNE IMAGE passe par le canevas,
+// côté long ramené à 2000 px, sur le patron du logo de signature
+// (mail.html) et de la photo de frais. Une photo de page signée tombe alors
+// sous le mégaoctet. Le canevas est aussi ce qui assainit : quoi qu'on lui
+// donne à décoder, il en ressort des pixels réencodés, jamais le fichier
+// d'origine.
+function litPiecePourEnvoi(fichier){
+  return new Promise(function(resolve, reject){
+    // Refus nommé avant tout le reste : un SVG est un document, il porte
+    // scripts, liens externes et feuilles de style, et la pièce déposée
+    // s'ouvre ensuite dans un onglet.
+    if(/svg/i.test(fichier.type) || /\.svg$/i.test(fichier.name)){
+      reject('Un fichier SVG est un document, pas une image : il n\'est pas accepté comme devis signé. Fournissez un PDF, un PNG, un JPEG ou un WEBP.');
+      return;
+    }
+    if(PIECE_TYPES.indexOf(fichier.type) < 0){
+      reject('Ce fichier n\'est pas un document reconnu. Formats acceptés : PDF, PNG, JPEG, WEBP.');
+      return;
+    }
+    const lecteur = new FileReader();
+    lecteur.onerror = function(){ reject('Ce fichier n\'a pas pu être lu.'); };
+    lecteur.onload = function(e){
+      const brut = String(e.target.result || '');
+      if(fichier.type === 'application/pdf'){
+        const motif = motifPoidsPiece(octetsDataUrl(brut));
+        if(motif){ reject(motif); return; }
+        resolve(brut);
+        return;
+      }
+      const img = new Image();
+      img.onerror = function(){ reject('Ce fichier ne s\'ouvre pas comme une image. Formats acceptés : PDF, PNG, JPEG, WEBP.'); };
+      img.onload = function(){
+        const l = img.naturalWidth, h = img.naturalHeight;
+        if(!l || !h){ reject('Ce fichier ne s\'ouvre pas comme une image.'); return; }
+        // Jamais d'agrandissement : une photo déjà petite reste telle
+        // qu'elle est, le facteur est borné à 1.
+        const r = Math.min(1, PIECE_IMAGE_COTE_LONG_MAX / Math.max(l, h));
+        const L = Math.max(1, Math.round(l * r));
+        const H = Math.max(1, Math.round(h * r));
+        const toile = document.createElement('canvas');
+        toile.width = L; toile.height = H;
+        const ctx = toile.getContext('2d');
+        // Fond blanc posé d'abord : le JPEG ne connaît pas la transparence,
+        // et un PNG transparent tomberait sinon sur du noir, où l'encre
+        // d'une signature ne se lit plus.
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, L, H);
+        ctx.drawImage(img, 0, 0, L, H);
+        const url = toile.toDataURL('image/jpeg', PIECE_IMAGE_QUALITE);
+        const motif = motifPoidsPiece(octetsDataUrl(url));
+        if(motif){ reject(motif); return; }
+        resolve(url);
+      };
+      img.src = brut;
+    };
+    lecteur.readAsDataURL(fichier);
+  });
+}
+
+// « PDF, 1,2 Mo, déposé le 3 mar. 2026 ». Le poids se dit en Ko sous le
+// mégaoctet : « 0,3 Mo » ne renseigne personne.
+function descriptionPiece(p){
+  const type = p.content_type === 'application/pdf' ? 'PDF' : 'Image';
+  const o = Number(p.octets) || 0;
+  const poids = o >= 1024 * 1024
+    ? (o / (1024 * 1024)).toFixed(1).replace('.', ',') + ' Mo'
+    : Math.max(1, Math.round(o / 1024)) + ' Ko';
+  return type + ', ' + poids + ', déposé le ' + fmtDate(p.deposited_at);
+}
+
+// Le bouton et la ligne d'état, refaits depuis l'état courant. Le libellé
+// dit ce que le geste fera, et non ce qui existe : « Déposer » tant qu'il
+// n'y a rien, « Remplacer » ensuite.
+function majZonePiece(){
+  const btn = document.getElementById('btn-piece');
+  const etat = document.getElementById('piece-etat');
+  if(!btn || !etat) return;
+  const d = currentId ? docs.find(x => x.id === currentId) : null;
+  const signe = !!d && estSigne(d);
+  btn.disabled = !d;
+  btn.textContent = signe ? 'Remplacer la pièce signée' : 'Déposer le devis signé';
+  if(!signe){ etat.hidden = true; etat.innerHTML = ''; return; }
+  // La pièce du devis à l'écran, et pas celle d'un autre : la lecture est
+  // asynchrone, et un changement de document pendant qu'elle voyage la
+  // ferait s'afficher sous le mauvais devis.
+  const p = (pieceCourante && clefDevis(pieceCourante.devisId) === clefDevis(d.id)) ? pieceCourante : null;
+  const lien = '/api/devis/' + encodeURIComponent(d.id) + '/signature/fichier';
+  etat.hidden = false;
+  etat.innerHTML = (p ? esc(descriptionPiece(p)) + '<br>' : '')
+    + '<a href="' + esc(lien) + '" target="_blank" rel="noopener">Ouvrir la pièce signée</a>';
+}
+
+// Les métadonnées de la pièce, charge exclue. Appelée sur un devis signé
+// seulement : un devis sans pièce n'a rien à lire.
+async function chargePieceCourante(d){
+  pieceCourante = null;
+  if(!d || !estSigne(d)) return;
+  const demande = d.id;
+  try {
+    const r = await fetch('/api/devis/' + encodeURIComponent(d.id) + '/signature');
+    if(!r.ok) return;
+    const p = await r.json();
+    // Le document a pu changer pendant la lecture.
+    if(currentId !== demande) return;
+    pieceCourante = p;
+    majZonePiece();
+  } catch(e){ console.warn('[devis] lecture de la pièce signée', e); }
+}
+
+// LE DÉPÔT. La réponse est LUE : le serveur rédige ses refus pour l'abonné,
+// ils s'affichent tels quels.
+async function deposerPiece(input){
+  const fichier = input && input.files && input.files[0];
+  // Vidé tout de suite : sans cela, redéposer le MÊME fichier ne relance
+  // aucun événement et le geste reste sans effet.
+  if(input) input.value = '';
+  if(!fichier || !currentId) return;
+  const d = docs.find(x => x.id === currentId);
+  if(!d) return;
+
+  let dataUrl;
+  try {
+    dataUrl = await litPiecePourEnvoi(fichier);
+  } catch(motif){
+    mupAlert(String(motif), null, 'Fermer');
+    return;
+  }
+
+  const btn = document.getElementById('btn-piece');
+  if(btn) btn.disabled = true;
+  try {
+    const r = await fetch('/api/devis/' + encodeURIComponent(d.id) + '/signature', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contenu_data_url: dataUrl, filename: fichier.name })
+    });
+    if(!r.ok){
+      // 402 : la fenêtre d'abonnement est déjà levée par
+      // trial-expired-modal.js, un second message ferait double emploi.
+      if(r.status !== 402){
+        const err = await r.json().catch(() => ({}));
+        mupAlert(err.error || 'Le dépôt a été refusé.', null, 'Fermer');
+      }
+      return;
+    }
+    pieceCourante = await r.json();
+    devisSignes.add(clefDevis(d.id));
+    // Rien n'est rechargé : l'ensemble se met à jour sur place, et l'écran
+    // se refait depuis lui. Le devis est désormais figé, loadDocToEditor
+    // s'en charge, et Convertir s'allume.
+    renderList();
+    loadDocToEditor(d);
+    renderPreview(d);
+    syncOutputButtons();
+    showToast('✓ Devis signé déposé');
+  } catch(e){
+    console.error('[devis] dépôt de la pièce signée', e);
+    mupAlert('Erreur réseau lors du dépôt.', null, 'Fermer');
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+
+// LE FIGEAGE, CÔTÉ ÉCRAN. Posé dans loadDocToEditor, seul point de passage
+// vers l'éditeur : aucun devis n'y entre sans traverser ce contrôle.
+//
+// Le refus serveur reste en place derrière, et c'est lui l'autorité : il
+// couvre les chemins qui n'ont pas de bouton, et le cas où la page ignore
+// qu'une pièce existe parce que sa lecture a échoué.
+const CHAMPS_EDITEUR = ['e-num','e-name','e-co','e-email','e-addr','e-date','e-validity','e-tva','e-status','e-notes'];
+
+function appliqueFigeage(fige){
+  for(const id of CHAMPS_EDITEUR){
+    const el = document.getElementById(id);
+    if(!el) continue;
+    // Un <select> n'a pas de lecture seule : seul disabled l'arrête. Les
+    // champs de saisie prennent readOnly, qui laisse lire, sélectionner et
+    // copier ce que le devis porte.
+    if(el.tagName === 'SELECT') el.disabled = fige;
+    else el.readOnly = fige;
+    el.title = fige ? RAISON_FIGE : '';
+  }
+  document.querySelectorAll('#lines-container input').forEach(el => {
+    el.readOnly = fige;
+    el.title = fige ? RAISON_FIGE : '';
+  });
+  document.querySelectorAll('#lines-container .line-del').forEach(el => { el.disabled = fige; });
+  // « Supprimer » s'éteint avec l'explication au survol. « Marquer comme
+  // accepté » s'éteint avec lui : il écrit le champ statut, par une autre
+  // porte que le sélecteur qu'on vient de fermer. Il ne manque à personne,
+  // la pièce signée valant déjà acceptation.
+  for(const id of ['btn-delete','btn-accept']){
+    const el = document.getElementById(id);
+    if(el){ el.disabled = fige; el.title = fige ? RAISON_FIGE : ''; }
+  }
+  const ajout = document.querySelector('.btn-add-line');
+  if(ajout){ ajout.disabled = fige; ajout.title = fige ? RAISON_FIGE : ''; }
 }
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -964,7 +1322,10 @@ function renderList() {
     return `<div class="doc-item${isActive?' active':''}" onclick="selectDoc('${d.id}')">
       <div class="doc-item-top">
         <div class="doc-num">${d.type==='facture'?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>':'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'}${esc(numeroDuDoc(d))}</div>
-        <div class="doc-status s-${d.status}">${statusLabel(d.status)}</div>
+        <div class="doc-pastilles">
+          <div class="doc-status s-${d.status}">${statusLabel(d.status)}</div>
+          ${estSigne(d) ? '<div class="doc-status doc-signe">Signé</div>' : ''}
+        </div>
       </div>
       <div class="doc-client">${esc(d.co||d.name)}</div>
       <div class="doc-co">${esc(d.name)}</div>
@@ -1010,6 +1371,12 @@ function loadDocToEditor(d) {
   (d.lines||[]).forEach(l => addLine(l.desc, l.qty, l.pu));
   updateTotals();
   majAlerteNumero();
+  // LE FIGEAGE est posé ICI, et nulle part ailleurs : loadDocToEditor est
+  // le seul chemin par lequel un devis entre dans l'éditeur. Après addLine,
+  // parce que les lignes de prestation naissent ouvertes.
+  appliqueFigeage(estSigne(d));
+  majZonePiece();
+  chargePieceCourante(d);
 }
 
 // ── LIGNES ──
@@ -1169,6 +1536,10 @@ function liveUpdate() {
   d.notes = document.getElementById('e-notes').value;
   d.lines = getLines();
   renderPreview(d);
+  // Le sélecteur de statut est dans ces champs : passer un devis à
+  // « Accepté » doit allumer Convertir dans le même geste, et l'en sortir
+  // doit l'éteindre.
+  syncOutputButtons();
 }
 
 // ── LE NUMÉRO DU DEVIS ─────────────────────────────────────────────
@@ -1277,27 +1648,38 @@ function newDoc() {
   document.getElementById('e-name').focus();
 }
 
-function saveDoc() {
+async function saveDoc() {
   if(!currentId) return;
   liveUpdate();
   const d = docs.find(x => x.id === currentId);
   if(d) d.updatedAt = new Date().toISOString();
-  saveDocs();
+  // Le bilan est LU. Annoncer « Document enregistré » sans regarder ce que
+  // le serveur a répondu, c'était renvoyer l'abonné à ses affaires avec une
+  // modification qui n'existait que sur son écran.
+  const bilan = await saveDocs();
   renderList();
-  showToast('✓ Document enregistré');
+  if(bilan.refuses) showToast('Enregistrement refusé, rechargez la page');
+  else if(d && estSigne(d)) showToast(RAISON_FIGE);
+  else showToast('✓ Document enregistré');
 }
 
 function markAccepted() {
   if(!currentId) return;
   const d = docs.find(x => x.id === currentId);
-  if(d) { d.status = 'accepted'; document.getElementById('e-status').value = 'accepted'; saveDocs(); renderList(); renderPreview(d); showToast('✓ Marqué comme accepté'); }
+  // syncOutputButtons en fin de geste : le devis vient de devenir
+  // convertible, et le bouton doit s'en apercevoir sans attendre un clic
+  // ailleurs.
+  if(d) { d.status = 'accepted'; document.getElementById('e-status').value = 'accepted'; saveDocs(); renderList(); renderPreview(d); syncOutputButtons(); showToast('✓ Marqué comme accepté'); }
 }
 
 async function convertToInvoice() {
   if(!currentId) return;
   const d = docs.find(x => x.id === currentId);
   if(!d) return;
-  if(d.status !== 'accepted'){ mupAlert('Le devis doit être accepté avant conversion', null, 'Fermer'); return; }
+  // Élargie de la même façon que le bouton et que le serveur : sans cela,
+  // un devis signé mais jamais marqué accepté serait refusé ici alors que
+  // le serveur l'accepte, et le bouton allumé n'ouvrirait sur rien.
+  if(!estConvertible(d)){ mupAlert('Le devis doit être accepté, ou porter le devis signé de votre client, avant conversion', null, 'Fermer'); return; }
 
   // Conversion via route serveur dédiée — numéro de facture séquentiel généré côté API
   try {
@@ -1321,7 +1703,15 @@ async function deleteDoc(btn) {
   if(!currentId) return;
   if(btn) btn.disabled = true;                 // la fenêtre ne bloque plus le fil
   if(!await mupConfirm('Supprimer ce document ?', null, 'Supprimer', 'Annuler')){ if(btn) btn.disabled = false; return; }
-  await deleteDocApi(currentId);
+  // La liste ne perd le devis QUE si le serveur l'a supprimé. Sans cette
+  // lecture, un refus le faisait disparaître de l'écran pour le voir
+  // revenir au rechargement.
+  const suppression = await deleteDocApi(currentId);
+  if(!suppression.ok){
+    if(suppression.motif) mupAlert(suppression.motif, null, 'Fermer');
+    if(btn) btn.disabled = false;
+    return;
+  }
   docs = docs.filter(x => x.id !== currentId);
   currentId = null;
   renderList();
@@ -1331,6 +1721,8 @@ async function deleteDoc(btn) {
   document.getElementById('e-num').value = '';   // le numéro part avec la pièce
   majAlerteNumero();
   syncOutputButtons();                         // plus rien à imprimer ni à envoyer
+  appliqueFigeage(false);                      // l'éditeur vide se rouvre
+  majZonePiece();                              // et n'attend plus aucune pièce
   if(btn) btn.disabled = false;                // rendu au document suivant
 }
 
@@ -1353,6 +1745,13 @@ function syncOutputButtons() {
     const b = document.getElementById(id);
     if(b) b.disabled = !on;
   }
+  // CONVERTIR a son propre critère, plus riche que celui des trois
+  // ci-dessus : un document sélectionné ne suffit pas, il faut qu'il soit
+  // convertible, c'est-à-dire marqué accepté ou porteur de la pièce signée
+  // de son client. C'est le prédicat de la garde serveur, à la lettre.
+  // Une ligne à part, donc, et non un quatrième nom dans le tableau.
+  const conv = document.getElementById('btn-convert');
+  if(conv) conv.disabled = !estConvertible(on ? docs.find(x => x.id === currentId) : null);
 }
 
 // ── LE REPLI DE LA LISTE ───────────────────────────────────────────
@@ -1530,6 +1929,9 @@ function showToast(msg) {
   applyListFold();
   await loadAccountRegime();
   await loadDocs();
+  // À côté de loadDocs, et avant renderList : la pastille doit être là au
+  // premier rendu, pas après un aller-retour.
+  await loadSignatures();
   document.getElementById('filter-client-clear').addEventListener('click', () => {
     const url = new URL(window.location.href);
     url.searchParams.delete('client_siret');

@@ -153,6 +153,134 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .preview-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted2)}
 
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ================================================================ */
+/* FEUILLE D'IMPRESSION — le document, seul                         */
+/*                                                                  */
+/* À l'écran, .doc-paper vit au fond d'une cascade qui le borne :    */
+/* html/body en 100% + overflow:hidden, .shell en grille de trois    */
+/* colonnes et calc(100vh - …), .preview-col et .preview-scroll qui  */
+/* clippent. Imprimée telle quelle, cette cascade rend l'application */
+/* — rails compris — et coupe le document au bas de la première      */
+/* feuille, car 100vh y vaut la hauteur d'UNE page.                  */
+/*                                                                  */
+/* Ce bloc lève la cascade, retire tout ce qui n'est pas le          */
+/* document, et laisse celui-ci reprendre le flux normal : largeur   */
+/* de page, autant de feuilles qu'il en faut. Aucune valeur de       */
+/* couleur, de corps, de graisse ou de famille n'est réécrite ici :  */
+/* c'est le même document, rendu sur le papier.                      */
+/* ================================================================ */
+@media print {
+
+  /* Les marges du papier. Le document n'a donc plus à porter les
+     siennes : son padding d'écran tombe plus bas. */
+  @page { margin: 14mm; }
+
+  /* 1. La cascade de hauteurs et de débordements tombe.
+     Chaque règle ci-dessous défait un verrou relevé à l'écran :
+     la hauteur en 100vh, l'overflow qui tronque, la grille à trois
+     colonnes qui comprimerait le document dans son tiers central. */
+  html, body {
+    height: auto;
+    overflow: visible;
+    display: block;
+    background: #fff;
+  }
+  .shell {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .preview-col {
+    display: block;
+    overflow: visible;
+    border-right: none;
+    background: transparent;
+  }
+  .preview-scroll {
+    display: block;
+    height: auto;
+    overflow: visible;
+    padding: 0;
+    background: transparent;   /* le fond gris de la colonne part */
+  }
+
+  /* 2. Ne s'impriment pas.
+     Le rail, le pied applicatif fixed (qui se répéterait sur chaque
+     feuille), les surcouches injectées par script — consentement,
+     essai, confirmation, toasts — puis, dans le shell, la colonne de
+     liste avec son en-tête et ses filtres, la barre d'aperçu et la
+     colonne d'édition. L'état vide part aussi : sans document il n'y
+     a rien à imprimer, et printDoc refuse avant d'en arriver là. */
+  .sidebar,
+  .list-col,
+  .preview-toolbar,
+  .preview-empty,
+  .edit-col,
+  .mup-app-footer,
+  #mup-cookie-banner,
+  #mup-cookie-panel,
+  #tem-modal-overlay,
+  #tem-banner,
+  #tem-pastdue-banner,
+  #tem-mut-toast,
+  #tem-quota-toast,
+  .mupc-overlay,
+  #mup-toast { display: none !important; }
+
+  /* 3. Le décor d'écran part, le document prend la page.
+     Ombre portée, rayon et padding d'écran s'en vont — les marges
+     sont désormais celles de @page. La largeur n'est plus bornée à
+     640px : c'est la feuille qui la fixe. */
+  .doc-paper {
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  /* Les fonds qui portent une INFORMATION doivent survivre au
+     blanchiment que les navigateurs appliquent par défaut : le
+     bandeau de validité, et toute pastille de statut que le document
+     porterait. La consigne est posée sur le document seul — le reste
+     de la page ne s'imprime pas, il n'a pas à la recevoir. */
+  #doc-paper,
+  #doc-paper * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 4. Coupures propres.
+     Le tableau peut s'étendre sur plusieurs feuilles, mais jamais au
+     milieu d'une ligne ; son en-tête est un table-header-group, donc
+     il se répète en tête de chaque feuille et ne peut être orphelin
+     de sa première ligne. Le bloc des totaux et les blocs d'identité
+     restent d'un seul tenant. */
+  .doc-table { page-break-inside: auto; break-inside: auto; }
+  .doc-table thead {
+    display: table-header-group;
+    break-inside: avoid;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .doc-table tr,
+  .doc-table td,
+  .doc-table th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .doc-totals,
+  .doc-total-row,
+  .doc-paper-hdr,
+  .doc-parties,
+  .doc-validity,
+  .doc-conditions {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
@@ -719,8 +847,20 @@ async function deleteDoc(btn) {
 }
 
 function sendDoc() { showToast('Envoi email — disponible en v2'); }
-function printDoc() { window.print(); }
-function exportPDF() { showToast('PDF — disponible en v2'); }
+
+// #doc-paper n'existe qu'une fois que renderPreview a écrit un document dans
+// la colonne d'aperçu. Sans lui, la feuille d'impression n'aurait rien à
+// rendre : le refus se dit dans la page plutôt que sur une page blanche.
+function printDoc() {
+  if(!document.getElementById('doc-paper')) { showToast('Sélectionnez un document à imprimer'); return; }
+  window.print();
+}
+
+// Imprimer vers PDF est ce que fait le système d'exploitation, pas une
+// fonction à écrire. Les deux libellés restent — « PDF » est le mot que l'on
+// cherche quand on ne veut pas de papier — mais ils mènent au même chemin,
+// et aucun des deux ne promet ce qu'il ne fait pas.
+function exportPDF() { printDoc(); }
 
 function showToast(msg) {
   let t = document.getElementById('mup-toast');

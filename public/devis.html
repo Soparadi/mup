@@ -577,20 +577,11 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .mes-pile{display:grid}
 .mes-pile > *{grid-area:1 / 1;visibility:hidden}
 .mes-pile > .actif{visibility:visible}
-.mes-surtitre{
-  font-size:12px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
-  color:var(--mes-surtitre);margin-bottom:14px;
-}
 .mes-carte h2{
   font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.15;
   color:var(--mes-titre);margin-bottom:16px;
 }
 .mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
-/* Le second temps dit deux choses en deux paragraphes : ce que le logo devient
-   sur la feuille, puis ce qu'elle accepte comme image. Collés faute de cette
-   gouttière, ils se seraient lus comme un seul bloc. Reprise de visio.html, qui
-   la porte pour la même raison. */
-.mes-carte p + p{margin-top:12px}
 
 /* —— LES QUATRE CHAMPS ——
    Deux tiennent la largeur entière parce qu'ils la remplissent — une raison
@@ -1259,11 +1250,6 @@ body #mup-cookie-panel{z-index:60001}
     <div class="mes-filet" aria-hidden="true"></div>
 
     <div class="mes-corps">
-      <!-- LE SURTITRE NE BOUGE PAS D'UN TEMPS À L'AUTRE, et il est donc hors de
-           la pile : « mise en service » couvre les deux, et le faire changer
-           n'aurait servi qu'à faire clignoter une ligne. -->
-      <p class="mes-surtitre">MISE EN SERVICE</p>
-
       <!-- LA PILE DES DEUX TEMPS. Ils se remplacent au même endroit : ils y
            sont posés ensemble, tous deux mesurés, et la carte garde la hauteur
            du plus long quel que soit celui qui paraît. C'est `.actif` qui les
@@ -1275,8 +1261,8 @@ body #mup-cookie-panel{z-index:60001}
 
         <!-- PREMIER TEMPS : LES COORDONNÉES. -->
         <div id="mesTempsCoordonnees" class="actif">
-          <h2 id="coordTitre">Configurez vos devis une seule fois.</h2>
-          <p>Vos informations prendront la tête de chacun de vos devis, et la facture reprendra tout le jour où le client dira oui.</p>
+          <h2 id="coordTitre">Vos coordonnées, Votre logo, Vos devis.</h2>
+          <p>Configurez vos devis en une seule fois à l'image de votre société.</p>
 
           <!-- Les champs arrivent PRÉ-REMPLIS de ce que le compte porte déjà :
                une information donnée n'est jamais redemandée. Ils restent
@@ -1309,9 +1295,8 @@ body #mup-cookie-panel{z-index:60001}
              file nu ne se laisse ni habiller ni nommer. Même geste que
              « Déposer le devis signé », dans le pied de l'éditeur. -->
         <div id="mesTempsLogo">
-          <h2 id="logoTitre">Votre logo, en tête de vos devis.</h2>
-          <p>Il se pose en haut de la feuille, à gauche du mot DEVIS. Sans lui, cet emplacement reste vide : votre société se lit juste en dessous, avec son adresse et son SIRET.</p>
-          <p>Au plus 60 mm de large et 15 mm de haut sur la feuille, proportions conservées, jamais agrandi au-delà de sa taille d'origine. PNG, JPEG, WEBP ou GIF.</p>
+          <h2 id="logoTitre">Mettez votre logo ici</h2>
+          <p>Votre logo prendra place immédiatement dans votre devis, si vous le désirez vous pourrez toujours le modifier en cliquant sur le devis à l'emplacement de vos coordonnées.</p>
           <input type="file" id="logo-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="choisitLogo(this)">
           <div class="mes-logo-zone" id="logo-zone"></div>
           <div class="mes-logo-erreur" id="logo-erreur" hidden></div>

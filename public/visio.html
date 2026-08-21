@@ -323,8 +323,8 @@ body.outils-deplies .my-link-field.vide{display:flex}
 
 .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center;gap:14px}
 /* Le cercle violet est parti : il venait de la palette de l'application et
-   jurait avec l'encre chaude du vêtement. L'icône reste, à la couleur du
-   surtitre, et sa gouttière est celle que .mes-surtitre pose sous lui. */
+   jurait avec l'encre chaude du vêtement. L'icône reste, à l'encre douce du
+   vêtement, et pose elle-même sa gouttière. */
 .empty-state .empty-icone{color:var(--mes-surtitre);margin-bottom:14px}
 .empty-state .hint{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11.5px;color:var(--muted);margin-top:8px}
 .empty-state .hint strong{color:var(--text)}
@@ -752,10 +752,6 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .mes-pile > *{grid-area:1 / 1;visibility:hidden}
 .mes-pile > .actif{visibility:visible}
 
-.mes-surtitre{
-  font-size:12px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
-  color:var(--mes-surtitre);margin-bottom:14px;
-}
 .mes-carte h2,.mes-bloc h2{
   font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.15;
   color:var(--mes-titre);
@@ -1253,7 +1249,6 @@ body #mup-cookie-panel{z-index:60001}
     <div class="mes-filet" aria-hidden="true"></div>
 
     <div class="mes-corps">
-      <p class="mes-surtitre" id="mesSurtitre">Mise en service</p>
       <h2 id="mesTitre">Vos visios, prêtes à l'emploi.</h2>
 
       <!-- LA PILE DES QUATRE TEMPS. Ils se remplacent au même endroit : ils y
@@ -1962,23 +1957,23 @@ function effacerReport(){ try{ localStorage.removeItem(LS.ACCUEIL_DIFFERE) }catc
 
 /* —— LES QUATRE VISAGES DU PANNEAU ——
    Un seul état : l'étape courante. Chaque visage dit le bloc qu'il montre, le
-   sur-titre, le titre et ce que porte le pied. Rien d'autre n'en décide. */
+   titre et ce que porte le pied. Rien d'autre n'en décide. */
 let mesEtapeCourante = 'choix';
 const MES_VISAGES = {
   choix: {
-    bloc:'accueilIntro', surtitre:'Mise en service', titre:"Vos visios, prêtes à l'emploi.",
+    bloc:'accueilIntro', titre:"Vos visios, prêtes à l'emploi.",
     note:"Un seul lien suffit. Les autres s'ajoutent depuis la barre du haut."
   },
   saisie: {
-    bloc:'accueilSaisie', surtitre:'Mise en service', titre:'Bienvenue dans votre espace visio',
+    bloc:'accueilSaisie', titre:'Bienvenue dans votre espace visio',
     note:"Collez l'adresse complète, telle que votre outil vous la donne."
   },
   conseil: {
-    bloc:'mesConseil', surtitre:'Mise en service', titre:'Aucun outil ? Commencez par là',
+    bloc:'mesConseil', titre:'Aucun outil ? Commencez par là',
     note:''
   },
   documents: {
-    bloc:'mesDocuments', surtitre:'Second temps', titre:'Vos documents de visio',
+    bloc:'mesDocuments', titre:'Vos documents de visio',
     note:"Ce temps ne bloque rien : une visio se tient très bien sans document."
   }
 };
@@ -1994,7 +1989,6 @@ function mesEtape(nom){
   Object.keys(MES_VISAGES).forEach(k=>{
     $(MES_VISAGES[k].bloc).classList.toggle('actif', k === nom);
   });
-  $('mesSurtitre').textContent = visage.surtitre;
   $('mesTitre').textContent = visage.titre;
   $('mesNote').textContent = visage.note;
   $('mesPiedConseil').classList.toggle('actif', nom === 'conseil');

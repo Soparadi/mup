@@ -1449,6 +1449,19 @@ function copiePristine(d){
   return d ? JSON.parse(JSON.stringify(d)) : null;
 }
 
+// LA DESCRIPTION, RÉDUITE À CE QUE LE CHAMP PEUT PORTER. Un input de type
+// « text » retire de sa valeur les retours chariot et les sauts de ligne :
+// c'est l'assainissement que la norme HTML lui impose, et il ne se combat
+// pas, il s'absorbe. Une description venue d'ailleurs avec un saut de ligne
+// est donc lue sans lui, quoi que le document porte.
+//
+// LES DEUX CÔTÉS Y PASSENT, et c'est tout l'objet de cette fonction : sans
+// elle, la pristine garderait le saut que le champ ne rend pas, et le devis
+// se déclarerait modifié à la seconde où il s'ouvre.
+function descNormalisee(v){
+  return String(v || '').replace(/[\r\n]/g, '');
+}
+
 // L'EMPREINTE D'UN DEVIS : ce que l'abonné peut écrire, et rien d'autre.
 // Les champs du serveur (numero, created_at, updated_at) en sont exclus :
 // ils changent à chaque enregistrement sans que personne ait touché au
@@ -1458,8 +1471,10 @@ function copiePristine(d){
 // devis qui arrive avec pu:'' et un champ de prix laissé vide se réduisent
 // tous deux au même 0 ; un SIRET porté sous l'une des trois clés que
 // devisSiret connaît se réduit aux mêmes quatorze chiffres que celui que
-// liveUpdate écrit. Sans cette normalisation commune, un devis jamais
-// touché serait déclaré modifié à la seconde où il s'ouvre.
+// liveUpdate écrit ; une description perd ses sauts de ligne des deux côtés,
+// puisque le champ les perd (cf. descNormalisee). Sans cette normalisation
+// commune, un devis jamais touché serait déclaré modifié à la seconde où il
+// s'ouvre.
 //
 // LE TROU D'ADDLINE SE FERME ICI, sans qu'addLine soit touchée. Elle ajoute
 // une ligne au DOM sans appeler liveUpdate : le document ne la voit pas.
@@ -1483,7 +1498,7 @@ function empreinteDevis(d, lignes){
     status: String(d.status || 'draft'),
     notes: String(d.notes || ''),
     lines: src.map(l => ({
-      desc: String((l && l.desc) || ''),
+      desc: descNormalisee(l && l.desc),
       qty: numOr(l && l.qty, 1),
       pu: numOr(l && l.pu, 0)
     }))
@@ -1765,7 +1780,32 @@ function appliqueFigeage(raison){
   if(ajout){ ajout.disabled = fige; ajout.title = motif; }
 }
 
-function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// L'ÉCHAPPEMENT, ET LES DEUX GUILLEMETS AVEC. Cette fonction n'en traitait
+// que trois, et l'absence du guillemet droit coûtait DEUX choses, dont la
+// seconde est une perte de données.
+//
+// PREMIÈREMENT, L'ATTRIBUT SE REFERME. addLine écrit la description dans
+// value="${esc(desc)}" : une description qui porte un guillemet droit, « Écran
+// 27" reconditionné », referme l'attribut sur son propre guillemet, et
+// input.value ne rend plus que « Écran 27 ».
+//
+// DEUXIÈMEMENT, ET C'EST LE PIRE, LA TRONCATURE PART EN BASE. getLines relit
+// le DOM, liveUpdate monte dans le document ce qu'il y trouve, et le premier
+// enregistrement écrit la description amputée. L'abonné perd la fin de sa
+// ligne sans un mot, et le devis enregistré ne dit plus ce qu'il vendait.
+//
+// addLine est le SEUL emploi d'esc en contexte d'ATTRIBUT avec une valeur
+// libre. Le href de la pièce signée en est un aussi, mais sa valeur est
+// fabriquée par la page et passe par encodeURIComponent, qui a déjà changé
+// les guillemets en %22 et %27. Tous les autres emplois sont en position de
+// TEXTE, où l'analyseur HTML décode les références : &quot; s'y lit comme un
+// guillemet droit et &#39; comme une apostrophe. Le rendu n'y change pas, ni
+// à l'écran ni à l'impression, aucune de ces sorties ne passant par
+// textContent.
+//
+// L'esperluette RESTE LA PREMIÈRE remplacée : elle ouvre les quatre autres
+// références, et la traiter ensuite réécrirait celles qu'on vient de poser.
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // La mise en forme du SIRET de contacts.html et de contact-societe.html,
 // reprise à l'identique : l'abonné lit ses quatorze chiffres groupés comme

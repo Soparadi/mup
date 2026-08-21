@@ -850,7 +850,7 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
     <div class="edit-actions">
 
       <!-- ENREGISTRER — le geste qui vient avant tous les autres. -->
-      <button class="btn-action primary" onclick="saveDoc()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Enregistrer</button>
+      <button class="btn-action primary" id="btn-save" onclick="saveDoc()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:6px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Enregistrer</button>
 
       <!-- SORTIE — ne change pas la pièce, l'emmène dehors. -->
       <div class="edit-actions-out">
@@ -1034,33 +1034,70 @@ async function loadDocs() {
     return false;
   }
 }
-// LE CODE DE RETOUR EST LU. Cette boucle l'ignorait : un refus du serveur
-// finissait en « ✓ Document enregistré », et l'abonné repartait avec une
-// modification qui n'existait que sur son écran. Le bilan rendu ici est ce
-// que saveDoc affiche.
+// LES CHAMPS QUI APPARTIENNENT AU SERVEUR, et rien d'autre. Le serveur
+// fabrique le numéro de séquence, il date la création et la dernière
+// écriture ; la page ne les invente pas et ne les affiche pas, mais elle
+// doit les TENIR, faute de quoi elle les fait effacer au POST suivant.
 //
-// Les devis signés sont ÉCARTÉS de la boucle : le serveur les refuse en 409,
-// et rien de ce que la page tient d'eux ne doit être renvoyé. Ils sont
-// comptés à part, pour que l'appelant sache dire pourquoi.
+// POST /api/devis écrit en UPDATE … CONTENT, qui REMPLACE l'enregistrement
+// en entier : un champ absent du payload est un champ effacé. Sans ce
+// report, chaque enregistrement repartait sans created_at, que le serveur
+// reposait donc au jour même, et sans numero, qu'il refabriquait en
+// consommant un rang du compteur. Le devis vieillissait d'un numéro à
+// chaque clic sur Enregistrer, et n'avait plus d'âge.
+const CHAMPS_SERVEUR = ['numero', 'numero_seq', 'numero_year', 'created_at', 'updated_at'];
+
+// L'OBJET LOCAL N'EST PAS REMPLACÉ par la réponse, il est COMPLÉTÉ.
+// L'abonné a pu continuer à saisir pendant l'aller-retour, et un
+// remplacement en bloc lui prendrait ses frappes.
 //
-// LE 402 EST COMPTÉ À PART LUI AUSSI. Il n'est pas un refus parmi d'autres :
-// c'est un essai terminé, et « rechargez la page » y est un conseil FAUX,
-// recharger ne rendra pas l'écriture. La fenêtre du choix des abonnements est
-// déjà levée par trial-expired-modal.js, avec ses trois formules ; la page
-// n'a rien à ajouter par-dessus, et se tait.
-async function saveDocs() {
-  // Persistance API : chaque doc devient un POST upsert (idempotent grâce à upsertRecord serveur)
-  const bilan = { enregistres: 0, ignores: 0, refuses: 0, abonnement: 0 };
-  for(const d of docs){
-    if(estSigne(d)){ bilan.ignores++; continue; }
-    try {
-      const r = await fetch('/api/devis', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(d) });
-      if(r.ok) bilan.enregistres++;
-      else if(r.status === 402) bilan.abonnement++;
-      else { bilan.refuses++; console.warn('[devis] enregistrement refusé pour', d.id, r.status); }
-    } catch(e){ bilan.refuses++; console.warn('[devis] saveDocs failed for', d.id, e); }
+// Seules les clés PRÉSENTES sont reportées : quand l'abonné a écrit son
+// propre numéro, le serveur n'en fabrique aucun et la réponse ne porte pas
+// de numero. Poser un undefined à la place effacerait celui qu'un
+// enregistrement antérieur avait obtenu.
+//
+// `id` n'est JAMAIS reporté : le serveur rend l'identifiant SurrealDB, qui
+// n'a pas la forme de l'identifiant local. Le recopier romprait la liste,
+// la sélection et la suppression, qui comparent toutes sur cette clé.
+function reporteChampsServeur(d, record){
+  if(!d || !record || typeof record !== 'object') return;
+  for(const k of CHAMPS_SERVEUR){
+    if(record[k] !== undefined && record[k] !== null) d[k] = record[k];
   }
-  return bilan;
+}
+
+// L'ENREGISTREMENT D'UN SEUL DEVIS, celui qu'on lui donne. La page envoyait
+// jusqu'ici TOUTE la liste à chaque clic : le message parlait du lot et non
+// de la pièce écrite, et chaque devis de la liste repartait en base sans
+// que personne l'ait touché.
+//
+// Rend { ok, motif }, sur le patron de deleteDocApi. Le motif vaut null
+// quand le refus s'est déjà annoncé ailleurs : un 402 lève la fenêtre du
+// choix des abonnements, posée par trial-expired-modal.js avec ses trois
+// formules, et un second message par-dessus ferait deux.
+//
+// LE DEVIS SIGNÉ EST DIT AVANT LE POST, pas après : le serveur le refuse en
+// 409, et rien de ce que la page tient d'un devis signé n'a à être renvoyé.
+async function envoieDoc(d){
+  if(!d) return { ok:false, motif:'Aucun document à enregistrer.' };
+  if(estSigne(d)) return { ok:false, motif: RAISON_FIGE };
+  try {
+    const r = await fetch('/api/devis', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(d) });
+    if(!r.ok){
+      if(r.status === 402) return { ok:false, motif:null };
+      const err = await r.json().catch(() => ({}));
+      console.warn('[devis] enregistrement refusé pour', d.id, r.status);
+      return { ok:false, motif: motifDuRefus(err, 'L\'enregistrement a été refusé.') };
+    }
+    // LA RÉPONSE EST LUE. Elle ne l'était pas, et le devis local repartait
+    // au POST suivant amputé de ce que le serveur venait d'écrire.
+    const record = await r.json().catch(() => null);
+    reporteChampsServeur(d, record);
+    return { ok:true, motif:null };
+  } catch(e){
+    console.warn('[devis] envoi du devis', d.id, e);
+    return { ok:false, motif:'Erreur réseau lors de l\'enregistrement.' };
+  }
 }
 
 // CE QUI EST LU À L'ABONNÉ QUAND LE SERVEUR REFUSE, à un seul endroit.
@@ -1415,12 +1452,25 @@ function appliqueFigeage(raison){
     el.title = motif;
   });
   document.querySelectorAll('#lines-container .line-del').forEach(el => { el.disabled = fige; });
-  // « Supprimer » s'éteint avec l'explication au survol, quand il y en a
-  // une. Il est seul dans ce paragraphe : « Marquer comme accepté » a été
-  // retiré du pied, la pièce signée valant déjà acceptation et le
-  // sélecteur de statut restant la porte de l'un comme de l'autre.
-  const suppr = document.getElementById('btn-delete');
-  if(suppr){ suppr.disabled = fige; suppr.title = motif; }
+  // « Enregistrer » et « Supprimer » s'éteignent avec l'explication au
+  // survol, quand il y en a une. « Marquer comme accepté » a été retiré du
+  // pied, la pièce signée valant déjà acceptation et le sélecteur de statut
+  // restant la porte de l'un comme de l'autre.
+  //
+  // ENREGISTRER N'A RIEN À ÉCRIRE dans les deux états que cette fonction
+  // fige, et dans ceux-là seulement : aucun devis à l'écran, où l'appelante
+  // passe true et où le bouton s'éteint sans un mot, et devis signé, où il
+  // s'éteint en portant RAISON_FIGE au survol. La raison est donc lue AVANT
+  // le clic. La garde posée dans envoieDoc reste en place derrière, pour les
+  // chemins qui n'ont pas de bouton.
+  //
+  // Le CSS est déjà posé : .btn-action:disabled porte l'aplat éteint, et
+  // .btn-action.primary:hover:not(:disabled) empêche le bouton de reprendre
+  // sa couleur au survol. Rien à ajouter.
+  for(const id of ['btn-save', 'btn-delete']){
+    const b = document.getElementById(id);
+    if(b){ b.disabled = fige; b.title = motif; }
+  }
   const ajout = document.querySelector('.btn-add-line');
   if(ajout){ ajout.disabled = fige; ajout.title = motif; }
 }
@@ -2051,7 +2101,7 @@ function majAlerteNumero(){
 }
 
 // ── ACTIONS ──
-function newDoc() {
+async function newDoc() {
   // Le champ du numéro arrive VIDE : rien n’est proposé, l’abonné écrit
   // sa référence. Voir § LE NUMÉRO DU DEVIS.
   //
@@ -2064,7 +2114,6 @@ function newDoc() {
   const nowIso = new Date().toISOString();
   const d = { id:'d'+Date.now(), type:'devis', num:'', name:'', co:'', email:'', addr:'', client_siret:'', date:today, validity:30, status:'draft', tva:accountDefaultTva, notes:String(accountSettings.conditionsVente || ''), lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
   docs.unshift(d);
-  saveDocs();
   currentId = d.id;
   closeListOverlay();     // le devis neuf est à l'écran, la liste n'a plus à couvrir
   renderList();
@@ -2072,27 +2121,52 @@ function newDoc() {
   renderPreview(d);
   syncOutputButtons();
   document.getElementById('e-name').focus();
+  // L'ENREGISTREMENT EST ATTENDU ET LU. Il partait sans await et son
+  // résultat était jeté : un refus laissait à l'écran, et en liste, un
+  // devis qui n'existait nulle part, et l'abonné le remplissait.
+  //
+  // L'écran est posé AVANT l'attente : l'éditeur ne fait pas patienter sur
+  // un aller-retour, et le devis neuf n'a rien à montrer que la réponse
+  // changerait. Sur succès, les champs du serveur montent dans l'objet
+  // local, invisibles à l'écran comme sur la feuille.
+  const envoi = await envoieDoc(d);
+  if(!envoi.ok){
+    // Le devis part de la liste dans TOUS les cas de refus, essai expiré
+    // compris : l'abonné n'a pas encore écrit une lettre, et rien n'est
+    // perdu. Seul le MOT change, et sur 402 il n'y en a pas : la fenêtre du
+    // choix des abonnements est déjà à l'écran, seule.
+    retireDocEtVideEcran(d.id);
+    if(envoi.motif) mupAlert(envoi.motif, null, 'Fermer');
+  }
 }
 
 async function saveDoc() {
   if(!currentId) return;
   liveUpdate();
   const d = docs.find(x => x.id === currentId);
-  if(d) d.updatedAt = new Date().toISOString();
-  // Le bilan est LU. Annoncer « Document enregistré » sans regarder ce que
-  // le serveur a répondu, c'était renvoyer l'abonné à ses affaires avec une
-  // modification qui n'existait que sur son écran.
-  const bilan = await saveDocs();
+  if(!d) return;
+  d.updatedAt = new Date().toISOString();
+  // LE DEVIS COURANT, ET LUI SEUL. La page envoyait toute la liste : le
+  // message parlait du lot quand l'abonné venait d'écrire une pièce, et
+  // chaque devis de la liste repartait en base sans avoir été touché.
+  //
+  // La réponse est lue, et le motif du serveur est celui qui s'affiche.
+  // « Enregistrement refusé, rechargez la page » les remplaçait tous par un
+  // conseil qui, sur un devis signé, ne mène nulle part : recharger ne
+  // rendra pas une écriture que le serveur refuse par principe.
+  const envoi = await envoieDoc(d);
   renderList();
-  if(bilan.refuses){ showToast('Enregistrement refusé, rechargez la page'); return; }
-  // Essai terminé : l'encart des abonnements est déjà à l'écran, seul. Un
-  // toast par-dessus ferait un second message, et un conseil de plus.
-  if(bilan.abonnement) return;
-  if(d && estSigne(d)){ showToast(RAISON_FIGE); return; }
+  if(!envoi.ok){
+    // Le motif vaut null sur essai terminé : la fenêtre du choix des
+    // abonnements est déjà à l'écran, seule, et un toast par-dessus ferait
+    // un second message.
+    if(envoi.motif) showToast(envoi.motif);
+    return;
+  }
   showToast('✓ Document enregistré');
   // Le devis est en base : ses conditions peuvent devenir celles du compte,
   // et le devis suivant naîtra avec.
-  if(d) await monteConditionsAuCompte(d.notes);
+  await monteConditionsAuCompte(d.notes);
 }
 
 async function convertToInvoice() {
@@ -2128,22 +2202,33 @@ async function convertToInvoice() {
   }
 }
 
-async function deleteDoc(btn) {
-  if(!currentId) return;
-  if(btn) btn.disabled = true;                 // la fenêtre ne bloque plus le fil
-  if(!await mupConfirm('Supprimer ce document ?', null, 'Supprimer', 'Annuler')){ if(btn) btn.disabled = false; return; }
-  // La liste ne perd le devis QUE si le serveur l'a supprimé. Sans cette
-  // lecture, un refus le faisait disparaître de l'écran pour le voir
-  // revenir au rechargement.
-  const suppression = await deleteDocApi(currentId);
-  if(!suppression.ok){
-    if(suppression.motif) mupAlert(suppression.motif, null, 'Fermer');
-    if(btn) btn.disabled = false;
-    return;
-  }
-  docs = docs.filter(x => x.id !== currentId);
-  currentId = null;
+// LE RETRAIT D'UN DEVIS DE L'ÉCRAN, à un seul endroit. Deux chemins y
+// mènent : la suppression acceptée par le serveur, et le devis neuf dont
+// l'enregistrement a été refusé, qui n'a jamais existé nulle part et n'a
+// pas à rester en liste. Le second réécrivait la même séquence, il l'aurait
+// laissée dériver de la première.
+//
+// L'appelante décide de ce qui se dit ensuite : cette fonction ne parle pas.
+//
+// DEUX GESTES, ET UN SEUL EST CONDITIONNEL.
+//
+// LE RETRAIT DE LA LISTE EST INCONDITIONNEL. Un devis que le serveur a
+// refusé n'existe pas en base ; le laisser en liste au motif que l'abonné
+// regarde un autre devis recréerait le fantôme que ce chemin ferme.
+//
+// LE VIDAGE DE L'ÉCRAN, lui, ne se fait que si c'est bien CE devis qui est
+// à l'écran. Le retrait peut survenir après un aller-retour pendant lequel
+// l'abonné a changé de devis : vider l'éditeur lui prendrait alors la
+// sélection qu'il vient de faire, pour un document dont il ne s'agit pas.
+//
+// La suppression, elle, part toujours du devis courant : la garde y est
+// vraie, et son comportement est celui d'avant, entier.
+function retireDocEtVideEcran(id){
+  const aLEcran = currentId === id;
+  docs = docs.filter(x => x.id !== id);
   renderList();
+  if(!aLEcran) return;
+  currentId = null;
   document.getElementById('preview-area').innerHTML = '<div class="preview-empty"><div style="opacity:.2"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div><div style="font-size:13px">Sélectionnez ou créez un devis</div></div>';
   // L'ÉDITEUR SE VIDE EN ENTIER. Quatre champs sur quinze partaient jusqu'ici :
   // le nom du contact, la société, le courriel, l'adresse, la date, la
@@ -2164,7 +2249,31 @@ async function deleteDoc(btn) {
   // l'aperçu, qui vient de reprendre « Sélectionnez ou créez un devis ».
   appliqueFigeage(true);
   majZonePiece();                              // et n'attend plus aucune pièce
-  if(btn) btn.disabled = false;                // rendu au document suivant
+}
+
+async function deleteDoc(btn) {
+  if(!currentId) return;
+  if(btn) btn.disabled = true;                 // la fenêtre ne bloque plus le fil
+  if(!await mupConfirm('Supprimer ce document ?', null, 'Supprimer', 'Annuler')){ if(btn) btn.disabled = false; return; }
+  // La liste ne perd le devis QUE si le serveur l'a supprimé. Sans cette
+  // lecture, un refus le faisait disparaître de l'écran pour le voir
+  // revenir au rechargement.
+  const suppression = await deleteDocApi(currentId);
+  if(!suppression.ok){
+    if(suppression.motif) mupAlert(suppression.motif, null, 'Fermer');
+    if(btn) btn.disabled = false;
+    return;
+  }
+  // LE PIED N'EST PAS RALLUMÉ ICI. Cette ligne rendait « Supprimer » à
+  // l'abonné APRÈS l'appliqueFigeage(true) qui venait de l'éteindre : le
+  // bouton reparaissait vif sur un écran sans document, pour n'y rien faire
+  // que sortir en silence sur son propre if(!currentId) return. Il se
+  // rallumera avec le devis suivant, par loadDocToEditor, qui repasse par
+  // appliqueFigeage : elle est seule maîtresse de l'état du pied.
+  //
+  // Les deux sorties anticipées plus haut, elles, le rendent bel et bien :
+  // là, le devis est toujours à l'écran et reste supprimable.
+  retireDocEtVideEcran(currentId);
 }
 
 function sendDoc() { showToast('Envoi email — disponible en v2'); }

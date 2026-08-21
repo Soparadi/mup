@@ -20,6 +20,32 @@
      et la position de la liste rouverte en surimpression, qui se pose
      juste à sa droite. Deux endroits, une valeur. */
   --list-rail-w:52px;
+
+  /* —— VÊTEMENT DES COURRIELS MOVUP ——
+     Relevé dans server/templates/ et posé ICI, comme visio.html le pose chez
+     elle. Ce n'est pas une duplication par négligence : ces valeurs habillent
+     LE PRODUIT quand il parle en son nom — la mise en service — et non
+     l'application, qui a le sien juste au-dessus. Elles ne descendent pas dans
+     une feuille partagée tant qu'une troisième page ne les demande pas ;
+     mup-confirm.css, seule candidate, porte le vêtement des DIALOGUES, et
+     l'encart de mise en service est précisément l'inverse d'un dialogue : il ne
+     se ferme sur aucun geste. */
+  --mes-fond:#f4f1ea;
+  --mes-carte:#ffffff;
+  --mes-bord:#d9d3c4;
+  --mes-rayon:16px;
+  --mes-surtitre:#8a8579;
+  --mes-titre:#0d0d0b;
+  --mes-corps:#5c574e;
+  --mes-bouton:#0d0d0b;
+  --mes-bouton-rayon:10px;
+  /* Le filet du COURRIEL, tranché : six bandes de 12 px DANS CET ORDRE. */
+  --mes-filet-1:#B84C00;
+  --mes-filet-2:#4338CA;
+  --mes-filet-3:#7C3AED;
+  --mes-filet-4:#0BBCD4;
+  --mes-filet-5:#D97706;
+  --mes-filet-6:#1D8348;
 }
 html,body{height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoothing:antialiased;display:flex}
@@ -249,12 +275,21 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .doc-party-label{font-size:2.38mm;font-weight:700;text-transform:uppercase;letter-spacing:.4mm;color:var(--muted2);margin-bottom:1.59mm}
 .doc-party-name{font-size:3.7mm;font-weight:700;color:var(--text);margin-bottom:.53mm}
 .doc-party-info{font-size:3.18mm;color:var(--muted);line-height:1.6}
-/* Renvoi vers les réglages, posé dans le bloc émetteur quand le compte n'a
+/* Renvoi vers les coordonnées, posé dans le bloc émetteur quand le compte n'a
    pas encore de société. C'est une commande de l'application, pas une mention
    du document : elle reste à l'écran et le § 2 du bloc d'impression la retire
    de la feuille. La phrase qui la précède, elle, s'imprime — un devis sorti
-   d'un compte incomplet doit dire de lui-même où son émetteur a passé. */
-.doc-emetteur-cta{display:inline-block;margin-top:2.12mm;padding:1.32mm 2.65mm;border:1px solid var(--border2);border-radius:1.32mm;font-size:2.91mm;font-weight:600;color:var(--text);text-decoration:none}
+   d'un compte incomplet doit dire de lui-même où son émetteur a passé.
+   C'EST UN BOUTON DEPUIS QU'IL NE QUITTE PLUS LA PAGE. Il menait à
+   /frais?reglages=1, et il y menait SANS passer par la fenêtre à trois issues :
+   #preview-area n'est pas dans les trois sélecteurs que la page intercepte, si
+   bien qu'un devis modifié se perdait sur ce clic. Il rouvre désormais l'encart,
+   sur place, et le défaut tombe avec le voyage. Le libellé, lui, ne bouge pas :
+   il désignait un aller-retour, il désigne un geste, et il reste exact.
+   Trois déclarations s'ajoutent parce qu'un <button> ne naît pas habillé comme
+   un <a> : la police, le fond et le curseur. La page ne pose aucun reset de
+   bouton global, elles ne peuvent donc venir de nulle part ailleurs. */
+.doc-emetteur-cta{display:inline-block;margin-top:2.12mm;padding:1.32mm 2.65mm;border:1px solid var(--border2);border-radius:1.32mm;font-family:inherit;font-size:2.91mm;font-weight:600;color:var(--text);text-decoration:none;background:transparent;cursor:pointer}
 .doc-emetteur-cta:hover{background:var(--surface2)}
 .doc-table{width:100%;border-collapse:collapse;margin-bottom:6.35mm}
 .doc-table th{font-size:2.51mm;font-weight:700;text-transform:uppercase;letter-spacing:.26mm;color:var(--muted2);padding:2.12mm 2.65mm;border-bottom:1.5px solid var(--border);text-align:left}
@@ -426,6 +461,157 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
+/* ══════════════════════════════════════════════════════════════════
+   MISE EN SERVICE — L'ENCART DES COORDONNÉES
+   ------------------------------------------------------------------
+   Le VÊTEMENT de mup-confirm — voile, flou, carte centrée — et rien de
+   sa mécanique : .mupc-overlay se referme sur un clic au fond et sur
+   Échap, exactement ce qu'on ne veut pas. Cet encart ne se ferme sur
+   aucun geste ; il se retire sur l'une de ses deux sorties, et il n'en
+   a pas de troisième.
+   Ce n'est pas un formulaire à remplir, c'est une ANNONCE DE CAPACITÉ :
+   il dit ce que MovUP fera des informations, et l'abonné donne ou passe.
+   C'est pourquoi rien n'y est requis, aucun champ n'y est validé, et
+   « Je verrai plus tard » n'est pas un renoncement mais une issue.
+
+   COUCHE : --mupz-dialogue (50000), le palier des dialogues système, posé
+   par mup-confirm.css, chargée plus bas. L'encart y RESTE et ne remonte
+   pas. Trois voisins, traités en bas de ce bloc :
+     — le mur d'essai expiré (#tem-modal-overlay, 99999) passe DEVANT, et
+       c'est voulu : un abonné dont l'essai est fini doit voir le mur, pas
+       une mise en service. Il est déjà au-dessus, rien à écrire ;
+     — le bandeau de consentement (9999) passe DESSOUS et doit être
+       remonté : l'encart ne se retire qu'à l'une de ses sorties, un
+       bandeau enfoui derrière lui resterait inatteignable aussi longtemps ;
+     — l'infobulle du rail (#sb-rail-flyout, 99999) flotte au-dessus du
+       voile mais porte pointer-events:none et ne dit qu'un libellé : elle
+       est sans prise, et n'est pas touchée.
+   .mupc-overlay partage le palier (50000) sans jamais croiser l'encart :
+   la fenêtre à trois issues a déjà rendu son verdict et s'est retirée
+   quand saveDoc lève l'encart.
+   ══════════════════════════════════════════════════════════════════ */
+.mes-voile{
+  position:fixed;top:0;right:0;bottom:0;left:var(--sidebar-w);
+  z-index:var(--mupz-dialogue,50000);
+  background:rgba(13,13,11,.55);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;overflow-y:auto;
+}
+.mes-carte{
+  background:var(--mes-carte);border:1px solid var(--mes-bord);
+  border-radius:var(--mes-rayon);overflow:hidden;
+  width:100%;max-width:600px;max-height:calc(100vh - 48px);
+  display:flex;flex-direction:column;
+  box-shadow:0 24px 60px rgba(13,13,11,.28);
+}
+/* Six bandes de 12 px dans leur ordre, écrites une seule fois : ce sont des
+   arrêts de dégradé, pas six éléments à poser dans le balisage. */
+.mes-filet{
+  height:12px;flex-shrink:0;
+  background:linear-gradient(90deg,
+    var(--mes-filet-1) 0 16.6667%,        var(--mes-filet-2) 16.6667% 33.3333%,
+    var(--mes-filet-3) 33.3333% 50%,      var(--mes-filet-4) 50% 66.6667%,
+    var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
+}
+.mes-corps{padding:30px 34px 26px;overflow-y:auto}
+/* AUCUNE .mes-pile ICI. Visio en a une parce que son panneau a quatre temps
+   qui se remplacent au même endroit et que la carte doit garder la hauteur du
+   plus long. Celui-ci n'a qu'un seul visage : il n'y aurait rien à mesurer, et
+   une pile d'un élément est une pile qui ment sur ce qu'elle fait. */
+.mes-surtitre{
+  font-size:12px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--mes-surtitre);margin-bottom:14px;
+}
+.mes-carte h2{
+  font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.15;
+  color:var(--mes-titre);margin-bottom:16px;
+}
+.mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
+
+/* —— LES QUATRE CHAMPS ——
+   Deux tiennent la largeur entière parce qu'ils la remplissent — une raison
+   sociale et une adresse sont longues ; les deux autres se partagent la ligne,
+   un SIRET et un courriel étant courts et se lisant d'un coup d'œil. Sous
+   560px, la carte n'a plus de quoi tenir deux colonnes et tout repasse en une. */
+.mes-champs{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;margin-top:24px}
+.mes-champ{display:flex;flex-direction:column;gap:6px;min-width:0}
+.mes-champ-large{grid-column:1 / -1}
+.mes-champ label{
+  font-size:9.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--mes-surtitre);
+}
+.mes-champ input{
+  width:100%;padding:11px 13px;
+  border:1px solid var(--mes-bord);border-radius:var(--mes-bouton-rayon);
+  font-family:var(--font);font-size:13px;outline:none;
+  background:#fff;color:var(--mes-titre);transition:border-color .15s;
+}
+.mes-champ input::placeholder{color:var(--mes-surtitre)}
+.mes-champ input:focus{border-color:var(--mes-titre)}
+@media (max-width:560px){ .mes-champs{grid-template-columns:1fr} }
+
+/* Le pied ne porte que ses deux sorties, alignées à droite. Visio y met en
+   plus une note ; il n'y en a pas ici, et un élément vide posé pour tenir la
+   symétrie aurait porté sa gouttière pour rien. */
+.mes-pied{
+  border-top:1px solid var(--mes-bord);background:var(--mes-fond);
+  padding:16px 34px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:flex-end;
+  gap:16px;flex-wrap:wrap;
+}
+.mes-pied-actions{display:flex;align-items:center;gap:16px;flex-shrink:0}
+.mes-btn{
+  background:var(--mes-bouton);color:#fff;border:none;
+  padding:11px 20px;border-radius:var(--mes-bouton-rayon);
+  font-family:var(--font);font-size:13px;font-weight:700;
+  flex-shrink:0;cursor:pointer;
+}
+.mes-btn:hover{background:#000}
+.mes-btn:disabled{opacity:.5;cursor:default}
+.mes-lien{
+  background:none;border:none;padding:0;
+  font-family:var(--font);font-size:12.5px;font-weight:600;color:var(--mes-corps);
+  text-decoration:underline;text-underline-offset:3px;cursor:pointer;
+}
+.mes-lien:hover{color:var(--mes-titre)}
+.mes-btn:focus-visible,.mes-lien:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+
+/* —— LA PAGE, DERRIÈRE ——
+   Le document ne défile déjà pas : html,body{overflow:hidden} est posé depuis
+   toujours et le défilement est confiné à trois panneaux internes. Ce sont EUX
+   qu'on arrête. L'inertie du pointeur et du focus, elle, est posée en JS sur
+   .shell et le pied — pas sur le rail. */
+body.mise-en-service .list-scroll,
+body.mise-en-service .preview-scroll,
+body.mise-en-service .edit-scroll{overflow:hidden}
+
+/* —— LE RAIL, DEVANT, EN TIROIR SEULEMENT ——
+   Un encart de mise en service tient une PAGE, jamais l'application : l'abonné
+   qui ouvre Devis sans vouloir se mettre en service doit pouvoir en repartir.
+   Le rail est donc laissé hors de rendreLaPageInerte.
+   Au-dessus de 640 px, le voile part de --sidebar-w : il s'arrête au rail, qui
+   n'est donc jamais recouvert et n'a plus à être remonté. En dessous,
+   --sidebar-w vaut 0 : le voile reprend tout l'écran, et le bouton qui ouvre le
+   tiroir — la seule sortie à cette largeur — doit rester atteignable. C'est là,
+   et là seule, qu'on remonte la bande du rail au-dessus du voile, en conservant
+   son ordre interne (bouton < scrim < rail) et en restant sous le consentement
+   (60000) et sous le mur d'essai (99999). */
+@media (max-width:640px){
+  body.mise-en-service #sb-drawer-toggle{z-index:50150}
+  body.mise-en-service #sb-drawer-scrim{z-index:50190}
+  body.mise-en-service aside#sidebar.sidebar{z-index:50200}
+}
+
+/* Le consentement passe DEVANT la mise en service, comme dans Visio. L'encart
+   ne se retire qu'à l'une de ses deux sorties : un bandeau enfoui derrière lui
+   resterait inatteignable aussi longtemps, ce qui ne se défend pas.
+   Sélecteurs qualifiés par body : cookies-banner.css est chargée APRÈS ce bloc
+   et gagnerait l'égalité de spécificité par l'ordre. Écrit ici, dans la page
+   qui pose l'encart — la feuille partagée n'est pas touchée. */
+body #mup-cookie-banner{z-index:60000}
+body #mup-cookie-panel{z-index:60001}
+
 /* ================================================================ */
 /* FEUILLE D'IMPRESSION — le document, seul                         */
 /*                                                                  */
@@ -504,9 +690,16 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
      qui porte désormais toutes les commandes, y compris celle qui
      lance cette impression. L'état vide part aussi : sans document il
      n'y a rien à imprimer, et printDoc refuse avant d'en arriver là.
-     Enfin le renvoi vers les réglages, seule commande à se tenir DANS
-     le document : la phrase qui l'accompagne s'imprime, le bouton non. */
+     Enfin le renvoi vers les coordonnées, seule commande à se tenir DANS
+     le document : la phrase qui l'accompagne s'imprime, le bouton non.
+     .mes-voile ferme la liste. L'encart de mise en service n'est pas
+     injecté par script, il vit dans le balisage : sans cette ligne, une
+     impression déclenchée pendant qu'il tient la page sortirait un voile
+     gris pleine feuille. Ce chemin est étroit — printDoc refuse tant que
+     l'identité manque, et la page est inerte sous l'encart — mais Ctrl+P
+     et l'impression du navigateur ne passent par aucun des deux. */
   .sidebar,
+  .mes-voile,
   .list-slot,
   .list-col,
   .list-rail,
@@ -903,6 +1096,68 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════
+     L'ENCART DES COORDONNÉES — LA MISE EN SERVICE DE LA PAGE
+
+     HORS DU SHELL, et il le faut : rendreLaPageInerte rend .shell inerte, et
+     l'encart s'y rendrait lui-même s'il vivait dedans.
+
+     PAS d'aria-modal. La page est rendue inerte au pointeur et au focus,
+     mais le rail reste atteignable — un encart de mise en service tient une
+     PAGE, jamais l'application. Déclarer une modale la masquerait aux lecteurs
+     d'écran et rétablirait pour eux l'enfermement qu'on retire.
+
+     Masqué en style EN LIGNE : il n'est révélé qu'une fois les réglages
+     lus, sans quoi il clignoterait au chargement chez l'abonné qui a déjà
+     ses coordonnées.
+
+     LE NUMÉRO N'EST PAS ICI, et le LOGO non plus. Le premier se règle sur
+     le devis, où il a son contexte ; le second est un lot à part.
+     ══════════════════════════════════════════════════════════════ -->
+<div class="mes-voile" id="panneauCoordonnees" style="display:none" role="dialog" aria-labelledby="coordTitre">
+  <div class="mes-carte">
+    <div class="mes-filet" aria-hidden="true"></div>
+
+    <div class="mes-corps">
+      <p class="mes-surtitre">MISE EN SERVICE</p>
+      <h2 id="coordTitre">Configurez vos devis une seule fois.</h2>
+      <p>Vos informations prendront la tête de chacun de vos devis, et la facture reprendra tout le jour où le client dira oui.</p>
+
+      <!-- Les champs arrivent PRÉ-REMPLIS de ce que le compte porte déjà :
+           une information donnée n'est jamais redemandée. Ils restent
+           modifiables — c'est une proposition, pas un constat. -->
+      <div class="mes-champs">
+        <div class="mes-champ mes-champ-large">
+          <label for="coord-raison">Raison sociale</label>
+          <input type="text" id="coord-raison" autocomplete="organization" placeholder="Nom de votre entreprise">
+        </div>
+        <div class="mes-champ mes-champ-large">
+          <label for="coord-adresse">Adresse</label>
+          <input type="text" id="coord-adresse" autocomplete="street-address" placeholder="N°, rue, code postal, ville">
+        </div>
+        <div class="mes-champ">
+          <label for="coord-siret">SIRET</label>
+          <input type="text" id="coord-siret" inputmode="numeric" maxlength="14" placeholder="12345678901234">
+        </div>
+        <div class="mes-champ">
+          <label for="coord-email">Courriel</label>
+          <input type="email" id="coord-email" autocomplete="email" placeholder="vous@exemple.fr">
+        </div>
+      </div>
+    </div>
+
+    <!-- LES DEUX SORTIES, ET IL N'Y EN A PAS DE TROISIÈME. « Je verrai plus
+         tard » n'écrit RIEN : la page reste utilisable, l'émetteur reste
+         inconnu, et ce sont les boutons de sortie du document qui refusent. -->
+    <div class="mes-pied">
+      <div class="mes-pied-actions">
+        <button type="button" class="mes-lien" id="coord-plus-tard">Je verrai plus tard</button>
+        <button type="button" class="mes-btn" id="coord-enregistrer">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/js/mup-confirm.js"></script>
 <script src="/js/mup-lecture.js"></script>
 <script>
@@ -945,6 +1200,20 @@ let accountDefaultTva = 0;
 let reglagesLus = false;
 
 const MOTIF_EMETTEUR_INCONNU = 'Vos coordonnées n\'ont pas pu être lues : la feuille sortirait sans votre société ni votre régime de TVA. Rechargez la page.';
+
+// LE SECOND MOTIF, ET IL NE SE CONFOND PAS AVEC LE PREMIER. Celui du dessus dit
+// une lecture ÉCHOUÉE : on ne sait rien du compte, et « rechargez la page » est
+// le seul conseil qui vaille. Celui-ci dit tout l'inverse — le compte est LU, il
+// est connu, et sa société n'est simplement pas dite. Recharger n'y changerait
+// rien, il ne le propose donc pas : il nomme le geste qui répare, et ce geste
+// est à un clic, dans le document lui-même.
+//
+// Les fondre en un seul aurait servi au compte neuf le conseil qui ne mène
+// nulle part — la faute exacte que saveDoc a déjà corrigée sur les refus du
+// serveur.
+const MOTIF_IDENTITE_ABSENTE = 'Vos coordonnées ne sont pas renseignées : la feuille sortirait sans raison sociale, sans adresse et sans SIRET. Renseignez-les depuis « Renseigner ma société », dans le document.';
+
+const MOTIF_COORDONNEES_REFUSEES = 'Vos coordonnées n\'ont pas pu être enregistrées. Réessayez, ou passez outre : le document vous les redemandera.';
 
 // Rend true quand les réglages ont été lus, false sinon. Le code de retour
 // n'est pas décoratif : sans réglages, l'émetteur du document est INCONNU,
@@ -1011,10 +1280,289 @@ function emetteurDuCompte() {
   return {
     nom: (accountSettings.raisonSociale || '').trim(),
     adresse: (accountSettings.adresse || '').trim(),
+    email: (accountSettings.email || '').trim(),
     siret: (accountSettings.siret || '').trim(),
     tvaIntra: (accountSettings.tvaIntra || '').trim()
   };
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// L'ENCART DES COORDONNÉES — LA MISE EN SERVICE DE LA PAGE
+// ----------------------------------------------------------------------
+// Le patron est celui de la Visio, à la lettre : même vêtement, même
+// doctrine. Ce n'est PAS un formulaire à remplir, c'est une ANNONCE DE
+// CAPACITÉ. La page dit ce qu'elle fera des informations ; l'abonné donne,
+// ou passe. Rien n'y est requis, rien n'y est validé, et refuser n'est pas
+// une faute : c'est l'une des deux issues.
+//
+// QUAND IL PARAÎT. À la première arrivée sur la page. Passé une fois, il ne
+// revient pas à l'ouverture suivante — un report local le retient. Il
+// reparaît AU MOMENT OÙ L'ABONNÉ ENREGISTRE son devis, tant que l'identité
+// manque, et là le report ne le retient plus : enregistrer un devis, c'est
+// vouloir une pièce, et une pièce a un émetteur.
+// UNE FOIS PAR SÉANCE, ET PAS DAVANTAGE. « Je verrai plus tard » éteint aussi
+// la relance sur « Enregistrer », d'un drapeau non persistant : une annonce de
+// capacité se fait entendre, elle ne se paie pas à chaque passage.
+//
+// CE QUE FONT LES DEUX SORTIES. « Enregistrer » écrit et l'encart disparaît.
+// « Je verrai plus tard » n'écrit RIEN : la page reste utilisable, l'émetteur
+// reste inconnu, et ce sont les boutons de sortie du document — Imprimer,
+// PDF, Envoyer — qui refusent, avec leur motif (cf. syncOutputButtons).
+// ══════════════════════════════════════════════════════════════════════
+
+// —— LE REPORT ——
+// LOCAL, et local pour les mêmes deux raisons que celui de la Visio : rien de
+// nouveau ne part en base — ni champ, ni route — et un report qui passerait par
+// une écriture pourrait échouer, enfermant l'abonné derrière l'encart à chaque
+// ouverture. C'est le PREMIER localStorage de cette page, et il ne gouverne QUE
+// l'apparition à l'arrivée : il ne touche ni aux refus de sortie, qui refusent
+// sur l'identité elle-même, ni au relèvement sur « Enregistrer ».
+const LS_COORDS_DIFFERE = 'mup_devis_coords_differe';
+function reportCoordsPris(){ try { return localStorage.getItem(LS_COORDS_DIFFERE) === '1'; } catch(e){ return false; } }
+function poserReportCoords(){ try { localStorage.setItem(LS_COORDS_DIFFERE, '1'); } catch(e){} }
+function effacerReportCoords(){ try { localStorage.removeItem(LS_COORDS_DIFFERE); } catch(e){} }
+
+// —— LE DRAPEAU DE SÉANCE ——
+// DEUX FAITS, DEUX PORTÉES, DEUX VARIABLES. Le report ci-dessus gouverne
+// l'ARRIVÉE et survit au rechargement : il est en localStorage parce que « je
+// verrai plus tard » doit valoir demain matin. Celui-ci gouverne la LEVÉE SUR
+// « ENREGISTRER » et meurt avec l'onglet : c'est une variable de module, rien de
+// plus, et rouvrir la page la remet à false.
+//
+// POURQUOI IL FALLAIT LES SÉPARER. Sans lui, saveDoc relevait l'encart à CHAQUE
+// enregistrement tant que l'identité manquait — le report ne le retenant qu'à
+// l'arrivée. Un abonné qui a dit « je verrai plus tard » et qui enregistre cinq
+// fois dans la séance le voyait cinq fois, et pire : remplirEncartCoordonnees
+// repose les valeurs à chaque ouverture, si bien qu'il ne revoyait même pas sa
+// saisie mais la proposition du départ. Une annonce de capacité devenait un
+// péage, ce que ce patron refuse.
+//
+// CE QU'IL N'ÉTEINT PAS, et c'est tout ce qui compte : coordonneesManquent()
+// reste VRAI. Les boutons de sortie continuent de refuser avec
+// MOTIF_IDENTITE_ABSENTE, printDoc aussi, et « Renseigner ma société » reste
+// dans le document, à un clic. La porte de rattrapage est entière — seule la
+// relance automatique s'éteint, et elle s'éteint parce qu'on la lui a demandée.
+let relanceCoordonneesEteinte = false;
+
+// L'IDENTITÉ EST-ELLE RENSEIGNÉE ? Le juge est la RAISON SOCIALE, et c'est
+// EXACTEMENT celui du rendu du document — renderPreview bascule sur `em.nom`
+// pour afficher « Votre société apparaîtra ici ». Un seul fait, un seul juge :
+// l'écran et le verrou de sortie ne peuvent pas diverger.
+//
+// Sur la VALEUR, jamais sur la présence de la clé : effacer le champ dans Frais
+// écrit une chaîne vide et laisse la clé en base.
+function identiteRenseignee(){ return !!String(accountSettings.raisonSociale || '').trim(); }
+
+// L'encart n'a de raison de paraître que si la lecture a ABOUTI. Sur un échec on
+// ne sait pas si le compte porte une société, et prendre la page en otage pour
+// un hoquet réseau est la pire des deux erreurs — c'est le motif de la lecture
+// échouée qui parle alors, et lui seul.
+function coordonneesManquent(){ return reglagesLus && !identiteRenseignee(); }
+
+// —— LE PRÉ-REMPLISSAGE ——
+// Une information déjà donnée n'est jamais redemandée. Deux sources, dans cet
+// ordre : les réglages du compte d'abord, puisque c'est ce que le DOCUMENT lit ;
+// window.__USER__ ensuite, injecté serveur-side sur /devis (route protégée) et
+// qui coûte donc zéro requête.
+//
+// L'ADRESSE N'A PAS DE SECONDE SOURCE : le payload injecté n'en porte pas. Il
+// porte bien `billing_address`, mais c'est l'adresse de FACTURATION Stripe, qui
+// n'est pas l'adresse de l'émetteur d'un devis — la confondre écrirait une
+// adresse fausse sur un document envoyé.
+//
+// Les valeurs proposées restent MODIFIABLES : c'est une proposition, pas un
+// constat, et rien n'est écrit tant que « Enregistrer » n'est pas cliqué.
+function remplirEncartCoordonnees(){
+  const u = window.__USER__ || {};
+  const pose = (id, valeur) => { const el = document.getElementById(id); if(el) el.value = String(valeur || '').trim(); };
+  pose('coord-raison',  accountSettings.raisonSociale || u.raison_sociale);
+  pose('coord-adresse', accountSettings.adresse);
+  pose('coord-siret',   accountSettings.siret || u.siret);
+  pose('coord-email',   accountSettings.email || u.email);
+}
+
+// Inertie de la page derrière le voile : pointeur et focus. L'encart vit hors de
+// .shell précisément pour pouvoir rendre .shell inerte sans le devenir lui-même.
+// LE NOM ÉVITE « FIGEAGE » À DESSEIN : ce mot est déjà pris dans cette page, et
+// il y désigne tout autre chose — le devis SIGNÉ, passé en lecture seule
+// (figeCourant, motifFige, appliqueFigeage). Deux notions sous un seul
+// vocabulaire auraient fini par se lire l'une pour l'autre.
+// LE RAIL EST DÉLIBÉRÉMENT ABSENT de cette liste : un encart de mise en service
+// tient une page, jamais l'application. Le rendre inerte condamnerait toute
+// sortie à l'abonné venu sur Devis sans vouloir s'y mettre en service.
+function rendreLaPageInerte(fige){
+  [ document.querySelector('.shell'), document.querySelector('.mup-app-footer') ]
+    .forEach(el => { if(el) el.inert = fige; });
+}
+
+// —— L'ENCART GARDE, IL NE SURIMPRIME PAS ——
+// Une promesse, levée à l'ouverture et résolue à la retraite. C'est elle que
+// saveDoc attend, et c'est ce qui fait de l'encart un GARDE : l'écriture du
+// devis ne part pas tant qu'il tient la page. Les DEUX sorties la résolvent,
+// « Je verrai plus tard » comprise — sans quoi l'abonné qui vient de choisir
+// « Enregistrer et quitter » se retrouverait ni enregistré ni parti.
+//
+// La promesse tient lieu d'état : elle existe quand l'encart est à l'écran. Une
+// seconde demande d'ouverture rend la même, elle n'en lève pas un second.
+let attenteCoordonnees = null;
+let resoudreCoordonnees = null;
+
+function ouvrirCoordonnees(){
+  if(attenteCoordonnees) return attenteCoordonnees;
+  remplirEncartCoordonnees();
+  document.getElementById('panneauCoordonnees').style.display = 'flex';
+  document.body.classList.add('mise-en-service');
+  rendreLaPageInerte(true);
+  attenteCoordonnees = new Promise(r => { resoudreCoordonnees = r; });
+  const premier = document.getElementById('coord-raison');
+  if(premier) premier.focus();
+  return attenteCoordonnees;
+}
+
+// L'encart ne se ferme sur AUCUN geste — ni Échap, ni clic au fond, ni croix :
+// il n'en a pas. Cette fonction n'est appelée que par ses deux sorties, et c'est
+// le passage obligé des deux, ce qui permet d'y écrire une seule fois ce qui
+// vaut pour l'une comme pour l'autre.
+function fermerCoordonnees(){
+  if(!attenteCoordonnees) return;
+  const resoudre = resoudreCoordonnees;
+  attenteCoordonnees = null;
+  resoudreCoordonnees = null;
+  document.getElementById('panneauCoordonnees').style.display = 'none';
+  document.body.classList.remove('mise-en-service');
+  rendreLaPageInerte(false);
+  // Le report tombe si l'identité EXISTE, et pas seulement quand on vient de
+  // l'écrire : la page est équipée, le report n'a plus rien à retenir. Sans
+  // cela, un report posé avant que Frais renseigne la société survivrait jusqu'à
+  // interdire à l'encart de revenir le jour où l'abonné efface sa raison
+  // sociale. Jugé sur la VALEUR, par le juge unique de « identité renseignée ».
+  //
+  // LE DRAPEAU DE SÉANCE TOMBE AVEC LUI, au même endroit et pour la même raison :
+  // il ne retient qu'une relance devenue sans objet. Les deux ont des portées
+  // différentes, ils n'ont pas pour autant deux conditions d'extinction — une
+  // page équipée n'a plus rien à retenir, ni pour l'arrivée ni pour la séance.
+  if(identiteRenseignee()){ effacerReportCoords(); relanceCoordonneesEteinte = false; }
+  resoudre();
+}
+
+// —— L'ÉCRITURE ——
+// LE PIÈGE DU CORPS ENTIER, déjà documenté à monteConditionsAuCompte : Frais et
+// Statistiques renvoient leur objet settings ENTIER en PUT, si bien qu'un onglet
+// resté ouvert sur l'une de ces pages écraserait ce que Devis vient d'écrire.
+// La même parade, à l'identique, et il en faut les deux moitiés : on RELIT les
+// réglages juste avant d'écrire, et on n'envoie QUE ses quatre clés. Le PUT est
+// en MERGE côté serveur — aucune route nouvelle n'est nécessaire.
+//
+// CE QUE CETTE PARADE NE COUVRE PAS, et il vaut mieux l'écrire que le taire :
+// elle empêche Devis d'écraser les clés des autres, elle n'empêche PAS un onglet
+// Frais ouvert AVANT cette écriture de reposer ensuite ses vieilles valeurs
+// par-dessus. Le MERGE n'y peut rien : la clé est présente dans son corps, avec
+// l'ancienne valeur. C'est une faille préexistante et symétrique — Frais et
+// Statistiques s'écrasent déjà ainsi — et la corriger demanderait de faire
+// relire Frais avant d'écrire. Hors de ce lot.
+//
+// `email` EST UNE CLÉ NEUVE. user_settings est SCHEMALESS : elle naît au premier
+// PUT, sans migration ni route. C'est là qu'elle va et non sur le record `user`,
+// dont le champ `email` est l'identifiant de CONNEXION, gouverné par un parcours
+// de confirmation à deux temps (request-email-change → confirm-email-change).
+// L'écrire d'ici détournerait l'identifiant de compte en mention de document.
+//
+// Rend true quand l'écriture a abouti, false sinon. L'encart ne se retire QUE
+// sur true : se fermer sur un refus perdrait la saisie sans rien dire.
+async function ecrireCoordonnees(){
+  const cles = {
+    raisonSociale: document.getElementById('coord-raison').value.trim(),
+    adresse:       document.getElementById('coord-adresse').value.trim(),
+    siret:         document.getElementById('coord-siret').value.trim(),
+    email:         document.getElementById('coord-email').value.trim()
+  };
+  try {
+    const r = await fetch('/api/user-settings');
+    if(r.ok) accountSettings = await r.json() || {};
+    const w = await fetch('/api/user-settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cles)
+    });
+    if(!w.ok){ console.warn('[devis] écriture des coordonnées refusée', w.status); return false; }
+  } catch(e){
+    console.warn('[devis] écriture des coordonnées', e);
+    return false;
+  }
+  Object.assign(accountSettings, cles);
+  // La relecture ci-dessus a remplacé accountSettings en entier : le taux par
+  // défaut se recalcule sur elle, sinon le miroir mentirait sur un point que
+  // l'objet vient de rafraîchir. Ce n'est PAS un choix de régime — l'encart n'en
+  // propose aucun, et la ligne recopie mot pour mot celle de loadAccountRegime.
+  accountDefaultTva = accountSettings.tvaAssujetti ? (accountSettings.tauxTvaDefaut ?? 20) : 0;
+  monteIdentiteAuCompte(cles.raisonSociale, cles.siret);
+  return true;
+}
+
+// —— L'IDENTITÉ LÉGALE MONTE AU RECORD DU COMPTE ——
+// Deux endroits, et ils ne portent pas la même chose. user_settings porte
+// l'émetteur du DOCUMENT, que le devis lit. Le record `user` porte l'identité
+// RESPONSABLE DE TRAITEMENT, que le pré-check RGPD art. 14 des campagnes exige
+// avant tout premier envoi : sans elle, la campagne est refusée en 400
+// siret_missing. Un abonné qui renseigne sa société ici et nulle part ailleurs
+// resterait bloqué là-bas sans comprendre pourquoi.
+//
+// CONDITIONNELLE. /api/account/profile est STRICT — raison sociale de 2
+// caractères au moins ET SIRET de 14 chiffres exactement, sinon 400 et rien
+// n'est écrit, les deux champs partant dans un même SET. Un devis se fait très
+// bien sans SIRET : on n'appelle donc la route que si les deux valeurs la
+// satisfont déjà. Imposer quatorze chiffres dans l'encart en aurait fait un
+// formulaire, ce que ce patron refuse.
+//
+// SILENCIEUSE. Le verdict est ignoré et l'encart se ferme sur le seul succès de
+// /api/user-settings. Même règle et même raison qu'à monteConditionsAuCompte :
+// la montée est un effet du geste « Enregistrer », pas un geste de plus, et une
+// panne de réseau ne doit pas coiffer des coordonnées qui, elles, sont écrites.
+function monteIdentiteAuCompte(raisonSociale, siret){
+  const rs = String(raisonSociale || '').trim();
+  const sr = String(siret || '').replace(/\s/g, '');
+  if(rs.length < 2 || !/^\d{14}$/.test(sr)) return;
+  fetch('/api/account/profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raison_sociale: rs, siret: sr })
+  }).catch(() => {});
+}
+
+// —— LES DEUX SORTIES ——
+// « Je verrai plus tard » n'écrit RIEN en base, et pose DEUX refus de portées
+// différentes : le report, qui empêchera l'encart de revenir à l'ouverture
+// suivante, et le drapeau de séance, qui empêche saveDoc de le relever d'ici la
+// fin de l'onglet. Un seul geste, mais l'abonné n'a pas dit « pas maintenant »
+// deux fois de suite pour s'entendre redemander au prochain enregistrement.
+// Puis il rend la main : le devis qui attendait, s'il y en avait un, part comme
+// si de rien n'était — l'abonné a dit non aux coordonnées, pas à son devis.
+document.getElementById('coord-plus-tard').addEventListener('click', () => {
+  poserReportCoords();
+  relanceCoordonneesEteinte = true;
+  fermerCoordonnees();
+});
+
+// « Enregistrer » écrit, puis l'encart disparaît. Le bouton s'éteint le temps de
+// l'aller-retour : la page est inerte sous le voile, mais l'encart, lui, ne
+// l'est pas, et deux clics y lanceraient deux écritures.
+// SUR UN REFUS, L'ENCART RESTE. La saisie est encore à l'écran, le motif est dit,
+// et « Je verrai plus tard » demeure la sortie de secours.
+document.getElementById('coord-enregistrer').addEventListener('click', async function(){
+  const btn = this;
+  if(btn.disabled) return;
+  btn.disabled = true;
+  const ecrit = await ecrireCoordonnees();
+  btn.disabled = false;
+  if(!ecrit){ showToast(MOTIF_COORDONNEES_REFUSEES); return; }
+  fermerCoordonnees();
+  // La feuille porte désormais un émetteur, et les boutons de sortie n'ont plus
+  // de raison de refuser. Les deux se repeignent ICI, sur le passage de la seule
+  // sortie qui change quelque chose.
+  const d = docCourant();
+  if(d) renderPreview(d);
+  syncOutputButtons();
+});
 
 // API SurrealDB (V1 mono-utilisateur, scoping serveur via env MUP_DEFAULT_USER_ID)
 //
@@ -2342,11 +2890,19 @@ function renderPreview(d) {
   // de gauche sous la barre, sans étiquette : sa place le désigne déjà. Les
   // deux lisent la MÊME société, celle du compte : la feuille sort au nom de
   // l'abonné qui l'imprime, jamais au nom de l'outil.
-  // Le courriel ne figure nulle part — aucun champ des réglages ne le porte, et
-  // une ligne absente vaut mieux qu'une adresse fausse sur un document envoyé.
+  // LE COURRIEL FIGURE DÉSORMAIS, et la raison de son absence est tombée : elle
+  // était qu'aucun champ des réglages ne le portait. L'encart des coordonnées en
+  // pose un — `email` dans user_settings — et c'est même la moitié de ce qu'il
+  // promet : « vos informations prendront la tête de chacun de vos devis ». Le
+  // recueillir pour ne l'imprimer nulle part aurait fait mentir l'encart.
+  // La ligne reste CONDITIONNELLE comme ses voisines : un compte qui n'a pas
+  // donné de courriel n'en voit aucun, et rien de faux ne part sur un document
+  // envoyé. Elle vient après l'adresse et avant le SIRET — on lit d'abord où
+  // joindre l'émetteur, ensuite ce qui l'identifie.
   const em = emetteurDuCompte();
   const emLignes = [
     em.adresse,
+    em.email,
     em.siret ? 'SIRET : ' + em.siret : '',
     em.tvaIntra ? 'TVA intracommunautaire : ' + em.tvaIntra : ''
   ].filter(Boolean).map(esc).join('<br>');
@@ -2376,7 +2932,7 @@ function renderPreview(d) {
         <div>
           ${em.nom ? `<div class="doc-party-name">${esc(em.nom)}</div>
           ${emLignes ? `<div class="doc-party-info">${emLignes}</div>` : ''}` : `<div class="doc-party-info">Votre société apparaîtra ici.</div>
-          <a class="doc-emetteur-cta" href="/frais?reglages=1">Renseigner ma société</a>`}
+          <button type="button" class="doc-emetteur-cta" onclick="ouvrirCoordonnees()">Renseigner ma société</button>`}
         </div>
         <div>
           <div class="doc-party-label">Destinataire</div>
@@ -2528,6 +3084,28 @@ function newDoc() {
 
 async function saveDoc() {
   if(!currentId) return;
+  // L'ENCART DES COORDONNÉES SE LÈVE ICI, ET IL GARDE L'ÉCRITURE. Il se lève
+  // AVANT elle, et rien ne part tant qu'il tient la page : un devis enregistré
+  // sous un émetteur inconnu est une pièce qu'il faudra reprendre.
+  //
+  // ICI, ET NON SUR LE BOUTON. saveDoc a DEUX appelants — « Enregistrer » dans
+  // le pied du document, et sortieAutorisee sur « Enregistrer et quitter ». Cette
+  // ligne est leur passage obligé ; posée sur l'écouteur du bouton, elle aurait
+  // laissé le second chemin aveugle.
+  //
+  // LE REPORT NE LE RETIENT PAS, LE DRAPEAU DE SÉANCE SI. Le report ne gouverne
+  // que l'arrivée sur la page : enregistrer un devis, c'est vouloir une pièce, et
+  // une pièce a un émetteur — l'encart se lève donc une fois même sur un report
+  // posé la veille. Mais il ne se lève qu'UNE fois : « je verrai plus tard »
+  // éteint la relance pour toute la séance, sans quoi chaque enregistrement
+  // aurait redemandé ce que l'abonné venait de refuser deux lignes plus haut.
+  //
+  // DEPUIS sortieAutorisee, une fenêtre est déjà refermée et une navigation
+  // attend. Elle attend VRAIMENT : le clic d'origine a été empêché, et il ne sera
+  // rejoué qu'une fois cette promesse rendue. Les deux sorties de l'encart la
+  // rendent, « Je verrai plus tard » comprise — sinon l'abonné qui vient de
+  // choisir « Enregistrer et quitter » ne serait ni enregistré ni parti.
+  if(coordonneesManquent() && !relanceCoordonneesEteinte) await ouvrirCoordonnees();
   liveUpdate();
   const d = docCourant();
   if(!d) return;
@@ -2709,8 +3287,26 @@ function sendDoc() { showToast('Envoi email — disponible en v2'); }
 // motif est posé sur le bouton lui-même, donc lisible AVANT le clic, sur le
 // modèle de la raison au survol d'un devis signé (appliqueFigeage).
 function syncOutputButtons() {
-  const motifEmetteur = reglagesLus ? '' : MOTIF_EMETTEUR_INCONNU;
-  const on = !!currentId && reglagesLus;
+  // DEUX FAITS, DEUX MOTIFS, ET ILS NE SE CONFONDENT PAS. Le verrou ne jouait
+  // que sur `reglagesLus`, c'est-à-dire sur une lecture ÉCHOUÉE — et il ne jouait
+  // donc JAMAIS sur un compte neuf : GET /api/user-settings rend 200 avec un
+  // objet fabriqué quand le compte n'a aucun réglage, la lecture aboutit, et la
+  // feuille sortait avec un en-tête vide.
+  //
+  // Le second fait est l'IDENTITÉ, jugée sur la raison sociale, par le même juge
+  // que le rendu du document. Son motif nomme le geste qui répare au lieu de
+  // conseiller un rechargement qui ne rendrait rien.
+  //
+  // CE QUE CE VERROU NE JUGE PAS : le régime de TVA. L'encart des coordonnées
+  // n'en propose aucun choix — ses quatre champs sont la raison sociale,
+  // l'adresse, le SIRET et le courriel. Un compte neuf qui les renseigne tous
+  // sort donc encore en franchise, `tvaAssujetti` valant false par défaut. Le
+  // juger ici l'aurait éteint sans rattrapage : les boutons auraient refusé et
+  // rien dans la page n'aurait permis d'y répondre. C'est un lot à part, et il
+  // est dit ici au lieu d'être tu.
+  const motifEmetteur = !reglagesLus ? MOTIF_EMETTEUR_INCONNU
+                      : (identiteRenseignee() ? '' : MOTIF_IDENTITE_ABSENTE);
+  const on = !!currentId && reglagesLus && identiteRenseignee();
   for(const id of ['btn-print','btn-pdf','btn-send']) {
     const b = document.getElementById(id);
     if(b){ b.disabled = !on; b.title = motifEmetteur; }
@@ -2875,6 +3471,11 @@ function watchDocScale() {
 function printDoc() {
   if(!document.getElementById('doc-paper')) { showToast('Sélectionnez un document à imprimer'); return; }
   if(!reglagesLus) { showToast(MOTIF_EMETTEUR_INCONNU); return; }
+  // Le second refus est posé aux DEUX endroits, ici et sur les boutons : les
+  // fondre en un seul les aurait laissés diverger au premier changement, et
+  // celui-ci couvre les chemins qui n'ont pas de bouton — Ctrl+P, l'impression
+  // du navigateur, un appel depuis la console.
+  if(!identiteRenseignee()) { showToast(MOTIF_IDENTITE_ABSENTE); return; }
   window.print();
 }
 
@@ -2942,6 +3543,13 @@ function showToast(msg) {
   // sélectionné et la sortie s'allume, ou il n'y en avait aucun et elle
   // reste éteinte.
   syncOutputButtons();
+  // L'ENCART DES COORDONNÉES, À LA PREMIÈRE ARRIVÉE. En DERNIER, et sans await :
+  // la page doit être entièrement peinte derrière lui — il la fige, il ne la
+  // remplace pas — et rien ne suit qui aurait à l'attendre.
+  // Le report, lui, ne joue QUE là : passé une fois, l'encart ne revient pas à
+  // l'ouverture suivante. Il reparaîtra sur « Enregistrer », que saveDoc juge sur
+  // le drapeau de séance et non sur le report — deux portées, deux variables.
+  if(coordonneesManquent() && !reportCoordsPris()) ouvrirCoordonnees();
 })();
 </script>
 <script src="/sidebar.js"></script>

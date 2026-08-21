@@ -106,7 +106,12 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .list-hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .list-title{font-size:16px;font-weight:800;letter-spacing:-.3px}
 .btn-new{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;border:none;background:var(--text);color:#fff;font-family:var(--font);font-size:11.5px;font-weight:700;cursor:pointer;transition:all .15s}
-.btn-new:hover{background:#000}
+.btn-new:hover:not(:disabled){background:#000}
+/* « Nouveau » s'éteint désormais (cf. majBoutonsDocument) et lui manquait tout
+   ce que .btn-action:disabled porte depuis toujours : l'aplat, le curseur, et
+   surtout le :not(:disabled) sur le survol, sans lequel un bouton éteint
+   redevenait noir sous la souris. */
+.btn-new:disabled{opacity:.4;cursor:not-allowed}
 .status-tabs{display:flex;gap:2px;background:var(--surface2);border-radius:8px;padding:2px;overflow-x:auto}
 .stab{flex:0 1 auto;text-align:center;padding:5px 8px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;color:var(--muted);border:none;background:none;font-family:var(--font);transition:all .12s;white-space:nowrap}
 .stab.on{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -694,7 +699,7 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
         <div class="edit-hdr-title" id="edit-hdr-title">Devis</div>
         <div class="edit-hdr-num" id="edit-num">#—</div>
       </div>
-      <button class="btn-new" onclick="newDoc()">
+      <button class="btn-new" id="btn-new" onclick="newDoc()">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         Nouveau
       </button>
@@ -1326,7 +1331,7 @@ function majZonePiece(){
   const btn = document.getElementById('btn-piece');
   const etat = document.getElementById('piece-etat');
   if(!btn || !etat) return;
-  const d = currentId ? docs.find(x => x.id === currentId) : null;
+  const d = docCourant();
   const signe = !!d && estSigne(d);
   btn.disabled = !d;
   btn.textContent = signe ? 'Remplacer la pièce signée' : 'Déposer le devis signé';
@@ -1366,7 +1371,7 @@ async function deposerPiece(input){
   // aucun événement et le geste reste sans effet.
   if(input) input.value = '';
   if(!fichier || !currentId) return;
-  const d = docs.find(x => x.id === currentId);
+  const d = docCourant();
   if(!d) return;
 
   let dataUrl;
@@ -1412,6 +1417,282 @@ async function deposerPiece(input){
   }
 }
 
+// ── LE DEVIS COURANT, SON ÉTAT, SES BOUTONS ───────────────────────
+//
+// LE DEVIS COURANT, à un seul endroit. Six lecteurs le cherchaient chacun
+// avec sa propre ligne, et une seule des six se gardait d'un currentId nul.
+//
+// AUCUNE GARDE N'EST RETIRÉE pour autant. Chaque appelante conserve son
+// `if(!d) return` : cet accesseur dit s'il y a un devis, il ne sait pas ce
+// qu'il faut faire quand il n'y en a pas, et c'est à l'appelante de le dire.
+function docCourant(){
+  return currentId ? (docs.find(x => x.id === currentId) || null) : null;
+}
+
+// LA COPIE PRISTINE : le devis TEL QU'IL EST ENTRÉ dans l'éditeur, avant la
+// première frappe. Elle est prise dans loadDocToEditor, le seul point de
+// passage, et refaite après un enregistrement ABOUTI : ce qui vient d'être
+// écrit en base devient l'état de référence.
+//
+// Elle sert trois fois. Premièrement à détecter le MODIFIÉ, en comparant
+// son empreinte à celle de l'éditeur. Deuxièmement à RESTAURER le devis
+// abandonné : l'objet de `docs` a été réécrit frappe à frappe par
+// liveUpdate, et sans ce retour en arrière la liste garderait le nom, le
+// montant et le statut auxquels l'abonné vient de renoncer. Troisièmement à
+// fermer le trou d'addLine, dit plus bas.
+let docPristine = null;
+
+// UNE COPIE PROFONDE, et non une référence. `lines` est un tableau
+// d'objets : une copie de surface le partagerait avec le devis vivant, et
+// la pristine suivrait chaque frappe au lieu de s'y opposer.
+function copiePristine(d){
+  return d ? JSON.parse(JSON.stringify(d)) : null;
+}
+
+// L'EMPREINTE D'UN DEVIS : ce que l'abonné peut écrire, et rien d'autre.
+// Les champs du serveur (numero, created_at, updated_at) en sont exclus :
+// ils changent à chaque enregistrement sans que personne ait touché au
+// document, et les compter ferait paraître modifié un devis intact.
+//
+// LES DEUX CÔTÉS PASSENT PAR ICI, et c'est ce qui les rend comparables. Un
+// devis qui arrive avec pu:'' et un champ de prix laissé vide se réduisent
+// tous deux au même 0 ; un SIRET porté sous l'une des trois clés que
+// devisSiret connaît se réduit aux mêmes quatorze chiffres que celui que
+// liveUpdate écrit. Sans cette normalisation commune, un devis jamais
+// touché serait déclaré modifié à la seconde où il s'ouvre.
+//
+// LE TROU D'ADDLINE SE FERME ICI, sans qu'addLine soit touchée. Elle ajoute
+// une ligne au DOM sans appeler liveUpdate : le document ne la voit pas.
+// L'empreinte du côté VIVANT ne lit donc pas d.lines mais getLines(), qui
+// lit le DOM. Une ligne ajoutée compte comme une modification, et la
+// correction d'addLine reste un chantier à part, sans objet tant que la
+// comparaison la couvre.
+function empreinteDevis(d, lignes){
+  if(!d) return '';
+  const src = lignes || d.lines || [];
+  return JSON.stringify({
+    num: numeroDuDoc(d),
+    name: String(d.name || ''),
+    co: String(d.co || ''),
+    email: String(d.email || ''),
+    addr: String(d.addr || ''),
+    siret: devisSiret(d),
+    date: String(d.date || ''),
+    validity: parseInt(d.validity, 10) || 30,
+    tva: numOr(d.tva ?? accountDefaultTva, accountDefaultTva),
+    status: String(d.status || 'draft'),
+    notes: String(d.notes || ''),
+    lines: src.map(l => ({
+      desc: String((l && l.desc) || ''),
+      qty: numOr(l && l.qty, 1),
+      pu: numOr(l && l.pu, 0)
+    }))
+  });
+}
+
+// L'ÉDITEUR PORTE-T-IL QUELQUE CHOSE QUE LA BASE N'A PAS ? Toute la passe
+// tient sur cette question : c'est elle qui allume « Enregistrer », qui
+// éteint « Nouveau », qui lève la fenêtre à trois issues, et qui arme le
+// filet du navigateur.
+function estModifie(){
+  const d = docCourant();
+  if(!d || !docPristine) return false;
+  return empreinteDevis(d, getLines()) !== empreinteDevis(docPristine);
+}
+
+// LE DEVIS EST-IL EN BASE ? Sur des FAITS VÉRIFIABLES, et non sur un drapeau
+// que la page se poserait à elle-même. Trois champs, tous écrits par le
+// serveur et par lui seul : created_at, updated_at, numero.
+//
+// Le serveur pose les deux dates à chaque POST et rend l'enregistrement,
+// reporteChampsServeur les monte dans l'objet local, et created_at est même
+// le champ sur lequel la base ORDONNE la liste des devis
+// (ORDER BY date_emission DESC, created_at DESC) : aucun devis enregistré
+// n'en manque. created_at seul suffirait donc.
+//
+// POURQUOI LES TROIS QUAND MÊME. Ce n'est pas la même chose de se tromper
+// dans un sens ou dans l'autre. Un vierge qui paraîtrait en liste est une
+// ligne de trop, qu'un rechargement efface. Un devis ENREGISTRÉ qui
+// disparaîtrait de la liste faute d'un champ est un devis que l'abonné
+// croit PERDU, et c'est la rupture la plus grave que cette page connaisse.
+// La disjonction ne coûte rien : un devis vierge ne porte aucun des trois,
+// un devis enregistré en porte au moins un, et le filet couvre le jour où
+// la route changerait de champ.
+function estEnBase(d){
+  return !!(d && (d.created_at || d.updated_at || d.numero));
+}
+
+// LE FIGEAGE, RETENU. appliqueFigeage l'écrit, majBoutonsDocument le lit :
+// c'est ce qui permet à la première de garder son VETO sans écrire
+// elle-même sur « Enregistrer », et à la seconde d'être seule à l'écrire.
+let figeCourant = false;
+let motifFige = '';
+
+const RAISON_NOUVEAU_BLOQUE = 'Ce devis porte des modifications qui ne sont pas enregistrées : enregistrez-le, ou abandonnez-les, avant d\'en créer un autre';
+const RAISON_NOUVEAU_VIERGE = 'Ce devis est vierge et n\'a jamais été enregistré : en créer un second donnerait le même';
+
+// L'ÉTAT D'« ENREGISTRER » ET DE « NOUVEAU », À UN SEUL ENDROIT. Ces deux
+// boutons n'ont plus qu'un écrivain : cette fonction. Trois faits le
+// décident, et rien d'autre :
+//
+//   le DEVIS COURANT, il y en a un ou il n'y en a pas ;
+//   le FIGEAGE, le devis est signé, donc en lecture seule ;
+//   le MODIFIÉ, l'éditeur porte quelque chose que la base n'a pas.
+//
+// ENREGISTRER s'allume quand il y a quelque chose à écrire : un devis,
+// non figé, modifié. Il ne propose plus d'enregistrer un devis intact, et
+// il porte au survol la raison du figeage quand il y en a une.
+//
+// NOUVEAU s'éteint sur DEUX faits, et non sur un.
+//
+// Le premier est le miroir exact d'« Enregistrer » : le devis courant est
+// MODIFIÉ. Un devis en cours d'écriture ne se quitte pas par ce bouton, et
+// le refus se lit AVANT le clic, au survol, plutôt qu'après dans une
+// fenêtre.
+//
+// Le second est le devis VIERGE JAMAIS ENREGISTRÉ. Le bouton n'y ferait
+// qu'un second document vide, identique au premier, et laisserait derrière
+// lui celui qu'on vient de quitter. Ce fait est celui de la liste, estEnBase,
+// et non un troisième à tenir d'accord.
+//
+// btn-delete N'EST PAS ICI : il reste à appliqueFigeage, qui l'éteint avec
+// les champs. Supprimer un devis modifié demeure possible, sa propre
+// confirmation étant déjà là pour le dire.
+function majBoutonsDocument(){
+  const d = docCourant();
+  const modifie = estModifie();
+  const vierge = !!d && !estEnBase(d) && !modifie;
+  const save = document.getElementById('btn-save');
+  if(save){
+    save.disabled = !d || figeCourant || !modifie;
+    save.title = motifFige;
+  }
+  const nouveau = document.getElementById('btn-new');
+  if(nouveau){
+    nouveau.disabled = modifie || vierge;
+    nouveau.title = modifie ? RAISON_NOUVEAU_BLOQUE : (vierge ? RAISON_NOUVEAU_VIERGE : '');
+  }
+}
+
+// RESTAURER LE DEVIS ABANDONNÉ. L'objet n'est pas remplacé dans `docs` mais
+// RÉÉCRIT EN PLACE : d'autres lecteurs tiennent cette référence, et poser
+// un nouvel objet à sa place les laisserait sur l'ancienne.
+//
+// L'ÉCRAN EST REFAIT AUSSI, et pas seulement le document. Les lignes de
+// prestation vivent dans le DOM, et empreinteDevis les y lit : un document
+// restauré sous un éditeur resté modifié se déclarerait encore modifié, et
+// le filet du navigateur s'ouvrirait sur une sortie que l'abonné vient
+// d'accepter. Le passage par loadDocToEditor remet les deux d'accord et
+// refait la copie pristine au passage.
+function restaureDevisPristine(){
+  const d = docCourant();
+  if(!d || !docPristine) return;
+  for(const k of Object.keys(d)) delete d[k];
+  Object.assign(d, copiePristine(docPristine));
+  renderList();
+  loadDocToEditor(d);
+  renderPreview(d);
+}
+
+// LA FENÊTRE DES TROIS ISSUES, à un seul endroit. Toutes les sorties du
+// devis courant y passent : le choix d'un autre devis dans la liste, la
+// navigation par le rail, la déconnexion.
+//
+// Elle rend true quand la sortie peut se faire, false quand l'abonné a
+// choisi de rester. Sur un devis intact, elle ne montre RIEN et rend true :
+// une fenêtre qui s'ouvre pour dire qu'il n'y a rien à perdre est une
+// fenêtre de trop.
+//
+// POURQUOI TROIS ISSUES ET NON DEUX. La croix, la touche Échap, le clic sur
+// le fond et « Annuler » rendent tous 'retour', et 'retour' ramène au devis
+// sans rien faire. Un binaire détourné ferait de la touche Échap un
+// abandon : l'abonné perdrait son devis sur le geste qui, partout ailleurs
+// dans le produit, ne fait que refermer.
+async function sortieAutorisee(){
+  if(!estModifie()) return true;
+  const issue = await mupChoix(
+    'Ce devis n\'est pas enregistré',
+    'Vos modifications ne sont pas encore en base. Vous pouvez les enregistrer avant de partir, ou les abandonner.',
+    'Enregistrer et quitter', 'Quitter sans enregistrer', 'Annuler'
+  );
+  if(issue === 'retour') return false;
+  if(issue === 'tiers'){ restaureDevisPristine(); return true; }
+  await saveDoc();
+  // L'ENREGISTREMENT PEUT AVOIR ÉTÉ REFUSÉ : devis signé, essai terminé,
+  // panne réseau. saveDoc a dit le motif, et la sortie NE SE FAIT PAS.
+  // Partir maintenant perdrait exactement ce que l'abonné venait de
+  // demander de garder. La question se relit sur l'état, et non sur un
+  // code de retour : un enregistrement abouti a refait la pristine, donc
+  // le devis n'est plus modifié.
+  return !estModifie();
+}
+
+// LES SORTIES DE LA PAGE, INTERCEPTÉES EN CAPTURE. Le rail de navigation et
+// le bouton de déconnexion appartiennent à sidebar.js, qui ne connaît aucun
+// devis : c'est donc la page qui se garde, et sidebar.js n'est pas touché.
+//
+// EN CAPTURE, ET SUR document. L'écouteur de la déconnexion est posé par
+// sidebar.js sur le bouton lui-même, en phase de bouillonnement ; se placer
+// en capture sur document est le seul moyen de passer AVANT lui. Le rail
+// n'est écrit qu'après ce script, ce qui interdit d'écouter ses liens un
+// par un : document, lui, est là depuis toujours.
+//
+// TROIS SÉLECTEURS, PARCE QUE LE MENU DU COMPTE N'EST PAS DANS LE RAIL.
+// sidebar.js le déplace dans document.body une fois dessiné, pour échapper
+// au contexte d'empilement de la barre : #sidebar a[href] ne voit donc ni
+// « Mon compte » ni « Mon abonnement », qui sont pourtant deux sorties de
+// la page comme les autres. #sb-user-menu a[href] les reprend.
+//
+// LE SECOND CLIC EST REJOUÉ sur la même cible, drapeau levé. La déconnexion
+// reste celle de sidebar.js et la navigation celle du lien : la page n'en
+// récrit pas une seconde version qui divergerait de l'originale au premier
+// changement. Le drapeau retombe aussitôt, click() étant synchrone.
+//
+// PERDRE UN DEVIS EN SE DÉCONNECTANT est la même perte qu'en changeant de
+// devis, et la fenêtre ne bloque personne : « Quitter sans enregistrer »
+// part en un clic.
+let sortieRejouee = false;
+document.addEventListener('click', function(e){
+  if(sortieRejouee) return;
+  if(!e.target || !e.target.closest) return;
+  const cible = e.target.closest('#sb-logout-btn, #sidebar a[href], #sb-user-menu a[href]');
+  if(!cible) return;
+  if(!estModifie()) return;
+  e.preventDefault();
+  e.stopPropagation();
+  sortieAutorisee().then(function(ok){
+    if(!ok) return;
+    sortieRejouee = true;
+    cible.click();
+    sortieRejouee = false;
+  });
+}, true);
+
+// LE FILET, ET RIEN DE PLUS. beforeunload est la seule prise que le
+// navigateur laisse sur l'onglet fermé et sur le rechargement. Elle est
+// étroite, et il faut la connaître pour ne pas lui demander ce qu'elle ne
+// peut pas :
+//
+// IL AVERTIT, IL NE PROPOSE PAS. Pas d'« Enregistrer et quitter » ici : le
+// navigateur n'offre que rester ou partir, et rien de ce que la page sait
+// faire ne s'y branche.
+//
+// LE TEXTE N'EST PAS LE NÔTRE. Les navigateurs ignorent toute phrase
+// fournie et affichent la leur, dans leurs mots, qui ne parlent pas de
+// devis.
+//
+// IL NE S'OUVRE QUE SI L'ABONNÉ A INTERAGI avec la page, règle du
+// navigateur et non de la page. Un onglet ouvert puis fermé sans un clic ne
+// dira rien, et n'aura rien à dire.
+//
+// On le pose quand même : c'est le seul mot qui sépare un devis perdu en
+// silence d'un devis perdu après un avertissement.
+window.addEventListener('beforeunload', function(e){
+  if(!estModifie()) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
 // LE FIGEAGE, CÔTÉ ÉCRAN. Posé dans loadDocToEditor, seul point de passage
 // vers l'éditeur : aucun devis n'y entre sans traverser ce contrôle.
 //
@@ -1428,15 +1709,22 @@ const CHAMPS_EDITEUR = ['e-client-q','e-num','e-name','e-co','e-email','e-addr',
 
 // LA RAISON, et non plus un booléen. Le title au survol dit POURQUOI le
 // champ ne se laisse pas écrire : il n'a donc lieu d'être que lorsqu'il y
-// a quelque chose à dire. Un éditeur INOCCUPÉ est éteint sans un mot :
-// « Ce devis a été signé par votre client » y serait faux, aucun devis
-// n'y étant, et l'écran dit déjà « Sélectionnez ou créez un devis ».
+// a quelque chose à dire.
 //
-// Trois états pour un seul argument : la raison fige ET s'affiche au
-// survol ; true fige sans rien dire ; false rouvre.
+// IL N'Y A PLUS QU'UNE SEULE RAISON, ET PLUS QU'UN SEUL APPELANT :
+// loadDocToEditor, qui passe RAISON_FIGE sur un devis signé et false
+// partout ailleurs. Le troisième état, ce true qui figeait sans un mot,
+// servait l'écran sans document ; cet écran n'existe plus, l'éditeur
+// portant toujours un devis, fût-il vierge. Le typeof reste en place : il
+// coûte une ligne et laisse la porte ouverte à une seconde raison.
+//
+// LE FIGEAGE EST RETENU au passage. C'est l'un des trois faits dont
+// majBoutonsDocument décide, et elle n'a pas à le recalculer.
 function appliqueFigeage(raison){
   const fige = !!raison;
   const motif = typeof raison === 'string' ? raison : '';
+  figeCourant = fige;
+  motifFige = motif;
   for(const id of CHAMPS_EDITEUR){
     const el = document.getElementById(id);
     if(!el) continue;
@@ -1452,25 +1740,27 @@ function appliqueFigeage(raison){
     el.title = motif;
   });
   document.querySelectorAll('#lines-container .line-del').forEach(el => { el.disabled = fige; });
-  // « Enregistrer » et « Supprimer » s'éteignent avec l'explication au
-  // survol, quand il y en a une. « Marquer comme accepté » a été retiré du
-  // pied, la pièce signée valant déjà acceptation et le sélecteur de statut
-  // restant la porte de l'un comme de l'autre.
+  // « Supprimer » s'éteint avec l'explication au survol, quand il y en a
+  // une. « Marquer comme accepté » a été retiré du pied, la pièce signée
+  // valant déjà acceptation et le sélecteur de statut restant la porte de
+  // l'un comme de l'autre.
   //
-  // ENREGISTRER N'A RIEN À ÉCRIRE dans les deux états que cette fonction
-  // fige, et dans ceux-là seulement : aucun devis à l'écran, où l'appelante
-  // passe true et où le bouton s'éteint sans un mot, et devis signé, où il
-  // s'éteint en portant RAISON_FIGE au survol. La raison est donc lue AVANT
-  // le clic. La garde posée dans envoieDoc reste en place derrière, pour les
-  // chemins qui n'ont pas de bouton.
+  // ENREGISTRER N'EST PLUS ÉCRIT ICI. Son état dépend de trois faits, dont
+  // le figeage n'est qu'un, et deux écrivains pour un même bouton, c'est un
+  // bouton qui finit par dire ce que le dernier appelé a décidé.
+  // majBoutonsDocument en est désormais seule maîtresse.
+  //
+  // LE VETO N'EST PAS PERDU POUR AUTANT, il est seulement rendu par un
+  // lecteur : figeCourant, écrit plus haut, éteint « Enregistrer » sur un
+  // devis signé quoi que disent les deux autres faits, et la raison se lit
+  // au survol AVANT le clic. La garde posée dans envoieDoc reste en place
+  // derrière, pour les chemins qui n'ont pas de bouton.
   //
   // Le CSS est déjà posé : .btn-action:disabled porte l'aplat éteint, et
   // .btn-action.primary:hover:not(:disabled) empêche le bouton de reprendre
   // sa couleur au survol. Rien à ajouter.
-  for(const id of ['btn-save', 'btn-delete']){
-    const b = document.getElementById(id);
-    if(b){ b.disabled = fige; b.title = motif; }
-  }
+  const suppr = document.getElementById('btn-delete');
+  if(suppr){ suppr.disabled = fige; suppr.title = motif; }
   const ajout = document.querySelector('.btn-add-line');
   if(ajout){ ajout.disabled = fige; ajout.title = motif; }
 }
@@ -1742,7 +2032,9 @@ function applyClientFilter(siret) {
   const banner = document.getElementById('filter-client-banner');
   const label = document.getElementById('filter-client-label');
   if (clientSiretFilter) {
-    const n = docs.filter(d => devisSiret(d) === clientSiretFilter).length;
+    // Le même fonds que renderList : la bande annonce ce que la liste
+    // montre, et la liste ne montre que ce qui est en base.
+    const n = docs.filter(d => estEnBase(d) && devisSiret(d) === clientSiretFilter).length;
     label.textContent = 'Filtre client : SIRET ' + clientSiretFilter
       + ' (' + n + ' devis)';
     banner.style.display = 'flex';
@@ -1760,8 +2052,18 @@ function filterStatus(s, btn) {
   renderList();
 }
 
+// LA LISTE MONTRE CE QUI EST EN BASE, et rien d'autre. Le devis vierge vit
+// dans `docs` parce que tout en dépend, la sélection, l'éditeur, l'aperçu et
+// les totaux, mais il n'a pas sa ligne ici tant qu'il n'est pas enregistré :
+// c'était une ligne fantôme, sans numéro ni nom, pour un document que le
+// rechargement ferait disparaître.
+//
+// Il y entre au premier enregistrement abouti, sans que personne ait à le
+// demander : envoieDoc monte created_at dans l'objet, et saveDoc appelle
+// déjà renderList juste après.
 function renderList() {
-  let list = filterStat === 'all' ? docs : docs.filter(d => d.status === filterStat);
+  const enBase = docs.filter(estEnBase);
+  let list = filterStat === 'all' ? enBase : enBase.filter(d => d.status === filterStat);
   if (clientSiretFilter) list = list.filter(d => devisSiret(d) === clientSiretFilter);
   // La bande repliée annonce ce que la liste contient, filtres
   // compris : c'est cette liste-là qu'elle masque, pas le fonds
@@ -1794,7 +2096,15 @@ function renderList() {
 }
 
 // ── SÉLECTION ──
-function selectDoc(id) {
+// LA PREMIÈRE DES TROIS PORTES. Changer de devis quitte celui qui est à
+// l'écran, exactement comme la déconnexion ou le rail : la fenêtre à trois
+// issues est donc la même, et posée AVANT que currentId ne bouge.
+//
+// Le devis DÉJÀ À L'ÉCRAN ne déclenche rien : recliquer sa propre ligne
+// dans la liste n'est pas une sortie, et une fenêtre y demanderait de
+// choisir entre partir et rester là où l'on est déjà.
+async function selectDoc(id) {
+  if(id !== currentId && !await sortieAutorisee()) return;
   currentId = id;
   const d = docs.find(x => x.id === id);
   if(!d) return;
@@ -1805,16 +2115,50 @@ function selectDoc(id) {
   syncOutputButtons();
 }
 
-// LE DOCUMENT VIDE, celui d'un écran sans document. Ce n'est pas une pièce :
-// il n'entre jamais dans `docs`, personne ne l'enregistre, et il ne porte pas
-// d'identifiant. Il ne sert qu'à RENDRE l'éditeur vide en passant par
-// loadDocToEditor, comme tout le reste. Le taux est celui du compte, comme à
-// la création : c'est ce que le champ montrerait de toute façon au devis
-// suivant.
-function docVide() {
-  return { id:null, type:'devis', num:'', name:'', co:'', email:'', addr:'',
-           date:'', validity:30, status:'draft', tva:accountDefaultTva,
-           notes:'', lines:[] };
+// LE DEVIS VIERGE, et non plus le « document vide ». L'écran sans document
+// est mort avec lui : il montrait un éditeur éteint, une boîte de totaux
+// tue, un aperçu qui disait « Sélectionnez ou créez un devis », et il
+// n'était bon qu'à être quitté. On atterrit désormais sur un vrai devis,
+// prêt à recevoir la première ligne.
+//
+// C'est le devis de newDoc, mot pour mot : identifiant local, date du jour,
+// conditions de vente du compte, taux du compte, une ligne de prestation
+// vide. Les deux naissances passent par ici, il n'y a pas deux formes de
+// devis neuf à tenir d'accord.
+function devisVierge() {
+  const today = new Date().toISOString().split('T')[0];
+  const nowIso = new Date().toISOString();
+  return { id:'d'+Date.now(), type:'devis', num:'', name:'', co:'', email:'', addr:'', client_siret:'',
+           date:today, validity:30, status:'draft', tva:accountDefaultTva,
+           notes:String(accountSettings.conditionsVente || ''),
+           lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
+}
+
+// LE DEVIS VIERGE POSÉ À L'ÉCRAN, SANS ÊTRE ÉCRIT. Il naît en mémoire et ne
+// part en base qu'au premier « Enregistrer ». Les TROIS chemins qui mènent
+// à un devis neuf passent par ici et aucun n'écrit : l'ouverture d'un compte
+// qui ne porte aucun devis, la suppression du dernier, et le clic sur
+// « Nouveau ».
+//
+// POURQUOI RIEN N'EST ENVOYÉ. « Nouveau » posait le devis en base sur
+// l'instant : chaque clic y déposait un devis vide à 0,00 €, et brûlait un
+// rang du compteur de séquence pour un document que personne n'avait
+// commencé. Un devis n'existe en base que si l'abonné l'y a mis, et il n'y
+// a plus qu'une écriture dans cette page, « Enregistrer ».
+//
+// Un vierge jamais rempli ne coûte donc rien : il disparaît au rechargement,
+// et rien n'est perdu puisque rien n'a été écrit. La liste, elle, ne le
+// montre pas (cf. renderList) : elle ne porte que ce qui est en base.
+function poseDevisVierge() {
+  const d = devisVierge();
+  docs.unshift(d);
+  currentId = d.id;
+  closeListOverlay();
+  renderList();
+  loadDocToEditor(d);
+  renderPreview(d);
+  syncOutputButtons();
+  return d;
 }
 
 function loadDocToEditor(d) {
@@ -1853,17 +2197,25 @@ function loadDocToEditor(d) {
   document.getElementById('lines-container').innerHTML = '';
   (d.lines||[]).forEach(l => addLine(l.desc, l.qty, l.pu));
   updateTotals();
-  // LA BOÎTE DE TOTAUX SUIT LE DOCUMENT. Elle affichait 0,00 € trois fois sur
-  // un écran qui n'en porte aucun, compte neuf ou dernier devis supprimé.
-  // Le document vide n'a pas d'identifiant : c'est ce qui la fait taire, et
-  // elle reparaît avec le devis suivant. La règle tient ici, sur le chemin
-  // que tout devis emprunte déjà, et non dans une seconde à tenir d'accord.
-  document.getElementById('totals-box').style.display = d.id ? '' : 'none';
+  // LA BOÎTE DE TOTAUX NE SE TAIT PLUS. Elle se cachait sur un document sans
+  // identifiant, pour n'avoir pas à afficher 0,00 € trois fois sur un écran
+  // qui ne portait aucun devis, compte neuf ou dernier devis supprimé.
+  // C'était l'écran sans document, et il n'existe plus : tout devis qui
+  // entre ici porte un identifiant, fût-il vierge et pas encore en base, et
+  // ses totaux à zéro sont ceux d'un devis qu'on commence, pas ceux d'un
+  // vide. La condition ne gardait plus rien.
+  document.getElementById('totals-box').style.display = '';
   majAlerteNumero();
   // LE FIGEAGE est posé ICI, et nulle part ailleurs : loadDocToEditor est
   // le seul chemin par lequel un devis entre dans l'éditeur. Après addLine,
   // parce que les lignes de prestation naissent ouvertes.
   appliqueFigeage(estSigne(d) && RAISON_FIGE);
+  // LA COPIE PRISTINE EST PRISE ICI, et nulle part ailleurs, pour la même
+  // raison que le figeage : c'est le seul point de passage. Après les
+  // lignes, sinon elle ne porterait pas celles du devis qu'on vient
+  // d'ouvrir. Avant majBoutonsDocument, qui la lit.
+  docPristine = copiePristine(d);
+  majBoutonsDocument();
   majZonePiece();
   chargePieceCourante(d);
 }
@@ -1910,6 +2262,13 @@ function updateTotals() {
   document.getElementById('t-tva-label').textContent = tva==0 ? 'TVA non applicable' : `TVA (${tva}%)`;
   document.getElementById('t-tva').textContent = fmt(t.tva);
   document.getElementById('t-ttc').textContent = fmt(t.ttc);
+  // L'ÉTAT DES DEUX BOUTONS SE REFAIT ICI, et c'est ce qui ferme le trou
+  // d'addLine SANS TOUCHER À addLine. Quatre gestes peuvent changer le
+  // modifié, et tous les quatre passent par updateTotals :
+  // loadDocToEditor, addLine, removeLine et liveUpdate. Accrocher la mise à
+  // jour à liveUpdate seule laisserait « Ajouter une ligne » sans effet sur
+  // « Enregistrer », puisqu'addLine ne l'appelle pas.
+  majBoutonsDocument();
 }
 
 // ── APERÇU ──
@@ -2014,7 +2373,7 @@ function renderPreview(d) {
 function liveUpdate() {
   updateTotals();
   if(!currentId) return;
-  const d = docs.find(x => x.id === currentId);
+  const d = docCourant();
   if(!d) return;
   d.name = document.getElementById('e-name').value;
   d.co = document.getElementById('e-co').value;
@@ -2101,7 +2460,7 @@ function majAlerteNumero(){
 }
 
 // ── ACTIONS ──
-async function newDoc() {
+function newDoc() {
   // Le champ du numéro arrive VIDE : rien n’est proposé, l’abonné écrit
   // sa référence. Voir § LE NUMÉRO DU DEVIS.
   //
@@ -2110,40 +2469,27 @@ async function newDoc() {
   // une phrase à réécrire à chaque devis. Aucun texte d’usine n’est
   // posé ici : un compte neuf naît avec un champ vide, et ce qu’il
   // écrira une fois montera dans ses réglages (monteConditionsAuCompte).
-  const today = new Date().toISOString().split('T')[0];
-  const nowIso = new Date().toISOString();
-  const d = { id:'d'+Date.now(), type:'devis', num:'', name:'', co:'', email:'', addr:'', client_siret:'', date:today, validity:30, status:'draft', tva:accountDefaultTva, notes:String(accountSettings.conditionsVente || ''), lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
-  docs.unshift(d);
-  currentId = d.id;
-  closeListOverlay();     // le devis neuf est à l'écran, la liste n'a plus à couvrir
-  renderList();
-  loadDocToEditor(d);
-  renderPreview(d);
-  syncOutputButtons();
-  document.getElementById('e-name').focus();
-  // L'ENREGISTREMENT EST ATTENDU ET LU. Il partait sans await et son
-  // résultat était jeté : un refus laissait à l'écran, et en liste, un
-  // devis qui n'existait nulle part, et l'abonné le remplissait.
   //
-  // L'écran est posé AVANT l'attente : l'éditeur ne fait pas patienter sur
-  // un aller-retour, et le devis neuf n'a rien à montrer que la réponse
-  // changerait. Sur succès, les champs du serveur montent dans l'objet
-  // local, invisibles à l'écran comme sur la feuille.
-  const envoi = await envoieDoc(d);
-  if(!envoi.ok){
-    // Le devis part de la liste dans TOUS les cas de refus, essai expiré
-    // compris : l'abonné n'a pas encore écrit une lettre, et rien n'est
-    // perdu. Seul le MOT change, et sur 402 il n'y en a pas : la fenêtre du
-    // choix des abonnements est déjà à l'écran, seule.
-    retireDocEtVideEcran(d.id);
-    if(envoi.motif) mupAlert(envoi.motif, null, 'Fermer');
-  }
+  // « NOUVEAU » N'ÉCRIT PLUS RIEN. Il posait le devis neuf en base sur
+  // l'instant, et chaque clic y déposait donc un devis vide à 0,00 € en
+  // brûlant un rang du compteur de séquence au passage. « Enregistrer »
+  // est désormais la seule écriture de la page, et c'est tout le sens de
+  // cette passe : rien ne part en base que l'abonné n'ait demandé.
+  //
+  // Il n'y a plus d'aller-retour, donc plus de refus à replier, donc plus
+  // rien à attendre : ce que faisait cette fonction en dix lignes et deux
+  // await, poseDevisVierge le fait en une.
+  //
+  // LA FORME DU DEVIS NEUF EST DANS devisVierge : le clic sur « Nouveau »
+  // et l'atterrissage sans devis font naître exactement le même document.
+  poseDevisVierge();
+  document.getElementById('e-name').focus();
 }
 
 async function saveDoc() {
   if(!currentId) return;
   liveUpdate();
-  const d = docs.find(x => x.id === currentId);
+  const d = docCourant();
   if(!d) return;
   d.updatedAt = new Date().toISOString();
   // LE DEVIS COURANT, ET LUI SEUL. La page envoyait toute la liste : le
@@ -2164,6 +2510,17 @@ async function saveDoc() {
     return;
   }
   showToast('✓ Document enregistré');
+  // LA COPIE PRISTINE EST REFAITE : ce qui vient d'être écrit en base est le
+  // nouvel état de référence. Sans cela, un devis enregistré resterait
+  // « modifié » pour la page entière : « Enregistrer » resterait allumé sur
+  // un devis qui n'a plus rien à écrire, « Nouveau » resterait éteint, et la
+  // fenêtre à trois issues s'ouvrirait à la sortie suivante pour proposer de
+  // sauver ce qui est déjà sauvé.
+  //
+  // liveUpdate a été appelée en tête : `d` porte donc l'éditeur en entier,
+  // lignes comprises, et la copie est fidèle à ce qui vient de partir.
+  docPristine = copiePristine(d);
+  majBoutonsDocument();
   // Le devis est en base : ses conditions peuvent devenir celles du compte,
   // et le devis suivant naîtra avec.
   await monteConditionsAuCompte(d.notes);
@@ -2171,7 +2528,7 @@ async function saveDoc() {
 
 async function convertToInvoice() {
   if(!currentId) return;
-  const d = docs.find(x => x.id === currentId);
+  const d = docCourant();
   if(!d) return;
   // Élargie de la même façon que le bouton et que le serveur : sans cela,
   // un devis signé mais jamais marqué accepté serait refusé ici alors que
@@ -2202,78 +2559,92 @@ async function convertToInvoice() {
   }
 }
 
-// LE RETRAIT D'UN DEVIS DE L'ÉCRAN, à un seul endroit. Deux chemins y
-// mènent : la suppression acceptée par le serveur, et le devis neuf dont
-// l'enregistrement a été refusé, qui n'a jamais existé nulle part et n'a
-// pas à rester en liste. Le second réécrivait la même séquence, il l'aurait
-// laissée dériver de la première.
+// LE RETRAIT D'UN DEVIS DE L'ÉCRAN, à un seul endroit. Il en avait deux :
+// la suppression acceptée par le serveur, et le devis neuf dont
+// l'enregistrement était refusé. Le second est parti avec l'envoi de
+// newDoc : « Nouveau » n'écrit plus rien, aucune création ne peut donc plus
+// être refusée, et il ne reste que la suppression.
 //
 // L'appelante décide de ce qui se dit ensuite : cette fonction ne parle pas.
 //
 // DEUX GESTES, ET UN SEUL EST CONDITIONNEL.
 //
-// LE RETRAIT DE LA LISTE EST INCONDITIONNEL. Un devis que le serveur a
-// refusé n'existe pas en base ; le laisser en liste au motif que l'abonné
-// regarde un autre devis recréerait le fantôme que ce chemin ferme.
+// LE RETRAIT DE `docs` EST INCONDITIONNEL. Le serveur a supprimé le devis :
+// le garder en mémoire au motif que l'abonné en regarde un autre le ferait
+// reparaître au premier renderList.
 //
-// LE VIDAGE DE L'ÉCRAN, lui, ne se fait que si c'est bien CE devis qui est
-// à l'écran. Le retrait peut survenir après un aller-retour pendant lequel
-// l'abonné a changé de devis : vider l'éditeur lui prendrait alors la
-// sélection qu'il vient de faire, pour un document dont il ne s'agit pas.
+// LE REMPLACEMENT DE L'ÉCRAN, lui, ne se fait que si c'est bien CE devis
+// qui est à l'écran. Le retrait suit deux attentes, la confirmation puis
+// l'aller-retour, pendant lesquelles l'abonné a pu changer de devis : lui
+// poser un devis vierge lui prendrait alors la sélection qu'il vient de
+// faire, pour un document dont il ne s'agit pas.
 //
-// La suppression, elle, part toujours du devis courant : la garde y est
-// vraie, et son comportement est celui d'avant, entier.
-function retireDocEtVideEcran(id){
+// Cette garde n'a de sens que parce que l'appelante CAPTURE l'identifiant
+// avant les attentes. En lui passant le currentId d'après, elle lui poserait
+// une question dont elle serait elle-même la réponse, et la garde serait
+// toujours vraie.
+function retireDocEtPoseVierge(id){
   const aLEcran = currentId === id;
   docs = docs.filter(x => x.id !== id);
   renderList();
   if(!aLEcran) return;
-  currentId = null;
-  document.getElementById('preview-area').innerHTML = '<div class="preview-empty"><div style="opacity:.2"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div><div style="font-size:13px">Sélectionnez ou créez un devis</div></div>';
-  // L'ÉDITEUR SE VIDE EN ENTIER. Quatre champs sur quinze partaient jusqu'ici :
-  // le nom du contact, la société, le courriel, l'adresse, la date, la
-  // validité, le taux, le statut, les lignes de prestation et la boîte de
-  // totaux avec son montant restaient à l'écran, grisés mais parfaitement
-  // lisibles, sous un aperçu qui disait « Sélectionnez ou créez un devis ».
-  // Un écran sans document ne porte rien d'un document.
+  // UN DEVIS VIERGE PREND LA PLACE, et l'écran n'est jamais vide. Le bloc
+  // d'aperçu « Sélectionnez ou créez un devis », l'éditeur éteint sans un
+  // mot et la boîte de totaux tue sont partis avec lui : renderPreview
+  // écrit la feuille du vierge, loadDocToEditor rouvre les champs, et
+  // majZonePiece comme syncOutputButtons sont appelées depuis
+  // poseDevisVierge.
   //
-  // Le vidage passe par loadDocToEditor, le chemin que tout devis emprunte
-  // déjà : c'est ce qui évite une seconde liste de champs à tenir d'accord
-  // avec CHAMPS_EDITEUR. Un champ ajouté à l'éditeur se videra ici sans que
-  // personne ait à y penser.
-  loadDocToEditor(docVide());
-  syncOutputButtons();                         // plus rien à imprimer ni à envoyer
-  // L'éditeur ne se ROUVRE pas : il n'y a plus de devis à écrire. Il
-  // s'éteint, et sans raison au survol : le figeage n'en a une que
-  // lorsqu'un devis signé est à l'écran. Le mot est ailleurs, dans
-  // l'aperçu, qui vient de reprendre « Sélectionnez ou créez un devis ».
-  appliqueFigeage(true);
-  majZonePiece();                              // et n'attend plus aucune pièce
+  // L'ÉDITEUR SE VIDE TOUJOURS EN ENTIER, et par le même chemin qu'avant :
+  // loadDocToEditor, que tout devis emprunte déjà. C'est ce qui évite une
+  // seconde liste de champs à tenir d'accord avec CHAMPS_EDITEUR. Un champ
+  // ajouté à l'éditeur se videra ici sans que personne ait à y penser.
+  poseDevisVierge();
 }
 
 async function deleteDoc(btn) {
   if(!currentId) return;
+  // L'IDENTIFIANT EST CAPTURÉ, et non relu après coup. Deux attentes
+  // séparent ce point de la suppression, la fenêtre de confirmation puis
+  // l'aller-retour, et l'abonné peut changer de devis entre les deux : la
+  // liste reste cliquable pendant le DELETE. En relisant currentId à la
+  // fin, la page supprimait le devis A en base et retirait le devis B de
+  // `docs`.
+  //
+  // C'est aussi ce qui rend vivante la garde de retireDocEtPoseVierge : en
+  // lui passant currentId, cette fonction lui posait une question dont elle
+  // était elle-même la réponse, et le paragraphe qui décrit la course
+  // décrivait une course que ce chemin ne pouvait plus produire.
+  const id = currentId;
   if(btn) btn.disabled = true;                 // la fenêtre ne bloque plus le fil
   if(!await mupConfirm('Supprimer ce document ?', null, 'Supprimer', 'Annuler')){ if(btn) btn.disabled = false; return; }
   // La liste ne perd le devis QUE si le serveur l'a supprimé. Sans cette
   // lecture, un refus le faisait disparaître de l'écran pour le voir
   // revenir au rechargement.
-  const suppression = await deleteDocApi(currentId);
+  const suppression = await deleteDocApi(id);
   if(!suppression.ok){
     if(suppression.motif) mupAlert(suppression.motif, null, 'Fermer');
     if(btn) btn.disabled = false;
     return;
   }
-  // LE PIED N'EST PAS RALLUMÉ ICI. Cette ligne rendait « Supprimer » à
-  // l'abonné APRÈS l'appliqueFigeage(true) qui venait de l'éteindre : le
-  // bouton reparaissait vif sur un écran sans document, pour n'y rien faire
-  // que sortir en silence sur son propre if(!currentId) return. Il se
-  // rallumera avec le devis suivant, par loadDocToEditor, qui repasse par
-  // appliqueFigeage : elle est seule maîtresse de l'état du pied.
+  // LE PIED N'EST PAS RALLUMÉ ICI. Une ligne le faisait, et rendait
+  // « Supprimer » à l'abonné après l'extinction qui venait de le retirer :
+  // le bouton reparaissait vif sur un écran sans document, pour n'y rien
+  // faire que sortir en silence sur son propre if(!currentId) return.
+  //
+  // Cet écran n'existe plus, un devis vierge prenant la place, mais la
+  // règle tient et vaut mieux qu'avant : c'est le devis vierge qui rallume
+  // le pied, par loadDocToEditor, qui repasse par appliqueFigeage pour
+  // « Supprimer » et par majBoutonsDocument pour les deux autres. Personne
+  // n'écrit sur un bouton depuis ici.
   //
   // Les deux sorties anticipées plus haut, elles, le rendent bel et bien :
   // là, le devis est toujours à l'écran et reste supprimable.
-  retireDocEtVideEcran(currentId);
+  //
+  // AUCUNE FENÊTRE DE PLUS n'est posée sur ce chemin. Supprimer un devis
+  // modifié n'est pas une perte accidentelle : c'est la perte demandée, et
+  // « Supprimer ce document ? » l'a déjà dit.
+  retireDocEtPoseVierge(id);
 }
 
 function sendDoc() { showToast('Envoi email — disponible en v2'); }
@@ -2310,7 +2681,7 @@ function syncOutputButtons() {
   // display : .btn-action ne pose aucun display, la gouttière de
   // .edit-actions-life se referme d'elle-même.
   const conv = document.getElementById('btn-convert');
-  if(conv) conv.hidden = !montreConversion(on ? docs.find(x => x.id === currentId) : null);
+  if(conv) conv.hidden = !montreConversion(on ? docCourant() : null);
 }
 
 // ── LE REPLI DE LA LISTE ───────────────────────────────────────────
@@ -2511,23 +2882,22 @@ function showToast(msg) {
   if(clientSiretParam) applyClientFilter(decodeURIComponent(clientSiretParam));
   renderList();
   // Sélectionner le premier par défaut
-  if(docs.length) selectDoc(docs[0].id);
-  else {
-    // AUCUNE DATE DU JOUR N'EST POSÉE, et surtout pas après selectDoc : elle
-    // écrasait là dans l'éditeur la date du devis sélectionné, et la première
-    // saisie suivante réenregistrait le devis à la date du jour. Elle n'est
-    // pas posée ici non plus : le geste avait un sens quand l'éditeur restait
-    // ouvert, il datait depuis un éditeur éteint un document qui n'existe pas.
-    //
-    // L'écran sans document se vide par le chemin de la suppression du dernier
-    // devis : loadDocToEditor avec le document vide. Le taux du compte, les
-    // totaux et l'en-tête en viennent tous, sans seconde liste à tenir.
-    loadDocToEditor(docVide());
-    // Aucun devis à l'écran : l'éditeur est éteint, et sans raison au
-    // survol. Il n'y a pas de devis signé ici, il n'y a pas de devis du
-    // tout, et l'aperçu dit déjà « Sélectionnez ou créez un devis ».
-    appliqueFigeage(true);
-  }
+  // AUCUNE DATE DU JOUR N'EST POSÉE APRÈS selectDoc : elle écrasait dans
+  // l'éditeur la date du devis sélectionné, et la première saisie suivante
+  // réenregistrait le devis à la date du jour. La branche sans devis, elle,
+  // en pose une, mais par devisVierge et non à part : c'est la date de
+  // naissance du document, celle que « Nouveau » pose déjà.
+  //
+  // UN COMPTE SANS DEVIS ATTERRIT SUR UN DEVIS VIERGE, par le même chemin
+  // que la suppression du dernier. Il n'est pas envoyé : ouvrir la page ne
+  // doit rien écrire en base, et un vierge jamais rempli ne laisse aucune
+  // trace au rechargement.
+  // ATTENDUE : selectDoc est devenue asynchrone, la fenêtre à trois issues
+  // étant posée avant qu'elle ne change de devis. Sans await, le
+  // syncOutputButtons qui suit la branche passerait AVANT elle, sur un
+  // currentId encore nul.
+  if(docs.length) await selectDoc(docs[0].id);
+  else poseDevisVierge();
   // Après la branche, donc vrai dans les deux cas : un document a été
   // sélectionné et la sortie s'allume, ou il n'y en avait aucun et elle
   // reste éteinte.

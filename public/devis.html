@@ -629,7 +629,10 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
           <button class="stab" onclick="filterStatus('sent',this)">Envoyé</button>
           <button class="stab" onclick="filterStatus('accepted',this)">Accepté</button>
           <button class="stab" onclick="filterStatus('refused',this)">Refusé</button>
-          <button class="stab" onclick="filterStatus('transformed',this)">Transformé</button>
+          <!-- CINQ ONGLETS, ET PAS DE SIXIÈME. « Transformé » filtrait sur
+               status === 'transformed', une chaîne qu'aucun devis ne porte :
+               après conversion le serveur pose statut = 'accepte'. L'onglet
+               rendait donc « Aucun document » à tous les coups. -->
         </div>
       </div>
       <div id="filter-client-banner" style="display:none;background:rgba(67,56,202,0.10);border-bottom:1px solid #4338CA;padding:10px 16px;font-size:11.5px;color:#4338CA;align-items:center;justify-content:space-between;gap:10px;">
@@ -659,7 +662,7 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
          que l'en-tête de la liste portait jusqu'ici. -->
     <div class="edit-hdr">
       <div class="edit-hdr-id">
-        <div class="edit-hdr-title" id="edit-hdr-title">Nouveau devis</div>
+        <div class="edit-hdr-title" id="edit-hdr-title">Devis</div>
         <div class="edit-hdr-num" id="edit-num">#—</div>
       </div>
       <button class="btn-new" onclick="newDoc()">
@@ -1502,6 +1505,10 @@ function docVide() {
 
 function loadDocToEditor(d) {
   const numDoc = numeroDuDoc(d);
+  // L'EN-TÊTE PORTE LE NOM DE LA PIÈCE, jamais une promesse. Le document vide
+  // est de type devis : sans document à l'écran, l'en-tête porte donc le nom
+  // de la page, « Devis ». Il annonçait « Nouveau devis » là où rien n'était
+  // ouvert et où rien ne pouvait s'écrire.
   document.getElementById('edit-hdr-title').textContent = d.type === 'facture' ? 'Facture' : 'Devis';
   document.getElementById('edit-num').textContent = numDoc ? '#' + numDoc : '#—';
   // Le champ reste modifiable sur un devis déjà enregistré : une référence
@@ -1522,6 +1529,12 @@ function loadDocToEditor(d) {
   document.getElementById('lines-container').innerHTML = '';
   (d.lines||[]).forEach(l => addLine(l.desc, l.qty, l.pu));
   updateTotals();
+  // LA BOÎTE DE TOTAUX SUIT LE DOCUMENT. Elle affichait 0,00 € trois fois sur
+  // un écran qui n'en porte aucun, compte neuf ou dernier devis supprimé.
+  // Le document vide n'a pas d'identifiant : c'est ce qui la fait taire, et
+  // elle reparaît avec le devis suivant. La règle tient ici, sur le chemin
+  // que tout devis emprunte déjà, et non dans une seconde à tenir d'accord.
+  document.getElementById('totals-box').style.display = d.id ? '' : 'none';
   majAlerteNumero();
   // LE FIGEAGE est posé ICI, et nulle part ailleurs : loadDocToEditor est
   // le seul chemin par lequel un devis entre dans l'éditeur. Après addLine,
@@ -1858,7 +1871,6 @@ async function deleteDoc(btn) {
   // avec CHAMPS_EDITEUR. Un champ ajouté à l'éditeur se videra ici sans que
   // personne ait à y penser.
   loadDocToEditor(docVide());
-  document.getElementById('edit-hdr-title').textContent = 'Nouveau devis';
   syncOutputButtons();                         // plus rien à imprimer ni à envoyer
   // L'éditeur ne se ROUVRE pas : il n'y a plus de devis à écrire. Il
   // s'éteint, et sans raison au survol : le figeage n'en a une que
@@ -2106,12 +2118,16 @@ function showToast(msg) {
   // Sélectionner le premier par défaut
   if(docs.length) selectDoc(docs[0].id);
   else {
-    document.getElementById('e-tva').value = accountDefaultTva;
-    // Date du jour SEULEMENT quand aucun devis n'est chargé. Posée après
-    // selectDoc, elle écrasait dans l'éditeur la date du devis sélectionné :
-    // la première saisie suivante réenregistrait le devis à la date du jour.
-    document.getElementById('e-date').value = new Date().toISOString().split('T')[0];
-    updateTotals();
+    // AUCUNE DATE DU JOUR N'EST POSÉE, et surtout pas après selectDoc : elle
+    // écrasait là dans l'éditeur la date du devis sélectionné, et la première
+    // saisie suivante réenregistrait le devis à la date du jour. Elle n'est
+    // pas posée ici non plus : le geste avait un sens quand l'éditeur restait
+    // ouvert, il datait depuis un éditeur éteint un document qui n'existe pas.
+    //
+    // L'écran sans document se vide par le chemin de la suppression du dernier
+    // devis : loadDocToEditor avec le document vide. Le taux du compte, les
+    // totaux et l'en-tête en viennent tous, sans seconde liste à tenir.
+    loadDocToEditor(docVide());
     // Aucun devis à l'écran : l'éditeur est éteint, et sans raison au
     // survol. Il n'y a pas de devis signé ici, il n'y a pas de devis du
     // tout, et l'aperçu dit déjà « Sélectionnez ou créez un devis ».

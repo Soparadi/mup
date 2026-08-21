@@ -411,8 +411,6 @@ body.outils-deplies .my-link-field.vide{display:flex}
   white-space:nowrap;
 }
 .briefing-mini:hover{background:var(--surface2)}
-.briefing-mini.cta{background:var(--text);color:#fff}
-.briefing-mini.cta:hover{background:#000}
 
 /* ZONE VISIO */
 .video-frame-wrap{
@@ -1273,7 +1271,7 @@ body #mup-cookie-panel{z-index:60001}
              outil, il subit celui de son client, et n'en propose qu'un quand
              c'est lui qui invite. -->
         <div id="accueilIntro">
-          <p>Collez l'adresse de votre salle de visioconférence : elle sera proposée à chaque rendez-vous, et reste modifiable en un instant. Le reste suit tout seul — la fiche du prospect à côté de l'appel, vos documents à portée, vos notes rangées sur la fiche, et le devis qui part de là.</p>
+          <p>Collez l'adresse de votre salle de visioconférence : elle sera proposée à chaque rendez-vous, et reste modifiable en un instant. Le reste suit tout seul : la fiche du prospect à côté de l'appel, vos documents à portée, et vos notes rangées sur la fiche.</p>
           <p>Avec quel outil appelez-vous ?</p>
           <div class="accueil-choix">
             <button class="accueil-outil" data-accueil-outil="zoom"><span class="ld" style="background:var(--zoom)"></span>Zoom</button>
@@ -3037,13 +3035,15 @@ async function renderBriefing(rdv){
   }
 
   // Badges actions
+  // « Devis » est parti d'ici, avec createDevisFromRdv et le paquet
+  // mup_devis_prefill qu'il écrivait dans le stockage du navigateur. Visio
+  // écrivait ce paquet, la page Devis ne l'a jamais lu : le bouton menait à un
+  // écran vide. Le faire fonctionner aurait pérennisé un passage par la
+  // mémoire du navigateur que le commentaire du code annonçait lui-même comme
+  // provisoire. Qui veut faire un devis après sa visio va sur la page Devis.
   let actionsHtml = '';
   if(rdv.prospectId){
     actionsHtml = `
-      <button class="briefing-mini cta" onclick="createDevisFromRdv()">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        Devis
-      </button>
       <button class="briefing-mini briefing-fiche" onclick="ouvrirFicheRdv('${escapeHtml(String(rdv.prospectId))}')">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         Fiche
@@ -3101,16 +3101,6 @@ window.launchPopup = function(link){
   } else {
     showToast('Veuillez autoriser les popups');
   }
-};
-
-window.createDevisFromRdv = function(){
-  if(!rdvAffiche) return;
-  // TODO: migrer en SurrealDB lors de la migration page Devis (handover éphémère cross-page)
-  localStorage.setItem('mup_devis_prefill', JSON.stringify({
-    societe: rdvAffiche.societe, nom: rdvAffiche.prospectName,
-    email: rdvAffiche.email, source: 'visio', rdvId: rdvAffiche.id
-  }));
-  window.location.href = '/devis';
 };
 
 /* ————————————————————————————————————————————————

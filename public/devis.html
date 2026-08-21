@@ -291,6 +291,19 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    bouton global, elles ne peuvent donc venir de nulle part ailleurs. */
 .doc-emetteur-cta{display:inline-block;margin-top:2.12mm;padding:1.32mm 2.65mm;border:1px solid var(--border2);border-radius:1.32mm;font-family:inherit;font-size:2.91mm;font-weight:600;color:var(--text);text-decoration:none;background:transparent;cursor:pointer}
 .doc-emetteur-cta:hover{background:var(--surface2)}
+/* LE BLOC ÉMETTEUR EST LA PORTE DE L'ENCART, DANS SES DEUX ÉTATS. Renseigné, il
+   n'existait plus AUCUN chemin vers les coordonnées depuis Devis : le renvoi
+   ci-dessus ne paraît que sur un compte sans société, et le lien vers
+   /frais?reglages=1 est tombé au lot précédent. On modifie là où on lit : la
+   zone de clic est exactement ce qu'elle édite, aucun élément ne s'ajoute à
+   l'écran, et rien ne s'imprime puisque c'est le document lui-même.
+   UNE SEULE DÉCLARATION, LE CURSEUR. Pas de fond, pas de cadre, pas de couleur,
+   pas de soulignement : ce dernier ne se voit qu'au survol, comme le curseur, il
+   ne découvrirait donc rien de plus et poserait le vocabulaire de l'application
+   sur la pièce de l'abonné. Le reste de la découvrabilité tient dans le
+   balisage (title au survol, role et tabindex pour le clavier), et l'anneau de
+   focus est celui du navigateur, personne ne le pose ici. */
+.doc-emetteur{cursor:pointer}
 .doc-table{width:100%;border-collapse:collapse;margin-bottom:6.35mm}
 .doc-table th{font-size:2.51mm;font-weight:700;text-transform:uppercase;letter-spacing:.26mm;color:var(--muted2);padding:2.12mm 2.65mm;border-bottom:1.5px solid var(--border);text-align:left}
 .doc-table th:last-child,.doc-table td:last-child{text-align:right}
@@ -717,6 +730,16 @@ body #mup-cookie-panel{z-index:60001}
   #tem-quota-toast,
   .mupc-overlay,
   #mup-toast { display: none !important; }
+
+  /* LE BLOC ÉMETTEUR, LUI, RESTE : il EST le document, et il n'entre pas dans
+     la liste ci-dessus, qui vise le bouton seul. Ce qui le rend cliquable, en
+     revanche, ne va pas sur le papier. Des trois marques d'écran, deux se
+     règlent ici : le curseur, qui n'a aucun rendu à l'impression mais dont la
+     valeur d'écran se redit là où elle est lue, et l'anneau de focus, qui lui en
+     aurait un si la feuille partait pendant que le bloc tient le clavier. La
+     troisième, le title, est une infobulle du navigateur : elle n'a ni boîte ni
+     rendu papier, il n'y a rien à lui remettre. La structure ne bouge pas. */
+  .doc-emetteur { cursor: auto; outline: none; }
 
   /* 3. Le décor d’écran part, la hauteur minimale reste, d’un cheveu
      plus courte.
@@ -1562,6 +1585,43 @@ document.getElementById('coord-enregistrer').addEventListener('click', async fun
   const d = docCourant();
   if(d) renderPreview(d);
   syncOutputButtons();
+});
+
+// LA PORTE DE RETOUR : POSÉE UNE FOIS SUR LA COLONNE D'APERÇU
+// Le bloc émetteur du document rouvre cet encart, DANS SES DEUX ÉTATS. Renseigné,
+// c'est la seule porte : le renvoi « Renseigner ma société » ne paraît que sur un
+// compte sans société, et l'abonné qui veut corriger son adresse, son courriel ou
+// son SIRET n'avait plus où cliquer. Vide, le bloc porte déjà son bouton, qui ne
+// change pas : son clic remonte jusqu'ici et demande le même encart, qu'une
+// seconde demande ne lève pas deux fois. Rien à neutraliser.
+//
+// PAR DÉLÉGATION, ET SUR #preview-area. renderPreview réécrit l'innerHTML de la
+// colonne à chaque frappe : le bloc est détruit et recréé, un écouteur posé sur
+// lui serait à reposer après chacun des six appels et finirait par manquer un
+// chemin. Le conteneur, lui, n'est jamais remplacé : on écrit DANS lui. Il vit
+// dans le balisage et existe déjà quand ce script s'exécute, comme les deux
+// boutons de l'encart ci-dessus, qui s'accrochent de la même façon.
+//
+// LE CLAVIER AVEC LA SOURIS. Une zone que seule la souris atteint est un défaut
+// qu'il faudrait rouvrir : role et tabindex mettent le bloc dans l'ordre de
+// tabulation et l'annoncent comme commande, Entrée et Espace l'activent, ce qu'un
+// <div> ne fait pas de lui-même. preventDefault tient l'Espace, sans quoi la
+// colonne défilerait sous la frappe.
+//
+// Le capteur de sortie posé plus bas ne s'en mêle pas : ses trois sélecteurs sont
+// ceux de la barre, #preview-area n'en est pas, et le clic passe intact.
+const colonneApercu = document.getElementById('preview-area');
+colonneApercu.addEventListener('click', function(e){
+  if(!e.target || !e.target.closest) return;
+  if(!e.target.closest('.doc-emetteur')) return;
+  ouvrirCoordonnees();
+});
+colonneApercu.addEventListener('keydown', function(e){
+  if(e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+  if(!e.target || !e.target.closest) return;
+  if(!e.target.closest('.doc-emetteur')) return;
+  e.preventDefault();
+  ouvrirCoordonnees();
 });
 
 // API SurrealDB (V1 mono-utilisateur, scoping serveur via env MUP_DEFAULT_USER_ID)
@@ -2929,7 +2989,7 @@ function renderPreview(d) {
       </div>
 
       <div class="doc-parties">
-        <div>
+        <div class="doc-emetteur" role="button" tabindex="0" title="Modifier vos coordonnées">
           ${em.nom ? `<div class="doc-party-name">${esc(em.nom)}</div>
           ${emLignes ? `<div class="doc-party-info">${emLignes}</div>` : ''}` : `<div class="doc-party-info">Votre société apparaîtra ici.</div>
           <button type="button" class="doc-emetteur-cta" onclick="ouvrirCoordonnees()">Renseigner ma société</button>`}

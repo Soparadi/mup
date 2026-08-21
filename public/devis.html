@@ -343,7 +343,10 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .doc-totals{margin-left:auto;width:63.5mm;margin-bottom:7.41mm}
 .doc-total-row{display:flex;justify-content:space-between;padding:1.32mm 0;font-size:3.31mm;color:var(--muted);border-bottom:1px solid var(--border)}
 .doc-total-row:last-child{border-bottom:none;padding-top:2.65mm;font-size:3.97mm;font-weight:800;color:var(--text);border-top:2px solid var(--text)}
-.doc-total-row:last-child span:last-child{font-family:var(--mono)}
+/* LE TOTAL NE CHANGE PAS DE POLICE. Il porte le corps, la graisse et le
+   filet de la ligne au-dessus, et pour le reste il prend la typographie du
+   document, celle des lignes de prestation. La monospace ne tenait ici que
+   ce seul montant de la feuille, et le montrait du doigt. */
 /* LE PIED DE FEUILLE. margin-top:auto, et rien d’autre : dans une colonne
    flex, la marge automatique absorbe toute la hauteur libre et dépose le bloc
    au ras du bas de la boîte, soit à 14mm du bord de la feuille, ses marges
@@ -3766,7 +3769,7 @@ function renderPreview(d) {
       <div class="doc-totals">
         <div class="doc-total-row"><span>Sous-total HT</span><span>${fmt(t.ht)}</span></div>
         <div class="doc-total-row"><span>${tva==0?'TVA non applicable (art. 293B CGI)':'TVA '+tva+'%'}</span><span>${tva==0?'—':fmt(t.tva)}</span></div>
-        <div class="doc-total-row" style="font-weight:800;font-size:3.7mm;border-top:2px solid var(--text);padding-top:2.65mm;margin-top:1.06mm"><span>Total TTC</span><span style="font-family:var(--mono)">${fmt(t.ttc)}</span></div>
+        <div class="doc-total-row" style="font-weight:800;font-size:3.7mm;border-top:2px solid var(--text);padding-top:2.65mm;margin-top:1.06mm"><span>Total TTC</span><span>${fmt(t.ttc)}</span></div>
       </div>
 
       ${conditions ? `<div class="doc-conditions">

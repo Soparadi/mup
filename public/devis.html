@@ -581,6 +581,10 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
   <link rel="stylesheet" href="/styles/mup-confirm.css">
+  <!-- L'encart de lecture interrompue emprunte son vêtement à
+       mup-confirm.css, chargée juste au-dessus : les deux feuilles vont
+       ensemble, et dans cet ordre. -->
+  <link rel="stylesheet" href="/styles/mup-lecture.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -691,10 +695,10 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
         <div class="edit-section-title">Informations</div>
         <!-- LE NUMÉRO, à côté de la date : les deux mentions que le
              document porte en tête, saisies au même endroit. Le champ
-             est libre de format : l’abonné y écrit la référence de sa
-             propre comptabilité, et la page apprend cette forme pour
-             proposer la suite au devis suivant. Voir § LE NUMÉRO DU
-             DEVIS dans le script. -->
+             est libre de format ET ARRIVE VIDE : l’abonné y écrit la
+             référence de sa propre comptabilité, la page n’en propose
+             aucune et n’en fabrique aucune. Voir § LE NUMÉRO DU DEVIS
+             dans le script. -->
         <div class="f2">
           <div class="frow">
             <div class="flabel">Numéro</div>
@@ -769,8 +773,13 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
       <!-- Notes -->
       <div class="edit-section">
         <div class="edit-section-title">Conditions & Notes</div>
+        <!-- LE CHAMP EST VIDE DANS LE BALISAGE, et il doit le rester : ce
+             qu’il porte vient du devis chargé, ou des réglages du compte
+             pour un devis neuf. Le texte d’usine qui vivait ici
+             s’imprimait sur la feuille d’un abonné qui n’en avait jamais
+             voulu, et se réinstallait à chaque page rouverte. -->
         <div class="frow">
-          <textarea class="finput" id="e-notes" rows="3" style="resize:none" placeholder="Conditions de paiement, délais de livraison…" oninput="liveUpdate()">Paiement à 30 jours à réception de facture. Acompte de 30% à la signature.</textarea>
+          <textarea class="finput" id="e-notes" rows="3" style="resize:none" placeholder="Conditions de paiement, délais de livraison…" oninput="liveUpdate()"></textarea>
         </div>
       </div>
 
@@ -827,6 +836,7 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 </div>
 
 <script src="/js/mup-confirm.js"></script>
+<script src="/js/mup-lecture.js"></script>
 <script>
 const MONTHS_FR = ['jan.','fév.','mar.','avr.','mai','jun.','jul.','aoû.','sep.','oct.','nov.','déc.'];
 // Les mois entiers, réservés au DOCUMENT. Une feuille qui sort de
@@ -836,7 +846,9 @@ const MONTHS_FR = ['jan.','fév.','mar.','avr.','mai','jun.','jul.','aoû.','sep
 const MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
 // ── DONNÉES ──
-const MOCK_DOCS = [];
+// MOCK_DOCS est parti avec le repli de loadDocs : un tableau vide recopié
+// sur une lecture échouée n'était pas un jeu d'essai, c'était le mensonge
+// qui faisait passer une panne pour un compte neuf.
 
 let docs = [];
 let currentId = null;
@@ -854,6 +866,21 @@ let accountSettings = {};
 // gardent leur propre taux figé — ce défaut ne s'applique qu'à la création.
 let accountDefaultTva = 0;
 
+// LES RÉGLAGES ONT-ILS ÉTÉ LUS ? Ce n'est pas la même question que « la
+// société est-elle renseignée » : un compte sans raison sociale est un compte
+// qu'on connaît, et l'aperçu lui dit déjà « Renseigner ma société ». Ici il
+// s'agit d'une lecture qui a ÉCHOUÉ, donc d'un émetteur INCONNU. Une feuille
+// qui sort sans raison sociale, sans adresse, sans SIRET, avec un taux retombé
+// à 0, s'imprimerait en franchise de TVA sur un compte peut-être assujetti.
+// Cet échec ne tient pas la page : la liste, elle, est lisible et l'abonné
+// peut travailler. Ce sont les BOUTONS DE SORTIE qui refusent.
+let reglagesLus = false;
+
+const MOTIF_EMETTEUR_INCONNU = 'Vos coordonnées n\'ont pas pu être lues : la feuille sortirait sans votre société ni votre régime de TVA. Rechargez la page.';
+
+// Rend true quand les réglages ont été lus, false sinon. Le code de retour
+// n'est pas décoratif : sans réglages, l'émetteur du document est INCONNU,
+// et ce sont les boutons de sortie qui refusent (cf. syncOutputButtons).
 async function loadAccountRegime() {
   try {
     const r = await fetch('/api/user-settings');
@@ -861,8 +888,52 @@ async function loadAccountRegime() {
       accountSettings = await r.json() || {};
       // ?? et non || : un taux enregistré à 0 est un choix de l'abonné, pas une absence.
       accountDefaultTva = accountSettings.tvaAssujetti ? (accountSettings.tauxTvaDefaut ?? 20) : 0;
+      return true;
     }
   } catch(e){ console.warn('[devis] user-settings load failed', e); }
+  return false;
+}
+
+// ── LES CONDITIONS DE VENTE MONTENT DANS LE COMPTE ─────────────────
+// Elles ne changent pas d'un devis à l'autre : ce sont des conditions de
+// VENTE, une propriété de l'entreprise. La dernière version écrite devient
+// donc le défaut de TOUS les devis à venir, sans que l'abonné ait le moindre
+// geste à faire : MovUP ne peut pas savoir qu'un changement ne viserait qu'un
+// devis, et n'a pas à le deviner.
+//
+// LES DEVIS DÉJÀ ENREGISTRÉS NE BOUGENT JAMAIS. Le texte reste écrit DANS le
+// devis ; les réglages ne remplissent qu'un devis NEUF (newDoc) et ne
+// relisent jamais les anciens. Même règle que le taux de TVA, déjà en place.
+//
+// LE PIÈGE, déjà documenté ailleurs : Frais et Statistiques renvoient leur
+// objet settings ENTIER en PUT, si bien qu'un onglet resté ouvert sur l'une
+// de ces pages écraserait ce que Devis vient d'écrire. Deux précautions, pas
+// une : on RELIT les réglages juste avant d'écrire, et on n'envoie QUE la clé
+// des conditions. Le PUT est en MERGE côté serveur, aucune route nouvelle
+// n'est nécessaire.
+//
+// Silencieuse de bout en bout : la montée est un effet du geste
+// « Enregistrer », pas un geste de plus. Un refus d'abonnement lève déjà sa
+// propre fenêtre, et une panne de réseau ne doit pas coiffer le devis qui
+// vient, lui, d'être enregistré.
+async function monteConditionsAuCompte(conditions) {
+  const texte = String(conditions == null ? '' : conditions);
+  // Rien n'a changé depuis la dernière lecture : ni relecture ni écriture.
+  // « Enregistrer » est un geste fréquent, et la plupart des devis sortent
+  // avec les conditions qu'ils ont reçues du compte.
+  if(String(accountSettings.conditionsVente || '') === texte) return;
+  try {
+    const r = await fetch('/api/user-settings');
+    if(r.ok) accountSettings = await r.json() || {};
+    if(String(accountSettings.conditionsVente || '') === texte) return;
+    const w = await fetch('/api/user-settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conditionsVente: texte })
+    });
+    if(w.ok) accountSettings.conditionsVente = texte;
+    else console.warn('[devis] montée des conditions de vente refusée', w.status);
+  } catch(e){ console.warn('[devis] montée des conditions de vente', e); }
 }
 
 // Émetteur du document, composé depuis le compte et de nulle part ailleurs.
@@ -878,16 +949,27 @@ function emetteurDuCompte() {
 }
 
 // API SurrealDB (V1 mono-utilisateur, scoping serveur via env MUP_DEFAULT_USER_ID)
+//
+// LA LECTURE REND SON SORT, et n'invente plus de liste. Une lecture échouée
+// posait ici une liste VIDE : la page affichait alors « Aucun document »,
+// l'écran EXACT d'un compte neuf. L'abonné croyait avoir tout perdu, et s'il
+// cliquait sur Nouveau il écrivait un devis dans une base dont la page
+// ignorait le contenu, sous une référence qui pouvait déjà exister.
+//
+// `docs` n'est donc touché QUE sur une lecture aboutie. L'appelante tient
+// l'encart de lecture interrompue (mupLecture), qui garde la page tant que
+// cette fonction n'a pas rendu true.
 async function loadDocs() {
   try {
     const r = await fetch('/api/devis');
-    if(r.ok){
-      const data = await r.json();
-      docs = Array.isArray(data) && data.length ? data : JSON.parse(JSON.stringify(MOCK_DOCS));
-      return;
-    }
-  } catch(e){}
-  docs = JSON.parse(JSON.stringify(MOCK_DOCS));
+    if(!r.ok){ console.warn('[devis] lecture des devis refusée', r.status); return false; }
+    const data = await r.json();
+    docs = Array.isArray(data) ? data : [];
+    return true;
+  } catch(e){
+    console.warn('[devis] lecture des devis', e);
+    return false;
+  }
 }
 // LE CODE DE RETOUR EST LU. Cette boucle l'ignorait : un refus du serveur
 // finissait en « ✓ Document enregistré », et l'abonné repartait avec une
@@ -897,18 +979,45 @@ async function loadDocs() {
 // Les devis signés sont ÉCARTÉS de la boucle : le serveur les refuse en 409,
 // et rien de ce que la page tient d'eux ne doit être renvoyé. Ils sont
 // comptés à part, pour que l'appelant sache dire pourquoi.
+//
+// LE 402 EST COMPTÉ À PART LUI AUSSI. Il n'est pas un refus parmi d'autres :
+// c'est un essai terminé, et « rechargez la page » y est un conseil FAUX,
+// recharger ne rendra pas l'écriture. La fenêtre du choix des abonnements est
+// déjà levée par trial-expired-modal.js, avec ses trois formules ; la page
+// n'a rien à ajouter par-dessus, et se tait.
 async function saveDocs() {
   // Persistance API : chaque doc devient un POST upsert (idempotent grâce à upsertRecord serveur)
-  const bilan = { enregistres: 0, ignores: 0, refuses: 0 };
+  const bilan = { enregistres: 0, ignores: 0, refuses: 0, abonnement: 0 };
   for(const d of docs){
     if(estSigne(d)){ bilan.ignores++; continue; }
     try {
       const r = await fetch('/api/devis', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(d) });
       if(r.ok) bilan.enregistres++;
+      else if(r.status === 402) bilan.abonnement++;
       else { bilan.refuses++; console.warn('[devis] enregistrement refusé pour', d.id, r.status); }
     } catch(e){ bilan.refuses++; console.warn('[devis] saveDocs failed for', d.id, e); }
   }
   return bilan;
+}
+
+// CE QUI EST LU À L'ABONNÉ QUAND LE SERVEUR REFUSE, à un seul endroit.
+//
+// `message` d'abord : c'est la phrase que le serveur écrit POUR L'ABONNÉ, et
+// elle n'accompagne aujourd'hui que les refus d'abonnement, dont le champ
+// `error` porte, lui, un code machine (« trial_expired »). Aucun code machine
+// ne doit paraître à l'écran, jamais.
+//
+// `error` ensuite, et le retenir est délibéré : sur toutes les autres routes
+// devis et factures, ce champ ne porte PAS de code mais une phrase française
+// écrite pour être lue : « Devis introuvable », « Devis déjà converti en
+// facture », « Le devis doit être accepté… », le motif de refus d'une pièce
+// trop lourde. L'écarter d'office remplacerait ces motifs, choisis un par un
+// côté serveur, par un repli générique : le refus perdrait sa raison. Les
+// refus d'abonnement, eux, ne passent plus par ici : leurs appelantes les
+// écartent en amont sur le status 402.
+function motifDuRefus(err, repli){
+  const e = err || {};
+  return e.message || e.error || repli;
 }
 
 // Rend { ok, motif }. Le motif vaut null quand le refus s'est déjà annoncé
@@ -921,7 +1030,7 @@ async function deleteDocApi(id){
     if(r.ok) return { ok:true, motif:null };
     if(r.status === 402) return { ok:false, motif:null };
     const err = await r.json().catch(() => ({}));
-    return { ok:false, motif: err.error || 'La suppression a été refusée.' };
+    return { ok:false, motif: motifDuRefus(err, 'La suppression a été refusée.') };
   } catch(e){
     console.warn('[devis] DELETE failed', id, e);
     return { ok:false, motif:'Erreur réseau lors de la suppression.' };
@@ -1181,7 +1290,7 @@ async function deposerPiece(input){
       // trial-expired-modal.js, un second message ferait double emploi.
       if(r.status !== 402){
         const err = await r.json().catch(() => ({}));
-        mupAlert(err.error || 'Le dépôt a été refusé.', null, 'Fermer');
+        mupAlert(motifDuRefus(err, 'Le dépôt a été refusé.'), null, 'Fermer');
       }
       return;
     }
@@ -1379,12 +1488,25 @@ function selectDoc(id) {
   syncOutputButtons();
 }
 
+// LE DOCUMENT VIDE, celui d'un écran sans document. Ce n'est pas une pièce :
+// il n'entre jamais dans `docs`, personne ne l'enregistre, et il ne porte pas
+// d'identifiant. Il ne sert qu'à RENDRE l'éditeur vide en passant par
+// loadDocToEditor, comme tout le reste. Le taux est celui du compte, comme à
+// la création : c'est ce que le champ montrerait de toute façon au devis
+// suivant.
+function docVide() {
+  return { id:null, type:'devis', num:'', name:'', co:'', email:'', addr:'',
+           date:'', validity:30, status:'draft', tva:accountDefaultTva,
+           notes:'', lines:[] };
+}
+
 function loadDocToEditor(d) {
   const numDoc = numeroDuDoc(d);
   document.getElementById('edit-hdr-title').textContent = d.type === 'facture' ? 'Facture' : 'Devis';
   document.getElementById('edit-num').textContent = numDoc ? '#' + numDoc : '#—';
-  // Le champ reste modifiable sur un devis déjà enregistré : la correction
-  // y devient la nouvelle référence de la série (cf. dernierNumero).
+  // Le champ reste modifiable sur un devis déjà enregistré : une référence
+  // mal saisie se corrige. Il ne montre QUE ce que l'abonné a écrit, et
+  // reste vide tant qu'il n'a rien écrit.
   document.getElementById('e-num').value = numDoc;
   document.getElementById('e-name').value = d.name||'';
   document.getElementById('e-co').value = d.co||'';
@@ -1459,10 +1581,16 @@ function renderPreview(d) {
   const tva = d.tva ?? accountDefaultTva;
   const validityDate = d.date ? new Date(new Date(d.date).getTime() + (d.validity||30)*24*3600*1000) : null;
   const isInvoice = d.type === 'facture';
-  // Le numéro s’imprime tel qu’il est saisi. Tant qu’il reste vide, au
-  // premier devis d’un compte neuf, la ligne cède la place plutôt que
-  // d’annoncer un « N° » vide.
+  // Le numéro s’imprime tel qu’il est saisi. Tant qu’il reste vide, la
+  // ligne cède la place plutôt que d’annoncer un « N° » vide.
   const numDoc = numeroDuDoc(d);
+  // LES CONDITIONS, ET LE REPLI QUI PART AVEC ELLES. `d.notes || '<clause>'`
+  // confondait un champ EFFACÉ et un champ JAMAIS REMPLI : `||` bascule sur
+  // toute chaîne vide, et la feuille repartait donc avec une clause de
+  // paiement que l’abonné venait précisément de retirer. Sans conditions,
+  // le bloc ne s’imprime pas du tout. Ce qu’il voit à l’écran est ce qui
+  // sort sur le papier.
+  const conditions = String(d.notes || '').trim();
 
   const linesHtml = (d.lines||[]).map(l => {
     const total = (parseFloat(l.qty)||0) * (parseFloat(l.pu)||0);
@@ -1532,9 +1660,9 @@ function renderPreview(d) {
         <div class="doc-total-row" style="font-weight:800;font-size:3.7mm;border-top:2px solid var(--text);padding-top:2.65mm;margin-top:1.06mm"><span>Total TTC</span><span style="font-family:var(--mono)">${fmt(t.ttc)}</span></div>
       </div>
 
-      <div class="doc-conditions">
-        <strong>Conditions :</strong> ${esc(d.notes||'Paiement à 30 jours à réception de facture.')}
-      </div>
+      ${conditions ? `<div class="doc-conditions">
+        <strong>Conditions :</strong> ${esc(conditions)}
+      </div>` : ''}
     </div>`;
 }
 
@@ -1549,10 +1677,9 @@ function liveUpdate() {
   d.email = document.getElementById('e-email').value;
   d.addr = document.getElementById('e-addr').value;
   // Le numéro part du champ tel qu’il est saisi, dans la forme libre de
-  // l’abonné, et se réhorodate à chaque changement : cet horodatage, et
-  // lui seul, désigne la référence du devis suivant.
+  // l’abonné. Rien n’en est déduit : ni série, ni suite, ni horodatage
+  // de référence.
   const numSaisi = document.getElementById('e-num').value.trim();
-  if(numSaisi !== numeroDuDoc(d)) d.numAt = new Date().toISOString();
   d.num = numSaisi;
   document.getElementById('edit-num').textContent = numSaisi ? '#' + numSaisi : '#—';
   majAlerteNumero();
@@ -1573,68 +1700,34 @@ function liveUpdate() {
 }
 
 // ── LE NUMÉRO DU DEVIS ─────────────────────────────────────────────
-// Le numéro appartient à l’abonné. Il l’écrit dans la forme de sa
-// comptabilité : D-2026-042, 2026/07, 145. La page apprend cette forme
-// au lieu de lui en imposer une. La composition « 2026-NNN » depuis
-// docs.length est partie avec l’année en dur qu’elle portait : elle
-// rejouait un numéro déjà employé dès qu’un devis du milieu de la
-// série était supprimé, et elle interdisait à qui tenait déjà sa
-// propre série de la poursuivre ici.
+// Le numéro appartient à l’abonné, ENTIÈREMENT. Il l’écrit dans la
+// forme de sa comptabilité : D-2026-042, 2026/07, 145. La page ne lui
+// en impose aucune, ne lui en propose aucune, et n’en affiche aucune
+// qu’elle aurait fabriquée. Le champ arrive VIDE.
+//
+// POURQUOI RIEN N’EST PROPOSÉ, et pourquoi il ne faut pas y revenir.
+// Une numérotation courante s’écrit « 21-210826 » : un rang en tête,
+// une date en queue, donc DEUX compteurs dans une seule chaîne. Toute
+// règle mécanique avance le nombre FINAL et proposerait
+// « 21-210827 » : elle incrémenterait le jour au lieu du rang. Aucune
+// règle ne tranche entre les deux, et une référence comptable fausse
+// coûte plus cher qu’une saisie à faire.
 //
 // Ce qui vaut ici vaut pour le DEVIS seul. La facture garde son
 // compteur séquentiel à mutex côté serveur (nextSequenceNumber) : la
 // loi y impose une suite continue et pleine, qu’une saisie libre
 // briserait.
+//
+// Il reste donc de tout ce paragraphe la seule GARDE D’UNICITÉ, plus
+// bas : elle ne fabrique rien, elle signale.
 
-// Le numéro affiché et retenu, quelle que soit la plume qui a écrit le
-// devis : `num` pour ceux que cette page crée, `numero` pour ceux que
-// l’API a numérotés seule. La saisie, elle, écrit toujours dans `num`.
+// Le numéro affiché et retenu : `num`, celui que l’abonné a écrit, et
+// LUI SEUL. Le `numero` que le serveur fabrique n’est pas repris ici :
+// la page ne montre pas une référence que personne n’a saisie. Le
+// retrait de cette numérotation côté serveur est un arbitrage à part,
+// et le serveur n’est pas touché par cette passe.
 function numeroDuDoc(d){
-  return String((d && (d.num ?? d.numero)) || '').trim();
-}
-
-// L’horodatage de la SÉRIE, distinct d’updatedAt : il bouge quand le
-// numéro bouge, et lui seul. Retoucher le client ou une ligne d’un
-// vieux devis laisse donc la référence au dernier numéro écrit. Les
-// devis d’avant cette passe portent leur date de création, ce qui les
-// range dans l’ordre où ils sont arrivés.
-function horodateNumero(d){
-  return String((d && (d.numAt || d.createdAt || d.created_at)) || '');
-}
-
-// Le dernier numéro ÉCRIT, référence de la suite. Il se lit dans les
-// devis eux-mêmes plutôt que dans leur nombre : une suppression laisse
-// la série avancer là où elle en est. Une correction devient référence à
-// son tour, puisqu’elle réhorodate le devis corrigé : l’erreur de
-// saisie se rattrape donc en une fois.
-function dernierNumero(){
-  let ref = '', stamp = null;
-  for(const d of docs){
-    const n = numeroDuDoc(d);
-    if(!n) continue;
-    const h = horodateNumero(d);
-    if(stamp === null || h > stamp){ ref = n; stamp = h; }
-  }
-  return ref;
-}
-
-// La suite d’un numéro : le nombre qui le termine avance de un, tout le
-// reste tient. Préfixe, séparateurs et longueur du nombre sont rendus
-// tels quels : D-2026-042 donne D-2026-043, 2026/07 donne 2026/08, 145
-// donne 146. BigInt plutôt que Number : au-delà de seize chiffres, un
-// entier flottant arrondirait la référence de l’abonné.
-// Un numéro qui se termine autrement que par un nombre rend une chaîne
-// vide, et le champ reste alors libre : mieux vaut laisser écrire que
-// d’inventer une suite.
-function suiteDe(num){
-  const m = String(num || '').trim().match(/^(.*?)(\d+)$/);
-  if(!m) return '';
-  const chiffres = m[2];
-  return m[1] + (BigInt(chiffres) + 1n).toString().padStart(chiffres.length, '0');
-}
-
-function numeroSuivant(){
-  return suiteDe(dernierNumero());
+  return String((d && d.num) || '').trim();
 }
 
 // LA GARDE D’UNICITÉ. Elle compare à l’identique, casse et espaces de
@@ -1660,13 +1753,17 @@ function majAlerteNumero(){
 
 // ── ACTIONS ──
 function newDoc() {
-  // Le champ arrive rempli : l’abonné saisit sa forme une seule fois,
-  // au premier devis, et la page tient la série ensuite.
-  const num = numeroSuivant();
+  // Le champ du numéro arrive VIDE : rien n’est proposé, l’abonné écrit
+  // sa référence. Voir § LE NUMÉRO DU DEVIS.
+  //
+  // Les conditions, elles, arrivent REMPLIES quand le compte en porte :
+  // ce sont des conditions de VENTE, une propriété de l’entreprise, pas
+  // une phrase à réécrire à chaque devis. Aucun texte d’usine n’est
+  // posé ici : un compte neuf naît avec un champ vide, et ce qu’il
+  // écrira une fois montera dans ses réglages (monteConditionsAuCompte).
   const today = new Date().toISOString().split('T')[0];
   const nowIso = new Date().toISOString();
-  const d = { id:'d'+Date.now(), type:'devis', num, name:'', co:'', email:'', addr:'', date:today, validity:30, status:'draft', tva:accountDefaultTva, notes:'Paiement à 30 jours à réception de facture. Acompte de 30% à la signature.', lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
-  if(num) d.numAt = nowIso;   // le numéro proposé entre dans la série dès l’enregistrement
+  const d = { id:'d'+Date.now(), type:'devis', num:'', name:'', co:'', email:'', addr:'', date:today, validity:30, status:'draft', tva:accountDefaultTva, notes:String(accountSettings.conditionsVente || ''), lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
   docs.unshift(d);
   saveDocs();
   currentId = d.id;
@@ -1688,9 +1785,15 @@ async function saveDoc() {
   // modification qui n'existait que sur son écran.
   const bilan = await saveDocs();
   renderList();
-  if(bilan.refuses) showToast('Enregistrement refusé, rechargez la page');
-  else if(d && estSigne(d)) showToast(RAISON_FIGE);
-  else showToast('✓ Document enregistré');
+  if(bilan.refuses){ showToast('Enregistrement refusé, rechargez la page'); return; }
+  // Essai terminé : l'encart des abonnements est déjà à l'écran, seul. Un
+  // toast par-dessus ferait un second message, et un conseil de plus.
+  if(bilan.abonnement) return;
+  if(d && estSigne(d)){ showToast(RAISON_FIGE); return; }
+  showToast('✓ Document enregistré');
+  // Le devis est en base : ses conditions peuvent devenir celles du compte,
+  // et le devis suivant naîtra avec.
+  if(d) await monteConditionsAuCompte(d.notes);
 }
 
 async function convertToInvoice() {
@@ -1706,8 +1809,14 @@ async function convertToInvoice() {
   try {
     const r = await fetch('/api/factures/from-devis/' + encodeURIComponent(d.id), { method:'POST' });
     if(!r.ok){
-      const err = await r.json().catch(() => ({}));
-      mupAlert(err.error || 'Conversion impossible', null, 'Fermer');
+      // 402 : la fenêtre du choix des abonnements est déjà levée par
+      // trial-expired-modal.js. La garde que deposerPiece et deleteDocApi
+      // portent déjà manquait ICI, et la page affichait donc le code machine
+      // « trial_expired » à un abonné dont l'essai venait de finir.
+      if(r.status !== 402){
+        const err = await r.json().catch(() => ({}));
+        mupAlert(motifDuRefus(err, 'Conversion impossible'), null, 'Fermer');
+      }
       return;
     }
     const facture = await r.json();
@@ -1737,10 +1846,19 @@ async function deleteDoc(btn) {
   currentId = null;
   renderList();
   document.getElementById('preview-area').innerHTML = '<div class="preview-empty"><div style="opacity:.2"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div><div style="font-size:13px">Sélectionnez ou créez un devis</div></div>';
+  // L'ÉDITEUR SE VIDE EN ENTIER. Quatre champs sur quinze partaient jusqu'ici :
+  // le nom du contact, la société, le courriel, l'adresse, la date, la
+  // validité, le taux, le statut, les lignes de prestation et la boîte de
+  // totaux avec son montant restaient à l'écran, grisés mais parfaitement
+  // lisibles, sous un aperçu qui disait « Sélectionnez ou créez un devis ».
+  // Un écran sans document ne porte rien d'un document.
+  //
+  // Le vidage passe par loadDocToEditor, le chemin que tout devis emprunte
+  // déjà : c'est ce qui évite une seconde liste de champs à tenir d'accord
+  // avec CHAMPS_EDITEUR. Un champ ajouté à l'éditeur se videra ici sans que
+  // personne ait à y penser.
+  loadDocToEditor(docVide());
   document.getElementById('edit-hdr-title').textContent = 'Nouveau devis';
-  document.getElementById('edit-num').textContent = '#—';
-  document.getElementById('e-num').value = '';   // le numéro part avec la pièce
-  majAlerteNumero();
   syncOutputButtons();                         // plus rien à imprimer ni à envoyer
   // L'éditeur ne se ROUVRE pas : il n'y a plus de devis à écrire. Il
   // s'éteint, et sans raison au survol : le figeage n'en a une que
@@ -1764,11 +1882,20 @@ function sendDoc() { showToast('Envoi email — disponible en v2'); }
 // chemins qui n'ont pas de bouton — Ctrl+P, l'impression du navigateur,
 // un appel depuis la console — et un bouton éteint ne dit rien de ces
 // chemins-là.
+//
+// L'ÉMETTEUR EST LE SECOND CRITÈRE, et il pèse autant que le premier. Quand la
+// lecture des réglages a échoué, la feuille sortirait sans raison sociale,
+// sans adresse, sans SIRET, et son taux retombé à 0 l'imprimerait en franchise
+// de TVA sur un compte peut-être assujetti. Cet échec ne tient pas la page, la
+// liste est lisible et l'abonné travaille, mais rien ne doit en sortir. Le
+// motif est posé sur le bouton lui-même, donc lisible AVANT le clic, sur le
+// modèle de la raison au survol d'un devis signé (appliqueFigeage).
 function syncOutputButtons() {
-  const on = !!currentId;
+  const motifEmetteur = reglagesLus ? '' : MOTIF_EMETTEUR_INCONNU;
+  const on = !!currentId && reglagesLus;
   for(const id of ['btn-print','btn-pdf','btn-send']) {
     const b = document.getElementById(id);
-    if(b) b.disabled = !on;
+    if(b){ b.disabled = !on; b.title = motifEmetteur; }
   }
   // CONVERTIR n'a pas le même sort que les trois ci-dessus : il ne
   // s'éteint pas, il DISPARAÎT, et son critère est le sien. Une ligne à
@@ -1925,8 +2052,11 @@ function watchDocScale() {
 // #doc-paper n'existe qu'une fois que renderPreview a écrit un document dans
 // la colonne d'aperçu. Sans lui, la feuille d'impression n'aurait rien à
 // rendre : le refus se dit dans la page plutôt que sur une page blanche.
+// Le même refus que celui des boutons, pour les chemins qui n'en ont pas :
+// une feuille au nom d'un émetteur inconnu ne part pas non plus par ici.
 function printDoc() {
   if(!document.getElementById('doc-paper')) { showToast('Sélectionnez un document à imprimer'); return; }
+  if(!reglagesLus) { showToast(MOTIF_EMETTEUR_INCONNU); return; }
   window.print();
 }
 
@@ -1952,8 +2082,15 @@ function showToast(msg) {
   // Avant tout await : la page ne doit pas s'afficher un instant en
   // trois colonnes sur une fenêtre qui n'en tient pas trois.
   applyListFold();
-  await loadAccountRegime();
-  await loadDocs();
+  // L'échec de cette lecture-ci ne tient PAS la page : la liste reste
+  // lisible et l'abonné peut travailler. Ce sont les boutons de sortie qui
+  // refusent, avec leur motif (cf. syncOutputButtons).
+  reglagesLus = await loadAccountRegime();
+  // Celle-ci, si. L'encart tient la page tant que la lecture n'a pas abouti,
+  // et « Réessayer » la relance sur place : la page ne pose plus la liste
+  // vide d'un compte neuf sur une panne, et aucune écriture ne part avant
+  // qu'elle sache ce que la base contient.
+  await mupLecture(loadDocs);
   // À côté de loadDocs, et avant renderList : la pastille doit être là au
   // premier rendu, pas après un aller-retour.
   await loadSignatures();

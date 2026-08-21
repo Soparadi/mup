@@ -176,7 +176,7 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .doc-date{font-size:10.5px;color:var(--muted2)}
 
 /* APERÇU CENTRE */
-.preview-col{display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);overflow:hidden}
+.preview-col{display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);overflow:hidden;position:relative}
 /* La colonne d'aperçu n'a plus de barre. Les règles .preview-toolbar,
    .preview-title et .preview-btn sont parties avec elle plutôt que de
    rester à décrire un élément que la page n'écrit plus. Le titre
@@ -191,6 +191,31 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .preview-scroll{flex:1;overflow-y:auto;padding:24px;display:flex;justify-content:center;align-items:flex-start}
 .preview-scroll::-webkit-scrollbar{width:3px}
 .preview-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* LE VOILE DE CAPTURE. Pendant la seconde à trois secondes du rendu,
+   body.doc-sortie neutralise le zoom d'aperçu sur la page VIVANTE : la
+   feuille saute à 100 % et se fait rogner par sa colonne. On ne la
+   déplace pas pour autant, on la COUVRE. La sortir du champ créerait une
+   seconde mise en page à tenir vraie, ce que le gabarit A4 s'interdit
+   depuis qu'il tient en un seul endroit.
+   Le vêtement n'est pas inventé : rgba(0,0,0,.45) et blur(3px) sont les
+   valeurs de .list-scrim et de .mupc-overlay. Un seul voile pour
+   l'abonné, quoi qui se pose dessus. Le préfixe -webkit- accompagne le
+   flou : sans lui, Safari affiche un noir plat.
+   Il se cale sur la COLONNE, pas sur la fenêtre : position:absolute et
+   inset:0 dans .preview-col, devenue bloc conteneur par un simple
+   position:relative, comme .list-slot l'est déjà pour son tiroir. Rien
+   n'est mesuré, rien n'est déplacé.
+   Il n'est PAS dans .preview-scroll, et ce n'est pas un détail : le
+   défilement du conteneur le ferait glisser avec le document, et la
+   molette passerait au travers.
+   Il intercepte le pointeur et n'offre aucune sortie, ni clic ni Échap.
+   Le geste dure trois secondes au plus et le verrou de fond reste
+   pdfEnCours, dans exportPDF. cursor:progress dit l'attente sans
+   promettre un clic qui ne ferait rien.
+   z-index:5 : au-dessus de la feuille, sous le tiroir de liste (39, 40),
+   sous le message d'échec (999), sous les dialogues (50000). */
+.pdf-voile{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);cursor:progress}
 
 /* ================================================================ */
 /* LE DOCUMENT — UNE FEUILLE A4, DITE EN MILLIMÈTRES                */
@@ -767,6 +792,103 @@ body #mup-cookie-banner{z-index:60000}
 body #mup-cookie-panel{z-index:60001}
 
 /* ================================================================ */
+/* DOCTRINE PAPIER : un corps de règle, deux consommateurs          */
+/*                                                                  */
+/* Le document a désormais DEUX sorties : la feuille d'impression,  */
+/* juste en dessous, et le fichier PDF, que le bouton du même nom   */
+/* fabrique en rasterisant #doc-paper. Ce que le document doit      */
+/* devenir pour SORTIR ne peut donc plus vivre dans @media print :  */
+/* une feuille d'impression est INERTE pendant une capture, qui     */
+/* rend son clone en média « screen ». Écrites là-bas, ces          */
+/* déclarations auraient dû être recopiées en JS pour la capture,   */
+/* et les deux copies auraient divergé au premier réglage : le PDF  */
+/* serait reparti à 297mm de hauteur minimale, au zoom de la        */
+/* colonne d'aperçu, avec l'ombre portée et le rayon d'écran cuits  */
+/* dans l'image, sans que personne ne s'en avise.                   */
+/*                                                                  */
+/* Les deux sorties posent la MÊME classe sur <body> : la capture   */
+/* le temps du rendu (exportPDF), l'impression le temps de la       */
+/* feuille (les écouteurs beforeprint et afterprint, qui couvrent   */
+/* window.print comme Ctrl+P et le menu du navigateur). Une valeur, */
+/* deux consommateurs.                                              */
+/* ================================================================ */
+
+/* LE DÉCOR D'ÉCRAN PART, LA HAUTEUR MINIMALE RESTE, d'un cheveu
+   plus courte.
+   L'ombre portée et le rayon sont des affordances d'écran : ils disent
+   « ceci est une feuille » à qui regarde un écran, et ils restent muets
+   pour qui tient la feuille. Le zoom d'aperçu revient à 1 : il vaut la
+   réduction de la COLONNE, laquelle est absente des deux sorties, et
+   l'oublier ferait sortir le devis à 70% dans un coin de la page. Le
+   margin:0 reste : à l'écran la feuille est un élément flex centré, à
+   la sortie elle doit être à fleur de page.
+
+   Ce qui est ABSENT ici : width, max-width, padding. Ils y étaient tant
+   que le document était un bloc de 640px à marges en pixels, qu'il
+   fallait délier pour qu'il prenne la page. Il EST la page désormais ;
+   les rendre au papier serait le seul moyen de casser ce que ce bloc
+   est censé protéger.
+
+   Reste la hauteur minimale, qui perd 1mm et retrouve un rôle. Elle
+   l'a repris le jour où les conditions se sont posées en pied de
+   feuille : c'est la hauteur de la BOÎTE qui dit où ce pied se trouve,
+   et une feuille à hauteur de contenu remonterait les conditions sous
+   les totaux au lieu de les laisser en bas de la page. Ce bloc a donc
+   porté min-height:0 tout le temps que le dernier bloc du document se
+   contentait de suivre le précédent.
+
+   Le millimètre retiré est le prix de cette hauteur. 297mm et la boîte
+   de page valent exactement la même chose, @page étant à marge nulle,
+   et une égalité stricte périt à l'arrondi : 297mm font 1122,52px CSS,
+   que le moteur arrondit à 1123 ; il suffit que la boîte de page,
+   arrondie de son côté, tombe sur 1122 pour que le pixel en trop parte
+   sur une deuxième feuille, blanche. 296mm font 1118,74px, soit 1119 :
+   trois points sous le pire des deux arrondis, et invisibles à l'œil,
+   puisque les conditions descendent à 15mm du bord au lieu de 14. Un
+   millimètre de marge basse contre une feuille blanche de plus,
+   l'échange est bon.
+
+   LA CAPTURE SE CALE SUR LE MÊME 296, et pour la même raison : c'est le
+   pas auquel elle découpe le raster en pages, et un pas de 297 lui
+   ferait produire la même bande orpheline que le moteur d'impression.
+   La constante JS PDF_HAUTEUR_MM ne fait que redire cette valeur, qui
+   se lit ici.
+
+   Le cas long reste intact, et il l'est par construction : dès que le
+   contenu dépasse 296mm, un plancher de 296mm est inerte, et la marge
+   automatique des conditions se résout à zéro. Sur un devis de deux
+   feuilles les conditions suivent donc les totaux, là où elles
+   tombent : le pied de feuille est une promesse de document court, et
+   c'est le seul cas où elle a un sens. Les coupures restent l'affaire
+   du § 4 de la feuille d'impression, et de pagesDuDocument pour le
+   fichier. */
+body.doc-sortie .doc-paper {
+  min-height: 296mm;
+  zoom: 1;
+  margin: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* LE BLOC ÉMETTEUR, LUI, RESTE : il EST le document, et il n'entre pas dans
+   les retraits de la feuille d'impression, qui visent le bouton seul. Ce qui
+   le rend cliquable, en revanche, ne va ni sur le papier ni dans le fichier.
+   Des trois marques d'écran, deux se règlent ici : le curseur, qui n'a aucun
+   rendu à la sortie mais dont la valeur d'écran se redit là où elle est lue,
+   et l'anneau de focus, qui lui en aurait un si la feuille partait pendant
+   que le bloc tient le clavier. La troisième, le title, est une infobulle du
+   navigateur : elle n'a ni boîte ni rendu papier, il n'y a rien à lui
+   remettre. La structure ne bouge pas.
+
+   LE LOGO EST SON JUMEAU, et c'est pourquoi les deux partagent ce corps de
+   règle. Il est la seconde zone du document qui édite ce qu'elle montre (il
+   ouvre le temps du logo dans l'encart) et il porte donc les mêmes marques
+   d'écran, qui n'ont rien à faire à la sortie. L'image, elle, RESTE : c'est
+   le document. */
+body.doc-sortie .doc-emetteur,
+body.doc-sortie .doc-logo { cursor: auto; outline: none; }
+
+/* ================================================================ */
 /* FEUILLE D'IMPRESSION — le document, seul                         */
 /*                                                                  */
 /* À l'écran, .doc-paper vit au fond d'une cascade qui le borne :    */
@@ -851,9 +973,13 @@ body #mup-cookie-panel{z-index:60001}
      impression déclenchée pendant qu'il tient la page sortirait un voile
      gris pleine feuille. Ce chemin est étroit — printDoc refuse tant que
      l'identité manque, et la page est inerte sous l'encart — mais Ctrl+P
-     et l'impression du navigateur ne passent par aucun des deux. */
+     et l'impression du navigateur ne passent par aucun des deux.
+     .pdf-voile suit la même règle pour la même raison, à ceci près qu'il
+     ne vit que le temps d'une capture : un Ctrl+P lancé pendant ces trois
+     secondes sortirait, lui aussi, un voile gris pleine feuille. */
   .sidebar,
   .mes-voile,
+  .pdf-voile,
   .list-slot,
   .list-col,
   .list-rail,
@@ -872,73 +998,16 @@ body #mup-cookie-panel{z-index:60001}
   .mupc-overlay,
   #mup-toast { display: none !important; }
 
-  /* LE BLOC ÉMETTEUR, LUI, RESTE : il EST le document, et il n'entre pas dans
-     la liste ci-dessus, qui vise le bouton seul. Ce qui le rend cliquable, en
-     revanche, ne va pas sur le papier. Des trois marques d'écran, deux se
-     règlent ici : le curseur, qui n'a aucun rendu à l'impression mais dont la
-     valeur d'écran se redit là où elle est lue, et l'anneau de focus, qui lui en
-     aurait un si la feuille partait pendant que le bloc tient le clavier. La
-     troisième, le title, est une infobulle du navigateur : elle n'a ni boîte ni
-     rendu papier, il n'y a rien à lui remettre. La structure ne bouge pas. */
-  .doc-emetteur { cursor: auto; outline: none; }
-
-  /* LE LOGO, SON JUMEAU. Il est la seconde zone du document qui édite ce
-     qu'elle montre (il ouvre le temps du logo dans l'encart) et il porte donc
-     les mêmes marques d'écran, qui n'ont rien à faire sur le papier : le
-     curseur, dont la valeur d'écran se redit là où elle est lue, et l'anneau de
-     focus, qui lui aurait un rendu si la feuille partait pendant que l'image
-     tient le clavier. L'image, elle, RESTE : c'est le document. */
-  .doc-logo { cursor: auto; outline: none; }
-
-  /* 3. Le décor d’écran part, la hauteur minimale reste, d’un cheveu
-     plus courte.
-     L’ombre portée et le rayon sont des affordances d’écran : ils disent
-     « ceci est une feuille » à qui regarde un écran, et ils restent muets
-     pour qui tient la feuille. Le zoom d’aperçu revient à 1 : il vaut la
-     réduction de la COLONNE, laquelle est absente ici, et l’oublier
-     imprimerait le devis à 70% dans un coin de la page. Le margin:0
-     reste : à l’écran la feuille est un élément flex centré, sur le
-     papier elle doit être à fleur de page.
-
-     Ce qui est ABSENT ici : width, max-width, padding. Ils y étaient tant
-     que le document était un bloc de 640px à marges en pixels, qu’il
-     fallait délier pour qu’il prenne la page. Il EST la page désormais ;
-     les rendre au papier serait le seul moyen de casser ce que ce bloc
-     est censé protéger.
-
-     Reste la hauteur minimale, qui perd 1mm et retrouve un rôle. Elle
-     l’a repris le jour où les conditions se sont posées en pied de
-     feuille : c’est la hauteur de la BOÎTE qui dit où ce pied se trouve,
-     et une feuille à hauteur de contenu remonterait les conditions sous
-     les totaux au lieu de les laisser en bas de la page. Ce bloc a donc
-     porté min-height:0 tout le temps que le dernier bloc du document se
-     contentait de suivre le précédent.
-
-     Le millimètre retiré est le prix de cette hauteur. 297mm et la boîte
-     de page valent exactement la même chose, @page étant à marge nulle,
-     et une égalité stricte périt à l’arrondi : 297mm font 1122,52px CSS,
-     que le moteur arrondit à 1123 ; il suffit que la boîte de page,
-     arrondie de son côté, tombe sur 1122 pour que le pixel en trop parte
-     sur une deuxième feuille, blanche. 296mm font 1118,74px, soit 1119 :
-     trois points sous le pire des deux arrondis, et invisibles à l’œil,
-     puisque les conditions descendent à 15mm du bord au lieu de 14. Un
-     millimètre de marge basse contre une feuille blanche de plus,
-     l’échange est bon.
-
-     Le cas long reste intact, et il l’est par construction : dès que le
-     contenu dépasse 296mm, un plancher de 296mm est inerte, et la marge
-     automatique des conditions se résout à zéro. Sur un devis de deux
-     feuilles les conditions suivent donc les totaux, là où elles
-     tombent : le pied de feuille est une promesse de document court, et
-     c’est le seul cas où elle a un sens. Les coupures restent l’affaire
-     du § 4. */
-  .doc-paper {
-    min-height: 296mm;
-    zoom: 1;
-    margin: 0;
-    box-shadow: none;
-    border-radius: 0;
-  }
+  /* 3. LE DÉCOR D'ÉCRAN, LES MARQUES D'ÉCRAN : AILLEURS, ET UNE SEULE FOIS.
+     Le décor de la feuille part, sa hauteur minimale se raccourcit d'un
+     millimètre, son zoom revient à 1 ; le bloc émetteur et le logo restent
+     mais perdent leur curseur et leur anneau de focus. Ces règles ne sont
+     plus écrites ici : elles valent AUSSI pour la capture PDF, que
+     @media print n'atteint pas, et elles vivent donc en un seul endroit,
+     sous body.doc-sortie, à la section DOCTRINE PAPIER qui précède ce bloc.
+     L'impression les reçoit par la classe, qu'un écouteur beforeprint pose
+     sur <body> avant que le moteur ne prenne la page et qu'afterprint
+     retire. Le § 3 existe donc toujours, il est simplement ailleurs. */
 
   /* print-color-adjust est parti avec le bandeau de validité. Il levait
      le blanchiment que les navigateurs appliquent aux fonds, et le
@@ -4122,7 +4191,13 @@ function syncOutputButtons() {
   const on = !!currentId && reglagesLus && identiteRenseignee();
   for(const id of ['btn-print','btn-pdf','btn-send']) {
     const b = document.getElementById(id);
-    if(b){ b.disabled = !on; b.title = motifEmetteur; }
+    if(!b) continue;
+    // PDF EST LE SEUL À POUVOIR ÊTRE OCCUPÉ, et un rallumage pendant la
+    // préparation lui rendrait son libellé de repos alors qu'il travaille.
+    // Le verrou de fond reste pdfEnCours, dans exportPDF : celui-ci ne
+    // protège que ce qui se voit.
+    if(id === 'btn-pdf' && pdfEnCours) { b.title = motifEmetteur; continue; }
+    b.disabled = !on; b.title = motifEmetteur;
   }
   // CONVERTIR n'a pas le même sort que les trois ci-dessus : il ne
   // s'éteint pas, il DISPARAÎT, et son critère est le sien. Une ligne à
@@ -4276,22 +4351,39 @@ function watchDocScale() {
 // piste : l'observateur ne se déclenche pas et la feuille ne bouge
 // pas. C'est voulu, et c'est ce qui justifie la surimpression.
 
+// ── LES REFUS DE SORTIE, ÉCRITS UNE FOIS POUR LES DEUX PORTES ──
 // #doc-paper n'existe qu'une fois que renderPreview a écrit un document dans
 // la colonne d'aperçu. Sans lui, la feuille d'impression n'aurait rien à
-// rendre : le refus se dit dans la page plutôt que sur une page blanche.
-// Le même refus que celui des boutons, pour les chemins qui n'en ont pas :
-// une feuille au nom d'un émetteur inconnu ne part pas non plus par ici.
+// rendre et la capture rasteriserait le vide : le refus se dit dans la page
+// plutôt que sur une page blanche.
+// Les deux autres sont ceux des boutons, redits ici pour les chemins qui n'en
+// ont pas : une feuille au nom d'un émetteur inconnu ne part ni au papier ni
+// au fichier. Les fondre en un seul jeu les empêche de diverger : imprimer et
+// enregistrer emmènent la MÊME pièce dehors, et ce qui interdit l'une
+// interdit l'autre. Seul le premier motif nomme le geste, et c'est pourquoi
+// le verbe est un paramètre.
+function refusDeSortie(verbe) {
+  if(!document.getElementById('doc-paper')) return 'Sélectionnez un document à ' + verbe;
+  if(!reglagesLus) return MOTIF_EMETTEUR_INCONNU;
+  if(!identiteRenseignee()) return MOTIF_IDENTITE_ABSENTE;
+  return '';
+}
+
+// LA DOCTRINE PAPIER EST PORTÉE PAR UNE CLASSE (cf. la section du même nom
+// dans la feuille de style) et l'impression la reçoit ici. beforeprint couvre
+// les TROIS chemins d'impression, le bouton, Ctrl+P et le menu du navigateur :
+// window.print() déclenche l'événement au même titre que les deux autres, et
+// le moteur ne prend la page qu'une fois l'écouteur revenu. afterprint la
+// retire. La capture PDF pose et retire la même classe de son côté.
+addEventListener('beforeprint', function(){ document.body.classList.add('doc-sortie'); });
+addEventListener('afterprint', function(){ document.body.classList.remove('doc-sortie'); });
+
 async function printDoc() {
-  if(!document.getElementById('doc-paper')) { showToast('Sélectionnez un document à imprimer'); return; }
-  if(!reglagesLus) { showToast(MOTIF_EMETTEUR_INCONNU); return; }
-  // Le second refus est posé aux DEUX endroits, ici et sur les boutons : les
-  // fondre en un seul les aurait laissés diverger au premier changement, et
-  // celui-ci couvre les chemins qui n'ont pas de bouton — Ctrl+P, l'impression
-  // du navigateur, un appel depuis la console.
-  if(!identiteRenseignee()) { showToast(MOTIF_IDENTITE_ABSENTE); return; }
+  const refus = refusDeSortie('imprimer');
+  if(refus) { showToast(refus); return; }
   // window.print() saisit la mise en page telle qu'elle est à cet instant.
   // Si une fonte n'est pas encore posée, la feuille part dans la police de
-  // secours, et rien ne le signale : le PDF sort en Helvetica, avec des
+  // secours, et rien ne le signale : la sortie se fait en Helvetica, avec des
   // césures et une pagination qui ne sont plus celles de l'aperçu.
   // document.fonts.ready est déjà tenue dans le cas courant, où l'aperçu
   // est rendu en Geist depuis longtemps ; elle ne coûte que le cas rare,
@@ -4303,11 +4395,358 @@ async function printDoc() {
   window.print();
 }
 
-// Imprimer vers PDF est ce que fait le système d'exploitation, pas une
-// fonction à écrire. Les deux libellés restent — « PDF » est le mot que l'on
-// cherche quand on ne veut pas de papier — mais ils mènent au même chemin,
-// et aucun des deux ne promet ce qu'il ne fait pas.
-function exportPDF() { printDoc(); }
+// ═══════════════════════════════════════════════════════════════════
+// PDF : UN VRAI FICHIER, PAS UN RENVOI VERS L'IMPRESSION
+//
+// Le bouton produit le DEVIS SEUL, c'est-à-dire #doc-paper et rien
+// d'autre : ni rail, ni colonnes, ni surcouches. Il le produit en
+// RASTERISANT la feuille, puis en posant l'image dans un PDF. Le texte
+// n'y est donc pas sélectionnable, et c'est assumé : le gabarit bouge
+// encore chaque semaine, et un second moteur de rendu (un traceur de
+// texte qui redessinerait le document à partir des données) divergerait
+// de l'aperçu sans que personne ne le voie. Ce que l'abonné voit à
+// l'écran est, au pixel près, ce qu'il envoie.
+//
+// L'ÉCHELLE EST 3. C'est celle où le logo atteint sa définition native :
+// en dessous, une marque déposée sort floue sur la pièce commerciale.
+//
+// LES DEUX BIBLIOTHÈQUES SONT DANS LE DÉPÔT, jamais à un CDN, et
+// chargées À LA DEMANDE au premier clic. Dans la tête de page, elles
+// coûteraient 560 Ko à chaque ouverture de /devis pour un bouton
+// qu'on ne clique pas toujours ; à un CDN, une panne ou un blocage
+// ferait sortir la pièce commerciale de l'abonné en police système,
+// sans que rien ne le signale, et cela ne se rattrape pas.
+// ═══════════════════════════════════════════════════════════════════
+
+// 296 et non 297 : la raison est écrite dans la section DOCTRINE PAPIER,
+// c'est la même valeur et le même arrondi. 210 est la largeur A4 pleine,
+// le document portant ses propres marges.
+const PDF_LARGEUR_MM = 210;
+const PDF_HAUTEUR_MM = 296;
+const PDF_ECHELLE = 3;
+
+// Les blocs que la découpe ne coupe pas. C'est la MÊME liste que le § 4 de
+// la feuille d'impression, à ceci près que .doc-total-row n'y figure pas :
+// il vit dans .doc-totals, déjà insécable, et l'ajouter ferait remonter la
+// coupe au milieu d'un bloc qui doit rester entier.
+const PDF_BLOCS_INSECABLES = '.doc-paper-hdr, .doc-parties, .doc-table tr, .doc-totals, .doc-conditions';
+
+// Safari iOS n'alloue pas une toile de plus de 16,7 millions de pixels :
+// il rend un rectangle vide, SANS lever d'erreur. Un devis d'une page pèse
+// 8 millions de pixels à l'échelle 3, deux pages en pèsent 16 : la limite
+// tombe donc au milieu du cas courant, et c'est pourquoi la capture se fait
+// page par page dès que le pointeur est grossier.
+const PDF_SURFACE_MAX = 16.7e6;
+
+const PDF_BIBLIOTHEQUES = [
+  '/vendor/html2canvas-1.4.1.min.js',
+  '/vendor/jspdf-2.5.2.umd.min.js'
+];
+
+// LE QUATRIÈME REFUS, celui qui n'appartient qu'au PDF. Il nomme le repli :
+// « Imprimer » sait encore produire un PDF, par le système d'exploitation,
+// et un bouton qui échoue en silence laisse l'abonné cliquer trois fois.
+const MOTIF_PDF_INDISPONIBLE = 'Le PDF n\'a pas pu être fabriqué. Passez par « Imprimer », puis « Enregistrer au format PDF » dans la fenêtre d\'impression.';
+
+let pdfEnCours = false;
+let pdfChargement = null;
+
+function chargerScript(src) {
+  return new Promise(function(resolve, reject){
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = true;
+    s.onload = function(){ resolve(); };
+    s.onerror = function(){ reject(new Error('script indisponible : ' + src)); };
+    document.head.appendChild(s);
+  });
+}
+
+// Une seule promesse pour toute la vie de la page : le second clic ne
+// recharge pas 560 Ko, et deux clics rapprochés n'insèrent pas deux paires
+// de balises. Un échec la remet à null pour qu'un clic ultérieur retente,
+// la panne pouvant être passagère.
+function bibliothequesPdf() {
+  if(window.html2canvas && window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+  if(!pdfChargement) {
+    pdfChargement = Promise.all(PDF_BIBLIOTHEQUES.map(chargerScript)).then(function(){
+      if(!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
+        throw new Error('bibliotheques PDF chargées mais absentes de window');
+      }
+    }).catch(function(e){ pdfChargement = null; throw e; });
+  }
+  return pdfChargement;
+}
+
+// LE NOM DU FICHIER. Le type d'abord, jugé par le MÊME critère que le
+// libellé imprimé en tête de feuille (renderPreview lit d.type === 'facture'
+// et rien d'autre) : le fichier et la pièce ne peuvent pas se contredire.
+// Puis le numéro du document, celui que l'abonné a saisi dans le champ
+// Numéro, et lui seul : ni série, ni préfixe reconstruit, ni compteur
+// serveur. S'il est vide, le nom n'a pas de segment libre. Puis la date DU
+// DOCUMENT en ISO, et non celle du jour : deux exports du même devis à
+// trois semaines d'écart portent le même nom, ce qui est le comportement
+// voulu, le fichier désignant la pièce et non l'export.
+function segmentFichier(s) {
+  return String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+}
+
+function nomFichierPdf(d) {
+  const type = (d && d.type === 'facture') ? 'facture' : 'devis';
+  // LE SEGMENT LIBRE EST ASSAINI, et il doit l'être : le numéro est saisi
+  // librement, l'abonné y met des barres obliques (2026/04), des deux-points,
+  // des espaces ou des accents, et Windows refuse la moitié de ces caractères
+  // dans un nom de fichier quand d'autres systèmes de fichiers rendent les
+  // accents en mojibake. Tout ce qui n'est ni lettre ASCII ni chiffre devient
+  // un trait d'union, les traits de bord tombent, et la longueur est bornée :
+  // un numéro de 200 caractères ferait échouer l'écriture sur place.
+  //
+  // Deux devis sans numéro émis le même jour portent donc le même nom et
+  // s'écrasent dans le dossier de téléchargements. C'est assumé : le nom ne
+  // porte que ce que l'abonné a écrit, aucun suffixe ni horodatage n'est
+  // ajouté pour désambiguïser à sa place.
+  const libre = segmentFichier((d && numeroDuDoc(d)) || '');
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String((d && d.date) || '')) ? d.date : '';
+  return [type, libre, date].filter(Boolean).join('-') + '.pdf';
+}
+
+// LA DÉCOUPE RESPECTE LES FRONTIÈRES DE BLOC, elle n'est pas aveugle. Une
+// coupe posée tous les 296mm tomberait au milieu d'une ligne de table ou
+// d'un bloc de totaux, et un montant coupé en deux ne se voit qu'APRÈS
+// l'envoi. La coupe théorique est donc remontée au sommet du premier bloc
+// qu'elle traverse ; le blanc qui reste en pied de page est le prix, et
+// c'est exactement ce que fait break-inside:avoid à l'impression.
+//
+// Les blocs retenus ne s'emboîtent pas les uns dans les autres : la coupe
+// remontée tombe donc sur une frontière que plus aucun bloc n'enjambe, et
+// une seule passe suffit.
+//
+// LE CAS DÉGÉNÉRÉ EST NOMMÉ : un bloc plus haut qu'une page (une ligne de
+// devis à la description très longue) ne peut par définition pas rester
+// entier. La coupe redevient alors aveugle pour cette page-là, ce qui vaut
+// mieux qu'une boucle qui ne finit pas.
+function pagesDuDocument(feuille, pxParMm) {
+  const hauteurPage = PDF_HAUTEUR_MM * pxParMm;
+  const cadre = feuille.getBoundingClientRect();
+  const hauteurTotale = cadre.height;
+  const blocs = Array.prototype.map.call(feuille.querySelectorAll(PDF_BLOCS_INSECABLES), function(el){
+    const r = el.getBoundingClientRect();
+    return { haut: r.top - cadre.top, bas: r.bottom - cadre.top };
+  }).filter(function(b){ return b.bas > b.haut; });
+
+  const pages = [];
+  let haut = 0;
+  // 60 pages : un plafond de sûreté, pas une limite de produit. Le devis le
+  // plus long jamais vu en compte trois.
+  while(haut < hauteurTotale - 1 && pages.length < 60) {
+    let bas = haut + hauteurPage;
+    if(bas >= hauteurTotale - 1) {
+      bas = hauteurTotale;
+    } else {
+      const traverses = blocs.filter(function(b){
+        return b.haut > haut + 1 && b.haut < bas - 1 && b.bas > bas + 1;
+      });
+      if(traverses.length) {
+        bas = Math.min.apply(null, traverses.map(function(b){ return b.haut; }));
+      }
+    }
+    if(bas <= haut + 1) bas = Math.min(haut + hauteurPage, hauteurTotale);
+    pages.push({ haut: haut, bas: bas });
+    haut = bas;
+  }
+  return pages.length ? pages : [{ haut: 0, bas: hauteurTotale }];
+}
+
+// UNE TRANCHE DU RASTER, sur un fond blanc posé d'abord : la dernière page
+// est plus courte que sa toile quand le contenu s'arrête avant la coupe, et
+// une toile neuve est TRANSPARENTE, ce qui sortirait en noir dans le PDF.
+function trancheDeRaster(toile, hautPx, basPx, echelle) {
+  const c = document.createElement('canvas');
+  c.width = toile.width;
+  c.height = Math.max(1, Math.round((basPx - hautPx) * echelle));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  const sy = Math.round(hautPx * echelle);
+  const sh = Math.min(c.height, toile.height - sy);
+  if(sh > 0) ctx.drawImage(toile, 0, sy, toile.width, sh, 0, 0, toile.width, sh);
+  return c;
+}
+
+function poserPage(pdf, toile, hauteurMm, premiere) {
+  if(!premiere) pdf.addPage('a4', 'portrait');
+  // LE PNG PLUTÔT QUE LE JPEG, et c'est le contraire de l'intuition. Le
+  // réflexe dit qu'une image de 2382 x 3357 pixels doit partir en JPEG pour
+  // ne pas peser ; la mesure dit l'inverse. Un devis d'une page pèse 330 Ko
+  // en PNG contre 392 Ko en JPEG de qualité 0,92 : la feuille est un aplat
+  // blanc à 95%, que la compression sans perte réduit mieux que la
+  // transformée en cosinus, laquelle dépense au contraire des bits à décrire
+  // le bruit qu'elle vient d'introduire autour des lettres. Le PNG est donc
+  // plus léger ET net, sans halo autour des filets fins du gabarit, qui sont
+  // exactement ce que le JPEG abîme en premier. jsPDF redéflate le flux à
+  // l'insertion, compress:true étant posé sur le document.
+  const image = toile.toDataURL('image/png');
+  pdf.addImage(image, 'PNG', 0, 0, PDF_LARGEUR_MM, Math.min(hauteurMm, 297));
+}
+
+async function exportPDF() {
+  // LE VERROU EST ICI, avant tout le reste : la préparation dure une à trois
+  // secondes, et sans lui trois clics feraient trois fichiers. Le bouton se
+  // voit occupé juste après, mais c'est ce booléen qui garantit l'unicité,
+  // un bouton pouvant être rallumé entre-temps par syncOutputButtons.
+  if(pdfEnCours) return;
+  const refus = refusDeSortie('enregistrer en PDF');
+  if(refus) { showToast(refus); return; }
+
+  const bouton = document.getElementById('btn-pdf');
+  const vetement = bouton ? bouton.innerHTML : '';
+  pdfEnCours = true;
+  if(bouton) {
+    bouton.disabled = true;
+    bouton.setAttribute('aria-busy', 'true');
+    bouton.textContent = 'Préparation…';
+  }
+
+  // LA COLONNE D'APERÇU REVIENT EN TÊTE le temps du rendu, et repart où elle
+  // était. html2canvas rasterise un CLONE de la page, et un clone ne reçoit
+  // pas le défilement interne d'un conteneur : la feuille s'y retrouverait
+  // décalée de ce que l'abonné avait fait défiler, et la capture prendrait
+  // le mauvais morceau.
+  const colonne = document.querySelector('.preview-scroll');
+  const defilementAvant = colonne ? colonne.scrollTop : 0;
+  let classePosee = false;
+
+  // LE VOILE, fabriqué ici et posé plus bas. Il couvre la colonne d'aperçu
+  // le temps du rendu : body.doc-sortie va neutraliser le zoom sur la page
+  // VIVANTE, et la feuille sauterait à 100 % sous les yeux de l'abonné,
+  // rognée par sa colonne. Elle n'est pas déplacée pour autant, elle est
+  // couverte : la sortir du champ demanderait une seconde mise en page.
+  // Il n'entre pas dans la capture. html2canvas ne peint que le sous-arbre
+  // de l'élément qu'on lui passe, et le voile est posé hors de #doc-paper,
+  // dans .preview-col. Les frères du clone servent la mise en page, pas le
+  // raster.
+  // Aucun écouteur : ni clic, ni Échap. Ce voile n'a pas de sortie, il a
+  // une fin. aria-hidden parce qu'il ne dit rien qu'un lecteur d'écran ait
+  // à entendre : c'est le bouton, passé en aria-busy, qui l'annonce.
+  const voile = document.createElement('div');
+  voile.className = 'pdf-voile';
+  voile.setAttribute('aria-hidden', 'true');
+
+  try {
+    await bibliothequesPdf();
+    // Comme avant l'impression, et pour la même raison : une fonte non
+    // encore posée sortirait le document en police de secours. La capture
+    // est plus exigeante que l'impression sur ce point, puisqu'elle fige
+    // l'erreur dans une image que l'abonné enverra.
+    try { if(document.fonts && document.fonts.ready) await document.fonts.ready; } catch(e) {}
+
+    // Il naît AVANT tout ce qui touche à l'aperçu, le défilement comme le
+    // zoom, jamais après : entre les deux, la feuille serait à découvert, et
+    // l'abonné la verrait remonter avant que le voile arrive.
+    if(colonne && colonne.parentNode) colonne.parentNode.appendChild(voile);
+    if(colonne) colonne.scrollTop = 0;
+    // La classe neutralise le zoom d'aperçu. Elle doit être posée sur la page
+    // VIVANTE et pas seulement sur le clone : html2canvas mesure la feuille
+    // sur l'original et la dessine d'après le clone, et un zoom qui ne vaut
+    // pas la même chose des deux côtés recadre la capture de travers.
+    document.body.classList.add('doc-sortie');
+    classePosee = true;
+
+    const feuille = document.getElementById('doc-paper');
+    if(!feuille) throw new Error('feuille absente');
+
+    const cadre = feuille.getBoundingClientRect();
+    // Le rapport pixel/millimètre se LIT sur la feuille au lieu d'être
+    // supposé : elle mesure 210mm de large par construction, et c'est le
+    // navigateur qui dit ce que cela fait en pixels CSS.
+    const pxParMm = cadre.width / PDF_LARGEUR_MM;
+    const pages = pagesDuDocument(feuille, pxParMm);
+
+    const surface = (cadre.width * PDF_ECHELLE) * (cadre.height * PDF_ECHELLE);
+    const parPage = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+                 || surface > PDF_SURFACE_MAX;
+
+    const jsPDF = window.jspdf.jsPDF;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+
+    if(parPage) {
+      // SUR MOBILE, PAGE PAR PAGE ET JAMAIS D'UN SEUL RASTER. Chaque page est
+      // une capture à part, cadrée en coordonnées de document sur la bande qui
+      // lui revient. La fenêtre ne défile pas dans cette application (html et
+      // body sont en overflow:hidden), mais scrollX et scrollY sont ajoutés
+      // quand même : ils valent zéro et ne coûtent rien, et le jour où la page
+      // défilera le cadrage ne sera pas faux.
+      for(let i = 0; i < pages.length; i++) {
+        const p = pages[i];
+        const toile = await window.html2canvas(feuille, {
+          scale: PDF_ECHELLE,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false,
+          imageTimeout: 0,
+          x: cadre.left + window.scrollX,
+          y: cadre.top + window.scrollY + p.haut,
+          width: cadre.width,
+          height: p.bas - p.haut
+        });
+        poserPage(pdf, toile, (p.bas - p.haut) / pxParMm, i === 0);
+      }
+    } else {
+      const toile = await window.html2canvas(feuille, {
+        scale: PDF_ECHELLE,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+        imageTimeout: 0
+      });
+      for(let i = 0; i < pages.length; i++) {
+        const p = pages[i];
+        const tranche = trancheDeRaster(toile, p.haut, p.bas, PDF_ECHELLE);
+        poserPage(pdf, tranche, (p.bas - p.haut) / pxParMm, i === 0);
+      }
+    }
+
+    // LE FICHIER TOMBE PAR UN BLOB, JAMAIS PAR UNE DATA URL. Une data URL
+    // porte le PDF entier dans l'attribut href, en base64, soit un tiers de
+    // poids en plus dans une chaîne que Safari tronque au-delà de quelques
+    // mégaoctets et que Firefox refuse de télécharger depuis un lien. Le blob
+    // est un pointeur ; l'URL qui le désigne est révoquée juste après, sans
+    // quoi le PDF resterait en mémoire jusqu'au rechargement de la page.
+    const blob = pdf.output('blob');
+    const url = URL.createObjectURL(blob);
+    const lien = document.createElement('a');
+    lien.href = url;
+    lien.download = nomFichierPdf(docCourant());
+    document.body.appendChild(lien);
+    lien.click();
+    lien.remove();
+    // La révocation est différée : Safari lit l'URL APRÈS le retour du clic,
+    // et la révoquer dans la foulée y annule le téléchargement.
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+  } catch(e) {
+    // Un seul motif pour les deux façons d'échouer, la bibliothèque absente
+    // et la capture qui tourne court : le repli est le même dans les deux
+    // cas, et c'est lui que l'abonné a besoin de lire.
+    showToast(MOTIF_PDF_INDISPONIBLE);
+  } finally {
+    if(classePosee) document.body.classList.remove('doc-sortie');
+    if(colonne) colonne.scrollTop = defilementAvant;
+    // Sur le même chemin que les deux lignes précédentes, et pour la même
+    // raison : une capture qui tourne court ne doit jamais laisser le voile
+    // sur place. remove() ne fait rien s'il n'a jamais été posé.
+    voile.remove();
+    pdfEnCours = false;
+    if(bouton) {
+      bouton.innerHTML = vetement;
+      bouton.removeAttribute('aria-busy');
+    }
+    syncOutputButtons();
+  }
+}
 
 function showToast(msg) {
   let t = document.getElementById('mup-toast');

@@ -564,16 +564,17 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .mes-champ input:focus{border-color:var(--mes-titre)}
 @media (max-width:560px){ .mes-champs{grid-template-columns:1fr} }
 
-/* Le pied ne porte que ses deux sorties, alignées à droite. Visio y met en
-   plus une note ; il n'y en a pas ici, et un élément vide posé pour tenir la
-   symétrie aurait porté sa gouttière pour rien. */
+/* Le pied ne porte que ses deux sorties, écartées aux deux bords. Visio y met
+   en plus une note ; il n'y en a pas ici, et un élément vide posé pour tenir la
+   symétrie aurait porté sa gouttière pour rien. L'écart vient du conteneur,
+   qui prend toute la largeur du pied : aucun bouton ne porte de marge. */
 .mes-pied{
   border-top:1px solid var(--mes-bord);background:var(--mes-fond);
   padding:16px 34px;flex-shrink:0;
   display:flex;align-items:center;justify-content:flex-end;
   gap:16px;flex-wrap:wrap;
 }
-.mes-pied-actions{display:flex;align-items:center;gap:16px;flex-shrink:0}
+.mes-pied-actions{display:flex;align-items:center;gap:16px;flex:1;justify-content:space-between}
 .mes-btn{
   background:var(--mes-bouton);color:#fff;border:none;
   padding:11px 20px;border-radius:var(--mes-bouton-rayon);
@@ -582,13 +583,11 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 }
 .mes-btn:hover{background:#000}
 .mes-btn:disabled{opacity:.5;cursor:default}
-.mes-lien{
-  background:none;border:none;padding:0;
-  font-family:var(--font);font-size:12.5px;font-weight:600;color:var(--mes-corps);
-  text-decoration:underline;text-underline-offset:3px;cursor:pointer;
-}
-.mes-lien:hover{color:var(--mes-titre)}
-.mes-btn:focus-visible,.mes-lien:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+.mes-btn:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+/* La sortie de gauche reprend le bouton secondaire de mup-confirm.css, chargée
+   plus bas. Seule sa bague de focus manque à cette feuille : on lui prête
+   celle du pied, sans toucher au rayon que .mupc-btn pose déjà. */
+.mes-pied .mupc-btn-outline:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px}
 
 /* —— LA PAGE, DERRIÈRE ——
    Le document ne défile déjà pas : html,body{overflow:hidden} est posé depuis
@@ -1174,7 +1173,7 @@ body #mup-cookie-panel{z-index:60001}
          inconnu, et ce sont les boutons de sortie du document qui refusent. -->
     <div class="mes-pied">
       <div class="mes-pied-actions">
-        <button type="button" class="mes-lien" id="coord-plus-tard">Je verrai plus tard</button>
+        <button type="button" class="mupc-btn mupc-btn-outline" id="coord-plus-tard">Je verrai plus tard</button>
         <button type="button" class="mes-btn" id="coord-enregistrer">Enregistrer</button>
       </div>
     </div>

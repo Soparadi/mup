@@ -392,6 +392,12 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    du parent, et c'est donc lui qui doit remonter. Même piège que la
    colonne repliée plus haut. */
 .client-search{position:relative;z-index:20}
+/* type="search" declare le champ comme une recherche, ce qui retire a
+   Safari l'idee d'un champ de contact. En echange il ajoute sa croix
+   native d'effacement : une seconde icone pour un geste que la page ne
+   demande pas, donc on l'eteint, sur ce champ seul. */
+#e-client-q::-webkit-search-decoration,
+#e-client-q::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
 .client-results{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--card);border:1.5px solid var(--border);border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.16);max-height:268px;overflow-y:auto}
 .client-hit{padding:7px 11px;cursor:pointer;border-bottom:1px solid var(--border)}
 .client-hit:last-child{border-bottom:none}
@@ -705,7 +711,8 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
              place. -->
         <div class="frow client-search" id="client-search">
           <div class="flabel">Rechercher un client</div>
-          <input class="finput" id="e-client-q" placeholder="Nom, société, email, SIRET"
+          <input class="finput" id="e-client-q" type="search"
+                 placeholder="Nom, société ou SIRET"
                  autocomplete="off" role="combobox" aria-autocomplete="list"
                  aria-expanded="false" aria-controls="client-results"
                  oninput="rechercheClient()" onkeydown="clientKeydown(event)"

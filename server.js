@@ -1105,6 +1105,29 @@ app.use('/fonts', express.static(join(__dirname, 'public', 'fonts'), {
   fallthrough: false
 }))
 
+// ── Bibliothèques du PDF servies par le dépôt ──
+// Même montage que les fontes juste au-dessus, et pour la même raison : le
+// service général rendrait ces deux fichiers sans aucun en-tête de cache, et
+// un demi-mégaoctet de bibliothèque repayerait une revalidation 304 à chaque
+// ouverture de devis.
+//
+// Un an et immutable se tiennent parce que le nom du fichier porte la
+// version de la bibliothèque (html2canvas-1.4.1, jspdf-2.5.2) : une mise à
+// jour change le nom, donc l'URL, et le cache d'un an ne peut jamais retenir
+// un fichier périmé. Ne renommez pas ces fichiers sans changer la version, et
+// ne changez pas leur contenu sans les renommer.
+//
+// Les .txt du dossier sont les licences MIT des deux bibliothèques, que
+// celles-ci exigent de distribuer avec le code : même montage.
+app.use('/vendor', express.static(join(__dirname, 'public', 'vendor'), {
+  maxAge: '1y',
+  immutable: true
+  // PAS de fallthrough:false ici, à la différence des fontes. Une
+  // bibliothèque absente doit finir en 404 ordinaire : c'est ce 404 qui fait
+  // échouer le chargement du script, donc tomber dans le catch d'exportPDF,
+  // qui affiche le motif de repli vers Imprimer. Le devis reste sortable.
+}))
+
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }))
 
 // ── /api/leads/engaged ──

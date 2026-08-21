@@ -381,6 +381,29 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .finput[readonly]:focus,.line-item input[readonly]:focus{border-color:var(--border);background:var(--surface2)}
 .btn-action:disabled,.btn-add-line:disabled,.line-del:disabled{opacity:.4;cursor:not-allowed}
 
+/* LA RECHERCHE DE CLIENT, posée au-dessus des champs de la section
+   Client. Sa liste de résultats se pose SOUS le champ, en absolu :
+   elle recouvre les lignes qui suivent au lieu de les pousser vers
+   le bas, et la section garde sa hauteur.
+
+   LE Z-INDEX EST SUR LA LIGNE, pas sur la liste. Une liste posée en
+   absolu dans une .frow qui, elle, reste dans le flux passerait
+   DERRIÈRE les .frow suivantes : le contexte d'empilement est celui
+   du parent, et c'est donc lui qui doit remonter. Même piège que la
+   colonne repliée plus haut. */
+.client-search{position:relative;z-index:20}
+.client-results{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--card);border:1.5px solid var(--border);border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.16);max-height:268px;overflow-y:auto}
+.client-hit{padding:7px 11px;cursor:pointer;border-bottom:1px solid var(--border)}
+.client-hit:last-child{border-bottom:none}
+.client-hit:hover,.client-hit.on{background:var(--surface2)}
+.client-hit-t{font-size:12.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.client-hit-m{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+/* Le mot sous le champ, quand la lecture des clients a échoué. Vide,
+   il disparaît : sans display:none il resterait un enfant du flex et
+   la ligne porterait son gap de 4px pour rien. */
+.client-mot{font-size:10.5px;color:var(--muted);line-height:1.45}
+.client-mot:empty{display:none}
+
 /* L'ÉTAT DE LA PIÈCE, sous le bouton qui la dépose : ce qu'elle est, ce
    qu'elle pèse, quand elle est arrivée, et le lien qui l'ouvre. */
 .piece-etat{font-size:10.5px;color:var(--muted);line-height:1.45;text-align:center}
@@ -675,8 +698,24 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
       <!-- Client -->
       <div class="edit-section">
         <div class="edit-section-title">Client</div>
+        <!-- LES DEUX VOIES COEXISTENT, sans mode à choisir. L'abonné tape
+             ici et prend un client dans la liste, ou il ignore ce champ et
+             remplit les cinq suivants à la main comme avant ce lot. Rien
+             ne bascule de l'une à l'autre : le champ est en plus, pas à la
+             place. -->
+        <div class="frow client-search" id="client-search">
+          <div class="flabel">Rechercher un client</div>
+          <input class="finput" id="e-client-q" placeholder="Nom, société, email, SIRET"
+                 autocomplete="off" role="combobox" aria-autocomplete="list"
+                 aria-expanded="false" aria-controls="client-results"
+                 oninput="rechercheClient()" onkeydown="clientKeydown(event)"
+                 onblur="fermeResultats()">
+          <div class="client-mot" id="client-mot"></div>
+          <div class="client-results" id="client-results" role="listbox" hidden
+               onmousedown="event.preventDefault()" onclick="choisitClientDepuis(event)"></div>
+        </div>
         <div class="frow">
-          <div class="flabel">Nom du contact</div>
+          <div class="flabel">Prénom Nom</div>
           <input class="finput" id="e-name" placeholder="Laurent Morin" oninput="liveUpdate()">
         </div>
         <div class="frow">
@@ -690,6 +729,20 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
         <div class="frow">
           <div class="flabel">Adresse</div>
           <input class="finput" id="e-addr" placeholder="12 rue du Commerce, 75001 Paris" autocomplete="off" oninput="liveUpdate()">
+        </div>
+        <!-- LE SIRET DU CLIENT est une coordonnée comme les quatre autres :
+             saisissable à la main, rempli au choix d'un client, corrigeable
+             ensuite pour ce devis seul. Il a sa place sur un devis entre
+             professionnels, et c'est par lui que la fiche société retrouve
+             les devis de son client (?client_siret=).
+
+             LE CHAMP NE NORMALISE PAS. Les quatorze chiffres s'y saisissent
+             avec les espaces qui les séparent sur les papiers de l'abonné ;
+             c'est liveUpdate qui les ramène aux seuls chiffres en écrivant
+             sur le document. -->
+        <div class="frow">
+          <div class="flabel">SIRET</div>
+          <input class="finput" id="e-siret" placeholder="123 456 789 00012" autocomplete="off" spellcheck="false" oninput="liveUpdate()">
         </div>
       </div>
 
@@ -1321,7 +1374,13 @@ async function deposerPiece(input){
 // Le refus serveur reste en place derrière, et c'est lui l'autorité : il
 // couvre les chemins qui n'ont pas de bouton, et le cas où la page ignore
 // qu'une pièce existe parce que sa lecture a échoué.
-const CHAMPS_EDITEUR = ['e-num','e-name','e-co','e-email','e-addr','e-date','e-validity','e-tva','e-status','e-notes'];
+//
+// LA RECHERCHE DE CLIENT EST DANS LA LISTE, et pas dans une règle à part :
+// sans elle, un devis SIGNÉ se laisserait changer de client par le seul
+// chemin resté ouvert. Elle s'éteint donc avec les champs qu'elle remplit,
+// et prend au passage l'aplat inerte de .finput[readonly] et la raison au
+// survol.
+const CHAMPS_EDITEUR = ['e-client-q','e-num','e-name','e-co','e-email','e-addr','e-siret','e-date','e-validity','e-tva','e-status','e-notes'];
 
 // LA RAISON, et non plus un booléen. Le title au survol dit POURQUOI le
 // champ ne se laisse pas écrire : il n'a donc lieu d'être que lorsqu'il y
@@ -1360,6 +1419,13 @@ function appliqueFigeage(raison){
 }
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// La mise en forme du SIRET de contacts.html et de contact-societe.html,
+// reprise à l'identique : l'abonné lit ses quatorze chiffres groupés comme
+// sur la fiche société, et non d'une seule traite.
+function siretFormat(s){
+  return s ? String(s).replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4') : '';
+}
 
 function fmt(n) {
   return Number(n).toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
@@ -1410,6 +1476,190 @@ function calcTotals(lines, tva) {
   return { ht, tva: tvaAmt, ttc: round2(ht + tvaAmt), rate: tvaRate };
 }
 
+// ── RECHERCHE DE CLIENT ──
+// La section Client reçoit une recherche au-dessus de ses champs. Ce qu'elle
+// remplit reste modifiable : le client d'un devis n'est PAS la fiche du
+// contact. L'adresse de facturation peut différer de l'adresse de la fiche,
+// et l'interlocuteur peut être une autre personne de la même société. Le
+// devis porte donc sa version, et la fiche garde la sienne : rien de ce qui
+// est corrigé ici ne remonte jamais dans le contact. Aucune écriture ne part
+// vers /api/contacts depuis cette page.
+
+// LA LECTURE EST PARESSEUSE, et c'est délibéré. GET /api/contacts pèse de 1 à
+// 3 Mo à mille fiches, et la plupart des ouvertures de Devis ne cherchent
+// aucun client : la page charge déjà ses devis, ses signatures et ses
+// réglages avant d'afficher quoi que ce soit. La lecture part donc à la
+// PREMIÈRE FRAPPE, une seule fois, et le résultat sert le reste de la
+// session. `contactsPromesse` tient l'appel en vol : trois frappes rapides
+// partagent une requête, pas trois.
+//
+// Une lecture échouée ne garde rien, donc la promesse est relâchée : une
+// frappe plus tard réessaiera. Ce n'est pas une seconde lecture du même
+// résultat, c'est un premier résultat toujours manquant.
+let contactsCache = null;
+let contactsPromesse = null;
+let clientResultats = [];
+let clientIndex = -1;
+
+function chargeContacts(){
+  if(contactsCache) return Promise.resolve(contactsCache);
+  if(!contactsPromesse){
+    contactsPromesse = fetch('/api/contacts')
+      .then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => { contactsCache = Array.isArray(data) ? data : []; return contactsCache; })
+      .catch(e => {
+        console.warn('[devis] lecture des contacts', e);
+        contactsPromesse = null;
+        return null;
+      });
+  }
+  return contactsPromesse;
+}
+
+// LE PRÉDICAT DE contacts.html, repris tel quel : includes() sur la chaîne
+// mise en bas de casse, sept champs, aucun score, aucune normalisation
+// d'accents, aucun découpage en mots. Ce lot transpose une recherche qui
+// existe, il n'en écrit pas une meilleure.
+//
+// PLUS LE SIRET, huitième champ, absent de contacts.html alors que la fiche
+// le porte : c'est le numéro qu'un abonné a sous les yeux sur un papier
+// quand il cherche un client, et le seul que ce lot pose sur le devis.
+function clientCorrespond(p, q){
+  return (p.nom||'').toLowerCase().includes(q) ||
+         (p.enseigne||'').toLowerCase().includes(q) ||
+         (p.adresse||'').toLowerCase().includes(q) ||
+         (p.email||'').toLowerCase().includes(q) ||
+         (p.contact_nom||p.contact||'').toLowerCase().includes(q) ||
+         (p.siren||'').toLowerCase().includes(q) ||
+         (p.notes||'').toLowerCase().includes(q) ||
+         (p.siret||'').toLowerCase().includes(q);
+}
+
+// Même règle de titre que la liste des contacts : l'enseigne quand il y en a
+// une, le nom juridique sinon. La personne est à part, c'est elle qui va dans
+// « Prénom Nom ».
+function clientSociete(p){ return String(p.enseigne || p.nom || '').trim(); }
+function clientPersonne(p){ return String(p.contact_nom || p.contact || '').trim(); }
+
+function fermeResultats(){
+  const box = document.getElementById('client-results');
+  if(box){ box.hidden = true; box.innerHTML = ''; }
+  const input = document.getElementById('e-client-q');
+  if(input) input.setAttribute('aria-expanded', 'false');
+  clientResultats = [];
+  clientIndex = -1;
+}
+
+// UN ÉCHEC DE LECTURE NE TIENT RIEN. Contrairement à loadDocs, il ne lève pas
+// l'encart de lecture interrompue : la recherche est un raccourci, pas la
+// matière du devis. La saisie à la main prend le relais, et le mot sous le
+// champ dit quoi faire plutôt que ce qui a manqué.
+function motClient(texte){
+  const mot = document.getElementById('client-mot');
+  if(mot) mot.textContent = texte || '';
+}
+
+function rechercheClient(){
+  const input = document.getElementById('e-client-q');
+  if(!input) return;
+  motClient('');
+  const q = input.value.trim().toLowerCase();
+  if(!q){ fermeResultats(); return; }
+  chargeContacts().then(liste => {
+    // La frappe a continué pendant la lecture : c'est le champ tel qu'il est
+    // MAINTENANT qui décide, jamais la requête d'il y a trois lettres.
+    const q2 = input.value.trim().toLowerCase();
+    if(!q2){ fermeResultats(); return; }
+    if(!liste){
+      fermeResultats();
+      motClient('Saisissez le client dans les champs ci-dessous.');
+      return;
+    }
+    // Dix lignes au plus : la colonne en tient dix sans couvrir la section
+    // entière, et au-delà c'est une lettre de plus à taper, pas une liste
+    // plus longue à lire.
+    clientResultats = liste.filter(p => clientCorrespond(p, q2)).slice(0, 10);
+    afficheResultats();
+  });
+}
+
+function afficheResultats(){
+  const box = document.getElementById('client-results');
+  const input = document.getElementById('e-client-q');
+  if(!box) return;
+  if(!clientResultats.length){ fermeResultats(); return; }
+  clientIndex = -1;
+  box.innerHTML = clientResultats.map((p, i) => {
+    const titre = clientSociete(p) || clientPersonne(p) || 'Sans nom';
+    const meta = [clientPersonne(p), p.email || '', p.adresse || '']
+      .filter(v => v && v !== titre).join(' · ');
+    return '<div class="client-hit" role="option" data-i="' + i + '">' +
+             '<div class="client-hit-t">' + esc(titre) + '</div>' +
+             (meta ? '<div class="client-hit-m">' + esc(meta) + '</div>' : '') +
+           '</div>';
+  }).join('');
+  box.hidden = false;
+  if(input) input.setAttribute('aria-expanded', 'true');
+}
+
+function surligneClient(){
+  const box = document.getElementById('client-results');
+  if(!box) return;
+  box.querySelectorAll('.client-hit').forEach((el, i) => {
+    el.classList.toggle('on', i === clientIndex);
+    if(i === clientIndex && el.scrollIntoView) el.scrollIntoView({ block:'nearest' });
+  });
+}
+
+function bougeClient(pas){
+  if(!clientResultats.length) return;
+  if(clientIndex < 0) clientIndex = pas > 0 ? 0 : clientResultats.length - 1;
+  else clientIndex = (clientIndex + pas + clientResultats.length) % clientResultats.length;
+  surligneClient();
+}
+
+function clientKeydown(e){
+  const box = document.getElementById('client-results');
+  const ouverte = box && !box.hidden;
+  if(e.key === 'Escape'){ if(ouverte) e.preventDefault(); fermeResultats(); return; }
+  if(!ouverte) return;
+  if(e.key === 'ArrowDown'){ e.preventDefault(); bougeClient(1); }
+  else if(e.key === 'ArrowUp'){ e.preventDefault(); bougeClient(-1); }
+  else if(e.key === 'Enter'){ e.preventDefault(); if(clientIndex >= 0) choisitClient(clientIndex); }
+}
+
+function choisitClientDepuis(e){
+  const ligne = e.target && e.target.closest ? e.target.closest('.client-hit') : null;
+  if(!ligne) return;
+  choisitClient(parseInt(ligne.getAttribute('data-i'), 10));
+}
+
+function choisitClient(i){
+  const p = clientResultats[i];
+  if(!p) return;
+  document.getElementById('e-name').value  = clientPersonne(p);
+  document.getElementById('e-co').value    = clientSociete(p);
+  document.getElementById('e-email').value = String(p.email || '');
+  document.getElementById('e-addr').value  = String(p.adresse || '');
+  // LE SIRET ARRIVE PAR SON CHAMP, comme les quatre autres valeurs, et non par
+  // une écriture posée à part sur le document : une seule voie l'écrit, celle
+  // que l'abonné voit et peut corriger. Il est mis en forme comme sur la fiche
+  // société, d'où il vient. Une fiche sans SIRET laisse le champ vide, comme
+  // elle laisse vide un courriel absent.
+  document.getElementById('e-siret').value = siretFormat(String(p.siret || ''));
+  // liveUpdate reporte les cinq champs sur le document et refait l'aperçu,
+  // exactement comme une saisie à la main : le choix d'un client n'a pas de
+  // chemin d'enregistrement à lui.
+  liveUpdate();
+  const input = document.getElementById('e-client-q');
+  if(input) input.value = '';
+  motClient('');
+  fermeResultats();
+  // La main revient au premier des champs remplis : ce qui vient de la fiche
+  // se corrige là, pour ce devis et pour lui seul.
+  document.getElementById('e-name').focus();
+}
+
 // ── FILTRE CLIENT (?client_siret=) ──
 // Même paramètre que factures.html, lu de la même façon : la fiche contact
 // ouvre les deux listes sur le SIRET de son client. Les trois clés sont
@@ -1417,9 +1667,16 @@ function calcTotals(lines, tva) {
 // conversion serveur, l'import de factures — et qu'aucun n'a la même forme.
 let clientSiretFilter = null;
 
+// LE REPLI NE JOUE QUE SUR UNE CLÉ ABSENTE, jamais sur une clé vide. Depuis
+// que le champ SIRET de la section Client écrit `client_siret`, une chaîne
+// vide y est une RÉPONSE, l'abonné a effacé le numéro, et non une question
+// laissée aux deux autres clés. Un `||` les rappellerait, et le SIRET effacé
+// reparaîtrait sur le document et dans le filtre. Les devis venus d'ailleurs,
+// eux, n'ont pas la clé du tout : leur repli tient.
 function devisSiret(d) {
   if (!d) return '';
-  const s = d.client_siret || (d.client && d.client.siret) || d.siret || '';
+  const pose = d.client_siret !== undefined && d.client_siret !== null;
+  const s = pose ? d.client_siret : ((d.client && d.client.siret) || d.siret || '');
   return String(s).replace(/\D/g, '');
 }
 
@@ -1515,10 +1772,20 @@ function loadDocToEditor(d) {
   // mal saisie se corrige. Il ne montre QUE ce que l'abonné a écrit, et
   // reste vide tant qu'il n'a rien écrit.
   document.getElementById('e-num').value = numDoc;
+  // La recherche repart à vide avec chaque devis : une requête laissée
+  // dans le champ appartient au document précédent. Elle passe par ici,
+  // le seul chemin par lequel un devis entre dans l'éditeur.
+  const rech = document.getElementById('e-client-q');
+  if(rech) rech.value = '';
+  fermeResultats();
   document.getElementById('e-name').value = d.name||'';
   document.getElementById('e-co').value = d.co||'';
   document.getElementById('e-email').value = d.email||'';
   document.getElementById('e-addr').value = d.addr||'';
+  // Le SIRET revient par devisSiret, seul lecteur à connaître les trois clés
+  // sous lesquelles un devis peut le porter, et reparaît groupé comme sur la
+  // fiche société : le champ montre des espaces, le document n'en garde pas.
+  document.getElementById('e-siret').value = siretFormat(devisSiret(d));
   document.getElementById('e-date').value = d.date||'';
   document.getElementById('e-validity').value = d.validity||30;
   document.getElementById('e-tva').value = d.tva ?? accountDefaultTva;
@@ -1628,6 +1895,13 @@ function renderPreview(d) {
     em.tvaIntra ? 'TVA intracommunautaire : ' + em.tvaIntra : ''
   ].filter(Boolean).map(esc).join('<br>');
 
+  // LE SIRET DU DESTINATAIRE, dans la forme du SIRET de l'émetteur juste
+  // au-dessus : « SIRET : » puis le numéro, à la suite de son adresse et dans
+  // le même bloc. Il vient du champ de la section Client, et devisSiret le
+  // rend aux seuls chiffres avant que siretFormat les groupe. La ligne cède la
+  // place quand le champ est vide, comme celle du numéro plus haut.
+  const siretClient = siretFormat(devisSiret(d));
+
   document.getElementById('preview-area').innerHTML = `
     <div class="doc-paper" id="doc-paper">
       <div class="doc-paper-hdr">
@@ -1651,7 +1925,7 @@ function renderPreview(d) {
         <div>
           <div class="doc-party-label">Destinataire</div>
           <div class="doc-party-name">${esc(d.co||d.name)}</div>
-          <div class="doc-party-info">${esc(d.name)}<br>${esc(d.email)}<br>${esc(d.addr)}</div>
+          <div class="doc-party-info">${esc(d.name)}<br>${esc(d.email)}<br>${esc(d.addr)}${siretClient ? `<br>SIRET : ${esc(siretClient)}` : ''}</div>
         </div>
       </div>
 
@@ -1689,6 +1963,11 @@ function liveUpdate() {
   d.co = document.getElementById('e-co').value;
   d.email = document.getElementById('e-email').value;
   d.addr = document.getElementById('e-addr').value;
+  // LE SIRET DU CLIENT, normalisé ICI et jamais dans le champ : l'abonné y
+  // saisit ses quatorze chiffres comme ils figurent sur ses papiers, espaces
+  // compris, et c'est le document qui reçoit la forme canonique : celle que
+  // devisSiret compare, et celle sous laquelle ?client_siret= filtre.
+  d.client_siret = document.getElementById('e-siret').value.replace(/\D/g, '');
   // Le numéro part du champ tel qu’il est saisi, dans la forme libre de
   // l’abonné. Rien n’en est déduit : ni série, ni suite, ni horodatage
   // de référence.
@@ -1776,7 +2055,7 @@ function newDoc() {
   // écrira une fois montera dans ses réglages (monteConditionsAuCompte).
   const today = new Date().toISOString().split('T')[0];
   const nowIso = new Date().toISOString();
-  const d = { id:'d'+Date.now(), type:'devis', num:'', name:'', co:'', email:'', addr:'', date:today, validity:30, status:'draft', tva:accountDefaultTva, notes:String(accountSettings.conditionsVente || ''), lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
+  const d = { id:'d'+Date.now(), type:'devis', num:'', name:'', co:'', email:'', addr:'', client_siret:'', date:today, validity:30, status:'draft', tva:accountDefaultTva, notes:String(accountSettings.conditionsVente || ''), lines:[{desc:'',qty:1,pu:''}], createdAt: nowIso, updatedAt: nowIso };
   docs.unshift(d);
   saveDocs();
   currentId = d.id;

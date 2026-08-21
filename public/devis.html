@@ -709,18 +709,6 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
              remplit les cinq suivants à la main comme avant ce lot. Rien
              ne bascule de l'une à l'autre : le champ est en plus, pas à la
              place. -->
-        <!-- BANC D'ESSAI TEMPORAIRE, pas une declaration semantique.
-             L'icone de remplissage de Safari parait au focus sur les cinq
-             champs de cette section. Aucun attribut ne garantit le silence,
-             donc on mesure : chaque champ porte ici une valeur
-             d'autocomplete DIFFERENTE, et l'on regarde laquelle fait taire
-             l'icone. Une seule valeur survivra ; les quatre autres seront
-             retirees au commit suivant. Ne lisez pas "url" sur un email ou
-             "one-time-code" sur une adresse comme un sens : ce sont des
-             sondes.
-             e-client-q : off (temoin)   e-name : nope
-             e-co : organization-title   e-email : url
-             e-addr : one-time-code -->
         <div class="frow client-search" id="client-search">
           <div class="flabel">Rechercher un client</div>
           <input class="finput" id="e-client-q" type="search"
@@ -735,19 +723,19 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
         </div>
         <div class="frow">
           <div class="flabel">Prénom Nom</div>
-          <input class="finput" id="e-name" placeholder="Laurent Morin" autocomplete="nope" oninput="liveUpdate()">
+          <input class="finput" id="e-name" placeholder="Laurent Morin" oninput="liveUpdate()">
         </div>
         <div class="frow">
           <div class="flabel">Société</div>
-          <input class="finput" id="e-co" placeholder="Hôtel Le Grand" autocomplete="organization-title" oninput="liveUpdate()">
+          <input class="finput" id="e-co" placeholder="Hôtel Le Grand" oninput="liveUpdate()">
         </div>
         <div class="frow">
           <div class="flabel">Email</div>
-          <input class="finput" id="e-email" placeholder="l.morin@legrand.fr" type="email" autocomplete="url" oninput="liveUpdate()">
+          <input class="finput" id="e-email" placeholder="l.morin@legrand.fr" type="email" autocomplete="off" oninput="liveUpdate()">
         </div>
         <div class="frow">
           <div class="flabel">Adresse</div>
-          <input class="finput" id="e-addr" placeholder="12 rue du Commerce, 75001 Paris" autocomplete="one-time-code" oninput="liveUpdate()">
+          <input class="finput" id="e-addr" placeholder="12 rue du Commerce, 75001 Paris" autocomplete="off" oninput="liveUpdate()">
         </div>
         <!-- LE SIRET DU CLIENT est une coordonnée comme les quatre autres :
              saisissable à la main, rempli au choix d'un client, corrigeable

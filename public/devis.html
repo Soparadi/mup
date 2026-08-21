@@ -620,7 +620,7 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    Le fond blanc n'est pas un choix d'apparence : un logo à fond transparent
    posé sur le beige du vêtement se lirait mal, quand la feuille sur laquelle il
    finira est blanche. La vignette montre donc ce que montrera le papier. */
-.mes-logo-zone{margin-top:24px}
+.mes-logo-zone{margin-top:24px;display:flex;flex-direction:column;flex-grow:1}
 .mes-logo-cadre{
   padding:14px;border:1.5px dashed var(--mes-bord);
   border-radius:var(--mes-bouton-rayon);background:#fff;
@@ -630,6 +630,37 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    cette adjacence n'existe plus : la règle ne s'applique donc qu'à l'état nu,
    sans avoir à le nommer. */
 .mes-logo-zone .mupc-btn + .mes-logo-cadre{margin-top:10px}
+/* LE CADRE PREND LE VIDE, IL NE LE CRÉE PAS.
+   La pile donne à la carte la hauteur du temps le PLUS LONG, celui des
+   coordonnées ; le temps du logo, plus court, laissait la différence en blanc
+   sous lui. Cette place revient au CADRE, qui est la surface du dépôt : une
+   cible plus grande s'attrape mieux, et c'est un gain, pas un remplissage.
+   LE TEMPS DEVIENT UNE COLONNE pour que quelque chose puisse s'y étendre : la
+   zone croît jusqu'au bas de la cellule, et le cadre avec elle. Le titre, le
+   paragraphe et le bouton gardent leur place et leurs écarts, qui sont tous
+   explicites (16px sous le titre, 24px au-dessus de la zone, 10px sous le
+   bouton) : la remise à zéro du haut de page ne laisse aucune marge à fusionner,
+   donc rien que le passage en colonne pourrait défaire.
+   RIEN NE S'AJOUTE À LA MESURE DE LA PILE. `flex-grow` ne distribue que la
+   place LIBRE : il n'entre pas dans la hauteur naturelle d'un conteneur, et le
+   temps du logo se mesure donc exactement comme avant, à la hauteur de son
+   contenu. C'est toujours le temps des coordonnées qui donne sa hauteur à la
+   carte, et le cadre ne peut pas devenir le plus long des deux.
+   `flex-basis` RESTE SUR `auto` POUR CETTE RAISON : posé à zéro, la base d'un
+   élément ne serait plus son contenu, et la mesure de la pile changerait de
+   nature. */
+#mesTempsLogo{display:flex;flex-direction:column}
+/* Le bouton tenait sa largeur naturelle en élément de ligne ; en colonne,
+   l'étirement transversal la lui prendrait. Il la garde. */
+.mes-logo-zone > .mupc-btn{align-self:flex-start}
+/* SEUL L'ÉTAT NU EST VISÉ, et il n'a pas à se nommer : avec un logo posé, le
+   cadre est dans la rangée .mes-logo-pose et n'est plus enfant direct de la
+   zone. Il y ceint la vignette à sa taille et ne s'étend pas.
+   La phrase se centre en hauteur comme elle se centrait déjà en largeur. */
+.mes-logo-zone > .mes-logo-cadre{
+  flex-grow:1;
+  display:flex;align-items:center;justify-content:center;
+}
 /* La rangée du logo posé ne porte plus que sa disposition : le cadre, puis les
    deux gestes et les dimensions, qui ne relèvent pas du dépôt et sortent donc
    du cadre. */
@@ -1933,7 +1964,7 @@ function rendZoneLogo(){
     const cadre = faitCadreLogo();
     const appel = document.createElement('p');
     appel.className = 'mes-logo-appel';
-    appel.textContent = 'Glissez votre image ici';
+    appel.textContent = 'Glissez votre logo ici';
     cadre.appendChild(appel);
     zone.appendChild(cadre);
     return;

@@ -647,6 +647,17 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .mes-logo-lien:hover{color:var(--mes-titre)}
 .mes-logo-zone .mupc-btn:focus-visible,
 .mes-logo-lien:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+/* LE DÉPÔT, SECONDE VOIE VERS LA MÊME PORTE.
+   L'appel se lit SOUS le bouton : un fichier qu'on peut lâcher quelque part ne
+   se devine pas, et rien dans la zone ne le disait. Le bouton, lui, ne bouge
+   pas ; le dépôt s'ajoute à lui, il ne le remplace pas.
+   LA MARQUE DE SURVOL N'INVENTE RIEN : c'est la bague de focus que la zone
+   porte déjà deux lignes plus haut, même trait, même couleur, même écart. Elle
+   ceint la ZONE ENTIÈRE, ce qui la rend visible dans les deux états, avec ou
+   sans logo posé : sans image, la zone n'est qu'un bouton et n'a aucun cadre à
+   repeindre. */
+.mes-logo-appel{margin-top:10px;font-size:12.5px;line-height:1.5;color:var(--mes-surtitre)}
+.mes-logo-zone.mes-survol{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
 /* Le motif du refus, sous la zone. Il est rédigé par lib/logo-compte.js ou par
    son jumeau de page, jamais fabriqué ici. */
 .mes-logo-erreur{
@@ -1904,6 +1915,13 @@ function rendZoneLogo(){
     choisir.textContent = 'Choisir une image';
     choisir.onclick = ouvreChoixLogo;
     zone.appendChild(choisir);
+    // L'APPEL, SOUS LE BOUTON. La zone accepte un fichier lâché dessus depuis
+    // ce lot, et personne ne le devinerait : le bouton ne dit que son propre
+    // geste. La phrase dit les deux voies, dans cet ordre.
+    const appel = document.createElement('p');
+    appel.className = 'mes-logo-appel';
+    appel.textContent = 'Choisir une image ou la glisser ici';
+    zone.appendChild(appel);
     return;
   }
   const pose = document.createElement('div');
@@ -1947,6 +1965,16 @@ function ouvreChoixLogo(){
 function choisitLogo(input){
   const fichier = input && input.files && input.files[0];
   if(!fichier) return;
+  prendLogo(fichier);
+}
+
+// LA PORTE COMMUNE AUX DEUX VOIES : le bouton y arrive par choisitLogo, le
+// dépôt par l'écouteur de drop, et il n'y a rien après ce point qui sache dire
+// par où le fichier est entré. Une seule mise au format, un seul jeu de refus,
+// un seul endroit où les écrire : les gardes du fichier vivent toutes dans
+// metLogoAuFormat, et une garde parallèle posée du côté du dépôt aurait fini
+// par diverger de celle-ci sans que rien ne le signale.
+function prendLogo(fichier){
   erreurLogo('');
   metLogoAuFormat(fichier).then(function(logo){
     logoEnCours = logo;
@@ -1956,6 +1984,82 @@ function choisitLogo(input){
     erreurLogo(String(motif));
   });
 }
+
+// ---- LE DÉPÔT ----
+// LES ÉCOUTEURS TIENNENT SUR LA ZONE ELLE-MÊME, jamais sur ce qu'elle contient :
+// rendZoneLogo vide son innerHTML à chaque geste, et des écouteurs posés sur le
+// bouton ou sur la vignette seraient à reposer après chaque rendu. La zone, elle,
+// vit dans le balisage et n'est jamais remplacée.
+// preventDefault SUR dragover EST OBLIGATOIRE, et ce n'est pas une précaution :
+// sans lui le navigateur refuse la cible, et le drop ne se produit tout
+// simplement jamais.
+// UN SEUL FICHIER, LE PREMIER. Un dépôt multiple n'est pas une faute à annoncer :
+// la zone porte UN logo, elle prend celui du dessus et ne dit rien des autres.
+(function brancheDepotLogo(){
+  const zone = document.getElementById('logo-zone');
+  if(!zone) return;
+  // LE COMPTEUR D'ENTRÉES, faute de quoi la marque clignote : dragleave part
+  // AUSSI quand le pointeur passe du bouton au blanc de la zone, alors qu'on
+  // n'a jamais quitté la zone. Le compte monte à chaque entrée, descend à
+  // chaque sortie, et la marque ne tombe qu'à zéro.
+  let entrees = 0;
+  function marque(actif){ zone.classList.toggle('mes-survol', actif); }
+  zone.addEventListener('dragenter', function(e){
+    e.preventDefault();
+    entrees++;
+    marque(true);
+  });
+  zone.addEventListener('dragover', function(e){
+    e.preventDefault();
+    if(e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  zone.addEventListener('dragleave', function(){
+    entrees = Math.max(0, entrees - 1);
+    if(!entrees) marque(false);
+  });
+  zone.addEventListener('drop', function(e){
+    e.preventDefault();
+    // Le compte est remis à plat, et non décrémenté : le dépôt clôt la course,
+    // et aucun dragleave ne viendra plus solder les entrées restées ouvertes.
+    entrees = 0;
+    marque(false);
+    const fichier = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(!fichier) return;
+    prendLogo(fichier);
+  });
+})();
+
+// LE DÉPÔT MANQUÉ NE FAIT RIEN, et c'est le vrai enjeu de ce lot : une image
+// lâchée à CÔTÉ de la zone, le navigateur l'ouvre, et il ouvre en REMPLAÇANT la
+// page. L'abonné perdrait le devis qu'il est en train d'écrire, l'encart avec,
+// et rien ne l'aurait prévenu. Le devis en cours ne tient qu'en mémoire : aucun
+// brouillon ne dort en local, il n'y a rien à retrouver après le départ.
+//
+// LA GARDE EST POSÉE SUR LE DOCUMENT, ET NON SUR LE SEUL VOILE, parce que le
+// voile ne couvre pas tout ce qu'il faudrait :
+//   . au-dessus de 640 px il part de --sidebar-w et laisse la bande du rail
+//     découverte ; en dessous, le rail repasse DEVANT lui (cf. le bloc du rail,
+//     dans la feuille) ;
+//   . et surtout, l'encart n'est pas toujours là : l'éditeur nu se perd de la
+//     même façon, sur le même geste, hors de toute mise en service.
+// Le voile est compris dans cette garde sans avoir la sienne : ses événements
+// remontent jusqu'ici comme ceux du reste de la page.
+//
+// ELLE NE PREND JAMAIS LE FICHIER, elle l'empêche seulement de partir ailleurs.
+// Les deux événements sont nécessaires ensemble : dragover pour que la cible
+// existe, drop pour que le fichier n'y soit pas ouvert.
+// LA ZONE DU LOGO N'EN SOUFFRE PAS : son écouteur s'exécute le premier, sur la
+// cible, et a déjà pris le fichier quand l'événement arrive ici ; un second
+// preventDefault sur un événement déjà arrêté ne change rien.
+// EN CONTREPARTIE, PLUS AUCUN DÉPÔT NE MARCHE DANS CETTE PAGE SANS ÉCOUTEUR À
+// LUI. Rien ne s'en trouve cassé aujourd'hui : la seule autre entrée de fichier,
+// « Déposer le devis signé », passe par un bouton et son input caché, jamais par
+// un dépôt. Toute zone de dépôt ajoutée plus tard devra faire comme celle du
+// logo, et prendre le fichier chez elle.
+(function brancheDepotManque(){
+  document.addEventListener('dragover', function(e){ e.preventDefault(); });
+  document.addEventListener('drop', function(e){ e.preventDefault(); });
+})();
 
 // Retire le logo de l'état de TRAVAIL, et de lui seul. Rien n'est écrit tant
 // que « Enregistrer » n'a pas été cliqué : c'est lui qui appellera le DELETE.

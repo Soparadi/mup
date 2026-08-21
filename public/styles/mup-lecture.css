@@ -1,0 +1,28 @@
+/* ══════════════════════════════════════════════════════════════════
+   ENCART DE LECTURE INTERROMPUE, habillage partagé
+   ------------------------------------------------------------------
+   Cette feuille N'HABILLE PRESQUE RIEN, et c'est voulu. L'encart porte
+   le vêtement de mup-confirm.css, repris CLASSE POUR CLASSE :
+   .mupc-overlay, .mupc-modal, .mupc-body, .mupc-foot, .mupc-btn. Le
+   voile, le rayon, les retraits, le corps, la graisse et le bouton
+   sombre ne sont pas retapés ici : ils n'ont qu'une seule écriture, et
+   elle est là-bas. Un encart de plus ne doit pas être une palette de
+   plus.
+
+   Elle ne pose donc QUE ce que mup-confirm.css n'a pas : l'état
+   d'attente du bouton, le temps que la lecture rappelée voyage.
+
+   DÉPENDANCE : /styles/mup-confirm.css doit être chargée par la page
+   hôte, avant celle-ci. Même règle que mup-confirm.js avec sa propre
+   feuille, et même raison : la pièce ne connaît aucune page, c'est la
+   page qui appelle ses deux morceaux.
+
+   Le préfixe .mupl- ne croise ni les .mupc- de la fenêtre de
+   confirmation, ni les classes des pages hôtes.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Le bouton pendant que la lecture court. Il ne se reclique pas, et il
+   le montre. Le couple est relevé sur .btn-out:disabled (devis.html),
+   la façon dont le produit éteint déjà un bouton : aucune valeur n'est
+   inventée pour l'occasion. */
+.mupl-btn[disabled]{opacity:.4;cursor:not-allowed;}

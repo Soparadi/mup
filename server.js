@@ -115,6 +115,17 @@ import {
   listeDevisSignes,
   PIECE_CORPS_LIMITE
 } from './lib/piece-signee.js'
+// Le logo du compte, en tête des devis. Trois noms de ce module portent ceux du
+// module de signature de courriel juste au-dessus (même patron, bornes
+// différentes) : ils sont renommés à l'entrée plutôt que de laisser deux
+// plafonds de logo se répondre sous une seule identité.
+import {
+  chargeLogoCompte,
+  logoEnSortie,
+  motifLogoRefuse as motifLogoCompteRefuse,
+  LOGO_LARGEUR_ENCODEE_MAX as LOGO_COMPTE_LARGEUR_MAX,
+  LOGO_HAUTEUR_ENCODEE_MAX as LOGO_COMPTE_HAUTEUR_MAX
+} from './lib/logo-compte.js'
 import { controleAuthentification, redigeAnnonce } from './lib/mail-authentification.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -4348,6 +4359,121 @@ app.post('/api/account/profile', async (req, res) => {
   }
 })
 
+// ── LOGO DU COMPTE, EN TÊTE DES DEVIS ─────────────────────────────────
+// Table `account_logo`, une image par abonné, id = userId. Le patron est celui
+// de `mail_signature` : voir le bloc SIGNATURE D'ABONNÉ plus bas, dont ces trois
+// routes reprennent la doctrine point par point.
+//
+// UNE TABLE À ELLE, et non une clé de plus dans user_settings : cette table-là
+// est écrite par trois pages, dont deux renvoient leur objet ENTIER en PUT. Une
+// image de plusieurs centaines de kilooctets y repartirait à chaque
+// enregistrement d'un réglage sans rapport, et un onglet resté ouvert sur Frais
+// l'effacerait en reposant ses vieilles valeurs. Séparée, elle ne peut plus
+// être emportée par une écriture qui ne la vise pas.
+//
+// UN NOM DE COMPTE, ET HORS DU GABARIT /api/devis/*. Le logo appartient à
+// l'abonné et non à une pièce : il coiffe TOUS ses devis, ceux d'hier compris.
+// Le loger sous /api/devis/… l'aurait de surcroît exposé à la contrainte
+// d'ordre de déclaration de ce gabarit, où /api/devis/:id capte tout ce qui le
+// suit. Ici, aucune route ne le précède ni ne le suit qui puisse le capter.
+//
+// L'IDENTITÉ VIENT DE req.userId, que seul requireAuth pose depuis la session
+// vérifiée, et JAMAIS de requireUserId, dont la chaîne de repli lit l'en-tête
+// x-user-id, la query et le corps (cf. lib/auth.js, note SEC 1). Ce logo part
+// imprimé sur des pièces envoyées à des clients : l'identité doit se lire dans
+// la route, sans dépendre de l'ordre d'un middleware à des milliers de lignes
+// d'ici. Ne pas revenir à requireUserId ici.
+//
+// La garde est explicite parce que String(undefined) vaut « undefined », qui
+// serait un identifiant d'enregistrement parfaitement valide : une requête
+// atteignant ces routes hors du portillon partagerait alors un même logo avec
+// toutes les autres. Absente, l'identité vaut 401, sans qu'une seule lecture ni
+// écriture ait lieu.
+//
+// AUCUN PARSEUR PROPRE. Le plafond est de 750 Ko d'octets décodés, soit environ
+// 1 Mo en adresse data: ; le parseur global de 10 Mo les porte, et lui en poser
+// un second n'ajouterait qu'un endroit de plus où les deux chiffres peuvent
+// diverger.
+
+const LOGO_COMPTE_VIDE = {
+  logo_data_url: null,
+  logo_width: null,
+  logo_height: null,
+  updated_at: null
+}
+
+// Une dimension de logo est une métadonnée d'affichage, pas une donnée de
+// confiance. Hors bornes, non entière ou absente, elle est mise à null : la
+// feuille retombe alors sur ses plafonds en millimètres, qui tiennent les
+// proportions sans connaître la taille. Rien à refuser ici : il n'y a rien à
+// protéger qu'un plafond ne tienne déjà.
+function dimensionLogoCompte(valeur, max) {
+  const n = Number(valeur)
+  if (!Number.isInteger(n) || n <= 0 || n > max) return null
+  return n
+}
+
+app.get('/api/account/logo', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  try {
+    const db = await getDb()
+    // N'avoir aucun logo est un état normal, pas une erreur : la page reçoit
+    // l'objet vide plutôt qu'un 404 à interpréter.
+    res.json(logoEnSortie(await chargeLogoCompte(db, userId)) || LOGO_COMPTE_VIDE)
+  } catch (err) {
+    console.error('[account/logo:get]', err.message)
+    res.status(500).json({ error: 'Lecture de votre logo impossible' })
+  }
+})
+
+app.put('/api/account/logo', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  const body = req.body || {}
+  if (!body.logo_data_url) {
+    return res.status(400).json({ error: 'Aucune image n\'a été fournie.' })
+  }
+  // Le logo arrive mis au format par la page. Le serveur le relit quand même,
+  // sans croire ni le type annoncé ni le poids déclaré : motifLogoCompteRefuse
+  // tranche sur les OCTETS DÉCODÉS, et rend le motif tel qu'il sera lu.
+  const motif = motifLogoCompteRefuse(body.logo_data_url)
+  if (motif) return res.status(400).json({ error: motif })
+  try {
+    const db = await getDb()
+    // Le remplacement intégral d'upsertRecord est ici la bonne opération : ce
+    // payload EST le logo entier, et « Remplacer » doit effacer le précédent.
+    const payload = {
+      userId,
+      logo_data_url: String(body.logo_data_url),
+      logo_width: dimensionLogoCompte(body.logo_width, LOGO_COMPTE_LARGEUR_MAX),
+      logo_height: dimensionLogoCompte(body.logo_height, LOGO_COMPTE_HAUTEUR_MAX),
+      updated_at: new Date().toISOString()
+    }
+    const { record, status } = await upsertRecord(db, 'account_logo', userId, payload)
+    res.status(status).json(logoEnSortie(record) || LOGO_COMPTE_VIDE)
+  } catch (err) {
+    console.error('[account/logo:put]', err.message)
+    res.status(500).json({ error: 'Enregistrement de votre logo impossible' })
+  }
+})
+
+// Retire le logo, et rien d'autre. Une route dédiée plutôt qu'un PUT à vide :
+// « je retire mon logo » est un geste, pas une écriture d'image nulle, et le
+// PUT ci-dessus refuse justement le corps sans image.
+app.delete('/api/account/logo', async (req, res) => {
+  const userId = req.userId ? String(req.userId) : null
+  if (!userId) return res.status(401).json({ error: 'Authentification requise' })
+  try {
+    const db = await getDb()
+    await db.query('DELETE type::record("account_logo", $id)', { id: userId })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[account/logo:delete]', err.message)
+    res.status(500).json({ error: 'Suppression de votre logo impossible' })
+  }
+})
+
 // ── Suppression de compte RGPD art. 17 (Phase 6 Étape 13) ──────────────
 // Effacement avec délai d'annulation 7 jours. Exécution effective par le cron
 // account_deletion (cascade deleteUserCascade, conservation comptable). POST +
@@ -4624,6 +4750,13 @@ app.get('/api/account/privacy/export', async (req, res) => {
       frais: await dump('frais'),
       frais_recurrents: await dump('frais_recurrents'),
       user_settings: await dump('user_settings'),
+      // account_logo : le logo que l'abonné imprime en tête de ses devis. Table
+      // à part de user_settings, donc ligne à part ici : c'est une donnée
+      // personnelle comme les autres, et la séparation qui la protège d'une
+      // écriture de réglages ne doit pas la faire manquer à son export. Aucun
+      // mécanisme de budget ne lui est nécessaire : un enregistrement par
+      // compte, plafonné à 750 Ko (LOGO_OCTETS_MAX dans lib/logo-compte.js).
+      account_logo: await dump('account_logo'),
       // mail_signature : table à part de mail_settings, et manquante ici depuis
       // l'origine : le logo et le texte de signature sont des données
       // personnelles comme les autres. Aucun mécanisme de budget ne lui est
@@ -8385,6 +8518,10 @@ app.use((req, res) => {
     await db.query('DEFINE TABLE IF NOT EXISTS visio_doc SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS visio_doc_open SCHEMALESS')
     await db.query('DEFINE TABLE IF NOT EXISTS devis SCHEMALESS')
+    // Le logo qui coiffe les devis. Distinct de user_settings à dessein, cf. le
+    // bloc LOGO DU COMPTE : trois pages écrivent les réglages, deux en renvoyant
+    // l'objet entier, et une image n'a rien à faire dans ce trafic.
+    await db.query('DEFINE TABLE IF NOT EXISTS account_logo SCHEMALESS')
     // Distincte de devis à dessein, cf. le bloc DEVIS SIGNÉ PAR LE CLIENT : une
     // écriture du devis remplace le document en entier et emporterait la pièce.
     await db.query('DEFINE TABLE IF NOT EXISTS devis_signature SCHEMALESS')

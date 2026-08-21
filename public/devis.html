@@ -266,7 +266,33 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    largeur propre. */
 .doc-paper{width:210mm;min-height:297mm;padding:14mm;flex-shrink:0;display:flex;flex-direction:column;zoom:var(--doc-zoom,1);background:#fff;border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.12);font-family:var(--font)}
 .doc-paper-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8.47mm;padding-bottom:6.35mm;border-bottom:2px solid var(--text)}
-.doc-logo{font-size:5.29mm;font-weight:900;letter-spacing:-.13mm;color:var(--text)}
+/* LE LOGO EN TÊTE DE FEUILLE, ET C'EST UNE IMAGE, PLUS UN TITRE.
+   Cette règle habillait une ligne de texte : la raison sociale, écrite en gros
+   à l'emplacement de la marque. Elle n'y paraît plus. SANS LOGO, LA TÊTE DE
+   FEUILLE RESTE VIDE, et la société se lit dans le bloc émetteur en dessous,
+   avec son adresse et son SIRET : une fois, à sa place, au lieu de deux fois
+   à dix millimètres d'écart. La règle typographique tombe donc avec son emploi ;
+   le sélecteur, lui, garde son nom, qui désigne toujours la même chose : ce que
+   la feuille porte en tête.
+   UN <img>, JAMAIS UN FOND. La feuille d'impression n'a plus de
+   print-color-adjust : voir le § 3 du bloc d'impression, où la consigne est partie
+   avec le bandeau de validité. Un logo posé en background-image en aurait
+   besoin et sortirait blanchi sans elle ; une image, elle, s'imprime.
+   LES DEUX PLAFONDS SONT LA TAILLE ARRÊTÉE, 60 × 15 mm, et les bornes
+   d'ENCODAGE de lib/logo-compte.js s'en déduisent à 300 dpi. Ni largeur ni
+   hauteur ne sont imposées : deux maximums suffisent à contraindre une image en
+   préservant ses proportions, et ils ne l'agrandissent jamais au-delà de sa
+   taille naturelle : un petit logo reste petit plutôt que d'être étiré à la
+   boîte.
+   LA LARGEUR MAXIMALE N'EST PAS DÉCORATIVE : son conteneur est un élément flex,
+   donc à min-width:auto, et sans plafond l'image imposerait sa largeur naturelle
+   à la cellule de gauche et pousserait le bloc « DEVIS » hors de la feuille.
+   display:block retire le talon de ligne de base qu'un <img> en ligne traîne
+   sous lui.
+   LE CURSEUR, ENFIN, ET LUI SEUL, sur la doctrine de .doc-emetteur juste plus
+   bas : la zone qui MONTRE le logo est celle qui l'ÉDITE, et elle le dit au
+   survol sans poser le vocabulaire de l'application sur la pièce de l'abonné. */
+.doc-logo{display:block;max-width:60mm;max-height:15mm;cursor:pointer}
 .doc-paper-type{text-align:right}
 .doc-paper-type-label{font-size:5.82mm;font-weight:900;letter-spacing:-.13mm;color:var(--text)}
 .doc-paper-num{font-size:3.18mm;font-weight:600;font-family:var(--mono);color:var(--muted);margin-top:.79mm}
@@ -528,10 +554,29 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
     var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
 }
 .mes-corps{padding:30px 34px 26px;overflow-y:auto}
-/* AUCUNE .mes-pile ICI. Visio en a une parce que son panneau a quatre temps
-   qui se remplacent au même endroit et que la carte doit garder la hauteur du
-   plus long. Celui-ci n'a qu'un seul visage : il n'y aurait rien à mesurer, et
-   une pile d'un élément est une pile qui ment sur ce qu'elle fait. */
+/* LA PILE : LA CARTE NE RESPIRE PLUS AU RYTHME DE SON CONTENU.
+   Transposée de visio.html, à la lettre et pour la même raison. L'encart a
+   désormais DEUX TEMPS, les coordonnées puis le logo, qui se remplacent au
+   même endroit. Départagés par `display`, la carte prendrait la hauteur de ce
+   qu'elle montre et sauterait d'un temps à l'autre sous les yeux de l'abonné,
+   au moment précis où on lui demande de la lire.
+   Ils sont donc empilés dans une seule cellule de grille. Tous y sont mesurés
+   ensemble, et c'est le PLUS LONG qui donne sa hauteur à la pile. Aucune valeur
+   n'est posée ici : la hauteur est relevée par le navigateur à chaque largeur
+   de carte, là où un nombre écrit à la main aurait été juste à 600 px et faux
+   partout où le texte se replie autrement.
+   Ce qui est caché l'est par VISIBILITÉ et non par affichage : c'est ce qui le
+   laisse occuper sa cellule, donc compter dans la mesure, tout en le retirant
+   de l'écran, de l'ordre de tabulation et des lecteurs d'écran. C'est aussi ce
+   qui oblige le focus à se déduire du temps ouvert : un .focus() sur un champ
+   en visibility:hidden échoue en silence (cf. focusPremierDuTemps).
+   LE PIED N'EN A PAS BESOIN, et il n'en reçoit pas. Il porte les deux MÊMES
+   boutons aux deux temps, sous les mêmes libellés ; seul leur comportement
+   change. Sa hauteur ne varie donc pas d'un temps à l'autre, et une pile posée
+   là n'aurait rien eu à mesurer. */
+.mes-pile{display:grid}
+.mes-pile > *{grid-area:1 / 1;visibility:hidden}
+.mes-pile > .actif{visibility:visible}
 .mes-surtitre{
   font-size:12px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
   color:var(--mes-surtitre);margin-bottom:14px;
@@ -541,6 +586,11 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
   color:var(--mes-titre);margin-bottom:16px;
 }
 .mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
+/* Le second temps dit deux choses en deux paragraphes : ce que le logo devient
+   sur la feuille, puis ce qu'elle accepte comme image. Collés faute de cette
+   gouttière, ils se seraient lus comme un seul bloc. Reprise de visio.html, qui
+   la porte pour la même raison. */
+.mes-carte p + p{margin-top:12px}
 
 /* —— LES QUATRE CHAMPS ——
    Deux tiennent la largeur entière parce qu'ils la remplissent — une raison
@@ -563,6 +613,47 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .mes-champ input::placeholder{color:var(--mes-surtitre)}
 .mes-champ input:focus{border-color:var(--mes-titre)}
 @media (max-width:560px){ .mes-champs{grid-template-columns:1fr} }
+
+/* LE SECOND TEMPS : LA ZONE DU LOGO.
+   Elle MONTRE ce qu'elle édite, comme le bloc émetteur du document : le logo
+   posé est là, à sa taille, avec les deux gestes qui le concernent : le
+   remplacer, le retirer. Sans logo, un seul bouton l'appelle, et rien d'autre
+   ne paraît : il n'y a pas de vignette vide à regarder.
+   Le cadre en tirets est celui du dépôt, pas une bordure d'image : il dit qu'un
+   fichier se dépose là. Le fond blanc, lui, est nécessaire : un logo à fond
+   transparent posé sur le beige du vêtement se lirait mal, quand la feuille sur
+   laquelle il finira est blanche. La vignette montre donc ce que montrera le
+   papier. */
+.mes-logo-zone{margin-top:24px}
+.mes-logo-pose{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:14px;border:1.5px dashed var(--mes-bord);
+  border-radius:var(--mes-bouton-rayon);background:#fff;
+}
+/* Les mêmes plafonds que la feuille, en pixels d'écran : 60 × 15 mm sous
+   l'oeil, soit 227 × 57 px à 96 dpi. La vignette n'est pas un aperçu
+   approximatif, c'est la taille qu'occupera l'image sur le papier. */
+.mes-logo-pose img{max-width:227px;max-height:57px;display:block}
+.mes-logo-dim{font-size:11px;color:var(--mes-surtitre);font-family:var(--mono)}
+/* « Retirer » n'est pas un bouton de même poids que les deux autres : c'est le
+   geste qu'on regrette, et il se donne en texte. Reprise du bouton textuel de
+   visio.html, qui n'existe pas dans cette page. */
+.mes-logo-lien{
+  background:none;border:none;padding:0;
+  font-family:var(--font);font-size:12.5px;font-weight:600;
+  color:var(--mes-corps);text-decoration:underline;text-underline-offset:3px;
+  cursor:pointer;
+}
+.mes-logo-lien:hover{color:var(--mes-titre)}
+.mes-logo-zone .mupc-btn:focus-visible,
+.mes-logo-lien:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+/* Le motif du refus, sous la zone. Il est rédigé par lib/logo-compte.js ou par
+   son jumeau de page, jamais fabriqué ici. */
+.mes-logo-erreur{
+  margin-top:12px;padding:10px 12px;
+  border:1px solid var(--red);border-radius:var(--mes-bouton-rayon);
+  font-size:12.5px;line-height:1.5;color:var(--red);background:#fff;
+}
 
 /* Le pied ne porte que ses deux sorties, écartées aux deux bords. Visio y met
    en plus une note ; il n'y en a pas ici, et un élément vide posé pour tenir la
@@ -739,6 +830,14 @@ body #mup-cookie-panel{z-index:60001}
      troisième, le title, est une infobulle du navigateur : elle n'a ni boîte ni
      rendu papier, il n'y a rien à lui remettre. La structure ne bouge pas. */
   .doc-emetteur { cursor: auto; outline: none; }
+
+  /* LE LOGO, SON JUMEAU. Il est la seconde zone du document qui édite ce
+     qu'elle montre (il ouvre le temps du logo dans l'encart) et il porte donc
+     les mêmes marques d'écran, qui n'ont rien à faire sur le papier : le
+     curseur, dont la valeur d'écran se redit là où elle est lue, et l'anneau de
+     focus, qui lui aurait un rendu si la feuille partait pendant que l'image
+     tient le clavier. L'image, elle, RESTE : c'est le document. */
+  .doc-logo { cursor: auto; outline: none; }
 
   /* 3. Le décor d’écran part, la hauteur minimale reste, d’un cheveu
      plus courte.
@@ -1133,44 +1232,95 @@ body #mup-cookie-panel{z-index:60001}
      lus, sans quoi il clignoterait au chargement chez l'abonné qui a déjà
      ses coordonnées.
 
-     LE NUMÉRO N'EST PAS ICI, et le LOGO non plus. Le premier se règle sur
-     le devis, où il a son contexte ; le second est un lot à part.
+     LE NUMÉRO N'EST PAS ICI. Il se règle sur le devis, où il a son contexte :
+     c'est une référence de comptabilité, pas une propriété du compte.
+
+     LE LOGO, LUI, Y EST : c'est le SECOND TEMPS de cette même carte. Un seul
+     encart, deux temps, et la carte ne bouge pas d'un pixel entre les deux
+     (cf. .mes-pile). Les sorties du premier temps ENCHAÎNENT toujours sur le
+     second, « Je verrai plus tard » comme « Enregistrer » : c'est ce qui fait
+     que le bloc émetteur reste la porte du logo même quand aucun logo n'est
+     posé, et qu'aucun temps n'est un cul-de-sac. Seules les sorties du SECOND
+     temps referment la carte.
      ══════════════════════════════════════════════════════════════ -->
 <div class="mes-voile" id="panneauCoordonnees" style="display:none" role="dialog" aria-labelledby="coordTitre">
   <div class="mes-carte">
     <div class="mes-filet" aria-hidden="true"></div>
 
     <div class="mes-corps">
+      <!-- LE SURTITRE NE BOUGE PAS D'UN TEMPS À L'AUTRE, et il est donc hors de
+           la pile : « mise en service » couvre les deux, et le faire changer
+           n'aurait servi qu'à faire clignoter une ligne. -->
       <p class="mes-surtitre">MISE EN SERVICE</p>
-      <h2 id="coordTitre">Configurez vos devis une seule fois.</h2>
-      <p>Vos informations prendront la tête de chacun de vos devis, et la facture reprendra tout le jour où le client dira oui.</p>
 
-      <!-- Les champs arrivent PRÉ-REMPLIS de ce que le compte porte déjà :
-           une information donnée n'est jamais redemandée. Ils restent
-           modifiables — c'est une proposition, pas un constat. -->
-      <div class="mes-champs">
-        <div class="mes-champ mes-champ-large">
-          <label for="coord-raison">Raison sociale</label>
-          <input type="text" id="coord-raison" autocomplete="organization" placeholder="Nom de votre entreprise">
+      <!-- LA PILE DES DEUX TEMPS. Ils se remplacent au même endroit : ils y
+           sont posés ensemble, tous deux mesurés, et la carte garde la hauteur
+           du plus long quel que soit celui qui paraît. C'est `.actif` qui les
+           départage, jamais `display`, d'où l'absence de style en ligne sur le
+           second, qui gagnerait sur la règle.
+           Le titre de CHAQUE temps est dans son temps : c'est lui que la carte
+           annonce, et montreTemps déplace aria-labelledby avec le visage. -->
+      <div class="mes-pile">
+
+        <!-- PREMIER TEMPS : LES COORDONNÉES. -->
+        <div id="mesTempsCoordonnees" class="actif">
+          <h2 id="coordTitre">Configurez vos devis une seule fois.</h2>
+          <p>Vos informations prendront la tête de chacun de vos devis, et la facture reprendra tout le jour où le client dira oui.</p>
+
+          <!-- Les champs arrivent PRÉ-REMPLIS de ce que le compte porte déjà :
+               une information donnée n'est jamais redemandée. Ils restent
+               modifiables : c'est une proposition, pas un constat. -->
+          <div class="mes-champs">
+            <div class="mes-champ mes-champ-large">
+              <label for="coord-raison">Raison sociale</label>
+              <input type="text" id="coord-raison" autocomplete="organization" placeholder="Nom de votre entreprise">
+            </div>
+            <div class="mes-champ mes-champ-large">
+              <label for="coord-adresse">Adresse</label>
+              <input type="text" id="coord-adresse" autocomplete="street-address" placeholder="N°, rue, code postal, ville">
+            </div>
+            <div class="mes-champ">
+              <label for="coord-siret">SIRET</label>
+              <input type="text" id="coord-siret" inputmode="numeric" maxlength="14" placeholder="12345678901234">
+            </div>
+            <div class="mes-champ">
+              <label for="coord-email">Courriel</label>
+              <input type="email" id="coord-email" autocomplete="email" placeholder="vous@exemple.fr">
+            </div>
+          </div>
         </div>
-        <div class="mes-champ mes-champ-large">
-          <label for="coord-adresse">Adresse</label>
-          <input type="text" id="coord-adresse" autocomplete="street-address" placeholder="N°, rue, code postal, ville">
+
+        <!-- SECOND TEMPS : LE LOGO. Il ne bloque rien : un devis se lit très
+             bien sans logo, et la tête de feuille reste alors vide plutôt que
+             de redire une raison sociale qui se trouve dix millimètres plus
+             bas.
+             L'ENTRÉE DE FICHIER EST CACHÉE, le bouton la déclenche : un input
+             file nu ne se laisse ni habiller ni nommer. Même geste que
+             « Déposer le devis signé », dans le pied de l'éditeur. -->
+        <div id="mesTempsLogo">
+          <h2 id="logoTitre">Votre logo, en tête de vos devis.</h2>
+          <p>Il se pose en haut de la feuille, à gauche du mot DEVIS. Sans lui, cet emplacement reste vide : votre société se lit juste en dessous, avec son adresse et son SIRET.</p>
+          <p>Au plus 60 mm de large et 15 mm de haut sur la feuille, proportions conservées, jamais agrandi au-delà de sa taille d'origine. PNG, JPEG, WEBP ou GIF.</p>
+          <input type="file" id="logo-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="choisitLogo(this)">
+          <div class="mes-logo-zone" id="logo-zone"></div>
+          <div class="mes-logo-erreur" id="logo-erreur" hidden></div>
         </div>
-        <div class="mes-champ">
-          <label for="coord-siret">SIRET</label>
-          <input type="text" id="coord-siret" inputmode="numeric" maxlength="14" placeholder="12345678901234">
-        </div>
-        <div class="mes-champ">
-          <label for="coord-email">Courriel</label>
-          <input type="email" id="coord-email" autocomplete="email" placeholder="vous@exemple.fr">
-        </div>
-      </div>
+
+      </div><!-- .mes-pile -->
     </div>
 
-    <!-- LES DEUX SORTIES, ET IL N'Y EN A PAS DE TROISIÈME. « Je verrai plus
-         tard » n'écrit RIEN : la page reste utilisable, l'émetteur reste
-         inconnu, et ce sont les boutons de sortie du document qui refusent. -->
+    <!-- LES DEUX SORTIES, ET IL N'Y EN A PAS DE TROISIÈME, À CHAQUE TEMPS.
+         LES DEUX BOUTONS SONT LES MÊMES AUX DEUX TEMPS, sous les mêmes
+         libellés : rien ne s'ajoute ici, rien ne se déplace, et la hauteur du
+         pied ne varie donc pas d'un temps à l'autre. Seul leur COMPORTEMENT est
+         branché sur le temps ouvert (cf. les deux écouteurs, plus bas).
+         AU PREMIER TEMPS, aucune des deux ne referme : elles enchaînent toutes
+         deux sur le second. « Je verrai plus tard » n'écrit RIEN : la page reste
+         utilisable, l'émetteur reste inconnu, et ce sont les boutons de sortie
+         du document qui refusent.
+         AU SECOND, les deux referment. « Je verrai plus tard » pose le report
+         propre au logo ; « Enregistrer » écrit l'image, ou efface celle qui
+         était là si l'abonné vient de la retirer. -->
     <div class="mes-pied">
       <div class="mes-pied-actions">
         <button type="button" class="mupc-btn mupc-btn-outline" id="coord-plus-tard">Je verrai plus tard</button>
@@ -1336,7 +1486,9 @@ function emetteurDuCompte() {
 // LOCAL, et local pour les mêmes deux raisons que celui de la Visio : rien de
 // nouveau ne part en base — ni champ, ni route — et un report qui passerait par
 // une écriture pourrait échouer, enfermant l'abonné derrière l'encart à chaque
-// ouverture. C'est le PREMIER localStorage de cette page, et il ne gouverne QUE
+// ouverture. C'est le premier des DEUX localStorage de cette page, l'autre étant
+// le report propre au LOGO (LS_LOGO_DIFFERE, plus bas) : deux annonces, deux
+// clés, refuser l'une ne disant rien de l'autre. Celui-ci ne gouverne QUE
 // l'apparition à l'arrivée : il ne touche ni aux refus de sortie, qui refusent
 // sur l'identité elle-même, ni au relèvement sur « Enregistrer ».
 const LS_COORDS_DIFFERE = 'mup_devis_coords_differe';
@@ -1429,17 +1581,40 @@ function rendreLaPageInerte(fige){
 let attenteCoordonnees = null;
 let resoudreCoordonnees = null;
 
-function ouvrirCoordonnees(){
+// LA LEVÉE, EN UN SEUL ENDROIT, PARAMÉTRÉE PAR LE TEMPS OÙ ELLE S'OUVRE. Ce
+// paramètre ne SURVIT PAS à l'appel : il ne dit qu'où commencer, il n'est retenu
+// nulle part et aucune sortie ne le consulte. Les sorties du premier temps
+// enchaînent sur le second dans tous les cas, et celles du second referment dans
+// tous les cas.
+//
+// LES DEUX TEMPS SONT PRÉPARÉS ENSEMBLE, quel que soit celui qui paraît : les
+// champs reçoivent ce que le compte porte, l'état de travail du logo repart de
+// ce que la base porte, et la zone se peint. Le second temps est de toute façon
+// à un geste, et une pile mesure ce qu'elle contient, pas ce qu'elle montre.
+function ouvrirEncart(temps){
   if(attenteCoordonnees) return attenteCoordonnees;
   remplirEncartCoordonnees();
+  logoEnCours = logoCompte;
+  erreurLogo('');
+  rendZoneLogo();
   document.getElementById('panneauCoordonnees').style.display = 'flex';
   document.body.classList.add('mise-en-service');
   rendreLaPageInerte(true);
   attenteCoordonnees = new Promise(r => { resoudreCoordonnees = r; });
-  const premier = document.getElementById('coord-raison');
-  if(premier) premier.focus();
+  // Après l'affichage, et pas avant : montreTemps pose le focus, et un .focus()
+  // dans une carte encore en display:none ne prend pas.
+  montreTemps(temps);
   return attenteCoordonnees;
 }
+
+// LES DEUX PORTES, ET ELLES NE DIFFÈRENT QUE PAR LE TEMPS OÙ ELLES OUVRENT.
+// ouvrirCoordonnees garde son nom et ses appelants : le bloc émetteur du
+// document, le renvoi « Renseigner ma société » et saveDoc, qui l'attend.
+function ouvrirCoordonnees(){ return ouvrirEncart(TEMPS_COORDONNEES); }
+// ouvrirLogo est la porte directe du second temps : le logo du document, et
+// l'arrivée sur la page quand aucun logo n'est posé et que le report du logo
+// n'a pas été pris.
+function ouvrirLogo(){ return ouvrirEncart(TEMPS_LOGO); }
 
 // L'encart ne se ferme sur AUCUN geste — ni Échap, ni clic au fond, ni croix :
 // il n'en a pas. Cette fonction n'est appelée que par ses deux sorties, et c'est
@@ -1464,6 +1639,11 @@ function fermerCoordonnees(){
   // différentes, ils n'ont pas pour autant deux conditions d'extinction — une
   // page équipée n'a plus rien à retenir, ni pour l'arrivée ni pour la séance.
   if(identiteRenseignee()){ effacerReportCoords(); relanceCoordonneesEteinte = false; }
+  // LE REPORT DU LOGO TOMBE À LA MÊME CONDITION, jugée sur le même fait que le
+  // sien : un compte qui PORTE un logo n'a plus rien à se voir proposer, et un
+  // report posé la veille ne doit pas interdire à la carte de revenir le jour où
+  // l'abonné retire son image. Deux reports, deux clés, une seule doctrine.
+  if(logoCompte){ effacerReportLogo(); }
   resoudre();
 }
 
@@ -1551,6 +1731,353 @@ function monteIdentiteAuCompte(raisonSociale, siret){
   }).catch(() => {});
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// LE SECOND TEMPS : LE LOGO DE LA FEUILLE
+// ----------------------------------------------------------------------
+// MÊME CARTE, MÊME VÊTEMENT, MÊME DOCTRINE que le temps des coordonnées
+// ci-dessus. Ce n'est pas un formulaire à remplir, c'est une ANNONCE DE
+// CAPACITÉ : la page dit ce qu'elle fera de l'image, l'abonné donne ou passe.
+//
+// QUAND IL PARAÎT. Toujours après le temps des coordonnées, quelle que soit la
+// sortie de celui-ci : « Je verrai plus tard » y mène comme « Enregistrer ».
+// Directement, sans passer par le premier, dans deux cas : à l'arrivée sur la
+// page quand aucun logo n'est posé et que le report propre au logo n'a pas été
+// pris, et sur un clic dans le logo du document.
+//
+// CE QUE FONT SES DEUX SORTIES, et elles sont les seules à refermer la carte :
+// « Enregistrer » écrit l'image, ou efface celle qui était là si l'abonné vient
+// de la retirer ; « Je verrai plus tard » n'écrit RIEN et pose le report.
+
+// ---- LES BORNES ----
+// lib/logo-compte.js en est l'autorité. Cette page tourne dans le navigateur et
+// ne peut pas importer un module du serveur ; les valeurs sont donc REPRISES,
+// pas redéfinies. Toute divergence dégrade le confort (un refus qui arrive
+// après l'aller-retour plutôt qu'avant), jamais la sûreté : le serveur relit le
+// logo, tranche sur les octets décodés et refuse pour son propre compte.
+//
+// 709 × 177 SONT 60 × 15 MM À 300 DPI, et rien d'autre : 60 ÷ 25,4 × 300 fait
+// 708,66, 15 ÷ 25,4 × 300 fait 177,17. C'est la taille arrêtée sur la feuille,
+// portée à la définition d'une impression de bureau.
+//
+// AUCUN FACTEUR DE DENSITÉ ICI, à la différence de la signature de courriel qui
+// encode au double de son affichage. La consigne est que l'image ne soit JAMAIS
+// agrandie au-delà de sa taille naturelle : doubler un petit logo l'agrandirait,
+// et sur du papier, où le détail se voit, l'adoucissement ne se rattrape pas.
+const LOGO_L_MAX = 709;
+const LOGO_H_MAX = 177;
+const LOGO_OCTETS_MAX = 750 * 1024;
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+// Les deux refus d'ÉCRITURE, distincts des refus de FICHIER que rédige
+// metLogoAuFormat ou que rend le serveur. Ceux-ci disent une écriture qui n'a
+// pas abouti, pas une image qu'on n'accepte pas.
+const MOTIF_LOGO_REFUSE = 'Votre logo n\'a pas pu être enregistré. Réessayez, ou passez outre : la feuille sortira sans lui.';
+const MOTIF_LOGO_RETRAIT = 'Votre logo n\'a pas pu être retiré. Réessayez : il reste en tête de vos devis d\'ici là.';
+
+// LE LOGO TEL QU'IL EST EN BASE, et le seul que le document lise. null quand le
+// compte n'en porte aucun. Forme : { dataUrl, width, height }.
+let logoCompte = null;
+
+// LA LECTURE A-T-ELLE ABOUTI ? Même question, même rôle et même raison que
+// reglagesLus pour les coordonnées : sur un échec on ignore si le compte porte
+// un logo, et proposer d'en poser un serait proposer d'écraser ce qu'on n'a pas
+// su lire. Le document se rend alors sans logo, et rien ne se relève.
+let logoLu = false;
+
+// L'ÉTAT DE TRAVAIL DU SECOND TEMPS. Il part de logoCompte à chaque ouverture
+// de la carte et vit jusqu'à sa sortie : choisir une image, la remplacer, la
+// retirer ne touchent que lui. RIEN N'EST ÉCRIT tant que « Enregistrer » n'a
+// pas été cliqué, exactement comme les quatre champs du premier temps.
+let logoEnCours = null;
+
+// ---- LE REPORT, PROPRE AU LOGO ----
+// Une clé à lui, et non celle des coordonnées : ce sont deux annonces, et
+// refuser l'une ne dit rien de l'autre. Sans ce report, un abonné déjà en
+// service, qui a ses coordonnées depuis des mois, ne saurait jamais que le logo
+// existe : le temps des coordonnées ne se lève plus chez lui, et c'est par lui
+// qu'on arrive au second.
+// LOCAL, pour les deux raisons du report des coordonnées : rien de nouveau ne
+// part en base, et un report qui passerait par une écriture pourrait échouer,
+// enfermant l'abonné derrière la carte à chaque ouverture.
+const LS_LOGO_DIFFERE = 'mup_devis_logo_differe';
+function reportLogoPris(){ try { return localStorage.getItem(LS_LOGO_DIFFERE) === '1'; } catch(e){ return false; } }
+function poserReportLogo(){ try { localStorage.setItem(LS_LOGO_DIFFERE, '1'); } catch(e){} }
+function effacerReportLogo(){ try { localStorage.removeItem(LS_LOGO_DIFFERE); } catch(e){} }
+
+// Les DEUX FAITS de l'arrivée directe au second temps, dans la forme exacte de
+// coordonneesManquent : aucun logo posé, sur une lecture ABOUTIE.
+function logoManque(){ return logoLu && !logoCompte; }
+
+// Rend true quand la lecture a abouti, false sinon. Le code de retour compte :
+// c'est lui qui pose logoLu, donc lui qui autorise la relance.
+async function chargeLogo(){
+  try {
+    const r = await fetch('/api/account/logo');
+    if(r.ok){
+      const d = await r.json() || {};
+      logoCompte = d.logo_data_url ? { dataUrl: d.logo_data_url, width: d.logo_width, height: d.logo_height } : null;
+      return true;
+    }
+    console.warn('[devis] lecture du logo refusée', r.status);
+  } catch(e){ console.warn('[devis] lecture du logo', e); }
+  return false;
+}
+
+// ---- LA MISE AU FORMAT ----
+// Faite ICI, avant transmission, sur le modèle de la signature de courriel. La
+// toile est aussi ce qui assainit : quoi qu'on lui donne à décoder, il en
+// ressort des pixels réencodés en PNG, jamais le fichier d'origine. Le PNG
+// parce qu'un logo a besoin de sa transparence et n'a rien à gagner d'une
+// compression avec perte, surtout sur une pièce imprimée.
+//
+// DOUBLE GARDE, page et serveur, et c'est voulu : celle-ci arrête le fichier
+// avant le voyage et nomme le motif tout de suite ; celle du serveur relit les
+// octets décodés et ne croit rien de ce que la page annonce.
+// octetsDataUrl n'est PAS redéclarée ici : la page en a déjà une, écrite pour la
+// pièce du devis signé, et deux fonctions du même nom au même niveau se seraient
+// écrasées en silence, la dernière lue servant les deux appelants.
+function metLogoAuFormat(fichier){
+  return new Promise(function(resolve, reject){
+    // Refus nommé avant tout le reste : un SVG est un document (scripts, liens
+    // externes, feuilles de style) et pas une image. Le rendre dans l'aperçu du
+    // devis reviendrait à exécuter le fichier téléversé.
+    if(/svg/i.test(fichier.type) || /\.svg$/i.test(fichier.name)){
+      reject('Un fichier SVG est un document, pas une image : il n\'est pas accepté comme logo. Fournissez un PNG, un JPEG, un WEBP ou un GIF.');
+      return;
+    }
+    if(LOGO_TYPES.indexOf(fichier.type) < 0){
+      reject('Ce fichier n\'est pas une image reconnue. Formats acceptés : PNG, JPEG, WEBP, GIF.');
+      return;
+    }
+    const lecteur = new FileReader();
+    lecteur.onerror = function(){ reject('Ce fichier n\'a pas pu être lu.'); };
+    lecteur.onload = function(e){
+      const img = new Image();
+      img.onerror = function(){ reject('Ce fichier ne s\'ouvre pas comme une image. Formats acceptés : PNG, JPEG, WEBP, GIF.'); };
+      img.onload = function(){
+        const l = img.naturalWidth, h = img.naturalHeight;
+        if(!l || !h){ reject('Ce fichier ne s\'ouvre pas comme une image.'); return; }
+        // Le facteur est plafonné à 1 : l'image entre dans 709 × 177 en gardant
+        // ses proportions, et n'est JAMAIS agrandie. Un logo plus petit que la
+        // boîte reste à sa taille, ici comme sur la feuille, où les deux
+        // maximums en millimètres font exactement le même travail.
+        const facteur = Math.min(1, LOGO_L_MAX / l, LOGO_H_MAX / h);
+        const L = Math.max(1, Math.round(l * facteur));
+        const H = Math.max(1, Math.round(h * facteur));
+        const toile = document.createElement('canvas');
+        toile.width = L; toile.height = H;
+        toile.getContext('2d').drawImage(img, 0, 0, L, H);
+        const url = toile.toDataURL('image/png');
+        const octets = octetsDataUrl(url);
+        if(octets > LOGO_OCTETS_MAX){
+          reject('Votre logo pèse ' + Math.round(octets / 1024) + ' Ko après mise au format, au-delà des '
+            + Math.round(LOGO_OCTETS_MAX / 1024) + ' Ko admis. Choisissez une image moins détaillée.');
+          return;
+        }
+        resolve({ dataUrl: url, width: L, height: H });
+      };
+      img.src = e.target.result;
+    };
+    lecteur.readAsDataURL(fichier);
+  });
+}
+
+// ---- LA ZONE QUI MONTRE EST CELLE QUI ÉDITE ----
+// Même doctrine que le bloc émetteur du document : le logo posé est là, à la
+// taille qu'il aura sur le papier, avec les deux gestes qui le concernent. Sans
+// logo, un seul bouton l'appelle et rien d'autre ne paraît.
+function erreurLogo(motif){
+  const el = document.getElementById('logo-erreur');
+  if(!el) return;
+  el.textContent = motif || '';
+  el.hidden = !motif;
+}
+
+function rendZoneLogo(){
+  const zone = document.getElementById('logo-zone');
+  if(!zone) return;
+  zone.innerHTML = '';
+  if(!logoEnCours){
+    const choisir = document.createElement('button');
+    choisir.className = 'mupc-btn mupc-btn-outline';
+    choisir.type = 'button';
+    choisir.textContent = 'Choisir une image';
+    choisir.onclick = ouvreChoixLogo;
+    zone.appendChild(choisir);
+    return;
+  }
+  const pose = document.createElement('div');
+  pose.className = 'mes-logo-pose';
+  const vignette = document.createElement('img');
+  vignette.src = logoEnCours.dataUrl;
+  vignette.alt = '';
+  pose.appendChild(vignette);
+  const remplacer = document.createElement('button');
+  remplacer.className = 'mupc-btn mupc-btn-outline';
+  remplacer.type = 'button';
+  remplacer.textContent = 'Remplacer';
+  remplacer.onclick = ouvreChoixLogo;
+  pose.appendChild(remplacer);
+  const retirer = document.createElement('button');
+  retirer.className = 'mes-logo-lien';
+  retirer.type = 'button';
+  retirer.textContent = 'Retirer';
+  retirer.onclick = retireLogoEnCours;
+  pose.appendChild(retirer);
+  const dim = document.createElement('span');
+  dim.className = 'mes-logo-dim';
+  dim.textContent = logoEnCours.width + ' × ' + logoEnCours.height + ' px';
+  pose.appendChild(dim);
+  zone.appendChild(pose);
+}
+
+// L'entrée de fichier est vidée AVANT d'être ouverte : sans cela, rechoisir le
+// MÊME fichier ne relance aucun événement et le geste reste sans effet. Même
+// précaution que deposerPiece, prise du côté de l'ouverture parce que le bouton
+// et l'entrée sont deux éléments distincts.
+function ouvreChoixLogo(){
+  const input = document.getElementById('logo-input');
+  if(!input) return;
+  input.value = '';
+  input.click();
+}
+
+// Appelée par l'entrée de fichier. Le refus est écrit SOUS la zone et n'y
+// touche pas : la saisie en cours, s'il y en avait une, reste ce qu'elle est.
+function choisitLogo(input){
+  const fichier = input && input.files && input.files[0];
+  if(!fichier) return;
+  erreurLogo('');
+  metLogoAuFormat(fichier).then(function(logo){
+    logoEnCours = logo;
+    rendZoneLogo();
+    focusPremierDuTemps();
+  }).catch(function(motif){
+    erreurLogo(String(motif));
+  });
+}
+
+// Retire le logo de l'état de TRAVAIL, et de lui seul. Rien n'est écrit tant
+// que « Enregistrer » n'a pas été cliqué : c'est lui qui appellera le DELETE.
+// Le focus revient sur le bouton qui vient de remplacer celui qu'on a cliqué,
+// sans quoi il retomberait sur le corps de la page, inerte sous le voile.
+function retireLogoEnCours(){
+  logoEnCours = null;
+  erreurLogo('');
+  rendZoneLogo();
+  focusPremierDuTemps();
+}
+
+// ---- L'ÉCRITURE ----
+// Rend { ok, motif }, sur le patron d'envoieDoc et de deleteDocApi. Le motif
+// vaut null quand le refus s'est DÉJÀ annoncé ailleurs : un 402 lève la fenêtre
+// du choix des abonnements, posée par trial-expired-modal.js, qui passe devant
+// la carte (99999 contre 50000). Un abonnement expiré n'est pas un refus de
+// fichier et ne doit jamais se lire comme tel.
+//
+// RIEN À ÉCRIRE EST UN SUCCÈS. L'abonné qui traverse le second temps sans
+// toucher à son logo ne doit ni attendre un aller-retour ni voir un refus : la
+// comparaison porte sur l'adresse data:, qui est l'image entière.
+async function ecrireLogo(){
+  const avant = logoCompte ? logoCompte.dataUrl : null;
+  const apres = logoEnCours ? logoEnCours.dataUrl : null;
+  if(avant === apres) return { ok:true, motif:null };
+  try {
+    if(!apres){
+      const r = await fetch('/api/account/logo', { method:'DELETE' });
+      if(r.status === 402) return { ok:false, motif:null };
+      if(!r.ok){
+        console.warn('[devis] retrait du logo refusé', r.status);
+        return { ok:false, motif: MOTIF_LOGO_RETRAIT };
+      }
+      logoCompte = null;
+      return { ok:true, motif:null };
+    }
+    const r = await fetch('/api/account/logo', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        logo_data_url: logoEnCours.dataUrl,
+        logo_width: logoEnCours.width,
+        logo_height: logoEnCours.height
+      })
+    });
+    if(r.status === 402) return { ok:false, motif:null };
+    if(!r.ok){
+      // Le serveur rédige ses propres refus de fichier (type inconnu, poids
+      // au-delà du plafond) : c'est le sien qui s'affiche, et le motif de repli
+      // ne sert que si la réponse n'en porte aucun.
+      const err = await r.json().catch(() => ({}));
+      return { ok:false, motif: motifDuRefus(err, MOTIF_LOGO_REFUSE) };
+    }
+    const d = await r.json() || {};
+    logoCompte = d.logo_data_url ? { dataUrl: d.logo_data_url, width: d.logo_width, height: d.logo_height } : null;
+    return { ok:true, motif:null };
+  } catch(e){
+    console.warn('[devis] écriture du logo', e);
+    return { ok:false, motif: MOTIF_LOGO_REFUSE };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// LES DEUX TEMPS DE LA CARTE
+// ----------------------------------------------------------------------
+// Le visage se pose par CLASSE et non par `display` : les deux temps vivent
+// dans une .mes-pile, où celui qui ne paraît pas garde sa cellule pour que la
+// carte se mesure sur le plus long. Écrire `display` ici les retirerait du flux
+// et rendrait la carte à la hauteur de ce qu'elle montre, ce dont on sort.
+//
+// AUCUNE VARIABLE DE TEMPS D'ENTRÉE, et aucun comportement conditionnel qui en
+// dépende. Les sorties du premier temps enchaînent TOUJOURS sur le second, quel
+// que soit le chemin par lequel la carte s'est levée. C'est ce qui fait que le
+// bloc émetteur reste la porte du logo même quand aucun logo n'est posé, et
+// qu'aucun temps n'est un cul-de-sac.
+//
+// LE TITRE SUIT LE VISAGE. Chaque temps porte le sien, et aria-labelledby se
+// déplace avec lui : la carte annonce ce qu'elle montre, et non le titre du
+// temps qu'elle a quitté. Un titre resté en visibility:hidden reste lisible
+// pour le calcul du nom accessible, ce qui aurait fait annoncer aux lecteurs
+// d'écran les coordonnées pendant qu'on demande un logo.
+const TEMPS_COORDONNEES = 'coordonnees';
+const TEMPS_LOGO = 'logo';
+
+// Le premier focusable se DÉDUIT du temps ouvert, il n'est jamais supposé : un
+// .focus() sur un élément en visibility:hidden échoue en SILENCE, et laisserait
+// l'abonné au clavier devant une carte qu'il ne peut pas atteindre. Celui du
+// logo est cherché dans la zone, qui est refaite à chaque geste : c'est
+// « Choisir une image » ou « Remplacer » selon ce qu'elle montre.
+const TEMPS = {
+  coordonnees: {
+    bloc: 'mesTempsCoordonnees',
+    titre: 'coordTitre',
+    premier: () => document.getElementById('coord-raison')
+  },
+  logo: {
+    bloc: 'mesTempsLogo',
+    titre: 'logoTitre',
+    premier: () => document.querySelector('#logo-zone button')
+  }
+};
+
+let tempsCourant = TEMPS_COORDONNEES;
+
+function focusPremierDuTemps(){
+  const t = TEMPS[tempsCourant];
+  const el = t && t.premier();
+  if(el) el.focus();
+}
+
+function montreTemps(nom){
+  const t = TEMPS[nom];
+  if(!t) return;
+  tempsCourant = nom;
+  Object.keys(TEMPS).forEach(k => {
+    document.getElementById(TEMPS[k].bloc).classList.toggle('actif', k === nom);
+  });
+  document.getElementById('panneauCoordonnees').setAttribute('aria-labelledby', t.titre);
+  focusPremierDuTemps();
+}
+
 // —— LES DEUX SORTIES ——
 // « Je verrai plus tard » n'écrit RIEN en base, et pose DEUX refus de portées
 // différentes : le report, qui empêchera l'encart de revenir à l'ouverture
@@ -1560,8 +2087,19 @@ function monteIdentiteAuCompte(raisonSociale, siret){
 // Puis il rend la main : le devis qui attendait, s'il y en avait un, part comme
 // si de rien n'était — l'abonné a dit non aux coordonnées, pas à son devis.
 document.getElementById('coord-plus-tard').addEventListener('click', () => {
-  poserReportCoords();
-  relanceCoordonneesEteinte = true;
+  // AU PREMIER TEMPS, ELLE NE REFERME PAS : elle pose ses deux refus, puis passe
+  // au logo. L'abonné a dit non à ses coordonnées, pas au logo, et c'est ici que
+  // se joue la promesse de ce lot : aucun temps n'est un cul-de-sac.
+  if(tempsCourant === TEMPS_COORDONNEES){
+    poserReportCoords();
+    relanceCoordonneesEteinte = true;
+    montreTemps(TEMPS_LOGO);
+    return;
+  }
+  // AU SECOND, ELLE REFERME, et pose le report propre au logo : la carte ne
+  // reviendra plus d'elle-même à l'arrivée. Le logo reste à un clic, dans le
+  // document, par le bloc émetteur comme par l'image elle-même.
+  poserReportLogo();
   fermerCoordonnees();
 });
 
@@ -1574,16 +2112,34 @@ document.getElementById('coord-enregistrer').addEventListener('click', async fun
   const btn = this;
   if(btn.disabled) return;
   btn.disabled = true;
-  const ecrit = await ecrireCoordonnees();
+  if(tempsCourant === TEMPS_COORDONNEES){
+    const ecrit = await ecrireCoordonnees();
+    btn.disabled = false;
+    if(!ecrit){ showToast(MOTIF_COORDONNEES_REFUSEES); return; }
+    // La feuille porte désormais un émetteur, et les boutons de sortie n'ont
+    // plus de raison de refuser. Les deux se repeignent ICI, sur le passage de
+    // la seule sortie qui change quelque chose. La carte, elle, ne se retire
+    // pas : elle passe au logo, comme l'autre sortie de ce temps.
+    const d = docCourant();
+    if(d) renderPreview(d);
+    syncOutputButtons();
+    montreTemps(TEMPS_LOGO);
+    return;
+  }
+  // AU SECOND TEMPS, C'EST L'IMAGE QUI PART, ou celle qui était là qui s'efface.
+  // SUR UN REFUS, LA CARTE RESTE : l'image choisie est encore à l'écran, le
+  // motif est dit sous la zone, et « Je verrai plus tard » demeure la sortie de
+  // secours. Sur un abonnement expiré le motif vaut null et rien ne s'affiche :
+  // la fenêtre du choix des abonnements est déjà devant, et un refus de fichier
+  // par-dessus dirait une faute qui n'a pas eu lieu.
+  const ecrit = await ecrireLogo();
   btn.disabled = false;
-  if(!ecrit){ showToast(MOTIF_COORDONNEES_REFUSEES); return; }
+  if(!ecrit.ok){ if(ecrit.motif) erreurLogo(ecrit.motif); return; }
   fermerCoordonnees();
-  // La feuille porte désormais un émetteur, et les boutons de sortie n'ont plus
-  // de raison de refuser. Les deux se repeignent ICI, sur le passage de la seule
-  // sortie qui change quelque chose.
+  // La tête de feuille change, elle seule : le logo n'entre dans aucun des
+  // verrous de sortie, qui jugent l'identité et non l'image.
   const d = docCourant();
   if(d) renderPreview(d);
-  syncOutputButtons();
 });
 
 // LA PORTE DE RETOUR : POSÉE UNE FOIS SUR LA COLONNE D'APERÇU
@@ -1610,17 +2166,23 @@ document.getElementById('coord-enregistrer').addEventListener('click', async fun
 // Le capteur de sortie posé plus bas ne s'en mêle pas : ses trois sélecteurs sont
 // ceux de la barre, #preview-area n'en est pas, et le clic passe intact.
 const colonneApercu = document.getElementById('preview-area');
+//
+// LE LOGO DE LA FEUILLE PASSE PAR LA MÊME DÉLÉGATION, et ouvre DIRECTEMENT le
+// second temps. Son sélecteur est DISJOINT de .doc-emetteur : l'image vit dans
+// l'en-tête du document, le bloc émetteur dans les parties en dessous, et aucun
+// des deux n'est l'ancêtre de l'autre. Aucun ordre de test n'est donc à tenir.
+// L'image ne paraît que lorsqu'un logo est posé ; sans logo il n'y a rien à
+// cliquer en tête de feuille, et c'est le bloc émetteur qui reste la porte.
 colonneApercu.addEventListener('click', function(e){
   if(!e.target || !e.target.closest) return;
-  if(!e.target.closest('.doc-emetteur')) return;
-  ouvrirCoordonnees();
+  if(e.target.closest('.doc-emetteur')){ ouvrirCoordonnees(); return; }
+  if(e.target.closest('.doc-logo')){ ouvrirLogo(); return; }
 });
 colonneApercu.addEventListener('keydown', function(e){
   if(e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
   if(!e.target || !e.target.closest) return;
-  if(!e.target.closest('.doc-emetteur')) return;
-  e.preventDefault();
-  ouvrirCoordonnees();
+  if(e.target.closest('.doc-emetteur')){ e.preventDefault(); ouvrirCoordonnees(); return; }
+  if(e.target.closest('.doc-logo')){ e.preventDefault(); ouvrirLogo(); return; }
 });
 
 // API SurrealDB (V1 mono-utilisateur, scoping serveur via env MUP_DEFAULT_USER_ID)
@@ -2958,6 +3520,18 @@ function renderPreview(d) {
   // donné de courriel n'en voit aucun, et rien de faux ne part sur un document
   // envoyé. Elle vient après l'adresse et avant le SIRET — on lit d'abord où
   // joindre l'émetteur, ensuite ce qui l'identifie.
+  //
+  // LA TÊTE DE FEUILLE PORTE LE LOGO, ET RIEN D'AUTRE. La raison sociale n'y
+  // paraît plus : elle se lit dans le bloc émetteur juste en dessous, avec
+  // l'adresse et le SIRET, une fois au lieu de deux à dix millimètres d'écart.
+  // Sans logo, l'emplacement RESTE VIDE. Le conteneur, lui, demeure : c'est le
+  // premier des deux éléments d'un en-tête en space-between, et le retirer
+  // ramènerait le bloc « DEVIS » à gauche de la feuille.
+  //
+  // alt VIDE ET aria-label DISTINCT : l'image ne PORTE aucune information que le
+  // document ne redise en toutes lettres dessous, mais elle est aussi une
+  // commande, et un role="button" sans nom accessible ne s'annonce pas. Le nom
+  // dit donc ce que le clic FAIT, jamais ce que l'image montre.
   const em = emetteurDuCompte();
   const emLignes = [
     em.adresse,
@@ -2976,9 +3550,7 @@ function renderPreview(d) {
   document.getElementById('preview-area').innerHTML = `
     <div class="doc-paper" id="doc-paper">
       <div class="doc-paper-hdr">
-        <div>
-          <div class="doc-logo">${esc(em.nom)}</div>
-        </div>
+        <div>${logoCompte ? `<img class="doc-logo" src="${esc(logoCompte.dataUrl)}" alt="" role="button" tabindex="0" aria-label="Modifier votre logo" title="Modifier votre logo">` : ''}</div>
         <div class="doc-paper-type">
           <div class="doc-paper-type-label">${isInvoice?'FACTURE':'DEVIS'}</div>
           ${numDoc ? `<div class="doc-paper-num">N° ${esc(numDoc)}</div>` : ''}
@@ -3564,6 +4136,11 @@ function showToast(msg) {
   // lisible et l'abonné peut travailler. Ce sont les boutons de sortie qui
   // refusent, avec leur motif (cf. syncOutputButtons).
   reglagesLus = await loadAccountRegime();
+  // Le logo, à côté des réglages et pour les mêmes raisons : le document le lit
+  // au premier rendu, et son sort décide de la relance. L'échec ne tient pas la
+  // page non plus. Il ne fait taire aucun bouton de sortie : le logo n'entre
+  // dans aucun verrou, un devis sortant très bien sans lui.
+  logoLu = await chargeLogo();
   // Celle-ci, si. L'encart tient la page tant que la lecture n'a pas abouti,
   // et « Réessayer » la relance sur place : la page ne pose plus la liste
   // vide d'un compte neuf sur une panne, et aucune écriture ne part avant
@@ -3608,7 +4185,13 @@ function showToast(msg) {
   // Le report, lui, ne joue QUE là : passé une fois, l'encart ne revient pas à
   // l'ouverture suivante. Il reparaîtra sur « Enregistrer », que saveDoc juge sur
   // le drapeau de séance et non sur le report — deux portées, deux variables.
+  // LE LOGO EST LA BRANCHE ELSE, et il le faut : quand la carte s'ouvre sur les
+  // coordonnées, elle mène au logo d'elle-même, et l'appeler ici en plus
+  // n'aurait rien ouvert de nouveau. C'est le compte DÉJÀ ÉQUIPÉ qui a besoin de
+  // cette seconde ligne : le temps des coordonnées ne se lève plus chez lui, et
+  // sans elle il ne saurait jamais que le logo existe.
   if(coordonneesManquent() && !reportCoordsPris()) ouvrirCoordonnees();
+  else if(logoManque() && !reportLogoPris()) ouvrirLogo();
 })();
 </script>
 <script src="/sidebar.js"></script>

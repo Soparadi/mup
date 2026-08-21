@@ -113,7 +113,7 @@ const TABLES_SCHEMAFULL = [
   'lead_enrichment'
 ]
 
-// 18 tables SCHEMALESS avec FK string brute userId. DELETE pattern :
+// 19 tables SCHEMALESS avec FK string brute userId. DELETE pattern :
 //   DELETE <table> WHERE userId = $uid
 // TRAITÉES HORS BOUCLE (voir deleteUserCascade) :
 //   - mailbox_credentials → révocation OAuth Google avant DELETE (par ownerId,
@@ -145,6 +145,12 @@ const TABLES_SCHEMALESS = [
   'visio_doc',
   'visio_doc_open',
   'user_settings',
+  // Le logo imprimé en tête des devis. Table à part de user_settings, donc
+  // ligne à part ici : c'est une donnée personnelle comme les autres, et la
+  // séparation qui la protège d'une écriture de réglages ne doit pas la faire
+  // survivre à la suppression du compte. Rien ne la retient au titre comptable :
+  // la pièce déjà émise porte son logo dans son PDF, pas dans cette table.
+  'account_logo',
   'user_plan',
   'user_plan_history',
   'domains_resend',

@@ -608,23 +608,36 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 /* LE SECOND TEMPS : LA ZONE DU LOGO.
    Elle MONTRE ce qu'elle édite, comme le bloc émetteur du document : le logo
    posé est là, à sa taille, avec les deux gestes qui le concernent : le
-   remplacer, le retirer. Sans logo, un seul bouton l'appelle, et rien d'autre
-   ne paraît : il n'y a pas de vignette vide à regarder.
-   Le cadre en tirets est celui du dépôt, pas une bordure d'image : il dit qu'un
-   fichier se dépose là. Le fond blanc, lui, est nécessaire : un logo à fond
-   transparent posé sur le beige du vêtement se lirait mal, quand la feuille sur
-   laquelle il finira est blanche. La vignette montre donc ce que montrera le
-   papier. */
+   remplacer, le retirer.
+   LE CADRE EN TIRETS APPARTIENT AU DÉPÔT, ET À LUI SEUL : c'est la surface sur
+   laquelle un fichier se lâche, et rien de ce qui n'est pas du dépôt n'y entre.
+   Il se voit donc AVANT tout dépôt, sans logo posé, portant la seule phrase qui
+   dise sa voie ; avec un logo posé, il ceint la VIGNETTE seule, qui est ce
+   qu'un dépôt remplacerait. Le bouton, lui, ouvre le sélecteur de fichiers :
+   autre geste, autre voie, il se tient hors du cadre.
+   SES VALEURS SONT ÉCRITES UNE SEULE FOIS, sur le cadre, quel que soit l'état :
+   deux jeux de déclarations auraient fini par diverger.
+   Le fond blanc n'est pas un choix d'apparence : un logo à fond transparent
+   posé sur le beige du vêtement se lirait mal, quand la feuille sur laquelle il
+   finira est blanche. La vignette montre donc ce que montrera le papier. */
 .mes-logo-zone{margin-top:24px}
-.mes-logo-pose{
-  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+.mes-logo-cadre{
   padding:14px;border:1.5px dashed var(--mes-bord);
   border-radius:var(--mes-bouton-rayon);background:#fff;
 }
+/* Sans logo, le cadre se range SOUS le bouton, à l'écart que portait la phrase
+   du dépôt avant d'entrer dedans. Avec un logo, le cadre est dans la rangée et
+   cette adjacence n'existe plus : la règle ne s'applique donc qu'à l'état nu,
+   sans avoir à le nommer. */
+.mes-logo-zone .mupc-btn + .mes-logo-cadre{margin-top:10px}
+/* La rangée du logo posé ne porte plus que sa disposition : le cadre, puis les
+   deux gestes et les dimensions, qui ne relèvent pas du dépôt et sortent donc
+   du cadre. */
+.mes-logo-pose{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 /* Les mêmes plafonds que la feuille, en pixels d'écran : 60 × 15 mm sous
    l'oeil, soit 227 × 57 px à 96 dpi. La vignette n'est pas un aperçu
    approximatif, c'est la taille qu'occupera l'image sur le papier. */
-.mes-logo-pose img{max-width:227px;max-height:57px;display:block}
+.mes-logo-cadre img{max-width:227px;max-height:57px;display:block}
 .mes-logo-dim{font-size:11px;color:var(--mes-surtitre);font-family:var(--mono)}
 /* « Retirer » n'est pas un bouton de même poids que les deux autres : c'est le
    geste qu'on regrette, et il se donne en texte. Reprise du bouton textuel de
@@ -639,16 +652,18 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .mes-logo-zone .mupc-btn:focus-visible,
 .mes-logo-lien:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
 /* LE DÉPÔT, SECONDE VOIE VERS LA MÊME PORTE.
-   L'appel se lit SOUS le bouton : un fichier qu'on peut lâcher quelque part ne
-   se devine pas, et rien dans la zone ne le disait. Le bouton, lui, ne bouge
-   pas ; le dépôt s'ajoute à lui, il ne le remplace pas.
+   L'appel se lit DANS le cadre, en son centre, et n'y dit plus que la voie du
+   cadre : l'autre est déjà nommée par le bouton juste au-dessus.
    LA MARQUE DE SURVOL N'INVENTE RIEN : c'est la bague de focus que la zone
    porte déjà deux lignes plus haut, même trait, même couleur, même écart. Elle
-   ceint la ZONE ENTIÈRE, ce qui la rend visible dans les deux états, avec ou
-   sans logo posé : sans image, la zone n'est qu'un bouton et n'a aucun cadre à
-   repeindre. */
-.mes-logo-appel{margin-top:10px;font-size:12.5px;line-height:1.5;color:var(--mes-surtitre)}
-.mes-logo-zone.mes-survol{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+   ceint le CADRE, qui est la cible du dépôt : la marque montre où le fichier
+   tombera, elle ne peut pas ceindre plus large que ça.
+   ELLE NE REPREND PAS SON border-radius : là où elle vivait, sur une zone sans
+   rayon, ce 4px ne servait qu'à donner sa forme au trait. Posé sur le cadre, il
+   écraserait le rayon du cadre et le ferait sauter au survol. Le trait suit le
+   rayon que le cadre porte déjà. */
+.mes-logo-appel{margin:0;text-align:center;font-size:12.5px;line-height:1.5;color:var(--mes-surtitre)}
+.mes-logo-cadre.mes-survol{outline:2px solid var(--mes-titre);outline-offset:3px}
 /* Le motif du refus, sous la zone. Il est rédigé par lib/logo-compte.js ou par
    son jumeau de page, jamais fabriqué ici. */
 .mes-logo-erreur{
@@ -1889,10 +1904,22 @@ function erreurLogo(motif){
   el.hidden = !motif;
 }
 
+// LE CADRE EST LA MÊME CHOSE DANS LES DEUX ÉTATS, et il se fabrique donc au
+// même endroit : c'est la surface du dépôt, elle ne change que ce qu'elle
+// contient. Sans logo, la phrase ; avec un logo, la vignette.
+function faitCadreLogo(){
+  const cadre = document.createElement('div');
+  cadre.className = 'mes-logo-cadre';
+  return cadre;
+}
+
 function rendZoneLogo(){
   const zone = document.getElementById('logo-zone');
   if(!zone) return;
   zone.innerHTML = '';
+  // LE BOUTON D'ABORD, HORS CADRE, dans les deux états : il ouvre le sélecteur
+  // de fichiers, ce qui n'est pas un dépôt, et il n'a rien à faire sur la
+  // surface où l'on lâche.
   if(!logoEnCours){
     const choisir = document.createElement('button');
     choisir.className = 'mupc-btn mupc-btn-outline';
@@ -1900,21 +1927,27 @@ function rendZoneLogo(){
     choisir.textContent = 'Choisir une image';
     choisir.onclick = ouvreChoixLogo;
     zone.appendChild(choisir);
-    // L'APPEL, SOUS LE BOUTON. La zone accepte un fichier lâché dessus depuis
-    // ce lot, et personne ne le devinerait : le bouton ne dit que son propre
-    // geste. La phrase dit les deux voies, dans cet ordre.
+    // LA PHRASE DU DÉPÔT, DANS LE CADRE ET SEULE. Elle ne dit plus que la voie
+    // du cadre : l'autre vient d'être nommée par le bouton, une ligne au-dessus,
+    // et la redire ici ferait porter au cadre un geste qui n'est pas le sien.
+    const cadre = faitCadreLogo();
     const appel = document.createElement('p');
     appel.className = 'mes-logo-appel';
-    appel.textContent = 'Choisir une image ou la glisser ici';
-    zone.appendChild(appel);
+    appel.textContent = 'Glissez votre image ici';
+    cadre.appendChild(appel);
+    zone.appendChild(cadre);
     return;
   }
   const pose = document.createElement('div');
   pose.className = 'mes-logo-pose';
+  // LE CADRE N'ENTOURE QUE LA VIGNETTE, qui est ce qu'un dépôt remplacerait.
+  // « Remplacer », « Retirer » et les dimensions se rangent à côté, dehors.
+  const cadre = faitCadreLogo();
   const vignette = document.createElement('img');
   vignette.src = logoEnCours.dataUrl;
   vignette.alt = '';
-  pose.appendChild(vignette);
+  cadre.appendChild(vignette);
+  pose.appendChild(cadre);
   const remplacer = document.createElement('button');
   remplacer.className = 'mupc-btn mupc-btn-outline';
   remplacer.type = 'button';
@@ -1971,38 +2004,61 @@ function prendLogo(fichier){
 }
 
 // ---- LE DÉPÔT ----
-// LES ÉCOUTEURS TIENNENT SUR LA ZONE ELLE-MÊME, jamais sur ce qu'elle contient :
-// rendZoneLogo vide son innerHTML à chaque geste, et des écouteurs posés sur le
-// bouton ou sur la vignette seraient à reposer après chaque rendu. La zone, elle,
-// vit dans le balisage et n'est jamais remplacée.
+// LA CIBLE EST LE CADRE, ET LES ÉCOUTEURS SONT DONC LES SIENS. La zone porte
+// maintenant le bouton HORS du cadre : des écouteurs restés sur elle prendraient
+// un fichier lâché sur le bouton, c'est-à-dire hors de la surface annoncée.
+//
+// ILS SONT POSÉS UNE FOIS SUR LA ZONE, PAR DÉLÉGATION, avec un test sur le
+// cadre, plutôt que reposés dans rendZoneLogo. Deux raisons, et la seconde est
+// la vraie :
+//   . rendZoneLogo refait le cadre à chaque geste ; une pose faite là-dedans
+//     rebrancherait quatre écouteurs par rendu, et il faudrait sortir le
+//     compteur d'entrées de sa fermeture pour qu'il survive au remplacement ;
+//   . la zone, elle, vit dans le balisage et n'est jamais remplacée : c'est le
+//     seul point fixe de cette histoire, et les événements de glissé remontent
+//     jusqu'à lui.
+// LE TEST FAIT LE PARTAGE : ce qui vient du cadre ou de son contenu compte, tout
+// le reste sort sans rien faire, sans compter, sans peindre. Un fichier lâché
+// sur le bouton n'est donc pas pris ici ; il tombe dans la garde du document,
+// plus bas, qui l'empêche seulement de partir ailleurs.
 // preventDefault SUR dragover EST OBLIGATOIRE, et ce n'est pas une précaution :
 // sans lui le navigateur refuse la cible, et le drop ne se produit tout
 // simplement jamais.
 // UN SEUL FICHIER, LE PREMIER. Un dépôt multiple n'est pas une faute à annoncer :
-// la zone porte UN logo, elle prend celui du dessus et ne dit rien des autres.
+// le cadre porte UN logo, il prend celui du dessus et ne dit rien des autres.
 (function brancheDepotLogo(){
   const zone = document.getElementById('logo-zone');
   if(!zone) return;
   // LE COMPTEUR D'ENTRÉES, faute de quoi la marque clignote : dragleave part
-  // AUSSI quand le pointeur passe du bouton au blanc de la zone, alors qu'on
-  // n'a jamais quitté la zone. Le compte monte à chaque entrée, descend à
+  // AUSSI quand le pointeur passe de la vignette au blanc du cadre, alors qu'on
+  // n'a jamais quitté le cadre. Le compte monte à chaque entrée, descend à
   // chaque sortie, et la marque ne tombe qu'à zéro.
   let entrees = 0;
-  function marque(actif){ zone.classList.toggle('mes-survol', actif); }
+  function cadreDe(e){
+    return e.target && e.target.closest ? e.target.closest('.mes-logo-cadre') : null;
+  }
+  function marque(actif){
+    const cadre = zone.querySelector('.mes-logo-cadre');
+    if(cadre) cadre.classList.toggle('mes-survol', actif);
+  }
   zone.addEventListener('dragenter', function(e){
+    if(!cadreDe(e)) return;
     e.preventDefault();
     entrees++;
     marque(true);
   });
   zone.addEventListener('dragover', function(e){
+    if(!cadreDe(e)) return;
     e.preventDefault();
     if(e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
   });
-  zone.addEventListener('dragleave', function(){
+  zone.addEventListener('dragleave', function(e){
+    if(!cadreDe(e)) return;
     entrees = Math.max(0, entrees - 1);
     if(!entrees) marque(false);
   });
   zone.addEventListener('drop', function(e){
+    if(!cadreDe(e)) return;
     e.preventDefault();
     // Le compte est remis à plat, et non décrémenté : le dépôt clôt la course,
     // et aucun dragleave ne viendra plus solder les entrées restées ouvertes.
@@ -2033,9 +2089,12 @@ function prendLogo(fichier){
 // ELLE NE PREND JAMAIS LE FICHIER, elle l'empêche seulement de partir ailleurs.
 // Les deux événements sont nécessaires ensemble : dragover pour que la cible
 // existe, drop pour que le fichier n'y soit pas ouvert.
-// LA ZONE DU LOGO N'EN SOUFFRE PAS : son écouteur s'exécute le premier, sur la
-// cible, et a déjà pris le fichier quand l'événement arrive ici ; un second
-// preventDefault sur un événement déjà arrêté ne change rien.
+// LE CADRE DU LOGO N'EN SOUFFRE PAS : l'écouteur de la zone s'exécute le
+// premier, en remontant depuis le cadre, et a déjà pris le fichier quand
+// l'événement arrive ici ; un second preventDefault sur un événement déjà
+// arrêté ne change rien. Un fichier lâché sur le bouton, lui, traverse cet
+// écouteur sans être pris et finit ici, sans rien faire : c'est bien ce qu'on
+// veut, le bouton n'est pas une surface de dépôt.
 // EN CONTREPARTIE, PLUS AUCUN DÉPÔT NE MARCHE DANS CETTE PAGE SANS ÉCOUTEUR À
 // LUI. Rien ne s'en trouve cassé aujourd'hui : la seule autre entrée de fichier,
 // « Déposer le devis signé », passe par un bouton et son input caché, jamais par

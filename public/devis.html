@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MovUP — Devis</title>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/fonts.css">
 <link rel="stylesheet" href="/styles/sidebar.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -4278,7 +4278,7 @@ function watchDocScale() {
 // rendre : le refus se dit dans la page plutôt que sur une page blanche.
 // Le même refus que celui des boutons, pour les chemins qui n'en ont pas :
 // une feuille au nom d'un émetteur inconnu ne part pas non plus par ici.
-function printDoc() {
+async function printDoc() {
   if(!document.getElementById('doc-paper')) { showToast('Sélectionnez un document à imprimer'); return; }
   if(!reglagesLus) { showToast(MOTIF_EMETTEUR_INCONNU); return; }
   // Le second refus est posé aux DEUX endroits, ici et sur les boutons : les
@@ -4286,6 +4286,17 @@ function printDoc() {
   // celui-ci couvre les chemins qui n'ont pas de bouton — Ctrl+P, l'impression
   // du navigateur, un appel depuis la console.
   if(!identiteRenseignee()) { showToast(MOTIF_IDENTITE_ABSENTE); return; }
+  // window.print() saisit la mise en page telle qu'elle est à cet instant.
+  // Si une fonte n'est pas encore posée, la feuille part dans la police de
+  // secours, et rien ne le signale : le PDF sort en Helvetica, avec des
+  // césures et une pagination qui ne sont plus celles de l'aperçu.
+  // document.fonts.ready est déjà tenue dans le cas courant, où l'aperçu
+  // est rendu en Geist depuis longtemps ; elle ne coûte que le cas rare,
+  // celui du tout premier chargement suivi d'un clic immédiat.
+  // Le try l'entoure parce qu'aucun refus de fonte ne doit empêcher
+  // d'imprimer : une feuille dans la mauvaise police vaut mieux que
+  // pas de feuille du tout.
+  try { if(document.fonts && document.fonts.ready) await document.fonts.ready; } catch(e) {}
   window.print();
 }
 

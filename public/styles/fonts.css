@@ -1,0 +1,127 @@
+/* ================================================================== */
+/* MovUP FONTES                                                        */
+/* Geist, Geist Mono et Instrument Serif, servies par le dépôt.         */
+/* Feuille unique : c'est le seul endroit où une fonte se déclare.      */
+/* ================================================================== */
+
+/* Pourquoi ici et pas chez Google.
+   Deux motifs, dans cet ordre. Le devis part en PDF par l'impression
+   du navigateur : tant qu'un blocage du CDN pouvait faire tomber la
+   feuille en Helvetica, la sortie n'était garantie par rien. Et une
+   page derrière authentification n'a pas à annoncer l'adresse de son
+   abonné à un tiers à chaque ouverture.
+
+   Les fichiers sont les sous-ensembles woff2 de Google Fonts, repris
+   tels quels, sous licence SIL Open Font License 1.1. Les deux textes
+   de licence vivent à côté des binaires, dans /fonts, comme la clause
+   2 de l'OFL l'exige de toute redistribution. Aucun nom réservé n'est
+   déclaré par l'une ni par l'autre.
+
+   Geist et Geist Mono sont des fontes variables : UN fichier porte
+   l'axe 100 à 900 entier. Les sept graisses ne coûtent donc pas sept
+   téléchargements, elles en coûtent un. C'était déjà le cas chez
+   Google, qui renvoyait le même fichier pour chaque graisse demandée.
+
+   La découpe latin / latin étendu est conservée : le navigateur ne va
+   chercher le second que si un glyphe de sa plage doit s'afficher.
+   Sur une raison sociale française, il ne le charge jamais.
+
+   font-display: swap. Le fichier est en même origine et presque
+   toujours en cache : la fenêtre de bascule tient en millisecondes.
+   block ferait courir un risque de texte invisible à l'impression,
+   et optional laisserait le navigateur renoncer à la fonte, ce qui
+   ramènerait exactement la panne que l'on supprime ici. */
+
+/* ── Geist ──────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/geist-v5-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/geist-v5-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ── Geist Mono ─────────────────────────────────────────────────── */
+
+/* L'axe complet est déclaré, alors que la feuille Google n'appelait
+   que 400 et 500. Le dépôt, lui, applique 600, 700, 800 et 900 à des
+   éléments en var(--mono) : ces graisses étaient donc SYNTHÉTISÉES.
+   Elles deviennent réelles. C'est un changement de rendu voulu, et
+   c'est le seul de cette passe : il touche tous les chiffres en
+   monospace, dont les montants du devis et des factures. */
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/geist-mono-v6-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/geist-mono-v6-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ── Instrument Serif ───────────────────────────────────────────── */
+
+/* Une seule graisse, 400, mais les DEUX styles : l'italique est un
+   dessin à part, et c'est lui que portent les <em> des titres. */
+
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-v5-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-v5-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-v5-italic-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-v5-italic-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Geist n'a PAS d'italique ici, et c'est délibéré : l'axe ital
+   n'était pas demandé à Google non plus. Les <em> et les règles en
+   font-style: italic posées sur du texte Geist restent donc obliques
+   par synthèse du navigateur, à l'identique. Embarquer le dessin
+   italique changerait leur rendu partout d'un coup. */

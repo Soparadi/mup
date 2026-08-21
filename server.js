@@ -1083,6 +1083,28 @@ app.use(async (req, res, next) => {
 // la main (server/services/visites.js).
 app.use(creerMesureAudience({ estPageApp: isProtectedHtmlRoute }))
 
+// ── Fontes servies par le dépôt ──
+// Monté AVANT le service général, qui servirait les mêmes fichiers sans
+// aucun en-tête de cache : express.static laissé à ses valeurs par défaut
+// ne pose ni max-age ni immutable, et chaque ouverture de page repayerait
+// un aller-retour de revalidation 304 par fichier. Google renvoyait un an.
+// Les repayer serait une régression, et ce sont les fontes : elles sont
+// dans le chemin critique du premier rendu.
+//
+// Un an et immutable se tiennent parce que le nom du fichier porte la
+// version de la fonte (geist-v5, geist-mono-v6, instrument-serif-v5) : une
+// mise à jour change le nom, donc l'URL, et le cache d'un an ne peut jamais
+// retenir un fichier périmé. Ne renommez pas ces fichiers sans changer la
+// version, et ne changez pas leur contenu sans les renommer.
+//
+// Les .txt du dossier sont les deux licences OFL, que la clause 2 exige de
+// distribuer avec les binaires : elles sont servies par le même montage.
+app.use('/fonts', express.static(join(__dirname, 'public', 'fonts'), {
+  maxAge: '1y',
+  immutable: true,
+  fallthrough: false
+}))
+
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }))
 
 // ── /api/leads/engaged ──

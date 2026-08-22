@@ -71,6 +71,32 @@
   --mes-filet-4:#0BBCD4;
   --mes-filet-5:#D97706;
   --mes-filet-6:#1D8348;
+  /* LA HAUTEUR COMMUNE DES TROIS ENCARTS DE MISE EN SERVICE.
+     Le seul nombre en dur du vêtement, et il est écrit ici parce qu'il ne peut
+     être nulle part ailleurs. La .mes-pile égalise les temps À L'INTÉRIEUR
+     d'une carte : le navigateur relève la hauteur du temps le plus long et la
+     donne aux autres, sans qu'aucune valeur soit posée à la main. Entre TROIS
+     PAGES, rien ne joue ce rôle. visio.html, devis.html et mail.html ne
+     connaissent chacune que la leur, et la doctrine du 21 août (taille
+     constante, 600 px de large, retrait de 34 px, toujours centré) tenait donc
+     dans chaque page sans tenir entre elles. Une hauteur commune DÉCLARÉE est
+     la seule façon de la tenir de l'une à l'autre.
+     D'OÙ VIENT LE NOMBRE. Les trois cartes ont été mesurées au banc, dans les
+     conditions de l'écran : Chrome sans tête, fontes du dépôt servies, encart
+     ouvert, carte à 600 px. Devis 481,39 px au temps des coordonnées, Visio
+     452,05 px au temps du conseil, Mail 318,67 px. Le maximum est celui de
+     Devis, et 490 lui laisse huit pixels de jeu : caler au pixel exact du
+     maximum du jour poserait Devis pile sur son plancher, où la première ligne
+     de texte ajoutée quelque part rendrait la valeur fausse. Huit pixels ne se
+     voient pas et absorbent la variation de rendu d'un poste à l'autre.
+     ELLE EST POSÉE EN PLANCHER ET NON EN TAILLE (min-height, cf. .mes-carte) :
+     une carte plus haute que 490 px continue de s'allonger.
+     ELLE NE GARANTIT RIEN SOUS 640 px. La carte y perd sa largeur, son texte se
+     replie sur plus de lignes, et le contenu peut passer au-dessus de ce
+     plancher : un plancher n'est pas un plafond, la carte s'allonge et rien
+     n'est perdu, mais personne ne doit lire cette valeur comme une hauteur
+     vraie à toutes les largeurs. */
+  --mes-hauteur-commune:490px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:var(--surface)}
@@ -725,6 +751,21 @@ body.outils-deplies .my-link-field.vide{display:flex}
   background:var(--mes-carte);border:1px solid var(--mes-bord);
   border-radius:var(--mes-rayon);overflow:hidden;
   width:100%;max-width:600px;max-height:calc(100vh - 48px);
+  /* LE PLANCHER COMMUN AUX TROIS PAGES (cf. --mes-hauteur-commune). En
+     min-height et JAMAIS en height : une carte plus haute que le plancher
+     continue de s'allonger, et le max-height ci-dessus la rogne comme avant.
+     LE PLANCHER NE PASSE JAMAIS AU-DESSUS DU PLAFOND, et c'est ce que min()
+     garantit. Posé nu, il l'emporterait sur le max-height dès que la fenêtre
+     descend sous 538 px de haut, la règle de CSS donnant le dernier mot au
+     minimum : la carte tiendrait 490 px dans un voile plus court, et comme le
+     voile CENTRE ce qu'il porte, le haut de la carte passerait au-dessus de
+     lui sans qu'aucun défilement puisse l'y ramener. Constaté au banc avant
+     min() : sur une fenêtre de 413 px, 38,5 px de filet et de titre hors
+     d'atteinte, que le défilement éloignait au lieu de les rendre.
+     Avec min(), le plancher s'abaisse au plafond quand la fenêtre est courte :
+     la carte y remplit la hauteur disponible, son corps défile en dedans comme
+     il l'a toujours fait, et rien n'est coupé. */
+  min-height:min(var(--mes-hauteur-commune), calc(100vh - 48px));
   display:flex;flex-direction:column;
   box-shadow:0 24px 60px rgba(13,13,11,.28);
 }
@@ -733,7 +774,18 @@ body.outils-deplies .my-link-field.vide{display:flex}
    fenêtre : aucun voile derrière lui, aucune ombre portée sous lui. Il n'a pas
    de hauteur maximale non plus — rien ne le contraint, il n'a rien à confiner.
    Tout le reste est celui de .mes-carte, et le filet comme le corps réemploient
-   ses règles telles quelles dans le balisage. */
+   ses règles telles quelles dans le balisage.
+   IL NE PREND PAS NON PLUS LA HAUTEUR COMMUNE, et pour la raison qui lui ôte
+   déjà la hauteur maximale : cette hauteur existe pour que les encarts de mise
+   en service des TROIS pages tombent au même niveau, et ce bloc n'a de
+   vis-à-vis nulle part, ni chez Devis ni chez Mail, qui n'ont pas d'état vide
+   de ce genre. Il n'est pas un encart : il ne s'ouvre ni ne se ferme, il vit
+   dans le flux de la page, et ses trois faces sont déjà égalisées entre elles
+   par sa propre .mes-pile, ce qui est tout ce qu'on lui demande. Lui poser
+   490 px de plancher lui donnerait du blanc pour s'aligner sur rien.
+   Le flex-grow que .mes-corps vient de recevoir ne l'atteint pas davantage :
+   le bloc n'est pas une colonne flexible, et une valeur de flex sur l'enfant
+   d'un bloc ordinaire ne veut rien dire. */
 .mes-bloc{
   background:var(--mes-carte);border:1px solid var(--mes-bord);
   border-radius:var(--mes-rayon);overflow:hidden;
@@ -748,7 +800,17 @@ body.outils-deplies .my-link-field.vide{display:flex}
     var(--mes-filet-3) 33.3333% 50%,      var(--mes-filet-4) 50% 66.6667%,
     var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
 }
-.mes-corps{padding:30px 34px 26px;overflow-y:auto}
+/* LE BLANC EN TROP VA AU CORPS.
+   Avec le plancher commun, une carte plus courte que 490 px a du blanc à
+   placer, et c'est le cas des trois à des degrés divers, Mail en tête. Sans
+   flex-grow ici, ce blanc tombait APRÈS le dernier élément de la colonne,
+   c'est-à-dire SOUS le pied, qui se retrouvait à flotter au milieu de la carte
+   (constaté au banc). Le corps prend cette place : le texte reste en haut, le
+   pied redescend au bas de la carte, et rien ne s'écarte ni ne se centre.
+   flex-grow SEUL, et non flex:1 : la base reste sur le contenu, la hauteur
+   naturelle de la carte est donc toujours celle de ce qu'elle porte, et seule
+   la place LIBRE est distribuée. */
+.mes-corps{padding:30px 34px 26px;overflow-y:auto;flex-grow:1}
 
 /* —— LA PILE : LA CARTE NE RESPIRE PLUS AU RYTHME DE SON CONTENU ——
    Les quatre temps du panneau, ses deux groupes d'actions de pied et les trois

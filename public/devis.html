@@ -753,10 +753,13 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    deux gestes et les dimensions, qui ne relèvent pas du dépôt et sortent donc
    du cadre. */
 .mes-logo-pose{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-/* Les mêmes plafonds que la feuille, en pixels d'écran : 60 × 15 mm sous
-   l'oeil, soit 227 × 57 px à 96 dpi. La vignette n'est pas un aperçu
-   approximatif, c'est la taille qu'occupera l'image sur le papier. */
-.mes-logo-cadre img{max-width:227px;max-height:57px;display:block}
+/* Les mêmes plafonds que la feuille, en pixels d'écran : 60 mm de large et
+   20,28 mm de haut sous l'oeil, soit 227 × 77 px à 96 dpi (60 × 3,7794 fait
+   226,76 ; 20,28 × 3,7794 fait 76,64). La vignette n'est pas un aperçu
+   approximatif, c'est la taille qu'occupera l'image sur le papier, et les
+   20,28 mm sont ceux que --doc-type-h donne au bloc de droite de la tête de
+   feuille, dont le logo prend le plafond. */
+.mes-logo-cadre img{max-width:227px;max-height:77px;display:block}
 .mes-logo-dim{font-size:11px;color:var(--mes-surtitre);font-family:var(--mono)}
 /* « Retirer » n'est pas un bouton de même poids que les deux autres : c'est le
    geste qu'on regrette, et il se donne en texte. Reprise du bouton textuel de
@@ -1981,7 +1984,7 @@ function monteIdentiteAuCompte(raisonSociale, siret){
 // et sur du papier, où le détail se voit, l'adoucissement ne se rattrape pas.
 const LOGO_L_MAX = 709;
 const LOGO_H_MAX = 240;
-const LOGO_OCTETS_MAX = 750 * 1024;
+const LOGO_OCTETS_MAX = 1000 * 1024;
 const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 // Les deux refus d'ÉCRITURE, distincts des refus de FICHIER que rédige

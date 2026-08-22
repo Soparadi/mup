@@ -4435,10 +4435,10 @@ app.post('/api/account/profile', async (req, res) => {
 // toutes les autres. Absente, l'identité vaut 401, sans qu'une seule lecture ni
 // écriture ait lieu.
 //
-// AUCUN PARSEUR PROPRE. Le plafond est de 750 Ko d'octets décodés, soit environ
-// 1 Mo en adresse data: ; le parseur global de 10 Mo les porte, et lui en poser
-// un second n'ajouterait qu'un endroit de plus où les deux chiffres peuvent
-// diverger.
+// AUCUN PARSEUR PROPRE. Le plafond est de 1 000 Ko d'octets décodés, soit
+// environ 1,33 Mo en adresse data: ; le parseur global de 10 Mo les porte, et
+// lui en poser un second n'ajouterait qu'un endroit de plus où les deux
+// chiffres peuvent diverger.
 
 const LOGO_COMPTE_VIDE = {
   logo_data_url: null,
@@ -4800,7 +4800,7 @@ app.get('/api/account/privacy/export', async (req, res) => {
       // personnelle comme les autres, et la séparation qui la protège d'une
       // écriture de réglages ne doit pas la faire manquer à son export. Aucun
       // mécanisme de budget ne lui est nécessaire : un enregistrement par
-      // compte, plafonné à 750 Ko (LOGO_OCTETS_MAX dans lib/logo-compte.js).
+      // compte, plafonné à 1 000 Ko (LOGO_OCTETS_MAX dans lib/logo-compte.js).
       account_logo: await dump('account_logo'),
       // mail_signature : table à part de mail_settings, et manquante ici depuis
       // l'origine : le logo et le texte de signature sont des données

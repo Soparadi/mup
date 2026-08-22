@@ -192,6 +192,7 @@
               ainsi que la <a href="https://movup.io/confidentialite" target="_blank" rel="noopener">politique de confidentialité</a>.</span>
           </label>
         </div>
+        <div class="field-err" id="err-cgu"></div>
 
         <div class="field-checkbox">
           <label class="checkbox-label" for="marketing_consent">
@@ -200,7 +201,7 @@
           </label>
         </div>
 
-        <button type="submit" id="btn-submit" class="btn btn-dark" disabled>Créer mon compte</button>
+        <button type="submit" id="btn-submit" class="btn btn-dark">Créer mon compte</button>
       </form>
     </div>
   </div>
@@ -261,7 +262,8 @@
     email: document.getElementById('err-email'),
     telephone: document.getElementById('err-telephone'),
     password: document.getElementById('err-password'),
-    password2: document.getElementById('err-password2')
+    password2: document.getElementById('err-password2'),
+    cgu: document.getElementById('err-cgu')
   }
   var pwStrength = document.getElementById('pw-strength')
   var pwLabel = document.getElementById('pw-label')
@@ -271,6 +273,10 @@
   // SVG œil ouvert / fermé
   var EYE_OPEN = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'
   var EYE_OFF = '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a19.66 19.66 0 0 1 5.06-5.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a19.69 19.69 0 0 1-3.17 4.36"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+
+  // Drapeau unique : passe à vrai au premier clic sur « Créer mon compte » et
+  // commande à lui seul l'affichage des erreurs.
+  var submitted = false
 
   // ── Validators ──
   function vRequired(s){ return typeof s==='string' && s.trim().length > 0 }
@@ -291,13 +297,42 @@
     return Math.min(score, 3)
   }
 
-  function setErr(name, msg){
-    errs[name].textContent = msg || ''
-    inputs[name].classList.toggle('error', !!msg)
+  // Ordre du formulaire — sert au focus sur le premier champ fautif.
+  var FIELD_ORDER = ['prenom','nom','email','telephone','password','password2','cgu']
+
+  // Élément porteur de l'état d'erreur : les six champs texte, plus la case CGU.
+  function fieldEl(name){
+    return name === 'cgu' ? cguCheckbox : inputs[name]
   }
 
-  function validate(showErrors){
+  function setErr(name, msg){
+    if(errs[name]) errs[name].textContent = msg || ''
+    var el = fieldEl(name)
+    if(!el) return
+    el.classList.toggle('error', !!msg)
+    if(msg) el.setAttribute('aria-invalid','true')
+    else el.removeAttribute('aria-invalid')
+  }
+
+  // Point unique des règles : message d'erreur d'un champ, ou '' s'il est valide.
+  function fieldMsg(name){
+    switch(name){
+      case 'prenom': return vRequired(inputs.prenom.value) ? '' : 'Prénom requis.'
+      case 'nom': return vRequired(inputs.nom.value) ? '' : 'Nom requis.'
+      case 'email': return vEmail(inputs.email.value) ? '' : 'Email invalide.'
+      case 'telephone': return vTelFR(inputs.telephone.value) ? '' : 'Numéro français invalide (10 chiffres ou +33).'
+      case 'password': return pwScore(inputs.password.value) > 0 ? '' : '10 caractères minimum, dont au moins 1 lettre et 1 chiffre.'
+      case 'password2': return (inputs.password2.value && inputs.password2.value === inputs.password.value) ? '' : 'Les mots de passe ne correspondent pas.'
+      case 'cgu': return cguCheckbox.checked ? '' : 'Acceptation requise.'
+    }
+    return ''
+  }
+
+  // Validation complète — n'est appelée qu'à la soumission ; elle marque les
+  // champs fautifs et renvoie le premier d'entre eux dans l'ordre du formulaire.
+  function validate(){
     var ok = true
+    var first = null
     var v = {
       prenom: inputs.prenom.value.trim(),
       nom: inputs.nom.value.trim(),
@@ -306,26 +341,12 @@
       password: inputs.password.value,
       password2: inputs.password2.value
     }
-    if(!vRequired(v.prenom)){ ok=false; if(showErrors) setErr('prenom','Prénom requis.') } else setErr('prenom','')
-    if(!vRequired(v.nom)){ ok=false; if(showErrors) setErr('nom','Nom requis.') } else setErr('nom','')
-    if(!vEmail(v.email)){ ok=false; if(showErrors) setErr('email','Email invalide.') } else setErr('email','')
-    if(!vTelFR(v.telephone)){ ok=false; if(showErrors) setErr('telephone','Numéro français invalide (10 chiffres ou +33).') } else setErr('telephone','')
-    var s = pwScore(v.password)
-    if(s === 0){
-      ok=false
-      if(showErrors) setErr('password','10 caractères minimum, dont au moins 1 lettre et 1 chiffre.')
-    } else setErr('password','')
-    if(v.password2 !== v.password || !v.password2){
-      ok=false
-      if(showErrors) setErr('password2','Les mots de passe ne correspondent pas.')
-    } else setErr('password2','')
-    // Acceptation CGU obligatoire — gate le bouton comme les champs requis.
-    if(!cguCheckbox.checked){ ok=false }
-    return { ok: ok, values: v, score: s }
-  }
-
-  function refreshSubmit(){
-    btnSubmit.disabled = !validate(false).ok
+    FIELD_ORDER.forEach(function(name){
+      var msg = fieldMsg(name)
+      if(msg){ ok = false; if(!first) first = name }
+      setErr(name, msg)
+    })
+    return { ok: ok, values: v, score: pwScore(v.password), first: first }
   }
 
   function refreshStrength(){
@@ -362,31 +383,26 @@
     })
   })
 
-  // ── Live validation : fait sauter l'erreur dès que l'utilisateur corrige ──
+  // ── Live validation ──
+  // Tant que le formulaire n'a pas été soumis une première fois, rien ne
+  // s'allume : on se contente d'effacer une erreur déjà posée dès qu'elle
+  // n'a plus lieu d'être. Après la première tentative, chaque champ redevient
+  // vivant — mais chacun pour lui seul, jamais ses voisins.
   Object.keys(inputs).forEach(function(name){
     inputs[name].addEventListener('input', function(){
       if(name === 'password') refreshStrength()
-      // n'affiche pas d'erreur tant que l'utilisateur tape, mais retire celles déjà affichées si OK
-      if(errs[name].textContent){
-        var v = validate(false)
-        if(name === 'password' && v.score > 0) setErr('password','')
-        if(name === 'password2' && inputs.password2.value === inputs.password.value && inputs.password2.value) setErr('password2','')
-        if(name === 'prenom' && vRequired(inputs.prenom.value)) setErr('prenom','')
-        if(name === 'nom' && vRequired(inputs.nom.value)) setErr('nom','')
-        if(name === 'email' && vEmail(inputs.email.value)) setErr('email','')
-        if(name === 'telephone' && vTelFR(inputs.telephone.value)) setErr('telephone','')
-      }
-      refreshSubmit()
+      if(submitted) setErr(name, fieldMsg(name))
+      else if(errs[name].textContent && !fieldMsg(name)) setErr(name, '')
     })
     inputs[name].addEventListener('blur', function(){
-      // À la sortie d'un champ touché, on affiche l'erreur si invalide
-      if(inputs[name].value) validate(true)
-      refreshSubmit()
+      if(submitted) setErr(name, fieldMsg(name))
     })
   })
 
-  // Cocher/décocher les CGU réévalue l'état du bouton.
-  cguCheckbox.addEventListener('change', refreshSubmit)
+  // Cocher/décocher les CGU réévalue la seule case, après la première tentative.
+  cguCheckbox.addEventListener('change', function(){
+    if(submitted) setErr('cgu', fieldMsg('cgu'))
+  })
 
   function setAlert(type, msg){
     alertBox.className = 'alert alert-' + type
@@ -398,10 +414,14 @@
   // ── Submit ──
   form.addEventListener('submit', function(ev){
     ev.preventDefault()
+    submitted = true
     clearAlert()
-    var v = validate(true)
-    refreshSubmit()
-    if(!v.ok){ return }
+    var v = validate()
+    if(!v.ok){
+      var faulty = fieldEl(v.first)
+      if(faulty) faulty.focus()
+      return
+    }
 
     btnSubmit.disabled = true
     btnSubmit.innerHTML = '<span class="spinner"></span> Création en cours…'
@@ -459,8 +479,6 @@
     })
   })
 
-  // Init
-  refreshSubmit()
 })()
 </script>
 </body>

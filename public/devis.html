@@ -176,7 +176,7 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .doc-date{font-size:10.5px;color:var(--muted2)}
 
 /* APERÇU CENTRE */
-.preview-col{display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);overflow:hidden;position:relative}
+.preview-col{display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);overflow:hidden}
 /* La colonne d'aperçu n'a plus de barre. Les règles .preview-toolbar,
    .preview-title et .preview-btn sont parties avec elle plutôt que de
    rester à décrire un élément que la page n'écrit plus. Le titre
@@ -191,31 +191,6 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 .preview-scroll{flex:1;overflow-y:auto;padding:24px;display:flex;justify-content:center;align-items:flex-start}
 .preview-scroll::-webkit-scrollbar{width:3px}
 .preview-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
-
-/* LE VOILE DE CAPTURE. Pendant la seconde à trois secondes du rendu,
-   body.doc-sortie neutralise le zoom d'aperçu sur la page VIVANTE : la
-   feuille saute à 100 % et se fait rogner par sa colonne. On ne la
-   déplace pas pour autant, on la COUVRE. La sortir du champ créerait une
-   seconde mise en page à tenir vraie, ce que le gabarit A4 s'interdit
-   depuis qu'il tient en un seul endroit.
-   Le vêtement n'est pas inventé : rgba(0,0,0,.45) et blur(3px) sont les
-   valeurs de .list-scrim et de .mupc-overlay. Un seul voile pour
-   l'abonné, quoi qui se pose dessus. Le préfixe -webkit- accompagne le
-   flou : sans lui, Safari affiche un noir plat.
-   Il se cale sur la COLONNE, pas sur la fenêtre : position:absolute et
-   inset:0 dans .preview-col, devenue bloc conteneur par un simple
-   position:relative, comme .list-slot l'est déjà pour son tiroir. Rien
-   n'est mesuré, rien n'est déplacé.
-   Il n'est PAS dans .preview-scroll, et ce n'est pas un détail : le
-   défilement du conteneur le ferait glisser avec le document, et la
-   molette passerait au travers.
-   Il intercepte le pointeur et n'offre aucune sortie, ni clic ni Échap.
-   Le geste dure trois secondes au plus et le verrou de fond reste
-   pdfEnCours, dans exportPDF. cursor:progress dit l'attente sans
-   promettre un clic qui ne ferait rien.
-   z-index:5 : au-dessus de la feuille, sous le tiroir de liste (39, 40),
-   sous le message d'échec (999), sous les dialogues (50000). */
-.pdf-voile{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);cursor:progress}
 
 /* ================================================================ */
 /* LE DOCUMENT — UNE FEUILLE A4, DITE EN MILLIMÈTRES                */
@@ -806,11 +781,19 @@ body #mup-cookie-panel{z-index:60001}
 /* colonne d'aperçu, avec l'ombre portée et le rayon d'écran cuits  */
 /* dans l'image, sans que personne ne s'en avise.                   */
 /*                                                                  */
-/* Les deux sorties posent la MÊME classe sur <body> : la capture   */
-/* le temps du rendu (exportPDF), l'impression le temps de la       */
-/* feuille (les écouteurs beforeprint et afterprint, qui couvrent   */
-/* window.print comme Ctrl+P et le menu du navigateur). Une valeur, */
-/* deux consommateurs.                                              */
+/* Les deux sorties posent la MÊME classe, mais plus au même        */
+/* endroit. L'impression la pose sur <body>, le temps de la feuille */
+/* (les écouteurs beforeprint et afterprint, qui couvrent           */
+/* window.print comme Ctrl+P et le menu du navigateur). La capture, */
+/* elle, ne touche plus à <body> : elle la pose sur le CONTENEUR du */
+/* clone qu'elle rasterise, et l'aperçu garde son zoom.             */
+/*                                                                  */
+/* D'où le sélecteur : .doc-sortie et non body.doc-sortie. Un       */
+/* descendant, quel que soit l'ancêtre qui porte la classe, est la  */
+/* forme la plus simple qui couvre les deux poses. <body> étant un  */
+/* ancêtre de la feuille vivante, l'impression continue de recevoir */
+/* les cinq déclarations comme avant, sans rien perdre. Le corps de */
+/* règle, lui, ne bouge pas : une valeur, deux consommateurs.       */
 /* ================================================================ */
 
 /* LE DÉCOR D'ÉCRAN PART, LA HAUTEUR MINIMALE RESTE, d'un cheveu
@@ -862,7 +845,7 @@ body #mup-cookie-panel{z-index:60001}
    c'est le seul cas où elle a un sens. Les coupures restent l'affaire
    du § 4 de la feuille d'impression, et de pagesDuDocument pour le
    fichier. */
-body.doc-sortie .doc-paper {
+.doc-sortie .doc-paper {
   min-height: 296mm;
   zoom: 1;
   margin: 0;
@@ -885,8 +868,34 @@ body.doc-sortie .doc-paper {
    ouvre le temps du logo dans l'encart) et il porte donc les mêmes marques
    d'écran, qui n'ont rien à faire à la sortie. L'image, elle, RESTE : c'est
    le document. */
-body.doc-sortie .doc-emetteur,
-body.doc-sortie .doc-logo { cursor: auto; outline: none; }
+.doc-sortie .doc-emetteur,
+.doc-sortie .doc-logo { cursor: auto; outline: none; }
+
+/* L'ÉTABLI DE CAPTURE : là où le clone est posé le temps du rendu, et le
+   second porteur de la classe.
+   Ce que la doctrine fait au document, elle le fait désormais à une COPIE.
+   Posée sur <body>, elle retirait son zoom à la feuille VIVANTE, qui sautait
+   à 100 % sous les yeux de l'abonné, rognée par sa colonne, deux secondes
+   durant. Un voile couvrait ce saut ; il ne traitait qu'un symptôme. La
+   feuille de l'aperçu ne bouge plus d'un pixel, il n'y a plus rien à
+   couvrir, et « Préparation… » sur le bouton redevient le seul signal, là
+   où le geste a eu lieu.
+
+   HORS DU CHAMP, JAMAIS MASQUÉ, et la nuance est tout le bloc.
+   display:none et visibility:hidden supprimeraient la boîte ou son rendu :
+   plus de largeur à lire pour pxParMm, plus de frontières de bloc pour la
+   découpe en pages, et une toile vide. Le retrait par la gauche laisse la
+   boîte entière, mesurable et rasterisable ; elle n'est simplement nulle
+   part sur l'écran.
+
+   position:fixed, et non absolute : l'établi est un enfant de <body>, et un
+   fixed ne participe à aucun flux ni à aucune hauteur de document, pas même
+   sous la feuille d'impression qui remet <body> en display:block. Il ne
+   porte NI largeur NI hauteur : c'est .doc-paper qui dit 210mm, comme dans
+   la colonne d'aperçu, et l'établi se contente de ce que son contenu prend.
+   pointer-events:none par principe, une boîte à -10000px n'attrapant de
+   toute façon rien. */
+.pdf-etabli{position:fixed;top:0;left:-10000px;pointer-events:none}
 
 /* ================================================================ */
 /* FEUILLE D'IMPRESSION — le document, seul                         */
@@ -974,12 +983,15 @@ body.doc-sortie .doc-logo { cursor: auto; outline: none; }
      gris pleine feuille. Ce chemin est étroit — printDoc refuse tant que
      l'identité manque, et la page est inerte sous l'encart — mais Ctrl+P
      et l'impression du navigateur ne passent par aucun des deux.
-     .pdf-voile suit la même règle pour la même raison, à ceci près qu'il
-     ne vit que le temps d'une capture : un Ctrl+P lancé pendant ces trois
-     secondes sortirait, lui aussi, un voile gris pleine feuille. */
+     .pdf-etabli ferme la liste, pour une raison voisine et non pour la
+     même : il ne vit que le temps d'une capture, mais pendant ces trois
+     secondes la page contient un SECOND .doc-paper, que rien d'autre ici
+     ne masque. Son conteneur est hors champ à gauche et n'apparaîtrait
+     sans doute sur aucune feuille ; sans doute ne suffit pas quand la
+     ligne ne coûte qu'un mot. */
   .sidebar,
   .mes-voile,
-  .pdf-voile,
+  .pdf-etabli,
   .list-slot,
   .list-col,
   .list-rail,
@@ -1004,10 +1016,12 @@ body.doc-sortie .doc-logo { cursor: auto; outline: none; }
      mais perdent leur curseur et leur anneau de focus. Ces règles ne sont
      plus écrites ici : elles valent AUSSI pour la capture PDF, que
      @media print n'atteint pas, et elles vivent donc en un seul endroit,
-     sous body.doc-sortie, à la section DOCTRINE PAPIER qui précède ce bloc.
+     sous .doc-sortie, à la section DOCTRINE PAPIER qui précède ce bloc.
      L'impression les reçoit par la classe, qu'un écouteur beforeprint pose
      sur <body> avant que le moteur ne prenne la page et qu'afterprint
-     retire. Le § 3 existe donc toujours, il est simplement ailleurs. */
+     retire ; le sélecteur n'exige pas <body>, il exige un ancêtre, et
+     <body> en est un. Le § 3 existe donc toujours, il est simplement
+     ailleurs. */
 
   /* print-color-adjust est parti avec le bandeau de validité. Il levait
      le blanchiment que les navigateurs appliquent aux fonds, et le
@@ -4374,7 +4388,9 @@ function refusDeSortie(verbe) {
 // les TROIS chemins d'impression, le bouton, Ctrl+P et le menu du navigateur :
 // window.print() déclenche l'événement au même titre que les deux autres, et
 // le moteur ne prend la page qu'une fois l'écouteur revenu. afterprint la
-// retire. La capture PDF pose et retire la même classe de son côté.
+// retire. La capture PDF pose la même classe, mais sur le conteneur de son
+// clone et jamais sur <body> : l'aperçu ne doit pas bouger pendant qu'elle
+// travaille. Le sélecteur, en .doc-sortie, reçoit les deux poses.
 addEventListener('beforeprint', function(){ document.body.classList.add('doc-sortie'); });
 addEventListener('afterprint', function(){ document.body.classList.remove('doc-sortie'); });
 
@@ -4611,30 +4627,20 @@ async function exportPDF() {
     bouton.textContent = 'Préparation…';
   }
 
-  // LA COLONNE D'APERÇU REVIENT EN TÊTE le temps du rendu, et repart où elle
-  // était. html2canvas rasterise un CLONE de la page, et un clone ne reçoit
-  // pas le défilement interne d'un conteneur : la feuille s'y retrouverait
-  // décalée de ce que l'abonné avait fait défiler, et la capture prendrait
-  // le mauvais morceau.
-  const colonne = document.querySelector('.preview-scroll');
-  const defilementAvant = colonne ? colonne.scrollTop : 0;
-  let classePosee = false;
-
-  // LE VOILE, fabriqué ici et posé plus bas. Il couvre la colonne d'aperçu
-  // le temps du rendu : body.doc-sortie va neutraliser le zoom sur la page
-  // VIVANTE, et la feuille sauterait à 100 % sous les yeux de l'abonné,
-  // rognée par sa colonne. Elle n'est pas déplacée pour autant, elle est
-  // couverte : la sortir du champ demanderait une seconde mise en page.
-  // Il n'entre pas dans la capture. html2canvas ne peint que le sous-arbre
-  // de l'élément qu'on lui passe, et le voile est posé hors de #doc-paper,
-  // dans .preview-col. Les frères du clone servent la mise en page, pas le
-  // raster.
-  // Aucun écouteur : ni clic, ni Échap. Ce voile n'a pas de sortie, il a
-  // une fin. aria-hidden parce qu'il ne dit rien qu'un lecteur d'écran ait
-  // à entendre : c'est le bouton, passé en aria-busy, qui l'annonce.
-  const voile = document.createElement('div');
-  voile.className = 'pdf-voile';
-  voile.setAttribute('aria-hidden', 'true');
+  // L'ÉTABLI est déclaré ici, hors du try, pour que le finally l'atteigne
+  // même si la capture tourne court avant de l'avoir posé. Il est fabriqué
+  // plus bas, une fois les bibliothèques et les fontes acquises.
+  //
+  // CE QUI A DISPARU DE CE PRÉAMBULE, et pourquoi. La remise à zéro du
+  // défilement de .preview-scroll y tenait le premier rôle : le clone
+  // interne de html2canvas ne reçoit pas le scrollTop d'un conteneur, et la
+  // feuille vivante, qui vit AU FOND de ce conteneur, s'y retrouvait
+  // décalée. Le clone que la capture se fabrique désormais naît enfant de
+  // <body>, dans une boîte fixe : il n'est au fond d'aucun conteneur
+  // défilant, il ne subit aucun défilement, et il n'y a donc plus ni remise
+  // à zéro à faire ni position à restituer. Le voile est parti pour la
+  // raison écrite à .pdf-etabli : la feuille de l'aperçu ne bouge plus.
+  let etabli = null;
 
   try {
     await bibliothequesPdf();
@@ -4644,25 +4650,44 @@ async function exportPDF() {
     // l'erreur dans une image que l'abonné enverra.
     try { if(document.fonts && document.fonts.ready) await document.fonts.ready; } catch(e) {}
 
-    // Il naît AVANT tout ce qui touche à l'aperçu, le défilement comme le
-    // zoom, jamais après : entre les deux, la feuille serait à découvert, et
-    // l'abonné la verrait remonter avant que le voile arrive.
-    if(colonne && colonne.parentNode) colonne.parentNode.appendChild(voile);
-    if(colonne) colonne.scrollTop = 0;
-    // La classe neutralise le zoom d'aperçu. Elle doit être posée sur la page
-    // VIVANTE et pas seulement sur le clone : html2canvas mesure la feuille
-    // sur l'original et la dessine d'après le clone, et un zoom qui ne vaut
-    // pas la même chose des deux côtés recadre la capture de travers.
-    document.body.classList.add('doc-sortie');
-    classePosee = true;
-
-    const feuille = document.getElementById('doc-paper');
-    if(!feuille) throw new Error('feuille absente');
+    // LA CAPTURE PORTE SUR UN CLONE, ET C'EST TOUT LE CHANGEMENT. La feuille
+    // que l'abonné regarde n'est plus touchée : ni son zoom, ni son
+    // défilement, ni son décor. Ce qui est rasterisé est une copie posée sur
+    // l'établi, hors du champ visible, dont le conteneur porte la doctrine
+    // papier.
+    //
+    // CE N'EST PAS LA SECONDE MISE EN PAGE que le gabarit A4 s'interdit.
+    // cloneNode(true) est une copie faite par le navigateur : même sous-arbre,
+    // mêmes feuilles de style, mêmes règles appliquées. Aucune valeur n'est
+    // recopiée en JS, donc rien ne peut diverger au prochain réglage du
+    // gabarit. Le logo suit : c'est une data URL, elle vit dans l'attribut
+    // src et se clone avec lui, sans second chargement. Les fontes sont
+    // locales et déjà posées, document.fonts.ready vient de l'attendre.
+    //
+    // L'ID NE SE CLONE PAS. Un id est unique dans un document : deux
+    // #doc-paper feraient répondre getElementById au premier venu dans
+    // l'ordre du document, et refusDeSortie comme renderPreview interrogent
+    // la page par cet id. Le clone le perd, et cela ne coûte rien au rendu :
+    // la feuille de style ne connaît que .doc-paper, l'id n'ayant jamais été
+    // qu'une poignée pour le script. C'est aussi le seul id du sous-arbre,
+    // le gabarit n'en écrivant pas d'autre.
+    const vivante = document.getElementById('doc-paper');
+    if(!vivante) throw new Error('feuille absente');
+    const feuille = vivante.cloneNode(true);
+    feuille.removeAttribute('id');
+    etabli = document.createElement('div');
+    etabli.className = 'pdf-etabli doc-sortie';
+    etabli.setAttribute('aria-hidden', 'true');
+    etabli.appendChild(feuille);
+    document.body.appendChild(etabli);
 
     const cadre = feuille.getBoundingClientRect();
     // Le rapport pixel/millimètre se LIT sur la feuille au lieu d'être
     // supposé : elle mesure 210mm de large par construction, et c'est le
-    // navigateur qui dit ce que cela fait en pixels CSS.
+    // navigateur qui dit ce que cela fait en pixels CSS. C'est le CLONE
+    // qui est mesuré ici, comme il l'est par pagesDuDocument juste après :
+    // le zoom d'aperçu ne vaut pas 1 sur la feuille vivante, et mesurer
+    // l'une pour rasteriser l'autre recadrerait la capture de travers.
     const pxParMm = cadre.width / PDF_LARGEUR_MM;
     const pages = pagesDuDocument(feuille, pxParMm);
 
@@ -4685,16 +4710,17 @@ async function exportPDF() {
       // haut-gauche de la feuille, jamais une coordonnée de document. Passer
       // cadre.left doublait ce décalage et poussait la fenêtre de cadrage hors
       // de la feuille : au banc, toutes les pages de cette branche revenaient
-      // BLANCHES. Zéro pixel d'encre, et rien pour le signaler, la toile étant
-      // remplie de blanc par backgroundColor. Mesuré au banc : à x = 0 et
-      // y = p.haut, chaque bande rend la tranche que la voie d'un seul raster
-      // découpe au même endroit. La première page en est le pixel exact ; les
-      // suivantes partent d'une coupe fractionnaire (1075,609 pixels CSS, soit
-      // 3226,83 pixels d'image à l'échelle 3) et rejouent donc leur
-      // anticrénelage un tiers de pixel plus haut : écart moyen mesuré de 0,55
-      // sur 255, et exactement zéro dès que la coupe tombe sur un pixel
-      // d'image entier. C'est une différence de rendu, pas de cadrage, et elle
-      // ne se voit qu'en comparant les deux branches pixel à pixel.
+      // BLANCHES, sur la feuille vivante comme sur le clone. Zéro pixel
+      // d'encre, et rien pour le signaler, la toile étant remplie de blanc par
+      // backgroundColor. Mesuré des deux côtés : à x = 0 et y = p.haut, chaque
+      // bande rend la tranche que la voie d'un seul raster découpe au même
+      // endroit. La première page en est le pixel exact ; les suivantes
+      // partent d'une coupe fractionnaire (1075,609 pixels CSS, soit 3226,83
+      // pixels d'image à l'échelle 3) et rejouent donc leur anticrénelage un
+      // tiers de pixel plus haut : écart moyen mesuré de 0,55 sur 255, et
+      // exactement zéro dès que la coupe tombe sur un pixel d'image entier.
+      // C'est une différence de rendu, pas de cadrage, et elle ne se voit
+      // qu'en comparant les deux branches pixel à pixel.
       //
       // scrollX et scrollY sont partis avec l'erreur qu'ils accompagnaient :
       // ils corrigeaient un défilement de fenêtre dans un repère qui n'est pas
@@ -4754,12 +4780,11 @@ async function exportPDF() {
     // cas, et c'est lui que l'abonné a besoin de lire.
     showToast(MOTIF_PDF_INDISPONIBLE);
   } finally {
-    if(classePosee) document.body.classList.remove('doc-sortie');
-    if(colonne) colonne.scrollTop = defilementAvant;
-    // Sur le même chemin que les deux lignes précédentes, et pour la même
-    // raison : une capture qui tourne court ne doit jamais laisser le voile
-    // sur place. remove() ne fait rien s'il n'a jamais été posé.
-    voile.remove();
+    // Sur le même chemin que le verrou et le vêtement du bouton, et pour la
+    // même raison : une capture qui tourne court, une bibliothèque absente,
+    // une toile refusée, ne doit jamais laisser le clone sur place. La garde
+    // couvre le cas où l'échec précède la pose.
+    if(etabli) etabli.remove();
     pdfEnCours = false;
     if(bouton) {
       bouton.innerHTML = vetement;

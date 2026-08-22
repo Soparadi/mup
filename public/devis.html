@@ -291,7 +291,37 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    margin-left:auto, qui pousse le bloc à droite dès lors qu’il porte une
    largeur propre. */
 .doc-paper{width:210mm;min-height:297mm;padding:14mm;flex-shrink:0;display:flex;flex-direction:column;zoom:var(--doc-zoom,1);background:#fff;border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.12);font-family:var(--font)}
-.doc-paper-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8.47mm;padding-bottom:6.35mm;border-bottom:2px solid var(--text)}
+/* LA TÊTE DE FEUILLE A UNE HAUTEUR, ET ELLE NE VARIE PLUS D'UNE PIÈCE À
+   L'AUTRE. Le bloc de droite prenait la hauteur de ce qu'il portait : quatre
+   lignes sur un devis complet, trois sur une facture, trois encore sur un devis
+   sans numéro ou sans date de validité. Le filet qui ferme la tête de feuille
+   montait et descendait avec lui, et deux pièces du même compte ne se
+   ressemblaient pas. Il prend désormais la hauteur de ses QUATRE lignes au
+   complet, toujours, et la place d'une ligne absente reste vide. Les lignes,
+   elles, restent calées en haut : c'est le flux normal du bloc, rien ne les y
+   force.
+
+   D'OÙ VIENT LA VALEUR, ET ELLE N'EST PAS RECOPIÉE D'UNE MESURE. Elle est la
+   somme des corps déclarés quelques lignes plus bas et des marges qui les
+   séparent, et de rien d'autre :
+       (5,82 + 3,18 + 2,91 + 2,91) mm de corps × 1,28 de hauteur de ligne
+     +  0,79 + 0,26 + 0,26          mm de marges
+     = 20,28 mm
+   LA HAUTEUR DE LIGNE EST POSÉE ICI, elle n'est plus laissée à `normal`, et
+   c'est ce qui rend la somme calculable. `normal` ne vaut pas un nombre : il
+   vaut ce que les métriques de la fonte disent, 1,273 du corps pour Geist,
+   1,331 pour Geist Mono, et une troisième valeur encore pour la fonte de
+   secours qu'affiche le navigateur le temps que les nôtres arrivent, puisque
+   fonts.css les sert en font-display:swap. Une hauteur FIXE remplie de lignes
+   de hauteur INCONNUE est un débordement qui attend son jour : le texte
+   passerait par-dessus le filet. 1,28 tient les deux métriques réelles à moins
+   d'un dixième de millimètre par ligne, et la boîte ne dépend plus de la fonte
+   effectivement chargée.
+   ELLE VIT SUR .doc-paper-hdr, et non sur le bloc de droite, parce que le logo
+   la lit aussi : une propriété personnalisée descend, et les deux cellules de
+   la tête de feuille sont ses filles. Une valeur, deux lecteurs, un seul
+   endroit où la corriger. */
+.doc-paper-hdr{--doc-type-lh:1.28;--doc-type-h:calc(var(--doc-type-lh)*(5.82mm + 3.18mm + 2.91mm + 2.91mm) + .79mm + .26mm + .26mm);display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8.47mm;padding-bottom:6.35mm;border-bottom:2px solid var(--text)}
 /* LE LOGO EN TÊTE DE FEUILLE, ET C'EST UNE IMAGE, PLUS UN TITRE.
    Cette règle habillait une ligne de texte : la raison sociale, écrite en gros
    à l'emplacement de la marque. Elle n'y paraît plus. SANS LOGO, LA TÊTE DE
@@ -304,7 +334,11 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    print-color-adjust : voir le § 3 du bloc d'impression, où la consigne est partie
    avec le bandeau de validité. Un logo posé en background-image en aurait
    besoin et sortirait blanchi sans elle ; une image, elle, s'imprime.
-   LES DEUX PLAFONDS SONT LA TAILLE ARRÊTÉE, 60 × 15 mm, et les bornes
+   LES DEUX PLAFONDS SONT LA TAILLE ARRÊTÉE : 60 mm de large, et en hauteur
+   celle du bloc de droite, --doc-type-h, posée sur .doc-paper-hdr juste
+   au-dessus, soit 20,28 mm. Le logo ne porte plus de hauteur à lui : il prend
+   pour plafond celui du bloc qui lui fait face, et c'est ce bloc, désormais de
+   hauteur constante, qui donne sa hauteur à la tête de feuille. Les bornes
    d'ENCODAGE de lib/logo-compte.js s'en déduisent à 300 dpi. Ni largeur ni
    hauteur ne sont imposées : deux maximums suffisent à contraindre une image en
    préservant ses proportions, et ils ne l'agrandissent jamais au-delà de sa
@@ -318,11 +352,11 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
    LE CURSEUR, ENFIN, ET LUI SEUL, sur la doctrine de .doc-emetteur juste plus
    bas : la zone qui MONTRE le logo est celle qui l'ÉDITE, et elle le dit au
    survol sans poser le vocabulaire de l'application sur la pièce de l'abonné. */
-.doc-logo{display:block;max-width:60mm;max-height:15mm;cursor:pointer}
-.doc-paper-type{text-align:right}
-.doc-paper-type-label{font-size:5.82mm;font-weight:900;letter-spacing:-.13mm;color:var(--text)}
-.doc-paper-num{font-size:3.18mm;font-weight:600;font-family:var(--mono);color:var(--muted);margin-top:.79mm}
-.doc-paper-date{font-size:2.91mm;color:var(--muted2);margin-top:.26mm}
+.doc-logo{display:block;max-width:60mm;max-height:var(--doc-type-h);cursor:pointer}
+.doc-paper-type{text-align:right;height:var(--doc-type-h)}
+.doc-paper-type-label{font-size:5.82mm;line-height:var(--doc-type-lh);font-weight:900;letter-spacing:-.13mm;color:var(--text)}
+.doc-paper-num{font-size:3.18mm;line-height:var(--doc-type-lh);font-weight:600;font-family:var(--mono);color:var(--muted);margin-top:.79mm}
+.doc-paper-date{font-size:2.91mm;line-height:var(--doc-type-lh);color:var(--muted2);margin-top:.26mm}
 .doc-parties{display:grid;grid-template-columns:1fr 1fr;gap:6.35mm;margin-bottom:7.41mm}
 .doc-party-label{font-size:2.38mm;font-weight:700;text-transform:uppercase;letter-spacing:.4mm;color:var(--muted2);margin-bottom:1.59mm}
 .doc-party-name{font-size:3.7mm;font-weight:700;color:var(--text);margin-bottom:.53mm}
@@ -1934,16 +1968,19 @@ function monteIdentiteAuCompte(raisonSociale, siret){
 // après l'aller-retour plutôt qu'avant), jamais la sûreté : le serveur relit le
 // logo, tranche sur les octets décodés et refuse pour son propre compte.
 //
-// 709 × 177 SONT 60 × 15 MM À 300 DPI, et rien d'autre : 60 ÷ 25,4 × 300 fait
-// 708,66, 15 ÷ 25,4 × 300 fait 177,17. C'est la taille arrêtée sur la feuille,
-// portée à la définition d'une impression de bureau.
+// 709 × 240 SONT 60 × 20,28 MM À 300 DPI, et rien d'autre : 60 ÷ 25,4 × 300
+// fait 708,66, et 20,28 ÷ 25,4 × 300 fait 239,52. C'est la taille arrêtée sur
+// la feuille, portée à la définition d'une impression de bureau. Les 20,28 mm
+// ne sont pas un chiffre rond : c'est la hauteur du bloc de droite de la tête
+// de feuille, dérivée de ses corps et de ses marges dans la feuille de style
+// de cette page, et dont le logo prend le plafond.
 //
 // AUCUN FACTEUR DE DENSITÉ ICI, à la différence de la signature de courriel qui
 // encode au double de son affichage. La consigne est que l'image ne soit JAMAIS
 // agrandie au-delà de sa taille naturelle : doubler un petit logo l'agrandirait,
 // et sur du papier, où le détail se voit, l'adoucissement ne se rattrape pas.
 const LOGO_L_MAX = 709;
-const LOGO_H_MAX = 177;
+const LOGO_H_MAX = 240;
 const LOGO_OCTETS_MAX = 750 * 1024;
 const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
@@ -2036,7 +2073,7 @@ function metLogoAuFormat(fichier){
       img.onload = function(){
         const l = img.naturalWidth, h = img.naturalHeight;
         if(!l || !h){ reject('Ce fichier ne s\'ouvre pas comme une image.'); return; }
-        // Le facteur est plafonné à 1 : l'image entre dans 709 × 177 en gardant
+        // Le facteur est plafonné à 1 : l'image entre dans 709 × 240 en gardant
         // ses proportions, et n'est JAMAIS agrandie. Un logo plus petit que la
         // boîte reste à sa taille, ici comme sur la feuille, où les deux
         // maximums en millimètres font exactement le même travail.

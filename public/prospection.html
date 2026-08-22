@@ -76,30 +76,32 @@ body {
 .sb-icon { width: 22px; height: 22px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; flex-shrink: 0; }
 .sb-badge { margin-left: auto; font-size: 9px; font-weight: 800; font-family: var(--mono); background: var(--text); color: #fff; border-radius: 6px; padding: 1px 6px; }
 
-main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display: flex; flex-direction: column; flex: 1; min-width: 0; }
-
-/* CADRE UNIQUE — patron .hero-leads-tool (index.html) : un seul conteneur
-   blanc, bordure, rayon, ombre, overflow:hidden ; marge latérale + verticale
-   laissant voir le fond #F5F5F7. Il porte la gouttière et le centrage
-   autrefois sur .search-engine. Empilement assuré par .content-area (commit 1). */
-.prospect-frame {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 28px;                 /* = --radius-xl vitrine */
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 12px 40px rgba(0,0,0,.06), 0 32px 80px rgba(0,0,0,.08);
-  max-width: 1300px;
-  width: calc(100% - 96px);
-  margin: 24px auto;
+/* GOUTTIERES LATERALES : patron .dash-content (dashboard.html). La page prend
+   toute la largeur de main, et c'est main qui porte le retrait lateral de 36px.
+   Plus de carte flottante : ni largeur bornee, ni marge, ni bordure, ni rayon,
+   ni ombre, ni fond distinct du fond de page. .search-engine et .content-area
+   sont desormais des enfants directs de main. */
+main {
+  padding-top: 0;
+  padding-bottom: calc(var(--app-footer-h) + 16px);
+  padding-left: 36px; padding-right: 36px;
+  display: flex; flex-direction: column; flex: 1; min-width: 0;
 }
 
 /* ═══════════════════════════════════════════════
    SEARCH ENGINE
 ═══════════════════════════════════════════════ */
+/* Le retrait lateral (32px) est parti sur main avec la gouttiere de page : il
+   ne reste ici que le retrait vertical, sinon les deux s'additionneraient et le
+   formulaire ne serait plus aligne sur la carte et les fiches.
+   position/z-index : la liste de suggestions (.acd) deborde desormais vers la
+   droite et vers le bas ; cette pile la fait passer au-dessus de .content-area,
+   dont .map-col ouvre son propre contexte d'empilement (isolation: isolate). */
 .search-engine {
+  position: relative; z-index: 20;
   background: var(--card);
   border-bottom: 1px solid var(--border);
-  padding: 28px 32px 24px;
+  padding: 28px 0 24px;
 }
 /* Simple enveloppe centrée : toute la disposition est portée par la grille,
    comme .leads-config sur la vitrine. Plus de flex-wrap ici — c'était lui qui
@@ -155,8 +157,20 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 .sip .clr.show { display: flex; }
 
 /* autocomplete dropdown */
+/* Liste de suggestions : elle n'est plus bornee par la largeur du champ. Ancree
+   a gauche (right:auto), elle part de la largeur de la piste (min-width:100%)
+   et s'elargit vers la droite autant qu'il faut pour rendre un libelle de code
+   APE sur un seul rang (width:max-content), jusqu'a un plafond de 520px. Au
+   dela, c'est .acd-label qui ellipse. 520px : la plus longue etiquette NAF
+   utile (« Commerce de detail d'optique », « Autres activites de soutien aux
+   entreprises n.c.a. ») tient dessous, et la liste reste dans le contenu de la
+   page a 1440 (colonne principale : 1440 - 220 de rail - 72 de gouttieres,
+   soit 1148px, pour une piste ancree a l'extreme gauche).
+   C'est une surimpression : elle passe au-dessus de la carte et des fiches,
+   pile assuree par .search-engine (position:relative; z-index:20). */
 .acd {
-  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+  position: absolute; top: calc(100% + 6px); left: 0; right: auto;
+  min-width: 100%; width: max-content; max-width: 520px;
   background: var(--card); border: 1.5px solid var(--border);
   border-radius: 14px; box-shadow: 0 16px 48px rgba(0,0,0,.15);
   z-index: 500; max-height: 300px; overflow-y: auto; display: none;
@@ -164,10 +178,14 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 .acd.open { display: block; }
 .acd::-webkit-scrollbar { width: 4px; }
 .acd::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+/* white-space:nowrap : l'intitule de section se rendait sur deux rangs quand la
+   liste avait la largeur du champ, et sa derniere lettre tombait sous le
+   letter-spacing. Il compte maintenant dans le width:max-content de .acd. */
 .acd-sec {
   padding: 8px 12px 4px; font-size: 10px; font-weight: 700;
   letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted2);
   background: var(--surface); border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 .acd-item {
   display: flex; align-items: center; gap: 10px;
@@ -182,7 +200,13 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
   border: 1px solid var(--border); border-radius: 5px;
   padding: 2px 6px; flex-shrink: 0;
 }
-.acd-label { font-size: 13px; font-weight: 500; flex: 1; line-height: 1.3; }
+/* Un seul rang, ellipse au plafond de .acd, au lieu du repli sur trois lignes.
+   min-width:0 : sans lui l'element flex refuse de descendre sous la largeur de
+   son texte et l'ellipse ne se declenche jamais. */
+.acd-label {
+  font-size: 13px; font-weight: 500; flex: 1; min-width: 0; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .acd-hl { background: #FEF08A; border-radius: 2px; padding: 0 1px; }
 .acd-empty { padding: 20px; text-align: center; font-size: 13px; color: var(--muted2); }
 
@@ -259,7 +283,7 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
    rouvre le bloc complet en un clic, toutes les valeurs intactes : aucune perte
    de fonction, tout ce qui est saisissable reste atteignable. */
 .search-summary { display: none; }
-.search-engine.collapsed { padding: 12px 20px; }
+.search-engine.collapsed { padding: 12px 0; }
 .search-engine.collapsed .search-bar,
 .search-engine.collapsed .sfooter { display: none; }
 .search-engine.collapsed .search-summary {
@@ -611,14 +635,14 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 
   /* 1 — Formulaire en colonne unique (ordre vitrine : Secteur → Région →
      Département → Ville → Lancer → identifiant, déjà l'ordre du DOM).
-     Le palier 1330 laisserait la grille à « 1fr 1fr auto » (l.232) : on force
+     Le palier 1330 laisserait la grille à « 1fr 1fr auto » : on force
      une colonne. width:100% car .search-bar centre son enfant
-     (justify-content:center, l.96) — sans ça la grille garderait sa largeur
-     de contenu au lieu de remplir. La carte de formulaire perd sa gouttière
-     desktop (calc(100% - 96px)) et resserre son padding : elle n'enveloppe
-     que le formulaire (carte/fiches sont dans .content-area, sibling). */
-  .prospect-frame { width: 100%; margin: 0; border: none; border-radius: 0; box-shadow: none; }
-  .search-engine { padding: 18px 16px; }
+     (justify-content:center), sans quoi la grille garderait sa largeur
+     de contenu au lieu de remplir. La gouttière de page se resserre à 16px sur
+     téléphone ; la règle qui défaisait l'ancien cadre flottant est sans objet,
+     il n'y a plus de cadre. */
+  main { padding-left: 16px; padding-right: 16px; }
+  .search-engine { padding: 18px 0; }
   .search-grid { grid-template-columns: 1fr; width: 100%; }
   .btn-go { width: 100%; }
   /* .id-block reste inchangé (flex : champ + bouton 44px). Le champ prend la
@@ -656,9 +680,6 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 
 <main>
 
-  <!-- ── CADRE UNIQUE (patron .hero-leads-tool) : formulaire + carte + barre + fiches ── -->
-  <div class="prospect-frame">
-
   <!-- ── SEARCH ENGINE ── -->
   <div class="search-engine">
     <div class="search-bar">
@@ -666,7 +687,7 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
 
       <!-- secteur -->
       <div>
-        <div class="field-label">Secteur professionnel</div>
+        <div class="field-label">Secteur</div>
         <div style="position:relative">
           <div class="sip" id="sip" style="height:44px;display:flex;align-items:center">
             <svg class="loup" width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -887,8 +908,6 @@ main { padding-top: 0; padding-bottom: calc(var(--app-footer-h) + 16px); display
     </div>
 
   </div><!-- /content-area -->
-
-  </div><!-- /prospect-frame -->
 
   <div class="exp-bar" id="exp-bar" style="display:none">
     <div class="exp-txt">

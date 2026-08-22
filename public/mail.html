@@ -20,6 +20,36 @@ html{scroll-behavior:smooth;}
   --red-l:#FFEBEB;--purple-l:#EEF2FF;
   --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
   --mono:'Geist Mono','SF Mono','Menlo',monospace;
+  /* -- VETEMENT DES COURRIELS MOVUP --
+     Releve dans server/templates/ et pose ICI, comme visio.html et devis.html
+     le posent chez elles. Ce n'est pas une duplication par negligence : ces
+     valeurs habillent LE PRODUIT quand il parle en son nom, la mise en service,
+     et non l'application, qui a le sien juste au-dessus.
+     LA QUESTION SE POSE DESORMAIS, et elle n'est pas tranchee ici. Le
+     commentaire de devis.html reservait la descente en feuille partagee au jour
+     ou une TROISIEME page demanderait ces valeurs : Mail est cette troisieme
+     page. La recopie reste la pratique etablie entre Visio et Devis, et ce lot
+     ne fait pas plus que s'y ranger. mup-confirm.css, seule candidate, porte le
+     vetement des DIALOGUES, et l'encart de mise en service est precisement
+     l'inverse d'un dialogue : il ne se ferme sur aucun geste. Une feuille
+     propre au vetement du produit reste a ecrire, et ce n'est pas le sujet de
+     cette passe. */
+  --mes-fond:#f4f1ea;
+  --mes-carte:#ffffff;
+  --mes-bord:#d9d3c4;
+  --mes-rayon:16px;
+  --mes-surtitre:#8a8579;
+  --mes-titre:#0d0d0b;
+  --mes-corps:#5c574e;
+  --mes-bouton:#0d0d0b;
+  --mes-bouton-rayon:10px;
+  /* Le filet du COURRIEL, tranche : six bandes de 12 px DANS CET ORDRE. */
+  --mes-filet-1:#B84C00;
+  --mes-filet-2:#4338CA;
+  --mes-filet-3:#7C3AED;
+  --mes-filet-4:#0BBCD4;
+  --mes-filet-5:#D97706;
+  --mes-filet-6:#1D8348;
 }
 body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow:hidden;display:flex;}
 ::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
@@ -428,6 +458,126 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 }
 
 /* ============================================================================
+   L'ENCART D'ANNONCE DE CAPACITE
+   ----------------------------------------------------------------------------
+   Vetement et mecanique recopies de devis.html, qui les tenait de visio.html.
+   La carte annonce ce que MovUP fera d'une boite connectee et porte le geste
+   qui l'y mene ; elle se retire par ses deux sorties, jamais autrement.
+
+   LE VOILE PART DE --sidebar-w : il s'arrete au rail, qui n'est donc jamais
+   recouvert au-dessus de 640 px. En dessous, --sidebar-w vaut 0 et le voile
+   reprend tout l'ecran : c'est la, et la seule, que le tiroir remonte.
+
+   --mupz-dialogue vient de mup-confirm.css, chargee plus bas : la valeur de
+   repli (50000) tient si la feuille manque.
+   ============================================================================ */
+.mes-voile{
+  position:fixed;top:0;right:0;bottom:0;left:var(--sidebar-w);
+  z-index:var(--mupz-dialogue,50000);
+  background:rgba(13,13,11,.55);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;overflow-y:auto;
+}
+.mes-carte{
+  background:var(--mes-carte);border:1px solid var(--mes-bord);
+  border-radius:var(--mes-rayon);overflow:hidden;
+  width:100%;max-width:600px;max-height:calc(100vh - 48px);
+  display:flex;flex-direction:column;
+  box-shadow:0 24px 60px rgba(13,13,11,.28);
+}
+/* Six bandes de 12 px dans leur ordre, ecrites une seule fois : ce sont des
+   arrets de degrade, pas six elements a poser dans le balisage. */
+.mes-filet{
+  height:12px;flex-shrink:0;
+  background:linear-gradient(90deg,
+    var(--mes-filet-1) 0 16.6667%,        var(--mes-filet-2) 16.6667% 33.3333%,
+    var(--mes-filet-3) 33.3333% 50%,      var(--mes-filet-4) 50% 66.6667%,
+    var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
+}
+.mes-corps{padding:30px 34px 26px;overflow-y:auto}
+/* PAS DE .mes-pile ICI, et c'est le seul ecart au patron des deux autres
+   pages : la pile sert a mesurer ensemble des temps qui se remplacent, et cet
+   encart n'en a qu'un. Il annonce une capacite, il ne conduit aucune saisie.
+   Rien a enchainer, rien a mesurer, donc rien a empiler. */
+.mes-carte h2{
+  font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.15;
+  color:var(--mes-titre);margin-bottom:16px;
+}
+.mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
+/* LE GESTE EST DANS LE CORPS, sous la phrase qui le justifie, et non au pied
+   avec l'autre sortie : c'est ce que l'encart PROPOSE, pas une des deux issues
+   symetriques d'un formulaire. Le pied ne porte donc que la sortie qui rend la
+   page, seule, a droite, la ou les deux autres pages en ecartent deux. */
+.mes-geste{margin-top:24px}
+.mes-btn{
+  background:var(--mes-bouton);color:#fff;border:none;
+  padding:11px 20px;border-radius:var(--mes-bouton-rayon);
+  font-family:var(--font);font-size:13px;font-weight:700;
+  flex-shrink:0;cursor:pointer;
+  display:inline-flex;align-items:center;gap:10px;
+}
+.mes-btn:hover{background:#000}
+.mes-btn svg{flex-shrink:0}
+.mes-btn:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+/* Le pied ne porte que sa sortie. Aucun bouton ne porte de marge : l'ecart
+   viendrait du conteneur s'il y en avait deux. */
+.mes-pied{
+  border-top:1px solid var(--mes-bord);background:var(--mes-fond);
+  padding:16px 34px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:flex-end;
+  gap:16px;flex-wrap:wrap;
+}
+/* La sortie reprend le bouton secondaire de mup-confirm.css, chargee plus bas.
+   Seule sa bague de focus manque a cette feuille : on lui prete celle du pied,
+   sans toucher au rayon que .mupc-btn pose deja. */
+.mes-pied .mupc-btn-outline:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px}
+
+/* -- LA PAGE, DERRIERE --
+   Le document ne defile deja pas : body{overflow:hidden} est pose depuis
+   toujours et le defilement est confine a des panneaux internes. Ce sont EUX
+   qu'on arrete, et ce sont les quatre que la page compte hors de ses fenetres :
+   la liste des messages, le lecteur et son corps, et le panneau des onglets qui
+   porte Parametres. Les .modal-body ne sont pas de la liste : aucune fenetre
+   n'est ouverte sous l'encart, et celles-ci vivent hors de .shell.
+   L'inertie du pointeur et du focus, elle, est posee en JS sur .shell et le
+   pied applicatif, jamais sur le rail. */
+body.mise-en-service .email-list,
+body.mise-en-service .viewer,
+body.mise-en-service .viewer-body,
+body.mise-en-service .tab-scroll{overflow:hidden}
+
+/* -- LE RAIL, DEVANT, EN TIROIR SEULEMENT --
+   Un encart de mise en service tient une PAGE, jamais l'application : l'abonne
+   qui ouvre Mail sans vouloir s'y mettre en service doit pouvoir en repartir.
+   Le rail est donc laisse hors de rendreLaPageInerte.
+   Sous 640 px, le voile reprend tout l'ecran et le bouton qui ouvre le tiroir,
+   seule sortie a cette largeur, doit rester atteignable. On remonte la bande du
+   rail au-dessus du voile en conservant son ordre interne (bouton < scrim <
+   rail) et en restant sous le consentement (60000). */
+@media (max-width:640px){
+  body.mise-en-service #sb-drawer-toggle{z-index:50150}
+  body.mise-en-service #sb-drawer-scrim{z-index:50190}
+  body.mise-en-service aside#sidebar.sidebar{z-index:50200}
+}
+
+/* LE TOAST PASSE DEVANT L'ENCART, et il le faut : le bouton de l'encart appelle
+   oauthMicrosoft(), qui refuse PAR UN TOAST quand la voie est momentanement
+   indisponible. Enfoui derriere le voile, ce motif ne serait jamais lu et le
+   bouton passerait pour mort. Le selecteur est plus specifique que .toast, qui
+   vit dans cette meme feuille au-dessus. */
+body.mise-en-service .toast{z-index:50100}
+
+/* Le consentement passe DEVANT la mise en service, comme dans Visio et Devis.
+   L'encart ne se retire qu'a l'une de ses deux sorties : un bandeau enfoui
+   derriere lui resterait inatteignable aussi longtemps.
+   Selecteurs qualifies par body : cookies-banner.css est chargee APRES ce bloc
+   et gagnerait l'egalite de specificite par l'ordre. Ecrit ici, dans la page
+   qui pose l'encart, la feuille partagee n'est pas touchee. */
+body #mup-cookie-banner{z-index:60000}
+body #mup-cookie-panel{z-index:60001}
+
+/* ============================================================================
    MASQUAGE — RÉDUCTION AU LANCEMENT
    ----------------------------------------------------------------------------
    La page se limite à connecter une boîte Microsoft, lire ses messages et
@@ -440,17 +590,21 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    être déclenchée au clavier faute d'être affichée.
 
    Quatre voies s'éteignent ici :
-   — Campagnes : le sous-onglet, son panneau, et les trois fenêtres qui n'en
+   - Campagnes : le sous-onglet, son panneau, et les trois fenêtres qui n'en
      relèvent que (création, détail, SIRET avant premier envoi) ;
-   — les pastilles Mailing et Newsletter du bandeau, qui n'ouvraient rien
+   - les pastilles Mailing et Newsletter du bandeau, qui n'ouvraient rien
      d'autre que ce sous-onglet ;
-   — la connexion manuelle : les deux entrées vers la fenêtre IMAP — le lien de
-     l'écran d'accueil, le bouton des Paramètres — et la fenêtre elle-même. Ces
-     deux entrées sont les seuls .link-secondary de la page ; elles sont visées
-     par leur emplacement, pour que rien n'ait à être marqué sur les éléments.
-   — la connexion Google : les trois boutons [data-oauth="google"] — celui de
-     l'accueil sans compte, celui de l'écran de reconnexion, celui des
-     Paramètres. Le sélecteur les couvre tous les trois et rien d'autre.
+   - la connexion manuelle : l'entrée des Paramètres vers la fenêtre IMAP, et
+     la fenêtre elle-même. Une seconde entrée vivait dans le panneau sans
+     compte de la colonne ; elle est partie avec lui, l'encart d'annonce de
+     capacité ayant repris la charge de cet écran. Il ne reste donc qu'un
+     .link-secondary à viser, et il l'est par son emplacement, pour que rien
+     n'ait à être marqué sur l'élément.
+   - la connexion Google : les deux boutons [data-oauth="google"] qui restent,
+     celui de l'écran de reconnexion et celui des Paramètres. Un troisième
+     vivait lui aussi dans le panneau sans compte et est parti avec ; l'encart
+     qui le remplace n'en porte aucun. Le sélecteur couvre les deux qui restent
+     et rien d'autre.
 
    LA CAUSE DE CE QUATRIÈME RETRAIT N'EST PAS CELLE DES TROIS PREMIERS. Les
    trois premiers écartent ce qui n'est pas prêt à être montré. Celui-ci
@@ -471,11 +625,21 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    masqué.
 
    Cinq endroits du document tirent la conséquence de ces retraits et portent
-   le même mot MASQUAGE : l'accueil sans compte et showInboxError(), qui ne
-   nomment plus que la voie offerte ; motifConnexionFermee(), qui ne propose
-   plus un fournisseur en repli de l'autre ; disconnectAccount(), qui prévient
-   avant de débrancher une boîte qu'on ne rebranchera pas d'ici ; et
-   autodetectProvider(), dont la recommandation désigne un bouton masqué.
+   le même mot MASQUAGE : showInboxError(), qui ne nomme plus que la voie
+   offerte ; motifConnexionFermee(), qui ne propose plus un fournisseur en
+   repli de l'autre ; disconnectAccount(), qui prévient avant de débrancher une
+   boîte qu'on ne rebranchera pas d'ici ; autodetectProvider(), dont la
+   recommandation désigne un bouton masqué ; et l'encart d'annonce de capacité,
+   qui ne porte QU'UN bouton, celui de Microsoft. Ce dernier ne tire pas la
+   conséquence par un texte mais par une absence : le bouton Google n'y a
+   jamais été posé, un sélecteur de plus dans la liste ci-dessous n'aurait donc
+   rien eu à éteindre. Le jour où le bouton revient, c'est un bouton qu'il faut
+   AJOUTER là, et non un sélecteur à retirer d'ici : c'est le seul des cinq qui
+   demande ce geste.
+
+   IL Y EN AVAIT UN SIXIÈME, et il est parti avec son panneau : l'accueil sans
+   compte de la colonne ne nommait, lui aussi, que la voie offerte. Le panneau
+   est retiré du document, l'encart portant désormais l'annonce et le geste.
    ============================================================================ */
 [data-oauth="google"],
 .subtab[data-tab="campaigns"],
@@ -485,7 +649,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 #siret-modal,
 .kpi-campagne,
 .kpi-newsletter,
-.empty-state-actions .link-secondary,
 #tab-settings .link-secondary,
 #imap-modal { display: none; }
 </style>
@@ -585,48 +748,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <span id="cc-toolbar-label">Reçus</span>
           </div>
 
-          <!-- Empty state : aucun compte connecté.
-               MASQUÉ EN LIGNE, comme ses quatre voisins de la colonne. Il était
-               le seul à ne pas l'être, et la règle .empty-state pose
-               display:flex : il s'affichait donc dès la première peinture,
-               si bien que l'abonné connecté depuis des mois lisait
-               « Connectez votre boîte mail » le temps que
-               /api/v2/mail/accounts réponde. setInboxState reste seul maître
-               de l'affichage. -->
-          <div class="empty-state" id="empty-state-noaccount" style="display:none;">
-            <div class="empty-state-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
-            </div>
-            <div class="empty-state-title">Connectez votre boîte mail</div>
-            <!-- MASQUAGE — ne nomme que la voie réellement offerte : le bouton
-                 Google est éteint par le bloc de la feuille de style, le temps
-                 de la validation de l'application. La promesse du mot de passe
-                 jamais confié reste vraie de la voie qui reste. À rétablir en
-                 même temps que le bouton. -->
-            <div class="empty-state-sub">Pour envoyer et recevoir vos messages depuis MUP, connectez d'abord votre boîte professionnelle. La connexion passe par Microsoft, sans jamais nous confier votre mot de passe.</div>
-            <div class="empty-state-actions">
-              <div class="notice notice-warn oauth-notice" style="display:none;text-align:left;"></div>
-              <button class="oauth-btn" data-oauth="google" onclick="oauthGoogle()">
-                <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A10.99 10.99 0 0 0 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.99 10.99 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A10.99 10.99 0 0 0 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                Connecter avec Google
-              </button>
-              <button class="oauth-btn" data-oauth="microsoft" onclick="oauthMicrosoft()">
-                <svg width="16" height="16" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
-                  <path fill="#F25022" d="M0 0h11v11H0z"/>
-                  <path fill="#7FBA00" d="M12 0h11v11H12z"/>
-                  <path fill="#00A4EF" d="M0 12h11v11H0z"/>
-                  <path fill="#FFB900" d="M12 12h11v11H12z"/>
-                </svg>
-                Connecter avec Microsoft
-              </button>
-              <button class="link-secondary" onclick="openImapModal()" style="margin-top:6px;">Mon fournisseur n'est pas dans la liste</button>
-            </div>
-          </div>
+          <!-- PAS DE FACE « SANS COMPTE » DANS CETTE COLONNE, et c'est un
+               retrait, pas un oubli : l'annonce et le geste sont portes par
+               l'encart de mise en service, plus haut dans le document, et le
+               meme texte n'avait pas a etre pose deux fois dans la page. La
+               colonne n'affiche que des messages ; sans boite connectee, elle
+               se tait (cf. renvoyerVersLEncart).
+
+               CELUI QUI A DIFFERE ne trouve donc rien ici, et c'est assume :
+               sa porte de retour est l'onglet Parametres, qui porte deja ses
+               boutons de connexion. -->
 
           <!-- Liste emails -->
           <div class="email-list" id="email-list" style="display:none;"></div>
@@ -871,7 +1002,71 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   </div>
 </div>
 
-<!-- ────── MODALE IMAP (accessible UNIQUEMENT via Paramètres / lien empty state) ────── -->
+<!-- ══════════════════════════════════════════════════════════════
+     L'ENCART D'ANNONCE DE CAPACITE
+     HORS DU SHELL, et il le faut : rendreLaPageInerte rend .shell inerte, et
+     un encart pose dedans se figerait avec lui.
+
+     PAS d'aria-modal. La page est rendue inerte au pointeur et au focus, mais
+     le rail reste atteignable : un encart de mise en service tient une PAGE,
+     jamais l'application. Declarer une modale la masquerait aux lecteurs
+     d'ecran et retablirait pour eux l'enfermement qu'on retire.
+
+     Masque en style EN LIGNE : il n'est revele qu'une fois les comptes lus,
+     sans quoi il clignoterait au chargement chez l'abonne deja connecte.
+
+     DEUX SORTIES, ET IL N'Y EN A PAS DE TROISIEME : ni croix, ni Echap, ni clic
+     au fond. Le bouton du corps emmene chez Microsoft ; « Je verrai plus tard »
+     rend la page et pose le report. C'est la Signature qui justifie cette
+     seconde sortie : elle se regle entierement sans boite, et un encart qui
+     tiendrait la page la rendrait inatteignable.
+
+     LA COLONNE N'ANNONCE PLUS RIEN : le panneau sans compte qui doublait ce
+     texte est retire du document. L'encart porte l'annonce et le geste, la
+     colonne n'affiche que des messages, et celui qui a differe ne voit qu'une
+     colonne muette dont la porte de retour est l'onglet Parametres.
+
+     MASQUAGE : un seul bouton, celui de Microsoft. L'encart n'a pas a porter un
+     bouton eteint par la feuille de style ; le jour ou Google revient, c'est ici
+     un bouton a AJOUTER.
+     ══════════════════════════════════════════════════════════════ -->
+<div class="mes-voile" id="encartCapacite" style="display:none" role="dialog" aria-labelledby="capaciteTitre">
+  <div class="mes-carte">
+    <div class="mes-filet" aria-hidden="true"></div>
+
+    <div class="mes-corps">
+      <h2 id="capaciteTitre">Vos messages, dans MovUP.</h2>
+      <p>Pour envoyer et recevoir vos messages depuis MovUP, connectez d'abord votre boîte professionnelle. La connexion passe par Microsoft, sans jamais nous confier votre mot de passe.</p>
+
+      <!-- Le geste que l'encart propose, sous la phrase qui le justifie.
+           oauthMicrosoft() est appelee telle quelle : c'est elle, et non cette
+           page, qui juge si le depart a une chance d'aboutir, et qui refuse par
+           un toast le cas echeant (cf. startOauth). Aucun data-oauth ici : la
+           fermeture par boite occupee que renderConnexionGate applique aux
+           autres boutons n'aurait rien a fermer, l'encart ne paraissant qu'en
+           l'absence de boite. -->
+      <div class="mes-geste">
+        <button type="button" class="mes-btn" id="capacite-connecter" onclick="oauthMicrosoft()">
+          <svg width="16" height="16" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path fill="#F25022" d="M0 0h11v11H0z"/>
+            <path fill="#7FBA00" d="M12 0h11v11H12z"/>
+            <path fill="#00A4EF" d="M0 12h11v11H0z"/>
+            <path fill="#FFB900" d="M12 12h11v11H12z"/>
+          </svg>
+          Connecter avec Microsoft
+        </button>
+      </div>
+    </div>
+
+    <!-- La seconde sortie, seule au pied : elle n'ecrit rien en base, pose le
+         report local et rend la page. -->
+    <div class="mes-pied">
+      <button type="button" class="mupc-btn mupc-btn-outline" id="capacite-plus-tard">Je verrai plus tard</button>
+    </div>
+  </div>
+</div>
+
+<!-- ────── MODALE IMAP (accessible UNIQUEMENT via Paramètres) ────── -->
 <div class="modal-overlay" id="imap-modal" onclick="if(event.target===this)closeImapModal()">
   <div class="modal" role="dialog" aria-labelledby="imap-modal-title">
     <div class="modal-head">
@@ -1054,6 +1249,84 @@ var STATE = {
 };
 
 // ────────────────────────────────────────────────
+// L'ENCART D'ANNONCE DE CAPACITE
+// ────────────────────────────────────────────────
+
+// -- LE REPORT --
+// LOCAL, pour les deux memes raisons que sur Visio et Devis : rien de nouveau
+// ne part en base, ni champ ni route, et un report qui passerait par une
+// ecriture pourrait echouer, enfermant l'abonne derriere l'encart a chaque
+// ouverture. Il ne gouverne QUE l'apparition a l'arrivee : il ne dit rien du
+// panneau de la colonne, qui reste offert a qui a differe.
+var LS_MAIL_CAPACITE_DIFFERE = 'mup_mail_capacite_differe';
+function reportCapacitePris(){ try { return localStorage.getItem(LS_MAIL_CAPACITE_DIFFERE) === '1'; } catch(e){ return false; } }
+function poserReportCapacite(){ try { localStorage.setItem(LS_MAIL_CAPACITE_DIFFERE, '1'); } catch(e){} }
+function effacerReportCapacite(){ try { localStorage.removeItem(LS_MAIL_CAPACITE_DIFFERE); } catch(e){} }
+
+// Inertie de la page derriere le voile : pointeur et focus. L'encart vit hors
+// de .shell precisement pour pouvoir rendre .shell inerte sans le devenir
+// lui-meme. LE RAIL EST DELIBEREMENT ABSENT de cette liste : un encart de mise
+// en service tient une page, jamais l'application, et le rendre inerte
+// condamnerait toute sortie a l'abonne venu sur Mail sans vouloir s'y mettre en
+// service. Les deux elements sont cherches A L'APPEL et jamais memorises : le
+// pied applicatif vit apres ce script dans le document, et un handle releve au
+// parsing serait nul.
+function rendreLaPageInerte(fige){
+  [ document.querySelector('.shell'), document.querySelector('.mup-app-footer') ]
+    .forEach(function(el){ if(el) el.inert = fige; });
+}
+
+// LEVER ET RETIRER, chacun garde par son propre etat : appeles deux fois de
+// suite, ils ne font rien la seconde. C'est ce qui permet a majEncartCapacite
+// d'etre appelee a chaque lecture des comptes sans jamais lever deux fois.
+function leverEncartCapacite(){
+  var voile = document.getElementById('encartCapacite');
+  if(!voile || voile.style.display === 'flex') return;
+  voile.style.display = 'flex';
+  document.body.classList.add('mise-en-service');
+  rendreLaPageInerte(true);
+  // Apres l'affichage, et pas avant : un .focus() dans une carte encore en
+  // display:none ne prend pas.
+  var btn = document.getElementById('capacite-connecter');
+  if(btn) btn.focus();
+}
+
+// L'encart ne se ferme sur AUCUN geste, ni Echap, ni clic au fond, ni croix :
+// il n'en a pas. Cette fonction n'est appelee que par sa sortie et par
+// majEncartCapacite, qui la constate sans objet.
+function retirerEncartCapacite(){
+  var voile = document.getElementById('encartCapacite');
+  if(!voile || voile.style.display === 'none') return;
+  voile.style.display = 'none';
+  document.body.classList.remove('mise-en-service');
+  rendreLaPageInerte(false);
+}
+
+// LA CONDITION D'APPARITION, A TROIS MEMBRES comme sur les deux autres pages :
+// les comptes ont ete LUS, aucune boite n'est connectee, le report n'a pas ete
+// pris. Le premier membre est ce qui distingue cette page des deux autres : une
+// lecture qui a echoue laisse STATE.comptesLus a false et l'encart ne se leve
+// pas. Annoncer « connectez votre boite » a un abonne dont on n'a pas pu lire
+// les comptes serait affirmer une absence dont on ne sait rien, exactement ce
+// que le panneau sans compte ne dit plus depuis que la panne a sa branche.
+//
+// LE REPORT TOMBE SI UNE BOITE EXISTE, et pas seulement quand on vient d'en
+// connecter une : la page est equipee, le report n'a plus rien a retenir. Sans
+// cela, un report pose avant une connexion faite depuis Parametres survivrait
+// jusqu'a interdire a l'encart de revenir le jour ou l'abonne deconnecte sa
+// boite. Meme doctrine que sur Devis et Visio.
+function majEncartCapacite(){
+  if(STATE.primaryAccount){ effacerReportCapacite(); }
+  if(STATE.comptesLus && !STATE.primaryAccount && !reportCapacitePris()) leverEncartCapacite();
+  else retirerEncartCapacite();
+}
+
+document.getElementById('capacite-plus-tard').addEventListener('click', function(){
+  poserReportCapacite();
+  retirerEncartCapacite();
+});
+
+// ────────────────────────────────────────────────
 // CHARGEMENT INITIAL
 // ────────────────────────────────────────────────
 async function loadAccountsAndInbox(){
@@ -1091,7 +1364,10 @@ async function loadAccountsAndInbox(){
       // à faire sur une boîte qui n'existe plus.
       AUTH_DOMAINE = null;
       peintAuthDomaine();
-      showEmptyNoAccount();
+      // La colonne se tait et l'encart se lève. Le finally rappellera
+      // majEncartCapacite juste après, sans effet : les deux gestes sont gardés
+      // par leur propre état.
+      renvoyerVersLEncart();
     }
   } catch(e){
     // LA PANNE NE SE FAIT PLUS PASSER POUR UN COMPTE NEUF. On ignore si
@@ -1101,6 +1377,19 @@ async function loadAccountsAndInbox(){
     STATE.comptesLus = false;
     console.warn('[mail] lecture des comptes', e);
     showComptesIllisibles();
+  } finally {
+    // LE POINT D'APPEL UNIQUE DE L'ENCART, et il est ici parce que c'est le
+    // seul endroit par ou passent les TROIS cas : l'init, le retour OAuth et la
+    // deconnexion appellent tous cette fonction, et la connexion IMAP avec eux.
+    // Le poser dans chacun des appelants l'aurait ecrit quatre fois pour dire
+    // la meme chose, et aurait laisse le cinquieme appelant du jour sans encart.
+    // DANS LE finally, pas apres le try : la branche de panne y passe aussi, et
+    // il FAUT qu'elle y passe. Elle laisse STATE.comptesLus a false, et c'est
+    // majEncartCapacite qui en tire la consequence, en un seul endroit, plutot
+    // qu'une condition recopiee dans chaque branche.
+    // IL NE SE LEVE PAS DEUX FOIS : leverEncartCapacite est garde par l'etat du
+    // voile, pas par un drapeau tenu a cote.
+    majEncartCapacite();
   }
 }
 
@@ -1258,7 +1547,11 @@ async function revaliderAuthDomaine(){
 }
 
 // Un seul état visible à la fois : rien n'est masqué avant d'avoir la réponse.
-var INBOX_STATES = { noaccount:'empty-state-noaccount', empty:'empty-state-empty', loading:'empty-state-loading', error:'empty-state-error' };
+// LA TABLE N'A PLUS DE FACE « SANS COMPTE » : son panneau est sorti du document
+// et l'encart d'annonce de capacité porte seul ce que la colonne en disait. Un
+// état absent de cette table, tel 'rien', éteint donc les trois faces qui
+// restent ET la liste avec : c'est ainsi que la colonne se tait.
+var INBOX_STATES = { empty:'empty-state-empty', loading:'empty-state-loading', error:'empty-state-error' };
 function setInboxState(state){
   Object.keys(INBOX_STATES).forEach(function(k){
     document.getElementById(INBOX_STATES[k]).style.display = (k === state) ? 'flex' : 'none';
@@ -1271,13 +1564,29 @@ function setInboxState(state){
   var fab = document.getElementById('fab-newmsg');
   if(fab) fab.classList.toggle('is-on', state === 'list');
 }
-function showEmptyNoAccount(){ setInboxState('noaccount'); }
+// LE RELAIS VERS L'ENCART, qui remplace showEmptyNoAccount. Les trois chemins
+// qui peignaient le panneau sans compte lèvent désormais l'encart : l'abonné
+// sans boîte voit l'annonce, il se connecte, la colonne affiche ses messages.
+// IL FAIT DEUX CHOSES, et la première compte autant que la seconde. Éteindre la
+// colonne n'est pas une précaution : sans elle, une déconnexion laisserait à
+// l'écran les messages de la boîte qu'on vient de débrancher.
+// CE QU'IL NE FORCE PAS : l'encart ne se lève qu'à la condition à trois membres
+// de majEncartCapacite. Celui qui a différé garde donc une colonne muette et
+// repasse par les Paramètres, où ses boutons de connexion l'attendent.
+// LE DÉSACCORD : showInboxError('no_account') arrive avec STATE.primaryAccount
+// encore posé, la boîte ayant disparu côté serveur entre deux appels. L'encart
+// ne se lève pas de ce chef, mais majEncartCapacite efface le report au passage
+// et la prochaine lecture des comptes, qui ne trouvera plus de boîte, le lèvera.
+function renvoyerVersLEncart(){
+  setInboxState('rien');
+  majEncartCapacite();
+}
 function showInboxList(){ setInboxState('list'); }
 function showLoading(){ setInboxState('loading'); }
 function showInboxEmpty(){ setInboxState('empty'); }
 function showInboxError(message, code){
-  // Boîte réellement absente : l'écran de connexion, pas un écran d'erreur.
-  if(code === 'no_account'){ showEmptyNoAccount(); return; }
+  // Boîte réellement absente : l'encart d'annonce, pas un écran d'erreur.
+  if(code === 'no_account'){ renvoyerVersLEncart(); return; }
   var reconnexion = code === 'reconnect_required';
   document.getElementById('empty-state-error-title').textContent =
     reconnexion ? 'Reconnexion nécessaire' : 'Lecture impossible';
@@ -1322,7 +1631,7 @@ function showComptesIllisibles(){
 // DOSSIERS (Reçus / Envoyés) — le serveur aiguille selon le fournisseur
 // ────────────────────────────────────────────────
 async function loadInbox(opts){
-  if(!STATE.primaryAccount){ showEmptyNoAccount(); return; }
+  if(!STATE.primaryAccount){ renvoyerVersLEncart(); return; }
   var silent = Boolean(opts && opts.silent);
   var folder = STATE.folder === 'sent' ? 'sent' : 'inbox';
   var token = ++STATE.listToken;
@@ -1986,10 +2295,12 @@ function renderConnexionGate(){
       else btn.removeAttribute('title');
     });
   });
-  // La connexion manuelle relève de la même règle. Ses deux entrées sont
-  // éteintes par le bloc MASQUAGE de la feuille de style ; les fermer ici garde
-  // la règle vraie le jour où il sera retiré.
-  var manuelles = document.querySelectorAll('.empty-state-actions .link-secondary, #tab-settings .link-secondary');
+  // La connexion manuelle relève de la même règle. Son entrée est éteinte par
+  // le bloc MASQUAGE de la feuille de style ; la fermer ici garde la règle vraie
+  // le jour où il sera retiré. ELLE EST SEULE DEPUIS QUE LE PANNEAU SANS COMPTE
+  // EST SORTI DU DOCUMENT : le sélecteur qui visait son lien n'aurait plus rien
+  // à atteindre, il est retiré ici comme il l'est de la feuille de style.
+  var manuelles = document.querySelectorAll('#tab-settings .link-secondary');
   Array.prototype.forEach.call(manuelles, function(btn){ btn.disabled = Boolean(boite); });
   Array.prototype.forEach.call(document.querySelectorAll('.oauth-notice'), function(el){
     var msg = motifConnexionFermee(el, p, boite);

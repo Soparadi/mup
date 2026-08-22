@@ -63,11 +63,19 @@ html{scroll-behavior:smooth;}
      D'OÙ VIENT LE NOMBRE. Les trois cartes ont été mesurées au banc, dans les
      conditions de l'écran : Chrome sans tête, fontes du dépôt servies, encart
      ouvert, carte à 600 px. Devis 481,39 px au temps des coordonnées, Visio
-     452,05 px au temps du conseil, Mail 318,67 px. Le maximum est celui de
-     Devis, et 490 lui laisse huit pixels de jeu : caler au pixel exact du
-     maximum du jour poserait Devis pile sur son plancher, où la première ligne
-     de texte ajoutée quelque part rendrait la valeur fausse. Huit pixels ne se
-     voient pas et absorbent la variation de rendu d'un poste à l'autre.
+     452,05 px au temps du conseil, Mail 257,28 px (remesuré le 22 août, pied
+     rétabli et bouton passé au secondaire ; 318,67 px était la valeur du jour
+     où le plancher a été posé).
+     LA MÊME PHRASE DIVERGE POUR L'INSTANT CHEZ VISIO ET CHEZ DEVIS, qui portent
+     encore 318,67 px pour Mail : ce bloc de jetons est recopié entier d'une page
+     à l'autre, et les deux autres copies seront rectifiées avec le lot du
+     plancher. Ce n'est pas un oubli, c'est un décalage daté.
+     LA VALEUR DE MAIL NE COMMANDE PAS LE NOMBRE, ni avant ni après cette
+     rectification. Le maximum est celui de Devis, et 490 lui laisse huit pixels
+     de jeu : caler au pixel exact du maximum du jour poserait Devis pile sur son
+     plancher, où la première ligne de texte ajoutée quelque part rendrait la
+     valeur fausse. Huit pixels ne se voient pas et absorbent la variation de
+     rendu d'un poste à l'autre.
      ELLE EST POSÉE EN PLANCHER ET NON EN TAILLE (min-height, cf. .mes-carte) :
      une carte plus haute que 490 px continue de s'allonger.
      ELLE NE GARANTIT RIEN SOUS 640 px. La carte y perd sa largeur, son texte se
@@ -550,11 +558,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    PUIS LE CORPS RÉPARTIT CE BLANC, ET CE CENTRAGE EST PROPRE À MAIL.
    Avoir donné la place au corps ne disait pas encore où elle tombe DEDANS :
    sans justify-content, tout s'accumulait SOUS le bouton. Cette carte mesure
-   318,67 px de haut naturellement (cf. le jeton de la hauteur commune), le
-   plancher lui en donne 490 : ce sont 171 px de blanc, et 197,72 px une fois
-   comptés dans la boîte de contenu du corps. Titre, phrase et bouton se
-   posent désormais au milieu, ce blanc se partageant en deux parts égales de
-   98,86 px, au-dessus et au-dessous (mesuré au banc, fenêtre de 1113 px).
+   257,28 px de haut naturellement (cf. le jeton de la hauteur commune), le
+   plancher lui en donne 490 : ce sont 232,72 px de blanc, et 232,72 px aussi
+   une fois comptés dans la boîte de contenu du corps. Les deux nombres se
+   confondent ici parce que le blanc tombe TOUT ENTIER dans cette boîte : le
+   filet (12 px), les deux bordures de la carte et le pied (33 px) ne grandissent
+   pas, seul le corps s'étire, et son remplissage de 30 et 26 px ne bouge pas
+   davantage. Titre, phrase et bouton se posent désormais au milieu, ce blanc se
+   partageant en deux parts égales de 116,36 px, au-dessus et au-dessous
+   (mesuré au banc le 22 août, pied rétabli, fenêtre de 1440 x 1113 px).
    ÇA NE DESCEND PAS DANS UNE RÈGLE PARTAGÉE. Les cartes de Devis et de Visio
    n'ont presque pas de blanc à placer, et leur contenu doit rester EN HAUT :
    ce centrage est la conséquence d'un corps court, pas une pièce du vêtement
@@ -564,13 +576,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    qui se fondait en flux et qui s'additionnerait en flex.
    « safe center » ET NON « center » NU, et c'est le banc qui tranche. Sur
    fenêtre courte, le plancher s'abaisse au plafond (cf. min() plus haut) et le
-   contenu finit par dépasser la hauteur du corps. Sur une fenêtre de 288 px,
-   où il déborde de 52 px : avec « center » nu, le titre part 26,14 px
-   AU-DESSUS du corps et le défilement n'en rend que 26, la moitié perdue,
-   exactement la perte constatée sur le voile avant min(). Avec « safe »,
-   l'alignement retombe en haut dès que ça déborde : titre à 0, et les 52 px
-   entiers rendus au défilement. Le « center » nu qui précède est le repli des
-   navigateurs qui ignorent le mot-clé. */
+   contenu finit par dépasser la hauteur du corps. LE SEUIL EST À 305,28 px DE
+   HAUTEUR DE FENÊTRE, et il se lit sans mesurer : la carte y vaut 100vh moins
+   les 48 px de remplissage du voile, et elle déborde dès que ce plafond passe
+   sous sa hauteur naturelle, soit 257,28 + 48. Le pied rétabli l'a fait remonter
+   de ses 33 px exactement, depuis les 272,28 px qu'il valait ce matin sans lui.
+   Vérifié au banc : à 306 px de fenêtre rien ne déborde, à 305 px le débordement
+   commence.
+   Sur une fenêtre de 288 px, où le contenu déborde de 17,28 px : avec « center »
+   nu, le titre part 8,64 px AU-DESSUS du corps et le défilement n'en rend que 9,
+   la moitié perdue, exactement la perte constatée sur le voile avant min(). Avec
+   « safe », l'alignement retombe en haut dès que ça déborde : titre à 0, et les
+   17 px entiers rendus au défilement. Le « center » nu qui précède est le repli
+   des navigateurs qui ignorent le mot-clé. */
 .mes-corps{
   padding:30px 34px 26px;overflow-y:auto;flex-grow:1;
   display:flex;flex-direction:column;
@@ -587,15 +605,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
 /* LE GESTE EST DANS LE CORPS, sous la phrase qui le justifie : c'est ce que
    l'encart PROPOSE, pas une des deux issues symetriques d'un formulaire. Il y
-   est reste quand le pied et sa sortie sont sortis du document, et il est
-   desormais le seul bouton de la carte. */
+   est reste quand la sortie « Je verrai plus tard » est sortie du document, et
+   il est desormais le seul bouton de la carte. Le pied, lui, est revenu, mais
+   VIDE : il ne ramene aucun bouton avec lui. */
 .mes-geste{margin-top:24px}
 /* PAS DE BOUTON NOIR ICI. Le noir n'est pas de trop en soi, il est de trop
    SUR CETTE PAGE : chez Devis et chez Visio il termine une saisie
    (« Enregistrer », « Ajouter un document »), là où celui-ci ne termine rien
    et EMMÈNE AILLEURS, chez Microsoft. Il porte donc le secondaire partagé de
    mup-confirm.css, .mupc-btn .mupc-btn-outline, qu'il est seul à porter ici
-   depuis que le pied de la carte est sorti du document.
+   depuis que la sortie « Je verrai plus tard » est sortie du document. Le pied
+   est revenu vide et ne lui rend aucun voisin.
    LA RÈGLE .mes-btn EST PARTIE AVEC LE NOIR. Elle n'était portée que par ce
    bouton et plus rien de cette page ne la réclame ; laissée en place, elle
    ferait croire au lecteur suivant que l'encart a un bouton primaire quelque
@@ -611,19 +631,38 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    des 10 px du noir. Seul le flex-shrink du logo manque à mup-confirm.css, et
    c'est lui qui garde au carré ses 16 px quand le libellé pousse. */
 .mes-geste .mupc-btn svg{flex-shrink:0}
-/* PAS DE REGLE .mes-pied ICI, et c'est un retrait : la carte n'a plus de pied
-   depuis que « Je verrai plus tard » est sorti du document, et plus rien de
-   cette page ne portait cette classe. Le jeton --mes-fond, qui n'etait lu que
-   par elle, RESTE : la palette du vetement est recopiee entiere d'une page a
-   l'autre (cf. le bloc de jetons en tete, et le meme raisonnement plus haut
-   pour --mes-bouton), et en retirer un de la seule copie de Mail ferait
-   diverger les trois copies. Devis et Visio gardent leur pied et leur regle,
-   chacune dans sa propre feuille. */
+/* LE PIED DE LA CARTE, RECOPIÉ DE VISIO SANS RIEN Y CHANGER. Il est VIDE sur
+   cette page : la sortie « Je verrai plus tard » est partie et ne revient pas
+   (cf. le bloc de tête, UNE SEULE SORTIE), mais le pied, lui, revient. Ce qu'il
+   porte ici n'est donc pas un contenu, c'est le trait de séparation et la bande
+   de fond qui terminent la carte comme sur les deux autres pages, plus les 33 px
+   que son remplissage et ce trait pèsent, et que le flex-grow du corps ne
+   distribue donc pas.
+   justify-content: space-between EST DÉLIBÉRÉ ET NE REND RIEN AUJOURD'HUI : un
+   conteneur flex sans aucun enfant n'a rien à répartir, la propriété est donc
+   sans effet mesurable sur cette page. Elle est posée pour le jour où le pied
+   portera quelque chose, et pour que la règle reste MOT POUR MOT celle de
+   Visio. QUE CETTE LIGNE RESTE : sans cette note, un relecteur la croira
+   inutile et la retirera, et la copie divergera de l'original le jour même où
+   le premier enfant arrivera.
+   NI .mes-pied-pile NI .mes-pied-actions : elles habillent chez Visio des
+   groupes d'actions que ce pied n'a pas. Les recopier ici poserait deux classes
+   que rien ne porte. */
+.mes-pied{
+  border-top:1px solid var(--mes-bord);background:var(--mes-fond);
+  padding:16px 34px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:16px;flex-wrap:wrap;
+}
 /* LE SEUL BOUTON DE LA CARTE, celui de Microsoft, reprend le secondaire de
    mup-confirm.css, chargee plus bas. Seule sa bague de focus manque a cette
    feuille : on la lui prete ici, sans toucher au rayon que .mupc-btn pose deja.
-   PORTEE SUR .mes-carte : le bouton vit dans le corps, et la regle doit
-   l'atteindre la ou il est. */
+   PORTEE SUR .mes-carte, ET C'EST CE QUI DISPENSE DE RECOPIER LA REGLE DE DEVIS.
+   Devis pose la sienne sur .mes-pied, parce que c'est la que vit sa sortie
+   secondaire ; ici .mes-carte couvre le corps ET le pied d'un seul tenant. Le
+   bouton d'aujourd'hui vit dans le corps et la regle l'atteint ; celui que le
+   pied portera peut-etre un jour sera atteint par la meme, sans qu'on ait a la
+   dedoubler. */
 .mes-carte .mupc-btn-outline:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px}
 
 /* -- LA PAGE, DERRIERE --
@@ -1172,9 +1211,16 @@ body #mup-cookie-panel{z-index:60001}
       </div>
     </div>
 
-    <!-- PAS DE PIED A CETTE CARTE. Le .mes-pied et son « Je verrai plus tard »
-         sont sortis du document : cf. le bloc de tete, UNE SEULE SORTIE. La
-         carte s'arrete donc a son corps. -->
+    <!-- LE PIED, VIDE. Il ne porte plus « Je verrai plus tard » : cette sortie
+         est partie et ne revient pas (cf. le bloc de tete, UNE SEULE SORTIE).
+         Le pied, lui, termine la carte comme chez Devis et chez Visio, et ses
+         33 px sont retires de ce que le flex-grow du corps repartit au-dessus.
+         AUCUN aria-hidden, ET C'EST VOULU. Un pied vide n'annonce rien aux
+         lecteurs d'ecran, il n'y a donc rien a leur masquer. L'attribut serait
+         a retirer le jour ou ce pied portera quelque chose, et ce jour-la
+         personne ne penserait a le chercher ici : ce qui se lit deja bien sans
+         lui ne se pose pas. -->
+    <div class="mes-pied"></div>
   </div>
 </div>
 

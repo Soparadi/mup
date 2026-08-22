@@ -297,7 +297,7 @@
     return Math.min(score, 3)
   }
 
-  // Ordre du formulaire — sert au focus sur le premier champ fautif.
+  // Ordre du formulaire : sert au focus sur le premier champ fautif.
   var FIELD_ORDER = ['prenom','nom','email','telephone','password','password2','cgu']
 
   // Élément porteur de l'état d'erreur : les six champs texte, plus la case CGU.
@@ -328,7 +328,7 @@
     return ''
   }
 
-  // Validation complète — n'est appelée qu'à la soumission ; elle marque les
+  // Validation complète, appelée à la seule soumission : elle marque les
   // champs fautifs et renvoie le premier d'entre eux dans l'ordre du formulaire.
   function validate(){
     var ok = true
@@ -387,10 +387,12 @@
   // Tant que le formulaire n'a pas été soumis une première fois, rien ne
   // s'allume : on se contente d'effacer une erreur déjà posée dès qu'elle
   // n'a plus lieu d'être. Après la première tentative, chaque champ redevient
-  // vivant — mais chacun pour lui seul, jamais ses voisins.
+  // vivant, mais chacun pour lui seul, jamais ses voisins.
   Object.keys(inputs).forEach(function(name){
     inputs[name].addEventListener('input', function(){
       if(name === 'password') refreshStrength()
+      // La confirmation dépend du premier mot de passe : seul couplage admis.
+      if(submitted && name === 'password') setErr('password2', fieldMsg('password2'))
       if(submitted) setErr(name, fieldMsg(name))
       else if(errs[name].textContent && !fieldMsg(name)) setErr(name, '')
     })

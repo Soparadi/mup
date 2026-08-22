@@ -4675,11 +4675,32 @@ async function exportPDF() {
 
     if(parPage) {
       // SUR MOBILE, PAGE PAR PAGE ET JAMAIS D'UN SEUL RASTER. Chaque page est
-      // une capture à part, cadrée en coordonnées de document sur la bande qui
-      // lui revient. La fenêtre ne défile pas dans cette application (html et
-      // body sont en overflow:hidden), mais scrollX et scrollY sont ajoutés
-      // quand même : ils valent zéro et ne coûtent rien, et le jour où la page
-      // défilera le cadrage ne sera pas faux.
+      // une capture à part, cadrée sur la bande qui lui revient.
+      //
+      // LE CADRAGE PART DU COIN DE LA FEUILLE, PAS DE CELUI DU DOCUMENT, et
+      // c'est une correction, pas un ajustement. html2canvas 1.4.1 ADDITIONNE
+      // l'option à la position de l'élément qu'on lui passe : il rend en
+      // x = (options.x ou 0) + bounds.left, bounds étant la boîte de cet
+      // élément. Ce qu'on lui donne est donc un DÉCALAGE depuis le coin
+      // haut-gauche de la feuille, jamais une coordonnée de document. Passer
+      // cadre.left doublait ce décalage et poussait la fenêtre de cadrage hors
+      // de la feuille : au banc, toutes les pages de cette branche revenaient
+      // BLANCHES. Zéro pixel d'encre, et rien pour le signaler, la toile étant
+      // remplie de blanc par backgroundColor. Mesuré au banc : à x = 0 et
+      // y = p.haut, chaque bande rend la tranche que la voie d'un seul raster
+      // découpe au même endroit. La première page en est le pixel exact ; les
+      // suivantes partent d'une coupe fractionnaire (1075,609 pixels CSS, soit
+      // 3226,83 pixels d'image à l'échelle 3) et rejouent donc leur
+      // anticrénelage un tiers de pixel plus haut : écart moyen mesuré de 0,55
+      // sur 255, et exactement zéro dès que la coupe tombe sur un pixel
+      // d'image entier. C'est une différence de rendu, pas de cadrage, et elle
+      // ne se voit qu'en comparant les deux branches pixel à pixel.
+      //
+      // scrollX et scrollY sont partis avec l'erreur qu'ils accompagnaient :
+      // ils corrigeaient un défilement de fenêtre dans un repère qui n'est pas
+      // celui de la fenêtre. La découpe ne se fait qu'en hauteur, x reste donc
+      // à zéro, et p.haut est déjà mesuré depuis le haut de la feuille par
+      // pagesDuDocument.
       for(let i = 0; i < pages.length; i++) {
         const p = pages[i];
         const toile = await window.html2canvas(feuille, {
@@ -4688,8 +4709,8 @@ async function exportPDF() {
           useCORS: true,
           logging: false,
           imageTimeout: 0,
-          x: cadre.left + window.scrollX,
-          y: cadre.top + window.scrollY + p.haut,
+          x: 0,
+          y: p.haut,
           width: cadre.width,
           height: p.bas - p.haut
         });

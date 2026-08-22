@@ -585,8 +585,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <span id="cc-toolbar-label">Reçus</span>
           </div>
 
-          <!-- Empty state : aucun compte connecté -->
-          <div class="empty-state" id="empty-state-noaccount">
+          <!-- Empty state : aucun compte connecté.
+               MASQUÉ EN LIGNE, comme ses quatre voisins de la colonne. Il était
+               le seul à ne pas l'être, et la règle .empty-state pose
+               display:flex : il s'affichait donc dès la première peinture,
+               si bien que l'abonné connecté depuis des mois lisait
+               « Connectez votre boîte mail » le temps que
+               /api/v2/mail/accounts réponde. setInboxState reste seul maître
+               de l'affichage. -->
+          <div class="empty-state" id="empty-state-noaccount" style="display:none;">
             <div class="empty-state-icon">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
             </div>
@@ -1037,7 +1044,13 @@ var STATE = {
   bodyToken: 0,            // idem pour le corps d'un message
   welcomePollTimer: null,
   oauthProviders: null,    // { google, microsoft } — null tant que non interrogé
-  googleAppVerified: false // dossier validé chez Google ? faux tant qu'on ne sait pas
+  googleAppVerified: false, // dossier validé chez Google ? faux tant qu'on ne sait pas
+  // LA LECTURE DES COMPTES A-T-ELLE ABOUTI ? Le témoin de Devis (reglagesLus)
+  // et de Visio (lectureReglagesAboutie), posé ici pour la même raison : tant
+  // qu'il est faux, on ignore si l'abonné a une boîte, et affirmer qu'il n'en a
+  // pas ferait passer une panne pour un compte neuf. Il ne se pose que sur une
+  // réponse effectivement lue, et retombe dès qu'une lecture échoue.
+  comptesLus: false
 };
 
 // ────────────────────────────────────────────────
@@ -1046,7 +1059,13 @@ var STATE = {
 async function loadAccountsAndInbox(){
   try {
     var r = await fetch('/api/v2/mail/accounts');
-    var accounts = r.ok ? await r.json() : [];
+    // UN STATUT NON-200 N'EST PAS UNE LISTE VIDE. Le repli sur [] faisait dire
+    // à un 500 exactement ce que dit un compte neuf. Il rejoint le réseau coupé
+    // dans la seule branche qui soit vraie : celle où la lecture n'a pas abouti.
+    if(!r.ok) throw new Error('comptes : statut ' + r.status);
+    var accounts = await r.json();
+    // Le témoin ne se pose qu'ICI, sur une réponse lue, et jamais avant.
+    STATE.comptesLus = true;
     STATE.accounts = accounts;
     // Une adresse de domaine vérifié sert à écrire, pas à lire : la colonne
     // n'affiche que les boîtes réellement connectées.
@@ -1074,7 +1093,15 @@ async function loadAccountsAndInbox(){
       peintAuthDomaine();
       showEmptyNoAccount();
     }
-  } catch(e){ showEmptyNoAccount(); }
+  } catch(e){
+    // LA PANNE NE SE FAIT PLUS PASSER POUR UN COMPTE NEUF. On ignore si
+    // l'abonné a une boîte : la colonne ne dit donc que ce qu'elle sait,
+    // c'est-à-dire qu'elle n'a pas pu lire. STATE.primaryAccount n'est pas
+    // touché pour la même raison : on n'en sait rien.
+    STATE.comptesLus = false;
+    console.warn('[mail] lecture des comptes', e);
+    showComptesIllisibles();
+  }
 }
 
 // L'abonné consulte sa boîte depuis un outil extérieur : l'en-tête de page
@@ -1277,6 +1304,18 @@ function showInboxError(message, code){
   if(actions) actions.style.display = (reconnexion && !imap) ? 'flex' : 'none';
   renderConnexionGate();
   setInboxState('error');
+}
+
+// LA LECTURE DES COMPTES A ÉCHOUÉ. Dite par l'état d'erreur DÉJÀ LÀ, et non par
+// une cinquième face : « Lecture impossible » est exactement ce qui vient de se
+// passer, et cet écran n'affirme rien d'autre de lui-même, là où l'écran sans
+// compte affirme une absence dont on ne sait rien.
+// SON MOTIF, LUI, EST PROPRE : celui que showInboxError rédige par défaut parle
+// de la boîte et de sa connexion, alors qu'ici on ignore jusqu'à son existence.
+// AUCUN BOUTON DE RECONNEXION ne s'y montre, et c'est juste : il n'y a rien à
+// rebrancher tant que rien n'a été lu.
+function showComptesIllisibles(){
+  showInboxError('La liste de vos boîtes n\'a pas pu être lue. Vérifiez votre connexion, puis rechargez la page.');
 }
 
 // ────────────────────────────────────────────────

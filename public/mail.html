@@ -488,7 +488,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    ----------------------------------------------------------------------------
    Vetement et mecanique recopies de devis.html, qui les tenait de visio.html.
    La carte annonce ce que MovUP fera d'une boite connectee et porte le geste
-   qui l'y mene ; elle se retire par ses deux sorties, jamais autrement.
+   qui l'y mene ; elle ne se retire que par ce geste, jamais autrement.
 
    LE VOILE PART DE --sidebar-w : il s'arrete au rail, qui n'est donc jamais
    recouvert au-dessus de 640 px. En dessous, --sidebar-w vaut 0 et le voile
@@ -585,17 +585,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   color:var(--mes-titre);margin-bottom:16px;
 }
 .mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
-/* LE GESTE EST DANS LE CORPS, sous la phrase qui le justifie, et non au pied
-   avec l'autre sortie : c'est ce que l'encart PROPOSE, pas une des deux issues
-   symetriques d'un formulaire. Le pied ne porte donc que la sortie qui rend la
-   page, seule, a droite, la ou les deux autres pages en ecartent deux. */
+/* LE GESTE EST DANS LE CORPS, sous la phrase qui le justifie : c'est ce que
+   l'encart PROPOSE, pas une des deux issues symetriques d'un formulaire. Il y
+   est reste quand le pied et sa sortie sont sortis du document, et il est
+   desormais le seul bouton de la carte. */
 .mes-geste{margin-top:24px}
 /* PAS DE BOUTON NOIR ICI. Le noir n'est pas de trop en soi, il est de trop
    SUR CETTE PAGE : chez Devis et chez Visio il termine une saisie
    (« Enregistrer », « Ajouter un document »), là où celui-ci ne termine rien
    et EMMÈNE AILLEURS, chez Microsoft. Il porte donc le secondaire partagé de
-   mup-confirm.css, .mupc-btn .mupc-btn-outline, celui-là même que
-   « Je verrai plus tard » porte au pied.
+   mup-confirm.css, .mupc-btn .mupc-btn-outline, qu'il est seul à porter ici
+   depuis que le pied de la carte est sorti du document.
    LA RÈGLE .mes-btn EST PARTIE AVEC LE NOIR. Elle n'était portée que par ce
    bouton et plus rien de cette page ne la réclame ; laissée en place, elle
    ferait croire au lecteur suivant que l'encart a un bouton primaire quelque
@@ -611,20 +611,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    des 10 px du noir. Seul le flex-shrink du logo manque à mup-confirm.css, et
    c'est lui qui garde au carré ses 16 px quand le libellé pousse. */
 .mes-geste .mupc-btn svg{flex-shrink:0}
-/* Le pied ne porte que sa sortie. Aucun bouton ne porte de marge : l'ecart
-   viendrait du conteneur s'il y en avait deux. */
-.mes-pied{
-  border-top:1px solid var(--mes-bord);background:var(--mes-fond);
-  padding:16px 34px;flex-shrink:0;
-  display:flex;align-items:center;justify-content:flex-end;
-  gap:16px;flex-wrap:wrap;
-}
-/* LES DEUX BOUTONS DE LA CARTE reprennent le secondaire de mup-confirm.css,
-   chargee plus bas : la sortie du pied et, depuis ce lot, le geste du corps.
-   Seule leur bague de focus manque a cette feuille : on leur prete celle de
-   l'encart, sans toucher au rayon que .mupc-btn pose deja.
-   PORTEE SUR .mes-carte ET NON SUR .mes-pied : visant le seul pied, elle
-   laisserait le bouton Microsoft, qui est dans le corps, sans bague. */
+/* PAS DE REGLE .mes-pied ICI, et c'est un retrait : la carte n'a plus de pied
+   depuis que « Je verrai plus tard » est sorti du document, et plus rien de
+   cette page ne portait cette classe. Le jeton --mes-fond, qui n'etait lu que
+   par elle, RESTE : la palette du vetement est recopiee entiere d'une page a
+   l'autre (cf. le bloc de jetons en tete, et le meme raisonnement plus haut
+   pour --mes-bouton), et en retirer un de la seule copie de Mail ferait
+   diverger les trois copies. Devis et Visio gardent leur pied et leur regle,
+   chacune dans sa propre feuille. */
+/* LE SEUL BOUTON DE LA CARTE, celui de Microsoft, reprend le secondaire de
+   mup-confirm.css, chargee plus bas. Seule sa bague de focus manque a cette
+   feuille : on la lui prete ici, sans toucher au rayon que .mupc-btn pose deja.
+   PORTEE SUR .mes-carte : le bouton vit dans le corps, et la regle doit
+   l'atteindre la ou il est. */
 .mes-carte .mupc-btn-outline:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px}
 
 /* -- LA PAGE, DERRIERE --
@@ -849,9 +848,10 @@ body #mup-cookie-panel{z-index:60001}
                colonne n'affiche que des messages ; sans boite connectee, elle
                se tait (cf. renvoyerVersLEncart).
 
-               CELUI QUI A DIFFERE ne trouve donc rien ici, et c'est assume :
-               sa porte de retour est l'onglet Parametres, qui porte deja ses
-               boutons de connexion. -->
+               PERSONNE NE VOIT CETTE COLONNE MUETTE, depuis que le report est
+               retire : sans boite, l'encart est devant, et il y reste. Le seul
+               cas ou elle se montre vide est celui d'une lecture des comptes
+               qui a echoue, ou l'encart ne se leve deliberement pas. -->
 
           <!-- Liste emails -->
           <div class="email-list" id="email-list" style="display:none;"></div>
@@ -1109,16 +1109,33 @@ body #mup-cookie-panel{z-index:60001}
      Masque en style EN LIGNE : il n'est revele qu'une fois les comptes lus,
      sans quoi il clignoterait au chargement chez l'abonne deja connecte.
 
-     DEUX SORTIES, ET IL N'Y EN A PAS DE TROISIEME : ni croix, ni Echap, ni clic
-     au fond. Le bouton du corps emmene chez Microsoft ; « Je verrai plus tard »
-     rend la page et pose le report. C'est la Signature qui justifie cette
-     seconde sortie : elle se regle entierement sans boite, et un encart qui
-     tiendrait la page la rendrait inatteignable.
+     UNE SEULE SORTIE, ET IL N'Y EN A PAS DE DEUXIEME : ni croix, ni Echap, ni
+     clic au fond, ni report. Le bouton du corps emmene chez Microsoft, et c'est
+     le depart lui-meme qui retire l'encart : oauthMicrosoft() pose un
+     window.location.href, la page quitte et l'encart part avec elle. Il n'y a
+     donc aucun retrait a ecrire pour ce chemin. Au retour, la condition
+     d'apparition tranche seule : boite connectee, l'encart ne se leve plus ;
+     connexion abandonnee, il se releve.
+
+     CECI DEROGE A LA DOCTRINE D'ACCOMPAGNEMENT DU 20 AOUT, qui exige partout
+     ailleurs une sortie sans cout, et la derogation est voulue. Le motif tient
+     a ce qu'il y a DERRIERE l'encart : sur Visio, sur Devis, sur la Carte,
+     fermer le panneau rend la main sur un ecran utilisable. Sur Mail, sans
+     boite connectee, il n'y a rien derriere, et la sortie ne rendait qu'une
+     colonne muette. QUE CETTE TRACE RESTE : sans elle, la regle generale sera
+     reappliquee ici par inadvertance, et le bouton de report reviendra.
+     Ce qui n'est PAS derogatoire, et ne doit pas l'etre : le rail reste hors de
+     rendreLaPageInerte. L'abonne quitte la page, il ne quitte pas l'encart.
+
+     LE SEUL CLIC QUI NE MENE NULLE PART est celui que startOauth refuse
+     (fournisseur indisponible). L'encart reste alors affiche et le refus arrive
+     par un toast, remonte en z-index expres pour se lire par-dessus le voile
+     (cf. body.mise-en-service .toast dans la feuille).
 
      LA COLONNE N'ANNONCE PLUS RIEN : le panneau sans compte qui doublait ce
      texte est retire du document. L'encart porte l'annonce et le geste, la
-     colonne n'affiche que des messages, et celui qui a differe ne voit qu'une
-     colonne muette dont la porte de retour est l'onglet Parametres.
+     colonne n'affiche que des messages, et personne ne la voit muette : sans
+     boite, l'encart est devant.
 
      MASQUAGE : un seul bouton, celui de Microsoft. L'encart n'a pas a porter un
      bouton eteint par la feuille de style ; le jour ou Google revient, c'est ici
@@ -1155,11 +1172,9 @@ body #mup-cookie-panel{z-index:60001}
       </div>
     </div>
 
-    <!-- La seconde sortie, seule au pied : elle n'ecrit rien en base, pose le
-         report local et rend la page. -->
-    <div class="mes-pied">
-      <button type="button" class="mupc-btn mupc-btn-outline" id="capacite-plus-tard">Je verrai plus tard</button>
-    </div>
+    <!-- PAS DE PIED A CETTE CARTE. Le .mes-pied et son « Je verrai plus tard »
+         sont sortis du document : cf. le bloc de tete, UNE SEULE SORTIE. La
+         carte s'arrete donc a son corps. -->
   </div>
 </div>
 
@@ -1349,16 +1364,17 @@ var STATE = {
 // L'ENCART D'ANNONCE DE CAPACITE
 // ────────────────────────────────────────────────
 
-// -- LE REPORT --
-// LOCAL, pour les deux memes raisons que sur Visio et Devis : rien de nouveau
-// ne part en base, ni champ ni route, et un report qui passerait par une
-// ecriture pourrait echouer, enfermant l'abonne derriere l'encart a chaque
-// ouverture. Il ne gouverne QUE l'apparition a l'arrivee : il ne dit rien du
-// panneau de la colonne, qui reste offert a qui a differe.
-var LS_MAIL_CAPACITE_DIFFERE = 'mup_mail_capacite_differe';
-function reportCapacitePris(){ try { return localStorage.getItem(LS_MAIL_CAPACITE_DIFFERE) === '1'; } catch(e){ return false; } }
-function poserReportCapacite(){ try { localStorage.setItem(LS_MAIL_CAPACITE_DIFFERE, '1'); } catch(e){} }
-function effacerReportCapacite(){ try { localStorage.removeItem(LS_MAIL_CAPACITE_DIFFERE); } catch(e){} }
+// -- LE REPORT N'EXISTE PLUS, ET SA CLE DOIT PARTIR DES NAVIGATEURS --
+// Le bouton qui la posait est sorti du document et plus personne ne la lit.
+// Laissee en place, elle resterait indefiniment chez ceux qui avaient differe,
+// sans rien gouverner. On la purge donc au chargement, une fois, chez tout le
+// monde : c'est un effacement, il n'echoue pas s'il n'y a rien a effacer, et il
+// n'a aucune consequence chez ceux qui ne l'ont jamais posee.
+// LA CLE EN CLAIR, sans constante : c'est le seul endroit de la page qui la
+// nomme encore, et le jour ou cette ligne partira a son tour, il ne restera
+// aucun vestige a chercher. CETTE LIGNE EST DESTINEE A ETRE RETIREE une fois
+// le parc renouvele ; d'ici la, elle coute un removeItem par ouverture.
+try { localStorage.removeItem('mup_mail_capacite_differe'); } catch(e){}
 
 // Inertie de la page derriere le voile : pointeur et focus. L'encart vit hors
 // de .shell precisement pour pouvoir rendre .shell inerte sans le devenir
@@ -1389,8 +1405,11 @@ function leverEncartCapacite(){
 }
 
 // L'encart ne se ferme sur AUCUN geste, ni Echap, ni clic au fond, ni croix :
-// il n'en a pas. Cette fonction n'est appelee que par sa sortie et par
-// majEncartCapacite, qui la constate sans objet.
+// il n'en a pas, et depuis le retrait du report il n'a plus de bouton qui le
+// rende non plus. Cette fonction n'a donc qu'un appelant, majEncartCapacite,
+// qui l'appelle le plus souvent sans objet. Elle reste car c'est elle qui
+// RETIRE l'encart quand une boite apparait dans une page qui ne s'est pas
+// rechargee (connexion faite depuis Parametres, retour de lecture).
 function retirerEncartCapacite(){
   var voile = document.getElementById('encartCapacite');
   if(!voile || voile.style.display === 'none') return;
@@ -1399,29 +1418,22 @@ function retirerEncartCapacite(){
   rendreLaPageInerte(false);
 }
 
-// LA CONDITION D'APPARITION, A TROIS MEMBRES comme sur les deux autres pages :
-// les comptes ont ete LUS, aucune boite n'est connectee, le report n'a pas ete
-// pris. Le premier membre est ce qui distingue cette page des deux autres : une
-// lecture qui a echoue laisse STATE.comptesLus a false et l'encart ne se leve
-// pas. Annoncer « connectez votre boite » a un abonne dont on n'a pas pu lire
-// les comptes serait affirmer une absence dont on ne sait rien, exactement ce
-// que le panneau sans compte ne dit plus depuis que la panne a sa branche.
+// LA CONDITION D'APPARITION, A DEUX MEMBRES depuis le retrait du report : les
+// comptes ont ete LUS, et aucune boite n'est connectee. Les deux autres pages
+// en comptent trois ; c'est ici que la difference se voit, et c'est voulu.
 //
-// LE REPORT TOMBE SI UNE BOITE EXISTE, et pas seulement quand on vient d'en
-// connecter une : la page est equipee, le report n'a plus rien a retenir. Sans
-// cela, un report pose avant une connexion faite depuis Parametres survivrait
-// jusqu'a interdire a l'encart de revenir le jour ou l'abonne deconnecte sa
-// boite. Meme doctrine que sur Devis et Visio.
+// STATE.comptesLus RESTE, ET IMPERATIVEMENT. Il etait deja ce qui distingue
+// cette page des deux autres, il est desormais ce qui la protege. Une lecture
+// qui a echoue le laisse a false, et l'encart ne se leve pas : sans lui, une
+// panne de /api/v2/mail/accounts leverait devant un abonne QUI A UNE BOITE un
+// encart qui ne se retire plus par aucun bouton. C'est le seul enfermement reel
+// que cette page puisse produire, et ce temoin est ce qui l'empeche. Annoncer
+// « connectez votre boite » a qui on n'a pas pu lire les comptes serait de
+// surcroit affirmer une absence dont on ne sait rien.
 function majEncartCapacite(){
-  if(STATE.primaryAccount){ effacerReportCapacite(); }
-  if(STATE.comptesLus && !STATE.primaryAccount && !reportCapacitePris()) leverEncartCapacite();
+  if(STATE.comptesLus && !STATE.primaryAccount) leverEncartCapacite();
   else retirerEncartCapacite();
 }
-
-document.getElementById('capacite-plus-tard').addEventListener('click', function(){
-  poserReportCapacite();
-  retirerEncartCapacite();
-});
 
 // ────────────────────────────────────────────────
 // CHARGEMENT INITIAL
@@ -1667,13 +1679,13 @@ function setInboxState(state){
 // IL FAIT DEUX CHOSES, et la première compte autant que la seconde. Éteindre la
 // colonne n'est pas une précaution : sans elle, une déconnexion laisserait à
 // l'écran les messages de la boîte qu'on vient de débrancher.
-// CE QU'IL NE FORCE PAS : l'encart ne se lève qu'à la condition à trois membres
-// de majEncartCapacite. Celui qui a différé garde donc une colonne muette et
-// repasse par les Paramètres, où ses boutons de connexion l'attendent.
+// CE QU'IL NE FORCE PAS : l'encart ne se lève qu'à la condition à deux membres
+// de majEncartCapacite. Une lecture des comptes qui a échoué laisse donc une
+// colonne muette, et c'est le seul cas où l'abonné la voit.
 // LE DÉSACCORD : showInboxError('no_account') arrive avec STATE.primaryAccount
 // encore posé, la boîte ayant disparu côté serveur entre deux appels. L'encart
-// ne se lève pas de ce chef, mais majEncartCapacite efface le report au passage
-// et la prochaine lecture des comptes, qui ne trouvera plus de boîte, le lèvera.
+// ne se lève pas de ce chef ; la prochaine lecture des comptes, qui ne trouvera
+// plus de boîte, le lèvera.
 function renvoyerVersLEncart(){
   setInboxState('rien');
   majEncartCapacite();

@@ -76,27 +76,35 @@ body {
 .sb-icon { width: 22px; height: 22px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; flex-shrink: 0; }
 .sb-badge { margin-left: auto; font-size: 9px; font-weight: 800; font-family: var(--mono); background: var(--text); color: #fff; border-radius: 6px; padding: 1px 6px; }
 
-/* PLEINE LARGEUR : patron .dash-content (dashboard.html), gouttiere laterale
-   nulle en grand format. La page prend toute la largeur de main, et main ne
-   retranche plus rien sur les cotes : formulaire, carte, bande de contexte,
-   bande d'indicateurs et fiches partent tous du rail de la barre laterale et
-   courent jusqu'au bord droit de la fenetre.
-   MOTIF, un seul retrait lateral dans la chaine, et il est interne au champ :
-   main est a 0, .search-engine reste a retrait lateral nul (padding 28px 0
-   24px) donc sa ligne de gauche est exactement celle de la carte, et c'est le
-   champ de saisie qui porte son propre habillage (44px a gauche pour la loupe).
-   Empiler un second retrait a l'un de ces deux etages decalerait le formulaire
-   par rapport a la carte et aux fiches : c'est le defaut que ce motif corrige.
+/* GOUTTIERE DE 24px : patron .dash-content (dashboard.html), retrait lateral
+   de 24px en grand format. Les six bandes de la page, formulaire, bandeau
+   d'erreur, carte, bande d'indicateurs, bande de contexte et fiches, partent
+   toutes de cette meme ligne et s'arretent a la meme a droite.
+   MOTIF DE LA VALEUR : le pied de page partage est en position:fixed hors de
+   main, cale a left: var(--sidebar-w), et porte --app-footer-pad-x a 24px
+   (styles/app-footer.css). Le contenu tombe donc sur la ligne exacte de la
+   boite du pied. Son texte suit cette ligne tant que la largeur utile reste
+   sous 1400px ; au-dela, .mup-app-footer__inner (max-width 1400px, marge auto)
+   le recentre dans ce meme retrait. Une gouttiere autre que 24px desalignerait
+   les deux des la premiere ligne, et couterait davantage dans la bande etroite
+   ou le formulaire se replie en deux rangees.
+   MOTIF, un seul retrait lateral dans la chaine, et il est ici : .search-engine
+   reste a retrait lateral nul (padding 28px 0 24px) donc sa ligne de gauche est
+   exactement celle de la carte, et c'est le champ de saisie qui porte son propre
+   habillage (44px a gauche pour la loupe). Empiler un second retrait a l'un de
+   ces etages decalerait le formulaire par rapport a la carte et aux fiches :
+   c'est le defaut que ce motif corrige. Aucune bande ne porte de marge laterale
+   propre : .err-banner, qui etait la seule, est passee a margin: 16px 0.
    Le padding-bottom n'est pas de la meme nature : il reserve la hauteur du pied
-   fixe, il ne bouge pas. La media query 640 redonne 16px lateraux, la gouttiere
-   reste lisible sur telephone.
+   fixe, il ne bouge pas. La media query 640 resserre la gouttiere a 16px, la
+   valeur du pied sur telephone etant elle aussi resserree (14px).
    Plus de carte flottante : ni largeur bornee, ni marge, ni bordure, ni rayon,
    ni ombre, ni fond distinct du fond de page. .search-engine et .content-area
    sont desormais des enfants directs de main. */
 main {
   padding-top: 0;
   padding-bottom: calc(var(--app-footer-h) + 16px);
-  padding-left: 0; padding-right: 0;
+  padding-left: 24px; padding-right: 24px;
   display: flex; flex-direction: column; flex: 1; min-width: 0;
 }
 
@@ -127,19 +135,29 @@ main {
 /* Une seule grille, sur le modèle de la vitrine (.leads-config). Elle porte les
    quatre champs géo, le bouton « Lancer » ET le bloc identifiant — celui-ci est
    désormais un enfant de la grille comme les autres, il ne se met plus à part.
-   En grand : une rangée (deux colonnes auto en bout pour « Lancer » et le bloc
-   identifiant). width:100% : la barre ne centre plus, la grille prend toute la
-   largeur de main et part donc du rail, comme la carte et les fiches.
-   PISTE 1 EN 1fr, ET NON PLAFONNÉE À 175px : pickNAF recopie le libellé NAF
-   ENTIER dans le champ après sélection, c'est ce texte-là que l'abonné relit.
-   Le champ perd 84px en habillage (44 à gauche pour la loupe, 38 à droite,
-   2 de bordure) : une piste de 175px n'en laissait lire que 91, soit 3% des
-   732 libellés affichés en entier. Rendue à 1fr, la piste mesure 398px à
-   1440 de large, laisse lire 314px de texte, et environ 95% des libellés
-   tiennent. Les quatre autres pistes gardent leur plafond : le département
-   le plus large des trois selects géo (« 04 Alpes-de-Haute-Provence »)
-   y tient, au-delà ellipsis native. */
-.search-grid { display: grid; width: 100%; grid-template-columns: minmax(150px,1fr) minmax(120px,160px) minmax(140px,180px) minmax(120px,160px) auto auto; gap: 16px; align-items: end; }
+   En grand : une rangée, « Lancer » sur une piste auto et le bloc identifiant
+   sur la piste qui prend le mou (cf. plus bas). width:100% : la barre ne centre
+   plus, la grille prend toute la largeur de main et part donc du rail, comme la
+   carte et les fiches.
+   PISTE 1 EN minmax(150px, 440px), ET NON PLAFONNÉE À 175px : pickNAF recopie
+   le libellé NAF ENTIER dans le champ après sélection, c'est ce texte-là que
+   l'abonné relit. Le champ perd 84px en habillage (44 à gauche pour la loupe,
+   38 à droite, 2 de bordure) : une piste de 175px n'en laissait lire que 91,
+   soit 3% des 732 libellés affichés en entier.
+   LE PLAFOND DE 440px EST LE GENOU DE LA COURBE DE COUVERTURE relevée sur ces
+   732 libellés : 400px en couvrent 95,6%, 420px 97,7%, 440px 98,8%, 460px
+   99,0%. Au-delà de 440 on paie de la largeur pour deux libellés, et on la paie
+   sur la seule piste que l'abonné relit vraiment.
+   PISTE 6 EN 1fr, ET .id-block EN justify-self:end : passé le plafond, le mou
+   doit s'installer ENTRE « Lancer » et le bloc identifiant. Avec les deux
+   dernières pistes en auto et la piste 1 en 1fr, tout le surplus gonflait la
+   piste 1 ; avec un plafond sur la piste 1 et les deux pistes de bout restées
+   en auto, il gonflerait les deux boutons. La piste 6 prend donc le mou, et son
+   contenu, poussé à droite, reste collé au bord droit de la gouttière.
+   Les quatre autres pistes gardent leur plafond : le département le plus large
+   des trois selects géo (« 04 Alpes-de-Haute-Provence ») y tient, au-delà
+   ellipsis native. */
+.search-grid { display: grid; width: 100%; grid-template-columns: minmax(150px,440px) minmax(120px,160px) minmax(140px,180px) minmax(120px,160px) auto 1fr; gap: 16px; align-items: end; }
 .search-grid select { text-overflow: ellipsis; }
 .field-label {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
@@ -269,7 +287,7 @@ main {
 .btn-go.loading { background: #000; color: #fff; cursor: wait; }
 
 /* bloc recherche par identifiant (SIRET / SIREN) — à droite de « Lancer » */
-.id-block { display: flex; align-items: flex-end; gap: 10px; flex: 0 0 auto; }
+.id-block { display: flex; align-items: flex-end; gap: 10px; flex: 0 0 auto; justify-self: end; }
 .id-field { width: 140px; }
 .id-field .field-label { white-space: nowrap; }
 .btn-id {
@@ -380,7 +398,7 @@ main {
 .err-banner {
   display: none; background: #FFF3F0; border: 1px solid #FCCAC7;
   border-radius: 12px; padding: 12px 20px;
-  margin: 16px 48px; font-size: 13px; color: var(--red);
+  margin: 16px 0; font-size: 13px; color: var(--red);
   align-items: center; gap: 10px;
 }
 .err-banner.show { display: flex; }

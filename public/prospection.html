@@ -141,13 +141,13 @@ main {
    carte et les fiches.
    PISTE 1 EN minmax(150px, 440px), ET NON PLAFONNÉE À 175px : pickNAF recopie
    le libellé NAF ENTIER dans le champ après sélection, c'est ce texte-là que
-   l'abonné relit. Le champ perd 84px en habillage (44 à gauche pour la loupe,
-   38 à droite, 2 de bordure) : une piste de 175px n'en laissait lire que 91,
-   soit 3% des 732 libellés affichés en entier.
+   l'abonné relit. Le champ perd 85px en habillage (44 à gauche pour la loupe,
+   38 à droite, deux bordures de 1,5) : une piste de 175px n'en laissait lire
+   que 90, soit 3% des 732 libellés affichés en entier.
    LE PLAFOND DE 440px EST LE GENOU DE LA COURBE DE COUVERTURE relevée sur ces
-   732 libellés : 400px en couvrent 95,6%, 420px 97,7%, 440px 98,8%, 460px
-   99,0%. Au-delà de 440 on paie de la largeur pour deux libellés, et on la paie
-   sur la seule piste que l'abonné relit vraiment.
+   732 libellés : 400px en couvrent 95,5%, 420px 97,7%, 440px 98,5%, 460px
+   99,0%. Au-delà de 440 on paie de la largeur pour quatre libellés, et on la
+   paie sur la seule piste que l'abonné relit vraiment.
    PISTE 6 EN 1fr, ET .id-block EN justify-self:end : passé le plafond, le mou
    doit s'installer ENTRE « Lancer » et le bloc identifiant. Avec les deux
    dernières pistes en auto et la piste 1 en 1fr, tout le surplus gonflait la
@@ -303,11 +303,30 @@ main {
 /* Repli en deux rangées stables, exactement comme .leads-config (1fr 1fr auto) :
    rangée 1 = secteur / région / département, rangée 2 = ville / « Lancer » / bloc
    identifiant. « Lancer » reste EN LIGNE dans sa cellule (pas de grid-column:1/-1),
-   comme le bouton de la vitrine. Seuil à 1330 : c'est la largeur de fenêtre en
-   dessous de laquelle la rangée unique (≈1180px de contenu + marges du bloc) ne
-   tient plus dans la colonne principale. On replie exactement là, ce qui supprime
-   la bande morte 1281–1370 de l'ancien double repli (flex-wrap puis media query). */
-@media (max-width: 1330px) {
+   comme le bouton de la vitrine.
+   SEUIL À 1749, ET NON PLUS À 1330 : le seuil ne se pose plus au croisement des
+   deux formules de largeur, c'est-à-dire là où la rangée unique cessait de tenir
+   dans la colonne principale. Il se pose au point où cette rangée unique atteint
+   son plafond. Relevé au banc : la piste Secteur touche 440px à 1745 de largeur
+   de fenêtre et n'en bouge plus ensuite ; au-dessus de ce point la rangée unique
+   ne rend plus rien de plus sur la seule piste que l'abonné relit, tout le gain
+   part dans la piste 6.
+   1750 est retenu plutôt que 1745 parce que clamp(200px, 16vw, 280px) y sature
+   exactement : 280 / 0,16 = 1750. En dessous, le rail prend 16% de chaque pixel
+   ajouté à la fenêtre ; au-dessus, il est figé et tout le gain va au contenu. Le
+   seuil se pose donc sur une charnière du rail, pas sur un arrondi de confort.
+   COUVERTURE DE PART ET D'AUTRE, relevée au banc sur les 732 libellés : à 1749
+   la grille est repliée et rend une piste Secteur de 595px, soit 99,9% ; à 1750
+   elle repasse en rangée unique et rend 440px, soit 98,5%, et n'en bouge plus
+   au-delà. Le décrochage vaut 1,4 point sur un pixel de fenêtre, et il est
+   borné : au-dessus de 1750 la couverture reste plate à 98,5%.
+   LA GRILLE REPLIÉE N'EST PAS PLAFONNÉE, et ce n'est pas un oubli : ses deux
+   colonnes 1fr sont symétriques, le mou qu'elles portent est résiduel et n'est
+   payé par aucune autre piste. La plafonner renverrait le surplus dans la
+   colonne de droite, celle qui porte Région en rangée 1 et « Lancer » en
+   rangée 2 : le mou finirait dans les boutons, ce que le plafond de la rangée
+   unique sert justement à empêcher. */
+@media (max-width: 1749px) {
   .search-grid { grid-template-columns: 1fr 1fr auto; }
 }
 .spinner {
@@ -692,7 +711,7 @@ main {
 
   /* 1 — Formulaire en colonne unique (ordre vitrine : Secteur → Région →
      Département → Ville → Lancer → identifiant, déjà l'ordre du DOM).
-     Le palier 1330 laisserait la grille à « 1fr 1fr auto » : on force
+     Le palier 1749 laisserait la grille à « 1fr 1fr auto » : on force
      une colonne. width:100% car .search-bar centre son enfant
      (justify-content:center), sans quoi la grille garderait sa largeur
      de contenu au lieu de remplir. La gouttière de page se resserre à 16px sur

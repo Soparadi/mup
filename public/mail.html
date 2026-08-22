@@ -541,12 +541,41 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    placer, et c'est le cas des trois à des degrés divers, Mail en tête. Sans
    flex-grow ici, ce blanc tombait APRÈS le dernier élément de la colonne,
    c'est-à-dire SOUS le pied, qui se retrouvait à flotter au milieu de la carte
-   (constaté au banc). Le corps prend cette place : le texte reste en haut, le
-   pied redescend au bas de la carte, et rien ne s'écarte ni ne se centre.
+   (constaté au banc). Le corps prend cette place, et le pied redescend au bas
+   de la carte, où il reste comme sur les deux autres pages.
    flex-grow SEUL, et non flex:1 : la base reste sur le contenu, la hauteur
    naturelle de la carte est donc toujours celle de ce qu'elle porte, et seule
-   la place LIBRE est distribuée. */
-.mes-corps{padding:30px 34px 26px;overflow-y:auto;flex-grow:1}
+   la place LIBRE est distribuée.
+
+   PUIS LE CORPS RÉPARTIT CE BLANC, ET CE CENTRAGE EST PROPRE À MAIL.
+   Avoir donné la place au corps ne disait pas encore où elle tombe DEDANS :
+   sans justify-content, tout s'accumulait SOUS le bouton. Cette carte mesure
+   318,67 px de haut naturellement (cf. le jeton de la hauteur commune), le
+   plancher lui en donne 490 : ce sont 171 px de blanc, et 197,72 px une fois
+   comptés dans la boîte de contenu du corps. Titre, phrase et bouton se
+   posent désormais au milieu, ce blanc se partageant en deux parts égales de
+   98,86 px, au-dessus et au-dessous (mesuré au banc, fenêtre de 1113 px).
+   ÇA NE DESCEND PAS DANS UNE RÈGLE PARTAGÉE. Les cartes de Devis et de Visio
+   n'ont presque pas de blanc à placer, et leur contenu doit rester EN HAUT :
+   ce centrage est la conséquence d'un corps court, pas une pièce du vêtement
+   commun aux trois pages.
+   PASSER LE CORPS EN COLONNE FLEX NE DÉPLACE AUCUNE MARGE : le reset de tête
+   met tous les éléments à margin:0, il n'y a donc ici aucune marge adjacente
+   qui se fondait en flux et qui s'additionnerait en flex.
+   « safe center » ET NON « center » NU, et c'est le banc qui tranche. Sur
+   fenêtre courte, le plancher s'abaisse au plafond (cf. min() plus haut) et le
+   contenu finit par dépasser la hauteur du corps. Sur une fenêtre de 288 px,
+   où il déborde de 52 px : avec « center » nu, le titre part 26,14 px
+   AU-DESSUS du corps et le défilement n'en rend que 26, la moitié perdue,
+   exactement la perte constatée sur le voile avant min(). Avec « safe »,
+   l'alignement retombe en haut dès que ça déborde : titre à 0, et les 52 px
+   entiers rendus au défilement. Le « center » nu qui précède est le repli des
+   navigateurs qui ignorent le mot-clé. */
+.mes-corps{
+  padding:30px 34px 26px;overflow-y:auto;flex-grow:1;
+  display:flex;flex-direction:column;
+  justify-content:center;justify-content:safe center;
+}
 /* PAS DE .mes-pile ICI, et c'est le seul ecart au patron des deux autres
    pages : la pile sert a mesurer ensemble des temps qui se remplacent, et cet
    encart n'en a qu'un. Il annonce une capacite, il ne conduit aucune saisie.
@@ -561,16 +590,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    symetriques d'un formulaire. Le pied ne porte donc que la sortie qui rend la
    page, seule, a droite, la ou les deux autres pages en ecartent deux. */
 .mes-geste{margin-top:24px}
-.mes-btn{
-  background:var(--mes-bouton);color:#fff;border:none;
-  padding:11px 20px;border-radius:var(--mes-bouton-rayon);
-  font-family:var(--font);font-size:13px;font-weight:700;
-  flex-shrink:0;cursor:pointer;
-  display:inline-flex;align-items:center;gap:10px;
-}
-.mes-btn:hover{background:#000}
-.mes-btn svg{flex-shrink:0}
-.mes-btn:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+/* PAS DE BOUTON NOIR ICI. Le noir n'est pas de trop en soi, il est de trop
+   SUR CETTE PAGE : chez Devis et chez Visio il termine une saisie
+   (« Enregistrer », « Ajouter un document »), là où celui-ci ne termine rien
+   et EMMÈNE AILLEURS, chez Microsoft. Il porte donc le secondaire partagé de
+   mup-confirm.css, .mupc-btn .mupc-btn-outline, celui-là même que
+   « Je verrai plus tard » porte au pied.
+   LA RÈGLE .mes-btn EST PARTIE AVEC LE NOIR. Elle n'était portée que par ce
+   bouton et plus rien de cette page ne la réclame ; laissée en place, elle
+   ferait croire au lecteur suivant que l'encart a un bouton primaire quelque
+   part. Rien ne bouge chez Devis ni chez Visio : chacune pose la sienne dans
+   sa propre feuille.
+   LES JETONS --mes-bouton ET --mes-bouton-rayon RESTENT, eux, bien que plus
+   personne ne les lise ici : la palette du vêtement est recopiée ENTIÈRE d'une
+   page à l'autre (cf. le bloc de jetons en tête), et en retirer deux de la
+   seule copie de Mail ferait diverger les trois copies que le jour d'une
+   feuille partagée demandera identiques.
+   RESTE À ÉCRIRE LE LOGO. La gouttière entre le carré Microsoft et le libellé
+   survit au changement de classe : .mupc-btn pose la sienne, de 6 px au lieu
+   des 10 px du noir. Seul le flex-shrink du logo manque à mup-confirm.css, et
+   c'est lui qui garde au carré ses 16 px quand le libellé pousse. */
+.mes-geste .mupc-btn svg{flex-shrink:0}
 /* Le pied ne porte que sa sortie. Aucun bouton ne porte de marge : l'ecart
    viendrait du conteneur s'il y en avait deux. */
 .mes-pied{
@@ -579,10 +619,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
   display:flex;align-items:center;justify-content:flex-end;
   gap:16px;flex-wrap:wrap;
 }
-/* La sortie reprend le bouton secondaire de mup-confirm.css, chargee plus bas.
-   Seule sa bague de focus manque a cette feuille : on lui prete celle du pied,
-   sans toucher au rayon que .mupc-btn pose deja. */
-.mes-pied .mupc-btn-outline:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px}
+/* LES DEUX BOUTONS DE LA CARTE reprennent le secondaire de mup-confirm.css,
+   chargee plus bas : la sortie du pied et, depuis ce lot, le geste du corps.
+   Seule leur bague de focus manque a cette feuille : on leur prete celle de
+   l'encart, sans toucher au rayon que .mupc-btn pose deja.
+   PORTEE SUR .mes-carte ET NON SUR .mes-pied : visant le seul pied, elle
+   laisserait le bouton Microsoft, qui est dans le corps, sans bague. */
+.mes-carte .mupc-btn-outline:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px}
 
 /* -- LA PAGE, DERRIERE --
    Le document ne defile deja pas : body{overflow:hidden} est pose depuis
@@ -1079,7 +1122,10 @@ body #mup-cookie-panel{z-index:60001}
 
      MASQUAGE : un seul bouton, celui de Microsoft. L'encart n'a pas a porter un
      bouton eteint par la feuille de style ; le jour ou Google revient, c'est ici
-     un bouton a AJOUTER.
+     un bouton a AJOUTER, et RIEN QUE CA : le texte de l'encart ne nomme aucun
+     fournisseur, il n'y a donc aucune phrase a retablir avec le bouton. C'est
+     ce qui distingue cet endroit des quatre autres marques MASQUAGE, ou la
+     consequence du retrait est ecrite en toutes lettres.
      ══════════════════════════════════════════════════════════════ -->
 <div class="mes-voile" id="encartCapacite" style="display:none" role="dialog" aria-labelledby="capaciteTitre">
   <div class="mes-carte">
@@ -1087,7 +1133,7 @@ body #mup-cookie-panel{z-index:60001}
 
     <div class="mes-corps">
       <h2 id="capaciteTitre">Vos messages, dans MovUP.</h2>
-      <p>Pour envoyer et recevoir vos messages depuis MovUP, connectez d'abord votre boîte professionnelle. La connexion passe par Microsoft, sans jamais nous confier votre mot de passe.</p>
+      <p>Pour envoyer et recevoir vos messages depuis MovUP, connectez votre boîte professionnelle.</p>
 
       <!-- Le geste que l'encart propose, sous la phrase qui le justifie.
            oauthMicrosoft() est appelee telle quelle : c'est elle, et non cette
@@ -1097,7 +1143,7 @@ body #mup-cookie-panel{z-index:60001}
            autres boutons n'aurait rien a fermer, l'encart ne paraissant qu'en
            l'absence de boite. -->
       <div class="mes-geste">
-        <button type="button" class="mes-btn" id="capacite-connecter" onclick="oauthMicrosoft()">
+        <button type="button" class="mupc-btn mupc-btn-outline" id="capacite-connecter" onclick="oauthMicrosoft()">
           <svg width="16" height="16" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <path fill="#F25022" d="M0 0h11v11H0z"/>
             <path fill="#7FBA00" d="M12 0h11v11H12z"/>

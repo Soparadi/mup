@@ -76,24 +76,38 @@ body {
 .sb-icon { width: 22px; height: 22px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; flex-shrink: 0; }
 .sb-badge { margin-left: auto; font-size: 9px; font-weight: 800; font-family: var(--mono); background: var(--text); color: #fff; border-radius: 6px; padding: 1px 6px; }
 
-/* GOUTTIERES LATERALES : patron .dash-content (dashboard.html). La page prend
-   toute la largeur de main, et c'est main qui porte le retrait lateral de 36px.
+/* PLEINE LARGEUR : patron .dash-content (dashboard.html), gouttiere laterale
+   nulle en grand format. La page prend toute la largeur de main, et main ne
+   retranche plus rien sur les cotes : formulaire, carte, bande de contexte,
+   bande d'indicateurs et fiches partent tous du rail de la barre laterale et
+   courent jusqu'au bord droit de la fenetre.
+   MOTIF, un seul retrait lateral dans la chaine, et il est interne au champ :
+   main est a 0, .search-engine reste a retrait lateral nul (padding 28px 0
+   24px) donc sa ligne de gauche est exactement celle de la carte, et c'est le
+   champ de saisie qui porte son propre habillage (44px a gauche pour la loupe).
+   Empiler un second retrait a l'un de ces deux etages decalerait le formulaire
+   par rapport a la carte et aux fiches : c'est le defaut que ce motif corrige.
+   Le padding-bottom n'est pas de la meme nature : il reserve la hauteur du pied
+   fixe, il ne bouge pas. La media query 640 redonne 16px lateraux, la gouttiere
+   reste lisible sur telephone.
    Plus de carte flottante : ni largeur bornee, ni marge, ni bordure, ni rayon,
    ni ombre, ni fond distinct du fond de page. .search-engine et .content-area
    sont desormais des enfants directs de main. */
 main {
   padding-top: 0;
   padding-bottom: calc(var(--app-footer-h) + 16px);
-  padding-left: 36px; padding-right: 36px;
+  padding-left: 0; padding-right: 0;
   display: flex; flex-direction: column; flex: 1; min-width: 0;
 }
 
 /* ═══════════════════════════════════════════════
    SEARCH ENGINE
 ═══════════════════════════════════════════════ */
-/* Le retrait lateral (32px) est parti sur main avec la gouttiere de page : il
-   ne reste ici que le retrait vertical, sinon les deux s'additionneraient et le
-   formulaire ne serait plus aligne sur la carte et les fiches.
+/* Retrait lateral nul, et il le reste : main est passe a 0 de son cote, donc la
+   ligne de gauche de ce bloc est celle de la carte et des fiches. Il ne reste
+   ici que le retrait vertical. Rendre un padding lateral a ce bloc reintroduit
+   la gouttiere que le motif de main vient de supprimer, et le champ, qui porte
+   deja 44px d'habillage interne, se retrouverait deux fois en retrait.
    position/z-index : la liste de suggestions (.acd) deborde desormais vers la
    droite et vers le bas ; cette pile la fait passer au-dessus de .content-area,
    dont .map-col ouvre son propre contexte d'empilement (isolation: isolate). */
@@ -103,17 +117,29 @@ main {
   border-bottom: 1px solid var(--border);
   padding: 28px 0 24px;
 }
-/* Simple enveloppe centrée : toute la disposition est portée par la grille,
-   comme .leads-config sur la vitrine. Plus de flex-wrap ici — c'était lui qui
-   faisait décrocher le bloc identifiant tout seul sur un rang intermédiaire. */
-.search-bar { display: flex; justify-content: center; }
+/* Simple enveloppe : toute la disposition est portée par la grille, comme
+   .leads-config sur la vitrine. Plus de flex-wrap ici : c'était lui qui
+   faisait décrocher le bloc identifiant tout seul sur un rang intermédiaire.
+   flex-start et non center : la grille remplit maintenant toute la largeur
+   (width:100% ci-dessous), et un centrage la ferait flotter dès qu'un palier
+   la rétrécit, donc décrocher du rail sur lequel s'alignent carte et fiches. */
+.search-bar { display: flex; justify-content: flex-start; }
 /* Une seule grille, sur le modèle de la vitrine (.leads-config). Elle porte les
    quatre champs géo, le bouton « Lancer » ET le bloc identifiant — celui-ci est
    désormais un enfant de la grille comme les autres, il ne se met plus à part.
    En grand : une rangée (deux colonnes auto en bout pour « Lancer » et le bloc
-   identifiant). Colonnes resserrées ; département le plus large des trois selects
-   géo (« 04 — Alpes-de-Haute-Provence »), au-delà ellipsis native. */
-.search-grid { display: grid; grid-template-columns: minmax(150px,175px) minmax(120px,160px) minmax(140px,180px) minmax(120px,160px) auto auto; gap: 16px; align-items: end; }
+   identifiant). width:100% : la barre ne centre plus, la grille prend toute la
+   largeur de main et part donc du rail, comme la carte et les fiches.
+   PISTE 1 EN 1fr, ET NON PLAFONNÉE À 175px : pickNAF recopie le libellé NAF
+   ENTIER dans le champ après sélection, c'est ce texte-là que l'abonné relit.
+   Le champ perd 84px en habillage (44 à gauche pour la loupe, 38 à droite,
+   2 de bordure) : une piste de 175px n'en laissait lire que 91, soit 3% des
+   732 libellés affichés en entier. Rendue à 1fr, la piste mesure 398px à
+   1440 de large, laisse lire 314px de texte, et environ 95% des libellés
+   tiennent. Les quatre autres pistes gardent leur plafond : le département
+   le plus large des trois selects géo (« 04 Alpes-de-Haute-Provence »)
+   y tient, au-delà ellipsis native. */
+.search-grid { display: grid; width: 100%; grid-template-columns: minmax(150px,1fr) minmax(120px,160px) minmax(140px,180px) minmax(120px,160px) auto auto; gap: 16px; align-items: end; }
 .search-grid select { text-overflow: ellipsis; }
 .field-label {
   font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
@@ -376,8 +402,21 @@ main {
 .content-area { display: flex; flex-direction: column; overflow: visible; }
 
 /* map column */
+/* HAUTEUR 700px, calée pour laisser quatre fiches entières sous la ligne de
+   flottaison. Mesures relevées au banc sur une fenêtre 1440x913, bloc de
+   recherche replié (l'état dans lequel on lit les résultats) : bloc de
+   recherche replié 61, bande de contexte 42, bande d'indicateurs 60,39,
+   retrait haut des fiches 10, pas de rangée 200, pied fixe 38,25.
+   Le créneau se lit sur cette référence à 67% de zoom, le réglage de travail
+   (viewport CSS 2149x1363, ligne de flottaison à 1324,75) : quatre fiches
+   entières, soit deux rangées puisque la grille est à deux colonnes,
+   demandent une carte dans ]561, 761]. Au-delà de 761 la deuxième rangée
+   passe sous le pied ; à 561 ou moins une troisième rangée remonte au-dessus
+   et la page en montre six. 700 tombe dans ce créneau, à 61px sous le plafond
+   et 139px au-dessus du plancher. Le 320px de la media query 640 ne dépend pas
+   de ce calcul : sur téléphone les fiches sont sur une seule colonne. */
 .map-col {
-  flex: 0 0 auto; height: 480px;
+  flex: 0 0 auto; height: 700px;
   display: flex; flex-direction: column;
   border-bottom: 1px solid var(--border); overflow: hidden; isolation: isolate;
 }

@@ -641,10 +641,7 @@
     html += 'Lecture impossible : ' + liste + '.';
     html += '<span class="etat-erreur-detail">Ce que cette page affiche est incomplet. Un total à zéro ne signifie pas que vous n\'avez aucune dépense, seulement que la base n\'a pas répondu.</span>';
     if(etatLecture.mup_user_settings === 'echec'){
-      // La page ne calcule plus rien à partir de ces réglages, mais le tiroir
-      // Société les réécrit : ouvert sur un repli, il enregistrerait des champs
-      // vides par-dessus les vrais.
-      html += '<span class="etat-erreur-detail">Vos informations de société n\'ont pas pu être lues. N\'ouvrez pas le tiroir Société tant que ce message dure : vous enregistreriez des champs vides par-dessus les vôtres.</span>';
+      html += '<span class="etat-erreur-detail">Vos informations de société n\'ont pas pu être lues : le tiroir Société est fermé tant que ce message dure, pour qu\'aucun champ vide ne vienne écraser les vôtres.</span>';
     }
     html += '<span class="etat-erreur-detail">Rechargez la page. Si le message persiste, votre session a peut-être expiré.</span>';
     html += '</div></div>';
@@ -1365,7 +1362,22 @@
   });
 
   /* ============ SETTINGS ============ */
+  // Verrou. Sur un repli de lecture, `settings` ne porte pas les valeurs de
+  // l'abonné mais celles du repli : le tiroir montrerait des champs vides comme
+  // s'ils l'étaient en base, et son enregistrement les écrirait par-dessus les
+  // vrais, que Devis et Factures relisent ensuite. Un avertissement ne protège
+  // de rien, on ferme la porte.
+  function reglagesIllisibles(){
+    return etatLecture.mup_user_settings === 'echec';
+  }
+
   function openSettings(){
+    if(reglagesIllisibles()){
+      mupAlert('Informations de société indisponibles',
+        'Vos informations de société n\'ont pas pu être lues : la page ne peut ni vous les montrer ni les enregistrer sans risquer d\'effacer les vraies, que vos devis et vos factures relisent. Rechargez la page, puis réessayez.',
+        'Fermer');
+      return;
+    }
     document.getElementById('set-raison').value = settings.raisonSociale || '';
     document.getElementById('set-adresse').value = settings.adresse || '';
     document.getElementById('set-tva').value = String(!!settings.tvaAssujetti);
@@ -1385,6 +1397,14 @@
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   document.getElementById('settings-overlay').addEventListener('click', closeSettings);
   document.getElementById('settings-save').addEventListener('click', async function(){
+    // Second verrou : l'état peut basculer pendant que le tiroir est ouvert. On
+    // ne réécrit jamais par-dessus des réglages qu'on n'a pas lus.
+    if(reglagesIllisibles()){
+      await mupAlert('Enregistrement refusé',
+        'Vos informations de société n\'ont pas pu être lues : les enregistrer maintenant écraserait les vraies. Rechargez la page, puis réessayez.',
+        'Fermer');
+      return;
+    }
     settings.raisonSociale = document.getElementById('set-raison').value.trim();
     settings.adresse = document.getElementById('set-adresse').value.trim();
     settings.tvaAssujetti = (document.getElementById('set-tva').value === 'true');

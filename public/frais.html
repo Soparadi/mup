@@ -688,7 +688,7 @@
     </div>
     <div class="field">
       <label>Photo / Justificatif</label>
-      <input type="file" id="f-photo-input" accept="image/*" capture="environment" style="display:none;" />
+      <input type="file" id="f-photo-input" accept="image/*,application/pdf" capture="environment" style="display:none;" />
       <div id="photo-zone"></div>
     </div>
   </div>
@@ -1448,11 +1448,84 @@
     if(btn) switchView(btn.dataset.view);
   });
 
+  /* ═════════════════════════════════════════════════════════════════
+     LE CONTRAT DE PIECE, COMMUN A LA CARTE ET AU TIROIR
+     ═════════════════════════════════════════════════════════════════ */
+
+  // UNE PIECE EST TOUJOURS LE MEME OBJET : { data, type:'image'|'pdf', nom,
+  // poids }. La carte et le tiroir la lisent par la meme fonction et la
+  // montrent par la meme. Un PDF depose sur la carte se retrouve donc tel quel
+  // sous le crayon, au lieu d'une balise image posee sur une donnee PDF.
+  var PLAFOND_PIECE = 5 * 1024 * 1024;
+
+  function poidsLisible(o){
+    if(o >= 1024*1024) return (o / (1024*1024)).toFixed(1).replace('.', ',') + ' Mo';
+    return Math.max(1, Math.round(o / 1024)) + ' Ko';
+  }
+
+  // Le poids ne part pas en base avec le frais : celui d'une piece relue se
+  // reprend de sa donnee, dont le corps base64 pese trois octets pour quatre
+  // caracteres.
+  function poidsDepuisData(data){
+    var corps = String(data || '').split(',')[1] || '';
+    return Math.round(corps.length * 3 / 4);
+  }
+
+  // Le PDF ne passe PAS par le canvas : il est stocke tel quel. L'image y passe,
+  // comme elle le faisait deja, et en ressort en JPEG redimensionne. La fonction
+  // rend soit la piece, soit le motif du refus, jamais les deux.
+  async function lirePiece(file){
+    var estPdf = (file.type === 'application/pdf') || /\.pdf$/i.test(file.name || '');
+    var estImage = /^image\//.test(file.type || '');
+    if(!estPdf && !estImage){
+      return { piece:null, motif:'Ce fichier n\'est ni une image ni un PDF. Déposez la photo de votre justificatif, ou le PDF que votre fournisseur vous a envoyé.' };
+    }
+    if(file.size > PLAFOND_PIECE){
+      return { piece:null, motif:'Cette pièce pèse ' + poidsLisible(file.size) + ', au-delà des 5 Mo acceptés. Photographiez-la à nouveau en réduisant la définition, ou déposez un fichier plus léger.' };
+    }
+    try {
+      if(estPdf){
+        var data = await new Promise(function(resolve, reject){
+          var r = new FileReader();
+          r.onload = function(e){ resolve(e.target.result); };
+          r.onerror = function(){ reject(new Error('lecture')); };
+          r.readAsDataURL(file);
+        });
+        return { piece:{ data:data, type:'pdf', nom:file.name || 'justificatif.pdf', poids:file.size }, motif:null };
+      }
+      var img = await compressImage(file);
+      return { piece:{ data:img, type:'image', nom:file.name || 'justificatif.jpg', poids:file.size }, motif:null };
+    } catch(e){
+      return { piece:null, motif:'Cette pièce n\'a pas pu être lue. Reprenez-la, ou choisissez un autre fichier.' };
+    }
+  }
+
+  // La vue est un argument : la bascule depot/piece n'appartient qu'a la carte,
+  // et ne descend donc pas ici.
+  function rendPiece(piece, idVue){
+    var vue = document.getElementById(idVue);
+    if(!vue) return;
+    if(!piece){ vue.innerHTML = ''; return; }
+    if(piece.type === 'pdf'){
+      // Apercu SOBRE et non balise image : un PDF ne se montre pas en vignette
+      // sans bibliotheque, et son nom avec son poids disent ce qu'il y a a
+      // verifier.
+      vue.innerHTML = '<div class="mes-piece-pdf"><span class="mes-piece-pdf-icone">'
+        + '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+        + '</span><div><div class="mes-piece-pdf-nom"></div><div class="mes-piece-pdf-poids"></div></div></div>';
+      vue.querySelector('.mes-piece-pdf-nom').textContent = piece.nom;
+      vue.querySelector('.mes-piece-pdf-poids').textContent = 'PDF, ' + poidsLisible(piece.poids);
+    } else {
+      vue.innerHTML = '<img alt="Justificatif déposé">';
+      vue.querySelector('img').src = piece.data;
+    }
+  }
+
   /* ============ TIROIR DE MODIFICATION D'UN FRAIS ============ */
   // Il ne sert plus à créer : la saisie se fait dans l'encart. Il reste la
   // fenêtre de MODIFICATION d'un frais existant, ouverte depuis le crayon
   // d'une ligne, avec sa grille étendue à la catégorie du frais ouvert.
-  var editingId = null, currentCategory = null, currentPhotoData = null;
+  var editingId = null, currentCategory = null, currentPiece = null;
 
   // La liste est un argument : les deux tiroirs ne partagent plus la leur.
   function buildCatGrid(targetId, liste, onSelect){
@@ -1530,7 +1603,7 @@
   function openDrawer(id){
     editingId = id || null;
     currentCategory = null;
-    currentPhotoData = null;
+    currentPiece = null;
     document.getElementById('drawer-title').textContent = id ? 'Modifier le frais' : 'Nouveau frais';
     document.getElementById('f-amount').value = '';
     document.getElementById('f-date').value = todayISO();
@@ -1553,8 +1626,16 @@
       var lien = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
       document.getElementById('f-card').value = lien ? lien.id : '';
       if(f.photoData){
-        currentPhotoData = f.photoData;
-        renderPhotoPreview(f.photoData);
+        // LA PIECE SE RECONSTITUE DEPUIS L'ENREGISTREMENT, son type et son nom
+        // compris. Sans `photoType`, l'enregistrement est d'avant le PDF : la
+        // piece est alors une image, c'est ce qu'elle etait.
+        currentPiece = {
+          data: f.photoData,
+          type: (f.photoType === 'pdf') ? 'pdf' : 'image',
+          nom: f.photoName || ((f.photoType === 'pdf') ? 'justificatif.pdf' : 'justificatif.jpg'),
+          poids: poidsDepuisData(f.photoData)
+        };
+        renderPhotoPreview(currentPiece);
       }
     }
     document.getElementById('drawer').classList.add('show');
@@ -1567,15 +1648,24 @@
     editingId = null;
   }
 
-  function renderPhotoPreview(data){
-    document.getElementById('photo-zone').innerHTML = '<div class="photo-preview"><img src="'+data+'" /><button type="button" class="photo-remove" id="photo-remove-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
-    document.getElementById('photo-remove-btn').addEventListener('click', function(){ currentPhotoData = null; resetPhotoZone(); });
+  // Le rendu de la piece vient du contrat commun ; le bouton de retrait, lui,
+  // reste au tiroir et se pose apres, la vue ayant ete remplie.
+  function renderPhotoPreview(piece){
+    document.getElementById('photo-zone').innerHTML = '<div class="photo-preview" id="photo-piece-vue"></div>';
+    rendPiece(piece, 'photo-piece-vue');
+    document.getElementById('photo-piece-vue').insertAdjacentHTML('beforeend', '<button type="button" class="photo-remove" id="photo-remove-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>');
+    document.getElementById('photo-remove-btn').addEventListener('click', function(){ currentPiece = null; resetPhotoZone(); });
   }
 
-  document.getElementById('f-photo-input').addEventListener('change', function(e){
+  document.getElementById('f-photo-input').addEventListener('change', async function(e){
     var file = e.target.files[0];
     if(!file) return;
-    compressImage(file).then(function(data){ currentPhotoData = data; renderPhotoPreview(data); });
+    var lu = await lirePiece(file);
+    // Le tiroir n'a pas de bande d'erreur : le motif du refus passe par la
+    // fenetre d'alerte, avec ses mots.
+    if(lu.motif){ await mupAlert('Pièce non retenue', lu.motif, 'Fermer'); return; }
+    currentPiece = lu.piece;
+    renderPhotoPreview(currentPiece);
   });
 
   function compressImage(file){
@@ -1624,7 +1714,9 @@
         existing.date = date;
         existing.description = document.getElementById('f-desc').value.trim();
         existing.cardId = document.getElementById('f-card').value || null;
-        existing.photoData = currentPhotoData;
+        existing.photoData = currentPiece ? currentPiece.data : null;
+        existing.photoType = currentPiece ? currentPiece.type : null;
+        existing.photoName = currentPiece ? currentPiece.nom : null;
         existing.updatedAt = new Date().toISOString();
       }
     } else {
@@ -1635,8 +1727,10 @@
         date: date,
         description: document.getElementById('f-desc').value.trim(),
         cardId: document.getElementById('f-card').value || null,
-        photoData: currentPhotoData,
-        ocrStatus: currentPhotoData ? 'pending' : null,
+        photoData: currentPiece ? currentPiece.data : null,
+        photoType: currentPiece ? currentPiece.type : null,
+        photoName: currentPiece ? currentPiece.nom : null,
+        ocrStatus: currentPiece ? 'pending' : null,
         location: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -1681,14 +1775,8 @@
 
   var encartPiece = null;      // { data, type:'image'|'pdf', nom, poids }
   var encartCategorie = null;
-  var PLAFOND_PIECE = 5 * 1024 * 1024;
 
   function elEncart(id){ return document.getElementById(id); }
-
-  function poidsLisible(o){
-    if(o >= 1024*1024) return (o / (1024*1024)).toFixed(1).replace('.', ',') + ' Mo';
-    return Math.max(1, Math.round(o / 1024)) + ' Ko';
-  }
 
   function encartErreur(motif){
     var el = elEncart('encart-erreur');
@@ -1698,63 +1786,18 @@
   }
 
   function encartRendPiece(){
-    var vue = elEncart('encart-piece-vue');
-    if(!encartPiece){
-      elEncart('encart-piece').hidden = true;
-      elEncart('encart-depot').hidden = false;
-      vue.innerHTML = '';
-      return;
-    }
-    if(encartPiece.type === 'pdf'){
-      // Aperçu SOBRE et non balise image : un PDF ne se montre pas en vignette
-      // sans bibliothèque, et son nom avec son poids disent ce qu'il y a à
-      // vérifier.
-      vue.innerHTML = '<div class="mes-piece-pdf"><span class="mes-piece-pdf-icone">'
-        + '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
-        + '</span><div><div class="mes-piece-pdf-nom"></div><div class="mes-piece-pdf-poids"></div></div></div>';
-      vue.querySelector('.mes-piece-pdf-nom').textContent = encartPiece.nom;
-      vue.querySelector('.mes-piece-pdf-poids').textContent = 'PDF, ' + poidsLisible(encartPiece.poids);
-    } else {
-      vue.innerHTML = '<img alt="Justificatif déposé">';
-      vue.querySelector('img').src = encartPiece.data;
-    }
-    elEncart('encart-piece').hidden = false;
-    elEncart('encart-depot').hidden = true;
+    rendPiece(encartPiece, 'encart-piece-vue');
+    elEncart('encart-piece').hidden = !encartPiece;
+    elEncart('encart-depot').hidden = !!encartPiece;
   }
 
-  // Le PDF ne passe PAS par le canvas : il est stocké tel quel. L'image y passe,
-  // comme elle le faisait déjà, et en ressort en JPEG redimensionné.
   async function encartPrendFichier(file){
     if(!file) return;
     elEncart('encart-marque').hidden = true;
     encartErreur(null);
-    var estPdf = (file.type === 'application/pdf') || /\.pdf$/i.test(file.name || '');
-    var estImage = /^image\//.test(file.type || '');
-    if(!estPdf && !estImage){
-      encartErreur('Ce fichier n\'est ni une image ni un PDF. Déposez la photo de votre justificatif, ou le PDF que votre fournisseur vous a envoyé.');
-      return;
-    }
-    if(file.size > PLAFOND_PIECE){
-      encartErreur('Cette pièce pèse ' + poidsLisible(file.size) + ', au-delà des 5 Mo acceptés. Photographiez-la à nouveau en réduisant la définition, ou déposez un fichier plus léger.');
-      return;
-    }
-    try {
-      if(estPdf){
-        var data = await new Promise(function(resolve, reject){
-          var r = new FileReader();
-          r.onload = function(e){ resolve(e.target.result); };
-          r.onerror = function(){ reject(new Error('lecture')); };
-          r.readAsDataURL(file);
-        });
-        encartPiece = { data:data, type:'pdf', nom:file.name || 'justificatif.pdf', poids:file.size };
-      } else {
-        var img = await compressImage(file);
-        encartPiece = { data:img, type:'image', nom:file.name || 'justificatif.jpg', poids:file.size };
-      }
-    } catch(e){
-      encartErreur('Cette pièce n\'a pas pu être lue. Reprenez-la, ou choisissez un autre fichier.');
-      return;
-    }
+    var lu = await lirePiece(file);
+    if(lu.motif){ encartErreur(lu.motif); return; }
+    encartPiece = lu.piece;
     encartRendPiece();
   }
 

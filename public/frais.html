@@ -894,25 +894,34 @@
   // récupération qui figuraient ici sont partis avec le reste : cette page ne
   // calcule rien de fiscal et ne dit à personne ce qu'il peut récupérer.
   var CAT_LABELS = {
-    essence:     'Essence',
-    restaurant:  'Restaurant',
-    hotel:       'Hôtel',
-    peage:       'Péage',
-    parking:     'Parking',
-    fournitures: 'Fournitures',
-    telecom:     'Télécom',
-    autre:       'Autre'
+    essence:      'Essence',
+    restaurant:   'Restaurant',
+    hotel:        'Hôtel',
+    peage:        'Péage',
+    parking:      'Parking',
+    fournitures:  'Fournitures',
+    loyer:        'Loyer',
+    electricite:  'Électricité',
+    eau:          'Eau',
+    telecom:      'Téléphone et internet',
+    assurance:    'Assurance',
+    logiciels:    'Logiciels et abonnements',
+    comptabilite: 'Comptabilité',
+    autre:        'Autre'
   };
 
   // DEUX LISTES DE SAISIE, distinctes de CAT_LABELS. Ce dernier gouverne le
   // RENDU, partout et pour toujours : un frais enregistré sous une catégorie
   // qui n'est plus proposée continue de s'afficher normalement.
   //
-  // Quotidien : sept entrées, sans Télécom. Un abonnement mensuel n'est jamais
-  // une dépense du jour.
+  // Quotidien : sept entrées, sans les charges. Un abonnement mensuel n'est
+  // jamais une dépense du jour.
   var CAT_QUOTIDIEN = ['essence','restaurant','hotel','peage','parking','fournitures','autre'];
-  // Fixe : les huit, Télécom compris.
-  var CAT_FIXE = Object.keys(CAT_LABELS);
+  // Fixe : ses huit entrées à lui, et non plus la totalité de CAT_LABELS. Un
+  // frais fixe n'est pas un péage mensuel. La clé telecom est conservée sous ce
+  // nom, seul son libellé change : la renommer ferait passer à « Non classé »
+  // tous les frais déjà enregistrés sous elle.
+  var CAT_FIXE = ['loyer','electricite','eau','telecom','assurance','logiciels','comptabilite','autre'];
 
   // Repli explicite : le rendu ne casse sur aucune catégorie, même absente des
   // deux listes de saisie ou héritée d'un schéma plus ancien.

@@ -453,13 +453,27 @@
      l'écran sous la carte. */
   body.encart-ouvert main{overflow:hidden;}
 
-  /* SUR TÉLÉPHONE, enregistrer une dépense simple ne doit demander aucun
-     défilement : dépôt, montant, catégorie, enregistrer. La carte prend toute
-     la place et ses écarts se resserrent. La rangée du dépôt, elle, ne tient
-     pas sous 400 px de large : les deux boutons y descendent d'un cran. */
+  /* SUR TÉLÉPHONE, LA CARTE GARDE LA FORME DE CELLE DE MAIL, et ce bloc n'y
+     touche plus. Mail ne redéfinit RIEN de sa carte sous 640 px : son seul bloc
+     à cette largeur remonte des z-index. La forme téléphone y est donc la règle
+     de base — voile à 24 px de remplissage qui CENTRE, carte à width:100% et
+     max-width:600px, plafond calc(100vh - 48px), plancher
+     min(--mes-hauteur-commune, calc(100vh - 48px)), rayon --mes-rayon, bordure
+     1px --mes-bord. Frais pose exactement les mêmes valeurs plus haut : les
+     reprendre ici, c'est ne rien écrire.
+     CE QUE CELA DÉFAIT, ET QUI EST ASSUMÉ : la promesse « aucun défilement au
+     téléphone » tombe. Le corps de Frais est plus haut que celui de Mail ; sur
+     appareil court il défile EN DEDANS de la carte, comme il l'a toujours fait
+     ailleurs. Ce qui reste exigé, et que le pied tient par flex-shrink:0 : le
+     pied et ses deux boutons restent visibles sans défiler, seul le corps
+     défile.
+     PAS DE VARIANTE « un peu plus haute parce que Frais porte plus de
+     contenu » : le plancher est commun aux pages, le plafond aussi, et une
+     carte plus haute ici ferait diverger la forme que ce lot vient d'unifier.
+     Restent ci-dessous les seuls resserrements de CONTENU : les écarts du
+     corps, la taille du titre, et la rangée du dépôt qui ne tient pas sous
+     400 px de large — ses deux boutons y descendent d'un cran. */
   @media (max-width:640px){
-    .mes-voile{padding:0;align-items:stretch;}
-    .mes-carte{max-width:none;max-height:100vh;min-height:100vh;border:none;border-radius:0;}
     .mes-corps{padding:14px 16px 10px;gap:9px;}
     .mes-carte h2{font-size:20px;letter-spacing:-.5px;}
     .mes-carte h2 + p{margin-top:6px;}
@@ -473,11 +487,15 @@
     .mes-pied{padding:10px 16px;}
   }
 
-  /* LES ÉCRANS COURTS. Mesuré au banc : sous 700 px de hauteur, le texte de
-     première visite coûte ses quatre lignes et la rangée de catégories se
-     replie en trois, ce qui pousse le bas de la carte hors de l'écran. On
-     resserre encore, et l'icône du dépôt se retire : elle décore, les deux
-     boutons et le cadre en tirets disent la voie sans elle. */
+  /* LES ÉCRANS COURTS. Ce bloc ne sauve plus la carte d'un débordement — le
+     plafond calc(100vh - 48px) l'en empêche désormais tout seul, et le surplus
+     va au défilement du corps. Il RACCOURCIT CE DÉFILEMENT, et c'est ce qui le
+     garde. Mesuré au banc le 23 août sur 320 x 568, bloc actif contre bloc
+     neutralisé : première visite 121 px de défilement contre 166, retour 1 px
+     contre 67. Sur 375 x 667 il ne reste que le resserrement, le corps ne
+     défilant ni avec ni sans lui.
+     L'icône du dépôt se retire : elle décore, les deux boutons et le cadre en
+     tirets disent la voie sans elle. */
   @media (max-width:640px) and (max-height:700px){
     .mes-corps{padding:11px 14px 9px;gap:7px;}
     .mes-carte h2{font-size:18px;}

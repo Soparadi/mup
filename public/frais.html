@@ -546,6 +546,24 @@
   function dayLabel(date){ return new Date(date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}); }
   function fullDayLabel(date){ return new Date(date).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }
 
+  /* ============ IDENTIFIANTS ============ */
+  // L'API rend des identifiants préfixés par leur table (frais:..., pipeline:...)
+  // alors que la page en fabrique des nus. Toute comparaison passe les DEUX
+  // côtés par ici, sur le modèle de _normFicheId d'agenda.html. Rien n'est
+  // normalisé à l'écriture : le rattachement au prospect reste écrit préfixé,
+  // comme les frais déjà en base.
+  function normId(id){
+    var s = String(id == null ? '' : id).trim();
+    if(!s) return null;
+    s = s.replace(/^(frais_recurrents|frais|pipeline|agenda):/, '');
+    s = s.replace(/^\u27E8/, '').replace(/\u27E9$/, '');
+    return s || null;
+  }
+  function sameId(a, b){
+    var na = normId(a), nb = normId(b);
+    return na !== null && na === nb;
+  }
+
   function computeTva(amountTTC, category){
     if(!amountTTC || amountTTC <= 0) return { ht:0, tva:0, recup:0, rate:0, recupPct:0 };
     var t = TVA_TABLE[category] || TVA_TABLE.autre;
@@ -567,12 +585,20 @@
   /* ============ GÉNÉRATION OCCURRENCES RÉCURRENTES ============ */
   async function generateRecurrentOccurrences(){
     var today = new Date(); today.setHours(0,0,0,0);
+    // Deux clés par occurrence déjà connue : son identifiant normalisé, et le
+    // couple (règle, mois). La seconde rattrape les occurrences écrites avant
+    // cette normalisation, dont l'identifiant porte encore une forme préfixée.
     var existingIds = {};
-    frais.forEach(function(f){ existingIds[f.id] = true; });
+    frais.forEach(function(f){
+      var n = normId(f.id);
+      if(n) existingIds[n] = true;
+      if(f.recurrentId) existingIds['@'+normId(f.recurrentId)+'@'+String(f.date || '').slice(0,7)] = true;
+    });
     var added = false;
 
     recurrents.forEach(function(rule){
       if(!rule.active) return;
+      var ruleKey = normId(rule.id);
       var start = new Date(rule.startDate); start.setHours(0,0,0,0);
       var end = rule.endDate ? new Date(rule.endDate) : today;
       if(end > today) end = today;
@@ -587,8 +613,9 @@
         var occDateObj = new Date(occDate);
 
         if(occDateObj >= start && occDateObj <= end && skipped.indexOf(occYear+'-'+occMonth) === -1){
-          var occId = 'fr_'+rule.id+'_'+occYear+'-'+occMonth;
-          if(!existingIds[occId]){
+          var occId = 'fr_'+ruleKey+'_'+occYear+'-'+occMonth;
+          var occKey = '@'+ruleKey+'@'+occYear+'-'+occMonth;
+          if(!existingIds[occId] && !existingIds[occKey]){
             var newOcc = {
               id: occId,
               recurrentId: rule.id,
@@ -606,6 +633,7 @@
             enrichFrais(newOcc);
             frais.push(newOcc);
             existingIds[occId] = true;
+            existingIds[occKey] = true;
             added = true;
           }
         }
@@ -723,7 +751,7 @@
   }
 
   function renderRow(f){
-    var card = pipeline.find(function(c){ return c.id === f.cardId; });
+    var card = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
     var cardLbl = card ? (card.name || card.co || '') : '';
     var isRec = !!f.recurrentId;
     var html = '<div class="timeline-row">';
@@ -745,21 +773,21 @@
       b.addEventListener('click', async function(){
         var btn = this;
         var id = btn.dataset.del;
-        var f = frais.find(function(x){ return x.id === id; });
+        var f = frais.find(function(x){ return sameId(x.id, id); });
         if(!f) return;
         var titre = f.recurrentId ? 'Supprimer cette occurrence ?' : 'Supprimer ce frais ?';
         var detail = f.recurrentId ? 'Le frais récurrent ne sera pas généré ce mois-ci.' : null;
         btn.disabled = true;                   // la fenêtre ne bloque plus le fil
         if(!await mupConfirm(titre, detail, 'Supprimer', 'Annuler')){ btn.disabled = false; return; }
         if(f.recurrentId){
-          var rule = recurrents.find(function(r){ return r.id === f.recurrentId; });
+          var rule = recurrents.find(function(r){ return sameId(r.id, f.recurrentId); });
           if(rule){
             if(!rule.skippedMonths) rule.skippedMonths = [];
             rule.skippedMonths.push(monthKey(f.date));
             await saveJSON('mup_frais_recurrents', recurrents);
           }
         }
-        frais = frais.filter(function(x){ return x.id !== id; });
+        frais = frais.filter(function(x){ return !sameId(x.id, id); });
         await fetch('/api/frais/' + encodeURIComponent(id), { method:'DELETE' });
         renderAll();
       });
@@ -900,9 +928,9 @@
         var id = btn.dataset.delRec;
         btn.disabled = true;                   // la fenêtre ne bloque plus le fil
         if(!await mupConfirm('Supprimer ce frais récurrent et toutes ses occurrences générées ?', null, 'Supprimer', 'Annuler')){ btn.disabled = false; return; }
-        var fraisToDelete = frais.filter(function(f){ return f.recurrentId === id; });
-        recurrents = recurrents.filter(function(r){ return r.id !== id; });
-        frais = frais.filter(function(f){ return f.recurrentId !== id; });
+        var fraisToDelete = frais.filter(function(f){ return sameId(f.recurrentId, id); });
+        recurrents = recurrents.filter(function(r){ return !sameId(r.id, id); });
+        frais = frais.filter(function(f){ return !sameId(f.recurrentId, id); });
         await fetch('/api/frais-recurrents/' + encodeURIComponent(id), { method:'DELETE' });
         for(const occ of fraisToDelete){
           await fetch('/api/frais/' + encodeURIComponent(occ.id), { method:'DELETE' });
@@ -972,7 +1000,7 @@
       // ficheId en repli : c'est sous ce nom que l'agenda relie un évènement à
       // sa fiche. Sans lui, aucun RDV créé depuis le Pipeline n'était reconnu
       // et la suggestion ne s'affichait jamais.
-      var card = pipeline.find(function(c){ return String(c.id) === String(rdv.cardId || rdv.ficheId || rdv.prospectId); });
+      var card = pipeline.find(function(c){ return sameId(c.id, rdv.cardId) || sameId(c.id, rdv.ficheId) || sameId(c.id, rdv.prospectId); });
       if(card && document.getElementById('f-card').value === ''){
         wrap.innerHTML = '<div class="suggest-prospect"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>RDV avec <strong>'+(card.name || card.co || '—')+'</strong> ce jour-là</span><div class="suggest-actions"><button class="suggest-yes" data-link="'+card.id+'">Lier</button><button class="suggest-no" data-dismiss>Ignorer</button></div></div>';
         wrap.querySelector('[data-link]').addEventListener('click', function(){ document.getElementById('f-card').value = this.dataset.link; wrap.innerHTML = ''; });
@@ -1001,14 +1029,17 @@
     document.getElementById('suggest-prospect-wrap').innerHTML = '';
 
     if(id){
-      var f = frais.find(function(x){ return x.id === id; });
+      var f = frais.find(function(x){ return sameId(x.id, id); });
       if(f){
         currentCategory = f.category;
         document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === f.category); });
         document.getElementById('f-amount').value = f.amountTTC;
         document.getElementById('f-date').value = f.date;
         document.getElementById('f-desc').value = f.description || '';
-        document.getElementById('f-card').value = f.cardId || '';
+        // La liste porte les identifiants tels que l'API les rend : on retrouve
+        // l'option par comparaison normalisée plutôt que par égalité brute.
+        var lien = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
+        document.getElementById('f-card').value = lien ? lien.id : '';
         if(f.photoData){
           currentPhotoData = f.photoData;
           renderPhotoPreview(f.photoData);
@@ -1074,7 +1105,7 @@
     var date = document.getElementById('f-date').value || todayISO();
 
     if(editingId){
-      var idx = frais.findIndex(function(x){ return x.id === editingId; });
+      var idx = frais.findIndex(function(x){ return sameId(x.id, editingId); });
       if(idx >= 0){
         var existing = frais[idx];
         if(existing.recurrentId) existing._modifiedFromRecurrent = true;
@@ -1126,7 +1157,7 @@
     document.getElementById('rec-existing-info').innerHTML = '';
 
     if(id){
-      var r = recurrents.find(function(x){ return x.id === id; });
+      var r = recurrents.find(function(x){ return sameId(x.id, id); });
       if(r){
         currentRecCategory = r.category;
         document.querySelectorAll('#rec-cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === r.category); });
@@ -1136,7 +1167,7 @@
         document.getElementById('rec-vendor').value = r.vendor || '';
         document.getElementById('rec-start').value = r.startDate;
         document.getElementById('rec-end').value = r.endDate || '';
-        var occCount = frais.filter(function(f){ return f.recurrentId === id; }).length;
+        var occCount = frais.filter(function(f){ return sameId(f.recurrentId, id); }).length;
         document.getElementById('rec-existing-info').innerHTML = '<div style="font-size:11px;color:var(--muted);background:var(--surface);padding:10px 12px;border-radius:8px;">'+occCount+' occurrence'+(occCount>1?'s':'')+' déjà générée'+(occCount>1?'s':'')+'.</div>';
       }
     }
@@ -1165,7 +1196,7 @@
     if(!desc){ mupAlert('Description obligatoire', null, 'Fermer'); return; }
 
     if(editingRecId){
-      var idx = recurrents.findIndex(function(r){ return r.id === editingRecId; });
+      var idx = recurrents.findIndex(function(r){ return sameId(r.id, editingRecId); });
       if(idx >= 0){
         recurrents[idx].category = currentRecCategory;
         recurrents[idx].amountTTC = amount;
@@ -1240,7 +1271,7 @@
     if(frais.length === 0){ mupAlert('Aucun frais à exporter', null, 'Fermer'); return; }
     var headers = ['Date','Catégorie','Description','Prospect','Montant TTC','Montant HT','TVA','TVA récupérable','Type','Photo'];
     var rows = frais.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); }).map(function(f){
-      var card = pipeline.find(function(c){ return c.id === f.cardId; });
+      var card = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
       return [
         f.date,
         TVA_TABLE[f.category].label,

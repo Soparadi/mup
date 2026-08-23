@@ -1535,7 +1535,7 @@
     else if(currentView === 'rec') renderRecurrents();
   }
 
-  (async function init(){
+  async function init(){
     frais = await loadJSON('mup_frais', []);
     recurrents = await loadJSON('mup_frais_recurrents', []);
     pipeline = await loadJSON('mup_pipeline', []);
@@ -1556,7 +1556,19 @@
     }
     // Renvoi depuis une autre page (ex. facture sans émetteur) : ouvre le tiroir.
     if(new URLSearchParams(window.location.search).get('reglages') === '1') openSettings();
-  })();
+  }
+
+  // Le script est en analyse synchrone, alors que trial-expired-modal.js et
+  // auth-401-handler.js portent defer : partir tout de suite ferait sortir la
+  // première lecture avant que window.fetch soit intercepté, et un 401 ou un
+  // 402 sur /api/frais ne produirait ni toast, ni redirection, ni modale. Les
+  // scripts différés s'exécutant avant DOMContentLoaded, on attend ce moment.
+  // Motif repris de trial-expired-modal.js.
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, { once:true });
+  } else {
+    init();
+  }
 })();
 </script>
 <footer class="mup-app-footer">

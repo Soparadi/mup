@@ -871,8 +871,10 @@
   }
 
   /* ============ STORAGE (SurrealDB Cloud via /api/*) ============ */
-  // loadJSON/saveJSON conservent leur signature historique mais dispatchent par clé vers
-  // les routes /api/* (multi-tenant scopées userId côté serveur). localStorage n'est plus écrit.
+  // loadJSON dispatche par clé vers les routes /api/* (multi-tenant scopées
+  // userId côté serveur). localStorage n'est plus écrit. Les écritures, elles,
+  // ne passent plus par une fonction à tout faire : chacune nomme ce qu'elle
+  // envoie, et n'envoie que cela.
   var ROUTES = {
     mup_frais:            '/api/frais',
     mup_frais_recurrents: '/api/frais-recurrents',
@@ -934,26 +936,45 @@
     }
   }
 
-  // La boucle va jusqu'au bout : s'arrêter au premier refus laisserait sans
-  // écriture des éléments qui, eux, seraient passés. Mais un seul refus suffit
-  // à rendre un échec, parce que la collection est réémise en entier et que la
-  // page ne sait donc pas lequel des envois portait la modification en cours.
-  async function ecrireCollection(url, liste, quoi){
+  // UN ENREGISTREMENT, UN ENVOI. La page réémettait la collection entière à
+  // chaque écriture : une requête PAR record, chacune reportant en base64 la
+  // pièce de ce record. Aucune requête ne dépassait donc les 10 Mo du serveur,
+  // chacune n'en portant qu'une ; mais ajouter UN frais reversait toutes les
+  // pièces déjà déposées, soit vingt requêtes et cent trente méga-octets pour
+  // vingt justificatifs, sur le forfait de données de l'abonné, à chaque
+  // dépense saisie.
+  // POST /api/frais accepte un record isolé et fait son upsert sur
+  // l'identifiant : on ne lui donne plus que celui qui vient de changer.
+  function envoiUnitaire(item){
+    return { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(item) };
+  }
+  async function enregistrerFrais(f){
+    return await ecrire('/api/frais', envoiUnitaire(f), 'Ce frais');
+  }
+  async function enregistrerRegle(r){
+    return await ecrire('/api/frais-recurrents', envoiUnitaire(r), 'Ce frais récurrent');
+  }
+  async function enregistrerReglages(v){
+    // Le tiroir Société garde son PUT : il n'a jamais réémis qu'un objet.
+    return await ecrire('/api/user-settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(v) }, 'Vos informations de société');
+  }
+
+  // LE SEUL LOT QUI SUBSISTE, et il appartient à la génération des occurrences
+  // récurrentes : elle crée d'un coup plusieurs occurrences qui sont TOUTES la
+  // modification en cours. Elle ne reçoit ici que celles qu'elle vient
+  // d'ajouter, jamais la collection.
+  // L'ampleur est rapportée parce qu'ici elle a un sens : savoir que trois
+  // occurrences sur douze ont été refusées dit quelque chose. Sur une écriture
+  // unitaire elle n'en aurait aucun, et le verdict y est celui de l'envoi.
+  async function enregistrerLotOccurrences(liste){
     var refus = 0, motif = null;
-    for(const item of liste){
-      var r = await ecrire(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(item) }, quoi);
+    for(const occ of liste){
+      var r = await enregistrerFrais(occ);
       if(!r.ok){ refus++; if(!motif) motif = r.motif; }
     }
     if(refus === 0) return { ok:true };
-    var ampleur = (liste.length > 1) ? (' Sur ' + liste.length + ' enregistrements envoyés, ' + refus + ' ont été refusés.') : '';
+    var ampleur = (liste.length > 1) ? (' Sur ' + liste.length + ' occurrences envoyées, ' + refus + ' ont été refusées.') : '';
     return { ok:false, refus:refus, total:liste.length, motif: motif + ampleur };
-  }
-
-  async function saveJSON(k, v){
-    if(k === 'mup_frais')             return await ecrireCollection('/api/frais', v, 'Vos frais');
-    if(k === 'mup_frais_recurrents')  return await ecrireCollection('/api/frais-recurrents', v, 'Vos frais récurrents');
-    if(k === 'mup_user_settings')     return await ecrire('/api/user-settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(v) }, 'Vos informations de société');
-    return { ok:true };
   }
 
   var frais = [];
@@ -1038,7 +1059,11 @@
       if(n) existingIds[n] = true;
       if(f.recurrentId) existingIds['@'+normId(f.recurrentId)+'@'+String(f.date || '').slice(0,7)] = true;
     });
-    var added = false;
+    // Les occurrences que CETTE passe crée, et rien d'autre. La génération ne
+    // réécrit jamais un frais existant : ni ceux d'une autre règle, ni ceux que
+    // l'abonné a saisis, ni les occurrences déjà en base qu'elle vient de
+    // reconnaître par leur clé.
+    var ajoutees = [];
 
     recurrents.forEach(function(rule){
       if(!rule.active) return;
@@ -1075,16 +1100,16 @@
               updatedAt: new Date().toISOString()
             };
             frais.push(newOcc);
+            ajoutees.push(newOcc);
             existingIds[occId] = true;
             existingIds[occKey] = true;
-            added = true;
           }
         }
         d.setMonth(d.getMonth()+1);
       }
     });
-    if(!added) return { ok:true };
-    return await saveJSON('mup_frais', frais);
+    if(ajoutees.length === 0) return { ok:true };
+    return await enregistrerLotOccurrences(ajoutees);
   }
 
   /* ============ KPI ============ */
@@ -1234,7 +1259,7 @@
           if(rule){
             if(!rule.skippedMonths) rule.skippedMonths = [];
             rule.skippedMonths.push(monthKey(f.date));
-            var vRegle = await saveJSON('mup_frais_recurrents', recurrents);
+            var vRegle = await enregistrerRegle(rule);
             if(!vRegle.ok){
               // Le mois sauté n'a pas été écrit : on retire la marque plutôt que
               // de laisser la mémoire prétendre une exception qui n'existe pas.
@@ -1604,10 +1629,12 @@
     if(!amount || amount <= 0){ mupAlert('Saisir un montant valide', null, 'Fermer'); return; }
     var date = document.getElementById('f-date').value || todayISO();
 
+    var aEnvoyer = null;
     if(editingId){
       var idx = frais.findIndex(function(x){ return sameId(x.id, editingId); });
       if(idx >= 0){
         var existing = frais[idx];
+        aEnvoyer = existing;
         if(existing.recurrentId) existing._modifiedFromRecurrent = true;
         existing.category = currentCategory;
         existing.amountTTC = amount;
@@ -1632,12 +1659,19 @@
         updatedAt: new Date().toISOString()
       };
       frais.push(newF);
+      aEnvoyer = newF;
       // La ligne existe désormais en mémoire. Si l'envoi est refusé, le tiroir
       // reste ouvert : on la marque en modification pour qu'un nouvel essai la
       // mette à jour au lieu d'en créer une seconde.
       editingId = newF.id;
     }
-    var verdict = await saveJSON('mup_frais', frais);
+    // Le frais introuvable ne peut pas s'envoyer : la ligne a disparu sous le
+    // tiroir, mieux vaut le dire que refermer sur rien.
+    if(!aEnvoyer){
+      await mupAlert('Frais introuvable', 'Ce frais n\'est plus dans la liste : il a peut-être été supprimé ailleurs. Refermez ce tiroir et rechargez la page.', 'Fermer');
+      return;
+    }
+    var verdict = await enregistrerFrais(aEnvoyer);
     if(!verdict.ok){
       await mupAlert('Frais non enregistré', verdict.motif, 'Fermer');
       return;
@@ -1873,7 +1907,7 @@
     };
     frais.push(nouveau);
 
-    var verdict = await saveJSON('mup_frais', frais);
+    var verdict = await enregistrerFrais(nouveau);
     if(!verdict.ok){
       // La ligne n'a jamais été rendue et n'est pas en base : on la retire de la
       // collection, sinon les totaux derrière l'encart compteraient un frais
@@ -2002,9 +2036,11 @@
     var desc = document.getElementById('rec-desc').value.trim();
     if(!desc){ mupAlert('Description obligatoire', null, 'Fermer'); return; }
 
+    var regleAEnvoyer = null;
     if(editingRecId){
       var idx = recurrents.findIndex(function(r){ return sameId(r.id, editingRecId); });
       if(idx >= 0){
+        regleAEnvoyer = recurrents[idx];
         recurrents[idx].category = currentRecCategory;
         recurrents[idx].amountTTC = amount;
         recurrents[idx].dayOfMonth = day;
@@ -2030,11 +2066,16 @@
         updatedAt: new Date().toISOString()
       };
       recurrents.push(newRec);
+      regleAEnvoyer = newRec;
       // Même motif que pour un frais : un nouvel essai après refus doit mettre
       // à jour la règle déjà en mémoire, pas en empiler une seconde.
       editingRecId = newRec.id;
     }
-    var verdict = await saveJSON('mup_frais_recurrents', recurrents);
+    if(!regleAEnvoyer){
+      await mupAlert('Frais récurrent introuvable', 'Cette règle n\'est plus dans la liste : elle a peut-être été supprimée ailleurs. Refermez ce tiroir et rechargez la page.', 'Fermer');
+      return;
+    }
+    var verdict = await enregistrerRegle(regleAEnvoyer);
     if(!verdict.ok){
       await mupAlert('Frais récurrent non enregistré', verdict.motif, 'Fermer');
       return;
@@ -2101,7 +2142,7 @@
     settings.tvaIntra = document.getElementById('set-tva-intra').value.trim();
     var tauxRaw = document.getElementById('set-taux-tva').value.trim();
     settings.tauxTvaDefaut = (tauxRaw === '') ? null : (parseFloat(tauxRaw) || 0);
-    var verdict = await saveJSON('mup_user_settings', settings);
+    var verdict = await enregistrerReglages(settings);
     if(!verdict.ok){
       await mupAlert('Réglages non enregistrés', verdict.motif, 'Fermer');
       return;

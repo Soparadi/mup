@@ -46,6 +46,30 @@
     --cyan:#0BBCD4; --amber:#F59E0B; --violet:#7C3AED;
     --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
     --mono:'Geist Mono','SF Mono','Menlo',monospace;
+
+    /* LE VÊTEMENT DE L'ENCART, transposé de devis.html et de visio.html.
+       Il ne descend dans aucune feuille partagée : le périmètre de cette
+       refonte est d'un seul fichier, et mup-confirm.css, seule candidate,
+       porte le vêtement des DIALOGUES. */
+    --mes-fond:#f4f1ea;
+    --mes-carte:#ffffff;
+    --mes-bord:#d9d3c4;
+    --mes-rayon:16px;
+    --mes-surtitre:#8a8579;
+    --mes-titre:#0d0d0b;
+    --mes-corps:#5c574e;
+    --mes-bouton:#0d0d0b;
+    --mes-bouton-rayon:10px;
+    /* Le filet du courriel : six bandes de 12 px dans cet ordre. */
+    --mes-filet-1:#B84C00;
+    --mes-filet-2:#4338CA;
+    --mes-filet-3:#7C3AED;
+    --mes-filet-4:#0BBCD4;
+    --mes-filet-5:#D97706;
+    --mes-filet-6:#1D8348;
+    /* La hauteur commune des encarts de mise en service, mesurée au banc sur
+       les trois autres pages. Posée en PLANCHER et jamais en taille. */
+    --mes-hauteur-commune:490px;
   }
   html,body{height:100%;overflow:hidden;background:var(--bg);}
   body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;display:flex;}
@@ -187,8 +211,23 @@
   .field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
   .field-help{font-size:10.5px;color:var(--muted2);margin-top:3px;}
 
-  .cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
-  .cat-btn{padding:10px 6px;border:1px solid var(--border);background:#fff;border-radius:8px;cursor:pointer;font-family:var(--font);font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);transition:all .15s;text-align:center;}
+  /* LA TRAME DES CATÉGORIES, TRANCHÉE ICI POUR LES TROIS GRILLES : celle de
+     l'encart, celle du tiroir de modification et celle des frais fixes.
+     La grille en quatre colonnes fixes laissait un emplacement vide sous sept
+     boutons, qui se lit comme un bouton manquant et non comme une fin de liste.
+     Le nombre de colonnes ne peut pas être écrit : sept est premier, et les
+     trois surfaces n'ont pas la même largeur (600 px pour la carte, 480 pour
+     les tiroirs, la largeur de l'écran sur téléphone).
+     LA RANGÉE SE REMPLIT DONC D'ELLE-MÊME. Les boutons se replient quand la
+     largeur manque, et ceux d'une même rangée se partagent ce qui reste : aucune
+     rangée n'est jamais trouée, quel que soit leur nombre et quelle que soit la
+     largeur. Sur la carte, les sept tiennent sur une seule rangée ; dans un
+     tiroir, ils se replient sur deux, pleines l'une et l'autre.
+     `flex:1 1 auto` et JAMAIS `1 1 0` : la base reste le libellé, sans quoi les
+     boutons ne se replieraient plus du tout et tiendraient tous sur une rangée
+     en s'écrasant. */
+  .cat-grid{display:flex;flex-wrap:wrap;gap:6px;}
+  .cat-btn{flex:1 1 auto;padding:10px 12px;border:1px solid var(--border);background:#fff;border-radius:8px;cursor:pointer;font-family:var(--font);font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);transition:all .15s;text-align:center;}
   .cat-btn:hover{border-color:var(--text);color:var(--text);}
   .cat-btn.active{background:var(--text);color:#fff;border-color:var(--text);}
 
@@ -226,6 +265,199 @@
   .detail-erreur span{display:block;margin-top:6px;color:var(--muted);font-weight:500;font-size:12px;line-height:1.6;}
   .kpi-value.illisible{font-size:15px;font-weight:700;color:var(--muted);letter-spacing:0;}
   .chart12-totals-val.illisible{font-size:13px;color:var(--muted);}
+
+  /* ══════════════════════════════════════════════════════════════════
+     L'ENCART DE SAISIE
+     Le vêtement vient de devis.html, transposé à la lettre. Un écart
+     délibéré au patron : cet encart N'EST PAS UN GARDE. Il se quitte, il
+     n'exige rien, et la page derrière lui reste entièrement utilisable.
+     Aucun surtitre : la décision vaut pour tous les encarts du produit.
+     ══════════════════════════════════════════════════════════════════ */
+  /* `hidden` est posé par la feuille du navigateur avec la spécificité d'un
+     attribut : toute règle d'auteur qui déclare un `display` le bat. Trois blocs
+     de l'encart sont en display:flex et ne se seraient jamais cachés. */
+  #encart [hidden]{display:none !important;}
+  .mes-voile{
+    position:fixed;top:0;right:0;bottom:0;left:var(--sidebar-w,0);
+    z-index:var(--mupz-dialogue,50000);
+    background:rgba(13,13,11,.55);
+    -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+    display:none;align-items:center;justify-content:center;
+    padding:24px;overflow-y:auto;
+  }
+  .mes-voile.ouvert{display:flex;}
+  .mes-carte{
+    background:var(--mes-carte);border:1px solid var(--mes-bord);
+    border-radius:var(--mes-rayon);overflow:hidden;
+    width:100%;max-width:600px;max-height:calc(100vh - 48px);
+    /* Plancher, jamais taille. min() garde le plancher sous le plafond : posé
+       nu, il l'emporterait dès que la fenêtre descend sous 538 px de haut, et
+       le haut de la carte passerait hors du voile qui la centre. */
+    min-height:min(var(--mes-hauteur-commune), calc(100vh - 48px));
+    display:flex;flex-direction:column;
+    box-shadow:0 24px 60px rgba(13,13,11,.28);
+  }
+  /* Six bandes de 12 px : des arrêts de dégradé, pas six éléments de balisage. */
+  .mes-filet{
+    height:12px;flex-shrink:0;
+    background:linear-gradient(90deg,
+      var(--mes-filet-1) 0 16.6667%,        var(--mes-filet-2) 16.6667% 33.3333%,
+      var(--mes-filet-3) 33.3333% 50%,      var(--mes-filet-4) 50% 66.6667%,
+      var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
+  }
+  /* Le blanc en trop va au corps, sans quoi il tomberait sous le pied et le
+     ferait flotter au milieu de la carte. flex-grow seul, pas flex:1 : la base
+     reste le contenu, seule la place LIBRE est distribuée. */
+  .mes-corps{padding:26px 34px 22px;overflow-y:auto;flex-grow:1;display:flex;flex-direction:column;gap:16px;}
+  .mes-carte h2{
+    font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.15;
+    color:var(--mes-titre);margin:0;
+  }
+  .mes-carte h2 + p{margin-top:12px;}
+  .mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch;margin:0;}
+  .mes-etiquette{
+    display:block;font-size:9.5px;font-weight:700;letter-spacing:1.5px;
+    text-transform:uppercase;color:var(--mes-surtitre);margin-bottom:6px;
+  }
+  .mes-champ input,.mes-champ select{
+    width:100%;padding:11px 13px;
+    border:1px solid var(--mes-bord);border-radius:var(--mes-bouton-rayon);
+    font-family:var(--font);font-size:13px;outline:none;
+    background:#fff;color:var(--mes-titre);transition:border-color .15s;
+  }
+  .mes-champ input::placeholder{color:var(--mes-surtitre);}
+  .mes-champ input:focus,.mes-champ select:focus{border-color:var(--mes-titre);}
+  /* Le montant est la seule valeur que l'abonné frappe à chaque fois : il porte
+     la taille et la fonte du chiffre, pas celles d'un champ de formulaire. */
+  .mes-champ input#encart-montant{
+    font-family:var(--mono);font-size:26px;font-weight:800;letter-spacing:-.6px;
+    padding:12px 14px;
+  }
+
+  /* LA ZONE DE DÉPÔT. Trois voies, aucune privilégiée : deux boutons nommés,
+     et la surface elle-même qui reçoit un fichier lâché. Le cadre en tirets se
+     voit AVANT tout dépôt, il n'attend pas le survol pour exister. */
+  .mes-depot{
+    border:1.5px dashed var(--mes-bord);border-radius:var(--mes-bouton-rayon);
+    background:#fff;padding:22px 18px;text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:12px;
+  }
+  .mes-depot.mes-survol{outline:2px solid var(--mes-titre);outline-offset:3px;}
+  .mes-depot-icone{
+    width:44px;height:44px;border-radius:50%;background:var(--mes-fond);
+    color:var(--mes-surtitre);display:inline-flex;align-items:center;justify-content:center;
+  }
+  .mes-depot-voies{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+  .mes-depot-appel{font-size:12.5px;line-height:1.5;color:var(--mes-surtitre);}
+  /* Le plafond est annoncé DANS la zone : un refus après coup n'apprend le
+     plafond qu'à celui qui l'a déjà dépassé. */
+  .mes-depot-note{font-size:11px;color:var(--mes-surtitre);font-family:var(--mono);letter-spacing:.2px;}
+
+  /* LA PIÈCE DÉPOSÉE, et sa voie de retour. */
+  .mes-piece{
+    border:1.5px solid var(--mes-bord);border-radius:var(--mes-bouton-rayon);
+    background:#fff;padding:14px;display:flex;flex-direction:column;gap:12px;
+  }
+  .mes-piece-vue{display:flex;align-items:center;justify-content:center;}
+  .mes-piece-vue img{max-width:100%;max-height:190px;border-radius:6px;display:block;}
+  /* Le PDF ne passe pas par le canvas et n'a pas d'aperçu en image : une carte
+     sobre portant son nom et son poids dit tout ce qu'il y a à vérifier. */
+  .mes-piece-pdf{
+    display:flex;align-items:center;gap:12px;width:100%;
+    background:var(--mes-fond);border-radius:8px;padding:14px 16px;
+  }
+  .mes-piece-pdf-icone{color:var(--red);flex-shrink:0;}
+  .mes-piece-pdf-nom{font-size:13px;font-weight:700;color:var(--mes-titre);word-break:break-all;}
+  .mes-piece-pdf-poids{font-size:11px;color:var(--mes-surtitre);font-family:var(--mono);margin-top:2px;}
+  .mes-piece-actions{display:flex;gap:16px;flex-wrap:wrap;}
+
+  /* Le geste qu'on regrette se donne en texte, pas en bouton de même poids. */
+  .mes-lien{
+    background:none;border:none;padding:0;
+    font-family:var(--font);font-size:12.5px;font-weight:600;
+    color:var(--mes-corps);text-decoration:underline;text-underline-offset:3px;
+    cursor:pointer;text-align:left;
+  }
+  .mes-lien:hover{color:var(--mes-titre);}
+  .mes-lien:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px;}
+
+  /* Le motif du refus d'une pièce, sous la zone. */
+  .mes-erreur{
+    padding:10px 12px;border:1px solid var(--red);border-radius:var(--mes-bouton-rayon);
+    font-size:12.5px;line-height:1.5;color:var(--red);background:#fff;
+  }
+  /* La marque d'enregistrement. Sans elle, rien ne distingue un enregistrement
+     réussi d'un dépôt sans effet. Elle s'efface au dépôt suivant. */
+  .mes-marque{
+    padding:10px 12px;border:1px solid rgba(29,131,72,.35);background:rgba(29,131,72,.07);
+    border-radius:var(--mes-bouton-rayon);font-size:12.5px;line-height:1.5;color:var(--green);font-weight:600;
+  }
+
+  /* LES FACULTATIFS. Atteignables sans être imposés : ils ne prennent pas la
+     place de ce qu'il faut voir sur un téléphone, et un clic les ouvre. */
+  .mes-facultatif{display:flex;flex-direction:column;gap:14px;}
+  /* LA DATE. Modifiable, discrète, et jamais sur le même rang que le montant :
+     elle est seule sur sa rangée, au bas de la carte, à la taille d'une note. */
+  .mes-date{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:4px;}
+  .mes-date label{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--mes-surtitre);}
+  .mes-date input{
+    padding:6px 9px;border:1px solid var(--mes-bord);border-radius:7px;
+    font-family:var(--mono);font-size:12px;background:#fff;color:var(--mes-corps);outline:none;
+  }
+  .mes-date input:focus{border-color:var(--mes-titre);}
+
+  .mes-pied{
+    border-top:1px solid var(--mes-bord);background:var(--mes-fond);
+    padding:16px 34px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:flex-end;
+    gap:16px;flex-wrap:wrap;
+  }
+  .mes-pied-actions{display:flex;align-items:center;gap:16px;flex:1;justify-content:space-between;}
+  .mes-btn{
+    background:var(--mes-bouton);color:#fff;border:none;
+    padding:11px 20px;border-radius:var(--mes-bouton-rayon);
+    font-family:var(--font);font-size:13px;font-weight:700;
+    flex-shrink:0;cursor:pointer;
+  }
+  .mes-btn:hover{background:#000;}
+  .mes-btn:disabled{opacity:.5;cursor:default;}
+  .mes-btn:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px;}
+  .mes-pied .mupc-btn-outline:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;}
+
+  /* LA PAGE, DERRIÈRE. Le document ne défile pas, le défilement est confiné à
+     `main` : c'est lui qu'on arrête, pour que la molette ne fasse pas glisser
+     l'écran sous la carte. */
+  body.encart-ouvert main{overflow:hidden;}
+
+  /* SUR TÉLÉPHONE, enregistrer une dépense simple ne doit demander aucun
+     défilement : dépôt, montant, catégorie, enregistrer. La carte prend toute
+     la place, ses écarts se resserrent, et la zone de dépôt cesse d'être le
+     grand rectangle qu'elle peut être sur un écran large. */
+  @media (max-width:640px){
+    .mes-voile{padding:0;align-items:stretch;}
+    .mes-carte{max-width:none;max-height:100vh;min-height:100vh;border:none;border-radius:0;}
+    .mes-corps{padding:16px 16px 12px;gap:10px;}
+    .mes-carte h2{font-size:22px;letter-spacing:-.5px;}
+    .mes-carte h2 + p{margin-top:8px;}
+    .mes-carte p{font-size:13px;}
+    .mes-depot{padding:12px 12px;gap:8px;}
+    .mes-depot-icone{width:32px;height:32px;}
+    .mes-pied{padding:12px 16px;}
+  }
+
+  /* LES ÉCRANS COURTS. Mesuré au banc : sous 700 px de hauteur, le texte de
+     première visite coûte ses quatre lignes et la rangée de catégories se
+     replie en trois, ce qui pousse le bas de la carte hors de l'écran. On
+     resserre encore, et l'icône du dépôt se retire : elle décore, les deux
+     boutons et le cadre en tirets disent la voie sans elle. */
+  @media (max-width:640px) and (max-height:700px){
+    .mes-corps{padding:12px 14px 10px;gap:8px;}
+    .mes-carte h2{font-size:19px;}
+    .mes-depot{padding:10px;gap:6px;}
+    .mes-depot-icone{display:none;}
+    .mes-champ input#encart-montant{font-size:22px;padding:9px 12px;}
+    .mes-pied{padding:10px 14px;}
+  }
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
@@ -319,6 +551,121 @@
 
   </div>
 </main>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     L'ENCART DE SAISIE
+     Il se lève à CHAQUE visite, pas seulement la première : on vient sur
+     cette page pour déposer un justificatif, pas pour consulter des totaux.
+     L'écran complet vit derrière lui, inchangé.
+     CE N'EST PAS UN GARDE. Il se quitte par le bouton du pied ou par un clic
+     hors de la carte, il n'exige rien, et une fois quitté il ne se relève plus
+     de la séance : le bouton « Nouveau frais » de l'en-tête est la porte
+     permanente qui le rouvre.
+     LES DEUX TEXTES SONT ÉCRITS EN CLAIR ICI, jamais construits en
+     JavaScript : ils se remplacent d'une seule ligne. Le second n'a pas de
+     corps, c'est voulu. Aucun surtitre, la décision vaut pour tous les
+     encarts du produit.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="mes-voile" id="encart" role="dialog" aria-labelledby="encart-titre-1">
+  <div class="mes-carte">
+    <div class="mes-filet" aria-hidden="true"></div>
+
+    <div class="mes-corps">
+
+      <!-- PREMIÈRE VISITE -->
+      <div id="encart-texte-1">
+        <h2 id="encart-titre-1">Photographiez vos frais, c'est enregistré.</h2>
+        <p>Vos dépenses du jour et vos frais fixes, rassemblés mois par mois. Déposez le justificatif, indiquez le montant, rattachez le prospect si le déplacement était pour lui.</p>
+      </div>
+
+      <!-- VISITES SUIVANTES -->
+      <div id="encart-texte-2" hidden>
+        <h2 id="encart-titre-2">Déposez votre justificatif.</h2>
+      </div>
+
+      <!-- LA MARQUE D'ENREGISTREMENT, entre le texte et le dépôt : c'est là que
+           l'oeil revient après avoir enregistré, et le dépôt suivant est juste
+           dessous. Son contenu est un constat, pas un des deux textes. -->
+      <div class="mes-marque" id="encart-marque" hidden></div>
+
+      <!-- 1. LA ZONE DE DÉPÔT, en grand, première chose que l'oeil rencontre.
+           DEUX ENTRÉES DE FICHIER ET NON UNE : `capture` force l'appareil photo
+           sur téléphone et retire l'accès à la photothèque. Une seule entrée
+           portant l'attribut privilégierait donc une voie et en supprimerait
+           une autre, quand le cahier en demande trois à égalité. -->
+      <input type="file" id="encart-photo-input" accept="image/*,application/pdf" capture="environment" style="display:none">
+      <input type="file" id="encart-fichier-input" accept="image/*,application/pdf" style="display:none">
+
+      <div class="mes-depot" id="encart-depot">
+        <div class="mes-depot-icone" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
+        <div class="mes-depot-voies">
+          <button type="button" class="mupc-btn mupc-btn-outline" id="encart-photo">Photographier</button>
+          <button type="button" class="mupc-btn mupc-btn-outline" id="encart-choisir">Choisir un fichier</button>
+        </div>
+        <p class="mes-depot-appel">ou glissez votre justificatif ici</p>
+        <p class="mes-depot-note">Image ou PDF, 5 Mo au plus</p>
+      </div>
+
+      <!-- LE CONTRÔLE DE LA PIÈCE, avec sa voie de retour : on en reprend une
+           autre sans rien perdre du reste de la saisie. -->
+      <div class="mes-piece" id="encart-piece" hidden>
+        <div class="mes-piece-vue" id="encart-piece-vue"></div>
+        <div class="mes-piece-actions">
+          <button type="button" class="mes-lien" id="encart-reprendre">Reprendre une autre pièce</button>
+          <button type="button" class="mes-lien" id="encart-retirer">Retirer</button>
+        </div>
+      </div>
+
+      <div class="mes-erreur" id="encart-erreur" hidden></div>
+
+      <!-- 2. LE MONTANT TTC -->
+      <div class="mes-champ">
+        <label class="mes-etiquette" for="encart-montant">Montant TTC</label>
+        <input type="number" id="encart-montant" inputmode="decimal" step="0.01" min="0" placeholder="0,00">
+      </div>
+
+      <!-- 3. LES SEPT CATÉGORIES DU QUOTIDIEN -->
+      <div class="mes-champ">
+        <span class="mes-etiquette">Catégorie</span>
+        <div class="cat-grid" id="encart-cat-grid"></div>
+      </div>
+
+      <!-- 4. LA DESCRIPTION ET LE PROSPECT, facultatifs : atteignables d'un
+           clic, jamais imposés, et hors du chemin de la dépense simple. -->
+      <button type="button" class="mes-lien" id="encart-plus" aria-expanded="false" aria-controls="encart-facultatif">Ajouter une description ou un prospect</button>
+      <div class="mes-facultatif" id="encart-facultatif" hidden>
+        <div class="mes-champ">
+          <label class="mes-etiquette" for="encart-desc">Description</label>
+          <input type="text" id="encart-desc" placeholder="ex : Plein autoroute Paris">
+        </div>
+        <div class="mes-champ">
+          <label class="mes-etiquette" for="encart-prospect">Prospect lié</label>
+          <select id="encart-prospect"><option value="">Aucun</option></select>
+          <div id="encart-suggest"></div>
+        </div>
+      </div>
+
+      <!-- 5. LA DATE, seule sur sa rangée et au bas de la carte. -->
+      <div class="mes-date">
+        <label for="encart-date">Date</label>
+        <input type="date" id="encart-date">
+      </div>
+
+    </div>
+
+    <!-- LA SORTIE À GAUCHE, à la place qu'occupe « Je verrai plus tard » dans
+         Devis. Elle reste le chemin annoncé ; le clic hors de la carte est un
+         raccourci vers la même porte. -->
+    <div class="mes-pied">
+      <div class="mes-pied-actions">
+        <button type="button" class="mupc-btn mupc-btn-outline" id="encart-sortir">Voir mes frais</button>
+        <button type="button" class="mes-btn" id="encart-enregistrer">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- DRAWER FRAIS PONCTUEL -->
 <div class="drawer-overlay" id="drawer-overlay"></div>
@@ -1089,7 +1436,10 @@
     if(btn) switchView(btn.dataset.view);
   });
 
-  /* ============ DRAWER FRAIS PONCTUEL ============ */
+  /* ============ TIROIR DE MODIFICATION D'UN FRAIS ============ */
+  // Il ne sert plus à créer : la saisie se fait dans l'encart. Il reste la
+  // fenêtre de MODIFICATION d'un frais existant, ouverte depuis le crayon
+  // d'une ligne, avec sa grille étendue à la catégorie du frais ouvert.
   var editingId = null, currentCategory = null, currentPhotoData = null;
 
   // La liste est un argument : les deux tiroirs ne partagent plus la leur.
@@ -1240,7 +1590,10 @@
   }
 
   document.getElementById('f-date').addEventListener('change', suggestProspect);
-  document.getElementById('btn-new').addEventListener('click', function(){ openDrawer(); });
+  // LA PORTE PERMANENTE. Une fois l'encart quitté, il ne se relève plus de la
+  // séance : ce bouton est le seul chemin qui y ramène, et il ne dépend
+  // d'aucun état. Le tiroir, lui, ne sert plus à CRÉER.
+  document.getElementById('btn-new').addEventListener('click', ouvrirEncart);
   document.getElementById('drawer-cancel').addEventListener('click', closeDrawer);
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
   document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
@@ -1291,6 +1644,307 @@
     }
     closeDrawer();
     renderAll();
+  });
+
+  /* ══════════════════════════════════════════════════════════════════
+     L'ENCART DE SAISIE
+     ══════════════════════════════════════════════════════════════════ */
+
+  // Le report est LOCAL, comme celui de Devis et celui de la Visio : rien de
+  // nouveau ne part en base, et un report qui passerait par une écriture
+  // pourrait échouer. Il ne gouverne QUE le texte affiché, pas l'apparition :
+  // l'encart se lève à chaque visite, c'est arrêté.
+  var LS_ENCART_VU = 'mup_frais_encart_vu';
+  function encartDejaVu(){ try { return localStorage.getItem(LS_ENCART_VU) === '1'; } catch(e){ return false; } }
+  function poserEncartVu(){ try { localStorage.setItem(LS_ENCART_VU, '1'); } catch(e){} }
+
+  // Drapeau de SÉANCE, et non de report : une fois quitté, l'encart ne se
+  // relève plus tant que l'onglet vit. Rouvrir la page le remet à faux, et le
+  // bouton « Nouveau frais » le force à tout moment.
+  var encartQuitte = false;
+  var encartPiece = null;      // { data, type:'image'|'pdf', nom, poids }
+  var encartCategorie = null;
+  var PLAFOND_PIECE = 5 * 1024 * 1024;
+
+  function elEncart(id){ return document.getElementById(id); }
+
+  function poidsLisible(o){
+    if(o >= 1024*1024) return (o / (1024*1024)).toFixed(1).replace('.', ',') + ' Mo';
+    return Math.max(1, Math.round(o / 1024)) + ' Ko';
+  }
+
+  // Une saisie est EN COURS dès que quelque chose a été posé : la pièce, le
+  // montant, la catégorie ou la description. La date seule ne compte pas, elle
+  // est pré-remplie et n'est le geste de personne.
+  function encartSaisieEnCours(){
+    if(encartPiece) return true;
+    if(encartCategorie) return true;
+    if((elEncart('encart-montant').value || '').trim() !== '') return true;
+    if((elEncart('encart-desc').value || '').trim() !== '') return true;
+    if((elEncart('encart-prospect').value || '') !== '') return true;
+    return false;
+  }
+
+  function encartErreur(motif){
+    var el = elEncart('encart-erreur');
+    if(!motif){ el.hidden = true; el.textContent = ''; return; }
+    el.textContent = motif;
+    el.hidden = false;
+  }
+
+  function encartRendPiece(){
+    var vue = elEncart('encart-piece-vue');
+    if(!encartPiece){
+      elEncart('encart-piece').hidden = true;
+      elEncart('encart-depot').hidden = false;
+      vue.innerHTML = '';
+      return;
+    }
+    if(encartPiece.type === 'pdf'){
+      // Aperçu SOBRE et non balise image : un PDF ne se montre pas en vignette
+      // sans bibliothèque, et son nom avec son poids disent ce qu'il y a à
+      // vérifier.
+      vue.innerHTML = '<div class="mes-piece-pdf"><span class="mes-piece-pdf-icone">'
+        + '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+        + '</span><div><div class="mes-piece-pdf-nom"></div><div class="mes-piece-pdf-poids"></div></div></div>';
+      vue.querySelector('.mes-piece-pdf-nom').textContent = encartPiece.nom;
+      vue.querySelector('.mes-piece-pdf-poids').textContent = 'PDF, ' + poidsLisible(encartPiece.poids);
+    } else {
+      vue.innerHTML = '<img alt="Justificatif déposé">';
+      vue.querySelector('img').src = encartPiece.data;
+    }
+    elEncart('encart-piece').hidden = false;
+    elEncart('encart-depot').hidden = true;
+  }
+
+  // Le PDF ne passe PAS par le canvas : il est stocké tel quel. L'image y passe,
+  // comme elle le faisait déjà, et en ressort en JPEG redimensionné.
+  async function encartPrendFichier(file){
+    if(!file) return;
+    elEncart('encart-marque').hidden = true;
+    encartErreur(null);
+    var estPdf = (file.type === 'application/pdf') || /\.pdf$/i.test(file.name || '');
+    var estImage = /^image\//.test(file.type || '');
+    if(!estPdf && !estImage){
+      encartErreur('Ce fichier n\'est ni une image ni un PDF. Déposez la photo de votre justificatif, ou le PDF que votre fournisseur vous a envoyé.');
+      return;
+    }
+    if(file.size > PLAFOND_PIECE){
+      encartErreur('Cette pièce pèse ' + poidsLisible(file.size) + ', au-delà des 5 Mo acceptés. Photographiez-la à nouveau en réduisant la définition, ou déposez un fichier plus léger.');
+      return;
+    }
+    try {
+      if(estPdf){
+        var data = await new Promise(function(resolve, reject){
+          var r = new FileReader();
+          r.onload = function(e){ resolve(e.target.result); };
+          r.onerror = function(){ reject(new Error('lecture')); };
+          r.readAsDataURL(file);
+        });
+        encartPiece = { data:data, type:'pdf', nom:file.name || 'justificatif.pdf', poids:file.size };
+      } else {
+        var img = await compressImage(file);
+        encartPiece = { data:img, type:'image', nom:file.name || 'justificatif.jpg', poids:file.size };
+      }
+    } catch(e){
+      encartErreur('Cette pièce n\'a pas pu être lue. Reprenez-la, ou choisissez un autre fichier.');
+      return;
+    }
+    encartRendPiece();
+  }
+
+  function encartVideLaCarte(){
+    encartPiece = null;
+    encartCategorie = null;
+    elEncart('encart-montant').value = '';
+    elEncart('encart-desc').value = '';
+    elEncart('encart-prospect').value = '';
+    elEncart('encart-date').value = todayISO();
+    elEncart('encart-suggest').innerHTML = '';
+    encartErreur(null);
+    encartRendPiece();
+    buildCatGrid('encart-cat-grid', CAT_QUOTIDIEN, onSelectEncart);
+    elEncart('encart-facultatif').hidden = true;
+    elEncart('encart-plus').setAttribute('aria-expanded', 'false');
+  }
+
+  function onSelectEncart(c){
+    encartCategorie = c;
+    document.querySelectorAll('#encart-cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === c); });
+  }
+
+  // La liste des prospects de l'encart est la même que celle du tiroir, bâtie
+  // depuis la même collection et avec la même mention quand elle est illisible.
+  function encartBuildProspects(){
+    var sel = elEncart('encart-prospect');
+    var garde = sel.value;
+    sel.innerHTML = '<option value="">Aucun</option>';
+    pipeline.filter(function(c){ return c.col !== 'lost'; }).forEach(function(c){
+      var nom = c.name || c.title || '';
+      var opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = (nom || 'Sans nom') + (c.co && c.co !== nom ? ' · ' + c.co : '');
+      sel.appendChild(opt);
+    });
+    if(etatLecture.mup_pipeline === 'echec'){
+      var alerte = document.createElement('option');
+      alerte.disabled = true;
+      alerte.textContent = 'Liste de vos prospects illisible pour le moment';
+      sel.appendChild(alerte);
+    }
+    sel.value = garde;
+  }
+
+  function encartSuggestProspect(){
+    var date = elEncart('encart-date').value;
+    var wrap = elEncart('encart-suggest');
+    wrap.innerHTML = '';
+    if(!date) return;
+    var rdvsOfDay = agenda.filter(function(r){ return r.date && String(r.date).slice(0,10) === date; });
+    if(rdvsOfDay.length !== 1) return;
+    var rdv = rdvsOfDay[0];
+    var card = pipeline.find(function(c){ return sameId(c.id, rdv.cardId) || sameId(c.id, rdv.ficheId) || sameId(c.id, rdv.prospectId); });
+    if(!card || elEncart('encart-prospect').value !== '') return;
+    wrap.innerHTML = '<div class="suggest-prospect"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>RDV avec <strong></strong> ce jour-là</span><div class="suggest-actions"><button class="suggest-yes" data-link="'+card.id+'">Lier</button><button class="suggest-no" data-dismiss>Ignorer</button></div></div>';
+    wrap.querySelector('strong').textContent = card.name || card.co || 'ce prospect';
+    wrap.querySelector('[data-link]').addEventListener('click', function(){ elEncart('encart-prospect').value = this.dataset.link; wrap.innerHTML = ''; });
+    wrap.querySelector('[data-dismiss]').addEventListener('click', function(){ wrap.innerHTML = ''; });
+  }
+
+  function ouvrirEncart(){
+    encartQuitte = false;
+    // Les deux textes sont dans le balisage : on ne fait ici que désigner
+    // celui qui paraît, et l'étiquette de la fenêtre suit son titre.
+    var premiere = !encartDejaVu();
+    elEncart('encart-texte-1').hidden = !premiere;
+    elEncart('encart-texte-2').hidden = premiere;
+    elEncart('encart').setAttribute('aria-labelledby', premiere ? 'encart-titre-1' : 'encart-titre-2');
+    elEncart('encart-marque').hidden = true;
+    encartBuildProspects();
+    encartVideLaCarte();
+    elEncart('encart').classList.add('ouvert');
+    document.body.classList.add('encart-ouvert');
+  }
+
+  function fermerEncart(){
+    encartQuitte = true;
+    // Vu une fois, vu pour de bon : la visite suivante ouvre sur le texte court.
+    poserEncartVu();
+    elEncart('encart').classList.remove('ouvert');
+    document.body.classList.remove('encart-ouvert');
+  }
+
+  // Les deux sorties passent par ici. Si une saisie est en cours, la fenêtre à
+  // trois issues tranche : enregistrer avant de sortir, abandonner, ou rester.
+  async function quitterEncart(){
+    if(!encartSaisieEnCours()){ fermerEncart(); return; }
+    var choix = await mupChoix(
+      'Votre saisie n\'est pas enregistrée',
+      'Vous avez commencé un frais sans l\'enregistrer. Que voulez-vous en faire ?',
+      'Enregistrer', 'Abandonner', 'Rester ici');
+    if(choix === 'retour') return;
+    if(choix === 'tiers'){ fermerEncart(); return; }
+    var ok = await enregistrerDepuisEncart();
+    if(ok) fermerEncart();
+  }
+
+  // L'enregistrement lit son code HTTP comme partout ailleurs. Sur refus, la
+  // carte ne se vide pas, la marque ne paraît pas, et le motif est dit.
+  async function enregistrerDepuisEncart(){
+    if(!encartCategorie){ await mupAlert('Sélectionner une catégorie', null, 'Fermer'); return false; }
+    var montant = parseFloat(elEncart('encart-montant').value);
+    if(!montant || montant <= 0){ await mupAlert('Saisir un montant valide', null, 'Fermer'); return false; }
+    var date = elEncart('encart-date').value || todayISO();
+
+    var nouveau = {
+      id: 'f' + Date.now(),
+      category: encartCategorie,
+      amountTTC: montant,
+      date: date,
+      description: elEncart('encart-desc').value.trim(),
+      cardId: elEncart('encart-prospect').value || null,
+      photoData: encartPiece ? encartPiece.data : null,
+      photoType: encartPiece ? encartPiece.type : null,
+      photoName: encartPiece ? encartPiece.nom : null,
+      ocrStatus: encartPiece ? 'pending' : null,
+      location: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    frais.push(nouveau);
+
+    var verdict = await saveJSON('mup_frais', frais);
+    if(!verdict.ok){
+      // La ligne n'a jamais été rendue et n'est pas en base : on la retire de la
+      // collection, sinon les totaux derrière l'encart compteraient un frais
+      // inexistant. Rien n'est perdu, la carte garde la saisie entière et un
+      // nouvel essai la renvoie telle quelle, sans doublon.
+      frais = frais.filter(function(x){ return !sameId(x.id, nouveau.id); });
+      await mupAlert('Frais non enregistré', verdict.motif, 'Fermer');
+      return false;
+    }
+
+    var totalJour = frais.filter(function(f){ return f.date === date; })
+                         .reduce(function(s,f){ return s + (f.amountTTC||0); }, 0);
+    var marque = elEncart('encart-marque');
+    marque.textContent = catLabel(nouveau.category) + ', ' + fmtEur2(nouveau.amountTTC)
+                       + ' ajouté. Total du ' + dayLabel(date) + ' : ' + fmtEur2(totalJour) + '.';
+    marque.hidden = false;
+    encartVideLaCarte();
+    renderAll();
+    return true;
+  }
+
+  /* ---- Les branchements de l'encart ---- */
+  elEncart('encart-photo').addEventListener('click', function(){ elEncart('encart-photo-input').click(); });
+  elEncart('encart-choisir').addEventListener('click', function(){ elEncart('encart-fichier-input').click(); });
+  elEncart('encart-reprendre').addEventListener('click', function(){ elEncart('encart-fichier-input').click(); });
+  elEncart('encart-retirer').addEventListener('click', function(){ encartPiece = null; encartErreur(null); encartRendPiece(); });
+
+  // La valeur est remise à vide après lecture : reprendre DEUX FOIS le même
+  // fichier ne déclencherait aucun `change` sans cela.
+  ['encart-photo-input','encart-fichier-input'].forEach(function(id){
+    elEncart(id).addEventListener('change', async function(e){
+      var file = e.target.files[0];
+      e.target.value = '';
+      await encartPrendFichier(file);
+    });
+  });
+
+  // Le glisser-déposer, troisième voie. dragover doit être annulé, sans quoi le
+  // navigateur ouvre le fichier à la place de la page.
+  (function(){
+    var zone = elEncart('encart-depot');
+    ['dragenter','dragover'].forEach(function(t){
+      zone.addEventListener(t, function(e){ e.preventDefault(); zone.classList.add('mes-survol'); });
+    });
+    ['dragleave','drop'].forEach(function(t){
+      zone.addEventListener(t, function(e){ e.preventDefault(); zone.classList.remove('mes-survol'); });
+    });
+    zone.addEventListener('drop', async function(e){
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if(f) await encartPrendFichier(f);
+    });
+  })();
+
+  elEncart('encart-plus').addEventListener('click', function(){
+    var zone = elEncart('encart-facultatif');
+    var ouvert = zone.hidden;
+    zone.hidden = !ouvert;
+    this.setAttribute('aria-expanded', String(ouvert));
+    if(ouvert) elEncart('encart-desc').focus();
+  });
+
+  elEncart('encart-date').addEventListener('change', encartSuggestProspect);
+  elEncart('encart-sortir').addEventListener('click', quitterEncart);
+  // Le clic hors de la carte sort aussi, en raccourci. Le bouton du pied reste
+  // le chemin annoncé, et les deux passent par la même confirmation.
+  elEncart('encart').addEventListener('click', function(e){ if(e.target === this) quitterEncart(); });
+  elEncart('encart-enregistrer').addEventListener('click', async function(){
+    var btn = this;
+    btn.disabled = true;
+    try { await enregistrerDepuisEncart(); }
+    finally { btn.disabled = false; }
   });
 
   /* ============ DRAWER RÉCURRENT ============ */
@@ -1505,6 +2159,7 @@
     buildCatGrid('cat-grid', CAT_QUOTIDIEN, onSelectQuotidien);
     buildCatGrid('rec-cat-grid', CAT_FIXE, onSelectFixe);
     buildCardSelect();
+    encartBuildProspects();
     renderEtatLecture();
     renderKPI();
     renderChart12();
@@ -1533,7 +2188,18 @@
         'Fermer');
     }
     // Renvoi depuis une autre page (ex. facture sans émetteur) : ouvre le tiroir.
-    if(new URLSearchParams(window.location.search).get('reglages') === '1') openSettings();
+    // IL PASSE AVANT L'ENCART ET L'EMPÊCHE. L'abonné vient d'ailleurs pour
+    // renseigner sa société, pas pour déposer un justificatif : lever l'encart
+    // ici recouvrirait le tiroir, qui vit sous lui dans l'ordre des plans.
+    if(new URLSearchParams(window.location.search).get('reglages') === '1'){
+      openSettings();
+      return;
+    }
+    // L'ENCART SE LÈVE À CHAQUE VISITE, pas seulement la première. Il ne se
+    // relève pas s'il a déjà été quitté dans cette séance : `init` ne tourne
+    // qu'une fois par chargement, la garde vaut pour le rechargement par
+    // l'évènement `storage`.
+    if(!encartQuitte) ouvrirEncart();
   }
 
   // Le script est en analyse synchrone, alors que trial-expired-modal.js et

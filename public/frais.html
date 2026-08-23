@@ -113,7 +113,7 @@
   .timeline-row{display:grid;grid-template-columns:60px 90px 1fr 70px 110px 30px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
   .timeline-row:last-child{border-bottom:none;}
   .timeline-date{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:600;}
-  .timeline-cat{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:5px;text-align:center;justify-self:start;}
+  .timeline-cat{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:5px;text-align:center;justify-self:start;background:var(--surface2);color:var(--muted);}
   .timeline-desc{color:var(--text);font-weight:500;}
   .timeline-desc-sub{font-size:10.5px;color:var(--muted);margin-top:2px;}
   .timeline-rec-badge{font-size:8.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);background:var(--surface2);padding:2px 6px;border-radius:4px;justify-self:start;}
@@ -210,7 +210,7 @@
   /* RÉCURRENTS list */
   .rec-row{display:grid;grid-template-columns:90px 1fr 60px 110px 30px;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
   .rec-row:last-child{border-bottom:none;}
-  .rec-cat{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:5px;text-align:center;justify-self:start;}
+  .rec-cat{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:5px;text-align:center;justify-self:start;background:var(--surface2);color:var(--muted);}
   .rec-desc{font-weight:600;color:var(--text);}
   .rec-desc-sub{font-size:10.5px;color:var(--muted);margin-top:2px;font-family:var(--mono);}
   .rec-day{font-family:var(--mono);font-weight:700;font-size:11px;color:var(--muted);text-align:center;background:var(--surface);padding:4px 8px;border-radius:5px;justify-self:end;}
@@ -506,7 +506,22 @@
     telecom:     'Télécom',
     autre:       'Autre'
   };
-  var CATEGORIES = Object.keys(CAT_LABELS);
+
+  // DEUX LISTES DE SAISIE, distinctes de CAT_LABELS. Ce dernier gouverne le
+  // RENDU, partout et pour toujours : un frais enregistré sous une catégorie
+  // qui n'est plus proposée continue de s'afficher normalement.
+  //
+  // Quotidien : sept entrées, sans Télécom. Un abonnement mensuel n'est jamais
+  // une dépense du jour.
+  var CAT_QUOTIDIEN = ['essence','restaurant','hotel','peage','parking','fournitures','autre'];
+  // Fixe : les huit, Télécom compris.
+  var CAT_FIXE = Object.keys(CAT_LABELS);
+
+  // Repli explicite : le rendu ne casse sur aucune catégorie, même absente des
+  // deux listes de saisie ou héritée d'un schéma plus ancien.
+  function catLabel(c){
+    return CAT_LABELS[c] || 'Non classé';
+  }
 
   /* ============ STORAGE (SurrealDB Cloud via /api/*) ============ */
   // loadJSON/saveJSON conservent leur signature historique mais dispatchent par clé vers
@@ -845,7 +860,7 @@
     var isRec = !!f.recurrentId;
     var html = '<div class="timeline-row">';
     html += '<div class="timeline-date">'+dayLabel(f.date)+'</div>';
-    html += '<div class="timeline-cat cat-'+f.category+'">'+CAT_LABELS[f.category]+'</div>';
+    html += '<div class="timeline-cat cat-'+f.category+'">'+catLabel(f.category)+'</div>';
     html += '<div><div class="timeline-desc">'+(f.description || '—')+'</div>'+(cardLbl?'<div class="timeline-desc-sub">→ '+cardLbl+'</div>':'')+'</div>';
     html += '<div class="timeline-rec-badge'+(isRec?'':' empty')+'">'+(isRec?'Récurrent':'')+'</div>';
     html += '<div class="timeline-amount">'+fmtEur2(f.amountTTC)+'</div>';
@@ -1015,7 +1030,7 @@
     sorted.forEach(function(r){
       var status = r.active ? '' : ' (inactif)';
       html += '<div class="rec-row">';
-      html += '<div class="rec-cat cat-'+r.category+'">'+CAT_LABELS[r.category]+'</div>';
+      html += '<div class="rec-cat cat-'+r.category+'">'+catLabel(r.category)+'</div>';
       html += '<div><div class="rec-desc">'+r.description+status+'</div>';
       html += '<div class="rec-desc-sub">'+(r.vendor?r.vendor+' · ':'')+'depuis '+new Date(r.startDate).toLocaleDateString('fr-FR',{month:'short',year:'2-digit'})+(r.endDate?' — '+new Date(r.endDate).toLocaleDateString('fr-FR',{month:'short',year:'2-digit'}):'')+'</div></div>';
       html += '<div class="rec-day">le '+r.dayOfMonth+'</div>';
@@ -1077,13 +1092,33 @@
   /* ============ DRAWER FRAIS PONCTUEL ============ */
   var editingId = null, currentCategory = null, currentPhotoData = null;
 
-  function buildCatGrid(targetId, onSelect){
+  // La liste est un argument : les deux tiroirs ne partagent plus la leur.
+  function buildCatGrid(targetId, liste, onSelect){
     var html = '';
-    CATEGORIES.forEach(function(c){ html += '<button type="button" class="cat-btn" data-cat="'+c+'">'+CAT_LABELS[c]+'</button>'; });
+    liste.forEach(function(c){ html += '<button type="button" class="cat-btn" data-cat="'+c+'">'+catLabel(c)+'</button>'; });
     document.getElementById(targetId).innerHTML = html;
     document.getElementById(targetId).querySelectorAll('.cat-btn').forEach(function(b){
       b.addEventListener('click', function(){ onSelect(this.dataset.cat); });
     });
+  }
+
+  function onSelectQuotidien(c){
+    currentCategory = c;
+    document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === c); });
+  }
+
+  function onSelectFixe(c){
+    currentRecCategory = c;
+    document.querySelectorAll('#rec-cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === c); });
+  }
+
+  // Un frais déjà enregistré sous une catégorie que le quotidien ne propose
+  // plus, Télécom par exemple, garde la sienne : elle est ajoutée à la grille
+  // le temps de la modification. Sans cela, le crayon la ferait perdre.
+  function catsQuotidien(categorieExistante){
+    var liste = CAT_QUOTIDIEN.slice();
+    if(categorieExistante && liste.indexOf(categorieExistante) === -1) liste.push(categorieExistante);
+    return liste;
   }
 
   function buildCardSelect(){
@@ -1139,26 +1174,25 @@
     document.getElementById('f-date').value = todayISO();
     document.getElementById('f-desc').value = '';
     document.getElementById('f-card').value = '';
-    document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.remove('active'); });
     resetPhotoZone();
     document.getElementById('suggest-prospect-wrap').innerHTML = '';
 
-    if(id){
-      var f = frais.find(function(x){ return sameId(x.id, id); });
-      if(f){
-        currentCategory = f.category;
-        document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === f.category); });
-        document.getElementById('f-amount').value = f.amountTTC;
-        document.getElementById('f-date').value = f.date;
-        document.getElementById('f-desc').value = f.description || '';
-        // La liste porte les identifiants tels que l'API les rend : on retrouve
-        // l'option par comparaison normalisée plutôt que par égalité brute.
-        var lien = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
-        document.getElementById('f-card').value = lien ? lien.id : '';
-        if(f.photoData){
-          currentPhotoData = f.photoData;
-          renderPhotoPreview(f.photoData);
-        }
+    var f = id ? frais.find(function(x){ return sameId(x.id, id); }) : null;
+    buildCatGrid('cat-grid', catsQuotidien(f ? f.category : null), onSelectQuotidien);
+
+    if(f){
+      currentCategory = f.category;
+      document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === f.category); });
+      document.getElementById('f-amount').value = f.amountTTC;
+      document.getElementById('f-date').value = f.date;
+      document.getElementById('f-desc').value = f.description || '';
+      // La liste porte les identifiants tels que l'API les rend : on retrouve
+      // l'option par comparaison normalisée plutôt que par égalité brute.
+      var lien = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
+      document.getElementById('f-card').value = lien ? lien.id : '';
+      if(f.photoData){
+        currentPhotoData = f.photoData;
+        renderPhotoPreview(f.photoData);
       }
     }
     document.getElementById('drawer').classList.add('show');
@@ -1435,7 +1469,7 @@
       var card = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
       return [
         f.date,
-        CAT_LABELS[f.category],
+        catLabel(f.category),
         (f.description || '').replace(/"/g,'""'),
         (card ? (card.name || card.co || '') : '').replace(/"/g,'""'),
         (f.amountTTC||0).toFixed(2),
@@ -1468,14 +1502,8 @@
 
   /* ============ INIT ============ */
   function renderAll(){
-    buildCatGrid('cat-grid', function(c){
-      currentCategory = c;
-      document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === c); });
-    });
-    buildCatGrid('rec-cat-grid', function(c){
-      currentRecCategory = c;
-      document.querySelectorAll('#rec-cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === c); });
-    });
+    buildCatGrid('cat-grid', CAT_QUOTIDIEN, onSelectQuotidien);
+    buildCatGrid('rec-cat-grid', CAT_FIXE, onSelectFixe);
     buildCardSelect();
     renderEtatLecture();
     renderKPI();

@@ -82,11 +82,10 @@
   .container{padding:24px 36px 60px;display:flex;flex-direction:column;gap:18px;}
 
   /* KPI */
-  .grid-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .grid-kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
   .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px 14px;display:flex;flex-direction:column;gap:3px;border-left:3px solid var(--border);}
   .kpi-card.k-mois{border-left-color:#B84C00;} .kpi-card.k-mois .kpi-value{color:#B84C00;}
   .kpi-card.k-ytd{border-left-color:var(--text);} .kpi-card.k-ytd .kpi-value{color:var(--text);}
-  .kpi-card.k-rdv{border-left-color:#0A66C2;} .kpi-card.k-rdv .kpi-value{color:#0A66C2;}
   .kpi-label{font-size:9.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px;line-height:1;}
   .kpi-value{font-size:26px;font-weight:900;line-height:1;letter-spacing:-.6px;font-family:var(--font);margin-top:6px;}
   .kpi-sub{font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:3px;letter-spacing:.2px;}
@@ -615,11 +614,6 @@
         <div class="kpi-value" id="kpi-ytd">— €</div>
         <div class="kpi-sub" id="kpi-ytd-sub">depuis 1er janvier</div>
       </div>
-      <div class="kpi-card k-rdv">
-        <div class="kpi-label">Coût moyen / RDV</div>
-        <div class="kpi-value" id="kpi-rdv">— €</div>
-        <div class="kpi-sub" id="kpi-rdv-sub">RDV honorés</div>
-      </div>
     </div>
 
     <!-- Bar chart 12 mois -->
@@ -1122,11 +1116,6 @@
     var fYTD = frais.filter(function(f){ return new Date(f.date).getFullYear() === thisYear; });
     var totalMois = fThisMonth.reduce(function(s,f){ return s + (f.amountTTC||0); }, 0);
     var totalYTD = fYTD.reduce(function(s,f){ return s + (f.amountTTC||0); }, 0);
-    var rdvHonored = agenda.filter(function(r){
-      var d = new Date(r.date || r.ts);
-      return d < now && d.getFullYear() === thisYear;
-    }).length;
-    var coutParRdv = rdvHonored > 0 ? totalYTD / rdvHonored : 0;
 
     var fraisIllisibles = etatLecture.mup_frais === 'echec';
 
@@ -1134,9 +1123,6 @@
              fmtEur(totalMois), fThisMonth.length + ' frais saisis');
     poserKpi('kpi-ytd', 'kpi-ytd-sub', fraisIllisibles,
              fmtEur(totalYTD), 'depuis 1er janvier');
-    poserKpi('kpi-rdv', 'kpi-rdv-sub', fraisIllisibles || etatLecture.mup_agenda === 'echec',
-             rdvHonored > 0 ? fmtEur(coutParRdv) : '—',
-             rdvHonored + ' RDV honorés');
   }
 
   /* ============ CHART 12 MOIS ============ */

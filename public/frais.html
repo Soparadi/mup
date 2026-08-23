@@ -222,6 +222,15 @@
   .rec-amount{font-family:var(--mono);font-weight:800;font-size:13px;color:#B84C00;text-align:right;}
 
   .placeholder-banner{padding:10px 12px;background:rgba(245,158,11,.08);border:1px dashed var(--amber);border-radius:9px;font-size:11px;color:#854F0B;display:flex;align-items:center;gap:8px;}
+
+  /* ÉTAT D'ÉCHEC DE LECTURE : jamais confondu avec un compte neuf */
+  .etat-erreur{padding:12px 14px;background:rgba(204,0,0,.06);border:1px solid rgba(204,0,0,.24);border-radius:10px;font-size:12.5px;color:var(--red);display:flex;align-items:flex-start;gap:9px;font-weight:700;line-height:1.5;}
+  .etat-erreur svg{flex-shrink:0;margin-top:3px;}
+  .etat-erreur-detail{display:block;margin-top:4px;font-weight:500;color:var(--muted);font-size:11.5px;}
+  .detail-erreur{padding:34px 0;text-align:center;color:var(--red);font-size:13px;font-weight:700;}
+  .detail-erreur span{display:block;margin-top:6px;color:var(--muted);font-weight:500;font-size:12px;line-height:1.6;}
+  .kpi-value.illisible{font-size:15px;font-weight:700;color:var(--muted);letter-spacing:0;}
+  .chart12-totals-val.illisible{font-size:13px;color:var(--muted);}
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
@@ -256,6 +265,9 @@
   </div>
 
   <div class="container">
+
+    <!-- ÉTAT DE LECTURE (échec de chargement) -->
+    <div id="etat-lecture" style="display:none;"></div>
 
     <!-- KPI -->
     <div class="grid-kpi">
@@ -511,22 +523,87 @@
   /* ============ STORAGE (SurrealDB Cloud via /api/*) ============ */
   // loadJSON/saveJSON conservent leur signature historique mais dispatchent par clé vers
   // les routes /api/* (multi-tenant scopées userId côté serveur). localStorage n'est plus écrit.
+  var ROUTES = {
+    mup_frais:            '/api/frais',
+    mup_frais_recurrents: '/api/frais-recurrents',
+    mup_user_settings:    '/api/user-settings',
+    mup_pipeline:         '/api/pipeline',
+    mup_agenda:           '/api/agenda'
+  };
+  var LIBELLE_SOURCE = {
+    mup_frais:            'vos frais',
+    mup_frais_recurrents: 'vos frais récurrents',
+    mup_user_settings:    'vos informations de société',
+    mup_pipeline:         'vos prospects',
+    mup_agenda:           'votre agenda'
+  };
+
+  // Trois états par source, jamais deux : 'charge', 'vide', 'echec'. Sans cette
+  // distinction, une panne et un compte neuf rendaient le même écran, et le
+  // repli silencieux affichait zéro comme s'il s'agissait d'un fait.
+  var etatLecture = {};
+
   async function loadJSON(k, fb){
-    if(k === 'mup_frais')             return await fetch('/api/frais').then(function(r){ return r.ok ? r.json() : fb; }).catch(function(){ return fb; });
-    if(k === 'mup_frais_recurrents')  return await fetch('/api/frais-recurrents').then(function(r){ return r.ok ? r.json() : fb; }).catch(function(){ return fb; });
-    if(k === 'mup_user_settings')     return await fetch('/api/user-settings').then(function(r){ return r.ok ? r.json() : fb; }).catch(function(){ return fb; });
-    if(k === 'mup_pipeline')          return await fetch('/api/pipeline').then(function(r){ return r.ok ? r.json() : fb; }).catch(function(){ return fb; });
-    if(k === 'mup_agenda')            return await fetch('/api/agenda').then(function(r){ return r.ok ? r.json() : fb; }).catch(function(){ return fb; });
-    return fb;
-  }
-  async function saveJSON(k, v){
-    if(k === 'mup_frais'){
-      for(const f of v){ await fetch('/api/frais', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(f) }); }
-    } else if(k === 'mup_frais_recurrents'){
-      for(const f of v){ await fetch('/api/frais-recurrents', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(f) }); }
-    } else if(k === 'mup_user_settings'){
-      await fetch('/api/user-settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(v) });
+    var url = ROUTES[k];
+    if(!url){ etatLecture[k] = 'vide'; return fb; }
+    try {
+      var r = await fetch(url);
+      if(!r.ok){ etatLecture[k] = 'echec'; return fb; }
+      var data = await r.json();
+      if(data == null){ etatLecture[k] = 'vide'; return fb; }
+      etatLecture[k] = (Array.isArray(data) && data.length === 0) ? 'vide' : 'charge';
+      return data;
+    } catch(e){
+      etatLecture[k] = 'echec';
+      return fb;
     }
+  }
+
+  /* ============ ÉCRITURES : le code HTTP est lu, toujours ============ */
+  // Un refus de la base ne doit jamais passer pour une réussite. Chaque écriture
+  // rend un verdict { ok, motif } ; l'appelante décide alors de fermer ou non
+  // son tiroir, et de retirer ou non sa ligne de la collection en mémoire.
+  function raisonHttp(code){
+    if(code === 401) return 'votre session a expiré. Reconnectez-vous, puis recommencez.';
+    if(code === 402) return 'votre abonnement ne couvre plus cette opération.';
+    if(code === 403) return 'l\'opération vous a été refusée.';
+    if(code === 404) return 'l\'enregistrement est introuvable en base, il a peut-être déjà été supprimé ailleurs.';
+    if(code === 413) return 'l\'envoi est trop lourd pour le serveur, une pièce jointe est probablement trop grosse.';
+    if(code === 429) return 'trop de demandes coup sur coup. Patientez un instant, puis recommencez.';
+    if(code >= 500)  return 'le serveur n\'a pas pu traiter la demande. Réessayez dans un instant.';
+    return 'le serveur a refusé la demande.';
+  }
+
+  async function ecrire(url, options, quoi){
+    try {
+      var r = await fetch(url, options);
+      if(r.ok) return { ok:true };
+      return { ok:false, motif: quoi + ' : ' + raisonHttp(r.status) };
+    } catch(e){
+      return { ok:false, motif: quoi + ' : le serveur est injoignable. Vérifiez votre connexion.' };
+    }
+  }
+
+  // La boucle va jusqu'au bout : s'arrêter au premier refus laisserait sans
+  // écriture des éléments qui, eux, seraient passés. Mais un seul refus suffit
+  // à rendre un échec, parce que la collection est réémise en entier et que la
+  // page ne sait donc pas lequel des envois portait la modification en cours.
+  async function ecrireCollection(url, liste, quoi){
+    var refus = 0, motif = null;
+    for(const item of liste){
+      var r = await ecrire(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(item) }, quoi);
+      if(!r.ok){ refus++; if(!motif) motif = r.motif; }
+    }
+    if(refus === 0) return { ok:true };
+    var ampleur = (liste.length > 1) ? (' Sur ' + liste.length + ' enregistrements envoyés, ' + refus + ' ont été refusés.') : '';
+    return { ok:false, refus:refus, total:liste.length, motif: motif + ampleur };
+  }
+
+  async function saveJSON(k, v){
+    if(k === 'mup_frais')             return await ecrireCollection('/api/frais', v, 'Vos frais');
+    if(k === 'mup_frais_recurrents')  return await ecrireCollection('/api/frais-recurrents', v, 'Vos frais récurrents');
+    if(k === 'mup_user_settings')     return await ecrire('/api/user-settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(v) }, 'Vos informations de société');
+    return { ok:true };
   }
 
   var frais = [];
@@ -580,6 +657,41 @@
     f.tvaRate = calc.rate; f.tvaRecuperablePct = calc.recupPct;
     f.tvaRecuperable = calc.recup;
     return f;
+  }
+
+  /* ============ RENDU DES ÉTATS D'ÉCHEC ============ */
+  var ICONE_ALERTE = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+
+  function renderEtatLecture(){
+    var zone = document.getElementById('etat-lecture');
+    var manquants = Object.keys(LIBELLE_SOURCE).filter(function(k){ return etatLecture[k] === 'echec'; });
+    if(manquants.length === 0){ zone.innerHTML = ''; zone.style.display = 'none'; return; }
+    var liste = manquants.map(function(k){ return LIBELLE_SOURCE[k]; }).join(', ');
+    var html = '<div class="etat-erreur">' + ICONE_ALERTE + '<div>';
+    html += 'Lecture impossible : ' + liste + '.';
+    html += '<span class="etat-erreur-detail">Ce que cette page affiche est incomplet. Un total à zéro ne signifie pas que vous n\'avez aucune dépense, seulement que la base n\'a pas répondu.</span>';
+    if(etatLecture.mup_user_settings === 'echec'){
+      html += '<span class="etat-erreur-detail">Vos réglages de TVA n\'ont pas pu être lus : la page ignore si vous êtes assujetti, elle ne l\'affirme donc pas.</span>';
+    }
+    html += '<span class="etat-erreur-detail">Rechargez la page. Si le message persiste, votre session a peut-être expiré.</span>';
+    html += '</div></div>';
+    zone.innerHTML = html;
+    zone.style.display = 'block';
+  }
+
+  function blocErreurDetail(quoi){
+    return '<div class="detail-erreur">' + quoi
+         + '<span>Cet écran ne dit pas que vous n\'avez rien saisi : la page n\'a pas pu interroger la base. Rechargez la page.</span></div>';
+  }
+
+  // Un indicateur dont la source n'a pas pu être lue ne montre aucun chiffre :
+  // zéro et illisible ne sont pas la même chose.
+  function poserKpi(idValeur, idSub, illisible, valeur, sub){
+    var elV = document.getElementById(idValeur);
+    var elS = document.getElementById(idSub);
+    elV.classList.toggle('illisible', !!illisible);
+    elV.textContent = illisible ? 'Illisible' : valeur;
+    elS.textContent = illisible ? 'lecture impossible' : sub;
   }
 
   /* ============ GÉNÉRATION OCCURRENCES RÉCURRENTES ============ */
@@ -640,7 +752,8 @@
         d.setMonth(d.getMonth()+1);
       }
     });
-    if(added) await saveJSON('mup_frais', frais);
+    if(!added) return { ok:true };
+    return await saveJSON('mup_frais', frais);
   }
 
   /* ============ KPI ============ */
@@ -659,13 +772,21 @@
     }).length;
     var coutParRdv = rdvHonored > 0 ? totalYTD / rdvHonored : 0;
 
-    document.getElementById('kpi-mois').textContent = fmtEur(totalMois);
-    document.getElementById('kpi-mois-sub').textContent = fThisMonth.length + ' frais saisis';
-    document.getElementById('kpi-ytd').textContent = fmtEur(totalYTD);
-    document.getElementById('kpi-tva').textContent = settings.tvaAssujetti ? fmtEur(tvaYTD) : '—';
-    document.getElementById('kpi-tva-sub').textContent = settings.tvaAssujetti ? 'cumul YTD' : 'non assujetti';
-    document.getElementById('kpi-rdv').textContent = rdvHonored > 0 ? fmtEur(coutParRdv) : '—';
-    document.getElementById('kpi-rdv-sub').textContent = rdvHonored + ' RDV honorés';
+    var fraisIllisibles = etatLecture.mup_frais === 'echec';
+    var reglagesIllisibles = etatLecture.mup_user_settings === 'echec';
+
+    poserKpi('kpi-mois', 'kpi-mois-sub', fraisIllisibles,
+             fmtEur(totalMois), fThisMonth.length + ' frais saisis');
+    poserKpi('kpi-ytd', 'kpi-ytd-sub', fraisIllisibles,
+             fmtEur(totalYTD), 'depuis 1er janvier');
+    // Réglages illisibles : tvaAssujetti retombe à faux sans que ce soit un
+    // fait. On ne présente donc pas « non assujetti » comme une donnée acquise.
+    poserKpi('kpi-tva', 'kpi-tva-sub', fraisIllisibles || reglagesIllisibles,
+             settings.tvaAssujetti ? fmtEur(tvaYTD) : '—',
+             settings.tvaAssujetti ? 'cumul YTD' : 'non assujetti');
+    poserKpi('kpi-rdv', 'kpi-rdv-sub', fraisIllisibles || etatLecture.mup_agenda === 'echec',
+             rdvHonored > 0 ? fmtEur(coutParRdv) : '—',
+             rdvHonored + ' RDV honorés');
   }
 
   /* ============ CHART 12 MOIS ============ */
@@ -713,11 +834,18 @@
       });
     });
 
+    // Frais illisibles : les barres vides ne doivent pas se lire comme une
+    // absence de dépense, la bande de totaux le dit au lieu de chiffrer.
+    var illisible = etatLecture.mup_frais === 'echec';
+    function cellule(libelle, teinte, valeur){
+      return '<div class="chart12-totals-cell"><span class="chart12-totals-lbl">'+libelle+'</span>'
+           + '<span class="chart12-totals-val '+(illisible ? 'illisible' : teinte)+'">'+(illisible ? 'Illisible' : valeur)+'</span></div>';
+    }
     var totals = '';
-    totals += '<div class="chart12-totals-cell"><span class="chart12-totals-lbl">Total 12 mois</span><span class="chart12-totals-val orange">'+fmtEur(totalAll)+'</span></div>';
-    totals += '<div class="chart12-totals-cell"><span class="chart12-totals-lbl">TVA récupérable</span><span class="chart12-totals-val green">'+(settings.tvaAssujetti ? fmtEur(tvaTotal) : '—')+'</span></div>';
-    totals += '<div class="chart12-totals-cell"><span class="chart12-totals-lbl">Moyenne / mois</span><span class="chart12-totals-val">'+fmtEur(avgMonth)+'</span></div>';
-    totals += '<div class="chart12-totals-cell"><span class="chart12-totals-lbl">Plus gros mois</span><span class="chart12-totals-val">'+(bestMonth && bestMonth.amount > 0 ? bestMonth.label + ' · ' + fmtEur(bestMonth.amount) : '—')+'</span></div>';
+    totals += cellule('Total 12 mois', 'orange', fmtEur(totalAll));
+    totals += cellule('TVA récupérable', 'green', (settings.tvaAssujetti ? fmtEur(tvaTotal) : '—'));
+    totals += cellule('Moyenne / mois', '', fmtEur(avgMonth));
+    totals += cellule('Plus gros mois', '', (bestMonth && bestMonth.amount > 0 ? bestMonth.label + ' · ' + fmtEur(bestMonth.amount) : '—'));
     document.getElementById('chart12-totals').innerHTML = totals;
   }
 
@@ -726,6 +854,10 @@
   var currentMonthDate = new Date();
 
   function renderTimeline(){
+    if(etatLecture.mup_frais === 'echec'){
+      document.getElementById('detail-view').innerHTML = blocErreurDetail('Vos frais n\'ont pas pu être lus.');
+      return;
+    }
     if(frais.length === 0){
       document.getElementById('detail-view').innerHTML = '<div class="timeline-empty">Aucun frais saisi. Cliquer sur <strong>+ Nouveau frais</strong> ou <strong>Frais récurrent</strong>.</div>';
       return;
@@ -784,11 +916,24 @@
           if(rule){
             if(!rule.skippedMonths) rule.skippedMonths = [];
             rule.skippedMonths.push(monthKey(f.date));
-            await saveJSON('mup_frais_recurrents', recurrents);
+            var vRegle = await saveJSON('mup_frais_recurrents', recurrents);
+            if(!vRegle.ok){
+              // Le mois sauté n'a pas été écrit : on retire la marque plutôt que
+              // de laisser la mémoire prétendre une exception qui n'existe pas.
+              rule.skippedMonths.pop();
+              btn.disabled = false;
+              await mupAlert('Suppression abandonnée', vRegle.motif, 'Fermer');
+              return;
+            }
           }
         }
+        var vSuppr = await ecrire('/api/frais/' + encodeURIComponent(id), { method:'DELETE' }, 'La suppression du frais');
+        if(!vSuppr.ok){
+          btn.disabled = false;
+          await mupAlert('Frais non supprimé', vSuppr.motif, 'Fermer');
+          return;
+        }
         frais = frais.filter(function(x){ return !sameId(x.id, id); });
-        await fetch('/api/frais/' + encodeURIComponent(id), { method:'DELETE' });
         renderAll();
       });
     });
@@ -861,7 +1006,8 @@
         html += '</div>';
       }
     }
-    document.getElementById('detail-view').innerHTML = '<div class="calmonth-grid">'+html+'</div>';
+    var enTete = (etatLecture.mup_frais === 'echec') ? blocErreurDetail('Vos frais n\'ont pas pu être lus.') : '';
+    document.getElementById('detail-view').innerHTML = enTete + '<div class="calmonth-grid">'+html+'</div>';
 
     document.querySelectorAll('[data-day]').forEach(function(c){
       c.addEventListener('click', function(){ openDayModal(this.dataset.day); });
@@ -877,7 +1023,9 @@
     var dayFrais = frais.filter(function(f){ return f.date === iso; }).sort(function(a,b){ return (a.createdAt||'').localeCompare(b.createdAt||''); });
     var date = new Date(iso);
     document.getElementById('day-modal-title').textContent = fullDayLabel(iso);
-    if(dayFrais.length === 0){
+    if(etatLecture.mup_frais === 'echec'){
+      document.getElementById('day-modal-body').innerHTML = blocErreurDetail('Vos frais n\'ont pas pu être lus.');
+    } else if(dayFrais.length === 0){
       document.getElementById('day-modal-body').innerHTML = '<div style="text-align:center;color:var(--muted2);font-size:13px;padding:20px 0;">Aucun frais ce jour-là.</div>';
     } else {
       var total = dayFrais.reduce(function(s,f){ return s + f.amountTTC; }, 0);
@@ -900,6 +1048,10 @@
 
   /* ============ RÉCURRENTS LIST ============ */
   function renderRecurrents(){
+    if(etatLecture.mup_frais_recurrents === 'echec'){
+      document.getElementById('detail-view').innerHTML = blocErreurDetail('Vos frais récurrents n\'ont pas pu être lus.');
+      return;
+    }
     if(recurrents.length === 0){
       document.getElementById('detail-view').innerHTML = '<div class="timeline-empty">Aucun frais récurrent. Cliquer sur <strong>Frais récurrent</strong> en haut pour automatiser vos abonnements (téléphone, internet, assurance...).</div>';
       return;
@@ -929,13 +1081,27 @@
         btn.disabled = true;                   // la fenêtre ne bloque plus le fil
         if(!await mupConfirm('Supprimer ce frais récurrent et toutes ses occurrences générées ?', null, 'Supprimer', 'Annuler')){ btn.disabled = false; return; }
         var fraisToDelete = frais.filter(function(f){ return sameId(f.recurrentId, id); });
+        var vRegle = await ecrire('/api/frais-recurrents/' + encodeURIComponent(id), { method:'DELETE' }, 'La suppression du frais récurrent');
+        if(!vRegle.ok){
+          btn.disabled = false;
+          await mupAlert('Frais récurrent non supprimé', vRegle.motif, 'Fermer');
+          return;
+        }
+        // La règle est partie. On ne retire de la mémoire que les occurrences
+        // dont la base a réellement accepté la suppression.
         recurrents = recurrents.filter(function(r){ return !sameId(r.id, id); });
-        frais = frais.filter(function(f){ return !sameId(f.recurrentId, id); });
-        await fetch('/api/frais-recurrents/' + encodeURIComponent(id), { method:'DELETE' });
+        var refusOcc = 0, motifOcc = null;
         for(const occ of fraisToDelete){
-          await fetch('/api/frais/' + encodeURIComponent(occ.id), { method:'DELETE' });
+          var vOcc = await ecrire('/api/frais/' + encodeURIComponent(occ.id), { method:'DELETE' }, 'La suppression d\'une occurrence');
+          if(vOcc.ok) frais = frais.filter(function(f){ return !sameId(f.id, occ.id); });
+          else { refusOcc++; if(!motifOcc) motifOcc = vOcc.motif; }
         }
         renderAll();
+        if(refusOcc > 0){
+          await mupAlert('Occurrences non supprimées',
+            motifOcc + ' ' + refusOcc + ' occurrence' + (refusOcc > 1 ? 's' : '') + ' sur ' + fraisToDelete.length + ' reste' + (refusOcc > 1 ? 'nt' : '') + ' en base. La règle, elle, a bien été supprimée.',
+            'Fermer');
+        }
       });
     });
   }
@@ -976,6 +1142,14 @@
       opt.textContent = name + (c.co && c.co !== name ? ' · ' + c.co : '');
       sel.appendChild(opt);
     });
+    // Une liste vide parce qu'illisible ne doit pas se lire comme une liste
+    // vide parce que sans prospect.
+    if(etatLecture.mup_pipeline === 'echec'){
+      var alerte = document.createElement('option');
+      alerte.disabled = true;
+      alerte.textContent = 'Liste de vos prospects illisible pour le moment';
+      sel.appendChild(alerte);
+    }
   }
 
   function updateTvaRecap(){
@@ -1134,8 +1308,16 @@
       };
       enrichFrais(newF);
       frais.push(newF);
+      // La ligne existe désormais en mémoire. Si l'envoi est refusé, le tiroir
+      // reste ouvert : on la marque en modification pour qu'un nouvel essai la
+      // mette à jour au lieu d'en créer une seconde.
+      editingId = newF.id;
     }
-    await saveJSON('mup_frais', frais);
+    var verdict = await saveJSON('mup_frais', frais);
+    if(!verdict.ok){
+      await mupAlert('Frais non enregistré', verdict.motif, 'Fermer');
+      return;
+    }
     closeDrawer();
     renderAll();
   });
@@ -1223,11 +1405,23 @@
         updatedAt: new Date().toISOString()
       };
       recurrents.push(newRec);
+      // Même motif que pour un frais : un nouvel essai après refus doit mettre
+      // à jour la règle déjà en mémoire, pas en empiler une seconde.
+      editingRecId = newRec.id;
     }
-    await saveJSON('mup_frais_recurrents', recurrents);
-    await generateRecurrentOccurrences();
+    var verdict = await saveJSON('mup_frais_recurrents', recurrents);
+    if(!verdict.ok){
+      await mupAlert('Frais récurrent non enregistré', verdict.motif, 'Fermer');
+      return;
+    }
+    var verdictOcc = await generateRecurrentOccurrences();
     closeRecDrawer();
     renderAll();
+    if(!verdictOcc.ok){
+      await mupAlert('Occurrences non enregistrées',
+        verdictOcc.motif + ' La règle est bien enregistrée, mais ses occurrences passées ne le sont pas encore : elles seront réessayées au prochain chargement de la page.',
+        'Fermer');
+    }
   });
 
   /* ============ SETTINGS ============ */
@@ -1259,15 +1453,28 @@
     settings.tvaIntra = document.getElementById('set-tva-intra').value.trim();
     var tauxRaw = document.getElementById('set-taux-tva').value.trim();
     settings.tauxTvaDefaut = (tauxRaw === '') ? null : (parseFloat(tauxRaw) || 0);
-    await saveJSON('mup_user_settings', settings);
+    var verdict = await saveJSON('mup_user_settings', settings);
+    if(!verdict.ok){
+      await mupAlert('Réglages non enregistrés', verdict.motif, 'Fermer');
+      return;
+    }
     frais.forEach(enrichFrais);
-    await saveJSON('mup_frais', frais);
+    var verdictFrais = await saveJSON('mup_frais', frais);
     closeSettings();
     renderAll();
+    if(!verdictFrais.ok){
+      await mupAlert('Frais non recalculés en base',
+        verdictFrais.motif + ' Vos informations de société sont bien enregistrées ; seul le recalcul de vos frais existants n\'a pas abouti.',
+        'Fermer');
+    }
   });
 
   /* ============ EXPORT CSV ============ */
   document.getElementById('btn-export').addEventListener('click', function(){
+    if(etatLecture.mup_frais === 'echec'){
+      mupAlert('Export impossible', 'Vos frais n\'ont pas pu être lus. Rechargez la page avant d\'exporter, sans quoi le fichier serait vide alors que vos frais existent bel et bien.', 'Fermer');
+      return;
+    }
     if(frais.length === 0){ mupAlert('Aucun frais à exporter', null, 'Fermer'); return; }
     var headers = ['Date','Catégorie','Description','Prospect','Montant TTC','Montant HT','TVA','TVA récupérable','Type','Photo'];
     var rows = frais.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); }).map(function(f){
@@ -1320,6 +1527,7 @@
       document.querySelectorAll('#rec-cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === c); });
     });
     buildCardSelect();
+    renderEtatLecture();
     renderKPI();
     renderChart12();
     if(currentView === 'timeline') renderTimeline();
@@ -1334,8 +1542,18 @@
     agenda = await loadJSON('mup_agenda', []);
     settings = await loadJSON('mup_user_settings', { tvaAssujetti:false, formeJuridique:'', siret:'' });
     if(settings.tvaAssujetti === undefined) settings.tvaAssujetti = false;
-    await generateRecurrentOccurrences();
+    // Lecture incomplète : on ne régénère rien. La page écrirait contre une
+    // collection tronquée et croirait manquantes des occurrences existantes.
+    var verdictGen = { ok:true };
+    if(etatLecture.mup_frais !== 'echec' && etatLecture.mup_frais_recurrents !== 'echec'){
+      verdictGen = await generateRecurrentOccurrences();
+    }
     renderAll();
+    if(!verdictGen.ok){
+      await mupAlert('Frais récurrents non enregistrés',
+        verdictGen.motif + ' Les occurrences manquantes s\'affichent, mais elles ne sont pas encore en base.',
+        'Fermer');
+    }
     // Renvoi depuis une autre page (ex. facture sans émetteur) : ouvre le tiroir.
     if(new URLSearchParams(window.location.search).get('reglages') === '1') openSettings();
   })();

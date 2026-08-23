@@ -2,8 +2,7 @@
 <!--
   SCHÉMA mup_frais (occurrences) :
   {
-    id, category, amountTTC, amountHT, amountTVA, tvaRate,
-    tvaRecuperablePct, tvaRecuperable,
+    id, category, amountTTC,
     date (YYYY-MM-DD), description, cardId?, location?, photoData?,
     recurrentId?,         // si généré depuis une règle récurrente
     _modifiedFromRecurrent?, // l'utilisateur a édité l'occurrence
@@ -22,6 +21,12 @@
 
   Génération auto silencieuse au chargement : pour chaque règle active,
   créer les occurrences manquantes depuis startDate jusqu'à aujourd'hui.
+
+  CHAMPS FISCAUX ABANDONNÉS : amountHT, amountTVA, tvaRate, tvaRecuperablePct
+  et tvaRecuperable subsistent sur les frais déjà écrits en base. Cette page ne
+  les calcule plus, ne les affiche plus et ne les exporte plus. Elle capture et
+  restitue, elle ne dit à personne ce qu'il peut déduire ou récupérer. Aucune
+  migration, aucun effacement : ils sont simplement ignorés.
 -->
 <html lang="fr">
 <head>
@@ -60,11 +65,10 @@
   .container{padding:24px 36px 60px;display:flex;flex-direction:column;gap:18px;}
 
   /* KPI */
-  .grid-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .grid-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
   .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px 14px;display:flex;flex-direction:column;gap:3px;border-left:3px solid var(--border);}
   .kpi-card.k-mois{border-left-color:#B84C00;} .kpi-card.k-mois .kpi-value{color:#B84C00;}
   .kpi-card.k-ytd{border-left-color:var(--text);} .kpi-card.k-ytd .kpi-value{color:var(--text);}
-  .kpi-card.k-tva{border-left-color:#1D8348;} .kpi-card.k-tva .kpi-value{color:#1D8348;}
   .kpi-card.k-rdv{border-left-color:#0A66C2;} .kpi-card.k-rdv .kpi-value{color:#0A66C2;}
   .kpi-label{font-size:9.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px;line-height:1;}
   .kpi-value{font-size:26px;font-weight:900;line-height:1;letter-spacing:-.6px;font-family:var(--font);margin-top:6px;}
@@ -106,7 +110,7 @@
   .timeline-month-header{display:flex;justify-content:space-between;align-items:baseline;padding:0 0 8px;border-bottom:2px solid var(--text);margin-bottom:10px;}
   .timeline-month-name{font-size:13px;font-weight:800;letter-spacing:-.2px;color:var(--text);text-transform:capitalize;}
   .timeline-month-total{font-size:14px;font-weight:800;font-family:var(--mono);color:#B84C00;letter-spacing:-.3px;}
-  .timeline-row{display:grid;grid-template-columns:60px 90px 1fr 70px 110px 100px 30px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
+  .timeline-row{display:grid;grid-template-columns:60px 90px 1fr 70px 110px 30px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
   .timeline-row:last-child{border-bottom:none;}
   .timeline-date{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:600;}
   .timeline-cat{font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:5px;text-align:center;justify-self:start;}
@@ -115,8 +119,6 @@
   .timeline-rec-badge{font-size:8.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);background:var(--surface2);padding:2px 6px;border-radius:4px;justify-self:start;}
   .timeline-rec-badge.empty{visibility:hidden;}
   .timeline-amount{font-family:var(--mono);font-weight:800;font-size:13px;color:var(--text);text-align:right;}
-  .timeline-tva{font-family:var(--mono);font-size:11px;color:var(--green);text-align:right;font-weight:600;}
-  .timeline-tva.zero{color:var(--muted2);}
   .timeline-actions{display:flex;justify-content:flex-end;gap:4px;}
   .timeline-action-btn{background:var(--surface);border:none;width:24px;height:24px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);}
   .timeline-action-btn:hover{background:var(--surface2);color:var(--text);}
@@ -198,13 +200,6 @@
   .photo-preview img{width:100%;border-radius:9px;display:block;}
   .photo-remove{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);color:#fff;border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 
-  .tva-recap{background:var(--surface);border-radius:9px;padding:12px 14px;margin:10px 0 14px;}
-  .tva-recap-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;}
-  .tva-recap-row.total{padding-top:8px;border-top:1px solid var(--border2);margin-top:6px;font-weight:700;}
-  .tva-recap-lbl{color:var(--muted);}
-  .tva-recap-val{font-family:var(--mono);font-weight:700;color:var(--text);}
-  .tva-recap-val.green{color:var(--green);}
-
   .suggest-prospect{background:rgba(245,158,11,.08);border:1px dashed var(--amber);border-radius:9px;padding:11px 12px;font-size:11.5px;color:#854F0B;margin-top:8px;display:flex;align-items:center;gap:8px;}
   .suggest-prospect strong{color:var(--text);}
   .suggest-actions{display:flex;gap:6px;margin-left:auto;}
@@ -281,11 +276,6 @@
         <div class="kpi-value" id="kpi-ytd">— €</div>
         <div class="kpi-sub" id="kpi-ytd-sub">depuis 1er janvier</div>
       </div>
-      <div class="kpi-card k-tva">
-        <div class="kpi-label">TVA récupérable</div>
-        <div class="kpi-value" id="kpi-tva">— €</div>
-        <div class="kpi-sub" id="kpi-tva-sub">cumul YTD</div>
-      </div>
       <div class="kpi-card k-rdv">
         <div class="kpi-label">Coût moyen / RDV</div>
         <div class="kpi-value" id="kpi-rdv">— €</div>
@@ -353,11 +343,6 @@
         <label>Date</label>
         <input type="date" id="f-date" />
       </div>
-    </div>
-    <div class="tva-recap" id="tva-recap" style="display:none;">
-      <div class="tva-recap-row"><span class="tva-recap-lbl">HT</span><span class="tva-recap-val" id="tva-ht">— €</span></div>
-      <div class="tva-recap-row"><span class="tva-recap-lbl" id="tva-rate-lbl">TVA</span><span class="tva-recap-val" id="tva-amount">— €</span></div>
-      <div class="tva-recap-row total"><span class="tva-recap-lbl">TVA récupérable</span><span class="tva-recap-val green" id="tva-recup">— €</span></div>
     </div>
     <div class="field">
       <label>Description</label>
@@ -474,7 +459,7 @@
         <option value="false">Non assujetti (auto-entrepreneur sous seuils)</option>
         <option value="true">Assujetti à la TVA</option>
       </select>
-      <div class="field-help">Si assujetti, la TVA récupérable est calculée auto selon catégorie.</div>
+      <div class="field-help">Détermine si vos devis et vos factures portent de la TVA. Sans effet sur la saisie de vos frais.</div>
     </div>
     <div class="field">
       <label>Taux de TVA par défaut</label>
@@ -507,18 +492,21 @@
 <script src="/js/mup-confirm.js"></script>
 <script>
 (function(){
-  /* ============ TVA TABLE ============ */
-  var TVA_TABLE = {
-    essence:     { tvaRate:20, recupPct:80,  label:'Essence' },
-    restaurant:  { tvaRate:10, recupPct:100, label:'Restaurant' },
-    hotel:       { tvaRate:10, recupPct:0,   label:'Hôtel' },
-    peage:       { tvaRate:20, recupPct:100, label:'Péage' },
-    parking:     { tvaRate:20, recupPct:100, label:'Parking' },
-    fournitures: { tvaRate:20, recupPct:100, label:'Fournitures' },
-    telecom:     { tvaRate:20, recupPct:100, label:'Télécom' },
-    autre:       { tvaRate:20, recupPct:100, label:'Autre' }
+  /* ============ CATÉGORIES ============ */
+  // Les libellés, et rien d'autre. Les taux de TVA et les pourcentages de
+  // récupération qui figuraient ici sont partis avec le reste : cette page ne
+  // calcule rien de fiscal et ne dit à personne ce qu'il peut récupérer.
+  var CAT_LABELS = {
+    essence:     'Essence',
+    restaurant:  'Restaurant',
+    hotel:       'Hôtel',
+    peage:       'Péage',
+    parking:     'Parking',
+    fournitures: 'Fournitures',
+    telecom:     'Télécom',
+    autre:       'Autre'
   };
-  var CATEGORIES = Object.keys(TVA_TABLE);
+  var CATEGORIES = Object.keys(CAT_LABELS);
 
   /* ============ STORAGE (SurrealDB Cloud via /api/*) ============ */
   // loadJSON/saveJSON conservent leur signature historique mais dispatchent par clé vers
@@ -641,24 +629,6 @@
     return na !== null && na === nb;
   }
 
-  function computeTva(amountTTC, category){
-    if(!amountTTC || amountTTC <= 0) return { ht:0, tva:0, recup:0, rate:0, recupPct:0 };
-    var t = TVA_TABLE[category] || TVA_TABLE.autre;
-    var rate = settings.tvaAssujetti ? t.tvaRate : 0;
-    var recupPct = settings.tvaAssujetti ? t.recupPct : 0;
-    var ht = rate > 0 ? amountTTC / (1 + rate/100) : amountTTC;
-    var tva = amountTTC - ht;
-    return { ht:ht, tva:tva, recup:tva*(recupPct/100), rate:rate, recupPct:recupPct };
-  }
-
-  function enrichFrais(f){
-    var calc = computeTva(f.amountTTC, f.category);
-    f.amountHT = calc.ht; f.amountTVA = calc.tva;
-    f.tvaRate = calc.rate; f.tvaRecuperablePct = calc.recupPct;
-    f.tvaRecuperable = calc.recup;
-    return f;
-  }
-
   /* ============ RENDU DES ÉTATS D'ÉCHEC ============ */
   var ICONE_ALERTE = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
 
@@ -671,7 +641,10 @@
     html += 'Lecture impossible : ' + liste + '.';
     html += '<span class="etat-erreur-detail">Ce que cette page affiche est incomplet. Un total à zéro ne signifie pas que vous n\'avez aucune dépense, seulement que la base n\'a pas répondu.</span>';
     if(etatLecture.mup_user_settings === 'echec'){
-      html += '<span class="etat-erreur-detail">Vos réglages de TVA n\'ont pas pu être lus : la page ignore si vous êtes assujetti, elle ne l\'affirme donc pas.</span>';
+      // La page ne calcule plus rien à partir de ces réglages, mais le tiroir
+      // Société les réécrit : ouvert sur un repli, il enregistrerait des champs
+      // vides par-dessus les vrais.
+      html += '<span class="etat-erreur-detail">Vos informations de société n\'ont pas pu être lues. N\'ouvrez pas le tiroir Société tant que ce message dure : vous enregistreriez des champs vides par-dessus les vôtres.</span>';
     }
     html += '<span class="etat-erreur-detail">Rechargez la page. Si le message persiste, votre session a peut-être expiré.</span>';
     html += '</div></div>';
@@ -742,7 +715,6 @@
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
             };
-            enrichFrais(newOcc);
             frais.push(newOcc);
             existingIds[occId] = true;
             existingIds[occKey] = true;
@@ -765,7 +737,6 @@
     var fYTD = frais.filter(function(f){ return new Date(f.date).getFullYear() === thisYear; });
     var totalMois = fThisMonth.reduce(function(s,f){ return s + (f.amountTTC||0); }, 0);
     var totalYTD = fYTD.reduce(function(s,f){ return s + (f.amountTTC||0); }, 0);
-    var tvaYTD = fYTD.reduce(function(s,f){ return s + (f.tvaRecuperable||0); }, 0);
     var rdvHonored = agenda.filter(function(r){
       var d = new Date(r.date || r.ts);
       return d < now && d.getFullYear() === thisYear;
@@ -773,17 +744,11 @@
     var coutParRdv = rdvHonored > 0 ? totalYTD / rdvHonored : 0;
 
     var fraisIllisibles = etatLecture.mup_frais === 'echec';
-    var reglagesIllisibles = etatLecture.mup_user_settings === 'echec';
 
     poserKpi('kpi-mois', 'kpi-mois-sub', fraisIllisibles,
              fmtEur(totalMois), fThisMonth.length + ' frais saisis');
     poserKpi('kpi-ytd', 'kpi-ytd-sub', fraisIllisibles,
              fmtEur(totalYTD), 'depuis 1er janvier');
-    // Réglages illisibles : tvaAssujetti retombe à faux sans que ce soit un
-    // fait. On ne présente donc pas « non assujetti » comme une donnée acquise.
-    poserKpi('kpi-tva', 'kpi-tva-sub', fraisIllisibles || reglagesIllisibles,
-             settings.tvaAssujetti ? fmtEur(tvaYTD) : '—',
-             settings.tvaAssujetti ? 'cumul YTD' : 'non assujetti');
     poserKpi('kpi-rdv', 'kpi-rdv-sub', fraisIllisibles || etatLecture.mup_agenda === 'echec',
              rdvHonored > 0 ? fmtEur(coutParRdv) : '—',
              rdvHonored + ' RDV honorés');
@@ -807,10 +772,6 @@
     var totalAll = months.reduce(function(s,m){ return s + m.amount; }, 0);
     var bestMonth = months.slice().sort(function(a,b){ return b.amount - a.amount; })[0];
     var avgMonth = totalAll / 12;
-    var tvaTotal = frais.filter(function(f){
-      var d = new Date(f.date);
-      return d >= new Date(now.getFullYear(), now.getMonth()-11, 1);
-    }).reduce(function(s,f){ return s + (f.tvaRecuperable||0); }, 0);
 
     var html = '';
     months.forEach(function(m){
@@ -843,7 +804,6 @@
     }
     var totals = '';
     totals += cellule('Total 12 mois', 'orange', fmtEur(totalAll));
-    totals += cellule('TVA récupérable', 'green', (settings.tvaAssujetti ? fmtEur(tvaTotal) : '—'));
     totals += cellule('Moyenne / mois', '', fmtEur(avgMonth));
     totals += cellule('Plus gros mois', '', (bestMonth && bestMonth.amount > 0 ? bestMonth.label + ' · ' + fmtEur(bestMonth.amount) : '—'));
     document.getElementById('chart12-totals').innerHTML = totals;
@@ -888,11 +848,10 @@
     var isRec = !!f.recurrentId;
     var html = '<div class="timeline-row">';
     html += '<div class="timeline-date">'+dayLabel(f.date)+'</div>';
-    html += '<div class="timeline-cat cat-'+f.category+'">'+TVA_TABLE[f.category].label+'</div>';
+    html += '<div class="timeline-cat cat-'+f.category+'">'+CAT_LABELS[f.category]+'</div>';
     html += '<div><div class="timeline-desc">'+(f.description || '—')+'</div>'+(cardLbl?'<div class="timeline-desc-sub">→ '+cardLbl+'</div>':'')+'</div>';
     html += '<div class="timeline-rec-badge'+(isRec?'':' empty')+'">'+(isRec?'Récurrent':'')+'</div>';
     html += '<div class="timeline-amount">'+fmtEur2(f.amountTTC)+'</div>';
-    html += '<div class="timeline-tva'+(f.tvaRecuperable > 0 ? '' : ' zero')+'">'+(f.tvaRecuperable > 0 ? '↗ '+fmtEur2(f.tvaRecuperable) : '—')+'</div>';
     html += '<div class="timeline-actions">';
     html += '<button class="timeline-action-btn" data-edit="'+f.id+'" title="Modifier"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>';
     html += '<button class="timeline-action-btn" data-del="'+f.id+'" title="Supprimer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>';
@@ -1029,10 +988,8 @@
       document.getElementById('day-modal-body').innerHTML = '<div style="text-align:center;color:var(--muted2);font-size:13px;padding:20px 0;">Aucun frais ce jour-là.</div>';
     } else {
       var total = dayFrais.reduce(function(s,f){ return s + f.amountTTC; }, 0);
-      var totalTva = dayFrais.reduce(function(s,f){ return s + (f.tvaRecuperable||0); }, 0);
       var html = '<div style="display:flex;justify-content:space-between;padding:0 0 14px;border-bottom:1px solid var(--border);margin-bottom:10px;">';
       html += '<div><div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">Total jour</div><div style="font-size:20px;font-weight:800;font-family:var(--mono);color:#B84C00;">'+fmtEur(total)+'</div></div>';
-      html += '<div style="text-align:right;"><div style="font-size:9.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);">TVA récup</div><div style="font-size:14px;font-weight:800;font-family:var(--mono);color:var(--green);">'+(settings.tvaAssujetti ? fmtEur(totalTva) : '—')+'</div></div>';
       html += '</div>';
       dayFrais.forEach(function(f){ html += renderRow(f); });
       document.getElementById('day-modal-body').innerHTML = html;
@@ -1061,7 +1018,7 @@
     sorted.forEach(function(r){
       var status = r.active ? '' : ' (inactif)';
       html += '<div class="rec-row">';
-      html += '<div class="rec-cat cat-'+r.category+'">'+TVA_TABLE[r.category].label+'</div>';
+      html += '<div class="rec-cat cat-'+r.category+'">'+CAT_LABELS[r.category]+'</div>';
       html += '<div><div class="rec-desc">'+r.description+status+'</div>';
       html += '<div class="rec-desc-sub">'+(r.vendor?r.vendor+' · ':'')+'depuis '+new Date(r.startDate).toLocaleDateString('fr-FR',{month:'short',year:'2-digit'})+(r.endDate?' — '+new Date(r.endDate).toLocaleDateString('fr-FR',{month:'short',year:'2-digit'}):'')+'</div></div>';
       html += '<div class="rec-day">le '+r.dayOfMonth+'</div>';
@@ -1125,7 +1082,7 @@
 
   function buildCatGrid(targetId, onSelect){
     var html = '';
-    CATEGORIES.forEach(function(c){ html += '<button type="button" class="cat-btn" data-cat="'+c+'">'+TVA_TABLE[c].label+'</button>'; });
+    CATEGORIES.forEach(function(c){ html += '<button type="button" class="cat-btn" data-cat="'+c+'">'+CAT_LABELS[c]+'</button>'; });
     document.getElementById(targetId).innerHTML = html;
     document.getElementById(targetId).querySelectorAll('.cat-btn').forEach(function(b){
       b.addEventListener('click', function(){ onSelect(this.dataset.cat); });
@@ -1150,18 +1107,6 @@
       alerte.textContent = 'Liste de vos prospects illisible pour le moment';
       sel.appendChild(alerte);
     }
-  }
-
-  function updateTvaRecap(){
-    var amount = parseFloat(document.getElementById('f-amount').value) || 0;
-    var recap = document.getElementById('tva-recap');
-    if(!currentCategory || amount <= 0){ recap.style.display = 'none'; return; }
-    recap.style.display = 'block';
-    var calc = computeTva(amount, currentCategory);
-    document.getElementById('tva-ht').textContent = fmtEur2(calc.ht);
-    document.getElementById('tva-rate-lbl').textContent = settings.tvaAssujetti ? ('TVA ' + calc.rate + '%') : 'TVA (non assujetti)';
-    document.getElementById('tva-amount').textContent = fmtEur2(calc.tva);
-    document.getElementById('tva-recup').textContent = settings.tvaAssujetti ? (fmtEur2(calc.recup) + ' (' + calc.recupPct + '%)') : '—';
   }
 
   function suggestProspect(){
@@ -1199,7 +1144,6 @@
     document.getElementById('f-card').value = '';
     document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.remove('active'); });
     resetPhotoZone();
-    updateTvaRecap();
     document.getElementById('suggest-prospect-wrap').innerHTML = '';
 
     if(id){
@@ -1218,7 +1162,6 @@
           currentPhotoData = f.photoData;
           renderPhotoPreview(f.photoData);
         }
-        updateTvaRecap();
       }
     }
     document.getElementById('drawer').classList.add('show');
@@ -1265,7 +1208,6 @@
     });
   }
 
-  document.getElementById('f-amount').addEventListener('input', updateTvaRecap);
   document.getElementById('f-date').addEventListener('change', suggestProspect);
   document.getElementById('btn-new').addEventListener('click', function(){ openDrawer(); });
   document.getElementById('drawer-cancel').addEventListener('click', closeDrawer);
@@ -1290,7 +1232,6 @@
         existing.cardId = document.getElementById('f-card').value || null;
         existing.photoData = currentPhotoData;
         existing.updatedAt = new Date().toISOString();
-        enrichFrais(existing);
       }
     } else {
       var newF = {
@@ -1306,7 +1247,6 @@
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-      enrichFrais(newF);
       frais.push(newF);
       // La ligne existe désormais en mémoire. Si l'envoi est refusé, le tiroir
       // reste ouvert : on la marque en modification pour qu'un nouvel essai la
@@ -1458,15 +1398,9 @@
       await mupAlert('Réglages non enregistrés', verdict.motif, 'Fermer');
       return;
     }
-    frais.forEach(enrichFrais);
-    var verdictFrais = await saveJSON('mup_frais', frais);
+    // Aucun frais n'est réécrit : rien ici ne dépend plus du statut de TVA.
     closeSettings();
     renderAll();
-    if(!verdictFrais.ok){
-      await mupAlert('Frais non recalculés en base',
-        verdictFrais.motif + ' Vos informations de société sont bien enregistrées ; seul le recalcul de vos frais existants n\'a pas abouti.',
-        'Fermer');
-    }
   });
 
   /* ============ EXPORT CSV ============ */
@@ -1476,18 +1410,15 @@
       return;
     }
     if(frais.length === 0){ mupAlert('Aucun frais à exporter', null, 'Fermer'); return; }
-    var headers = ['Date','Catégorie','Description','Prospect','Montant TTC','Montant HT','TVA','TVA récupérable','Type','Photo'];
+    var headers = ['Date','Catégorie','Description','Prospect','Montant TTC','Type','Photo'];
     var rows = frais.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); }).map(function(f){
       var card = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
       return [
         f.date,
-        TVA_TABLE[f.category].label,
+        CAT_LABELS[f.category],
         (f.description || '').replace(/"/g,'""'),
         (card ? (card.name || card.co || '') : '').replace(/"/g,'""'),
         (f.amountTTC||0).toFixed(2),
-        (f.amountHT||0).toFixed(2),
-        (f.amountTVA||0).toFixed(2),
-        (f.tvaRecuperable||0).toFixed(2),
         f.recurrentId ? 'Récurrent' : 'Ponctuel',
         f.photoData ? 'OUI' : 'NON'
       ];
@@ -1520,7 +1451,6 @@
     buildCatGrid('cat-grid', function(c){
       currentCategory = c;
       document.querySelectorAll('#cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === c); });
-      updateTvaRecap();
     });
     buildCatGrid('rec-cat-grid', function(c){
       currentRecCategory = c;

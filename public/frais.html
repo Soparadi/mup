@@ -67,14 +67,6 @@
     --mes-filet-4:#0BBCD4;
     --mes-filet-5:#D97706;
     --mes-filet-6:#1D8348;
-    /* La hauteur commune des encarts de mise en service, mesurée au banc sur
-       les trois autres pages. Posée en PLANCHER et jamais en taille.
-       Frais y rentre : son corps porte six blocs quand les autres en portent
-       trois, et c'est le contenu qui a cédé, pas le cadre. Mesuré au banc à
-       600 px de carte, fontes du dépôt servies : 485,31 px à la première
-       visite, 440,81 px au retour, sans défilement du corps ni dans l'un ni
-       dans l'autre. */
-    --mes-hauteur-commune:490px;
   }
   html,body{height:100%;overflow:hidden;background:var(--bg);}
   body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;display:flex;}
@@ -84,10 +76,6 @@
   .page-header{background:var(--text);color:#fff;padding:28px 36px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;}
   .page-title{font-size:24px;font-weight:800;letter-spacing:-.4px;}
   .header-actions{display:flex;align-items:center;gap:10px;}
-  .btn-new{background:#fff;color:var(--text);border:none;padding:9px 16px;border-radius:9px;font-family:var(--font);font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
-  .btn-new:hover{background:var(--surface);}
-  .btn-new.alt{background:rgba(255,255,255,.12);color:#fff;}
-  .btn-new.alt:hover{background:rgba(255,255,255,.2);}
   .btn-icon{background:rgba(255,255,255,.08);border:none;color:#fff;width:34px;height:34px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
   .btn-icon:hover{background:rgba(255,255,255,.14);}
 
@@ -216,23 +204,28 @@
   .field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
   .field-help{font-size:10.5px;color:var(--muted2);margin-top:3px;}
 
-  /* LA TRAME DES CATÉGORIES, TRANCHÉE ICI POUR LES TROIS GRILLES : celle de
-     l'encart, celle du tiroir de modification et celle des frais fixes.
-     La grille en quatre colonnes fixes laissait un emplacement vide sous sept
-     boutons, qui se lit comme un bouton manquant et non comme une fin de liste.
-     Le nombre de colonnes ne peut pas être écrit : sept est premier, et les
-     trois surfaces n'ont pas la même largeur (600 px pour la carte, 480 pour
-     les tiroirs, la largeur de l'écran sur téléphone).
-     LA RANGÉE SE REMPLIT DONC D'ELLE-MÊME. Les boutons se replient quand la
-     largeur manque, et ceux d'une même rangée se partagent ce qui reste : aucune
-     rangée n'est jamais trouée, quel que soit leur nombre et quelle que soit la
-     largeur. Sur la carte, les sept tiennent sur une seule rangée ; dans un
-     tiroir, ils se replient sur deux, pleines l'une et l'autre.
+  /* LA TRAME DES CATÉGORIES, TRANCHÉE ICI ET NULLE PART AILLEURS, POUR LES
+     TROIS GRILLES : celle de la carte, celle du tiroir de modification et
+     celle des frais fixes. Une seule règle les gouverne, et elle ne connaît
+     ni le nombre d'entrées ni la largeur de la surface qui la porte : sept
+     est premier, huit ne l'est pas, et les trois surfaces vont de la largeur
+     d'un téléphone à celle d'une page.
+     LA RANGÉE SE REMPLIT D'ELLE-MÊME. Les boutons se replient quand la
+     largeur manque, et ceux d'une même rangée se partagent ce qui reste :
+     aucune rangée n'est trouée.
+     LE PLAFOND DE MOITIÉ EST LA DEUXIÈME MOITIÉ DE LA RÈGLE, et il tient à
+     lui seul le cas qui restait. Quand le compte ne tombe pas juste, la
+     dernière rangée n'accueille qu'une entrée : sans plafond, elle s'étirait
+     sur toute la largeur et se lisait comme une catégorie plus importante que
+     les autres. Bornée à la moitié d'une rangée, elle garde la mesure d'un
+     bouton. Le plafond ne bride jamais une rangée pleine : deux boutons à
+     `50% - 3px` plus l'écart de 6 la remplissent exactement, et au-delà de
+     deux par rangée il n'est même pas atteint.
      `flex:1 1 auto` et JAMAIS `1 1 0` : la base reste le libellé, sans quoi les
      boutons ne se replieraient plus du tout et tiendraient tous sur une rangée
      en s'écrasant. */
   .cat-grid{display:flex;flex-wrap:wrap;gap:6px;}
-  .cat-btn{flex:1 1 auto;padding:10px 12px;border:1px solid var(--border);background:#fff;border-radius:8px;cursor:pointer;font-family:var(--font);font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);transition:all .15s;text-align:center;}
+  .cat-btn{flex:1 1 auto;max-width:calc(50% - 3px);padding:10px 12px;border:1px solid var(--border);background:#fff;border-radius:8px;cursor:pointer;font-family:var(--font);font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);transition:all .15s;text-align:center;}
   .cat-btn:hover{border-color:var(--text);color:var(--text);}
   .cat-btn.active{background:var(--text);color:#fff;border-color:var(--text);}
 
@@ -272,35 +265,25 @@
   .chart12-totals-val.illisible{font-size:13px;color:var(--muted);}
 
   /* ══════════════════════════════════════════════════════════════════
-     L'ENCART DE SAISIE
-     Le vêtement vient de devis.html, transposé à la lettre. Un écart
-     délibéré au patron : cet encart N'EST PAS UN GARDE. Il se quitte, il
-     n'exige rien, et la page derrière lui reste entièrement utilisable.
-     Aucun surtitre : la décision vaut pour tous les encarts du produit.
+     LA CARTE DE SAISIE
+     Elle ne se lève plus au-dessus de la page : ELLE EST LE HAUT DE LA PAGE.
+     On ne vient pas sur Frais consulter un état des lieux, on vient entrer un
+     frais ; la saisie passe donc devant l'analyse, qui descend sous elle.
+     CE QUE LA SORTIE DU VOILE EMPORTE, et qui est voulu : le plancher commun
+     de 490 px et le plafond calc(100vh - 48px) tombent tous les deux. Ils
+     accordaient entre elles des cartes FLOTTANTES, centrées dans un voile, et
+     il n'y a plus rien à accorder : une carte en flux prend la hauteur de son
+     contenu et la page défile, comme partout ailleurs sur ce produit. Le
+     vêtement, lui, ne bouge pas : le filet de six bandes, le corps, le pied.
      ══════════════════════════════════════════════════════════════════ */
   /* `hidden` est posé par la feuille du navigateur avec la spécificité d'un
-     attribut : toute règle d'auteur qui déclare un `display` le bat. Trois blocs
-     de l'encart sont en display:flex et ne se seraient jamais cachés. */
+     attribut : toute règle d'auteur qui déclare un `display` le bat. Plusieurs
+     blocs de la carte sont en display:flex et ne se seraient jamais cachés. */
   #encart [hidden]{display:none !important;}
-  .mes-voile{
-    position:fixed;top:0;right:0;bottom:0;left:var(--sidebar-w,0);
-    z-index:var(--mupz-dialogue,50000);
-    background:rgba(13,13,11,.55);
-    -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
-    display:none;align-items:center;justify-content:center;
-    padding:24px;overflow-y:auto;
-  }
-  .mes-voile.ouvert{display:flex;}
   .mes-carte{
     background:var(--mes-carte);border:1px solid var(--mes-bord);
     border-radius:var(--mes-rayon);overflow:hidden;
-    width:100%;max-width:600px;max-height:calc(100vh - 48px);
-    /* Plancher, jamais taille. min() garde le plancher sous le plafond : posé
-       nu, il l'emporterait dès que la fenêtre descend sous 538 px de haut, et
-       le haut de la carte passerait hors du voile qui la centre. */
-    min-height:min(var(--mes-hauteur-commune), calc(100vh - 48px));
     display:flex;flex-direction:column;
-    box-shadow:0 24px 60px rgba(13,13,11,.28);
   }
   /* Six bandes de 12 px : des arrêts de dégradé, pas six éléments de balisage. */
   .mes-filet{
@@ -310,16 +293,24 @@
       var(--mes-filet-3) 33.3333% 50%,      var(--mes-filet-4) 50% 66.6667%,
       var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
   }
-  /* Le blanc en trop va au corps, sans quoi il tomberait sous le pied et le
-     ferait flotter au milieu de la carte. flex-grow seul, pas flex:1 : la base
-     reste le contenu, seule la place LIBRE est distribuée. */
-  .mes-corps{padding:16px 28px 12px;overflow-y:auto;flex-grow:1;display:flex;flex-direction:column;gap:10px;}
+  .mes-corps{padding:20px 28px 16px;display:flex;flex-direction:column;gap:12px;}
   .mes-carte h2{
     font-size:23px;font-weight:800;letter-spacing:-.6px;line-height:1.15;
     color:var(--mes-titre);margin:0;
   }
   .mes-carte h2 + p{margin-top:7px;}
-  .mes-carte p{font-size:12.5px;line-height:1.5;color:var(--mes-corps);max-width:none;margin:0;}
+  .mes-carte p{font-size:12.5px;line-height:1.5;color:var(--mes-corps);max-width:64ch;margin:0;}
+
+  /* L'ENCART D'ACCUEIL, en tête de la carte. Il se quitte sans rien exiger,
+     et LA PORTE DE RETOUR EST POSÉE DU MÊME COUP : le texte court porte le
+     lien qui rouvre la présentation. Nous avons vécu son absence sur Devis,
+     elle ne se rajoute pas après coup ici.
+     Le texte long empile son titre, son corps et sa sortie ; le texte court
+     tient sur un rang, son lien poussé au bout. */
+  #encart-texte-1{display:flex;flex-direction:column;align-items:flex-start;}
+  #encart-texte-1 .mes-lien{margin-top:9px;}
+  #encart-texte-2{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+
   .mes-etiquette{
     display:block;font-size:9.5px;font-weight:700;letter-spacing:1.5px;
     text-transform:uppercase;color:var(--mes-surtitre);margin-bottom:4px;
@@ -338,22 +329,32 @@
     font-family:var(--mono);font-size:23px;font-weight:800;letter-spacing:-.6px;
     padding:9px 13px;
   }
-  /* LES SEPT CATÉGORIES DE L'ENCART, et elles seules : le tiroir et les frais
-     fixes gardent la taille de bouton de la page. Elles tiennent sur deux
-     rangées sur une carte de 600, sur trois à 320. */
-  #encart-cat-grid .cat-btn{padding:7px 12px;}
+  /* La date reste modifiable et pré-remplie au jour même : elle passe du bas de
+     la carte au rang du montant, où elle se lit avec lui. */
+  .mes-champ input#encart-date{font-family:var(--mono);font-size:13px;padding:12px 13px;}
+
+  /* LE MONTANT ET LA DATE, SUR UN RANG, ET BORNÉS. Une carte large ne fait pas
+     d'un montant un champ de 900 px : les deux gardent leur mesure, à gauche,
+     et la largeur gagnée profite à ce qui en a besoin. Sous 640 ils s'empilent
+     d'eux-mêmes, la base de repli étant plus large que la moitié de l'écran. */
+  .mes-rangee{display:flex;flex-wrap:wrap;gap:14px;}
+  .mes-rangee .mes-champ{flex:1 1 220px;max-width:280px;}
+  /* LA DESCRIPTION ET LE PROSPECT, sur le rang suivant, et non plus repliés
+     derrière un lien : la carte est la page, elle n'a plus la hauteur d'une
+     fenêtre à défendre. La description prend les deux tiers, elle s'écrit
+     quand le prospect se choisit. */
+  .mes-duo{display:grid;grid-template-columns:2fr 1fr;gap:14px;align-items:start;}
 
   /* LA ZONE DE DÉPÔT. Trois voies, aucune privilégiée : deux boutons nommés,
      et la surface elle-même qui reçoit un fichier lâché. Le cadre en tirets se
      voit AVANT tout dépôt, il n'attend pas le survol pour exister.
      EN RANGÉE, ET NON EN COLONNE. Empilés, l'icône, les deux boutons et les
-     deux mentions coûtaient 205,78 px : le bloc le plus haut du corps, pour
-     quatre éléments dont aucun ne réclame la largeur d'une carte de 600. La
-     grille les pose sur un rang — l'icône, les deux mentions l'une sous
-     l'autre, les deux boutons — et le même contenu, complet, tient en 61. */
+     deux mentions coûtaient 205,78 px pour quatre éléments dont aucun ne
+     réclame la largeur d'une carte. La grille les pose sur un rang : l'icône,
+     les deux mentions l'une sous l'autre, les deux boutons. */
   .mes-depot{
     border:1.5px dashed var(--mes-bord);border-radius:var(--mes-bouton-rayon);
-    background:#fff;padding:12px 14px;text-align:left;
+    background:#fff;padding:14px 16px;text-align:left;
     display:grid;grid-template-columns:auto 1fr auto;
     align-items:center;column-gap:12px;row-gap:1px;
   }
@@ -366,7 +367,7 @@
   .mes-depot-voies{grid-row:1/3;grid-column:3;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
   .mes-depot-voies .mupc-btn{padding:8px 11px;}
   /* Portées par `.mes-carte` : les deux mentions sont des `p`, et `.mes-carte p`
-     — un poids de plus — leur imposait sinon ses 14 px sur 1,6 et la couleur du
+     (un poids de plus) leur imposait sinon ses 14 px sur 1,6 et la couleur du
      corps. Les tailles déclarées ici n'avaient aucun effet, et la note se
      repliait en deux lignes. */
   .mes-carte .mes-depot-appel{grid-row:1;grid-column:2;font-size:12.5px;line-height:1.4;color:var(--mes-surtitre);}
@@ -380,7 +381,7 @@
     background:#fff;padding:14px;display:flex;flex-direction:column;gap:12px;
   }
   .mes-piece-vue{display:flex;align-items:center;justify-content:center;}
-  .mes-piece-vue img{max-width:100%;max-height:190px;border-radius:6px;display:block;}
+  .mes-piece-vue img{max-width:100%;max-height:240px;border-radius:6px;display:block;}
   /* Le PDF ne passe pas par le canvas et n'a pas d'aperçu en image : une carte
      sobre portant son nom et son poids dit tout ce qu'il y a à vérifier. */
   .mes-piece-pdf{
@@ -392,7 +393,9 @@
   .mes-piece-pdf-poids{font-size:11px;color:var(--mes-surtitre);font-family:var(--mono);margin-top:2px;}
   .mes-piece-actions{display:flex;gap:16px;flex-wrap:wrap;}
 
-  /* Le geste qu'on regrette se donne en texte, pas en bouton de même poids. */
+  /* Le geste qu'on regrette se donne en texte, pas en bouton de même poids.
+     Le renvoi vers les frais fixes est de la même encre : deux entrées
+     distinctes, une seule porte principale. */
   .mes-lien{
     background:none;border:none;padding:0;
     font-family:var(--font);font-size:12.5px;font-weight:600;
@@ -408,31 +411,15 @@
     font-size:12.5px;line-height:1.5;color:var(--red);background:#fff;
   }
   /* La marque d'enregistrement. Sans elle, rien ne distingue un enregistrement
-     réussi d'un dépôt sans effet. Elle s'efface au dépôt suivant. Neuf de
-     rembourrage et non dix : elle paraît APRÈS l'enregistrement, sur la carte
-     de retour déjà pleine, et ces deux pixels-là étaient ceux qui la faisaient
-     sortir du plancher commun. */
+     réussi d'un dépôt sans effet. Elle s'efface au dépôt suivant. */
   .mes-marque{
     padding:9px 12px;border:1px solid rgba(29,131,72,.35);background:rgba(29,131,72,.07);
     border-radius:var(--mes-bouton-rayon);font-size:12.5px;line-height:1.5;color:var(--green);font-weight:600;
   }
 
-  /* LES FACULTATIFS. Atteignables sans être imposés : ils ne prennent pas la
-     place de ce qu'il faut voir sur un téléphone, et un clic les ouvre. */
-  .mes-facultatif{display:flex;flex-direction:column;gap:14px;}
-  /* LA DATE. Modifiable, discrète, et jamais sur le même rang que le montant :
-     elle est seule sur sa rangée, au bas de la carte, à la taille d'une note. */
-  .mes-date{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:4px;}
-  .mes-date label{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--mes-surtitre);}
-  .mes-date input{
-    padding:4px 8px;border:1px solid var(--mes-bord);border-radius:7px;
-    font-family:var(--mono);font-size:12px;background:#fff;color:var(--mes-corps);outline:none;
-  }
-  .mes-date input:focus{border-color:var(--mes-titre);}
-
   .mes-pied{
     border-top:1px solid var(--mes-bord);background:var(--mes-fond);
-    padding:11px 28px;flex-shrink:0;
+    padding:12px 28px;flex-shrink:0;
     display:flex;align-items:center;justify-content:flex-end;
     gap:16px;flex-wrap:wrap;
   }
@@ -446,67 +433,26 @@
   .mes-btn:hover{background:#000;}
   .mes-btn:disabled{opacity:.5;cursor:default;}
   .mes-btn:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px;}
-  .mes-pied .mupc-btn-outline:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;}
 
-  /* LA PAGE, DERRIÈRE. Le document ne défile pas, le défilement est confiné à
-     `main` : c'est lui qu'on arrête, pour que la molette ne fasse pas glisser
-     l'écran sous la carte. */
-  body.encart-ouvert main{overflow:hidden;}
-
-  /* SUR TÉLÉPHONE, LA CARTE GARDE LA FORME DE CELLE DE MAIL, et ce bloc n'y
-     touche plus. Mail ne redéfinit RIEN de sa carte sous 640 px : son seul bloc
-     à cette largeur remonte des z-index. La forme téléphone y est donc la règle
-     de base — voile à 24 px de remplissage qui CENTRE, carte à width:100% et
-     max-width:600px, plafond calc(100vh - 48px), plancher
-     min(--mes-hauteur-commune, calc(100vh - 48px)), rayon --mes-rayon, bordure
-     1px --mes-bord. Frais pose exactement les mêmes valeurs plus haut : les
-     reprendre ici, c'est ne rien écrire.
-     CE QUE CELA DÉFAIT, ET QUI EST ASSUMÉ : la promesse « aucun défilement au
-     téléphone » tombe. Le corps de Frais est plus haut que celui de Mail ; sur
-     appareil court il défile EN DEDANS de la carte, comme il l'a toujours fait
-     ailleurs. Ce qui reste exigé, et que le pied tient par flex-shrink:0 : le
-     pied et ses deux boutons restent visibles sans défiler, seul le corps
-     défile.
-     PAS DE VARIANTE « un peu plus haute parce que Frais porte plus de
-     contenu » : le plancher est commun aux pages, le plafond aussi, et une
-     carte plus haute ici ferait diverger la forme que ce lot vient d'unifier.
-     Restent ci-dessous les seuls resserrements de CONTENU : les écarts du
-     corps, la taille du titre, et la rangée du dépôt qui ne tient pas sous
-     400 px de large — ses deux boutons y descendent d'un cran. */
+  /* SUR TÉLÉPHONE. La carte n'a plus de forme de fenêtre à tenir : elle occupe
+     la largeur utile comme les cartes d'analyse sous elle, et seuls les écarts
+     du contenu se resserrent. Les deux rangs se défont, la rangée du dépôt ne
+     tenant pas sous 400 px : ses deux boutons y descendent d'un cran. */
   @media (max-width:640px){
-    .mes-corps{padding:14px 16px 10px;gap:9px;}
+    .mes-corps{padding:16px 16px 12px;gap:10px;}
     .mes-carte h2{font-size:20px;letter-spacing:-.5px;}
     .mes-carte h2 + p{margin-top:6px;}
     .mes-carte p{font-size:12.5px;}
-    /* La rangée de 600 ne tient pas à 320 : l'icône et les deux mentions
+    .mes-rangee .mes-champ{max-width:none;}
+    .mes-duo{grid-template-columns:1fr;}
+    /* La rangée de la page ne tient pas à 320 : l'icône et les deux mentions
        gardent leur rang, les deux boutons passent dessous et se partagent la
-       largeur. Deux colonnes, trois rangées — pas un empilement de quatre. */
+       largeur. Deux colonnes, trois rangées, et non un empilement de quatre. */
     .mes-depot{grid-template-columns:auto 1fr;padding:10px 12px;column-gap:10px;row-gap:7px;}
     .mes-depot-voies{grid-row:3;grid-column:1/3;justify-content:flex-start;gap:8px;}
     .mes-depot-voies .mupc-btn{flex:1 1 auto;justify-content:center;}
-    .mes-pied{padding:10px 16px;}
-  }
-
-  /* LES ÉCRANS COURTS. Ce bloc ne sauve plus la carte d'un débordement — le
-     plafond calc(100vh - 48px) l'en empêche désormais tout seul, et le surplus
-     va au défilement du corps. Il RACCOURCIT CE DÉFILEMENT, et c'est ce qui le
-     garde. Mesuré au banc le 23 août sur 320 x 568, bloc actif contre bloc
-     neutralisé : première visite 121 px de défilement contre 166, retour 1 px
-     contre 67. Sur 375 x 667 il ne reste que le resserrement, le corps ne
-     défilant ni avec ni sans lui.
-     L'icône du dépôt se retire : elle décore, les deux boutons et le cadre en
-     tirets disent la voie sans elle. */
-  @media (max-width:640px) and (max-height:700px){
-    .mes-corps{padding:11px 14px 9px;gap:7px;}
-    .mes-carte h2{font-size:18px;}
-    .mes-depot{grid-template-columns:1fr;padding:9px 10px;row-gap:6px;}
-    /* Sa colonne part avec elle, sinon la gouttière resterait ouverte. */
-    .mes-depot-icone{display:none;}
-    .mes-carte .mes-depot-appel{grid-column:1;}
-    .mes-carte .mes-depot-note{grid-column:1;}
-    .mes-depot-voies{grid-row:3;grid-column:1;}
-    .mes-champ input#encart-montant{font-size:21px;padding:8px 12px;}
-    .mes-pied{padding:9px 14px;}
+    .mes-pied{padding:11px 16px;}
+    .mes-pied-actions{gap:12px;}
   }
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
@@ -530,14 +476,6 @@
       <button class="btn-icon" id="btn-settings" title="Société et facturation">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
-      <button class="btn-new alt" id="btn-new-rec">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        Frais récurrent
-      </button>
-      <button class="btn-new" id="btn-new">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Nouveau frais
-      </button>
     </div>
   </div>
 
@@ -545,6 +483,125 @@
 
     <!-- ÉTAT DE LECTURE (échec de chargement) -->
     <div id="etat-lecture" style="display:none;"></div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         LA CARTE DE SAISIE, EN TÊTE ET SUR TOUTE LA LARGEUR UTILE
+         Elle n'est plus une fenêtre au-dessus de la page, elle EST le haut de
+         la page : on ne vient pas sur Frais consulter un état des lieux, on
+         vient entrer un frais. Les compteurs, le graphe et le détail passent
+         dessous, déplacés tels quels.
+         DEUX ENTRÉES DISTINCTES, ET DE POIDS DIFFÉRENTS : le frais du jour
+         tient la carte, le frais fixe n'est qu'un renvoi en texte au pied, qui
+         ouvre le tiroir des récurrents. Aucun chemin de création d'un frais du
+         jour ne passe plus par un tiroir.
+         LES DEUX TEXTES D'ACCUEIL SONT ÉCRITS EN CLAIR ICI, jamais construits
+         en JavaScript : ils se remplacent d'une seule ligne. Le second n'a pas
+         de corps, c'est voulu, et il porte la porte de retour. Aucun surtitre,
+         la décision vaut pour tous les encarts du produit.
+         ══════════════════════════════════════════════════════════════════ -->
+    <section class="mes-carte" id="encart" aria-labelledby="encart-titre-1">
+      <div class="mes-filet" aria-hidden="true"></div>
+
+      <div class="mes-corps">
+
+        <!-- PREMIÈRE VISITE -->
+        <div id="encart-texte-1">
+          <h2 id="encart-titre-1">Photographiez, c'est enregistré.</h2>
+          <p>Vos dépenses du jour et vos frais fixes, rassemblés mois par mois. Déposez le justificatif, indiquez le montant, rattachez le prospect si le déplacement était pour lui.</p>
+          <button type="button" class="mes-lien" id="encart-fermer-accueil">Fermer cette présentation</button>
+        </div>
+
+        <!-- VISITES SUIVANTES, ET LA PORTE DE RETOUR AVEC ELLES -->
+        <div id="encart-texte-2" hidden>
+          <h2 id="encart-titre-2">Déposez votre justificatif.</h2>
+          <button type="button" class="mes-lien" id="encart-revoir">Revoir la présentation</button>
+        </div>
+
+        <!-- LA MARQUE D'ENREGISTREMENT, entre le texte et le dépôt : c'est là que
+             l'oeil revient après avoir enregistré, et le dépôt suivant est juste
+             dessous. Son contenu est un constat, pas un des deux textes. -->
+        <div class="mes-marque" id="encart-marque" hidden></div>
+
+        <!-- 1. LA ZONE DE DÉPÔT, en grand, première chose que l'oeil rencontre.
+             DEUX ENTRÉES DE FICHIER ET NON UNE : `capture` force l'appareil photo
+             sur téléphone et retire l'accès à la photothèque. Une seule entrée
+             portant l'attribut privilégierait donc une voie et en supprimerait
+             une autre, quand le cahier en demande trois à égalité. -->
+        <input type="file" id="encart-photo-input" accept="image/*,application/pdf" capture="environment" style="display:none">
+        <input type="file" id="encart-fichier-input" accept="image/*,application/pdf" style="display:none">
+
+        <div class="mes-depot" id="encart-depot">
+          <div class="mes-depot-icone" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </div>
+          <div class="mes-depot-voies">
+            <button type="button" class="mupc-btn mupc-btn-outline" id="encart-photo">Photographier</button>
+            <button type="button" class="mupc-btn mupc-btn-outline" id="encart-choisir">Choisir un fichier</button>
+          </div>
+          <p class="mes-depot-appel">ou glissez votre justificatif ici</p>
+          <p class="mes-depot-note">Image ou PDF, 5 Mo au plus</p>
+        </div>
+
+        <!-- LE CONTRÔLE DE LA PIÈCE, avec sa voie de retour : on en reprend une
+             autre sans rien perdre du reste de la saisie. -->
+        <div class="mes-piece" id="encart-piece" hidden>
+          <div class="mes-piece-vue" id="encart-piece-vue"></div>
+          <div class="mes-piece-actions">
+            <button type="button" class="mes-lien" id="encart-reprendre">Reprendre une autre pièce</button>
+            <button type="button" class="mes-lien" id="encart-retirer">Retirer</button>
+          </div>
+        </div>
+
+        <div class="mes-erreur" id="encart-erreur" hidden></div>
+
+        <!-- 2. LE MONTANT ET LA DATE, sur un rang et bornés en largeur. -->
+        <div class="mes-rangee">
+          <div class="mes-champ">
+            <label class="mes-etiquette" for="encart-montant">Montant TTC</label>
+            <input type="number" id="encart-montant" inputmode="decimal" step="0.01" min="0" placeholder="0,00">
+          </div>
+          <div class="mes-champ">
+            <label class="mes-etiquette" for="encart-date">Date</label>
+            <input type="date" id="encart-date">
+          </div>
+        </div>
+
+        <!-- 3. LES SEPT CATÉGORIES DU QUOTIDIEN -->
+        <div class="mes-champ">
+          <span class="mes-etiquette">Catégorie</span>
+          <div class="cat-grid" id="encart-cat-grid"></div>
+        </div>
+
+        <!-- 4. LA DESCRIPTION ET LE PROSPECT. Ils ne se replient plus derrière
+             un lien : la carte est la page, elle n'a plus la hauteur d'une
+             fenêtre à défendre, et le cahier les nomme parmi ce qu'elle porte.
+             Ni l'un ni l'autre n'est exigé à l'enregistrement.
+             LE PROSPECT GARDE SON SELECT NATIF : le moteur de recherche de
+             Devis relève d'un chantier transversal, pas de ce lot. -->
+        <div class="mes-duo">
+          <div class="mes-champ">
+            <label class="mes-etiquette" for="encart-desc">Description</label>
+            <input type="text" id="encart-desc" placeholder="ex : Plein autoroute Paris">
+          </div>
+          <div class="mes-champ">
+            <label class="mes-etiquette" for="encart-prospect">Prospect lié</label>
+            <select id="encart-prospect"><option value="">Aucun</option></select>
+            <div id="encart-suggest"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- LE PIED. À gauche le renvoi vers les frais fixes, en texte : une
+           seconde entrée, et non un second bouton de même poids. À droite le
+           seul geste principal de la page. -->
+      <div class="mes-pied">
+        <div class="mes-pied-actions">
+          <button type="button" class="mes-lien" id="encart-vers-fixe">Ajouter plutôt un frais fixe</button>
+          <button type="button" class="mes-btn" id="encart-enregistrer">Enregistrer</button>
+        </div>
+      </div>
+    </section>
 
     <!-- KPI -->
     <div class="grid-kpi">
@@ -601,121 +658,6 @@
 
   </div>
 </main>
-
-<!-- ══════════════════════════════════════════════════════════════════
-     L'ENCART DE SAISIE
-     Il se lève à CHAQUE visite, pas seulement la première : on vient sur
-     cette page pour déposer un justificatif, pas pour consulter des totaux.
-     L'écran complet vit derrière lui, inchangé.
-     CE N'EST PAS UN GARDE. Il se quitte par le bouton du pied ou par un clic
-     hors de la carte, il n'exige rien, et une fois quitté il ne se relève plus
-     de la séance : le bouton « Nouveau frais » de l'en-tête est la porte
-     permanente qui le rouvre.
-     LES DEUX TEXTES SONT ÉCRITS EN CLAIR ICI, jamais construits en
-     JavaScript : ils se remplacent d'une seule ligne. Le second n'a pas de
-     corps, c'est voulu. Aucun surtitre, la décision vaut pour tous les
-     encarts du produit.
-     ══════════════════════════════════════════════════════════════════ -->
-<div class="mes-voile" id="encart" role="dialog" aria-labelledby="encart-titre-1">
-  <div class="mes-carte">
-    <div class="mes-filet" aria-hidden="true"></div>
-
-    <div class="mes-corps">
-
-      <!-- PREMIÈRE VISITE -->
-      <div id="encart-texte-1">
-        <h2 id="encart-titre-1">Photographiez vos frais, c'est enregistré.</h2>
-        <p>Vos dépenses du jour et vos frais fixes, rassemblés mois par mois. Déposez le justificatif, indiquez le montant, rattachez le prospect si le déplacement était pour lui.</p>
-      </div>
-
-      <!-- VISITES SUIVANTES -->
-      <div id="encart-texte-2" hidden>
-        <h2 id="encart-titre-2">Déposez votre justificatif.</h2>
-      </div>
-
-      <!-- LA MARQUE D'ENREGISTREMENT, entre le texte et le dépôt : c'est là que
-           l'oeil revient après avoir enregistré, et le dépôt suivant est juste
-           dessous. Son contenu est un constat, pas un des deux textes. -->
-      <div class="mes-marque" id="encart-marque" hidden></div>
-
-      <!-- 1. LA ZONE DE DÉPÔT, en grand, première chose que l'oeil rencontre.
-           DEUX ENTRÉES DE FICHIER ET NON UNE : `capture` force l'appareil photo
-           sur téléphone et retire l'accès à la photothèque. Une seule entrée
-           portant l'attribut privilégierait donc une voie et en supprimerait
-           une autre, quand le cahier en demande trois à égalité. -->
-      <input type="file" id="encart-photo-input" accept="image/*,application/pdf" capture="environment" style="display:none">
-      <input type="file" id="encart-fichier-input" accept="image/*,application/pdf" style="display:none">
-
-      <div class="mes-depot" id="encart-depot">
-        <div class="mes-depot-icone" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-        </div>
-        <div class="mes-depot-voies">
-          <button type="button" class="mupc-btn mupc-btn-outline" id="encart-photo">Photographier</button>
-          <button type="button" class="mupc-btn mupc-btn-outline" id="encart-choisir">Choisir un fichier</button>
-        </div>
-        <p class="mes-depot-appel">ou glissez votre justificatif ici</p>
-        <p class="mes-depot-note">Image ou PDF, 5 Mo au plus</p>
-      </div>
-
-      <!-- LE CONTRÔLE DE LA PIÈCE, avec sa voie de retour : on en reprend une
-           autre sans rien perdre du reste de la saisie. -->
-      <div class="mes-piece" id="encart-piece" hidden>
-        <div class="mes-piece-vue" id="encart-piece-vue"></div>
-        <div class="mes-piece-actions">
-          <button type="button" class="mes-lien" id="encart-reprendre">Reprendre une autre pièce</button>
-          <button type="button" class="mes-lien" id="encart-retirer">Retirer</button>
-        </div>
-      </div>
-
-      <div class="mes-erreur" id="encart-erreur" hidden></div>
-
-      <!-- 2. LE MONTANT TTC -->
-      <div class="mes-champ">
-        <label class="mes-etiquette" for="encart-montant">Montant TTC</label>
-        <input type="number" id="encart-montant" inputmode="decimal" step="0.01" min="0" placeholder="0,00">
-      </div>
-
-      <!-- 3. LES SEPT CATÉGORIES DU QUOTIDIEN -->
-      <div class="mes-champ">
-        <span class="mes-etiquette">Catégorie</span>
-        <div class="cat-grid" id="encart-cat-grid"></div>
-      </div>
-
-      <!-- 4. LA DESCRIPTION ET LE PROSPECT, facultatifs : atteignables d'un
-           clic, jamais imposés, et hors du chemin de la dépense simple. -->
-      <button type="button" class="mes-lien" id="encart-plus" aria-expanded="false" aria-controls="encart-facultatif">Ajouter une description ou un prospect</button>
-      <div class="mes-facultatif" id="encart-facultatif" hidden>
-        <div class="mes-champ">
-          <label class="mes-etiquette" for="encart-desc">Description</label>
-          <input type="text" id="encart-desc" placeholder="ex : Plein autoroute Paris">
-        </div>
-        <div class="mes-champ">
-          <label class="mes-etiquette" for="encart-prospect">Prospect lié</label>
-          <select id="encart-prospect"><option value="">Aucun</option></select>
-          <div id="encart-suggest"></div>
-        </div>
-      </div>
-
-      <!-- 5. LA DATE, seule sur sa rangée et au bas de la carte. -->
-      <div class="mes-date">
-        <label for="encart-date">Date</label>
-        <input type="date" id="encart-date">
-      </div>
-
-    </div>
-
-    <!-- LA SORTIE À GAUCHE, à la place qu'occupe « Je verrai plus tard » dans
-         Devis. Elle reste le chemin annoncé ; le clic hors de la carte est un
-         raccourci vers la même porte. -->
-    <div class="mes-pied">
-      <div class="mes-pied-actions">
-        <button type="button" class="mupc-btn mupc-btn-outline" id="encart-sortir">Voir mes frais</button>
-        <button type="button" class="mes-btn" id="encart-enregistrer">Enregistrer</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- DRAWER FRAIS PONCTUEL -->
 <div class="drawer-overlay" id="drawer-overlay"></div>
@@ -791,7 +733,7 @@
       <input type="text" id="rec-desc" placeholder="ex : Abonnement Free Mobile" />
     </div>
     <div class="field">
-      <label>Prestataire / Vendor (optionnel)</label>
+      <label>Prestataire (optionnel)</label>
       <input type="text" id="rec-vendor" placeholder="ex : Free, Orange, OVH" />
     </div>
     <div class="field-row">
@@ -1674,10 +1616,6 @@
   }
 
   document.getElementById('f-date').addEventListener('change', suggestProspect);
-  // LA PORTE PERMANENTE. Une fois l'encart quitté, il ne se relève plus de la
-  // séance : ce bouton est le seul chemin qui y ramène, et il ne dépend
-  // d'aucun état. Le tiroir, lui, ne sert plus à CRÉER.
-  document.getElementById('btn-new').addEventListener('click', ouvrirEncart);
   document.getElementById('drawer-cancel').addEventListener('click', closeDrawer);
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
   document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
@@ -1740,21 +1678,21 @@
   });
 
   /* ══════════════════════════════════════════════════════════════════
-     L'ENCART DE SAISIE
+     LA CARTE DE SAISIE
      ══════════════════════════════════════════════════════════════════ */
 
   // Le report est LOCAL, comme celui de Devis et celui de la Visio : rien de
   // nouveau ne part en base, et un report qui passerait par une écriture
-  // pourrait échouer. Il ne gouverne QUE le texte affiché, pas l'apparition :
-  // l'encart se lève à chaque visite, c'est arrêté.
+  // pourrait échouer. C'EST LE MÊME MÉCANISME QU'AVANT, et il gouverne toujours
+  // la même chose : lequel des deux textes d'accueil paraît en tête de la
+  // carte. La carte, elle, ne se lève ni ne se couche, elle est la page.
   var LS_ENCART_VU = 'mup_frais_encart_vu';
   function encartDejaVu(){ try { return localStorage.getItem(LS_ENCART_VU) === '1'; } catch(e){ return false; } }
   function poserEncartVu(){ try { localStorage.setItem(LS_ENCART_VU, '1'); } catch(e){} }
+  // LA PORTE DE RETOUR passe par le même drapeau, en sens inverse : la
+  // présentation se rouvre pour de bon, y compris à la visite suivante.
+  function retirerEncartVu(){ try { localStorage.removeItem(LS_ENCART_VU); } catch(e){} }
 
-  // Drapeau de SÉANCE, et non de report : une fois quitté, l'encart ne se
-  // relève plus tant que l'onglet vit. Rouvrir la page le remet à faux, et le
-  // bouton « Nouveau frais » le force à tout moment.
-  var encartQuitte = false;
   var encartPiece = null;      // { data, type:'image'|'pdf', nom, poids }
   var encartCategorie = null;
   var PLAFOND_PIECE = 5 * 1024 * 1024;
@@ -1764,18 +1702,6 @@
   function poidsLisible(o){
     if(o >= 1024*1024) return (o / (1024*1024)).toFixed(1).replace('.', ',') + ' Mo';
     return Math.max(1, Math.round(o / 1024)) + ' Ko';
-  }
-
-  // Une saisie est EN COURS dès que quelque chose a été posé : la pièce, le
-  // montant, la catégorie ou la description. La date seule ne compte pas, elle
-  // est pré-remplie et n'est le geste de personne.
-  function encartSaisieEnCours(){
-    if(encartPiece) return true;
-    if(encartCategorie) return true;
-    if((elEncart('encart-montant').value || '').trim() !== '') return true;
-    if((elEncart('encart-desc').value || '').trim() !== '') return true;
-    if((elEncart('encart-prospect').value || '') !== '') return true;
-    return false;
   }
 
   function encartErreur(motif){
@@ -1857,8 +1783,6 @@
     encartErreur(null);
     encartRendPiece();
     buildCatGrid('encart-cat-grid', CAT_QUOTIDIEN, onSelectEncart);
-    elEncart('encart-facultatif').hidden = true;
-    elEncart('encart-plus').setAttribute('aria-expanded', 'false');
   }
 
   function onSelectEncart(c){
@@ -1904,41 +1828,14 @@
     wrap.querySelector('[data-dismiss]').addEventListener('click', function(){ wrap.innerHTML = ''; });
   }
 
-  function ouvrirEncart(){
-    encartQuitte = false;
-    // Les deux textes sont dans le balisage : on ne fait ici que désigner
-    // celui qui paraît, et l'étiquette de la fenêtre suit son titre.
-    var premiere = !encartDejaVu();
+  // L'ENCART D'ACCUEIL, ET LUI SEUL. Les deux textes sont dans le balisage : on
+  // ne fait ici que désigner celui qui paraît, et l'étiquette de la carte suit
+  // son titre. Rien n'est exigé pour passer de l'un à l'autre, et rien de la
+  // saisie n'est touché au passage : la carte reste où elle est.
+  function montrerAccueil(premiere){
     elEncart('encart-texte-1').hidden = !premiere;
     elEncart('encart-texte-2').hidden = premiere;
     elEncart('encart').setAttribute('aria-labelledby', premiere ? 'encart-titre-1' : 'encart-titre-2');
-    elEncart('encart-marque').hidden = true;
-    encartBuildProspects();
-    encartVideLaCarte();
-    elEncart('encart').classList.add('ouvert');
-    document.body.classList.add('encart-ouvert');
-  }
-
-  function fermerEncart(){
-    encartQuitte = true;
-    // Vu une fois, vu pour de bon : la visite suivante ouvre sur le texte court.
-    poserEncartVu();
-    elEncart('encart').classList.remove('ouvert');
-    document.body.classList.remove('encart-ouvert');
-  }
-
-  // Les deux sorties passent par ici. Si une saisie est en cours, la fenêtre à
-  // trois issues tranche : enregistrer avant de sortir, abandonner, ou rester.
-  async function quitterEncart(){
-    if(!encartSaisieEnCours()){ fermerEncart(); return; }
-    var choix = await mupChoix(
-      'Votre saisie n\'est pas enregistrée',
-      'Vous avez commencé un frais sans l\'enregistrer. Que voulez-vous en faire ?',
-      'Enregistrer', 'Abandonner', 'Rester ici');
-    if(choix === 'retour') return;
-    if(choix === 'tiers'){ fermerEncart(); return; }
-    var ok = await enregistrerDepuisEncart();
-    if(ok) fermerEncart();
   }
 
   // L'enregistrement lit son code HTTP comme partout ailleurs. Sur refus, la
@@ -2020,19 +1917,19 @@
     });
   })();
 
-  elEncart('encart-plus').addEventListener('click', function(){
-    var zone = elEncart('encart-facultatif');
-    var ouvert = zone.hidden;
-    zone.hidden = !ouvert;
-    this.setAttribute('aria-expanded', String(ouvert));
-    if(ouvert) elEncart('encart-desc').focus();
-  });
-
   elEncart('encart-date').addEventListener('change', encartSuggestProspect);
-  elEncart('encart-sortir').addEventListener('click', quitterEncart);
-  // Le clic hors de la carte sort aussi, en raccourci. Le bouton du pied reste
-  // le chemin annoncé, et les deux passent par la même confirmation.
-  elEncart('encart').addEventListener('click', function(e){ if(e.target === this) quitterEncart(); });
+
+  // L'ACCUEIL SE QUITTE SANS RIEN EXIGER, ET SE ROUVRE. Vu une fois, vu pour de
+  // bon : le texte court prend la place et le drapeau part en report local. Le
+  // lien du texte court fait le chemin inverse, entièrement.
+  elEncart('encart-fermer-accueil').addEventListener('click', function(){
+    poserEncartVu();
+    montrerAccueil(false);
+  });
+  elEncart('encart-revoir').addEventListener('click', function(){
+    retirerEncartVu();
+    montrerAccueil(true);
+  });
   elEncart('encart-enregistrer').addEventListener('click', async function(){
     var btn = this;
     btn.disabled = true;
@@ -2081,7 +1978,10 @@
     editingRecId = null;
   }
 
-  document.getElementById('btn-new-rec').addEventListener('click', function(){ openRecDrawer(); });
+  // LA SECONDE ENTRÉE, ET LA SEULE. Le renvoi du pied de la carte est en
+  // texte : le frais fixe reste une porte, il n'a pas le poids du frais du
+  // jour, qui tient la carte entière.
+  document.getElementById('encart-vers-fixe').addEventListener('click', function(){ openRecDrawer(); });
   document.getElementById('rec-cancel').addEventListener('click', closeRecDrawer);
   document.getElementById('rec-close').addEventListener('click', closeRecDrawer);
   document.getElementById('rec-overlay').addEventListener('click', closeRecDrawer);
@@ -2287,19 +2187,17 @@
         verdictGen.motif + ' Les occurrences manquantes s\'affichent, mais elles ne sont pas encore en base.',
         'Fermer');
     }
-    // Renvoi depuis une autre page (ex. facture sans émetteur) : ouvre le tiroir.
-    // IL PASSE AVANT L'ENCART ET L'EMPÊCHE. L'abonné vient d'ailleurs pour
-    // renseigner sa société, pas pour déposer un justificatif : lever l'encart
-    // ici recouvrirait le tiroir, qui vit sous lui dans l'ordre des plans.
+    // LA CARTE EST PRÊTE AVANT TOUT AUTRE CHEMIN : elle est le haut de la page
+    // et se voit dès l'arrivée, quel que soit ce qui s'ouvre par-dessus.
+    // `encartVideLaCarte` est ici et NON dans `renderAll` : cette dernière est
+    // rappelée par l'évènement `storage` et effacerait une saisie en cours.
+    montrerAccueil(!encartDejaVu());
+    encartVideLaCarte();
+    // Renvoi depuis une autre page (ex. facture sans émetteur) : ouvre le
+    // tiroir des réglages par-dessus la page, la carte l'attend dessous.
     if(new URLSearchParams(window.location.search).get('reglages') === '1'){
       openSettings();
-      return;
     }
-    // L'ENCART SE LÈVE À CHAQUE VISITE, pas seulement la première. Il ne se
-    // relève pas s'il a déjà été quitté dans cette séance : `init` ne tourne
-    // qu'une fois par chargement, la garde vaut pour le rechargement par
-    // l'évènement `storage`.
-    if(!encartQuitte) ouvrirEncart();
   }
 
   // Le script est en analyse synchrone, alors que trial-expired-modal.js et

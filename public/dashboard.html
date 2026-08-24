@@ -891,17 +891,19 @@ map.on('click',function(){
     if(bounds.length) map.fitBounds(bounds,{padding:[30,30],maxZoom:12});
   }
 
-  // a. Placement direct. Jitter pour déstacker les fiches qui partagent
-  //    exactement les mêmes coordonnées.
-  var storedByKey={};
-  withStored.forEach(function(s){var k=s.lat+','+s.lng;if(!storedByKey[k])storedByKey[k]=[];storedByKey[k].push(s);});
-  Object.keys(storedByKey).forEach(function(k){
-    var grp=storedByKey[k];
-    grp.forEach(function(s,idx){
-      var jitter=grp.length>1?(idx-grp.length/2)*0.0003:0;
-      placeCard(s.c,s.lat+jitter,s.lng+jitter);
-    });
-  });
+  // a. Placement direct, à la coordonnée exacte — comme la Carte depuis 6b179f7.
+  //
+  // Le décalage qui tenait ici ajoutait le même scalaire aux deux axes : il
+  // n'écartait pas les fiches confondues, il les alignait en diagonale. Son
+  // retrait suffit, et rien ne vient le remplacer. Contrairement à la Carte,
+  // la coordonnée n'entrait ici dans aucun calcul — placeCard ne la verse que
+  // dans bounds et dans le marqueur, et le maxZoom: 12 du cadrage absorbe
+  // l'étalement qu'elle donnait au cadre. Le regroupement de la Carte n'a donc
+  // pas lieu d'être repris : les fiches d'une même adresse se superposent. La
+  // vignette annonce une localisation, elle ne la détaille pas ; le détail se
+  // consulte sur la Carte, où le regroupement existe — le bloc entier y mène,
+  // et chaque bulle porte son lien.
+  withStored.forEach(function(s){ placeCard(s.c,s.lat,s.lng); });
 
   var pending=addrs.length;
   // Aucune adresse à résoudre : le cadrage doit tout de même avoir lieu, sinon
@@ -919,11 +921,7 @@ map.on('click',function(){
         var f=data&&data.features&&data.features[0];
         if(f&&f.geometry&&f.geometry.coordinates){
           var lng=f.geometry.coordinates[0], lat=f.geometry.coordinates[1];
-          var grp=addrMap[addr];
-          grp.forEach(function(c,idx){
-            var jitter=grp.length>1?(idx-grp.length/2)*0.0003:0;
-            placeCard(c,lat+jitter,lng+jitter);
-          });
+          addrMap[addr].forEach(function(c){ placeCard(c,lat,lng); });
         }
         pending--;
         if(pending<=0) finish();

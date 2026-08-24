@@ -2463,6 +2463,26 @@ async function materialiserProspect(userId, body, lookups) {
       // était le défaut du chemin nominal d'ajout depuis la Prospection.
       created_at: now
     }
+    // Coordonnées Etalab portées par la fiche — celles-là mêmes que cette
+    // transaction écrit sur le record société ci-dessus. Aucun appel réseau :
+    // la carte naît placée au lieu d'attendre un géocodage au premier
+    // affichage de la Carte.
+    // NORMALISÉES À L'ÉCRITURE, motif de server/services/referentiel.js :
+    // Number puis Number.isFinite, clé POSÉE si finie, OMISE sinon — jamais de
+    // null, jamais de NaN sur la carte. Le `!= null` du bloc société ne suffit
+    // pas ici : storedLatLng (public/carte.html) fait un parseFloat sans garde
+    // de format, une chaîne à virgule décimale y passerait ('48,85' -> 48) et
+    // poserait un marqueur à des dizaines de kilomètres, en silence. La chaîne
+    // vide est écartée avec l'absence (Number('') vaudrait 0).
+    // Traitement PAR COUPLE, comme server.js:740 pour les marqueurs de
+    // recherche : une coordonnée seule n'est pas exploitable, et le couple
+    // (0,0) est écarté (null-island, que storedLatLng refuse déjà).
+    const pLat = (body.lat == null || body.lat === '') ? NaN : Number(body.lat)
+    const pLng = (body.lng == null || body.lng === '') ? NaN : Number(body.lng)
+    if (Number.isFinite(pLat) && Number.isFinite(pLng) && !(pLat === 0 && pLng === 0)) {
+      params.pbody.lat = pLat
+      params.pbody.lng = pLng
+    }
     stmts.push('CREATE pipeline CONTENT $pbody;')
   }
 

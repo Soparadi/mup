@@ -259,15 +259,21 @@
   .pros-champ{position:relative;}
   /* Le champ laisse la place de la croix à sa droite, qu'elle soit visible
      ou non : sans réserve permanente, poser un lien déplacerait le texte.
-     Le sélecteur passe par [type] pour l'emporter : `.mes-champ input` pose
-     son padding plus bas dans cette feuille, à égalité de spécificité, et
-     reprendrait donc les 13 px de droite. */
-  .pros-champ input[type="search"]{padding-right:34px;}
+     Il laisse la place symétrique à gauche pour la loupe, elle toujours
+     posée. Le sélecteur passe par [type] pour l'emporter : `.mes-champ input`
+     pose son padding plus bas dans cette feuille, à égalité de spécificité,
+     et reprendrait donc les 13 px de droite comme ceux de gauche. */
+  .pros-champ input[type="search"]{padding-right:34px;padding-left:30px;}
   /* type="search" retire à Safari l'idée d'un champ de contact. En échange il
      ajoute sa croix native : une seconde icône pour le geste que la croix
      d'ici fait déjà, donc on l'éteint. */
   .pros-champ input::-webkit-search-decoration,
   .pros-champ input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;}
+  /* La loupe, sur le patron de celle de contacts.html : même tracé, même
+     place à gauche. Décorative, donc aria-hidden et sans rôle ; et
+     pointer-events:none pour que le clic la traverse et donne le focus au
+     champ au lieu de mourir sur l'icône. */
+  .pros-loupe{position:absolute;top:50%;left:10px;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;color:var(--muted);pointer-events:none;}
   .pros-vider{position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;padding:0;width:22px;height:22px;border-radius:6px;cursor:pointer;color:var(--muted);display:flex;align-items:center;justify-content:center;}
   .pros-vider:hover{background:var(--surface2);color:var(--text);}
   .pros-vider[hidden]{display:none;}
@@ -287,6 +293,7 @@
   #encart .pros-results{border-color:var(--mes-bord);}
   #encart .pros-mot{color:var(--mes-corps);}
   #encart .pros-vider{color:var(--mes-surtitre);}
+  #encart .pros-loupe{color:var(--mes-surtitre);}
 
   /* RÉCURRENTS list */
   .rec-row{display:grid;grid-template-columns:90px 1fr 60px 110px 30px;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
@@ -630,7 +637,8 @@
           <div class="mes-champ">
             <label class="mes-etiquette" for="encart-prospect-q">Prospect lié</label>
             <div class="pros-champ">
-              <input type="search" id="encart-prospect-q" placeholder="Nom, société ou SIRET"
+              <span class="pros-loupe" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+              <input type="search" id="encart-prospect-q" placeholder="Rechercher une société, personne, email, SIREN, contenu de note…"
                      autocomplete="off" role="combobox" aria-autocomplete="list"
                      aria-expanded="false" aria-controls="encart-prospect-results">
               <button type="button" class="pros-vider" id="encart-prospect-vider" hidden
@@ -739,7 +747,8 @@
     <div class="field">
       <label for="f-card-q">Prospect lié (optionnel)</label>
       <div class="pros-champ">
-        <input type="search" id="f-card-q" placeholder="Nom, société ou SIRET"
+        <span class="pros-loupe" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        <input type="search" id="f-card-q" placeholder="Rechercher une société, personne, email, SIREN, contenu de note…"
                autocomplete="off" role="combobox" aria-autocomplete="list"
                aria-expanded="false" aria-controls="f-card-results" />
         <button type="button" class="pros-vider" id="f-card-vider" hidden

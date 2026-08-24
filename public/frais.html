@@ -243,6 +243,51 @@
   .suggest-yes{background:var(--text);color:#fff;}
   .suggest-no{background:#fff;color:var(--muted);border:1px solid var(--border);}
 
+  /* LA RECHERCHE DE PROSPECT, transposée de devis.html. Le vêtement est le
+     sien : la boîte, les lignes, la surbrillance, le mot sous le champ. Les
+     couleurs sont celles d'ici.
+
+     UNE DIFFÉRENCE, ET UNE SEULE : la liste RESTE DANS LE FLUX et allonge la
+     carte, là où celle de Devis se pose en absolu par-dessus les champs
+     suivants. Les deux porteurs d'ici coupent ce qui déborde : .mes-carte
+     porte overflow:hidden pour tenir son filet dans ses angles, et
+     .drawer-body défile en y, ce qui lui donne aussi un overflow-x calculé.
+     Une liste en absolu y serait tranchée, dans un porteur comme dans
+     l'autre. Aucun position:fixed, aucun getBoundingClientRect : la liste
+     n'a pas d'ancrage à recalculer, elle est posée sous le champ par le
+     flux lui-même. */
+  .pros-champ{position:relative;}
+  /* Le champ laisse la place de la croix à sa droite, qu'elle soit visible
+     ou non : sans réserve permanente, poser un lien déplacerait le texte.
+     Le sélecteur passe par [type] pour l'emporter : `.mes-champ input` pose
+     son padding plus bas dans cette feuille, à égalité de spécificité, et
+     reprendrait donc les 13 px de droite. */
+  .pros-champ input[type="search"]{padding-right:34px;}
+  /* type="search" retire à Safari l'idée d'un champ de contact. En échange il
+     ajoute sa croix native : une seconde icône pour le geste que la croix
+     d'ici fait déjà, donc on l'éteint. */
+  .pros-champ input::-webkit-search-decoration,
+  .pros-champ input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;}
+  .pros-vider{position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;padding:0;width:22px;height:22px;border-radius:6px;cursor:pointer;color:var(--muted);display:flex;align-items:center;justify-content:center;}
+  .pros-vider:hover{background:var(--surface2);color:var(--text);}
+  .pros-vider[hidden]{display:none;}
+  .pros-results{margin-top:4px;background:var(--card);border:1.5px solid var(--border);border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.16);max-height:268px;overflow-y:auto;}
+  .pros-results[hidden]{display:none;}
+  .pros-hit{padding:7px 11px;cursor:pointer;border-bottom:1px solid var(--border);}
+  .pros-hit:last-child{border-bottom:none;}
+  .pros-hit:hover,.pros-hit.on{background:var(--surface2);}
+  .pros-hit-t{font-size:12.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pros-hit-m{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+  /* Le mot sous le champ. Vide, il disparaît : sans :empty il porterait sa
+     marge pour rien et décalerait la suggestion de rendez-vous. */
+  .pros-mot{font-size:10.5px;color:var(--muted);line-height:1.45;margin-top:4px;}
+  .pros-mot:empty{display:none;}
+  /* Les trois retouches de la carte : elle a sa propre palette, plus chaude
+     que celle du tiroir, et une boîte grise y détonnerait. */
+  #encart .pros-results{border-color:var(--mes-bord);}
+  #encart .pros-mot{color:var(--mes-corps);}
+  #encart .pros-vider{color:var(--mes-surtitre);}
+
   /* RÉCURRENTS list */
   .rec-row{display:grid;grid-template-columns:90px 1fr 60px 110px 30px;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
   .rec-row:last-child{border-bottom:none;}
@@ -575,16 +620,26 @@
              un lien : la carte est la page, elle n'a plus la hauteur d'une
              fenêtre à défendre, et le cahier les nomme parmi ce qu'elle porte.
              Ni l'un ni l'autre n'est exigé à l'enregistrement.
-             LE PROSPECT GARDE SON SELECT NATIF : le moteur de recherche de
-             Devis relève d'un chantier transversal, pas de ce lot. -->
+             LE PROSPECT SE CHERCHE, il ne se déroule plus : même moteur qu'ici
+             et dans le tiroir, même liste que la page Contacts. -->
         <div class="mes-duo">
           <div class="mes-champ">
             <label class="mes-etiquette" for="encart-desc">Description</label>
             <input type="text" id="encart-desc" placeholder="ex : Plein autoroute Paris">
           </div>
           <div class="mes-champ">
-            <label class="mes-etiquette" for="encart-prospect">Prospect lié</label>
-            <select id="encart-prospect"><option value="">Aucun</option></select>
+            <label class="mes-etiquette" for="encart-prospect-q">Prospect lié</label>
+            <div class="pros-champ">
+              <input type="search" id="encart-prospect-q" placeholder="Nom, société ou SIRET"
+                     autocomplete="off" role="combobox" aria-autocomplete="list"
+                     aria-expanded="false" aria-controls="encart-prospect-results">
+              <button type="button" class="pros-vider" id="encart-prospect-vider" hidden
+                      title="Retirer le prospect lié" aria-label="Retirer le prospect lié">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div class="pros-mot" id="encart-prospect-mot"></div>
+            <div class="pros-results" id="encart-prospect-results" role="listbox" hidden></div>
             <div id="encart-suggest"></div>
           </div>
         </div>
@@ -682,8 +737,18 @@
       <input type="text" id="f-desc" placeholder="ex : Plein autoroute Paris" />
     </div>
     <div class="field">
-      <label>Prospect lié (optionnel)</label>
-      <select id="f-card"><option value="">— Aucun</option></select>
+      <label for="f-card-q">Prospect lié (optionnel)</label>
+      <div class="pros-champ">
+        <input type="search" id="f-card-q" placeholder="Nom, société ou SIRET"
+               autocomplete="off" role="combobox" aria-autocomplete="list"
+               aria-expanded="false" aria-controls="f-card-results" />
+        <button type="button" class="pros-vider" id="f-card-vider" hidden
+                title="Retirer le prospect lié" aria-label="Retirer le prospect lié">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="pros-mot" id="f-card-mot"></div>
+      <div class="pros-results" id="f-card-results" role="listbox" hidden></div>
       <div id="suggest-prospect-wrap"></div>
     </div>
     <div class="field">
@@ -876,14 +941,19 @@
     mup_frais_recurrents: '/api/frais-recurrents',
     mup_user_settings:    '/api/user-settings',
     mup_pipeline:         '/api/pipeline',
-    mup_agenda:           '/api/agenda'
+    mup_agenda:           '/api/agenda',
+    // La recherche de prospect cherche dans la liste de la page Contacts,
+    // c'est-à-dire l'UNION des contacts et des cartes de pipeline. Il faut
+    // donc les deux sources, et non la seule seconde.
+    mup_contacts:         '/api/contacts'
   };
   var LIBELLE_SOURCE = {
     mup_frais:            'vos frais',
     mup_frais_recurrents: 'vos frais récurrents',
     mup_user_settings:    'vos informations de société',
     mup_pipeline:         'vos prospects',
-    mup_agenda:           'votre agenda'
+    mup_agenda:           'votre agenda',
+    mup_contacts:         'vos contacts'
   };
 
   // Trois états par source, jamais deux : 'charge', 'vide', 'echec'. Sans cette
@@ -977,6 +1047,11 @@
   var recurrents = [];
   var pipeline = [];
   var agenda = [];
+  var contacts = [];
+  // L'union des deux précédentes, dédoublonnée : c'est elle que la recherche
+  // parcourt, et c'est en elle que les trois relecteurs retrouvent le nom d'un
+  // prospect lié. Jamais lue avant fusionnerProspects().
+  var prospects = [];
   var settings = { tvaAssujetti:false, formeJuridique:'', siret:'' };
 
   /* ============ HELPERS ============ */
@@ -996,16 +1071,187 @@
   // côtés par ici, sur le modèle de _normFicheId d'agenda.html. Rien n'est
   // normalisé à l'écriture : le rattachement au prospect reste écrit préfixé,
   // comme les frais déjà en base.
+  //
+  // `contacts` REJOINT LA LISTE, et c'est ce qui fait tenir les anciens frais.
+  // La doctrine de contacts.html est que « contacts:abc » et « pipeline:abc »
+  // désignent le même objet : la carte de board partage l'identifiant local de
+  // son contact. La fusion garde la face contacts et écarte la carte ; un frais
+  // écrit hier sous « pipeline:abc » doit donc retrouver son nom dans une liste
+  // où ne subsiste que « contacts:abc ». Sans ce préfixe ici, il l'aurait perdu.
   function normId(id){
     var s = String(id == null ? '' : id).trim();
     if(!s) return null;
-    s = s.replace(/^(frais_recurrents|frais|pipeline|agenda):/, '');
+    s = s.replace(/^(frais_recurrents|frais|pipeline|agenda|contacts):/, '');
     s = s.replace(/^\u27E8/, '').replace(/\u27E9$/, '');
     return s || null;
   }
   function sameId(a, b){
     var na = normId(a), nb = normId(b);
     return na !== null && na === nb;
+  }
+
+  /* ============ ÉCHAPPEMENT ============ */
+  // Cette page concatène du texte brut dans du HTML depuis toujours : la
+  // description d'un frais, le nom d'une carte. Le moteur de recherche, lui,
+  // écrit dans sa liste des noms, des courriels et des adresses venus de la
+  // base, et il porte donc son échappement, repris d'esc() de devis.html.
+  // L'esperluette RESTE LA PREMIÈRE remplacée : elle ouvre les quatre autres
+  // références, et la traiter ensuite réécrirait celles qu'on vient de poser.
+  function esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  /* ============ LA LISTE DES PROSPECTS ============ */
+  // CE QUE CETTE PAGE APPELLE UN PROSPECT, c'est désormais ce que la page
+  // Contacts appelle une fiche : l'UNION des contacts et des cartes de
+  // pipeline, et non le seul pipeline du jour. Un abonné qui a saisi son
+  // client dans Contacts et jamais dans le board ne le trouvait pas ici.
+  //
+  // La projection et la fusion sont celles de contacts.html, reprises et non
+  // réinventées. Ce qui n'est PAS repris : ses replis sur localStorage. Cette
+  // page ne lit plus le cache local, ses lectures passent par loadJSON et ses
+  // trois états, et un échec s'y dit au lieu de se remplacer en silence.
+
+  // Identifiant de fusion : le préfixe de table retiré, quel qu'il soit. Cette
+  // clé-là est plus large que normId à dessein, elle est celle de localId()
+  // dans contacts.html et doit rapprocher les mêmes paires que lui. normId,
+  // qui sert aux comparaisons de frais, garde sa liste fermée.
+  function idFusion(v){
+    var brut = (v && typeof v === 'object' && v.id != null) ? v.id : v;
+    return String(brut == null ? '' : brut).replace(/^[a-z_]+:/i, '').trim();
+  }
+
+  // Une carte de board, dite avec les noms de champs d'un contact. Seuls les
+  // champs que le prédicat interroge et que la liste affiche sont projetés :
+  // migrateProspect de contacts.html en pose une quinzaine d'autres dont la
+  // recherche n'a que faire, et dont l'absence ici n'ôte rien.
+  function projeterCarte(c){
+    return {
+      id: c.id,
+      nom: c.co || c.nom || c.name || '',
+      contact_nom: c.name || c.title || '',
+      email: c.email || '',
+      adresse: c.address || c.adresse || '',
+      siren: c.siren || '',
+      siret: c.siret || '',
+      col: c.col || 'leads'
+    };
+  }
+
+  // Fusion sans doublon : clé = identifiant nu, LA FACE CONTACTS GAGNE. Second
+  // essai par contact_id, et seulement si le premier a échoué : la carte née
+  // d'un import de factures ne partage pas son suffixe avec son contact, elle
+  // ne le désigne que par ce champ.
+  // Les cartes absorbées par la fusion, et la fiche qui les représente. Sans
+  // cette table, un frais lié à une carte dont le jumeau a été trouvé PAR
+  // contact_id perdait son nom : la carte a quitté la liste, et son identifiant
+  // ne partage pas sa forme nue avec celui du contact, donc sameId ne les
+  // rapproche pas. Le cas de la paire née d'un import de factures, exactement.
+  var prospectsAbsorbes = new Map();
+
+  function fusionnerProspects(){
+    var parId = new Map();
+    var parCarte = new Map();
+    var union = [];
+    prospectsAbsorbes = new Map();
+    contacts.forEach(function(p){
+      var k = idFusion(p.id);
+      if(!k){ union.push(p); return; }   // sans identifiant : jamais fusionné
+      if(parId.has(k)) return;
+      parId.set(k, p);
+      union.push(p);
+    });
+    pipeline.forEach(function(c){
+      var k = idFusion(c.id), cible = idFusion(c.contact_id);
+      if(k && cible) parCarte.set(k, cible);
+    });
+    pipeline.forEach(function(c){
+      var p = projeterCarte(c);
+      var k = idFusion(p.id);
+      if(!k){ union.push(p); return; }
+      var jumeau = parId.get(k);
+      if(!jumeau){
+        var cible = parCarte.get(k);
+        if(cible) jumeau = parId.get(cible);
+      }
+      if(jumeau){
+        // La face contacts la représente déjà, mais l'identifiant de la carte
+        // reste écrit sur les frais d'hier : il doit continuer de mener à elle.
+        prospectsAbsorbes.set(k, jumeau);
+        return;
+      }
+      parId.set(k, p);
+      union.push(p);
+    });
+    prospects = union;
+  }
+
+  // LE PRÉDICAT DE contacts.html, repris tel quel : includes() sur la chaîne
+  // mise en bas de casse, sept champs, aucun score, aucune normalisation
+  // d'accents. Plus le siret en huitième, comme dans devis.html : c'est le
+  // numéro qu'un abonné a sous les yeux sur un papier.
+  // La fusion ayant projeté les cartes sur les noms de champs des contacts, un
+  // seul prédicat couvre les deux faces.
+  function prospectCorrespond(p, q){
+    return (p.nom||'').toLowerCase().includes(q) ||
+           (p.enseigne||'').toLowerCase().includes(q) ||
+           (p.adresse||'').toLowerCase().includes(q) ||
+           (p.email||'').toLowerCase().includes(q) ||
+           (p.contact_nom||p.contact||'').toLowerCase().includes(q) ||
+           (p.siren||'').toLowerCase().includes(q) ||
+           (p.notes||'').toLowerCase().includes(q) ||
+           (p.siret||'').toLowerCase().includes(q);
+  }
+
+  function prospectSociete(p){ return String(p.enseigne || p.nom || '').trim(); }
+  function prospectPersonne(p){ return String(p.contact_nom || p.contact || '').trim(); }
+
+  // LE DERNIER REPLI, et c'est le seul écart volontaire au patron de Devis.
+  // Une fiche sans société et sans personne s'y réduit à « Sans nom » : dix
+  // d'affilée y sont indiscernables. Ici elle se nomme par son siret, groupé
+  // comme sur la fiche société, ou par son adresse.
+  function prospectRepli(p){
+    var sr = String(p.siret || '').replace(/\s/g,'');
+    if(sr) return sr.replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4');
+    return String(p.adresse || '').trim();
+  }
+
+  // LE NOM D'UNE FICHE QU'ON PARCOURT, et lui seul : le titre d'une ligne de la
+  // liste de résultats. L'enseigne quand il y en a une, le nom juridique sinon,
+  // comme clientSociete de devis.html. La personne est à part, elle va sur la
+  // seconde ligne. N'écrit jamais dans un champ : une liste de fiches se lit
+  // par enseignes, mais un lien posé se nomme par prospectLigne.
+  function prospectTitre(p){
+    return prospectSociete(p) || prospectPersonne(p) || prospectRepli(p) || 'Sans nom';
+  }
+
+  // LE NOM D'UN LIEN POSÉ : le champ une fois le choix fait, la ligne de
+  // chronologie, la colonne Prospect de l'export. Les trois disent la même
+  // chose de la même fiche, sans quoi l'abonné lisait « Le Chai » dans le champ
+  // et « Laurent Morin » sur la ligne qui paraissait juste dessous.
+  // LA PERSONNE D'ABORD, société ensuite : c'est l'ordre exact de l'ancien
+  // `card.name || card.co`, et un frais déjà en base garde donc le nom qu'il
+  // affichait hier.
+  function prospectLigne(p){
+    return prospectPersonne(p) || prospectSociete(p) || prospectRepli(p);
+  }
+
+  // LA RÉSOLUTION D'UN LIEN, une seule fois écrite pour les trois relecteurs :
+  // renderRow, openDrawer et l'export CSV. Par sameId, jamais par égalité
+  // brute : le frais porte l'identifiant tel que l'API le rendait le jour où
+  // il a été écrit, la liste celui d'aujourd'hui.
+  function prospectParId(id){
+    if(id == null || id === '') return null;
+    for(var i = 0; i < prospects.length; i++){
+      if(sameId(prospects[i].id, id)) return prospects[i];
+    }
+    return prospectsAbsorbes.get(idFusion(id)) || null;
+  }
+  function nomProspectLie(id){
+    var p = prospectParId(id);
+    return p ? prospectLigne(p) : '';
   }
 
   /* ============ RENDU DES ÉTATS D'ÉCHEC ============ */
@@ -1215,8 +1461,9 @@
   }
 
   function renderRow(f){
-    var card = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
-    var cardLbl = card ? (card.name || card.co || '') : '';
+    // Dans l'union, pas dans le seul pipeline : un frais lié à un contact
+    // s'affichait sans nom, la ligne portait une flèche vers rien.
+    var cardLbl = nomProspectLie(f.cardId);
     var isRec = !!f.recurrentId;
     var html = '<div class="timeline-row">';
     html += '<div class="timeline-date">'+dayLabel(f.date)+'</div>';
@@ -1557,25 +1804,220 @@
     return liste;
   }
 
-  function buildCardSelect(){
-    var sel = document.getElementById('f-card');
-    sel.innerHTML = '<option value="">— Aucun</option>';
-    pipeline.filter(function(c){ return c.col !== 'lost'; }).forEach(function(c){
-      var name = c.name || c.title || '—';
-      var opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = name + (c.co && c.co !== name ? ' · ' + c.co : '');
-      sel.appendChild(opt);
-    });
+  /* ============ LE MOTEUR DE RECHERCHE DE PROSPECT ============ */
+  // UNE SEULE IMPLÉMENTATION, DEUX EXEMPLAIRES. Le champ existe deux fois, dans
+  // la carte et dans le tiroir, et la page en portait deux copies. Elles ont
+  // divergé, comme deux copies finissent toujours par le faire : leur option
+  // vide ne portait pas le même libellé, et l'une gardait la sélection à la
+  // reconstruction quand l'autre la perdait. Il n'y a plus qu'un moteur,
+  // paramétré par les identifiants de ses éléments.
+  //
+  // IL N'Y A PAS D'OPTION « AUCUN » : le champ vide vaut aucun lien, et la
+  // croix retire un lien posé. Il n'y a pas non plus de saisie libre en repli.
+  // Le prospect est un lien ou rien : ce que le champ montre est toujours une
+  // fiche qui existe, ou rien.
+  //
+  // LA FICHE DISQUALIFIÉE N'EST PLUS ÉCARTÉE. Le select filtrait col !== 'lost'
+  // et effaçait donc en silence le lien d'un vieux frais rouvert au crayon : la
+  // valeur ne trouvait plus son option, le select retombait sur « Aucun », et
+  // le premier enregistrement emportait le lien. La liste est ici celle de la
+  // page Contacts, entière.
+  function creerRechercheProspect(cfg){
+    var etat = { lien:null, lienAvant:null, resultats:[], index:-1 };
+    function el(id){ return document.getElementById(id); }
+    function mot(t){ var m = el(cfg.mot); if(m) m.textContent = t || ''; }
+    function croix(v){ var b = el(cfg.croix); if(b) b.hidden = !v; }
+
     // Une liste vide parce qu'illisible ne doit pas se lire comme une liste
-    // vide parce que sans prospect.
-    if(etatLecture.mup_pipeline === 'echec'){
-      var alerte = document.createElement('option');
-      alerte.disabled = true;
-      alerte.textContent = 'Liste de vos prospects illisible pour le moment';
-      sel.appendChild(alerte);
+    // vide parce que sans prospect. L'option désactivée qui le disait est
+    // devenue le mot sous le champ, sur le patron de motClient dans devis.html.
+    // Les deux sources sont nommées séparément : l'une des deux manquante rend
+    // une recherche incomplète, pas une recherche morte.
+    function texteEchec(){
+      var c = etatLecture.mup_contacts === 'echec';
+      var pl = etatLecture.mup_pipeline === 'echec';
+      if(c && pl) return 'Recherche indisponible pour l\'instant : ni vos contacts ni vos prospects n\'ont pu être lus. Rechargez la page.';
+      if(c) return 'Recherche incomplète pour l\'instant : vos contacts n\'ont pas pu être lus, seuls vos prospects du board apparaissent. Rechargez la page.';
+      if(pl) return 'Recherche incomplète pour l\'instant : vos prospects du board n\'ont pas pu être lus, seuls vos contacts apparaissent. Rechargez la page.';
+      return '';
     }
+
+    function ferme(){
+      var box = el(cfg.resultats);
+      if(box){ box.hidden = true; box.innerHTML = ''; }
+      var input = el(cfg.champ);
+      if(input) input.setAttribute('aria-expanded', 'false');
+      etat.resultats = [];
+      etat.index = -1;
+    }
+
+    function affiche(){
+      var box = el(cfg.resultats), input = el(cfg.champ);
+      if(!box) return;
+      if(!etat.resultats.length){ ferme(); return; }
+      etat.index = -1;
+      box.innerHTML = etat.resultats.map(function(p, i){
+        var titre = prospectTitre(p);
+        var meta = [prospectPersonne(p), p.email || '', p.adresse || '']
+          .filter(function(v){ return v && v !== titre; }).join(' · ');
+        return '<div class="pros-hit" role="option" data-i="' + i + '">' +
+                 '<div class="pros-hit-t">' + esc(titre) + '</div>' +
+                 (meta ? '<div class="pros-hit-m">' + esc(meta) + '</div>' : '') +
+               '</div>';
+      }).join('');
+      box.hidden = false;
+      if(input) input.setAttribute('aria-expanded', 'true');
+    }
+
+    function surligne(){
+      var box = el(cfg.resultats);
+      if(!box) return;
+      box.querySelectorAll('.pros-hit').forEach(function(e, i){
+        e.classList.toggle('on', i === etat.index);
+        if(i === etat.index && e.scrollIntoView) e.scrollIntoView({ block:'nearest' });
+      });
+    }
+
+    function bouge(pas){
+      if(!etat.resultats.length) return;
+      if(etat.index < 0) etat.index = pas > 0 ? 0 : etat.resultats.length - 1;
+      else etat.index = (etat.index + pas + etat.resultats.length) % etat.resultats.length;
+      surligne();
+    }
+
+    function cherche(){
+      var input = el(cfg.champ);
+      if(!input) return;
+      // Toute frappe défait le lien posé : le champ ne peut pas montrer le nom
+      // d'une fiche et en chercher une autre du même souffle. Le lien défait est
+      // mis de côté, pas jeté : une recherche abandonnée le rendra tel quel.
+      if(etat.lien){ etat.lienAvant = etat.lien; etat.lien = null; croix(false); }
+      mot(texteEchec());
+      var q = input.value.trim().toLowerCase();
+      if(!q){ ferme(); return; }
+      // Dix lignes au plus, comme dans devis.html : au-delà c'est une lettre de
+      // plus à taper, pas une liste plus longue à lire.
+      etat.resultats = prospects.filter(function(p){ return prospectCorrespond(p, q); }).slice(0, 10);
+      affiche();
+    }
+
+    // Pose un lien depuis son identifiant, TEL QU'IL EST ÉCRIT SUR LE FRAIS.
+    // Rien n'est normalisé au passage : ce qui est posé ici est ce qui repartira
+    // en base, préfixé de sa table, « contacts:… » comme « pipeline:… ».
+    function poserId(id){
+      var input = el(cfg.champ);
+      // Poser un lien clôt la recherche en cours : ce qui avait été mis de côté
+      // est relâché ici, donc sur les trois chemins qui posent comme sur la croix
+      // et sur la réinitialisation. Sans quoi la croix rendrait au premier blur
+      // venu le lien que l'abonné vient d'ôter.
+      etat.lienAvant = null;
+      etat.lien = (id == null || id === '') ? null : id;
+      ferme();
+      if(!etat.lien){ if(input) input.value = ''; croix(false); mot(texteEchec()); return; }
+      var p = prospectParId(etat.lien);
+      if(p){
+        // Une fiche sans personne, sans société, sans siret et sans adresse rend
+        // une ligne vide : le champ montrerait du vide avec sa croix. Ici, et ici
+        // seulement, l'absence de nom se nomme.
+        if(input) input.value = prospectLigne(p) || 'Sans nom';
+        croix(true);
+        mot(texteEchec());
+        return;
+      }
+      // Le lien est en base, sa fiche est introuvable : elle a été supprimée,
+      // ou sa source n'a pas pu être lue. LE LIEN N'EST PAS EFFACÉ POUR AUTANT,
+      // sans quoi un simple coup de crayon sur le frais l'emporterait. Il reste
+      // dans l'état, il repart tel quel à l'enregistrement, et la croix est là
+      // pour celui qui veut vraiment s'en défaire.
+      if(input) input.value = '';
+      croix(true);
+      mot(texteEchec() || 'Le prospect lié à ce frais est introuvable dans votre liste. Le lien reste enregistré tant que vous ne l\'effacez pas.');
+    }
+
+    // Remet le champ à l'état d'ouverture : vidé, puis rempli du lien du frais
+    // qu'on ouvre, s'il en porte un.
+    function reinit(id){
+      etat.lien = null;
+      var input = el(cfg.champ);
+      if(input) input.value = '';
+      croix(false);
+      ferme();
+      poserId(id);
+    }
+
+    // Appelée à chaque rendu général. Elle ne touche PAS un champ en cours de
+    // frappe : une suppression de ligne ailleurs dans la page ne doit pas
+    // effacer la requête qu'on est en train de taper. Un lien posé, lui, reprend
+    // le nom de sa fiche : une relecture a pu la renommer, ou la rendre enfin
+    // lisible.
+    function rafraichir(){
+      if(etat.lien) poserId(etat.lien);
+      else mot(texteEchec());
+    }
+
+    function clavier(e){
+      var box = el(cfg.resultats);
+      var ouverte = box && !box.hidden;
+      if(e.key === 'Escape'){ if(ouverte) e.preventDefault(); ferme(); return; }
+      if(!ouverte) return;
+      if(e.key === 'ArrowDown'){ e.preventDefault(); bouge(1); }
+      else if(e.key === 'ArrowUp'){ e.preventDefault(); bouge(-1); }
+      else if(e.key === 'Enter'){
+        e.preventDefault();
+        if(etat.index >= 0 && etat.resultats[etat.index]) poserId(etat.resultats[etat.index].id);
+      }
+    }
+
+    var input = el(cfg.champ), box = el(cfg.resultats), bouton = el(cfg.croix);
+    if(input){
+      input.addEventListener('input', cherche);
+      input.addEventListener('keydown', clavier);
+      input.addEventListener('blur', function(){
+        ferme();
+        // Une requête abandonnée n'est pas un lien. La laisser dans le champ la
+        // ferait lire comme une fiche liée alors que rien n'est lié.
+        // Mais abandonner une recherche rend l'état d'avant, jamais le vide : si
+        // la frappe avait défait un lien, il est reposé, avec son nom et sa croix.
+        // Seuls deux gestes défont un lien, choisir une autre fiche ou cliquer
+        // la croix.
+        if(etat.lien) return;
+        if(etat.lienAvant){ poserId(etat.lienAvant); return; }
+        if(input.value) input.value = '';
+      });
+    }
+    if(box){
+      // Le mousedown est arrêté avant que le champ ne perde la main : sans lui,
+      // le blur fermerait la liste avant que le clic ne l'atteigne.
+      box.addEventListener('mousedown', function(e){ e.preventDefault(); });
+      box.addEventListener('click', function(e){
+        var ligne = e.target && e.target.closest ? e.target.closest('.pros-hit') : null;
+        if(!ligne) return;
+        var p = etat.resultats[parseInt(ligne.getAttribute('data-i'), 10)];
+        if(p) poserId(p.id);
+      });
+    }
+    if(bouton){
+      bouton.addEventListener('click', function(){
+        reinit(null);
+        if(input) input.focus();
+      });
+    }
+
+    return {
+      reinit: reinit,
+      rafraichir: rafraichir,
+      poser: function(p){ if(p) poserId(p.id); },
+      valeur: function(){ return etat.lien; }
+    };
   }
+
+  var rechercheTiroir = creerRechercheProspect({
+    champ:'f-card-q', resultats:'f-card-results', mot:'f-card-mot', croix:'f-card-vider'
+  });
+  var rechercheEncart = creerRechercheProspect({
+    champ:'encart-prospect-q', resultats:'encart-prospect-results',
+    mot:'encart-prospect-mot', croix:'encart-prospect-vider'
+  });
 
   function suggestProspect(){
     var date = document.getElementById('f-date').value;
@@ -1587,10 +2029,14 @@
       // ficheId en repli : c'est sous ce nom que l'agenda relie un évènement à
       // sa fiche. Sans lui, aucun RDV créé depuis le Pipeline n'était reconnu
       // et la suggestion ne s'affichait jamais.
-      var card = pipeline.find(function(c){ return sameId(c.id, rdv.cardId) || sameId(c.id, rdv.ficheId) || sameId(c.id, rdv.prospectId); });
-      if(card && document.getElementById('f-card').value === ''){
-        wrap.innerHTML = '<div class="suggest-prospect"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>RDV avec <strong>'+(card.name || card.co || '—')+'</strong> ce jour-là</span><div class="suggest-actions"><button class="suggest-yes" data-link="'+card.id+'">Lier</button><button class="suggest-no" data-dismiss>Ignorer</button></div></div>';
-        wrap.querySelector('[data-link]').addEventListener('click', function(){ document.getElementById('f-card').value = this.dataset.link; wrap.innerHTML = ''; });
+      // La fiche est cherchée dans l'union, comme partout ailleurs désormais :
+      // un rendez-vous pris sur un contact n'aurait jamais rien suggéré.
+      var card = prospects.find(function(c){ return sameId(c.id, rdv.cardId) || sameId(c.id, rdv.ficheId) || sameId(c.id, rdv.prospectId); });
+      if(card && rechercheTiroir.valeur() === null){
+        wrap.innerHTML = '<div class="suggest-prospect"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>RDV avec <strong></strong> ce jour-là</span><div class="suggest-actions"><button class="suggest-yes" data-link>Lier</button><button class="suggest-no" data-dismiss>Ignorer</button></div></div>';
+        wrap.querySelector('strong').textContent = prospectLigne(card) || 'ce prospect';
+        // Le lien se pose dans le champ, il ne se choisit plus dans un select.
+        wrap.querySelector('[data-link]').addEventListener('click', function(){ rechercheTiroir.poser(card); wrap.innerHTML = ''; });
         wrap.querySelector('[data-dismiss]').addEventListener('click', function(){ wrap.innerHTML = ''; });
       }
     } else { wrap.innerHTML = ''; }
@@ -1609,7 +2055,7 @@
     document.getElementById('f-amount').value = '';
     document.getElementById('f-date').value = todayISO();
     document.getElementById('f-desc').value = '';
-    document.getElementById('f-card').value = '';
+    rechercheTiroir.reinit(null);
     resetPhotoZone();
     document.getElementById('suggest-prospect-wrap').innerHTML = '';
 
@@ -1622,10 +2068,11 @@
       document.getElementById('f-amount').value = f.amountTTC;
       document.getElementById('f-date').value = f.date;
       document.getElementById('f-desc').value = f.description || '';
-      // La liste porte les identifiants tels que l'API les rend : on retrouve
-      // l'option par comparaison normalisée plutôt que par égalité brute.
-      var lien = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
-      document.getElementById('f-card').value = lien ? lien.id : '';
+      // LE LIEN EST REPOSÉ TEL QU'IL EST ÉCRIT SUR LE FRAIS, et le champ le
+      // nomme depuis l'union. Une fiche disqualifiée, ou passée de la carte de
+      // board au contact, se retrouve donc toujours ; et le crayon ne perd pas
+      // un lien dont la fiche serait momentanément illisible.
+      rechercheTiroir.reinit(f.cardId);
       if(f.photoData){
         // LA PIECE SE RECONSTITUE DEPUIS L'ENREGISTREMENT, son type et son nom
         // compris. Sans `photoType`, l'enregistrement est d'avant le PDF : la
@@ -1714,7 +2161,7 @@
         existing.amountTTC = amount;
         existing.date = date;
         existing.description = document.getElementById('f-desc').value.trim();
-        existing.cardId = document.getElementById('f-card').value || null;
+        existing.cardId = rechercheTiroir.valeur() || null;
         existing.photoData = currentPiece ? currentPiece.data : null;
         existing.photoType = currentPiece ? currentPiece.type : null;
         existing.photoName = currentPiece ? currentPiece.nom : null;
@@ -1727,7 +2174,7 @@
         amountTTC: amount,
         date: date,
         description: document.getElementById('f-desc').value.trim(),
-        cardId: document.getElementById('f-card').value || null,
+        cardId: rechercheTiroir.valeur() || null,
         photoData: currentPiece ? currentPiece.data : null,
         photoType: currentPiece ? currentPiece.type : null,
         photoName: currentPiece ? currentPiece.nom : null,
@@ -1807,7 +2254,7 @@
     encartCategorie = null;
     elEncart('encart-montant').value = '';
     elEncart('encart-desc').value = '';
-    elEncart('encart-prospect').value = '';
+    rechercheEncart.reinit(null);
     elEncart('encart-date').value = todayISO();
     elEncart('encart-suggest').innerHTML = '';
     encartErreur(null);
@@ -1820,28 +2267,6 @@
     document.querySelectorAll('#encart-cat-grid .cat-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.cat === c); });
   }
 
-  // La liste des prospects de l'encart est la même que celle du tiroir, bâtie
-  // depuis la même collection et avec la même mention quand elle est illisible.
-  function encartBuildProspects(){
-    var sel = elEncart('encart-prospect');
-    var garde = sel.value;
-    sel.innerHTML = '<option value="">Aucun</option>';
-    pipeline.filter(function(c){ return c.col !== 'lost'; }).forEach(function(c){
-      var nom = c.name || c.title || '';
-      var opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = (nom || 'Sans nom') + (c.co && c.co !== nom ? ' · ' + c.co : '');
-      sel.appendChild(opt);
-    });
-    if(etatLecture.mup_pipeline === 'echec'){
-      var alerte = document.createElement('option');
-      alerte.disabled = true;
-      alerte.textContent = 'Liste de vos prospects illisible pour le moment';
-      sel.appendChild(alerte);
-    }
-    sel.value = garde;
-  }
-
   function encartSuggestProspect(){
     var date = elEncart('encart-date').value;
     var wrap = elEncart('encart-suggest');
@@ -1850,11 +2275,11 @@
     var rdvsOfDay = agenda.filter(function(r){ return r.date && String(r.date).slice(0,10) === date; });
     if(rdvsOfDay.length !== 1) return;
     var rdv = rdvsOfDay[0];
-    var card = pipeline.find(function(c){ return sameId(c.id, rdv.cardId) || sameId(c.id, rdv.ficheId) || sameId(c.id, rdv.prospectId); });
-    if(!card || elEncart('encart-prospect').value !== '') return;
-    wrap.innerHTML = '<div class="suggest-prospect"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>RDV avec <strong></strong> ce jour-là</span><div class="suggest-actions"><button class="suggest-yes" data-link="'+card.id+'">Lier</button><button class="suggest-no" data-dismiss>Ignorer</button></div></div>';
-    wrap.querySelector('strong').textContent = card.name || card.co || 'ce prospect';
-    wrap.querySelector('[data-link]').addEventListener('click', function(){ elEncart('encart-prospect').value = this.dataset.link; wrap.innerHTML = ''; });
+    var card = prospects.find(function(c){ return sameId(c.id, rdv.cardId) || sameId(c.id, rdv.ficheId) || sameId(c.id, rdv.prospectId); });
+    if(!card || rechercheEncart.valeur() !== null) return;
+    wrap.innerHTML = '<div class="suggest-prospect"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>RDV avec <strong></strong> ce jour-là</span><div class="suggest-actions"><button class="suggest-yes" data-link>Lier</button><button class="suggest-no" data-dismiss>Ignorer</button></div></div>';
+    wrap.querySelector('strong').textContent = prospectLigne(card) || 'ce prospect';
+    wrap.querySelector('[data-link]').addEventListener('click', function(){ rechercheEncart.poser(card); wrap.innerHTML = ''; });
     wrap.querySelector('[data-dismiss]').addEventListener('click', function(){ wrap.innerHTML = ''; });
   }
 
@@ -1882,7 +2307,7 @@
       amountTTC: montant,
       date: date,
       description: elEncart('encart-desc').value.trim(),
-      cardId: elEncart('encart-prospect').value || null,
+      cardId: rechercheEncart.valeur() || null,
       photoData: encartPiece ? encartPiece.data : null,
       photoType: encartPiece ? encartPiece.type : null,
       photoName: encartPiece ? encartPiece.nom : null,
@@ -2150,12 +2575,13 @@
     if(frais.length === 0){ mupAlert('Aucun frais à exporter', null, 'Fermer'); return; }
     var headers = ['Date','Catégorie','Description','Prospect','Montant TTC','Type','Photo'];
     var rows = frais.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); }).map(function(f){
-      var card = pipeline.find(function(c){ return sameId(c.id, f.cardId); });
+      // Dans l'union : un frais lié à un contact sortait avec une colonne
+      // Prospect vide.
       return [
         f.date,
         catLabel(f.category),
         (f.description || '').replace(/"/g,'""'),
-        (card ? (card.name || card.co || '') : '').replace(/"/g,'""'),
+        nomProspectLie(f.cardId).replace(/"/g,'""'),
         (f.amountTTC||0).toFixed(2),
         f.recurrentId ? 'Récurrent' : 'Ponctuel',
         f.photoData ? 'OUI' : 'NON'
@@ -2174,12 +2600,14 @@
   // n'est plus écrit donc cet événement ne se déclenche jamais. Conservé en attendant la
   // sync multi-tab serveur.
   window.addEventListener('storage', async function(e){
-    if(['mup_frais','mup_frais_recurrents','mup_pipeline','mup_agenda','mup_user_settings'].indexOf(e.key) !== -1){
+    if(['mup_frais','mup_frais_recurrents','mup_pipeline','mup_agenda','mup_user_settings','mup_contacts'].indexOf(e.key) !== -1){
       frais = await loadJSON('mup_frais', []);
       recurrents = await loadJSON('mup_frais_recurrents', []);
       pipeline = await loadJSON('mup_pipeline', []);
+      contacts = await loadJSON('mup_contacts', []);
       agenda = await loadJSON('mup_agenda', []);
       settings = await loadJSON('mup_user_settings', settings);
+      fusionnerProspects();
       renderAll();
     }
   });
@@ -2188,8 +2616,8 @@
   function renderAll(){
     buildCatGrid('cat-grid', CAT_QUOTIDIEN, onSelectQuotidien);
     buildCatGrid('rec-cat-grid', CAT_FIXE, onSelectFixe);
-    buildCardSelect();
-    encartBuildProspects();
+    rechercheTiroir.rafraichir();
+    rechercheEncart.rafraichir();
     renderEtatLecture();
     renderKPI();
     renderChart12();
@@ -2202,8 +2630,16 @@
     frais = await loadJSON('mup_frais', []);
     recurrents = await loadJSON('mup_frais_recurrents', []);
     pipeline = await loadJSON('mup_pipeline', []);
+    // LUE À L'INIT, ET NON À LA PREMIÈRE FRAPPE. Devis se permet une lecture
+    // paresseuse parce que la recherche y est un raccourci de saisie : rien de
+    // ce que la page affiche n'en dépend. Ici la chronologie et l'export
+    // NOMMENT le prospect lié à chaque frais dès le premier rendu ; attendre
+    // une frappe qui ne viendra peut-être jamais laisserait toutes ces lignes
+    // sans nom, et l'export sortirait avec une colonne vide.
+    contacts = await loadJSON('mup_contacts', []);
     agenda = await loadJSON('mup_agenda', []);
     settings = await loadJSON('mup_user_settings', { tvaAssujetti:false, formeJuridique:'', siret:'' });
+    fusionnerProspects();
     if(settings.tvaAssujetti === undefined) settings.tvaAssujetti = false;
     // Lecture incomplète : on ne régénère rien. La page écrirait contre une
     // collection tronquée et croirait manquantes des occurrences existantes.

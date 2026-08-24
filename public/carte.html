@@ -662,6 +662,45 @@ function migrateCard(c){
   if(c.location&&!c.address)c.address=c.location;if(c.director&&!c.contact)c.contact=c.director;
   c.co=c.company||'';c.name=c.contact||'';c.tel=c.phone||'';return c;
 }
+
+// ── NOM D'ENTREPRISE — une seule composition, pour toute la page ──────────
+// La Carte composait son nom elle-même : nom juridique en titre (`c.co`),
+// dirigeant en seconde ligne (`c.name`, que migrateCard vient d'égaler à
+// `contact`). L'enseigne, pourtant portée par la carte, n'était jamais lue —
+// d'où DEUX IDENTITÉS À L'ÉCRAN pour une même fiche : le Pipeline affichait
+// « LES BEAUX GARCONS / CHOUMICHA » là où la Carte affichait « CHOUMICHA /
+// KARIM EL JADEYAOUI (EL JADEYAOUI) ». Même fiche, même téléphone, deux noms.
+// La règle est désormais celle de MUPNom (_mup-nom.js), la même que le
+// Pipeline, Contacts et la fiche société : titre = enseigne si elle existe,
+// sinon nom juridique ; seconde ligne = nom juridique quand il diffère.
+//
+// LE REPLI, propre à cette page : la seconde ligne PRÉFÈRE le nom juridique et
+// retombe sur le dirigeant plutôt que de rester vide. La Carte n'a aucun autre
+// emplacement où le dirigeant figure, et c'est l'écran qu'on lit avant d'aller
+// sonner à une porte : le laisser tomber sans rien mettre à la place aurait
+// vidé 254 bulles sur 480. Rien ne se perd, rien ne se répète — la comparaison
+// de _mup-nom.js:23 garantit qu'un sousTitre ne redouble jamais le titre, et le
+// repli compare à son tour avant de poser le dirigeant. Même mécanique que
+// _nomsRdv (visio.html).
+//
+// La garde `window.MUPNom ?` suit le précédent GARDÉ de cette page —
+// MUPProjection l'est déjà (placeCard, renderSchedule) alors que MUPTel est
+// appelé nu — parce que le module est chargé APRÈS ce script inline. Repli
+// recopié de pipeline.html:1660.
+//
+// ÉCART QUI SUBSISTE, non traité ici : la Prospection passe par MUPCard
+// (_mup-card.js:89-96), qui retient le titre de MUPNom mais JETTE son sousTitre
+// pour y mettre lead.director. Elle affiche donc toujours enseigne / dirigeant.
+// Ce commit ne l'unifie pas.
+function nomsCarte(c){
+  var n=window.MUPNom
+    ? window.MUPNom.compose({enseigne:c.enseigne,nomJuridique:c.co||c.name})
+    : {titre:c.co||c.name||'',sousTitre:(c.co&&c.name?c.name:'')};
+  var titre=n.titre||'';
+  var dirigeant=String(c.name==null?'':c.name).trim();
+  var second=n.sousTitre||(dirigeant.toLowerCase()!==titre.toLowerCase()?dirigeant:'');
+  return {titre:titre,second:second};
+}
 var markers={}; // id -> {marker, card, latlng}
 var rdvPanelIds=[]; // ids shown in RDV panel
 // Une fermeture du panneau est un geste, pas un état de passage : autoShowRdv
@@ -797,10 +836,12 @@ function placeCard(c, clat, clng){
   // référentiel en connaît un pour son SIRET. Rien n'est écrit sur la carte : la
   // valeur projetée s'affiche, et disparaît avec la page.
   var telAppel=window.MUPProjection?window.MUPProjection.tel(c):(c.tel||'');
+  // Seul site de la page à porter deux lignes : le repli dirigeant ne joue qu'ici.
+  var noms=nomsCarte(c);
   var popup='<div class="pop">'
     +'<div class="pop-bar" style="background:'+col+'"></div>'
-    +'<div class="pop-name">'+esc(c.co||c.name)+'</div>'
-    +'<div class="pop-co">'+esc(c.co&&c.name?c.name:'')+'</div>'
+    +'<div class="pop-name">'+esc(noms.titre)+'</div>'
+    +'<div class="pop-co">'+esc(noms.second)+'</div>'
     +'<div class="pop-foot"><span class="pop-val">'+val+'</span>'+(jours===null?'':'<span class="pop-days">J+'+jours+'</span>')+'</div>'
     +'<div class="pop-stage" style="background:'+col+'22;color:'+col+'">'+stageName(c.col)+'</div>'
     +progressHtml(c.col)
@@ -1156,7 +1197,7 @@ function renderPanel(){
     return '<div class="tour-item" id="sched-'+it.id+'" style="cursor:pointer;'+(it.isRdv?'border-color:'+labelColor+';background:'+labelColor+'14':'')+'" onclick="flyTo(\''+it.id+'\')">'
       +'<div class="tour-num" style="background:'+col+'">'+(i+1)+'</div>'
       +'<div class="tour-info">'
-      +'<div class="tour-info-name">'+esc(it.card.co||it.card.name)+'</div>'
+      +'<div class="tour-info-name">'+esc(nomsCarte(it.card).titre)+'</div>'
       +'<div class="tour-info-dist">'+label+(distStr?' · '+distStr:'')+'</div>'
       +'</div>'
       +'</div>';
@@ -1467,7 +1508,7 @@ function renderSchedule(){
       html+='<div class="sched-item" id="sched-'+s.id+'" style="cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+s.id+'\')">'
         +'<div class="sched-time">'+fmtTime(arrivalMins)+'</div>'
         +'<div class="sched-dot" style="background:'+col+'"></div>'
-        +'<div class="sched-info"><div class="sched-name">'+esc(s.card.co||s.card.name)+'</div>'
+        +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(s.card).titre)+'</div>'
         +'<div class="sched-meta">'+distLabel+' · '+timeLabel+'</div>'
         // Le numéro est dans une ligne qui vole vers le marqueur au clic. Sans
         // arrêt de la propagation, appeler déclenchait aussi ce vol : le temps
@@ -1495,7 +1536,7 @@ function renderSchedule(){
     html+='<div class="sched-item excluded" id="sched-'+s.id+'">'
       +'<div class="sched-time" style="color:var(--muted2)">—</div>'
       +'<div class="sched-dot" style="background:var(--border2)"></div>'
-      +'<div class="sched-info"><div class="sched-name" style="color:var(--muted2)">'+esc(s.card.co||s.card.name)+'</div>'
+      +'<div class="sched-info"><div class="sched-name" style="color:var(--muted2)">'+esc(nomsCarte(s.card).titre)+'</div>'
       +'<div class="sched-meta">Exclu (retard RDV)</div></div></div>';
   });
 
@@ -1511,7 +1552,7 @@ function renderSchedule(){
   html+='<div class="sched-item" id="sched-'+anchorCard.id+'" style="border-color:#0BBCD4;background:rgba(11,188,212,.06);cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+anchorCard.id+'\')">'
     +'<div class="sched-time" style="color:#0BBCD4">'+fmtTime(anchorArrival)+'</div>'
     +'<div class="sched-dot" style="background:#0BBCD4"></div>'
-    +'<div class="sched-info"><div class="sched-name">'+esc(anchorCard.card.co||anchorCard.card.name)+'</div>'
+    +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(anchorCard.card).titre)+'</div>'
     +'<div class="sched-meta">'+anchorDistLabel+' · '+anchorTimeLabel+'</div>'
     +(function(){var na=nextActionOf(anchorCard.card);var st=na?actionStyle(na.type):actionStyle('rdv');var d=na?na.date.slice(0,10):anchorCard.card.rdvDate;var h=na?(na.hour||'14:00'):anchorCard.card.rdvTime;return '<div class="sched-meta" style="color:'+st.color+';font-weight:600">'+st.label+' — '+formatRdvDate(d,h)+'</div>';})()
     +'</div>'
@@ -1644,6 +1685,7 @@ function renderSchedule(){
   }
 })();
 </script>
+<script src="/_mup-nom.js"></script>
 <script src="/_mup-tel.js"></script>
 <script src="/_mup-projection.js"></script>
 <script src="/sidebar.js"></script>

@@ -112,14 +112,14 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 ---------------------------------------------------------------------------- */
 .tour-info-rdv{flex-basis:100%;margin-left:32px;font-size:10px;font-weight:700;font-family:var(--mono);white-space:nowrap}
 /* ----------------------------------------------------------------------------
-   LA FICHE RETENUE POUR LA TOURNÉE
+   LA FICHE RETENUE POUR LE TRAJET
    ----------------------------------------------------------------------------
    Trois signaux se posent sur la même ligne et ne doivent pas se confondre :
    — le teintage par couleur de type d'action, qui dit « cette fiche porte un
      rendez-vous » et tient border-color et background en style en ligne ;
    — le liseré de scrollToStop, qui dit « c'est celle que vous cherchiez » et
      tient box-shadow, mais 1,5 s seulement ;
-   — celui-ci, permanent, qui dit « c'est celle qui termine la tournée ».
+   — celui-ci, permanent, qui dit « c'est la destination du trajet ».
    D'où un rail plein en pseudo-élément : il ne touche ni border-color, ni
    background, ni box-shadow, et dessine une barre là où l'autre dessine un
    contour. Il survit au clignotement, qui écrase puis rend le seul box-shadow.
@@ -128,8 +128,8 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 ---------------------------------------------------------------------------- */
 .tour-item.retenue{position:relative}
 .tour-item.retenue::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:9px 0 0 9px;background:var(--text)}
-/* Le bouton de désignation, à la place qu'occupe .sched-badge dans une étape de
-   tournée. Hors de .tour-info : le nom y est tronqué par text-overflow, un
+/* Le bouton de désignation, à la place qu'occupe .sched-badge dans une ligne du
+   couloir. Hors de .tour-info : le nom y est tronqué par text-overflow, un
    bouton l'y rognerait ou s'y ferait rogner, et toute cette surface appelle
    déjà flyTo. Pour cette dernière raison, pas de ::after d'agrandissement
    tactile comme ailleurs dans le fichier : il mordrait sur le clic voisin.
@@ -143,7 +143,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    ----------------------------------------------------------------------------
    Ici on ne peut pas agrandir la boîte. .tour-clear vit dans .tour-footer, qui
    est un flex-shrink:0 d'une colonne de hauteur imposée : tout pixel donné au
-   pied est un pixel repris à .tour-body, la liste des étapes, qui est le
+   pied est un pixel repris à .tour-body, la liste des fiches, qui est le
    flex:1 en face. Quinze pixels de bouton coûteraient quinze pixels de liste.
 
    Le pseudo-élément du commit 77b44ad : position:relative sur le bouton, un
@@ -196,7 +196,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .leaflet-control-zoom a.leaflet-control-zoom-out{width:44px;height:44px;line-height:44px}
 
 /* SCHEDULE ITEMS */
-.sched-item{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:5px;background:var(--surface);transition:opacity .2s}
+.sched-item{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:5px;background:var(--surface)}
 .sched-time{font-size:11px;font-weight:800;font-family:var(--mono);color:var(--text);min-width:38px;flex-shrink:0;line-height:1.4}
 .sched-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
 .sched-info{flex:1;min-width:0}
@@ -336,7 +336,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
      .shell.tour-open ne vaut plus margin-right — la réserve n'a plus de
      source, elle ne doit pas lui survivre. À 390 elle amputait la barre
      de 260 des 390 disponibles : 130px pour un champ d'adresse et un
-     bouton « Calculer la tournée ».
+     bouton « Qui est sur la route ».
 
      left:16 / right:16 remplacent le centrage : la largeur devient celle
      de l'écran moins deux marges, sans nombre à tenir à jour. width:auto
@@ -710,8 +710,8 @@ var rdvPanelIds=[]; // ids shown in RDV panel
 // à faux : un rechargement de page est la seule remise à zéro légitime.
 var rdvPanelDismissed=false;
 // La fiche que l'abonné retient : la destination de sa journée, celle vers
-// laquelle le trajet se calcule et depuis laquelle il revient. Le planificateur
-// prenait jusqu'ici la première fiche à action à venir que lui rendait
+// laquelle le trajet se calcule et depuis laquelle il revient. Le calcul de
+// trajet prenait jusqu'ici la première fiche à action à venir que lui rendait
 // /api/pipeline, c'est-à-dire un ordre que personne ne décide. Plus de premier
 // venu : null vaut « aucun choix », et calcTour s'arrête là en le disant.
 // renderPanel désigne d'office quand il n'y a qu'un candidat.
@@ -722,13 +722,13 @@ var userMarker=null;
 var proximityCircles=[]; // array of L.circle
 
 // Purge les mises en évidence transitoires : cercles de proximité et opacité.
-// PLUS RIEN N'ESTOMPE. La restauration d'opacité répondait à renderSchedule,
-// qui rabattait à 0.2 les étapes trop tardives pour tenir le rendez-vous ; le
-// couloir ne disqualifie personne et ne touche pas aux marqueurs. La boucle
-// reste parce qu'elle est le seul endroit du fichier qui remette une opacité à
-// 1 : elle parcourt markers sans condition, elle est idempotente, elle coûte
-// une itération par fiche, et elle tient la garantie qu'« effacer » rende la
-// carte pleine quoi qu'il ait pu l'assombrir.
+// PLUS RIEN N'ESTOMPE. La restauration d'opacité répondait au planificateur
+// d'étapes, tombé depuis : il rabattait à 0,2 les fiches trop tardives pour
+// tenir le rendez-vous. Le couloir ne disqualifie personne et ne touche pas
+// aux marqueurs. La boucle reste parce qu'elle est le seul endroit du fichier
+// qui remette une opacité à 1 : elle parcourt markers sans condition, elle est
+// idempotente, elle coûte une itération par fiche, et elle tient la garantie
+// qu'« effacer » rende la carte pleine quoi qu'il ait pu l'assombrir.
 function resetOverlays(){
   retirerCercles();
   Object.keys(markers).forEach(function(id){markers[id].marker.setOpacity(1);});
@@ -1034,7 +1034,7 @@ function autoShowRdv(){
   // autoShowRdv est rappelée à chaque retour d'onglet (agenda-sync : storage,
   // visibilitychange, focus). Sans ce reset, la boucle ci-dessous empile un jeu
   // de cercles supplémentaire à chaque passage. Portée volontairement limitée
-  // aux overlays : un retour d'onglet ne doit pas effacer une tournée en cours.
+  // aux overlays : un retour d'onglet ne doit pas effacer un trajet en cours.
   resetOverlays();
 
   rdvPanelIds=[];
@@ -1246,12 +1246,13 @@ function renderPanel(){
     var actSt=it.isRdv?actionStyle(it.nextAction.type):null;
     var label=it.isRdv?actSt.label:'Prospect';
     var labelColor=it.isRdv?actSt.color:'#6E6E73';
-    // Même espace d'identifiants que les étapes de renderSchedule : les deux
-    // rendus remplacent #tour-body en entier et ne coexistent jamais, donc pas
-    // de collision. C'est ce qui donne une cible à scrollToStop hors tournée.
-    // Le bouton ne va que sur les fiches à rendez-vous : une tournée se termine
-    // sur un rendez-vous, un prospect n'est jamais son ancre. event.stopPropagation
-    // parce que le corps de la ligne garde flyTo, dans les deux états du bouton.
+    // Même espace d'identifiants que les lignes du couloir (ligneCandidat et
+    // ligneRendezVous) : les deux rendus remplacent #tour-body en entier et ne
+    // coexistent jamais, donc pas de collision. C'est ce qui donne une cible à
+    // scrollToStop hors couloir. Le bouton ne va que sur les fiches à
+    // rendez-vous : le trajet se calcule vers un rendez-vous, un prospect n'en
+    // est jamais la destination. event.stopPropagation parce que le corps de la
+    // ligne garde flyTo, dans les deux états du bouton.
     var retenue=(rdvChoisi===it.id);
     return '<div class="tour-item'+(retenue?' retenue':'')+'" id="sched-'+it.id+'" style="cursor:pointer;'+(it.isRdv?'border-color:'+labelColor+';background:'+labelColor+'14':'')+'" onclick="flyTo(\''+it.id+'\')">'
       +'<div class="tour-num" style="background:'+col+'">'+(i+1)+'</div>'
@@ -1271,10 +1272,10 @@ function renderPanel(){
   }).join('');
 }
 
-// Désigne la fiche qui terminera la tournée, ou défait cette désignation. Un
-// seul bouton, deux états : un second clic sur la fiche déjà retenue remet
-// rdvChoisi à null. Rien d'autre ne bouge — le clic sur le corps de la ligne
-// continue d'appeler flyTo dans les deux cas.
+// Désigne la fiche vers laquelle le trajet se calcule, ou défait cette
+// désignation. Un seul bouton, deux états : un second clic sur la fiche déjà
+// retenue remet rdvChoisi à null. Rien d'autre ne bouge — le clic sur le corps
+// de la ligne continue d'appeler flyTo dans les deux cas.
 function choisirRdv(id){
   id=String(id);
   rdvChoisi=(rdvChoisi===id)?null:id;
@@ -1664,7 +1665,7 @@ function ligneCandidat(c){
     // arrêt de la propagation, appeler déclenchait aussi ce vol : le temps
     // que le combiné prenne la main, la carte s'était recentrée et avait
     // ouvert une infobulle sous l'appel. Même geste que le lien tel: de
-    // l'infobulle (cf. popupHtml) — le href n'est pas touché, seule la
+    // l'infobulle (cf. placeCard) — le href n'est pas touché, seule la
     // remontée de l'événement au parent est coupée.
     +(tel?'<div class="sched-tel"><a href="tel:'+esc(window.MUPTel.lien(tel))+'" onclick="event.stopPropagation()">'+esc(window.MUPTel.format(tel))+'</a></div>':'')
     +'</div>'

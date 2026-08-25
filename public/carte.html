@@ -197,7 +197,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 /* SCHEDULE ITEMS */
 .sched-item{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:5px;background:var(--surface);transition:opacity .2s}
-.sched-item.excluded{opacity:.35;background:var(--surface2)}
 .sched-time{font-size:11px;font-weight:800;font-family:var(--mono);color:var(--text);min-width:38px;flex-shrink:0;line-height:1.4}
 .sched-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
 .sched-info{flex:1;min-width:0}
@@ -207,59 +206,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .sched-tel a{color:var(--blue);text-decoration:none}
 .sched-tel a:hover{text-decoration:underline}
 .sched-badge{font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0}
-.sched-summary{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;flex-shrink:0}
-.sched-summary strong{color:var(--text);font-family:var(--mono)}
-
-/* ----------------------------------------------------------------------------
-   LES ± DE DURÉE — 20x20 VISIBLES, 40x44 TOUCHABLES
-   ----------------------------------------------------------------------------
-   Deux carrés de 20px encadrant le libellé de durée, dans une ligne rendue par
-   renderSchedule. Même pseudo-élément qu'ailleurs : la géométrie ne bouge pas,
-   seule la zone du doigt s'étend.
-
-   LES INSETS SE COMPTENT DEPUIS LE PADDING, PAS DEPUIS LE BORD. Le bloc
-   conteneur d'un absolute est la boîte de PADDING de son ancêtre positionné.
-   Ces boutons portent border:1px : leur boîte de padding fait 18x18, pas
-   20x20, et un inset de -12px n'aurait donné que 42. Deux pixels manquants
-   qu'on ne voit pas en lisant la règle — d'où -13px, relevé plutôt que déduit.
-   (« Effacer » a la même bordure, même correction ; .tour-input et
-   .tour-calc-btn n'ont pas le problème, ils sont agrandis par height.)
-
-   LA HAUTEUR : 44 PLEINS. inset vertical -13px, 18+26 = 44.
-
-   LA LARGEUR : 40, PAS 44, ET DÉCENTRÉE. Le libellé central est à 6px du bord
-   de chaque bouton, donc à 7 de sa boîte de padding. Une zone de 44 centrée
-   déborderait de 22 depuis le centre du bouton et couvrirait les chiffres —
-   relevé : le − s'arrête à x=1039, le texte « 45 min » commence à 1046,1, une
-   zone de 44 centrée irait à 1051 et une de 40 centrée à 1049. On ne centre
-   donc pas : chaque zone prend les 7px qui la séparent du libellé et va
-   chercher les 15 qui manquent du côté libre, vers le bord de la ligne où il
-   n'y a rien. 15+18+7 = 40 de large, et le bord intérieur de la zone tombe
-   exactement sur le bord de la boîte du libellé — dessus, jamais dedans.
-
-   Ce 6 ne dépend d'aucune fonte : c'est le gap:6px de la ligne. Si la durée
-   s'allonge, c'est la boîte du libellé qui s'élargit et le + qui recule ; le
-   gap, lui, reste 6. La zone ne peut donc pas rattraper le texte. Relevé avec
-   « 45 min », la plus large que fmtDur produise (39,8px dans une boîte de 42) :
-   1,1px de marge au premier chiffre côté −, 1,1px au dernier caractère côté +.
-
-   LES DEUX ZONES NE SE TOUCHENT PAS. Les centres des boutons sont écartés de
-   74px (mesuré, invariant : 6+20+42+6 avec le min-width:42px du libellé). La
-   zone du − s'arrête à 16px de son centre, celle du + commence à 16px du sien :
-   74-16-16 = 42px les séparent, soit exactement la boîte du libellé.
-
-   CE QU'ON CONCÈDE. 44 de haut ne tiennent pas dans la ligne : 9px la séparent
-   de l'étape du dessus, 11 de celle du dessous, soit 40 disponibles. La zone
-   mord donc 3px sur le bas de l'étape au-dessus — la même étape, celle dont ce
-   ± règle la durée — et 1px sur le haut de la suivante. Ces 3 et 1 pixels
-   tombent dans le padding de 9px de .sched-item, sur 40px de large au bord
-   gauche : aucun texte, aucun lien tel: dessous. Le choix est de tenir les 44
-   plutôt que de s'arrêter à 40.
-   -------------------------------------------------------------------------- */
-.dur-btn{position:relative}
-.dur-btn::after{content:'';position:absolute}
-.dur-btn-moins::after{inset:-13px -7px -13px -15px}
-.dur-btn-plus::after{inset:-13px -15px -13px -7px}
 
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:600;z-index:9000;opacity:0;transition:opacity .2s;pointer-events:none}
@@ -440,17 +386,19 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       <span class="tour-count" id="tour-count">0 fiches</span>
     </div>
     <div id="tour-controls" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)">Départ</span>
-        <input type="time" id="tour-depart-time" value="09:00" style="margin-left:auto;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;font-family:var(--font);font-size:11px;color:var(--text);background:var(--surface);outline:none;width:80px" onchange="recalcSchedule(false)">
-      </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)">Durée visite</span>
-        <span id="visit-dur-label" style="margin-left:auto;font-size:11px;font-weight:700;font-family:var(--mono);color:var(--text)">45 min</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)">Durée du RDV</span>
+        <select id="rdv-dur" onchange="renderCouloir()" style="margin-left:auto;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;font-family:var(--font);font-size:11px;font-weight:700;color:var(--text);background:var(--surface);outline:none;cursor:pointer">
+          <option value="30">30 min</option>
+          <option value="45">45 min</option>
+          <option value="60" selected>1 h</option>
+          <option value="90">1 h 30</option>
+          <option value="120">2 h</option>
+          <option value="150">2 h 30</option>
+          <option value="180">3 h</option>
+        </select>
       </div>
-      <input type="range" id="visit-dur" min="15" max="240" step="15" value="45" oninput="updateDurLabel();recalcSchedule()" style="width:100%;margin-top:4px;accent-color:var(--text)">
     </div>
     <div class="tour-body" id="tour-body"></div>
     <div class="tour-footer">
@@ -461,7 +409,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   <div class="tour-input-bar">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
     <input class="tour-input" id="tour-start-addr" placeholder="Adresse de départ (ex: Rennes, 35)" onkeydown="if(event.key==='Enter')calcTour()">
-    <button class="tour-calc-btn" onclick="calcTour()">Calculer la tournée</button>
+    <button class="tour-calc-btn" onclick="calcTour()">Qui est sur la route</button>
   </div>
 </div>
 
@@ -736,7 +684,7 @@ function migrateCard(c){
 // _nomsRdv (visio.html).
 //
 // La garde `window.MUPNom ?` suit le précédent GARDÉ de cette page —
-// MUPProjection l'est déjà (placeCard, renderSchedule) alors que MUPTel est
+// MUPProjection l'est déjà (placeCard, ligneCandidat) alors que MUPTel est
 // appelé nu — parce que le module est chargé APRÈS ce script inline. Repli
 // recopié de pipeline.html:1660.
 //
@@ -761,11 +709,12 @@ var rdvPanelIds=[]; // ids shown in RDV panel
 // rouvrait ce qui venait d'être fermé. Posé par toggleTourPanel, jamais remis
 // à faux : un rechargement de page est la seule remise à zéro légitime.
 var rdvPanelDismissed=false;
-// La fiche que l'abonné retient pour terminer sa tournée. Le planificateur
+// La fiche que l'abonné retient : la destination de sa journée, celle vers
+// laquelle le trajet se calcule et depuis laquelle il revient. Le planificateur
 // prenait jusqu'ici la première fiche à action à venir que lui rendait
-// /api/pipeline, c'est-à-dire un ordre que personne ne décide. null vaut
-// « aucun choix » : calcTour reprend alors ce premier venu, et renderPanel
-// désigne d'office quand il n'y a qu'un candidat.
+// /api/pipeline, c'est-à-dire un ordre que personne ne décide. Plus de premier
+// venu : null vaut « aucun choix », et calcTour s'arrête là en le disant.
+// renderPanel désigne d'office quand il n'y a qu'un candidat.
 var rdvChoisi=null;
 var userLatLng=null;
 var watchId=null;
@@ -773,11 +722,13 @@ var userMarker=null;
 var proximityCircles=[]; // array of L.circle
 
 // Purge les mises en évidence transitoires : cercles de proximité et opacité.
-// La restauration d'opacité parcourt markers sans condition plutôt que de tenir
-// un registre des marqueurs estompés, parce que renderSchedule estompe les
-// étapes en retard (setOpacity(0.2)) à chaque frame du oninput du curseur de
-// durée : un registre y accumulerait des doublons. Le parcours, lui, est
-// idempotent et coûte une itération par fiche.
+// PLUS RIEN N'ESTOMPE. La restauration d'opacité répondait à renderSchedule,
+// qui rabattait à 0.2 les étapes trop tardives pour tenir le rendez-vous ; le
+// couloir ne disqualifie personne et ne touche pas aux marqueurs. La boucle
+// reste parce qu'elle est le seul endroit du fichier qui remette une opacité à
+// 1 : elle parcourt markers sans condition, elle est idempotente, elle coûte
+// une itération par fiche, et elle tient la garantie qu'« effacer » rende la
+// carte pleine quoi qu'il ait pu l'assombrir.
 function resetOverlays(){
   proximityCircles.forEach(function(c){map.removeLayer(c);});
   proximityCircles=[];
@@ -1149,10 +1100,10 @@ var GEO_SANS_API='Votre navigateur ne donne pas accès à la position.';
 // mente pas. L'effacement est ici et non dans la bascule du bouton, donc il
 // vaut aussi pour les extinctions par erreur et par refus.
 //
-// renderPanel reste gardé comme au commit 4c1275a : renderPanel et
-// renderSchedule se disputent #tour-body, et une feuille de route calculée ne
-// dépend pas de la position. Tant qu'un plan est affiché, l'extinction ne le
-// remplace pas.
+// renderPanel reste gardé comme au commit 4c1275a : renderPanel et le rendu du
+// couloir se disputent #tour-body, et une liste de fiches le long d'un trajet
+// ne dépend pas de la position. Tant qu'un couloir est affiché, l'extinction ne
+// le remplace pas.
 function stopLocate(){
   if(watchId!==null){
     navigator.geolocation.clearWatch(watchId);
@@ -1165,7 +1116,7 @@ function stopLocate(){
   userLatLng=null;
   document.getElementById('btn-locate').classList.remove('active');
   document.getElementById('locate-dot').style.display='none';
-  if(!anchorCard||!startLatLng) renderPanel();
+  if(!couloirAffiche) renderPanel();
 }
 
 function locateUser(){
@@ -1196,11 +1147,11 @@ function locateUser(){
     // celui de ?fiche= (cf. ARBITRE DE CADRAGE).
     if(premierFix) cadrerSur(userLatLng,11);
     // Le relevé sert à trier le panneau RDV par distance — mais renderPanel et
-    // renderSchedule se disputent #tour-body, et la feuille de route ne dépend
-    // pas de la position. Même garde que renderSchedule, inversée : tant qu'un
-    // plan est affiché, un relevé ne le remplace pas. #tour-controls et
-    // #tour-summary restaient sinon en place au-dessus de la liste RDV.
-    if(!anchorCard||!startLatLng) renderPanel();
+    // le rendu du couloir se disputent #tour-body, et la liste des candidats ne
+    // dépend pas de la position. Tant qu'un couloir est affiché, un relevé ne le
+    // remplace pas : #tour-controls restait sinon en place au-dessus de la liste
+    // RDV, à régler la durée d'un rendez-vous qu'on ne voyait plus.
+    if(!couloirAffiche) renderPanel();
   },function(err){
     // Une erreur en cours de suivi signale sans éteindre : un tunnel, un
     // sous-sol, une minute sans ciel ne doivent pas coûter la session. Deux
@@ -1312,11 +1263,11 @@ function renderPanel(){
 function choisirRdv(id){
   id=String(id);
   rdvChoisi=(rdvChoisi===id)?null:id;
-  // Même garde qu'ailleurs : renderPanel et renderSchedule se disputent
-  // #tour-body, et un plan affiché ne se laisse pas remplacer par la liste.
-  // Inatteignable d'ici — un plan affiché a remplacé les lignes, donc ce bouton
-  // n'existe plus — mais la règle du fichier vaut à tous ses appelants.
-  if(!anchorCard||!startLatLng) renderPanel();
+  // Même garde qu'ailleurs : renderPanel et le rendu du couloir se disputent
+  // #tour-body, et un couloir affiché ne se laisse pas remplacer par la liste.
+  // Inatteignable d'ici — un couloir affiché a remplacé les lignes, donc ce
+  // bouton n'existe plus — mais la règle du fichier vaut à tous ses appelants.
+  if(!couloirAffiche) renderPanel();
 }
 
 function flyTo(id){
@@ -1379,50 +1330,71 @@ function toast(msg){
   toastTimer=setTimeout(function(){el.classList.remove('show');},2500);
 }
 
-// ── TOUR PLANNER ──
+// ── LE COULOIR DU TRAJET ──
 var startMarker=null;
 var startLatLng=null;
-var anchorCard=null;
 var routeLine=null;
-var tourStops=[]; // ordered array of {id, card, latlng}
+// Les deux moitiés de l'aller-retour, telles que le calculateur les rend :
+// [0] l'aller, du départ au rendez-vous, [1] le retour. Ce ne sont plus les
+// tronçons d'une suite d'étapes — il n'y a plus d'étapes — mais les deux
+// versants d'un même voyage, et c'est leur frontière qui dit d'une fiche si
+// elle se trouve sur l'un ou sur l'autre.
+var trajetMoities=[];
+// Ce que le dernier calcul a trouvé, gardé pour qu'un changement de durée du
+// rendez-vous se rende sans rappeler personne : la fiche de destination, et les
+// candidats déjà mesurés et rangés dans l'ordre du trajet.
+var couloirRdv=null;
+var couloirCandidats=[];
+// « Un couloir occupe #tour-body ». Les trois gardes de renderPanel lisaient
+// anchorCard, qui n'existe plus ; un drapeau posé par le rendu et défait par
+// clearTourPlan dit la même chose sans corréler deux variables — startLatLng
+// seul n'aurait pas suffi, il est posé avant que l'itinéraire ne réponde.
+var couloirAffiche=false;
+// Le couloir : 15 km de part et d'autre du trajet. Seuil unique, sans
+// distinction ville/province — celle-ci demanderait une notion que le code n'a
+// pas, et la mesure sur un trajet réel de province rend déjà un nombre de
+// fiches lisible.
+var COULOIR_M=15000;
 
-// Efface le plan de tournée dans son entier : les deux calques qu'il pose, tout
-// l'état de calcul, et les affichages qui n'ont de sens que par lui. Seul point
-// de remise à zéro du planificateur, appelé par clearTour et en tête de calcTour
-// — il remplace les retraits ponctuels de startMarker et de routeLine qui
-// vivaient au milieu du calcul et ne couvraient que ces deux calques.
-// Ne touche ni rdvPanelIds ni les cercles de proximité : effacer une tournée
-// n'est pas effacer le panneau RDV.
+// Efface le trajet dans son entier : les deux calques qu'il pose, tout l'état
+// de calcul, et les affichages qui n'ont de sens que par lui. Seul point de
+// remise à zéro, appelé par clearTour et en tête de calcTour — il remplace les
+// retraits ponctuels de startMarker et de routeLine qui vivaient au milieu du
+// calcul et ne couvraient que ces deux calques.
+// Ne touche ni rdvPanelIds ni les cercles de proximité : effacer un trajet
+// n'est pas effacer le panneau RDV. Ne touche pas rdvChoisi non plus : la
+// destination est une désignation de l'abonné, pas un résultat de calcul.
 function clearTourPlan(){
   if(routeLine){map.removeLayer(routeLine);routeLine=null;}
   if(startMarker){map.removeLayer(startMarker);startMarker=null;}
   startLatLng=null;
-  anchorCard=null;
-  tourStops=[];
-  tourLegs=[];
-  stopDurations={};
+  trajetMoities=[];
+  couloirRdv=null;
+  couloirCandidats=[];
+  couloirAffiche=false;
   document.getElementById('tour-controls').style.display='none';
-  // Détruit, pas masqué : renderSchedule le recrée à la demande (940-948).
-  var summaryEl=document.getElementById('tour-summary');
-  if(summaryEl&&summaryEl.parentNode) summaryEl.parentNode.removeChild(summaryEl);
 }
 
 function calcTour(){
   var addr=document.getElementById('tour-start-addr').value.trim();
   if(!addr){toast('Saisir une adresse de départ');return;}
+  // Une désignation qui manque n'est pas une erreur de calcul : on le dit, et on
+  // n'appelle rien — ni le géocodeur, ni le calculateur d'itinéraire. Le
+  // rendez-vous n'est plus élu par l'ordre que rend la base, il est celui que
+  // l'abonné a retenu au panneau.
+  var rdv=rdvChoisi?markers[String(rdvChoisi)]:null;
+  if(!rdv){toast('Préparez d\'abord un RDV dans le panneau');return;}
   clearTourPlan();
 
-  // 1. Geocode start address
-  console.log('[Tour] Geocoding start address:', addr);
+  // 1. Géocodage de l'adresse de départ
   fetch('/api/geocode?q='+encodeURIComponent(addr)+'&type=municipality')
     .then(function(r){return r.json();})
-    .then(async function(data){
-      if(!data.features||!data.features.length){toast('Adresse introuvable');console.error('[Tour] No geocode results for:', addr);return;}
+    .then(function(data){
+      if(!data.features||!data.features.length){toast('Adresse introuvable');return;}
       var coords=data.features[0].geometry.coordinates;
       startLatLng=[coords[1],coords[0]]; // lat,lng
-      console.log('[Tour] Start geocoded:', addr, '→', startLatLng, 'label:', data.features[0].properties?.label);
 
-      // Place start marker (le précédent a été retiré par clearTourPlan)
+      // Marqueur maison (le précédent a été retiré par clearTourPlan)
       var icon=L.divIcon({
         className:'',
         html:'<div style="width:24px;height:24px;border-radius:8px;background:#1D1D1F;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>',
@@ -1430,293 +1402,254 @@ function calcTour(){
       });
       startMarker=L.marker(startLatLng,{icon:icon,zIndexOffset:2000}).addTo(map);
 
-      // 2. Find RDV anchor — refresh pipeline + agenda en parallèle pour avoir l'index à jour
-      anchorCard=null;
-      var allCards=[];
-      try {
-        var [pipelineResp] = await Promise.all([
-          fetch('/api/pipeline'),
-          loadAllAgenda()
-        ]);
-        if(pipelineResp.ok) allCards = await pipelineResp.json();
-      } catch(e) {}
-      var candidats=[];
-      for(var i=0;i<allCards.length;i++){
-        if(nextActionOf(allCards[i])&&allCards[i].col!=='lost'){
-          var mid=String(allCards[i].id);
-          if(markers[mid]) candidats.push({card:allCards[i],latlng:markers[mid].latlng,id:mid});
-        }
-      }
-      // L'ancre est la fiche retenue au panneau. À défaut — aucune désignation,
-      // ou une désignation que l'index qu'on vient de rafraîchir ne reconnaît
-      // plus — le premier candidat, c'est-à-dire exactement ce que rendait la
-      // boucle à `break` d'avant.
-      for(var k=0;k<candidats.length;k++){
-        if(candidats[k].id===rdvChoisi){anchorCard=candidats[k];break;}
-      }
-      if(!anchorCard&&candidats.length) anchorCard=candidats[0];
-      if(!anchorCard){toast('Aucun RDV dans le pipeline');return;}
-
-      // 3. Collect intermediate stops (non-RDV cards with address, within proximity)
-      var stops=[];
-      Object.keys(markers).forEach(function(mid){
-        if(mid===anchorCard.id)return;
-        var m=markers[mid];
-        if(!m.card.address)return;
-        // Within 60km of either start or anchor
-        var distStart=map.distance(L.latLng(startLatLng),L.latLng(m.latlng));
-        var distAnchor=map.distance(L.latLng(anchorCard.latlng),L.latLng(m.latlng));
-        if(distStart<=60000||distAnchor<=60000){
-          stops.push({id:mid,card:m.card,latlng:m.latlng});
-        }
-      });
-
-      // 4. Build waypoints: start -> stops (nearest neighbor) -> anchor
-      var ordered=[];
-      var remaining=stops.slice();
-      var current=startLatLng;
-      while(remaining.length){
-        var best=-1,bestDist=Infinity;
-        for(var j=0;j<remaining.length;j++){
-          var d=map.distance(L.latLng(current),L.latLng(remaining[j].latlng));
-          if(d<bestDist){bestDist=d;best=j;}
-        }
-        ordered.push(remaining[best]);
-        current=remaining[best].latlng;
-        remaining.splice(best,1);
-      }
-
-      tourStops=ordered;
-
-      // 5. Build OSRM route
-      var waypoints=[startLatLng[1]+','+startLatLng[0]]; // lng,lat for OSRM
-      ordered.forEach(function(s){waypoints.push(s.latlng[1]+','+s.latlng[0]);});
-      waypoints.push(anchorCard.latlng[1]+','+anchorCard.latlng[0]);
-      console.log('[Tour] OSRM waypoints:', waypoints.length, 'start:', waypoints[0], 'end:', waypoints[waypoints.length-1]);
-
-      fetch(OSRM+'/route/v1/driving/'+waypoints.join(';')+'?overview=full&geometries=geojson&steps=false&annotations=distance,duration')
+      // 2. Le trajet : trois points de passage, départ → rendez-vous → départ.
+      // La journée est un aller-retour, pas un aller simple : on revient de son
+      // rendez-vous, et la moitié du chemin qu'on refait porte elle aussi des
+      // fiches. annotations=duration donne la durée segment par segment, seule
+      // façon de situer une fiche en minutes du rendez-vous ; distance ne sert
+      // plus à personne depuis que le résumé kilométrique est tombé.
+      var d=startLatLng[1]+','+startLatLng[0]; // lng,lat pour OSRM
+      var b=rdv.latlng[1]+','+rdv.latlng[0];
+      fetch(OSRM+'/route/v1/driving/'+d+';'+b+';'+d+'?overview=full&geometries=geojson&steps=false&annotations=duration')
         .then(function(r){return r.json();})
         .then(function(route){
           if(!route.routes||!route.routes.length){toast('Impossible de calculer l\'itinéraire');return;}
+          var parcours=route.routes[0];
           // Le tracé précédent a été retiré par clearTourPlan en tête de calcTour.
-          var geojson=route.routes[0].geometry;
-          routeLine=L.geoJSON(geojson,{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
+          routeLine=L.geoJSON(parcours.geometry,{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
+          trajetMoities=parcours.legs||[];
 
-          // Store leg data
-          tourLegs=route.routes[0].legs||[];
-          var totalDist=route.routes[0].distance;
-          var totalTime=route.routes[0].duration;
+          couloirRdv={id:String(rdvChoisi),card:rdv.card,latlng:rdv.latlng};
+          couloirCandidats=fichesDuCouloir(parcours.geometry.coordinates);
 
-          // Show controls & render
           document.getElementById('tour-controls').style.display='';
-          renderSchedule();
+          renderCouloir();
 
           if(!document.getElementById('tour-panel').classList.contains('open')){
             toggleTourPanel();
           }
-          // Différé de 400 ms : le plan peut avoir été effacé entretemps
+          // Différé de 400 ms : le trajet peut avoir été effacé entretemps
           // (« Effacer », ou un second calcul lancé dans la foulée).
           setTimeout(function(){if(routeLine)map.fitBounds(routeLine.getBounds(),{padding:[60,60]});},400);
-          toast('Tournée calculée — '+Math.round(totalDist/1000)+' km · '+Math.round(totalTime/60)+' min');
+          var n=couloirCandidats.length;
+          toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
+            +' · '+fmtDuree(Math.round(parcours.duration/60))+' de trajet aller-retour');
         })
         .catch(function(){toast('Erreur de calcul itinéraire');});
     })
     .catch(function(){toast('Erreur de géocodage');});
 }
 
-var tourLegs=[];
-var stopDurations={}; // id -> minutes (per-stop override)
+// ── LA MESURE AU COULOIR ──
+// Distance d'une fiche à la ligne brisée : le minimum des distances
+// point-segment sur toute la polyligne. Force brute, aucune ruse — pas de bbox
+// préalable, pas d'échantillonnage, pas de worker. Le diagnostic l'a chiffrée
+// sur les données réelles : quelques dizaines de millisecondes pour le plus
+// gros portefeuille contre le plus long trajet plausible. Une optimisation
+// coûterait plus à lire qu'elle ne ferait gagner.
+//
+// Projection équirectangulaire locale plutôt que map.distance : une distance
+// point-segment demande un plan, et sur un couloir de 15 km aux latitudes
+// françaises l'écart au grand cercle se compte en centimètres. Le facteur de
+// longitude se prend au premier point de la ligne, une fois pour toutes.
+//
+// SUR UN ALLER-RETOUR PAR LA MÊME ROUTE, les deux moitiés se superposent et une
+// fiche est à égale distance de l'une et de l'autre : le premier segment
+// rencontré l'emporte, donc l'aller. C'est vrai plutôt qu'arbitraire — la fiche
+// est bien sur l'aller, à ces minutes-là du rendez-vous — et l'abonné qui la
+// voit sait qu'il repassera devant.
+function fichesDuCouloir(ligne){
+  if(!ligne||ligne.length<2) return [];
+  var kx=Math.cos(ligne[0][1]*Math.PI/180)*111320, ky=110540;
+  var px=new Array(ligne.length), py=new Array(ligne.length);
+  for(var i=0;i<ligne.length;i++){px[i]=ligne[i][0]*kx;py[i]=ligne[i][1]*ky;}
+  var chrono=chronoDeLaLigne(px,py,couloirRdv.latlng[1]*kx,couloirRdv.latlng[0]*ky);
+  var tRdv=chrono.cumul[chrono.iRdv];
 
-function updateDurLabel(){
-  var v=parseInt(document.getElementById('visit-dur').value);
-  var label=v>=60?(Math.floor(v/60)+'h'+(v%60?(' '+String(v%60).padStart(2,'0')):'')):v+' min';
-  document.getElementById('visit-dur-label').textContent=label;
-}
-
-function fmtTime(mins){
-  var h=Math.floor(mins/60)%24;
-  var m=Math.round(mins%60);
-  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
-}
-
-function fmtDist(m){return m>=1000?Math.round(m/1000)+' km':Math.round(m)+' m';}
-
-function recalcSchedule(resetIndividual){
-  if(resetIndividual!==false) stopDurations={};
-  renderSchedule();
-}
-
-function getStopDur(id){
-  if(stopDurations[id]!==undefined) return stopDurations[id];
-  return parseInt(document.getElementById('visit-dur').value)||45;
-}
-
-// Les bornes 15-240 doivent rester celles du curseur « Durée visite »
-// (carte.html:302) : getStopDur retombe sur sa valeur tant qu'aucun réglage
-// individuel n'existe. Quand le curseur montait à 480, un « + » sur une étape
-// la rabattait à 240 — le bouton diminuait la durée.
-function adjStopDur(id,delta){
-  var cur=getStopDur(id);
-  var nv=Math.max(15,Math.min(240,cur+delta));
-  stopDurations[id]=nv;
-  recalcSchedule(false);
-}
-
-function fmtDur(m){return m>=60?(Math.floor(m/60)+'h'+(m%60?' '+String(m%60).padStart(2,'0'):'')):m+' min';}
-
-function renderSchedule(){
-  if(!anchorCard||!startLatLng){return;}
-  var body=document.getElementById('tour-body');
-  var badge=document.getElementById('tour-badge');
-  var count=document.getElementById('tour-count');
-  var btnTour=document.getElementById('btn-tour');
-
-  var departParts=(document.getElementById('tour-depart-time').value||'09:00').split(':');
-  var currentMins=parseInt(departParts[0])*60+parseInt(departParts[1]);
-
-  // RDV anchor deadline
-  var anchorDeadline=Infinity;
-  if(anchorCard.card.rdvTime){
-    var ap=anchorCard.card.rdvTime.split(':');
-    anchorDeadline=parseInt(ap[0])*60+parseInt(ap[1]);
-  }
-
-  var totalDist=0;
-  var html='';
-
-  // Départ
-  html+='<div class="sched-item" style="border-color:#1D1D1F;background:rgba(29,29,31,.04)">'
-    +'<div class="sched-time">'+fmtTime(currentMins)+'</div>'
-    +'<div class="sched-dot" style="background:#1D1D1F"></div>'
-    +'<div class="sched-info"><div class="sched-name">Départ</div>'
-    +'<div class="sched-meta">'+esc(document.getElementById('tour-start-addr').value)+'</div></div></div>';
-
-  var included=[];
-  var excluded=[];
-
-  // Each stop
-  tourStops.forEach(function(s,i){
-    var legIdx=i; // leg 0 = start->stop0, leg 1 = stop0->stop1, etc.
-    var legDist=tourLegs[legIdx]?tourLegs[legIdx].distance:0;
-    var legTime=tourLegs[legIdx]?tourLegs[legIdx].duration/60:0;
-
-    var arrivalMins=Math.ceil((currentMins+legTime)/30)*30;
-    var thisDur=getStopDur(s.id);
-    var departureMins=arrivalMins+thisDur;
-
-    // Check: can we still reach anchor on time after this visit?
-    var lastLegIdx=i+1;
-    var remainingLegs=0;
-    for(var k=lastLegIdx;k<tourLegs.length;k++) remainingLegs+=tourLegs[k]?tourLegs[k].duration/60:0;
-    var remainingVisits=0;
-    for(var k=i+1;k<tourStops.length;k++) remainingVisits+=getStopDur(tourStops[k].id);
-    var estAnchorArrival=departureMins+remainingLegs+remainingVisits;
-
-    var tooLate=anchorDeadline!==Infinity&&estAnchorArrival>anchorDeadline;
-
-    if(tooLate){
-      excluded.push(s);
-      // Dim marker on map
-      if(markers[s.id])markers[s.id].marker.setOpacity(0.2);
-    } else {
-      included.push(s);
-      totalDist+=legDist;
-      var col=stageColor(s.card.col);
-      // Même lecture que la bulle : saisie d'abord, projection en repli.
-      var tel=window.MUPProjection?window.MUPProjection.tel(s.card):(s.card.tel||'');
-      var distLabel=legDist<2000?'< 2 km':fmtDist(legDist);
-      var timeLabel=legDist<2000?'< 2 min':Math.round(legTime)+' min';
-      html+='<div class="sched-item" id="sched-'+s.id+'" style="cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+s.id+'\')">'
-        +'<div class="sched-time">'+fmtTime(arrivalMins)+'</div>'
-        +'<div class="sched-dot" style="background:'+col+'"></div>'
-        +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(s.card).titre)+'</div>'
-        +'<div class="sched-meta">'+distLabel+' · '+timeLabel+'</div>'
-        // Le numéro est dans une ligne qui vole vers le marqueur au clic. Sans
-        // arrêt de la propagation, appeler déclenchait aussi ce vol : le temps
-        // que le combiné prenne la main, la carte s'était recentrée et avait
-        // ouvert une infobulle sous l'appel. Même geste que le lien tel: de
-        // l'infobulle (cf. popupHtml) — le href n'est pas touché, seule la
-        // remontée de l'événement au parent est coupée.
-        +(tel?'<div class="sched-tel"><a href="tel:'+esc(window.MUPTel.lien(tel))+'" onclick="event.stopPropagation()">'+esc(window.MUPTel.format(tel))+'</a></div>':'')
-        +'</div>'
-        +'<div class="sched-badge" style="background:'+col+'22;color:'+col+'">'+stageName(s.card.col)+'</div>'
-        +'</div>'
-        +'<div style="display:flex;align-items:center;gap:6px;padding:4px 10px 6px;margin-bottom:5px;font-size:10px;color:var(--muted)">'
-        +'<button class="dur-btn dur-btn-moins" onclick="event.stopPropagation();adjStopDur(\''+s.id+'\',-15)" style="width:20px;height:20px;border-radius:5px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center">−</button>'
-        +'<span style="font-family:var(--mono);font-weight:700;font-size:11px;color:var(--text);min-width:42px;text-align:center">'+fmtDur(thisDur)+'</span>'
-        +'<button class="dur-btn dur-btn-plus" onclick="event.stopPropagation();adjStopDur(\''+s.id+'\',15)" style="width:20px;height:20px;border-radius:5px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center">+</button>'
-        +'<span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted2)">Départ · '+fmtTime(departureMins)+'</span>'
-        +'</div>';
-      currentMins=departureMins;
+  var trouvees=[];
+  Object.keys(markers).forEach(function(mid){
+    // La destination n'est pas un candidat : c'est là qu'on va.
+    if(mid===couloirRdv.id) return;
+    var m=markers[mid];
+    // Une fiche disqualifiée ne se rappelle pas pour décrocher un rendez-vous.
+    if(m.card.col==='lost') return;
+    var qx=m.latlng[1]*kx, qy=m.latlng[0]*ky;
+    var meilleur=Infinity, segment=0, position=0;
+    for(var i=0;i<px.length-1;i++){
+      var ax=px[i], ay=py[i], dx=px[i+1]-ax, dy=py[i+1]-ay;
+      var l2=dx*dx+dy*dy;
+      var t=l2?((qx-ax)*dx+(qy-ay)*dy)/l2:0;
+      if(t<0)t=0; else if(t>1)t=1;
+      var ex=ax+t*dx-qx, ey=ay+t*dy-qy;
+      var d2=ex*ex+ey*ey;
+      if(d2<meilleur){meilleur=d2;segment=i;position=t;}
     }
+    var ecart=Math.sqrt(meilleur);
+    if(ecart>COULOIR_M) return;
+    // Le point de la ligne le plus proche porte un temps : celui de son segment,
+    // interpolé à l'endroit exact où la fiche vient s'y accrocher.
+    var t=chrono.cumul[segment]+position*(chrono.cumul[segment+1]-chrono.cumul[segment]);
+    trouvees.push({
+      id:mid, card:m.card, ecart:ecart,
+      aller:(segment<chrono.iRdv),
+      minutes:Math.round(Math.abs(tRdv-t)/60)
+    });
   });
 
-  // Excluded stops (grayed)
-  excluded.forEach(function(s){
-    var col=stageColor(s.card.col);
-    html+='<div class="sched-item excluded" id="sched-'+s.id+'">'
-      +'<div class="sched-time" style="color:var(--muted2)">—</div>'
-      +'<div class="sched-dot" style="background:var(--border2)"></div>'
-      +'<div class="sched-info"><div class="sched-name" style="color:var(--muted2)">'+esc(nomsCarte(s.card).titre)+'</div>'
-      +'<div class="sched-meta">Exclu (retard RDV)</div></div></div>';
-  });
+  // L'ordre de lecture est celui du trajet : l'aller du plus loin du rendez-vous
+  // au plus près — c'est-à-dire dans l'ordre où on les croise — puis le retour
+  // du plus près au plus loin.
+  var aller=trouvees.filter(function(c){return c.aller;}).sort(function(a,b){return b.minutes-a.minutes;});
+  var retour=trouvees.filter(function(c){return !c.aller;}).sort(function(a,b){return a.minutes-b.minutes;});
+  return aller.concat(retour);
+}
 
-  // Anchor (RDV)
-  var anchorLeg=tourLegs[tourLegs.length-1];
-  var anchorDist=anchorLeg?anchorLeg.distance:0;
-  var anchorTime=anchorLeg?anchorLeg.duration/60:0;
-  var anchorArrival=Math.ceil((currentMins+anchorTime)/30)*30;
-  totalDist+=anchorDist;
+// Le temps le long de la ligne, et l'index du rendez-vous dedans.
+// annotation.duration donne une durée par segment : la longueur de celle de
+// l'aller est l'index du rendez-vous dans la polyligne, et le cumul donne le
+// temps de chaque nœud. Si l'annotation manque ou ne recouvre pas la ligne —
+// un serveur qui la refuse, une géométrie qui ne coïncide pas — on retombe sur
+// une répartition au prorata de la longueur des segments, moitié par moitié.
+// Grossier là où une autoroute précède une départementale, mais la liste reste
+// entière : la rendre sans ses minutes serait la rendre amputée de ce qui la
+// fait lire.
+function chronoDeLaLigne(px,py,rx,ry){
+  var n=px.length-1;
+  var a0=trajetMoities[0]&&trajetMoities[0].annotation&&trajetMoities[0].annotation.duration;
+  var a1=trajetMoities[1]&&trajetMoities[1].annotation&&trajetMoities[1].annotation.duration;
+  var durees, iRdv;
+  if(a0&&a1&&a0.length+a1.length===n){
+    durees=a0.concat(a1);
+    iRdv=a0.length;
+  } else {
+    // À défaut d'annotation, le rendez-vous est le nœud le plus proche de la
+    // fiche : c'est le point de rebroussement, puisque c'est le point de
+    // passage qu'on a demandé.
+    iRdv=0;
+    var meilleur=Infinity;
+    for(var i=0;i<=n;i++){
+      var dx=px[i]-rx, dy=py[i]-ry, d2=dx*dx+dy*dy;
+      if(d2<meilleur){meilleur=d2;iRdv=i;}
+    }
+    durees=proRata(px,py,0,iRdv,trajetMoities[0]?trajetMoities[0].duration:0)
+      .concat(proRata(px,py,iRdv,n,trajetMoities[1]?trajetMoities[1].duration:0));
+  }
+  var cumul=[0];
+  for(var k=0;k<n;k++) cumul.push(cumul[k]+(durees[k]||0));
+  return {cumul:cumul,iRdv:iRdv};
+}
 
-  var anchorDistLabel=anchorDist<2000?'< 2 km':fmtDist(anchorDist);
-  var anchorTimeLabel=anchorDist<2000?'< 2 min':Math.round(anchorTime)+' min';
-  html+='<div class="sched-item" id="sched-'+anchorCard.id+'" style="border-color:#0BBCD4;background:rgba(11,188,212,.06);cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+anchorCard.id+'\')">'
-    +'<div class="sched-time" style="color:#0BBCD4">'+fmtTime(anchorArrival)+'</div>'
+// Répartit `total` secondes sur les segments [debut,fin[ au prorata de leur
+// longueur. Une moitié vide rend un tableau vide, un trajet de longueur nulle
+// rend des zéros : dans les deux cas le cumul reste défini sur toute la ligne.
+function proRata(px,py,debut,fin,total){
+  var longueurs=[], somme=0;
+  for(var i=debut;i<fin;i++){
+    var dx=px[i+1]-px[i], dy=py[i+1]-py[i];
+    var l=Math.sqrt(dx*dx+dy*dy);
+    longueurs.push(l); somme+=l;
+  }
+  return longueurs.map(function(l){return somme?total*l/somme:0;});
+}
+
+// ── LE RENDU DU COULOIR ──
+// Deux blocs, « SUR L'ALLER » et « AU RETOUR », parce que ce sont deux
+// propositions téléphoniques différentes : sur l'aller, « je passe devant chez
+// vous en début de matinée » ; au retour, « je sors d'un rendez-vous à Dinan à
+// 11h, je peux être chez vous vers 13h ». Un abonné qui décroche a besoin de
+// savoir laquelle des deux il tient. Un bloc vide ne s'affiche pas — un
+// intertitre sans ligne dessous annoncerait des fiches qu'il n'y a pas.
+//
+// AUCUN HORAIRE SUR UN CANDIDAT. Ce ne sont pas des étapes qu'on ira visiter à
+// une heure dite, ce sont des fiches à appeler, et une seule décrochera
+// peut-être. Les minutes qu'elles portent sont un écart au rendez-vous, jamais
+// une position dans la journée. Seule la ligne du rendez-vous porte des heures.
+function renderCouloir(){
+  if(!couloirRdv) return;
+  var aller=couloirCandidats.filter(function(c){return c.aller;});
+  var retour=couloirCandidats.filter(function(c){return !c.aller;});
+
+  var html='';
+  if(aller.length) html+='<div class="sb-label">Sur l\'aller</div>'+aller.map(ligneCandidat).join('');
+  html+=ligneRendezVous();
+  if(retour.length) html+='<div class="sb-label">Au retour</div>'+retour.map(ligneCandidat).join('');
+  if(!couloirCandidats.length){
+    html+='<div style="padding:16px 8px;text-align:center;color:var(--muted2);font-size:11px">Aucune fiche à moins de '+(COULOIR_M/1000)+' km de la route</div>';
+  }
+  document.getElementById('tour-body').innerHTML=html;
+
+  var n=couloirCandidats.length;
+  var badge=document.getElementById('tour-badge');
+  badge.style.display='inline';
+  badge.textContent=n;
+  document.getElementById('tour-count').textContent=n+' à appeler';
+  document.getElementById('btn-tour').classList.add('active');
+  couloirAffiche=true;
+}
+
+// Les minutes en principal, l'écart à la route en second : ils ne disent pas la
+// même chose. Les minutes situent la fiche dans la journée, l'écart dit ce
+// qu'il en coûte d'aller la voir — une fiche à 400 m de la route et une à 14 km
+// ne se proposent pas de la même façon au téléphone.
+function ligneCandidat(c){
+  var col=stageColor(c.card.col);
+  // Même lecture que la bulle : saisie d'abord, projection en repli.
+  var tel=window.MUPProjection?window.MUPProjection.tel(c.card):(c.card.tel||'');
+  return '<div class="sched-item" id="sched-'+c.id+'" style="cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+c.id+'\')">'
+    +'<div class="sched-time">'+fmtDuree(c.minutes)+'</div>'
+    +'<div class="sched-dot" style="background:'+col+'"></div>'
+    +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(c.card).titre)+'</div>'
+    +'<div class="sched-meta">à '+fmtEcart(c.ecart)+' de la route</div>'
+    // Le numéro est dans une ligne qui vole vers le marqueur au clic. Sans
+    // arrêt de la propagation, appeler déclenchait aussi ce vol : le temps
+    // que le combiné prenne la main, la carte s'était recentrée et avait
+    // ouvert une infobulle sous l'appel. Même geste que le lien tel: de
+    // l'infobulle (cf. popupHtml) — le href n'est pas touché, seule la
+    // remontée de l'événement au parent est coupée.
+    +(tel?'<div class="sched-tel"><a href="tel:'+esc(window.MUPTel.lien(tel))+'" onclick="event.stopPropagation()">'+esc(window.MUPTel.format(tel))+'</a></div>':'')
+    +'</div>'
+    +'<div class="sched-badge" style="background:'+col+'22;color:'+col+'">'+stageName(c.card.col)+'</div>'
+    +'</div>';
+}
+
+// La destination. Même identifiant #sched-<id> que les candidats : scrollToStop
+// vise cet espace-là, et le bouton « Voir dans le panneau » de l'infobulle doit
+// atteindre le rendez-vous comme le reste.
+function ligneRendezVous(){
+  var c=couloirRdv;
+  var na=nextActionOf(c.card);
+  var st=na?actionStyle(na.type):actionStyle('rdv');
+  var heure=na?(na.hour||'14:00'):null;
+  // L'heure de sortie, et elle seule, est un horaire : c'est à partir d'elle que
+  // l'abonné peut proposer autre chose au téléphone. Le <select> de
+  // #tour-controls la déplace, et rien d'autre ne bouge dans la liste.
+  var sortie=heure?fmtHeure(minutesDe(heure)+(parseInt(document.getElementById('rdv-dur').value,10)||60)):'';
+  return '<div class="sched-item" id="sched-'+c.id+'" style="border-color:#0BBCD4;background:rgba(11,188,212,.06);cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+c.id+'\')">'
+    +'<div class="sched-time" style="color:#0BBCD4">'+(heure?heure.replace(':','h'):'—')+'</div>'
     +'<div class="sched-dot" style="background:#0BBCD4"></div>'
-    +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(anchorCard.card).titre)+'</div>'
-    +'<div class="sched-meta">'+anchorDistLabel+' · '+anchorTimeLabel+'</div>'
-    +(function(){var na=nextActionOf(anchorCard.card);var st=na?actionStyle(na.type):actionStyle('rdv');var d=na?na.date.slice(0,10):anchorCard.card.rdvDate;var h=na?(na.hour||'14:00'):anchorCard.card.rdvTime;return '<div class="sched-meta" style="color:'+st.color+';font-weight:600">'+st.label+' — '+formatRdvDate(d,h)+'</div>';})()
+    +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(c.card).titre)+'</div>'
+    +'<div class="sched-meta" style="color:'+st.color+';font-weight:600">'+st.label+(na?' — '+formatRdvDate(na.date.slice(0,10),na.hour):'')+'</div>'
+    +(sortie?'<div class="sched-meta">Sortie vers '+sortie+'</div>':'')
     +'</div>'
     +'<div class="sched-badge" style="background:rgba(11,188,212,.12);color:#0BBCD4">RDV</div>'
     +'</div>';
+}
 
-  body.innerHTML=html;
+function minutesDe(hhmm){var p=String(hhmm).split(':');return parseInt(p[0],10)*60+(parseInt(p[1],10)||0);}
+function fmtHeure(min){min=((min%1440)+1440)%1440;return String(Math.floor(min/60)).padStart(2,'0')+'h'+String(min%60).padStart(2,'0');}
+function fmtDuree(min){
+  if(min<60) return min+' min';
+  var m=min%60;
+  return Math.floor(min/60)+' h'+(m?' '+String(m).padStart(2,'0'):'');
+}
 
-  // Summary
-  var total=included.length+1;
-  badge.style.display='inline';
-  badge.textContent=total;
-  count.textContent=total+' étape'+(total>1?'s':'');
-  btnTour.classList.add('active');
-
-  // Temps libre avant RDV
-  var tempsLibre='';
-  if(anchorDeadline!==Infinity){
-    var libre=anchorDeadline-anchorArrival;
-    if(libre>0){
-      var lh=Math.floor(libre/60);
-      var lm=Math.round(libre%60);
-      tempsLibre=lh?lh+'h'+(lm?' '+String(lm).padStart(2,'0'):''):lm+' min';
-    } else {
-      tempsLibre='0 min';
-    }
-  }
-
-  // Add summary bar
-  var summaryEl=document.getElementById('tour-summary');
-  if(!summaryEl){
-    summaryEl=document.createElement('div');
-    summaryEl.id='tour-summary';
-    summaryEl.className='sched-summary';
-    summaryEl.style.flexDirection='column';
-    summaryEl.style.gap='4px';
-    document.getElementById('tour-panel').insertBefore(summaryEl,document.querySelector('.tour-footer'));
-  }
-  var sumHtml='<div style="display:flex;justify-content:space-between"><span><strong>'+Math.round(totalDist/1000)+' km</strong> total</span><span>Arrivée RDV · <strong>'+fmtTime(anchorArrival).replace(':','h')+'</strong></span></div>';
-  if(tempsLibre&&anchorDeadline!==Infinity){
-    sumHtml+='<div style="display:flex;justify-content:space-between;color:var(--green)"><span>Temps libre</span><strong>'+tempsLibre+' avant '+fmtTime(anchorDeadline).replace(':','h')+'</strong></div>';
-  }
-  summaryEl.innerHTML=sumHtml;
+// Sous le kilomètre on arrondit à la centaine de mètres, au-delà on garde une
+// décimale jusqu'à 10 km : entre 1,4 et 2,3 km il y a une différence qui se
+// décide, entre 13 et 14 il n'y en a plus.
+function fmtEcart(m){
+  if(m<1000) return Math.round(m/100)*100+' m';
+  if(m<10000) return (m/1000).toFixed(1).replace('.',',')+' km';
+  return Math.round(m/1000)+' km';
 }
 
 // ── CONTACTS GÉOCODÉS depuis /api/contacts ──

@@ -379,10 +379,14 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    dit à sa place.
 
    CE QUE L'ENCART EST. Pas un dialogue : il ne se ferme sur aucun geste. Il
-   paraît parce que la Carte ne sait pas d'où part sa journée, et il se retire
-   parce qu'elle vient de l'apprendre. Une fois l'autorisation de géolocalisation
-   accordée, il ne revient plus : c'est le navigateur qui s'en souvient, pas
-   nous (cf. ouvrirMiseEnRoute).
+   paraît parce que la Carte ne sait pas encore ce qu'il lui faut pour préparer
+   la tournée, et il se retire quand elle vient de l'apprendre. Il conduit cette
+   préparation d'un bout à l'autre : d'où part la journée, vers quel rendez-vous
+   elle va, jusqu'où l'on accepte de sortir de la route.
+   L'AUTORISATION DÉJÀ ACCORDÉE NE LE SUPPRIME PLUS, elle lui fait sauter son
+   premier temps : le relevé se fait en silence (c'est le navigateur qui se
+   souvient, pas nous, cf. ouvrirMiseEnRoute) et l'encart reparaît au temps
+   suivant, celui qui reste à conduire.
 
    IL PARAÎT APRÈS LES FICHES, jamais avant : l'abonnée voit d'abord que sa
    carte est peuplée. C'est finish() qui l'appelle, une fois le flux écoulé.
@@ -455,10 +459,21 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   display:flex;flex-direction:column;
   justify-content:center;justify-content:safe center;
 }
-/* LA PILE DES DEUX TEMPS, comme chez Visio et chez Devis. Les deux temps se
-   remplacent au même endroit : ils y sont posés ensemble, tous deux mesurés, et
-   la carte garde la hauteur du plus long quel que soit celui qui paraît. C'est
-   `.actif` qui les départage, jamais `display`.
+/* LA PILE DES TEMPS, comme chez Visio et chez Devis, mais ils sont QUATRE ici :
+   la géolocalisation, la remise en route quand elle échoue, le choix du
+   rendez-vous, le réglage du rayon. Ils se remplacent au même endroit : ils y
+   sont posés ensemble, tous mesurés, et la carte garde la hauteur du plus long
+   quel que soit celui qui paraît. C'est `.actif` qui les départage, jamais
+   `display`.
+   AUCUN DES DEUX NOUVEAUX NE FAIT GRANDIR LA CARTE, et c'est une contrainte, pas
+   une chance : la liste des rendez-vous est bornée en hauteur (cf. .mes-liste)
+   et le compte du rayon tient sur une ligne fixe (cf. .mes-compte). Relevé au
+   banc, fontes Geist chargées, en 600 px de large : géolocalisation 158,3 px,
+   remise en route 192,7, choix du rendez-vous 239,3 à deux rendez-vous et 357,3
+   dès que la liste bute sur sa borne, rayon 254,3. Le plus long des quatre,
+   357,3 px, tient dans les 445 px que le corps offre sous le plancher commun,
+   et la carte mesure 490 px sur ses quatre temps, à deux rendez-vous comme à
+   douze.
    UNE SEULE CHOSE LA FAIT ENCORE VARIER, ET C'EST ASSUMÉ : les instructions
    d'autorisation du second temps (#depart-reglages) ne valent que pour un accès
    bloqué, et elles vivent en display:none dans les deux autres cas, donc hors
@@ -500,6 +515,45 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 }
 .mes-lien:hover{color:var(--mes-titre)}
 .mes-btn:focus-visible,.mes-lien:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+
+/* ── LE CHOIX DU RENDEZ-VOUS ──
+   Une liste de boutons, un par rendez-vous à venir, et LE CLIC VAUT
+   DÉSIGNATION : pas de case à cocher, pas de validation en second geste. Le
+   choix est le geste, comme le bouton noir l'est au premier temps.
+   ELLE EST BORNÉE EN HAUTEUR, ET LA PILE L'EXIGE : les quatre temps sont
+   mesurés ensemble, la carte prend la hauteur du plus long, et sans borne douze
+   rendez-vous allongeraient d'autant la carte des trois autres temps. À 240 px
+   la liste défile en dedans, la carte reste au plancher commun, et les temps
+   courts ne paient rien pour celui-ci. */
+.mes-liste{margin-top:22px;max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.mes-choix{
+  display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+  width:100%;text-align:left;
+  background:var(--mes-fond);border:1px solid var(--mes-bord);
+  border-radius:var(--mes-bouton-rayon);padding:10px 14px;
+  font-family:var(--font);cursor:pointer;
+}
+.mes-choix:hover{border-color:var(--mes-titre)}
+.mes-choix:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px}
+.mes-choix-quand{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.mes-choix-nom{font-size:14px;font-weight:600;color:var(--mes-titre)}
+
+/* ── LE CURSEUR DU RAYON, ET LE COMPTE SOUS LUI ──
+   accent-color teint la piste et la poignée du noir du produit sans qu'aucune
+   pseudo classe de navigateur soit à écrire : le curseur garde le rendu natif
+   de la plateforme, prise clavier comprise.
+   LE COMPTE A UNE HAUTEUR FIXE D'UNE LIGNE. Il se réécrit à chaque pixel du
+   curseur, et un texte qui passerait de une ligne à deux ferait sauter la carte
+   sous la main qui règle.
+   .mes-btn:disabled EST UN AJOUT DE LA CARTE, la règle recopiée juste au-dessus
+   n'étant pas touchée : c'est le premier encart dont un geste attende une
+   mesure, et un bouton qui ne répond pas doit le dire. */
+.mes-curseur{width:100%;margin-top:22px;accent-color:var(--mes-bouton);cursor:pointer}
+.mes-bornes{display:flex;justify-content:space-between;margin-top:4px;font-size:11px;font-weight:600;color:var(--mes-surtitre)}
+.mes-compte{margin-top:14px;height:22px;font-size:14px;line-height:22px;color:var(--mes-corps);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mes-compte b{color:var(--mes-titre);font-weight:800}
+.mes-btn:disabled,.mes-curseur:disabled{opacity:.45;cursor:default}
+.mes-curseur:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px}
 /* LE PIED, VIDE, RECOPIÉ DE MAIL SANS RIEN Y CHANGER. Ce qu'il porte ici n'est
    pas un contenu, c'est le trait de séparation et la bande de fond qui
    terminent la carte comme sur les trois autres pages, plus les 33 px que son
@@ -627,12 +681,17 @@ body #mup-cookie-panel{z-index:60001}
      l'encart qui y vivrait le deviendrait avec lui. Même place que chez Mail,
      chez Visio et chez Devis, et pour la même raison.
 
-     UN ENCART, DEUX TEMPS, DANS UNE PILE. Le premier propose la
+     UN ENCART, QUATRE TEMPS, DANS UNE PILE. Le premier propose la
      géolocalisation. Le second paraît quand elle ne peut pas aboutir : il dit
      pourquoi, il explique comment rouvrir la porte quand elle est fermée, et sa
      sortie principale est la relance. Le champ d'adresse reste offert, mais en
-     repli. La carte ne change pas de taille entre les deux : c'est ce que la
-     pile garantit.
+     repli. La carte ne change pas de taille d'un temps à l'autre : c'est ce que
+     la pile garantit.
+     LES DEUX DERNIERS CONDUISENT LA PRÉPARATION, une fois la position connue :
+     le choix du rendez-vous, puis le réglage du rayon. Ils ne sont pas des
+     issues de secours du premier, ce sont les temps suivants du même chemin, et
+     ils se sautent quand la réponse est déjà connue (cf.
+     enchainerApresPosition).
 
      IL NE SE FERME SUR AUCUN GESTE au premier temps : ni Échap, ni clic au
      fond, ni croix — il n'en a pas. Il se retire quand sa raison d'être
@@ -680,6 +739,44 @@ body #mup-cookie-panel{z-index:60001}
           <div class="mes-geste">
             <button type="button" class="mes-btn" id="depart-reessayer" onclick="releverPosition(true)">J'ai autorisé, réessayer</button>
             <button type="button" class="mes-lien" id="depart-adresse" onclick="allerAuChampAdresse()">Saisir mon adresse de départ</button>
+          </div>
+        </div>
+
+        <!-- TROISIÈME TEMPS : LE RENDEZ-VOUS DE LA JOURNÉE. Il ne paraît
+             qu'à DEUX rendez-vous à venir ou plus : à un seul la désignation
+             est faite d'office et poser une question dont la réponse est
+             connue ferait perdre du temps, à aucun il n'y a rien à préparer.
+             Les lignes sont écrites par peuplerLesRdvs, dans l'ordre de la
+             journée, chacune portant sa date, son heure et son nom. -->
+        <div id="mesTempsRdv">
+          <h2 id="departTitreRdv">Vers quel rendez-vous ?</h2>
+          <p>Le trajet part de votre position, va au rendez-vous et revient. Les fiches à appeler sont celles qui bordent cette route.</p>
+          <div class="mes-liste" id="depart-rdvs"></div>
+        </div>
+
+        <!-- QUATRIÈME TEMPS : LE RAYON. Le curseur est continu, de 500 m à
+             50 km, et son défaut est celui du couloir (cf. COULOIR_DEFAUT_M).
+             LE COMPTE EST SOUS LE CURSEUR ET LE SUIT EN DIRECT : c'est lui qui
+             permet de trancher, un curseur sans compte étant aveugle. Il ne
+             s'écrit qu'une fois la route mesurée, jamais avant : tant qu'elle
+             court, le curseur est figé et la ligne le dit (cf.
+             rafraichirLeRayon).
+             LES BORNES SONT ÉCRITES DEUX FOIS, ET CE N'EST PAS UNE SOURCE
+             DOUBLE : celles d'ici tiennent la mise en page avant toute
+             ouverture, et ouvrirLeRayon les repose depuis COULOIR_MIN_M et
+             COULOIR_MAX_M chaque fois que ce temps paraît. Ce sont les
+             constantes qui commandent, ces valeurs ne se voient jamais seules.
+             La borne haute est aussi celle à laquelle la route est mesurée : les
+             écarter l'une de l'autre rognerait le curseur en silence. -->
+        <div id="mesTempsRayon">
+          <h2 id="departTitreRayon">Jusqu'où sortez-vous de la route ?</h2>
+          <p>Réglez la largeur du couloir. Le compte suit votre réglage : c'est lui qui dit combien de fiches vous aurez à appeler.</p>
+          <input type="range" class="mes-curseur" id="depart-rayon" min="500" max="50000" step="100" value="15000" disabled
+                 aria-label="Rayon autour de la route" aria-describedby="depart-compte" oninput="reglerLeRayon()">
+          <div class="mes-bornes" aria-hidden="true"><span id="depart-borne-min">500 m</span><span id="depart-borne-max">50 km</span></div>
+          <div class="mes-compte" id="depart-compte"></div>
+          <div class="mes-geste">
+            <button type="button" class="mes-btn" id="depart-valider" disabled onclick="validerLeRayon()">Voir la liste</button>
           </div>
         </div>
 
@@ -1529,14 +1626,57 @@ function rendreLaPageInerte(fige){
     .forEach(function(el){ if(el) el.inert = fige; });
 }
 
-// Les deux temps se départagent par `.actif`, jamais par `display` : c'est la
-// pile qui les mesure ensemble, et la carte ne bouge pas d'un pixel entre eux.
-// aria-labelledby suit le temps affiché — c'est son titre que la carte annonce.
+// Les temps se départagent par `.actif`, jamais par `display` : c'est la pile
+// qui les mesure ensemble, et la carte ne bouge pas d'un pixel de l'un à
+// l'autre.
+// aria-labelledby suit le temps affiché : c'est son titre que la carte annonce.
+// LE TITRE SE LIT DANS LE TEMPS OUVERT, il ne se déduit plus d'une comparaison
+// d'identifiants. À deux temps un ternaire suffisait ; à quatre il faudrait une
+// table à tenir à jour, quand chaque temps porte déjà son titre et que ce titre
+// porte déjà un id. Ajouter un cinquième temps ne demande donc rien ici.
 function montrerTemps(id){
   var temps=document.querySelectorAll('#encartDepart .mes-pile > div');
   for(var i=0;i<temps.length;i++) temps[i].classList.toggle('actif', temps[i].id===id);
+  var ouvert=document.getElementById(id);
+  var titre=ouvert?ouvert.querySelector('h2'):null;
   document.getElementById('encartDepart')
-    .setAttribute('aria-labelledby', id==='mesTempsAdresse' ? 'departTitreAdresse' : 'departTitre');
+    .setAttribute('aria-labelledby', (titre&&titre.id)?titre.id:'departTitre');
+}
+
+// L'ENCART EST-IL LEVÉ SUR CE TEMPS-LÀ ? Deux états à réunir, et les deux
+// comptent : un temps peut être l'actif de la pile alors que le voile est
+// retiré, la pile gardant le dernier posé.
+function estOuvert(id){
+  var voile=document.getElementById('encartDepart');
+  var temps=document.getElementById(id);
+  return !!(voile&&voile.style.display==='flex'&&temps&&temps.classList.contains('actif'));
+}
+
+// VISER LE GESTE DU TEMPS OUVERT. Sorti de leverEncartDepart, qui en était le
+// seul appelant tant que l'encart ne portait qu'une question : il en a
+// maintenant plusieurs, et passer de l'une à l'autre sans relever le voile doit
+// emmener le clavier avec soi.
+// Le geste visé est le premier de ce temps dans l'ordre de lecture, ce qui met
+// le curseur du rayon devant son bouton : c'est lui qu'on règle, et les flèches
+// du clavier n'ont pas à être cherchées. Un élément désactivé est SAUTÉ, un
+// focus dessus ne prenant pas ; c'est rafraichirLeRayon qui revient viser quand
+// la mesure le libère.
+function viserLeGeste(){
+  var ouvert=document.querySelector('#encartDepart .mes-pile > .actif');
+  var gestes=ouvert?ouvert.querySelectorAll('.mes-btn,.mes-lien,.mes-choix,.mes-curseur'):[];
+  for(var i=0;i<gestes.length;i++){
+    if(gestes[i].offsetParent!==null&&!gestes[i].disabled){ gestes[i].focus(); break; }
+  }
+}
+
+// POSER UN TEMPS ET LE RENDRE ATTEIGNABLE, que le voile soit déjà levé ou non.
+// Les deux cas se rencontrent vraiment : l'abonnée qui vient de cliquer « Me
+// géolocaliser » est devant un encart levé, celle dont l'autorisation était déjà
+// accordée n'a rien vu du tout et le voile monte ici.
+function ouvrirTemps(id){
+  montrerTemps(id);
+  if(estOuvert(id)) viserLeGeste();
+  else leverEncartDepart();
 }
 
 // LEVER ET RETIRER, chacun gardé par son propre état : appelés deux fois de
@@ -1548,16 +1688,9 @@ function leverEncartDepart(){
   document.body.classList.add('mise-en-service');
   rendreLaPageInerte(true);
   // Après l'affichage, et pas avant : un .focus() dans une carte encore en
-  // display:none ne prend pas. Le geste visé est celui du temps ouvert, et
-  // c'est le bouton noir partout où il y en a un. Le repli en .mes-lien n'est
-  // visé que là où le bouton noir manque, c'est-à-dire au seul cas du
-  // navigateur sans API : il n'a rien à retenter, sa relance est en
-  // display:none, et un focus dessus ne prendrait pas.
-  var ouvert=document.querySelector('#encartDepart .mes-pile > .actif');
-  var gestes=ouvert?ouvert.querySelectorAll('.mes-btn,.mes-lien'):[];
-  for(var i=0;i<gestes.length;i++){
-    if(gestes[i].offsetParent!==null){ gestes[i].focus(); break; }
-  }
+  // display:none ne prend pas. Le choix du geste visé est celui de viserLeGeste,
+  // à qui il revient depuis que l'encart porte plus d'une question.
+  viserLeGeste();
 }
 function retirerEncartDepart(){
   var voile=document.getElementById('encartDepart');
@@ -1636,9 +1769,11 @@ function releverPosition(geste){
   if(!navigator.geolocation){ passerAuSecondChemin(DEPART_SANS_API); leverEncartDepart(); return; }
   navigator.geolocation.getCurrentPosition(function(pos){
     poserPosition([pos.coords.latitude,pos.coords.longitude], geste);
-    // L'encart ne se ferme pas : il se retire parce que sa raison d'être vient
-    // de disparaître. La page connaît son point de départ.
-    retirerEncartDepart();
+    // L'ENCART NE SE RETIRE PLUS ICI. Il le faisait quand le point de départ
+    // était tout ce qu'il avait à obtenir ; il en reste deux, et c'est le même
+    // encart qui les conduit. C'est enchainerApresPosition qui décide de son
+    // sort : les temps qui restent, ou le retrait s'il n'y en a aucun.
+    enchainerApresPosition();
   },function(err){
     // Code 1 : bloqué, au site ou à l'appareil, l'API ne dit pas lequel. Codes
     // 2 et 3, ou pas d'err du tout : introuvable, et rien n'est bloqué.
@@ -1705,6 +1840,167 @@ async function ouvrirMiseEnRoute(){
   if(etat==='granted'||(etat===null&&temoinGeo())){ releverPosition(false); return; }
   if(etat==='denied') passerAuSecondChemin(DEPART_BLOQUEE);
   leverEncartDepart();
+}
+
+// ── L'ENCART CONDUIT LA PRÉPARATION ──────────────────────────────────────────
+// LA POSITION OBTENUE, IL ENCHAÎNE. Deux temps restent, et chacun se saute
+// quand sa réponse est déjà connue :
+//   aucun rendez-vous à venir  : rien à préparer, l'encart se retire et la page
+//                                reste utilisable telle quelle ;
+//   un seul                    : la désignation est faite d'office, demander
+//                                serait faire perdre du temps ;
+//   deux ou plus               : la liste paraît, et le clic vaut désignation.
+// UNE DÉSIGNATION DÉJÀ FAITE VAUT AUTANT, d'où qu'elle vienne : l'abonnée dont
+// l'autorisation était déjà accordée n'a vu aucun voile et a pu retenir sa fiche
+// au bouton « Préparer » du panneau avant que le relevé n'aboutisse. On ne la
+// lui redemande pas.
+function enchainerApresPosition(){
+  var rdvs=rdvsAVenir();
+  if(!rdvs.length){ retirerEncartDepart(); return; }
+  if(rdvs.length>1&&!rdvChoisi){ peuplerLesRdvs(rdvs); ouvrirTemps('mesTempsRdv'); return; }
+  // La désignation d'office de renderPanel a normalement déjà posé rdvChoisi au
+  // rendez-vous unique. Elle est refaite ici plutôt que supposée : renderPanel
+  // ne la pose que sur les fiches qu'il liste, et il ne liste rien tant qu'un
+  // couloir occupe #tour-body.
+  if(!rdvChoisi){ designerDepuisEncart(rdvs[0].id); return; }
+  ouvrirLeRayon();
+}
+
+// LES RENDEZ-VOUS À VENIR, DANS L'ORDRE DE LA JOURNÉE. Même source et même
+// épreuve qu'autoShowRdv : une fiche est un rendez-vous si nextActionOf lui
+// rend une action à venir, et rien d'autre ne le dit. Lus dans markers et non
+// dans rdvPanelIds, qui porte aussi les prospects du voisinage.
+// Le tri est celui du panneau, date puis heure comparées en chaînes, l'heure
+// étant déjà défaultée par nextActionOf.
+function rdvsAVenir(){
+  var liste=[];
+  Object.keys(markers).forEach(function(id){
+    var na=nextActionOf(markers[id].card);
+    if(na) liste.push({id:String(id), card:markers[id].card, na:na});
+  });
+  liste.sort(function(a,b){
+    var ka=a.na.date+'T'+a.na.hour, kb=b.na.date+'T'+b.na.hour;
+    return ka<kb?-1:(ka>kb?1:0);
+  });
+  return liste;
+}
+
+// Une ligne par rendez-vous : sa date et son heure d'abord, teintées du type
+// d'action comme au panneau, son nom ensuite. formatRdvDate rend « Mardi 26
+// août · 9h », la même composition que l'infobulle et que le panneau.
+function peuplerLesRdvs(rdvs){
+  document.getElementById('depart-rdvs').innerHTML=rdvs.map(function(r){
+    var st=actionStyle(r.na.type);
+    return '<button type="button" class="mes-choix" onclick="designerDepuisEncart(\''+r.id+'\')">'
+      +'<span class="mes-choix-quand" style="color:'+st.color+'">'+esc(formatRdvDate(r.na.date.slice(0,10),r.na.hour))+'</span>'
+      +'<span class="mes-choix-nom">'+esc(nomsCarte(r.card).titre)+'</span>'
+      +'</button>';
+  }).join('');
+}
+
+// LA DÉSIGNATION VENUE DE L'ENCART. Elle ne bascule pas, à la différence de
+// choisirRdv : dans une liste de choix, recliquer la ligne qu'on vient de
+// choisir n'est pas une annulation. Le bouton « Préparer » du panneau garde la
+// sienne, c'est là qu'on change d'avis.
+// L'ORDRE DES DEUX DERNIÈRES LIGNES COMPTE : couloirSiPret abaisse couloirAffiche
+// en tête de son calcul, et c'est cet état-là que le temps du rayon doit lire
+// pour se poser figé.
+function designerDepuisEncart(id){
+  rdvChoisi=String(id);
+  // Le panneau porte la même désignation : elle vient d'ailleurs, elle s'y voit
+  // pareil. Même garde qu'à choisirRdv, pour la même raison.
+  if(!couloirAffiche) renderPanel();
+  couloirSiPret();
+  ouvrirLeRayon();
+}
+
+// ── LE TEMPS DU RAYON ────────────────────────────────────────────────────────
+// LE RÉGLAGE REPART DU DÉFAUT À CHAQUE PRÉPARATION, et rien n'en garde mémoire :
+// ni localStorage, ni réglage de compte. La journée change, le réglage se refait.
+// C'est clearTourPlan qui le remet, en tête de chaque calcul ; le curseur ne fait
+// que se ranger sur la valeur courante.
+function ouvrirLeRayon(){
+  var curseur=document.getElementById('depart-rayon');
+  if(curseur){
+    // Les bornes viennent des constantes, jamais du balisage : celle du haut
+    // est la largeur à laquelle la route a été mesurée, et un curseur qui irait
+    // au-delà rendrait un compte plafonné sans le dire.
+    curseur.min=COULOIR_MIN_M;
+    curseur.max=COULOIR_MAX_M;
+    curseur.value=COULOIR_M;
+    document.getElementById('depart-borne-min').textContent=fmtEcart(COULOIR_MIN_M);
+    document.getElementById('depart-borne-max').textContent=fmtEcart(COULOIR_MAX_M);
+  }
+  ouvrirTemps('mesTempsRayon');
+  rafraichirLeRayon();
+}
+
+// LE CURSEUR NE FAIT QUE REFILTRER. La mesure au couloir a déjà rangé chaque
+// fiche à sa distance à la route (cf. fichesDuCouloir) : bouger le curseur ne
+// rappelle personne, ne recalcule aucune route, et le compte se refait en
+// parcourant une liste déjà en main.
+function reglerLeRayon(){
+  var curseur=document.getElementById('depart-rayon');
+  COULOIR_M=parseInt(curseur.value,10)||COULOIR_DEFAUT_M;
+  var phrase=phraseDuCompte();
+  document.getElementById('depart-compte').innerHTML=phrase.html;
+  curseur.setAttribute('aria-valuetext', phrase.texte);
+}
+
+// LES DEUX ÉTATS DU TEMPS DU RAYON : la route se mesure encore, ou elle est
+// mesurée. Le rayon n'est pas un cercle autour du départ, c'est un écart à la
+// ROUTE : tant qu'elle n'est pas connue, aucun compte n'est vrai et AUCUN N'EST
+// AVANCÉ. Le curseur est alors figé, son bouton avec lui, et la ligne dit ce
+// qu'on attend.
+// couloirAffiche EST LE TÉMOIN de la mesure : clearTourPlan l'abaisse en tête de
+// calcul, renderCouloir le lève quand la liste est faite.
+// Appelée aussi quand l'encart est retiré, depuis lancerCouloir : elle n'écrit
+// alors que dans des éléments que personne ne regarde, et ne vise rien.
+function rafraichirLeRayon(){
+  var curseur=document.getElementById('depart-rayon');
+  if(!curseur) return;
+  var pret=couloirAffiche;
+  var etaitFige=curseur.disabled;
+  curseur.disabled=!pret;
+  document.getElementById('depart-valider').disabled=!pret;
+  var phrase=pret?phraseDuCompte():null;
+  document.getElementById('depart-compte').innerHTML=phrase?phrase.html:'Mesure de la route en cours.';
+  if(phrase) curseur.setAttribute('aria-valuetext', phrase.texte);
+  else curseur.removeAttribute('aria-valuetext');
+  // Le geste vient d'être libéré : un focus posé sur lui quand il était figé
+  // n'aurait pas pris, c'est donc ici qu'on le vise, une seule fois, et
+  // seulement si ce temps est celui qui est levé.
+  if(pret&&etaitFige&&estOuvert('mesTempsRayon')) viserLeGeste();
+}
+
+// LE COMPTE, EN TOUTES LETTRES. Des fiches et non des passages : croiser deux
+// fois la même enseigne ne fait pas deux appels à passer (cf. fichesDistinctes).
+// Le rayon est redit dans la même phrase, faute de quoi le nombre ne se
+// rapporterait à rien.
+// DEUX FORMES DE LA MÊME PHRASE, écrites d'un seul jeu de morceaux : celle qui
+// se voit, où le nombre est gras, et celle qui s'entend, que le curseur porte en
+// aria-valuetext. Sans elle, une prise vocale annoncerait « 15 000 », valeur
+// brute qui ne dit ni des mètres ni des fiches.
+function phraseDuCompte(){
+  var n=fichesDistinctes(passagesDuRayon());
+  var tete=n?(n+' fiche'+(n>1?'s':'')):'Aucune fiche';
+  var queue=' à moins de '+fmtEcart(COULOIR_M)+' de la route';
+  return {html:'<b>'+tete+'</b>'+queue, texte:tete+queue};
+}
+
+// LA SORTIE DU DERNIER TEMPS. Le rayon est déjà posé, le curseur l'ayant écrit
+// à chaque pixel ; il ne reste qu'à rendre la liste et à retirer le voile.
+function validerLeRayon(){
+  renderCouloir();
+  retirerEncartDepart();
+}
+
+// LA ROUTE N'A PAS PU SE CALCULER. Il n'y a alors rien à filtrer et rien à
+// régler : l'encart n'a plus à tenir la page, il se retire et laisse le motif
+// se dire au toast. La page reste utilisable telle quelle, le point de départ
+// étant acquis.
+function renoncerAuRayon(){
+  if(estOuvert('mesTempsRayon')) retirerEncartDepart();
 }
 
 // Panel rendering
@@ -1905,11 +2201,23 @@ var couloirTRdv=0;
 // clearTourPlan dit la même chose sans corréler deux variables — startLatLng
 // seul n'aurait pas suffi, il est posé avant que l'itinéraire ne réponde.
 var couloirAffiche=false;
-// Le couloir : 15 km de part et d'autre du trajet. Seuil unique, sans
-// distinction ville/province — celle-ci demanderait une notion que le code n'a
-// pas, et la mesure sur un trajet réel de province rend déjà un nombre de
-// fiches lisible.
-var COULOIR_M=15000;
+// LE COULOIR N'A PLUS DE LARGEUR FIXE. C'était 15 km de part et d'autre du
+// trajet, seuil unique et sans distinction ville/province : la distinction
+// demandait une notion que le code n'a pas, et personne ne pouvait la faire à la
+// place de l'abonnée. C'est elle qui la fait maintenant, au curseur du dernier
+// temps de l'encart, et 15 km n'est plus qu'un point de départ.
+//
+// TROIS VALEURS, ET ELLES NE SERVENT PAS AU MÊME. Le maximum est la largeur à
+// laquelle la ROUTE EST MESURÉE, une fois pour toutes : la mesure est le seul
+// travail coûteux, elle ne se refait pas à chaque pixel du curseur, et tout ce
+// qui tient dans 50 km est donc retenu par fichesDuCouloir. COULOIR_M, lui, est
+// le REGLAGE : il ne fait que refiltrer une mesure déjà en main, ce qui est
+// immédiat et sans appel réseau (cf. passagesDuRayon). Le minimum et le maximum
+// sont ceux du curseur, et le balisage les répète en clair.
+// AUCUNE MÉMOIRE DU RÉGLAGE : COULOIR_M repart du défaut à chaque préparation
+// (cf. clearTourPlan). La journée change, le réglage se refait.
+var COULOIR_MIN_M=500, COULOIR_MAX_M=50000, COULOIR_DEFAUT_M=15000;
+var COULOIR_M=COULOIR_DEFAUT_M;
 // Au-delà de la visio, on n'appelle plus à froid : un rendez-vous est déjà
 // pris, un devis et une négociation sont une relation ouverte, un client gagné
 // ne se rappelle pas pour ça. Un SEUIL sur l'avancement plutôt que la liste des
@@ -1940,6 +2248,10 @@ var COULOIR_FROID_MAX=stageIdx('visio');
 // destination est une désignation de l'abonné, pas un résultat de calcul.
 function clearTourPlan(){
   if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  // Le rayon repart du défaut, ici et nulle part ailleurs : c'est le seul point
+  // par lequel toute préparation passe, celle qui suit « Effacer » comme celle
+  // que l'encart conduit.
+  COULOIR_M=COULOIR_DEFAUT_M;
   trajetMoities=[];
   couloirRdv=null;
   couloirCandidats=[];
@@ -2047,9 +2359,9 @@ function lancerCouloir(){
   fetch(OSRM+'/route/v1/driving/'+d+';'+b+';'+d+'?overview=full&geometries=geojson&steps=false&annotations=duration')
     .then(function(r){return r.json();})
     .then(function(route){
-      if(!route.routes||!route.routes.length){toast('Impossible de calculer l\'itinéraire');return;}
+      if(!route.routes||!route.routes.length){toast('Impossible de calculer l\'itinéraire');renoncerAuRayon();return;}
       var demi=demiTrajet(route.routes[0],[rdv.latlng[1],rdv.latlng[0]]);
-      if(!demi){toast('Impossible de calculer l\'itinéraire');return;}
+      if(!demi){toast('Impossible de calculer l\'itinéraire');renoncerAuRayon();return;}
       // Le tracé précédent a été retiré par clearTourPlan en tête de lancerCouloir.
       routeLine=L.geoJSON({type:'LineString',coordinates:demi.ligne},{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
       trajetMoities=demi.moities;
@@ -2059,6 +2371,10 @@ function lancerCouloir(){
 
       document.getElementById('tour-controls').style.display='';
       renderCouloir();
+      // La route est mesurée : le temps du rayon peut se dégeler et écrire son
+      // compte. Sans effet quand l'encart est retiré, ce qui est le cas de la
+      // seconde voie, le bouton « Préparer » du panneau.
+      rafraichirLeRayon();
 
       // Le panneau s'ouvre parce qu'il a maintenant quelque chose à montrer.
       // Plus de test d'ouverture avant l'appel : ouvrirPanneau est gardée par son
@@ -2069,11 +2385,11 @@ function lancerCouloir(){
       setTimeout(function(){if(routeLine)map.fitBounds(routeLine.getBounds(),{padding:[60,60]});},400);
       // Des fiches, pas des passages : celle qu'on croise deux fois ne se
       // rappelle qu'une.
-      var n=fichesDistinctes(couloirCandidats);
+      var n=fichesDistinctes(passagesDuRayon());
       toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
         +' · '+fmtDuree(Math.round(demi.duration/60))+' de trajet aller-retour');
     })
-    .catch(function(){toast('Erreur de calcul itinéraire');});
+    .catch(function(){toast('Erreur de calcul itinéraire');renoncerAuRayon();});
 }
 
 // ── UNE SEULE ROUTE, PARCOURUE DEUX FOIS ──
@@ -2212,7 +2528,13 @@ function fichesDuCouloir(ligne){
 
   // Comparaison au carré, comme les distances de la boucle : une racine par
   // passage retenu suffit.
-  var seuil2=COULOIR_M*COULOIR_M;
+  // LE SEUIL EST CELUI DU CURSEUR AU PLUS LARGE, jamais le réglage courant : ce
+  // qui est mesuré ici l'est une fois pour toutes, et le curseur ne fait ensuite
+  // que refiltrer cette liste (cf. passagesDuRayon). Mesurer au réglage
+  // obligerait à recalculer la route à chaque pixel. La boucle ne coûte rien de
+  // plus pour autant : elle parcourt les mêmes fiches et les mêmes segments quel
+  // que soit le seuil, seul le nombre de passages retenus change.
+  var seuil2=COULOIR_MAX_M*COULOIR_MAX_M;
   // Le point de la ligne le plus proche porte un temps : celui de son segment,
   // interpolé à l'endroit exact où la fiche vient s'y accrocher.
   function passageDe(mid,card,d2,segment,position,retour){
@@ -2263,18 +2585,33 @@ function fichesDuCouloir(ligne){
   // fiche de l'aller sous elle avec une heure antérieure à la sienne.
   trouvees.sort(function(a,b){return (a.t-b.t)||((a.retour?1:0)-(b.retour?1:0));});
 
-  // UN IDENTIFIANT PAR ÉLÉMENT. Deux passages d'une même fiche font deux
-  // lignes, et deux lignes ne peuvent pas porter le même id : le second
-  // passage prend un suffixe. Le PREMIER garde #sched-<id> nu — c'est la cible
-  // de scrollToStop et du bouton « Voir dans le panneau », qui mènent donc à la
-  // première occasion d'appeler, celle qui vient la première dans la journée.
-  var vus={};
-  trouvees.forEach(function(p){
+  return trouvees;
+}
+
+// ── LE RAYON REFILTRE, IL NE MESURE PAS ──
+// Ce que le curseur commande : les passages de la mesure qui tiennent dans le
+// réglage courant. Aucun calcul de distance ici, elles sont toutes déjà prises ;
+// c'est ce qui permet au compte de suivre le curseur en direct, sans appel
+// réseau ni recalcul de route.
+//
+// UN IDENTIFIANT PAR ÉLÉMENT, ET IL SE POSE ICI. Deux passages d'une même fiche
+// font deux lignes, et deux lignes ne peuvent pas porter le même id : le second
+// passage prend un suffixe. Le PREMIER garde #sched-<id> nu, cible de
+// scrollToStop et du bouton « Voir dans le panneau », qui mènent donc à la
+// première occasion d'appeler, celle qui vient la première dans la journée.
+// La numérotation se fait sur les passages RETENUS et non sur la mesure entière :
+// numérotés avant le filtre, un passage écarté aurait emporté l'identifiant nu
+// avec lui et la fiche serait devenue inatteignable.
+function passagesDuRayon(){
+  var vus={}, retenus=[];
+  couloirCandidats.forEach(function(p){
+    if(p.ecart>COULOIR_M) return;
     var n=(vus[p.id]||0)+1;
     vus[p.id]=n;
     p.dom='sched-'+p.id+(n>1?'--'+n:'');
+    retenus.push(p);
   });
-  return trouvees;
+  return retenus;
 }
 
 // Le compteur dit des FICHES, pas des passages : croiser deux fois la même
@@ -2347,23 +2684,28 @@ function proRata(px,py,debut,fin,total){
 // journée, et c'est de son heure que toutes les autres se déduisent — et elle
 // coupe toute série d'ex æquo en cours, une heure de l'aller et une heure du
 // retour ne se rattachant jamais l'une à l'autre.
+// CE QUI SE REND EST CE QUE LE RAYON RETIENT, pas la mesure entière : celle-ci
+// va jusqu'au maximum du curseur et sert de réserve au réglage (cf.
+// passagesDuRayon). Relu à chaque rendu, si bien qu'un rayon changé se rend sans
+// que rien ne soit recalculé.
 function renderCouloir(){
   if(!couloirRdv) return;
 
+  var retenus=passagesDuRayon();
   var html='', posee=false, precedente=null;
-  couloirCandidats.forEach(function(c){
+  retenus.forEach(function(c){
     if(!posee&&c.retour){ html+=ligneRendezVous(); posee=true; precedente=null; }
     var quand=heureDePassage(c.t,c.retour)||fmtDuree(Math.round(c.t/60));
     html+=ligneCandidat(c,quand,quand===precedente);
     precedente=quand;
   });
   if(!posee) html+=ligneRendezVous();
-  if(!couloirCandidats.length){
-    html+='<div style="padding:16px 8px;text-align:center;color:var(--muted2);font-size:11px">Aucune fiche à moins de '+(COULOIR_M/1000)+' km de la route</div>';
+  if(!retenus.length){
+    html+='<div style="padding:16px 8px;text-align:center;color:var(--muted2);font-size:11px">Aucune fiche à moins de '+fmtEcart(COULOIR_M)+' de la route</div>';
   }
   document.getElementById('tour-body').innerHTML=html;
 
-  var n=fichesDistinctes(couloirCandidats);
+  var n=fichesDistinctes(retenus);
   // Même compte, même endroit unique qu'au panneau RDV : la pastille du bouton
   // « Actions » est partie avec lui.
   document.getElementById('tour-count').textContent=n+' à appeler';

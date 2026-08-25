@@ -1374,11 +1374,13 @@ function toast(msg){
 var startMarker=null;
 var startLatLng=null;
 var routeLine=null;
-// Les deux moitiés de l'aller-retour, telles que le calculateur les rend :
-// [0] l'aller, du départ au rendez-vous, [1] le retour. Ce ne sont plus les
-// tronçons d'une suite d'étapes — il n'y a plus d'étapes — mais les deux
-// versants d'un même voyage, et c'est leur frontière qui dit d'une fiche si
-// elle se trouve sur l'un ou sur l'autre.
+// Les deux moitiés de l'aller-retour : [0] l'aller, du départ au rendez-vous,
+// [1] le retour. Ce ne sont plus les tronçons d'une suite d'étapes — il n'y a
+// plus d'étapes — mais les deux versants d'un même voyage, et c'est leur
+// frontière qui dit d'une fiche si elle se trouve sur l'un ou sur l'autre.
+// Elles ne sont plus celles que le calculateur rend : demiTrajet n'en garde
+// qu'une et la replie, si bien que le retour est l'aller à l'envers, durées
+// de segment comprises.
 var trajetMoities=[];
 // Ce que le dernier calcul a trouvé, gardé pour qu'un changement de durée du
 // rendez-vous se rende sans rappeler personne : la fiche de destination, et les
@@ -1456,26 +1458,28 @@ function calcTour(){
       });
       startMarker=L.marker(startLatLng,{icon:icon,zIndexOffset:2000}).addTo(map);
 
-      // 2. Le trajet : trois points de passage, départ → rendez-vous → départ.
-      // La journée est un aller-retour, pas un aller simple : on revient de son
+      // 2. Le trajet : trois points de passage, départ → rendez-vous → départ,
+      // dont on ne garde QU'UNE MOITIÉ, repliée (cf. demiTrajet). La journée
+      // est un aller-retour, pas un aller simple : on revient de son
       // rendez-vous, et la moitié du chemin qu'on refait porte elle aussi des
       // fiches. annotations=duration donne la durée segment par segment, seule
       // façon de situer une fiche dans le temps du voyage — et donc de dire à
-      // quelle heure on passe devant ; distance ne sert plus à personne depuis
-      // que le résumé kilométrique est tombé.
+      // quelle heure on passe devant ; distance sert ici à départager les deux
+      // sens, elle ne s'affiche nulle part.
       var d=startLatLng[1]+','+startLatLng[0]; // lng,lat pour OSRM
       var b=rdv.latlng[1]+','+rdv.latlng[0];
       fetch(OSRM+'/route/v1/driving/'+d+';'+b+';'+d+'?overview=full&geometries=geojson&steps=false&annotations=duration')
         .then(function(r){return r.json();})
         .then(function(route){
           if(!route.routes||!route.routes.length){toast('Impossible de calculer l\'itinéraire');return;}
-          var parcours=route.routes[0];
+          var demi=demiTrajet(route.routes[0],[rdv.latlng[1],rdv.latlng[0]]);
+          if(!demi){toast('Impossible de calculer l\'itinéraire');return;}
           // Le tracé précédent a été retiré par clearTourPlan en tête de calcTour.
-          routeLine=L.geoJSON(parcours.geometry,{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
-          trajetMoities=parcours.legs||[];
+          routeLine=L.geoJSON({type:'LineString',coordinates:demi.ligne},{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
+          trajetMoities=demi.moities;
 
           couloirRdv={id:String(rdvChoisi),card:rdv.card,latlng:rdv.latlng};
-          couloirCandidats=fichesDuCouloir(parcours.geometry.coordinates);
+          couloirCandidats=fichesDuCouloir(demi.ligne);
 
           document.getElementById('tour-controls').style.display='';
           renderCouloir();
@@ -1490,11 +1494,95 @@ function calcTour(){
           // rappelle qu'une.
           var n=fichesDistinctes(couloirCandidats);
           toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
-            +' · '+fmtDuree(Math.round(parcours.duration/60))+' de trajet aller-retour');
+            +' · '+fmtDuree(Math.round(demi.duration/60))+' de trajet aller-retour');
         })
         .catch(function(){toast('Erreur de calcul itinéraire');});
     })
     .catch(function(){toast('Erreur de géocodage');});
+}
+
+// ── UNE SEULE ROUTE, PARCOURUE DEUX FOIS ──
+// Le calculateur rend deux moitiés CALCULÉES SÉPARÉMENT, et il minimise la
+// DURÉE. Quand deux itinéraires sont à égalité de temps, chaque sens prend le
+// sien et le trajet dessine une BOUCLE au lieu d'un aller-retour. Mesuré sur
+// Mayenne → 15 rue Carnot à Dinan → Mayenne : l'aller passe par Rennes,
+// 153,4 km en 119,7 min ; le retour par Fougères et Pontorson, 134,4 km en
+// 120,9 min. 1,2 minute d'écart décide, 19 km séparent les deux routes, et
+// 93,7 % des nœuds du retour tombent à plus d'un kilomètre de l'aller.
+//
+// Ce n'est PAS un demi-tour refusé au point de passage : `continue_straight`
+// est bien le paramètre du demi-tour, le serveur l'honore, et sur ce trajet il
+// ne change rien — 287,8 km contre 287,7, moitiés identiques, boucle intacte.
+// Aucun paramètre de point de passage ne lie deux moitiés calculées à part.
+//
+// Alors on ne demande plus au calculateur de rentrer : on garde UNE moitié et
+// on la replie. Le retour reprend exactement la route de l'aller, ce que fait
+// un commercial qui rentre chez lui, et le couloir cesse de contourner des
+// fiches qui sont sur le chemin.
+//
+// LA MOITIÉ GARDÉE EST LA PLUS COURTE EN DISTANCE. Les deux sens sont à
+// égalité de temps par construction — c'est cette égalité qui fabrique la
+// boucle — donc la durée ne départage rien ; la distance, si. Sur Dinan, ça
+// garde la route de Fougères : 268,8 km en 241,8 min au lieu des 287,7 km en
+// 240,7 min de la boucle, et les quatre fiches que l'autre moitié écartait
+// (Fougères, et trois à Saint-Malo) restent au couloir.
+//
+// Le repliement rend les deux moitiés EXACTEMENT superposées, ce que la mesure
+// au couloir attend déjà : chaque fiche retenue rend ses deux passages, au même
+// écart, l'un avant le rendez-vous et l'autre après (cf. fichesDuCouloir).
+// L'annotation se replie avec la géométrie, si bien que le contrôle
+// a0.length+a1.length===n de chronoDeLaLigne reste vrai et que iRdv tombe pile
+// au nœud du rendez-vous, au milieu de la ligne.
+//
+// `rdvLngLat` sert au seul repli sans annotation, à trouver le nœud sur lequel
+// replier. Rend null si la réponse ne porte pas de quoi tracer une moitié.
+function demiTrajet(parcours,rdvLngLat){
+  var g=parcours&&parcours.geometry&&parcours.geometry.coordinates;
+  if(!g||g.length<3) return null;
+  var legs=parcours.legs||[];
+  var n=g.length-1;
+  var a0=legs[0]&&legs[0].annotation&&legs[0].annotation.duration;
+  var a1=legs[1]&&legs[1].annotation&&legs[1].annotation.duration;
+  // Où la polyligne concaténée passe d'une moitié à l'autre. L'annotation le
+  // dit exactement. À défaut, c'est le nœud le plus proche du rendez-vous —
+  // même règle que le repli de chronoDeLaLigne, et la seule qui vaille : replier
+  // sur la moitié des segments plierait la ligne à un point quelconque du
+  // chemin, et l'aller n'arriverait pas au rendez-vous.
+  var coupe=0;
+  if(a0&&a1&&a0.length+a1.length===n){
+    coupe=a0.length;
+  } else if(rdvLngLat){
+    var meilleur=Infinity;
+    for(var i=0;i<=n;i++){
+      var ex=g[i][0]-rdvLngLat[0], ey=g[i][1]-rdvLngLat[1], e2=ex*ex+ey*ey;
+      if(e2<meilleur){meilleur=e2;coupe=i;}
+    }
+  }
+  if(coupe<1||coupe>=n) coupe=Math.floor(n/2);
+
+  var d0=legs[0]?legs[0].distance:Infinity;
+  var d1=legs[1]?legs[1].distance:Infinity;
+  var garde0=!(d1<d0);
+  var aller, durees, moitie;
+  if(garde0){
+    moitie=legs[0];
+    aller=g.slice(0,coupe+1);
+    durees=(a0&&a0.length===coupe)?a0.slice():null;
+  } else {
+    // La moitié du retour va du rendez-vous au départ : retournée, elle EST
+    // l'aller. Ses durées de segment se retournent avec elle.
+    moitie=legs[1];
+    aller=g.slice(coupe).reverse();
+    durees=(a1&&a1.length===n-coupe)?a1.slice().reverse():null;
+  }
+  // Le dernier point de l'aller est le rendez-vous : il ne se répète pas.
+  var ligne=aller.concat(aller.slice(0,-1).reverse());
+  var duree=moitie?moitie.duration:0;
+  var distance=moitie?moitie.distance:0;
+  var m0={duration:duree,distance:distance};
+  var m1={duration:duree,distance:distance};
+  if(durees){ m0.annotation={duration:durees}; m1.annotation={duration:durees.slice().reverse()}; }
+  return {ligne:ligne, moities:[m0,m1], duration:duree*2, distance:distance*2};
 }
 
 // ── LA MESURE AU COULOIR ──
@@ -1582,11 +1670,13 @@ function fichesDuCouloir(ligne){
       if(i<chrono.iRdv){ if(d2<mA){mA=d2;segA=i;posA=t;} }
       else { if(d2<mR){mR=d2;segR=i;posR=t;} }
     }
-    // Chaque moitié décide pour elle seule. Une fiche au bord de la route
-    // commune rend ses deux passages ; une fiche sur une variante que le retour
-    // n'emprunte pas n'en rend qu'un. Une moitié vide — géométrie dégénérée,
-    // rendez-vous au premier ou au dernier nœud — laisse son minimum à l'infini
-    // et ne rend rien, sans cas particulier à écrire.
+    // Chaque moitié décide pour elle seule. Les deux se superposant exactement
+    // depuis demiTrajet, une fiche retenue rend TOUJOURS ses deux passages, au
+    // même écart : l'un à l'aller, l'autre au retour. Le test reste écrit deux
+    // fois plutôt qu'une — c'est la mesure qui décide, pas une symétrie qu'on
+    // supposerait. Une moitié vide — géométrie dégénérée, rendez-vous au premier
+    // ou au dernier nœud — laisse son minimum à l'infini et ne rend rien, sans
+    // cas particulier à écrire.
     if(mA<=seuil2) trouvees.push(passageDe(mid,m.card,mA,segA,posA,false));
     if(mR<=seuil2) trouvees.push(passageDe(mid,m.card,mR,segR,posR,true));
   });
@@ -1639,8 +1729,8 @@ function chronoDeLaLigne(px,py,rx,ry){
     iRdv=a0.length;
   } else {
     // À défaut d'annotation, le rendez-vous est le nœud le plus proche de la
-    // fiche : c'est le point de rebroussement, puisque c'est le point de
-    // passage qu'on a demandé.
+    // fiche : c'est le point de rebroussement, celui sur lequel demiTrajet a
+    // replié la ligne.
     iRdv=0;
     var meilleur=Infinity;
     for(var i=0;i<=n;i++){

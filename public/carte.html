@@ -24,6 +24,40 @@
   --blue:#0A66C2;--purple:#4338CA;
   --font:'Geist',-apple-system,'Helvetica Neue',sans-serif;
   --mono:'Geist Mono','SF Mono','Menlo',monospace;
+
+  /* ── LE VÊTEMENT DE LA MISE EN SERVICE ──────────────────────────────────
+     Bloc RECOPIÉ ENTIER de mail.html, qui le tenait déjà de visio.html et de
+     devis.html. La recopie est la pratique établie entre ces pages : une
+     feuille propre au vêtement du produit reste à écrire, et ce lot ne fait
+     que s'y ranger. mup-confirm.css, seule candidate, porte le vêtement des
+     DIALOGUES, et l'encart de mise en service est précisément l'inverse d'un
+     dialogue — il ne se ferme pas sur un geste, il se retire quand sa raison
+     d'être disparaît.
+     LES SIX BANDES DU FILET SONT CELLES DES TROIS AUTRES PAGES, dans le même
+     ordre : c'est le filet du produit, pas celui d'une page. */
+  --mes-fond:#f4f1ea;
+  --mes-carte:#ffffff;
+  --mes-bord:#d9d3c4;
+  --mes-rayon:16px;
+  --mes-surtitre:#8a8579;
+  --mes-titre:#0d0d0b;
+  --mes-corps:#5c574e;
+  --mes-bouton:#0d0d0b;
+  --mes-bouton-rayon:10px;
+  --mes-filet-1:#B84C00;
+  --mes-filet-2:#4338CA;
+  --mes-filet-3:#7C3AED;
+  --mes-filet-4:#0BBCD4;
+  --mes-filet-5:#D97706;
+  --mes-filet-6:#1D8348;
+  /* LA HAUTEUR COMMUNE DES ENCARTS DE MISE EN SERVICE. Valeur recopiée, elle
+     non plus pas choisie ici : elle a été relevée au banc sur les trois cartes
+     existantes, la plus haute étant celle de Devis à 481,39 px, et 490 lui
+     laisse huit pixels de jeu. Posée EN PLANCHER (min-height, cf. .mes-carte)
+     et jamais en taille : une carte plus haute continue de s'allonger. Celle
+     de la Carte est plus courte que ce plancher — c'est ce blanc-là que le
+     flex-grow de .mes-corps distribue. */
+  --mes-hauteur-commune:490px;
 }
 html,body{height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoothing:antialiased;display:flex}
@@ -165,12 +199,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .tour-clear::after{content:'';position:absolute;inset:-9px 0}
 .tour-clear:hover{border-color:var(--red);color:var(--red)}
 
-/* MAP CONTROLS */
-.map-toolbar{position:absolute;top:12px;right:12px;z-index:800;display:flex;gap:6px}
-.map-btn{padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.95);backdrop-filter:blur(10px);font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:6px;transition:all .12s;box-shadow:0 2px 8px rgba(0,0,0,.08)}
-.map-btn:hover{border-color:var(--text)}
-.map-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
-
 /* ----------------------------------------------------------------------------
    LES COMMANDES DE ZOOM — 44px. Leaflet donne 26px à ses deux boutons, 30 si
    le navigateur se déclare tactile (.leaflet-touch) : sous la cible de 44
@@ -179,8 +207,9 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    LE DÉPLACEMENT N'A PAS LIEU. Relevé à 390 : le contrôle occupe (10,66) à
    (44,130), le bouton de tiroir (12,12) à (52,52) — quatorze pixels d'écart,
    aucun croisement. À 1280 le tiroir n'est pas rendu du tout et le contrôle
-   est à (74,10), la barre d'outils à 948px de là. Il n'y a rien à éviter :
-   agrandir suffit, bouger serait un geste sans cause.
+   est à (74,10) ; depuis que la barre d'outils est partie, il n'a plus aucun
+   voisin dans ce coin. Il n'y a rien à éviter : agrandir suffit, bouger serait
+   un geste sans cause.
 
    L'AGRANDISSEMENT NE POUSSE RIEN. Le contrôle vit dans .leaflet-top
    .leaflet-left, un conteneur position:absolute : il est hors flux, sa boîte
@@ -227,11 +256,16 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 /* ----------------------------------------------------------------------------
    LA BARRE DE SAISIE — 44px, EN VISIBLE
    ----------------------------------------------------------------------------
-   Le champ mesurait 32px de haut, le bouton 29 : les deux seules cibles de
-   cette barre étaient sous les 44, et ce sont celles qu'on vise au pouce, en
-   bas d'écran. Ici on agrandit pour de bon, sans pseudo-élément — parce qu'on
-   le peut, et parce qu'un <input> ne rend pas de ::after de toute façon
-   (élément remplacé) : la cible du champ ne pouvait venir que de sa boîte.
+   Le champ mesurait 32px de haut : la seule cible de cette barre était sous
+   les 44, et c'est celle qu'on vise au pouce, en bas d'écran. Ici on agrandit
+   pour de bon, sans pseudo-élément — parce qu'on le peut, et parce qu'un
+   <input> ne rend pas de ::after de toute façon (élément remplacé) : la cible
+   du champ ne pouvait venir que de sa boîte.
+   IL N'Y A PLUS DE BOUTON À CÔTÉ. « Qui est sur la route » est parti : le
+   calcul part de lui-même dès que le point de départ et la destination sont
+   tous deux connus, et la validation du champ se fait à la touche Entrée, ce
+   que le texte de substitution dit. La barre garde sa boîte et sa géométrie :
+   le champ est déjà en flex:1, il prend simplement toute la place.
 
    RIEN NE SE DÉPLACE. .tour-input-bar est en position:absolute, ancrée par
    bottom:16px : elle est hors flux, aucun voisin ne la suit. Relevé à 1280 et
@@ -244,14 +278,12 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    somme qui dépendrait de la fonte — c'est ce qui faisait 32 ici et 34 sur une
    machine où Geist se charge autrement. box-sizing:border-box est global, les
    8px de padding et les bordures sont donc compris dans les 44 ; le texte d'un
-   input et le libellé d'un button se centrent seuls dans ce qui reste.
+   input se centre seul dans ce qui reste.
    -------------------------------------------------------------------------- */
 /* TOUR INPUT BAR */
 .tour-input-bar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:800;display:flex;gap:6px;align-items:center;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;padding:6px 8px;box-shadow:0 4px 20px rgba(0,0,0,.12);width:420px;max-width:calc(100% - 260px)}
 .tour-input{flex:1;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s}
 .tour-input:focus{border-color:var(--text);background:var(--card)}
-.tour-calc-btn{height:44px;padding:8px 16px;border-radius:8px;border:none;background:var(--text);color:#fff;font-family:var(--font);font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .12s}
-.tour-calc-btn:hover{background:#000}
 
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
@@ -267,17 +299,16 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    panneau latéral n'a plus le droit d'occuper le flux.
 
    La zone 641-800px reste hors de ce lot : le panneau y laisse 356 à 456px de
-   carte, étroit mais jamais sans issue — le bouton « Actions » y reste
-   atteignable.
+   carte, étroit mais lisible.
 
    LE PIVOT. .shell.tour-open ne veut plus dire « pousse la carte de 280px »,
-   elle veut dire « le panneau est ouvert ». La classe survit intacte, posée et
-   retirée par le même toggleTourPanel ; seul son effet change. C'est ce qui
-   permet à la feuille de style d'interroger l'état du panneau sans qu'aucune
-   ligne de JS n'ait à poser un état supplémentaire.
+   elle veut dire « le panneau est ouvert ». La classe survit intacte, posée
+   par ouvrirPanneau ; seul son effet change. C'est ce qui permet à la feuille
+   de style d'interroger l'état du panneau sans qu'aucune ligne de JS n'ait à
+   poser un état supplémentaire.
 
-   Conséquence sur invalidateSize (toggleTourPanel, différé de 300ms) : sous ce
-   seuil #map ne change plus de taille au basculement, l'appel devient un
+   Conséquence sur invalidateSize (ouvrirPanneau, différé de 300ms) : sous ce
+   seuil #map ne change plus de taille à l'ouverture, l'appel devient un
    non-événement. Il reste indispensable au-dessus de 640 et n'est pas touché.
    ============================================================================ */
 @media (max-width:640px){
@@ -286,59 +317,30 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   .shell.tour-open{margin-right:0}
 
   /* --------------------------------------------------------------------
-     L'EMPILEMENT. Les trois surfaces carte sont à 800 depuis toujours ;
-     tant que la barre d'outils était hors champ sous ce seuil, personne ne
-     le voyait. Maintenant qu'elle est revenue dans l'écran, deux dettes
-     remontent d'un coup : la barre d'outils se dessine SOUS le panneau
-     (elementFromPoint sur « Ma position » rendait .tour-hdr, sur
-     « Actions » rendait #tour-count), et les trois surfaces passent
-     AU-DESSUS du voile du tiroir de gauche (190), donc cliquables à
-     travers lui.
+     L'EMPILEMENT. Les surfaces carte étaient à 800 depuis toujours, donc
+     AU-DESSUS du voile du tiroir de gauche (190) : elles restaient
+     cliquables à travers lui.
 
      On abaisse les surfaces carte plutôt que de remonter le tiroir : le
      tiroir et son voile sont partagés par toute l'application et vivent
      dans sidebar.css, la Carte est la seule à déborder. Corriger chez soi.
 
+     LA BARRE D'OUTILS ÉTAIT LA TROISIÈME, à 140, entre le bouton de tiroir
+     et le panneau : elle y était pour que « Ma position » et « Actions »
+     restent cliquables panneau ouvert comme fermé. Ces deux boutons sont
+     partis avec elle, et la valeur avec eux — les vingt qui séparaient
+     chaque surface de la suivante laissent la place libre.
+
      Ordre obtenu, du plus haut au plus bas :
        tiroir 200 > voile 190 > bouton de tiroir 150
-         > barre d'outils 140 > panneau 120 > barre de saisie 100
-     140 laisse dix sous le bouton de tiroir et cinquante sous le voile :
-     aucune valeur n'est collée à sa borne, et les vingt qui séparent
-     chaque surface de la suivante laissent de quoi intercaler plus tard.
-     La barre d'outils passe au-dessus du panneau — c'est ce qui rend
-     « Ma position » et « Actions » cliquables panneau ouvert comme fermé.
-     Le toast (9000) et le pied (5) ne sont pas concernés : le premier doit
-     rester au-dessus de tout, le second n'a jamais été en litige.
+         > panneau 120 > barre de saisie 100
+     Aucune valeur n'est collée à sa borne. Le toast (9000) et le pied (5)
+     ne sont pas concernés : le premier doit rester au-dessus de tout, le
+     second n'a jamais été en litige. L'encart de mise en service, lui, vit
+     au-dessus de tout cela (cf. le bloc de la mise en service, plus bas).
      -------------------------------------------------------------------- */
-  .map-toolbar{z-index:140}
   .tour-panel{z-index:120}
   .tour-input-bar{z-index:100}
-
-  /* --------------------------------------------------------------------
-     LA BARRE D'OUTILS, SOLIDAIRE DE LA FENÊTRE. En absolute, elle était
-     accrochée à la boîte de padding du .shell, c'est-à-dire au seul
-     conteneur qui bouge sous ce seuil : hier le margin-right du panneau,
-     aujourd'hui le padding-top:56px du tiroir, demain autre chose. Elle
-     n'a rien à suivre de tout cela — elle se pose sur la fenêtre, comme
-     le bouton de tiroir et pour la même raison.
-
-     La position ne bouge pas d'un pixel : sous ce seuil la boîte de
-     padding du .shell affleure déjà la fenêtre (marge nulle, bordure
-     nulle, et le padding-top ne déplace pas l'origine d'un absolute),
-     donc top:12 / right:12 tombaient exactement là où ils tombent
-     maintenant. Ce qui change n'est pas où la barre est, c'est à quoi
-     elle est accrochée. L'empilement ne bouge pas non plus : .shell est
-     position:relative z-index:auto, il ne crée aucun contexte, le 140
-     ci-dessus se résolvait déjà à la racine.
-
-     HAUTEUR 40. Le bouton de tiroir fait 40 (sidebar.css), les .map-btn
-     faisaient 33 : la rangée haute avait deux hauteurs et se lisait comme
-     deux éléments posés côte à côte. box-sizing:border-box est global,
-     40px est donc la hauteur finale ; les 8px de padding vertical
-     deviennent sans effet et align-items:center recentre le contenu.
-     -------------------------------------------------------------------- */
-  .map-toolbar{position:fixed;top:12px;right:12px}
-  .map-btn{height:40px}
 
   /* --------------------------------------------------------------------
      LA BARRE DE SAISIE, D'UN BORD À L'AUTRE. Elle était centrée par
@@ -348,14 +350,14 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
      carte. Sous ce seuil ce panneau ne pousse plus rien depuis que
      .shell.tour-open ne vaut plus margin-right — la réserve n'a plus de
      source, elle ne doit pas lui survivre. À 390 elle amputait la barre
-     de 260 des 390 disponibles : 130px pour un champ d'adresse et un
-     bouton « Qui est sur la route ».
+     de 260 des 390 disponibles : 130px pour un champ d'adresse.
 
      left:16 / right:16 remplacent le centrage : la largeur devient celle
      de l'écran moins deux marges, sans nombre à tenir à jour. width:auto
      libère les 420, max-width:none la réserve morte, transform:none le
      décalage qui n'a plus rien à compenser. Le champ est déjà en flex:1
-     dans la règle de base : il prend tout ce que le bouton laisse.
+     dans la règle de base : il prend toute la barre, le bouton de calcul
+     étant parti.
 
      PANNEAU OUVERT, LA BARRE DISPARAÎT. Sous ce seuil le panneau est en
      surimpression pleine hauteur : la barre est dessous, entièrement
@@ -367,6 +369,193 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
   .tour-input-bar{left:16px;right:16px;width:auto;max-width:none;transform:none}
   .shell.tour-open .tour-input-bar{display:none}
 }
+
+/* ============================================================================
+   L'ENCART DE MISE EN SERVICE — LE POINT DE DÉPART
+   ----------------------------------------------------------------------------
+   Le vêtement est celui de Mail, de Visio et de Devis, recopié : voile, carte,
+   filet de six bandes, corps, pied. Rien n'est réinventé ici — ce qui suit ne
+   contient que ce que la Carte porte EN PROPRE, et chaque écart au patron est
+   dit à sa place.
+
+   CE QUE L'ENCART EST. Pas un dialogue : il ne se ferme sur aucun geste. Il
+   paraît parce que la Carte ne sait pas d'où part sa journée, et il se retire
+   parce qu'elle vient de l'apprendre. Une fois l'autorisation de géolocalisation
+   accordée, il ne revient plus : c'est le navigateur qui s'en souvient, pas
+   nous (cf. ouvrirMiseEnRoute).
+
+   IL PARAÎT APRÈS LES FICHES, jamais avant : l'abonnée voit d'abord que sa
+   carte est peuplée. C'est finish() qui l'appelle, une fois le flux écoulé.
+   ============================================================================ */
+.mes-voile{
+  position:fixed;top:0;right:0;bottom:0;left:var(--sidebar-w);
+  z-index:var(--mupz-dialogue,50000);
+  background:rgba(13,13,11,.55);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;overflow-y:auto;
+}
+/* --mupz-dialogue VIENT DE mup-confirm.css, QUE CETTE PAGE NE CHARGE PAS : la
+   Carte n'a aucun dialogue de confirmation. C'est donc la valeur de repli qui
+   s'applique, 50000, et elle est la même que celle du jeton. Les trois autres
+   pages écrivent la même déclaration en chargeant la feuille ; l'écrire ici
+   sans elle ne change ni le nombre obtenu ni le rang de l'encart dans la pile,
+   et le jour où la Carte chargera mup-confirm.css elle en héritera sans qu'on
+   ait rien à toucher.
+   LE VOILE PART DE --sidebar-w : il s'arrête au rail, qui n'est donc jamais
+   recouvert au-dessus de 640 px. En dessous, --sidebar-w vaut 0 et le voile
+   reprend tout l'écran ; c'est là, et là seule, que le rail remonte (cf. la
+   media query en fin de bloc). --sidebar-w est la largeur EFFECTIVE du rail :
+   sidebar.css la pose et la fait varier par ses trois paliers, et c'est bien
+   elle qui commande, la règle .sidebar de cette page étant dominée par
+   aside#sidebar.sidebar de sidebar.css. */
+.mes-carte{
+  background:var(--mes-carte);border:1px solid var(--mes-bord);
+  border-radius:var(--mes-rayon);overflow:hidden;
+  width:100%;max-width:600px;max-height:calc(100vh - 48px);
+  /* LE PLANCHER COMMUN AUX PAGES QUI PORTENT UN ENCART (cf.
+     --mes-hauteur-commune). En min-height et JAMAIS en height : une carte plus
+     haute que le plancher continue de s'allonger, et le max-height ci-dessus la
+     rogne comme partout ailleurs. LE PLANCHER NE PASSE JAMAIS AU-DESSUS DU
+     PLAFOND, et c'est ce que min() garantit : posé nu, il l'emporterait sur le
+     max-height dès que la fenêtre descend sous 538 px de haut, la règle de CSS
+     donnant le dernier mot au minimum — la carte tiendrait 490 px dans un voile
+     plus court, et comme le voile CENTRE ce qu'il porte, son haut passerait
+     au-dessus de lui sans qu'aucun défilement puisse l'y ramener. */
+  min-height:min(var(--mes-hauteur-commune), calc(100vh - 48px));
+  display:flex;flex-direction:column;
+  box-shadow:0 24px 60px rgba(13,13,11,.28);
+}
+/* Six bandes de 12 px dans leur ordre, écrites une seule fois : ce sont des
+   arrêts de dégradé, pas six éléments à poser dans le balisage. */
+.mes-filet{
+  height:12px;flex-shrink:0;
+  background:linear-gradient(90deg,
+    var(--mes-filet-1) 0 16.6667%,        var(--mes-filet-2) 16.6667% 33.3333%,
+    var(--mes-filet-3) 33.3333% 50%,      var(--mes-filet-4) 50% 66.6667%,
+    var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
+}
+/* LE BLANC EN TROP VA AU CORPS, PUIS LE CORPS LE RÉPARTIT. Même situation que
+   Mail, et donc même règle : cette carte est courte — un titre, une phrase, un
+   bouton — et le plancher de 490 px lui donne du blanc à placer. Sans flex-grow
+   ce blanc tombait SOUS le pied, qui se mettait à flotter au milieu de la
+   carte ; sans justify-content il s'accumulait sous le bouton. Le contenu se
+   pose donc au milieu, ce blanc se partageant en deux parts égales.
+   ÇA NE MONTE PAS DANS UNE RÈGLE PARTAGÉE : les cartes de Devis et de Visio
+   n'ont presque pas de blanc à placer et leur contenu doit rester EN HAUT. Ce
+   centrage est la conséquence d'un corps court, pas une pièce du vêtement.
+   « safe center » ET NON « center » NU : sur fenêtre courte le plancher
+   s'abaisse au plafond et le contenu finit par dépasser la hauteur du corps ;
+   « center » nu pousserait alors le titre AU-DESSUS du corps, hors d'atteinte
+   du défilement, quand « safe » retombe en haut dès qu'il y a débordement. Le
+   « center » nu qui précède est le repli des navigateurs qui ignorent le
+   mot-clé. */
+.mes-corps{
+  padding:30px 34px 26px;overflow-y:auto;flex-grow:1;
+  display:flex;flex-direction:column;
+  justify-content:center;justify-content:safe center;
+}
+/* LA PILE DES DEUX TEMPS, comme chez Visio et chez Devis. Les deux temps se
+   remplacent au même endroit : ils y sont posés ensemble, tous deux mesurés, et
+   la carte garde la hauteur du plus long quel que soit celui qui paraît — elle
+   ne bouge donc pas d'un pixel quand la géolocalisation échoue. C'est `.actif`
+   qui les départage, jamais `display`. */
+.mes-pile{display:grid}
+.mes-pile > *{grid-area:1 / 1;visibility:hidden}
+.mes-pile > .actif{visibility:visible}
+.mes-carte h2{
+  font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.15;
+  color:var(--mes-titre);margin-bottom:16px;
+}
+.mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
+.mes-carte p + p{margin-top:12px}
+/* LE GESTE EST DANS LE CORPS, sous la phrase qui le justifie : c'est ce que
+   l'encart PROPOSE, pas une des deux issues symétriques d'un formulaire. Même
+   place que chez Mail, et pour la même raison. */
+.mes-geste{margin-top:24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+/* LE BOUTON NOIR, ET IL EST À SA PLACE ICI. Chez Mail il ne l'était pas parce
+   que son bouton EMMÈNE AILLEURS, chez Microsoft ; celui-ci ne quitte pas la
+   page — il TERMINE la mise en service, comme « Enregistrer » chez Devis et
+   « Ajouter un document » chez Visio. Règle recopiée de devis.html. */
+.mes-btn{
+  background:var(--mes-bouton);color:#fff;border:none;
+  padding:11px 20px;border-radius:var(--mes-bouton-rayon);
+  font-family:var(--font);font-size:13px;font-weight:700;
+  flex-shrink:0;cursor:pointer;
+}
+.mes-btn:hover{background:#000}
+/* La seconde voie, quand elle en a une, se donne en texte : c'est un
+   rattrapage, pas un geste de même poids que le bouton. Recopié de visio.html,
+   où .mes-lien tient déjà ce rôle. */
+.mes-lien{
+  background:none;border:none;padding:0;
+  font-family:var(--font);font-size:12.5px;font-weight:600;
+  color:var(--mes-corps);text-decoration:underline;text-underline-offset:3px;
+  cursor:pointer;
+}
+.mes-lien:hover{color:var(--mes-titre)}
+.mes-btn:focus-visible,.mes-lien:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
+/* LE PIED, VIDE, RECOPIÉ DE MAIL SANS RIEN Y CHANGER. Ce qu'il porte ici n'est
+   pas un contenu, c'est le trait de séparation et la bande de fond qui
+   terminent la carte comme sur les trois autres pages, plus les 33 px que son
+   remplissage et ce trait pèsent, et que le flex-grow du corps ne distribue
+   donc pas. Les deux sorties de l'encart sont dans le CORPS : celle qui
+   géolocalise parce que c'est le geste proposé, celle qui renvoie au champ
+   d'adresse parce qu'elle n'apparaît qu'au second temps et qu'un pied dont le
+   contenu change ferait varier sa hauteur d'un temps à l'autre.
+   justify-content:space-between EST DÉLIBÉRÉ ET NE REND RIEN AUJOURD'HUI : un
+   conteneur flex sans aucun enfant n'a rien à répartir. Il est posé pour que la
+   règle reste MOT POUR MOT celle de Mail et de Visio. QUE CETTE LIGNE RESTE :
+   sans cette note, un relecteur la croira inutile et la retirera, et la copie
+   divergera de l'original le jour où le premier enfant arrivera. */
+.mes-pied{
+  border-top:1px solid var(--mes-bord);background:var(--mes-fond);
+  padding:16px 34px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:16px;flex-wrap:wrap;
+}
+
+/* —— LA PAGE, DERRIÈRE ——
+   Le document ne défile déjà pas : html,body{overflow:hidden} est posé en tête
+   de cette feuille. Le seul panneau qui défile en dedans est la liste du
+   trajet ; c'est LUI qu'on arrête. L'inertie du pointeur et du focus, elle, est
+   posée en JS sur .shell et le pied applicatif (rendreLaPageInerte), jamais sur
+   le rail — et c'est cette inertie qui coupe aussi la carte Leaflet, qui vit
+   dans .shell : plus de glissé, plus de molette, plus de clic sur un marqueur.
+   `inert` n'arrête PAS le défilement d'une boîte, d'où la ligne ci-dessous. */
+body.mise-en-service .tour-body{overflow:hidden}
+
+/* LE TOAST PASSE DEVANT L'ENCART, et il le faut : les refus du champ d'adresse
+   (« Adresse introuvable », « Saisir une adresse de départ ») se disent par
+   toast, et l'encart renvoie précisément à ce champ. Enfoui derrière le voile,
+   ce motif ne serait jamais lu. Le sélecteur est plus spécifique que .toast,
+   qui vit dans cette même feuille au-dessus. */
+body.mise-en-service .toast{z-index:50100}
+
+/* —— LE RAIL, DEVANT, EN TIROIR SEULEMENT ——
+   Un encart de mise en service tient une PAGE, jamais l'application : l'abonnée
+   qui ouvre la Carte sans vouloir y définir son point de départ doit pouvoir en
+   repartir. Le rail est donc laissé hors de rendreLaPageInerte.
+   Au-dessus de 640 px le voile part de --sidebar-w et n'atteint pas le rail. En
+   dessous, --sidebar-w vaut 0, le voile reprend tout l'écran, et le bouton qui
+   ouvre le tiroir — la seule sortie à cette largeur — doit rester atteignable.
+   On remonte la bande du rail au-dessus du voile en conservant son ordre
+   interne (bouton < scrim < rail) et en restant sous le consentement (60000).
+   Ces trois valeurs sont celles de Mail, de Visio et de Devis. */
+@media (max-width:640px){
+  body.mise-en-service #sb-drawer-toggle{z-index:50150}
+  body.mise-en-service #sb-drawer-scrim{z-index:50190}
+  body.mise-en-service aside#sidebar.sidebar{z-index:50200}
+}
+
+/* Le consentement passe DEVANT la mise en service, comme dans les trois autres
+   pages. L'encart ne se retire qu'à l'une de ses deux sorties : un bandeau
+   enfoui derrière lui resterait inatteignable aussi longtemps.
+   Sélecteurs qualifiés par body : cookies-banner.css est chargée APRÈS ce bloc
+   et gagnerait l'égalité de spécificité par l'ordre. Écrit ici, dans la page
+   qui pose l'encart, la feuille partagée n'est pas touchée. */
+body #mup-cookie-banner{z-index:60000}
+body #mup-cookie-panel{z-index:60001}
 </style>
   <link rel="stylesheet" href="/styles/app-footer.css">
   <link rel="stylesheet" href="/styles/cookies-banner.css">
@@ -381,17 +570,12 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <div class="shell">
   <div id="map"></div>
 
-  <div class="map-toolbar">
-    <button class="map-btn" id="btn-locate" onclick="locateUser()">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
-      Ma position
-      <span id="locate-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#22c55e;animation:pulse 2s ease-out infinite;flex-shrink:0"></span>
-    </button>
-    <button class="map-btn" id="btn-tour" onclick="toggleTourPanel()">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-      Actions <span id="tour-badge" style="display:none;font-size:9px;font-weight:800;background:#fff;color:var(--text);border-radius:4px;padding:1px 5px;margin-left:2px">0</span>
-    </button>
-  </div>
+  <!-- LA BARRE D'OUTILS N'EST PLUS. Elle portait « Ma position » et
+       « Actions », et la pastille de compte qui vivait dans le second. La
+       géolocalisation est passée dans l'encart de mise en service ; le panneau
+       s'ouvre de lui-même dès qu'il a quelque chose à montrer ; et le compte de
+       fiches se lit dans #tour-count, à l'en-tête du panneau, où il était déjà
+       écrit en toutes lettres. -->
 
   <div class="tour-panel" id="tour-panel">
     <div class="tour-hdr">
@@ -421,8 +605,78 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
   <div class="tour-input-bar">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    <input class="tour-input" id="tour-start-addr" placeholder="Adresse de départ (ex: Rennes, 35)" onkeydown="if(event.key==='Enter')calcTour()">
-    <button class="tour-calc-btn" onclick="calcTour()">Qui est sur la route</button>
+    <!-- LA SECONDE VOIE VERS LE POINT DE DÉPART, et l'encart y renvoie
+         nommément quand la géolocalisation se refuse. Plus de bouton à côté :
+         « Qui est sur la route » est parti, le calcul se lance de lui-même dès
+         que le départ ET la destination sont connus. Entrée reste la validation
+         du champ, et le texte de substitution le dit — sans lui, le champ
+         n'aurait plus rien qui annonce comment on le valide. -->
+    <input class="tour-input" id="tour-start-addr" placeholder="Adresse de départ (ex : Rennes, 35), puis Entrée" onkeydown="if(event.key==='Enter')departDepuisAdresse()">
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     L'ENCART DE MISE EN SERVICE — LE POINT DE DÉPART DE LA JOURNÉE
+
+     HORS DU SHELL, et il le faut : rendreLaPageInerte rend .shell inerte, et
+     l'encart qui y vivrait le deviendrait avec lui. Même place que chez Mail,
+     chez Visio et chez Devis, et pour la même raison.
+
+     UN ENCART, DEUX TEMPS, DANS UNE PILE. Le premier propose la
+     géolocalisation. Le second paraît quand elle ne peut pas aboutir — refusée,
+     bloquée au navigateur, ou introuvable — et renvoie au champ d'adresse, qui
+     est la seconde voie vers le même point de départ. La carte ne change pas de
+     taille entre les deux : c'est ce que la pile garantit.
+
+     IL NE SE FERME SUR AUCUN GESTE au premier temps : ni Échap, ni clic au
+     fond, ni croix — il n'en a pas. Il se retire quand sa raison d'être
+     disparaît, c'est-à-dire quand le point de départ est connu. Au SECOND
+     temps il en a une, et c'est une obligation : refuser la géolocalisation ne
+     doit pas fermer la page, et laisser l'abonnée devant un bouton qui ne
+     répond plus serait exactement cela.
+     ══════════════════════════════════════════════════════════════ -->
+<div class="mes-voile" id="encartDepart" style="display:none" role="dialog" aria-labelledby="departTitre">
+  <div class="mes-carte">
+    <div class="mes-filet" aria-hidden="true"></div>
+
+    <div class="mes-corps">
+      <div class="mes-pile">
+
+        <!-- PREMIER TEMPS : LA GÉOLOCALISATION. -->
+        <div id="mesTempsGeo" class="actif">
+          <h2 id="departTitre">Optimisez vos déplacements</h2>
+          <p>Afin de rentabiliser vos déplacements, définissez votre point de départ en vous géolocalisant lorsque vous êtes sur MovUP.</p>
+          <div class="mes-geste">
+            <button type="button" class="mes-btn" id="depart-geolocaliser" onclick="releverPosition(true)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="vertical-align:-2px;margin-right:6px"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>Me géolocaliser
+            </button>
+          </div>
+        </div>
+
+        <!-- SECOND TEMPS : LA SECONDE VOIE. Le titre y est le MÊME, et c'est
+             voulu : c'est le même encart et la même promesse — seul le chemin
+             pour y parvenir a changé. Il porte son propre id, aria-labelledby
+             suivant le temps affiché (cf. montrerTemps).
+             #depart-cause est écrit en JS et dit CE QUI a échoué : un refus, un
+             blocage, une position introuvable et un navigateur sans API ne se
+             rattrapent pas de la même façon.
+             « Réessayer » ne paraît que si la cause se retente : sur un refus,
+             un bouton qui rappellerait le navigateur sans que rien n'ait changé
+             serait un second bouton mort. -->
+        <div id="mesTempsAdresse">
+          <h2 id="departTitreAdresse">Optimisez vos déplacements</h2>
+          <p id="depart-cause"></p>
+          <p>Le champ d'adresse, en bas de la carte, mène au même point de départ : saisissez la ville d'où vous partez, puis Entrée.</p>
+          <div class="mes-geste">
+            <button type="button" class="mes-btn" id="depart-adresse" onclick="allerAuChampAdresse()">Saisir mon adresse de départ</button>
+            <button type="button" class="mes-lien" id="depart-reessayer" style="display:none" onclick="releverPosition(true)">Réessayer</button>
+          </div>
+        </div>
+
+      </div><!-- .mes-pile -->
+    </div>
+
+    <div class="mes-pied"></div>
   </div>
 </div>
 
@@ -716,21 +970,16 @@ function nomsCarte(c){
 }
 var markers={}; // id -> {marker, card, latlng}
 var rdvPanelIds=[]; // ids shown in RDV panel
-// Une fermeture du panneau est un geste, pas un état de passage : autoShowRdv
-// est rappelée à chaque retour d'onglet (agenda-sync : storage,
-// visibilitychange, focus) et ne consultait que l'ouverture courante, donc
-// rouvrait ce qui venait d'être fermé. Posé par toggleTourPanel, jamais remis
-// à faux : un rechargement de page est la seule remise à zéro légitime.
-var rdvPanelDismissed=false;
 // La fiche que l'abonné retient : la destination de sa journée, celle vers
 // laquelle le trajet se calcule et depuis laquelle il revient. Le calcul de
 // trajet prenait jusqu'ici la première fiche à action à venir que lui rendait
 // /api/pipeline, c'est-à-dire un ordre que personne ne décide. Plus de premier
-// venu : null vaut « aucun choix », et calcTour s'arrête là en le disant.
-// renderPanel désigne d'office quand il n'y a qu'un candidat.
+// venu : null vaut « aucun choix », et le calcul ne part pas tant qu'il dure —
+// couloirSiPret le garde, en silence, puisque la désignation est à portée de
+// clic dans le panneau. renderPanel désigne d'office quand il n'y a qu'un
+// candidat.
 var rdvChoisi=null;
 var userLatLng=null;
-var watchId=null;
 var userMarker=null;
 var proximityCircles=[]; // array of L.circle
 
@@ -788,19 +1037,25 @@ map.on('click',function(){
 //
 // Règle : une vue demandée prime, le cadrage global est son repli.
 //
-// Demandée par l'URL, ou demandée à la main : le premier relevé de « Ma position »
-// recentre sur l'abonnée, et ce clic est une intention aussi explicite qu'un
-// ?fiche= — la même fenêtre non bornée le sépare de finish(), vue depuis l'autre
-// bout. Un finish() tardif rendait ce recentrage à la France entière. Le premier
-// relevé passe donc par le même arbitre. Lui seul : depuis 028f025, les relevés
-// suivants ne touchent plus à la vue, et n'ont donc aucun drapeau à poser.
+// Demandée par l'URL, ou demandée par un geste : le relevé de position que
+// l'abonnée réclame au bouton de l'encart recentre sur elle, et ce geste est une
+// intention aussi explicite qu'un ?fiche= — la même fenêtre non bornée le sépare
+// de finish(), vue depuis l'autre bout. Un finish() tardif rendait ce recentrage
+// à la France entière. Le relevé demandé passe donc par le même arbitre.
+//
+// LE RELEVÉ PRIS D'OFFICE NE DEMANDE RIEN, et se range de lui-même. Quand
+// l'autorisation était déjà accordée, la page se localise sans que personne l'ait
+// réclamé : poserPosition ne l'envoie à cadrerSur QUE SI aucune vue n'a été
+// demandée. C'est le seul appelant de l'arbitre qui s'interroge avant d'appeler,
+// et il le faut : un ?fiche= perdrait sinon sa fiche au profit d'un recentrage
+// que l'abonnée n'a pas demandé.
 //
 // Le drapeau se pose quand la vue demandée est EFFECTIVEMENT appliquée, jamais à
-// la lecture du paramètre ni au clic. Une cible introuvable ou sans coordonnées
+// la lecture du paramètre ni au geste. Une cible introuvable ou sans coordonnées
 // exploitables ne doit pas supprimer le cadrage global sans le remplacer : ce
 // serait laisser l'abonnée sur la carte de France du zoom 5, sans marqueur visé
-// ni cadrage. Un suivi allumé qui n'a encore rien relevé ne le supprime pas
-// davantage.
+// ni cadrage. Un relevé qui n'aboutit pas ne le supprime pas davantage : il
+// n'atteint jamais cadrerSur.
 //
 // L'arbitrage vaut dans les deux sens d'arrivée. Vue demandée d'abord : le
 // drapeau retient le fitBounds. Cadrage global d'abord : la vue demandée
@@ -895,6 +1150,77 @@ function placeCard(c, clat, clng){
   markers[String(c.id)]={marker:m,card:c,latlng:[clat,clng]};
 }
 
+// ── LA POSE EN FLUX ──────────────────────────────────────────────────────────
+// Les fiches se révèlent progressivement au lieu de paraître d'un bloc. La
+// mécanique est celle de la Prospection, reprise et non réinventée : une boucle
+// séquentielle qui rend un PAQUET puis attend, `await sommeil(...)` entre deux
+// paquets (prospection.html, runAutoRoll / renderChunk / sleep). Le paquet vaut
+// 25, comme son PAGE_SIZE.
+//
+// LA CADENCE, ELLE, N'EST PAS LA SIENNE, et c'est le seul écart. Les 260 ms de
+// Prospection cadencent un FLUX D'API — ils tiennent le déroulement sous le
+// limiteur d'Etalab, et son propre commentaire le dit. Ici il n'y a aucun
+// réseau à ménager : les fiches viennent de la base et portent déjà leurs
+// coordonnées. La cadence n'a plus qu'un travail, se laisser voir, et 40 ms —
+// une révélation tous les deux à trois rafraîchissements — suffit. Un
+// portefeuille de 480 fiches se pose en 0,76 s, un de 2 000 en 3,2 s.
+//
+// ── CE QUI A ÉTÉ MESURÉ, ET POURQUOI CE CHOIX ────────────────────────────────
+// La Carte verse ses marqueurs dans une bibliothèque de REGROUPEMENT, ce que la
+// Prospection ne fait pas. La crainte est légitime : chaque addLayer lui fait
+// recompter ses pastilles, et révéler en flux semblait multiplier ce travail.
+// Trois voies étaient ouvertes, et elles ont été mesurées avant d'être
+// départagées — Chrome 152 sans tête, mêmes versions de Leaflet et de
+// MarkerCluster que celles chargées en tête, mêmes options de groupe
+// (maxClusterRadius 30, mêmes paliers d'icône), portefeuille synthétique
+// déterministe de 12 pôles français, 35 % de fiches strictement confondues en
+// ville et 15 % isolées, carte de 1 280 × 720 au zoom 6. Trois tirs par taille,
+// médiane retenue. Chaque relevé compte AUSSI les appels à iconCreateFunction,
+// c'est-à-dire les pastilles effectivement redessinées.
+//
+//   sur 2 000 fiches      cumul     pire paquet   pastilles redessinées
+//   pose en bloc (avant)  178,9 ms    178,9 ms          3 628
+//   une par une           213,6 ms      8,7 ms          3 628
+//   paquets de 25         184,8 ms      4,2 ms          3 628
+//   hors groupe, versé    102,6 ms     18,5 ms             94  (+76,8 ms au versement)
+//
+// (sur 480 fiches : 41,3 / 39,4 / 37,2 / 18,8 ms de cumul, et 804 pastilles
+// pour les trois premières contre 26 pour la quatrième.)
+//
+// CE QUE LA MESURE TRANCHE, ET CE QU'ELLE DÉMENT. Le nombre de pastilles
+// redessinées est EXACTEMENT celui que la pose en bloc paie déjà, aux trois
+// tirs et aux deux tailles. C'est que la pose en bloc n'a jamais été un versement
+// groupé : elle appelle placeCard, donc addLayer, fiche par fiche, dans une
+// boucle. Découper cette boucle en paquets ne fait qu'y intercaler des attentes ;
+// la bibliothèque, elle, voit la même suite d'ajouts. La révélation progressive
+// ne coûte donc AUCUN recalcul de plus, et le cumul ne bouge pas non plus
+// (184,8 contre 178,9 ms, sous le bruit des tirs). Ce qui change est ailleurs :
+// 178,9 ms d'affilée où rien ne répond deviennent 4,2 ms au pire, sur les 40 ms
+// de l'intervalle.
+// Une par une est écartée pour ce qu'elle demande de TEMPS D'ÉCRAN, pas pour son
+// coût : 2 000 fiches sont 2 000 attentes, quatre-vingts secondes de révélation.
+// Hors groupe puis versé à la fin est écartée pour ce qu'elle MONTRE : 94
+// pastilles au lieu de 3 628, c'est vrai, et le cumul le plus bas des quatre,
+// mais au prix de 2 000 marqueurs superposés pendant toute la révélation —
+// l'empilement que le regroupement existe précisément pour défaire — puis d'une
+// réorganisation de 76,8 ms d'un seul bloc à la fin, la plus longue de tout le
+// banc. Les chiffres ne changeraient plus sous les yeux : c'est toute la carte
+// qui changerait, d'un coup.
+// RESTE LES PAQUETS DE 25. Les chiffres montent par pas de vingt-cinq, ce qui
+// se lit comme un compteur qui se remplit, pas comme un tremblement.
+var PAQUET_FLUX=25;
+var CADENCE_FLUX=40;
+function sommeil(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+async function revelerEnFlux(poses){
+  for(var i=0;i<poses.length;i+=PAQUET_FLUX){
+    var fin=Math.min(i+PAQUET_FLUX,poses.length);
+    for(var j=i;j<fin;j++) placeCard(poses[j].c, poses[j].lat, poses[j].lng);
+    // Pas d'attente après le dernier paquet : rien ne suit qu'elle retarderait,
+    // et c'est finish() qui attend derrière.
+    if(fin<poses.length) await sommeil(CADENCE_FLUX);
+  }
+}
+
 (async function(){
   var cards = [];
   try {
@@ -917,13 +1243,12 @@ function placeCard(c, clat, clng){
     }
   });
 
-  // a. Placement direct des cartes déjà résolues — AUCUN appel réseau. Chacune
-  //    est posée à SA coordonnée, sans décalage : le déstackage des points
-  //    confondus est le travail du regroupement (cf. REGROUPEMENT DES FICHES).
-  withStored.forEach(function(s){ placeCard(s.c, s.lat, s.lng); });
-
   var addrs=Object.keys(addrMap);
   var pending=addrs.length;
+  // La pose en flux n'est pas instantanée : finish() ne peut pas tomber avant
+  // qu'elle ait fini, sans quoi son fitBounds cadrerait sur les seules fiches
+  // déjà posées. Deux conditions, donc, et un témoin pour la seconde.
+  var fluxTermine=false;
 
   // ── RÉCEPTEUR DE ?fiche= ──
   // Le Dashboard émet ce lien depuis 77b44ad (« Voir sur la carte → »), en
@@ -981,6 +1306,12 @@ function placeCard(c, clat, clng){
     ficheGroupe.zoomToShowLayer(info.marker, function(){ info.marker.openPopup(); });
   }
 
+  // Les deux chargements convergent ici : les géocodages, comptés par pending,
+  // et la pose en flux, dite par fluxTermine. Le dernier des deux à retomber
+  // déclenche finish, et lui seul — la garde est symétrique, l'ordre d'arrivée
+  // n'a pas à être connu.
+  function tenterFinish(){ if(fluxTermine && pending<=0) finish(); }
+
   function finish(){
     // Le récepteur passe en premier : il lui faut tous les marqueurs posés,
     // donc finish, et la ligne suivante lui doit sa décision.
@@ -992,9 +1323,17 @@ function placeCard(c, clat, clng){
     // autoShowRdv porte les cercles de proximité, le badge et l'ouverture du
     // panneau — aucune décision de vue. Une vue demandée n'a pas à la priver.
     autoShowRdv();
+    // L'ENCART VIENT EN DERNIER, et c'est la place qui lui revient : l'abonnée
+    // voit d'abord que sa carte est peuplée, puis on lui demande d'où elle
+    // part. Il décide lui-même s'il doit paraître (cf. ouvrirMiseEnRoute).
+    ouvrirMiseEnRoute();
   }
-  if(!pending){ finish(); return; }
 
+  // b. Les géocodages partent D'ABORD, avant la pose en flux : ils sont
+  //    tributaires du réseau, la pose ne l'est pas. Les faire attendre
+  //    derrière quelques secondes de révélation les retarderait d'autant, et
+  //    les fiches qu'ils rendent se posent au fil de leurs réponses — un flux
+  //    de plus, qui se mêle au premier.
   addrs.forEach(function(addr){
   // b. Try BAN first, fallback to Nominatim
   fetch('/api/geocode?q='+encodeURIComponent(addr))
@@ -1025,13 +1364,21 @@ function placeCard(c, clat, clng){
       }
       // d. geo null → aucun marqueur, aucune écriture
       pending--;
-      if(pending<=0) finish();
+      tenterFinish();
     })
     .catch(function(){
       pending--;
-      if(pending<=0) finish();
+      tenterFinish();
     });
   });
+
+  // a. Puis la pose des cartes déjà résolues — AUCUN appel réseau. Chacune est
+  //    posée à SA coordonnée, sans décalage : le déstackage des points confondus
+  //    est le travail du regroupement (cf. REGROUPEMENT DES FICHES). En flux, et
+  //    non plus d'un bloc (cf. LA POSE EN FLUX).
+  await revelerEnFlux(withStored);
+  fluxTermine=true;
+  tenterFinish();
 })();
 
 // Auto-detect RDV cards and show their proximity + panel
@@ -1085,8 +1432,8 @@ function autoShowRdv(){
     }
   });
 
-  // LA QUATRIÈME GARDE. Les trois posées ailleurs couvraient stopLocate, le
-  // watchPosition de locateUser et choisirRdv — trois gestes de l'abonné.
+  // LA QUATRIÈME GARDE. Les trois posées ailleurs couvraient le relevé de
+  // position, poserPosition et choisirRdv — trois suites de gestes de l'abonnée.
   // Celle-ci couvre le seul appelant qui n'en soit pas un : agenda-sync rappelle
   // autoShowRdv à chaque retour d'onglet (storage, visibilitychange, focus), et
   // reprendre le focus suffisait à faire remplacer le couloir par la liste
@@ -1104,118 +1451,209 @@ function autoShowRdv(){
   // « il y a des RDV » passe par eux, pas par la saisie de l'écran. Seul le
   // geste d'ouvrir est conditionné.
   //
-  // Deux gardes s'ajoutent à l'ouverture courante :
-  // — sous 640 (le seuil de la media query ci-dessus), jamais : le panneau y
-  //   est en surimpression pleine hauteur et masquerait la carte d'entrée de
-  //   jeu, sans que l'abonné ait rien demandé ;
-  // — à toute largeur, plus après une fermeture : l'abonné a tranché.
+  // UNE SEULE GARDE DÉSORMAIS : sous 640 (le seuil de la media query ci-dessus),
+  // jamais. Le panneau y est en surimpression et masquerait la carte d'entrée de
+  // jeu, sans que l'abonnée ait rien demandé.
+  // La seconde garde, « plus après une fermeture », est partie avec le bouton
+  // « Actions » : il était le seul endroit d'où une fermeture pouvait venir, et
+  // rdvPanelDismissed le seul état qu'elle posait. Le panneau s'ouvre maintenant
+  // de lui-même dès qu'il a quelque chose à montrer, et ouvrirPanneau est gardée
+  // par sa propre idempotence.
   var etroit=window.matchMedia('(max-width:640px)').matches;
-  if(rdvPanelIds.length&&!rdvPanelDismissed&&!etroit
+  if(rdvPanelIds.length&&!etroit
      &&!document.getElementById('tour-panel').classList.contains('open')){
-    toggleTourPanel();
+    ouvrirPanneau();
   }
 }
 
-// Geolocation
-// Trois sorties d'échec, trois phrases, parce que trois gestes différents en
-// sortent : un refus se rattrape dans les réglages, une position introuvable se
-// retente, un navigateur sans API ne se rattrape pas. Aucune n'était dite : le
-// bouton s'éteignait sans un mot, et le `return` du premier cas ne faisait même
-// pas ça.
-var GEO_REFUS='Position refusée. Vous pouvez l\'autoriser dans les réglages du navigateur.';
-var GEO_INTROUVABLE='Position introuvable. Réessayez dans un instant.';
+// ── LE POINT DE DÉPART DE LA JOURNÉE ─────────────────────────────────────────
+// UN RELEVÉ, PLUS UNE VEILLE. La page allumait un watchPosition : un suivi
+// continu qui remettait le marqueur à jour à chaque déplacement, avec son
+// identifiant à tenir, son extinction à écrire, et la garantie qu'une seconde
+// veille ne s'ouvre pas par-dessus la première. Tout cela servait une position
+// QUI BOUGE. Un point de départ ne bouge pas : c'est un relevé unique, et
+// getCurrentPosition le rend. Le mécanisme de veille part avec lui — clearWatch,
+// watchId, stopLocate, le premierFix qui distinguait le premier relevé des
+// suivants, la pastille verte qui disait « ça tourne ».
+//
+// LES TROIS PHRASES D'ÉCHEC RESTENT, ET CHANGENT DE PLACE. Elles étaient dites
+// par toast, sous un bouton qui venait de s'éteindre sans un mot ; elles sont
+// désormais le texte du second temps de l'encart, là où la seconde voie est
+// proposée dans la même phrase. Trois causes, trois rattrapages différents : un
+// refus se lève dans les réglages du navigateur, une position introuvable se
+// retente, un navigateur sans API ne se rattrape pas du tout.
+var GEO_REFUS='La géolocalisation est refusée pour ce site. Vous pouvez l\'autoriser dans les réglages de votre navigateur.';
+var GEO_INTROUVABLE='Votre position est introuvable pour l\'instant.';
 var GEO_SANS_API='Votre navigateur ne donne pas accès à la position.';
 
-// Toute extinction passe par ici, et donc par clearWatch. Poser watchId=null
-// sans lui — ce que faisait le callback d'erreur — laissait une veille vivante
-// à un identifiant que plus personne ne tenait : le clic suivant en ouvrait une
-// seconde, et le navigateur les alimentait toutes les deux.
-//
-// Couper le suivi coupe tout. Le marqueur partait déjà de l'écran par la seule
-// grâce de n'être plus rafraîchi, mais il restait posé ; userLatLng gardait sa
-// dernière valeur et le panneau continuait d'afficher des distances calculées
-// depuis un point que plus rien ne tenait à jour, en les triant par-dessus le
-// marché. Plus de position, plus de distances : c'est la seule version qui ne
-// mente pas. L'effacement est ici et non dans la bascule du bouton, donc il
-// vaut aussi pour les extinctions par erreur et par refus.
-//
-// renderPanel reste gardé comme au commit 4c1275a : renderPanel et le rendu du
-// couloir se disputent #tour-body, et une liste de fiches le long d'un trajet
-// ne dépend pas de la position. Tant qu'un couloir est affiché, l'extinction ne
-// le remplace pas.
-function stopLocate(){
-  if(watchId!==null){
-    navigator.geolocation.clearWatch(watchId);
-    watchId=null;
-  }
-  if(userMarker){
-    map.removeLayer(userMarker);
-    userMarker=null;
-  }
-  userLatLng=null;
-  document.getElementById('btn-locate').classList.remove('active');
-  document.getElementById('locate-dot').style.display='none';
-  if(!couloirAffiche) renderPanel();
+// LE TÉMOIN DE REPLI, ET SON SEUL EMPLOI. La promesse « une fois l'autorisation
+// accordée, l'encart ne revient plus » est tenue PAR LE NAVIGATEUR :
+// permissions.query rend « granted » sans rien redemander, et il rend aussi
+// « prompt » le jour où l'abonnée révoque — ce qu'aucun témoin à nous ne saurait
+// dire. Il est donc la source, et ce témoin n'est consulté que là où il n'y a
+// pas de source : les navigateurs qui n'exposent pas permissions.query pour la
+// géolocalisation. Écrit à chaque relevé abouti, il ne coûte rien là où il ne
+// sert pas.
+var TEMOIN_GEO='mup_carte_depart_geolocalise';
+function temoinGeo(){ try{ return localStorage.getItem(TEMOIN_GEO)==='1'; }catch(e){ return false; } }
+
+// Inertie de la page derrière le voile : pointeur et focus. L'encart vit hors de
+// .shell précisément pour pouvoir rendre .shell inerte sans le devenir lui-même.
+// C'est aussi ce qui coupe la carte Leaflet, qui vit dedans : sous l'encart, on
+// ne fait plus glisser le fond ni ouvrir une bulle.
+// LE RAIL EST DÉLIBÉRÉMENT ABSENT de cette liste : un encart de mise en service
+// tient une page, jamais l'application, et le rendre inerte condamnerait toute
+// sortie à l'abonnée venue sur la Carte sans vouloir y définir son départ. Les
+// deux éléments sont cherchés À L'APPEL et jamais mémorisés : le pied applicatif
+// vit après ce script dans le document, et un handle relevé au parsing serait
+// nul.
+function rendreLaPageInerte(fige){
+  [ document.querySelector('.shell'), document.querySelector('.mup-app-footer') ]
+    .forEach(function(el){ if(el) el.inert = fige; });
 }
 
-function locateUser(){
-  if(!navigator.geolocation){ toast(GEO_SANS_API); return; }
-  if(watchId!==null){
-    stopLocate();
-    return;
-  }
-  watchId=navigator.geolocation.watchPosition(function(pos){
-    // Seul le premier relevé d'une session de suivi recentre. setView partait à
-    // chaque relevé et reforçait le zoom à 11 : tout déplacement, tout zoom fait
-    // à la main était annulé au relevé suivant, c'est-à-dire dans la minute, sur
-    // une carte que l'abonné venait justement de cadrer. Les relevés suivants
-    // mettent à jour la position et le marqueur, et ne touchent plus à la vue.
-    //
-    // userLatLng suffit à savoir qu'on est au premier : stopLocate le remet à
-    // null à chaque extinction, quelle qu'en soit la cause, donc il est null au
-    // début de toute session et jamais entre deux relevés d'une même session.
-    // Un drapeau de plus n'aurait rien dit que celui-ci ne dise déjà, et aurait
-    // eu sa propre remise à zéro à tenir.
-    var premierFix=(userLatLng===null);
-    userLatLng=[pos.coords.latitude,pos.coords.longitude];
-    if(userMarker) map.removeLayer(userMarker);
-    var icon=L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]});
-    userMarker=L.marker(userLatLng,{icon:icon,zIndexOffset:1000}).addTo(map);
-    // Par l'arbitre, et pas par setView : le pipeline peut n'avoir pas fini, et
-    // son fitBounds de repli emporterait ce recentrage-là comme il emportait
-    // celui de ?fiche= (cf. ARBITRE DE CADRAGE).
-    if(premierFix) cadrerSur(userLatLng,11);
-    // Le relevé sert à trier le panneau RDV par distance — mais renderPanel et
-    // le rendu du couloir se disputent #tour-body, et la liste des candidats ne
-    // dépend pas de la position. Tant qu'un couloir est affiché, un relevé ne le
-    // remplace pas : #tour-controls restait sinon en place au-dessus de la liste
-    // RDV, à régler la durée d'un rendez-vous qu'on ne voyait plus.
-    if(!couloirAffiche) renderPanel();
+// Les deux temps se départagent par `.actif`, jamais par `display` : c'est la
+// pile qui les mesure ensemble, et la carte ne bouge pas d'un pixel entre eux.
+// aria-labelledby suit le temps affiché — c'est son titre que la carte annonce.
+function montrerTemps(id){
+  var temps=document.querySelectorAll('#encartDepart .mes-pile > div');
+  for(var i=0;i<temps.length;i++) temps[i].classList.toggle('actif', temps[i].id===id);
+  document.getElementById('encartDepart')
+    .setAttribute('aria-labelledby', id==='mesTempsAdresse' ? 'departTitreAdresse' : 'departTitre');
+}
+
+// LEVER ET RETIRER, chacun gardé par son propre état : appelés deux fois de
+// suite, ils ne font rien la seconde.
+function leverEncartDepart(){
+  var voile=document.getElementById('encartDepart');
+  if(!voile||voile.style.display==='flex') return;
+  voile.style.display='flex';
+  document.body.classList.add('mise-en-service');
+  rendreLaPageInerte(true);
+  // Après l'affichage, et pas avant : un .focus() dans une carte encore en
+  // display:none ne prend pas. Le bouton visé est celui du temps ouvert.
+  var actif=document.querySelector('#encartDepart .mes-pile > .actif .mes-btn');
+  if(actif) actif.focus();
+}
+function retirerEncartDepart(){
+  var voile=document.getElementById('encartDepart');
+  if(!voile||voile.style.display==='none') return;
+  voile.style.display='none';
+  document.body.classList.remove('mise-en-service');
+  rendreLaPageInerte(false);
+}
+
+// LA SORTIE OBLIGATOIRE. Refuser la géolocalisation, ou l'avoir bloquée au
+// navigateur, ne doit pas fermer la page : le champ d'adresse de départ mène au
+// même point, et l'encart le dit au lieu de laisser l'abonnée devant un bouton
+// qui ne répond plus.
+// `retentable` commande le seul « Réessayer » de la carte : sur un refus, il
+// rappellerait le navigateur sans que rien n'ait changé — un second bouton mort
+// à côté du premier. Sur une position introuvable, il est la bonne réponse.
+function passerAuSecondChemin(cause, retentable){
+  document.getElementById('depart-cause').textContent=cause;
+  document.getElementById('depart-reessayer').style.display=retentable?'':'none';
+  montrerTemps('mesTempsAdresse');
+}
+
+// La seule sortie de l'encart qui soit un geste, et elle ne renvoie pas dans le
+// vide : elle retire le voile ET pose le curseur dans le champ.
+// SOUS 640 PX, PANNEAU OUVERT, LE CHAMP EST EN display:none et le focus ne prend
+// pas — la règle .shell.tour-open .tour-input-bar le veut ainsi. Ce n'est pas un
+// chemin qu'on rencontre : à cette largeur autoShowRdv n'ouvre pas le panneau de
+// lui-même, et le seul autre ouvreur est le calcul de trajet, qui suppose un
+// point de départ déjà connu — donc un encart déjà retiré.
+function allerAuChampAdresse(){
+  retirerEncartDepart();
+  var champ=document.getElementById('tour-start-addr');
+  if(champ) champ.focus();
+}
+
+// LE RELEVÉ. Un seul point, jamais de veille. `geste` dit si l'abonnée vient de
+// le demander (le bouton de l'encart) ou si la page le prend d'elle-même parce
+// que l'autorisation était déjà accordée — les deux ne cadrent pas la vue de la
+// même façon (cf. poserPosition).
+// maximumAge à 60 s, contre les 10 s de la veille : une position d'il y a une
+// minute est le même point de départ, et l'accepter évite un relevé matériel
+// quand le navigateur en tient déjà un.
+function releverPosition(geste){
+  if(!navigator.geolocation){ passerAuSecondChemin(GEO_SANS_API,false); leverEncartDepart(); return; }
+  navigator.geolocation.getCurrentPosition(function(pos){
+    poserPosition([pos.coords.latitude,pos.coords.longitude], geste);
+    // L'encart ne se ferme pas : il se retire parce que sa raison d'être vient
+    // de disparaître. La page connaît son point de départ.
+    retirerEncartDepart();
   },function(err){
-    // Une erreur en cours de suivi signale sans éteindre : un tunnel, un
-    // sous-sol, une minute sans ciel ne doivent pas coûter la session. Deux
-    // exceptions. Le refus, qui ne se retentera pas de lui-même — laisser la
-    // pastille pulser pour une veille qui ne rendra jamais rien serait mentir.
-    // Et l'échec avant le premier relevé, où il n'y a aucun suivi à préserver :
-    // sans lui, le timeout de 15 s rallumait une attente sans fin.
-    if(err&&err.code===1){ toast(GEO_REFUS); stopLocate(); return; }
-    toast(GEO_INTROUVABLE);
-    if(!userLatLng) stopLocate();
-  },{enableHighAccuracy:false,maximumAge:10000,timeout:15000});
-  document.getElementById('btn-locate').classList.add('active');
-  document.getElementById('locate-dot').style.display='inline-block';
+    var refus=!!(err&&err.code===1);
+    passerAuSecondChemin(refus?GEO_REFUS:GEO_INTROUVABLE, !refus);
+    leverEncartDepart();
+  },{enableHighAccuracy:false,maximumAge:60000,timeout:15000});
+}
+
+// Ce que le relevé pose : le marqueur, le tri du panneau par distance, et le
+// point de départ du trajet.
+// LE CADRAGE PASSE PAR L'ARBITRE, et pas par setView (cf. ARBITRE DE CADRAGE).
+// Un relevé DEMANDÉ est une intention explicite : il prime, comme ?fiche=. Un
+// relevé pris d'office, lui, ne l'est pas — il ne recadre que si personne n'a
+// réclamé la vue, faute de quoi il emporterait la fiche que l'URL désignait.
+function poserPosition(latlng, geste){
+  userLatLng=latlng;
+  if(userMarker) map.removeLayer(userMarker);
+  var icon=L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]});
+  userMarker=L.marker(userLatLng,{icon:icon,zIndexOffset:1000}).addTo(map);
+  try{ localStorage.setItem(TEMOIN_GEO,'1'); }catch(e){}
+  if(geste||!vueDemandee) cadrerSur(userLatLng,11);
+  // Le relevé sert à trier le panneau RDV par distance — mais renderPanel et le
+  // rendu du couloir se disputent #tour-body, et la liste des candidats ne
+  // dépend pas de la position. Tant qu'un couloir est affiché, un relevé ne le
+  // remplace pas.
+  if(!couloirAffiche) renderPanel();
+  // Sans marqueur maison : le point bleu ci-dessus marque déjà cette coordonnée,
+  // et deux marqueurs superposés diraient deux fois la même chose (cf.
+  // poserDepart). C'est aussi cet appel qui lance le calcul si la destination
+  // est déjà désignée.
+  poserDepart(userLatLng, false);
+}
+
+// LA DÉCISION DE MONTRER L'ENCART. Le navigateur sait dire si l'autorisation est
+// déjà accordée SANS LA REDEMANDER : c'est permissions.query, et c'est lui qui
+// tranche. Accordée, on relève en silence et l'abonnée ne voit rien — c'est la
+// promesse « à partir de là, chaque arrivée sur la Carte la localise sans rien
+// redemander ». Sinon l'encart paraît.
+// TROIS ÉTATS, ET CHACUN A SA SORTIE :
+//   granted — relevé silencieux, aucun encart ;
+//   denied  — l'encart paraît DIRECTEMENT à son second temps : le bouton de
+//             géolocalisation ne répondrait pas, le montrer serait le mensonge
+//             que la doctrine des encarts interdit ;
+//   prompt  — l'encart paraît à son premier temps, et c'est le cas nominal.
+// L'état inconnu (navigateur sans permissions.query, requête qui jette) retombe
+// sur le témoin local : lui seul sait alors qu'un relevé a déjà abouti ici.
+// Aucun encart si le navigateur n'a pas d'API du tout — enfin si : à son second
+// temps, qui dit pourquoi et renvoie au champ d'adresse.
+async function ouvrirMiseEnRoute(){
+  if(!navigator.geolocation){ passerAuSecondChemin(GEO_SANS_API,false); leverEncartDepart(); return; }
+  var etat=null;
+  try{
+    if(navigator.permissions&&navigator.permissions.query){
+      etat=(await navigator.permissions.query({name:'geolocation'})).state;
+    }
+  }catch(e){}
+  if(etat==='granted'||(etat===null&&temoinGeo())){ releverPosition(false); return; }
+  if(etat==='denied') passerAuSecondChemin(GEO_REFUS,false);
+  leverEncartDepart();
 }
 
 // Panel rendering
 function renderPanel(){
   var body=document.getElementById('tour-body');
-  var badge=document.getElementById('tour-badge');
+  // LE COMPTE NE SE DIT PLUS QU'À UN ENDROIT. Il s'écrivait deux fois : dans
+  // #tour-count, à l'en-tête du panneau, et dans une pastille logée DANS le
+  // bouton « Actions ». Ce bouton est parti, la pastille avec lui, et l'état
+  // « actif » qu'il portait n'a plus de bouton à teindre. L'en-tête suffit : il
+  // est visible dès que le panneau est ouvert, et le panneau s'ouvre de lui-même
+  // dès qu'il a quelque chose à montrer.
   var count=document.getElementById('tour-count');
-  badge.style.display=rdvPanelIds.length?'inline':'none';
-  badge.textContent=rdvPanelIds.length;
   count.textContent=rdvPanelIds.length+' fiche'+(rdvPanelIds.length>1?'s':'');
-  var btnTour=document.getElementById('btn-tour');
-  btnTour.classList.toggle('active',rdvPanelIds.length>0);
 
   if(!rdvPanelIds.length){
     body.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Aucun RDV dans le pipeline</div>';
@@ -1308,6 +1746,11 @@ function choisirRdv(id){
   // Inatteignable d'ici — un couloir affiché a remplacé les lignes, donc ce
   // bouton n'existe plus — mais la règle du fichier vaut à tous ses appelants.
   if(!couloirAffiche) renderPanel();
+  // « Qui est sur la route » a disparu : le calcul part de lui-même dès que ses
+  // DEUX inconnues sont levées. Celle-ci en est une, et c'est ici qu'elle tombe.
+  // Sans cette ligne, une abonnée qui se géolocalise AVANT de désigner son
+  // rendez-vous n'aurait plus aucun moyen de lancer le calcul.
+  couloirSiPret();
 }
 
 function flyTo(id){
@@ -1328,26 +1771,27 @@ function flyTo(id){
 function scrollToStop(id){
   var el=document.getElementById('sched-'+id);
   if(!el){toast('Fiche absente du panneau');return;}
-  if(!document.getElementById('tour-panel').classList.contains('open')) toggleTourPanel();
+  ouvrirPanneau();
   el.scrollIntoView({behavior:'smooth',block:'center'});
   el.style.boxShadow='0 0 0 2px var(--text)';
   setTimeout(function(){el.style.boxShadow='';},1500);
 }
 
-function toggleTourPanel(){
+// LE PANNEAU S'OUVRE, IL NE BASCULE PLUS. Le bouton « Actions » était la seule
+// bascule, et le seul endroit d'où une fermeture pouvait partir ; il est parti,
+// et avec lui la moitié « fermer » de cette fonction — la remise à zéro des
+// mises en évidence qui l'accompagnait, et le drapeau qu'elle posait.
+// Elle est GARDÉE PAR SON PROPRE ÉTAT : appelée deux fois, elle ne fait rien la
+// seconde. Ses trois appelants (autoShowRdv, scrollToStop, lancerCouloir)
+// testaient l'ouverture avant d'appeler ; ils peuvent continuer sans que la
+// garde d'ici soit de trop, aucun d'eux n'ayant à connaître les deux autres.
+// resetOverlays n'est pas perdue : le clic sur le fond de carte et « Effacer »
+// l'appellent toujours.
+function ouvrirPanneau(){
   var panel=document.getElementById('tour-panel');
-  var shell=document.querySelector('.shell');
-  var isOpen=panel.classList.contains('open');
-  panel.classList.toggle('open');
-  shell.classList.toggle('tour-open');
-  // If closing, reset overlays
-  if(isOpen){
-    // Le seul endroit d'où part une fermeture : le bouton « Actions ». Tous
-    // les autres appelants (scrollToStop, calcTour, autoShowRdv) testent
-    // l'ouverture avant d'appeler et n'entrent donc jamais ici.
-    rdvPanelDismissed=true;
-    resetOverlays();
-  }
+  if(panel.classList.contains('open')) return;
+  panel.classList.add('open');
+  document.querySelector('.shell').classList.add('tour-open');
   setTimeout(function(){map.invalidateSize();},300);
 }
 
@@ -1411,18 +1855,27 @@ var COULOIR_M=15000;
 // nécessaire, celle-ci la couvre.
 var COULOIR_FROID_MAX=stageIdx('visio');
 
-// Efface le trajet dans son entier : les deux calques qu'il pose, tout l'état
-// de calcul, et les affichages qui n'ont de sens que par lui. Seul point de
-// remise à zéro, appelé par clearTour et en tête de calcTour — il remplace les
-// retraits ponctuels de startMarker et de routeLine qui vivaient au milieu du
-// calcul et ne couvraient que ces deux calques.
+// Efface le trajet dans son entier : le tracé qu'il pose, tout l'état de calcul,
+// et les affichages qui n'ont de sens que par lui. Seul point de remise à zéro,
+// appelé par clearTour et en tête de lancerCouloir — il remplace les retraits
+// ponctuels de routeLine qui vivaient au milieu du calcul.
+//
+// LE POINT DE DÉPART N'EN EST PLUS, et c'est le seul changement de cette
+// fonction. startLatLng et startMarker en sortaient jusqu'ici parce qu'une seule
+// fonction géocodait l'adresse puis s'en servait dans la foulée : le départ n'y
+// était qu'une étape du calcul. Il est maintenant ce que la MISE EN SERVICE
+// établit, par géolocalisation ou par adresse, et il vaut pour toute la séance.
+// L'effacer avec le trajet le rendrait irrécupérable : l'encart ne paraît qu'une
+// fois, au chargement, et une autorisation déjà accordée l'empêche même de
+// reparaître — l'abonnée n'aurait plus rien pour redire d'où elle part.
+// « Effacer » efface un trajet, pas la connaissance qu'a la page d'où part la
+// journée. C'est poserDepart qui retire le marqueur précédent, au moment de
+// poser le suivant.
 // Ne touche ni rdvPanelIds ni les cercles de proximité : effacer un trajet
 // n'est pas effacer le panneau RDV. Ne touche pas rdvChoisi non plus : la
 // destination est une désignation de l'abonné, pas un résultat de calcul.
 function clearTourPlan(){
   if(routeLine){map.removeLayer(routeLine);routeLine=null;}
-  if(startMarker){map.removeLayer(startMarker);startMarker=null;}
-  startLatLng=null;
   trajetMoities=[];
   couloirRdv=null;
   couloirCandidats=[];
@@ -1431,74 +1884,132 @@ function clearTourPlan(){
   document.getElementById('tour-controls').style.display='none';
 }
 
-function calcTour(){
+// ── LE CALCUL PART DE LUI-MÊME ───────────────────────────────────────────────
+// « Qui est sur la route » n'existe plus. Le calcul n'attend plus qu'on le
+// demande : il part dès que ses DEUX inconnues sont levées — d'où l'on part, et
+// où l'on va. Chacune tombe à son propre moment, et l'ordre n'est pas connu
+// d'avance : le relevé de position peut aboutir avant que le rendez-vous soit
+// désigné, la désignation d'office peut précéder le relevé. D'où cette garde
+// unique, appelée des deux côtés (poserDepart et choisirRdv), qui ne fait rien
+// tant qu'il manque une pièce.
+// ELLE SE TAIT QUAND ELLE NE FAIT RIEN, et c'est délibéré : la pièce manquante
+// se comble d'elle-même — l'encart réclame le départ, le panneau propose la
+// désignation. Le seul appelant qui soit un geste explicite de demande de calcul,
+// la validation du champ d'adresse, dit lui-même ce qui manque encore.
+function couloirSiPret(){
+  if(!startLatLng||!rdvChoisi) return;
+  lancerCouloir();
+}
+
+// LE POINT DE DÉPART DE LA JOURNÉE, D'OÙ QU'IL VIENNE : du relevé de position ou
+// du champ d'adresse. Il ne s'ajoute pas, il remplace — le marqueur précédent
+// part avant que le nouveau se pose, et c'est ici que ce retrait vit depuis que
+// clearTourPlan ne s'en occupe plus.
+//
+// `marqueurMaison` DIT S'IL FAUT DESSINER LA MAISON. Le relevé de position est
+// DÉJÀ marqué à l'écran par le point bleu pulsant que pose poserPosition : y
+// ajouter la maison noire superposerait deux marqueurs sur la même coordonnée
+// pour dire la même chose. L'adresse saisie, elle, n'a rien qui la montre — c'est
+// là, et là seulement, que la maison sert. Le jour où l'abonnée passe de l'une à
+// l'autre, le retrait ci-dessus fait le ménage dans les deux sens : la maison
+// s'efface quand la position reprend la main, et le point bleu reste où il est
+// puisqu'il ne dit plus « je pars d'ici » mais « je suis ici ».
+function poserDepart(latlng, marqueurMaison){
+  if(startMarker){map.removeLayer(startMarker);startMarker=null;}
+  startLatLng=latlng;
+  if(marqueurMaison){
+    var icon=L.divIcon({
+      className:'',
+      html:'<div style="width:24px;height:24px;border-radius:8px;background:#1D1D1F;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>',
+      iconSize:[24,24],iconAnchor:[12,12]
+    });
+    startMarker=L.marker(startLatLng,{icon:icon,zIndexOffset:2000}).addTo(map);
+  }
+  couloirSiPret();
+}
+
+// LA SECONDE VOIE VERS LE POINT DE DÉPART, celle vers laquelle l'encart renvoie
+// quand la géolocalisation se refuse ou se trouve bloquée. Validée à la touche
+// Entrée, seul geste que le champ ait encore.
+//
+// LE GÉOCODAGE PART SANS ATTENDRE LA DÉSIGNATION, et c'est un renversement.
+// calcTour s'arrêtait avant lui quand aucun rendez-vous n'était retenu — « on ne
+// dérange ni le géocodeur ni le calculateur d'itinéraire » — parce que le
+// géocodage n'y servait qu'au calcul. Il sert maintenant à établir le POINT DE
+// DÉPART, qui vaut par lui-même : c'est la mise en service de la page, et elle
+// doit pouvoir s'achever qu'un rendez-vous soit désigné ou non. On pose donc le
+// départ, puis on dit ce qui manque encore.
+function departDepuisAdresse(){
   var addr=document.getElementById('tour-start-addr').value.trim();
   if(!addr){toast('Saisir une adresse de départ');return;}
-  // Une désignation qui manque n'est pas une erreur de calcul : on le dit, et on
-  // n'appelle rien — ni le géocodeur, ni le calculateur d'itinéraire. Le
-  // rendez-vous n'est plus élu par l'ordre que rend la base, il est celui que
-  // l'abonné a retenu au panneau.
-  var rdv=rdvChoisi?markers[String(rdvChoisi)]:null;
-  if(!rdv){toast('Préparez d\'abord un RDV dans le panneau');return;}
-  clearTourPlan();
-
-  // 1. Géocodage de l'adresse de départ
   fetch('/api/geocode?q='+encodeURIComponent(addr)+'&type=municipality')
     .then(function(r){return r.json();})
     .then(function(data){
       if(!data.features||!data.features.length){toast('Adresse introuvable');return;}
       var coords=data.features[0].geometry.coordinates;
-      startLatLng=[coords[1],coords[0]]; // lat,lng
-
-      // Marqueur maison (le précédent a été retiré par clearTourPlan)
-      var icon=L.divIcon({
-        className:'',
-        html:'<div style="width:24px;height:24px;border-radius:8px;background:#1D1D1F;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>',
-        iconSize:[24,24],iconAnchor:[12,12]
-      });
-      startMarker=L.marker(startLatLng,{icon:icon,zIndexOffset:2000}).addTo(map);
-
-      // 2. Le trajet : trois points de passage, départ → rendez-vous → départ,
-      // dont on ne garde QU'UNE MOITIÉ, repliée (cf. demiTrajet). La journée
-      // est un aller-retour, pas un aller simple : on revient de son
-      // rendez-vous, et la moitié du chemin qu'on refait porte elle aussi des
-      // fiches. annotations=duration donne la durée segment par segment, seule
-      // façon de situer une fiche dans le temps du voyage — et donc de dire à
-      // quelle heure on passe devant ; distance sert ici à départager les deux
-      // sens, elle ne s'affiche nulle part.
-      var d=startLatLng[1]+','+startLatLng[0]; // lng,lat pour OSRM
-      var b=rdv.latlng[1]+','+rdv.latlng[0];
-      fetch(OSRM+'/route/v1/driving/'+d+';'+b+';'+d+'?overview=full&geometries=geojson&steps=false&annotations=duration')
-        .then(function(r){return r.json();})
-        .then(function(route){
-          if(!route.routes||!route.routes.length){toast('Impossible de calculer l\'itinéraire');return;}
-          var demi=demiTrajet(route.routes[0],[rdv.latlng[1],rdv.latlng[0]]);
-          if(!demi){toast('Impossible de calculer l\'itinéraire');return;}
-          // Le tracé précédent a été retiré par clearTourPlan en tête de calcTour.
-          routeLine=L.geoJSON({type:'LineString',coordinates:demi.ligne},{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
-          trajetMoities=demi.moities;
-
-          couloirRdv={id:String(rdvChoisi),card:rdv.card,latlng:rdv.latlng};
-          couloirCandidats=fichesDuCouloir(demi.ligne);
-
-          document.getElementById('tour-controls').style.display='';
-          renderCouloir();
-
-          if(!document.getElementById('tour-panel').classList.contains('open')){
-            toggleTourPanel();
-          }
-          // Différé de 400 ms : le trajet peut avoir été effacé entretemps
-          // (« Effacer », ou un second calcul lancé dans la foulée).
-          setTimeout(function(){if(routeLine)map.fitBounds(routeLine.getBounds(),{padding:[60,60]});},400);
-          // Des fiches, pas des passages : celle qu'on croise deux fois ne se
-          // rappelle qu'une.
-          var n=fichesDistinctes(couloirCandidats);
-          toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
-            +' · '+fmtDuree(Math.round(demi.duration/60))+' de trajet aller-retour');
-        })
-        .catch(function(){toast('Erreur de calcul itinéraire');});
+      poserDepart([coords[1],coords[0]], true); // lat,lng
+      // poserDepart a lancé le calcul si la destination était connue. Sinon, la
+      // seule chose qui manque encore se dit ici : sans ce mot, Entrée poserait
+      // un marqueur et rien d'autre, et l'abonnée croirait à une panne.
+      if(!rdvChoisi) toast('Préparez d\'abord un RDV dans le panneau');
     })
     .catch(function(){toast('Erreur de géocodage');});
+}
+
+// LE CALCUL LUI-MÊME. Ce qu'était la seconde moitié de calcTour : le point de
+// départ est désormais posé avant lui et par quelqu'un d'autre, il n'a plus qu'à
+// s'en servir. couloirSiPret est sa seule porte, et c'est elle qui garantit que
+// les deux points existent — d'où l'absence de toast ici : rien de ce qu'il
+// rencontrerait ne serait le fait d'un geste mal formé.
+function lancerCouloir(){
+  var rdv=markers[String(rdvChoisi)];
+  // La désignation ne pointe une fiche absente de markers dans aucun chemin
+  // connu — rdvChoisi ne se remplit que d'identifiants venus de renderPanel,
+  // qui les lit de markers. La garde est là pour que la déréférence de la ligne
+  // suivante ne soit pas une supposition.
+  if(!rdv) return;
+  clearTourPlan();
+
+  // Le trajet : trois points de passage, départ → rendez-vous → départ, dont on
+  // ne garde QU'UNE MOITIÉ, repliée (cf. demiTrajet). La journée est un
+  // aller-retour, pas un aller simple : on revient de son rendez-vous, et la
+  // moitié du chemin qu'on refait porte elle aussi des fiches.
+  // annotations=duration donne la durée segment par segment, seule façon de
+  // situer une fiche dans le temps du voyage — et donc de dire à quelle heure on
+  // passe devant ; distance sert ici à départager les deux sens, elle ne
+  // s'affiche nulle part.
+  var d=startLatLng[1]+','+startLatLng[0]; // lng,lat pour OSRM
+  var b=rdv.latlng[1]+','+rdv.latlng[0];
+  fetch(OSRM+'/route/v1/driving/'+d+';'+b+';'+d+'?overview=full&geometries=geojson&steps=false&annotations=duration')
+    .then(function(r){return r.json();})
+    .then(function(route){
+      if(!route.routes||!route.routes.length){toast('Impossible de calculer l\'itinéraire');return;}
+      var demi=demiTrajet(route.routes[0],[rdv.latlng[1],rdv.latlng[0]]);
+      if(!demi){toast('Impossible de calculer l\'itinéraire');return;}
+      // Le tracé précédent a été retiré par clearTourPlan en tête de lancerCouloir.
+      routeLine=L.geoJSON({type:'LineString',coordinates:demi.ligne},{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
+      trajetMoities=demi.moities;
+
+      couloirRdv={id:String(rdvChoisi),card:rdv.card,latlng:rdv.latlng};
+      couloirCandidats=fichesDuCouloir(demi.ligne);
+
+      document.getElementById('tour-controls').style.display='';
+      renderCouloir();
+
+      // Le panneau s'ouvre parce qu'il a maintenant quelque chose à montrer.
+      // Plus de test d'ouverture avant l'appel : ouvrirPanneau est gardée par son
+      // propre état.
+      ouvrirPanneau();
+      // Différé de 400 ms : le trajet peut avoir été effacé entretemps
+      // (« Effacer », ou un second calcul lancé dans la foulée).
+      setTimeout(function(){if(routeLine)map.fitBounds(routeLine.getBounds(),{padding:[60,60]});},400);
+      // Des fiches, pas des passages : celle qu'on croise deux fois ne se
+      // rappelle qu'une.
+      var n=fichesDistinctes(couloirCandidats);
+      toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
+        +' · '+fmtDuree(Math.round(demi.duration/60))+' de trajet aller-retour');
+    })
+    .catch(function(){toast('Erreur de calcul itinéraire');});
 }
 
 // ── UNE SEULE ROUTE, PARCOURUE DEUX FOIS ──
@@ -1789,11 +2300,9 @@ function renderCouloir(){
   document.getElementById('tour-body').innerHTML=html;
 
   var n=fichesDistinctes(couloirCandidats);
-  var badge=document.getElementById('tour-badge');
-  badge.style.display='inline';
-  badge.textContent=n;
+  // Même compte, même endroit unique qu'au panneau RDV : la pastille du bouton
+  // « Actions » est partie avec lui.
   document.getElementById('tour-count').textContent=n+' à appeler';
-  document.getElementById('btn-tour').classList.add('active');
   couloirAffiche=true;
   retirerCercles();
 }

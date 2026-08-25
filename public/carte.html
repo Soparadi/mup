@@ -80,11 +80,37 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .tour-body{flex:1;overflow-y:auto;padding:8px}
 .tour-body::-webkit-scrollbar{width:3px}
 .tour-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
-.tour-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:6px;background:var(--surface)}
+.tour-item{display:flex;flex-wrap:wrap;align-items:center;gap:3px 10px;padding:8px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:6px;background:var(--surface)}
 .tour-num{width:22px;height:22px;border-radius:7px;background:var(--text);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .tour-info{flex:1;min-width:0}
 .tour-info-name{font-size:11.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tour-info-dist{font-size:10px;color:var(--muted);font-family:var(--mono)}
+/* ----------------------------------------------------------------------------
+   LA DATE ET L'HEURE DU RENDEZ-VOUS
+   ----------------------------------------------------------------------------
+   Ni dans .tour-info-name, que text-overflow tronque, ni ajoutée à
+   .tour-info-dist qui porte déjà le type d'action et la distance. Et pas
+   davantage en troisième enfant de .tour-info : mesuré, « Mercredi 28 septembre
+   · 14h30 » demande 174 px quand cette colonne — rognée par les 22 px de
+   .tour-num et par le bouton .tour-pick — n'en offre que 142. La ligne s'y
+   repliait en deux, portant l'item de 60 à 73 px selon la longueur du mois.
+   D'où un quatrième enfant de .tour-item, en flex-basis:100% : le retour à la
+   ligne devient celui de l'item (flex-wrap:wrap ci-dessus), et la boîte mesure
+   209 px — la largeur pleine moins les 32 px de retrait qui l'alignent sous le
+   nom. Le pire libellé y demande 174 px : il tient d'une seule ligne. Le nowrap
+   tient cette promesse : un libellé plus long déborderait plutôt que de faire
+   grandir la ligne en silence.
+   Le gap de .tour-item est passé de 10 px à 3 px 10 px pour cette raison :
+   flex-wrap fait aussi du gap un écart ENTRE RANGÉES, et les 10 px hérités
+   posaient l'item à 69 px. La colonne, elle, garde ses 10 px d'origine.
+   Mesures en panneau de 280 px, polices Geist chargées, trois tirs concordants :
+   une fiche prospect reste à 46 px, une fiche à rendez-vous passe de 46 à
+   62 px, quelle que soit la longueur du mois. Cette croissance est assumée —
+   c'est l'heure du rendez-vous qui commande la journée.
+   Couleur posée en ligne, celle du type d'action, comme .tour-info-dist le fait
+   déjà pour son libellé.
+---------------------------------------------------------------------------- */
+.tour-info-rdv{flex-basis:100%;margin-left:32px;font-size:10px;font-weight:700;font-family:var(--mono);white-space:nowrap}
 /* ----------------------------------------------------------------------------
    LA FICHE RETENUE POUR LA TOURNÉE
    ----------------------------------------------------------------------------
@@ -1215,7 +1241,27 @@ function renderPanel(){
     return{id:id,card:info.card,dist:dist,latlng:info.latlng,isRdv:!!na,nextAction:na};
   }).filter(Boolean);
 
-  if(userLatLng) items.sort(function(a,b){return(a.dist||0)-(b.dist||0);});
+  // L'ORDRE DES LIGNES. Trier tout le monde par distance mélangeait les deux
+  // natures de fiche : un prospect à 200 m passait devant le rendez-vous de 9h.
+  // Or ce panneau se lit comme une journée, et une journée est commandée par
+  // ses rendez-vous. D'où deux blocs concaténés :
+  //   — les fiches à rendez-vous en tête, par date puis heure. Clé
+  //     date + 'T' + hour comparée en chaînes, la même que nextActionOf emploie
+  //     pour élire l'événement à venir ; hour est déjà défaulté à '14:00' là-bas,
+  //     donc jamais vide ici.
+  //   — le reste ensuite, par distance si et seulement si on sait où est
+  //     l'abonné. Sans position, aucun tri : l'ordre d'insertion est conservé,
+  //     Array.sort n'étant même pas appelé.
+  // Le numéro de .tour-num suit l'ordre final, il se lit sur l'index du map.
+  var avecRdv=items.filter(function(it){return it.isRdv;});
+  var sansRdv=items.filter(function(it){return !it.isRdv;});
+  avecRdv.sort(function(a,b){
+    var ka=a.nextAction.date+'T'+a.nextAction.hour;
+    var kb=b.nextAction.date+'T'+b.nextAction.hour;
+    return ka<kb?-1:(ka>kb?1:0);
+  });
+  if(userLatLng) sansRdv.sort(function(a,b){return(a.dist||0)-(b.dist||0);});
+  items=avecRdv.concat(sansRdv);
 
   // DÉSIGNATION D'OFFICE. Ordonnée ici, avant la construction du HTML, et non
   // par un second rendu : renderPanel ne se rappelle jamais elle-même, le rendu
@@ -1248,6 +1294,13 @@ function renderPanel(){
       +'<div class="tour-info-dist">'+label+(distStr?' · '+distStr:'')+'</div>'
       +'</div>'
       +(it.isRdv?'<button class="tour-pick'+(retenue?' on':'')+'" onclick="event.stopPropagation();choisirRdv(\''+it.id+'\')">'+(retenue?'Annuler':'Préparer')+'</button>':'')
+      // La date et l'heure, sur les seules fiches à rendez-vous. Même
+      // composition que l'infobulle du marqueur : formatRdvDate rend
+      // « Mardi 26 août · 9h ». « RDV » seul ne dit pas si c'est à 9h ou à 16h,
+      // et c'est cette heure-là qui commande la journée — c'est elle aussi qui
+      // ordonne les lignes ci-dessus. Hors de .tour-info et après le bouton :
+      // la règle .tour-info-rdv dit pourquoi (la place, mesurée).
+      +(it.isRdv?'<div class="tour-info-rdv" style="color:'+labelColor+'">'+formatRdvDate(it.nextAction.date.slice(0,10),it.nextAction.hour)+'</div>':'')
       +'</div>';
   }).join('');
 }

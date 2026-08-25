@@ -226,7 +226,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 /* SCHEDULE ITEMS */
 .sched-item{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:5px;background:var(--surface)}
-.sched-time{font-size:11px;font-weight:800;font-family:var(--mono);color:var(--text);min-width:38px;flex-shrink:0;line-height:1.4}
 .sched-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
 .sched-info{flex:1;min-width:0}
 .sched-name{font-size:11.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -236,18 +235,42 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .sched-tel a:hover{text-decoration:underline}
 .sched-badge{font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0}
 
-/* LES EX ÆQUO. Un portefeuille concentré autour de la destination fait tomber
-   dix fiches à la même minute de trajet : la colonne répétait « 15h00 » huit
-   fois de suite et ne séparait plus rien — le « 0 min » de la veille sous une
-   autre unité. Rien à gagner à inventer des secondes que la mesure ne
-   distingue pas. L'heure ne se porte donc que sur la PREMIÈRE d'une série ;
-   les suivantes se resserrent contre elle et s'y rattachent par un rail
-   vertical, qui se lit « toujours celle-là ». Même mesure, dite une fois.
-   align-self:stretch sur la cellule d'heure, sinon elle n'a que la hauteur de
-   son texte — vide, elle n'en aurait aucune et le rail ne se verrait pas. */
-.sched-item.sched-lie{margin-top:-3px}
-.sched-time.sched-suite{align-self:stretch;display:flex;padding-left:5px}
-.sched-rail{width:2px;min-height:16px;border-radius:1px;background:var(--border2);align-self:stretch}
+/* ── L'ORDRE D'APPEL EN TÊTE DE LIGNE ───────────────────────────────────────
+   LA COLONNE D'HEURE N'EST PLUS, ET LE RAIL DES EX ÆQUO AVEC ELLE. Trois
+   règles vivaient ici, .sched-time, .sched-item.sched-lie et .sched-rail :
+   une heure de passage par ligne, portée sur la première d'une série et
+   reportée sur les suivantes par un rail vertical, parce qu'un portefeuille
+   concentré autour de la destination faisait tomber dix fiches à la même
+   minute et répétait « 15h00 » huit fois de suite. Ce problème n'a plus de
+   lieu où se poser : la ligne ne porte plus une heure de passage mais DEUX
+   CRÉNEAUX à proposer, et sa colonne de gauche porte un rang d'appel, unique
+   par construction. Rien à resserrer, rien à reporter.
+
+   .sched-rang est ce rang : un disque de 16 px, dans la couleur d'étape de la
+   fiche, chiffre blanc au centre. SEIZE ET PAS VINGT, et le chiffre est
+   mesuré, pas choisi. Le seuil de regroupement vaut 30 px et son arithmétique
+   est écrite plus bas (cf. ficheGroupe) : la plus grosse pastille fait 44 px,
+   rayon 22, et un point isolé ne mord son chiffre que si les deux rayons
+   dépassent 30. Un disque de 16 px a pour rayon 8, et 22 + 8 = 30 tout juste.
+   Numéroter les marqueurs ne coûte donc rien au regroupement, pas même un
+   pixel de seuil. Le chiffre suit : 9 px jusqu'à 99, 7 px au-delà, où trois
+   chiffres tiennent encore dans les 12 px intérieurs du disque.
+
+   .sched-slot est la même colonne, vide de rang : la ligne du rendez-vous s'y
+   range avec son point, pour que les deux sortes de lignes s'alignent sur le
+   même bord. Le point y garde ses 4 px de margin-top et tombe donc au même
+   centre que le disque de rang, à 8 px du haut de la ligne.
+
+   .sched-creneaux porte les deux heures. Mesuré au banc en panneau de 280 px,
+   fontes Geist chargées : « Proposez 09h12 ou 17h48 » occupe 145,4 px dans les
+   158,3 px que laisse le badge le plus large (« Prospects »), et ne se replie
+   à aucun des jeux essayés, de 1 à 150 appels. Toute formulation plus longue
+   passe à la ligne et coûte 12 px par fiche : « à proposer : ... » en occupe
+   170,7 et « vous pouvez proposer ... » 221,3. */
+.sched-rang{width:16px;height:16px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;font-weight:800;color:#fff;line-height:1}
+.sched-rang.sched-rang-long{font-size:7px}
+.sched-slot{width:16px;flex-shrink:0;display:flex;justify-content:center}
+.sched-creneaux{font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--text)}
 
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:600;z-index:9000;opacity:0;transition:opacity .2s;pointer-events:none}
@@ -650,7 +673,12 @@ body #mup-cookie-panel{z-index:60001}
 
   <div class="tour-panel" id="tour-panel">
     <div class="tour-hdr">
-      <span class="tour-title">Actions</span>
+      <!-- « Actions » ne disait rien de ce qu'on fait ici. Ce qui s'y range est
+           une liste d'APPELS à passer : des prospects que l'abonnée croise sur
+           la route de son rendez-vous et qu'elle appelle pour décrocher un
+           second rendez-vous le jour même. Le titre le dit maintenant, et le
+           compte à sa droite le redit en nombre. -->
+      <span class="tour-title">À contacter</span>
       <span class="tour-count" id="tour-count">0 fiches</span>
     </div>
     <div id="tour-controls" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
@@ -948,6 +976,42 @@ function createMupMarker(color){
   });
 }
 
+// LE MÊME MARQUEUR, PORTANT SON RANG D'APPEL. La liste du couloir numérote les
+// fiches de un à N dans l'ordre où la route les croise en montant ; le même
+// chiffre se lit sur la carte, faute de quoi l'abonnée aurait à faire la
+// correspondance de tête entre une liste ordonnée et un nuage de points qui ne
+// l'est pas. La route se lit alors d'un coup d'œil, de un à N.
+//
+// SEIZE PIXELS, ET C'EST LE REGROUPEMENT QUI L'IMPOSE. Le seuil de
+// maxClusterRadius vaut 30 px et son arithmétique est écrite au groupe : la
+// plus grosse pastille fait 44 px, rayon 22, et un point isolé lui mord son
+// chiffre dès que la somme des deux rayons dépasse le seuil. Le disque nu fait
+// 14 px, rayon 7, et 22 + 7 = 29 tenait sous 30. Un disque de 16 px a pour
+// rayon 8, et 22 + 8 = 30 tient encore, tout juste. Vingt pixels auraient
+// demandé de relever le seuil pour un état qui ne dure que le temps d'un
+// couloir : le chiffre s'est rangé au seuil plutôt que l'inverse.
+//
+// LE COÛT EN TEMPS EST NUL, mesuré au banc sur 480 marqueurs, MarkerCluster
+// 1.5.3, trois tirs médians : reposer l'icône des 480 coûte 0,3 ms carte large
+// (les fiches dorment dans les pastilles) et 4,8 ms carte serrée (elles sont
+// posées une à une). Un vidage suivi d'un réajout complet du groupe, la voie
+// brutale, en coûte 20,6. Le rendu de la liste ne touche de toute façon que les
+// rangs qui ont changé (cf. numeroterLesMarqueurs) : régler le curseur du rayon
+// ne relève jamais les 480.
+//
+// La police est celle des chiffres de la page, et sa taille suit le nombre de
+// chiffres : 9 px jusqu'à 99, 7 px au-delà, où trois chiffres tiennent encore
+// dans les 12 px que laissent les deux bords blancs.
+function createMupMarkerRang(color, rang){
+  var t=String(rang);
+  return L.divIcon({
+    className: 'mup-marker',
+    html: '<div style="width:16px;height:16px;border-radius:50%;background:'+color+';border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:'+(t.length>2?7:9)+'px;font-weight:800;color:#fff;line-height:1">'+t+'</div>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8]
+  });
+}
+
 function formatRdvDate(dateStr, timeStr) {
   if(!dateStr) return '';
   var JOURS=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
@@ -1077,7 +1141,7 @@ function migrateCard(c){
 // _nomsRdv (visio.html).
 //
 // La garde `window.MUPNom ?` suit le précédent GARDÉ de cette page —
-// MUPProjection l'est déjà (placeCard, ligneCandidat) alors que MUPTel est
+// MUPProjection l'est déjà (placeCard, ligneAppel) alors que MUPTel est
 // appelé nu — parce que le module est chargé APRÈS ce script inline. Repli
 // recopié de pipeline.html:1660.
 //
@@ -1996,7 +2060,8 @@ function rafraichirLeRayon(){
 }
 
 // LE COMPTE, EN TOUTES LETTRES. Des fiches et non des passages : croiser deux
-// fois la même enseigne ne fait pas deux appels à passer (cf. fichesDistinctes).
+// fois la même enseigne ne fait pas deux appels à passer, et c'est déjà la
+// forme que rend appelsDuRayon, un appel par fiche.
 // Le rayon est redit dans la même phrase, faute de quoi le nombre ne se
 // rapporterait à rien.
 // DEUX FORMES DE LA MÊME PHRASE, écrites d'un seul jeu de morceaux : celle qui
@@ -2004,7 +2069,7 @@ function rafraichirLeRayon(){
 // aria-valuetext. Sans elle, une prise vocale annoncerait « 15 000 », valeur
 // brute qui ne dit ni des mètres ni des fiches.
 function phraseDuCompte(){
-  var n=fichesDistinctes(passagesDuRayon());
+  var n=appelsDuRayon().length;
   var tete=n?(n+' fiche'+(n>1?'s':'')):'Aucune fiche';
   var queue=' à moins de '+fmtEcart(COULOIR_M)+' de la route';
   return {html:'<b>'+tete+'</b>'+queue, texte:tete+queue};
@@ -2090,7 +2155,7 @@ function renderPanel(){
     var actSt=it.isRdv?actionStyle(it.nextAction.type):null;
     var label=it.isRdv?actSt.label:'Prospect';
     var labelColor=it.isRdv?actSt.color:'#6E6E73';
-    // Même espace d'identifiants que les lignes du couloir (ligneCandidat et
+    // Même espace d'identifiants que les lignes du couloir (ligneAppel et
     // ligneRendezVous) : les deux rendus remplacent #tour-body en entier et ne
     // coexistent jamais, donc pas de collision. C'est ce qui donne une cible à
     // scrollToStop hors couloir. Le bouton ne va que sur les fiches à
@@ -2212,7 +2277,9 @@ var trajetMoities=[];
 // rendez-vous se rende sans rappeler personne : la fiche de destination, et les
 // PASSAGES déjà mesurés et rangés dans l'ordre du trajet. Des passages et non
 // des fiches : une même fiche en occupe deux quand la route la croise à l'aller
-// et au retour (cf. fichesDuCouloir).
+// et au retour (cf. fichesDuCouloir). C'est la réserve, pas la liste : le rendu
+// les refond en un appel par fiche, portant les deux heures (cf.
+// appelsDuRayon).
 var couloirRdv=null;
 var couloirCandidats=[];
 // Le cumul de temps, depuis le départ, du nœud du rendez-vous. Seul point fixe
@@ -2239,7 +2306,7 @@ var couloirAffiche=false;
 // travail coûteux, elle ne se refait pas à chaque pixel du curseur, et tout ce
 // qui tient dans 50 km est donc retenu par fichesDuCouloir. COULOIR_M, lui, est
 // le REGLAGE : il ne fait que refiltrer une mesure déjà en main, ce qui est
-// immédiat et sans appel réseau (cf. passagesDuRayon). Le minimum et le maximum
+// immédiat et sans appel réseau (cf. appelsDuRayon). Le minimum et le maximum
 // sont ceux du curseur, et le balisage les répète en clair.
 // AUCUNE MÉMOIRE DU RÉGLAGE : COULOIR_M repart du défaut à chaque préparation
 // (cf. clearTourPlan). La journée change, le réglage se refait.
@@ -2273,8 +2340,13 @@ var COULOIR_FROID_MAX=stageIdx('visio');
 // Ne touche ni rdvPanelIds ni les cercles de proximité : effacer un trajet
 // n'est pas effacer le panneau RDV. Ne touche pas rdvChoisi non plus : la
 // destination est une désignation de l'abonné, pas un résultat de calcul.
+// LES RANGS D'APPEL PARTENT AVEC LE TRAJET. Ils sont posés dans les marqueurs
+// eux-mêmes, hors de tout ce que cette fonction remet à zéro : sans ce retrait
+// la carte garderait les numéros d'une route effacée (cf.
+// numeroterLesMarqueurs, qu'une liste vide suffit à défaire).
 function clearTourPlan(){
   if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  numeroterLesMarqueurs([]);
   // Le rayon repart du défaut, ici et nulle part ailleurs : c'est le seul point
   // par lequel toute préparation passe, celle qui suit « Effacer » comme celle
   // que l'encart conduit.
@@ -2430,8 +2502,8 @@ function lancerCouloir(){
       // pas un résultat, et renoncerAuRayon retire l'encart sur ces chemins.
       if(!estOuvert('mesTempsRayon')){
         // Des fiches, pas des passages : celle qu'on croise deux fois ne se
-        // rappelle qu'une.
-        var n=fichesDistinctes(passagesDuRayon());
+        // rappelle qu'une, et la liste ne lui donne qu'une ligne.
+        var n=appelsDuRayon().length;
         toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
           +' · '+fmtDuree(Math.round(demi.duration/60))+' de trajet aller-retour');
       }
@@ -2551,11 +2623,17 @@ function demiTrajet(parcours,rdvLngLat){
 // et entre 4 et 35 minutes du rendez-vous les deux moitiés passent à moins de
 // 10 m l'une de l'autre. Aucun seuil ne rend ce classement stable. Mais la
 // vérité du trajet est justement qu'on passe devant DEUX FOIS : chaque moitié
-// garde son propre minimum, et chacune rend sa ligne dès lors qu'elle tient dans
-// le couloir. La liste double au pire exactement — jamais plus, chaque moitié ne
-// rendant qu'un passage par fiche — et les deux occurrences ne se suivent pas :
-// l'une tombe avant le rendez-vous, l'autre après sa sortie, chacune à son
-// heure. Le compteur, lui, continue de dire des fiches (cf. fichesDistinctes).
+// garde son propre minimum, et chacune rend son passage dès lors qu'elle tient
+// dans le couloir. Deux passages au pire, jamais plus, chaque moitié n'en
+// rendant qu'un par fiche.
+//
+// DEUX PASSAGES NE FONT PAS DEUX LIGNES. Ils l'ont fait, et c'était l'erreur :
+// treize fiches rendaient vingt-deux lignes, et l'abonnée n'appelle personne
+// deux fois. Ce que les deux passages servent à savoir, c'est que la même fiche
+// est joignable à deux moments de la journée, l'un en montant, l'autre en
+// redescendant. Le rendu les refond en un appel unique portant les deux heures
+// (cf. appelsDuRayon) ; la mesure, elle, continue de les rendre séparés, parce
+// qu'elle n'a pas à décider ce que la liste en fera.
 //
 // Ce que chaque passage porte est ce que la mesure établit juste : la distance à
 // SA moitié de route, et le cumul de temps depuis le DÉPART au point
@@ -2577,7 +2655,7 @@ function fichesDuCouloir(ligne){
   // passage retenu suffit.
   // LE SEUIL EST CELUI DU CURSEUR AU PLUS LARGE, jamais le réglage courant : ce
   // qui est mesuré ici l'est une fois pour toutes, et le curseur ne fait ensuite
-  // que refiltrer cette liste (cf. passagesDuRayon). Mesurer au réglage
+  // que refiltrer cette liste (cf. appelsDuRayon). Mesurer au réglage
   // obligerait à recalculer la route à chaque pixel. La boucle ne coûte rien de
   // plus pour autant : elle parcourt les mêmes fiches et les mêmes segments quel
   // que soit le seuil, seul le nombre de passages retenus change.
@@ -2635,38 +2713,58 @@ function fichesDuCouloir(ligne){
   return trouvees;
 }
 
-// ── LE RAYON REFILTRE, IL NE MESURE PAS ──
+// ── LE RAYON REFILTRE, ET LES DEUX PASSAGES SE FONDENT EN UN APPEL ──
 // Ce que le curseur commande : les passages de la mesure qui tiennent dans le
-// réglage courant. Aucun calcul de distance ici, elles sont toutes déjà prises ;
+// réglage courant. Aucun calcul de distance ici, ils sont tous déjà pris ;
 // c'est ce qui permet au compte de suivre le curseur en direct, sans appel
 // réseau ni recalcul de route.
 //
-// UN IDENTIFIANT PAR ÉLÉMENT, ET IL SE POSE ICI. Deux passages d'une même fiche
-// font deux lignes, et deux lignes ne peuvent pas porter le même id : le second
-// passage prend un suffixe. Le PREMIER garde #sched-<id> nu, cible de
-// scrollToStop et du bouton « Voir dans le panneau », qui mènent donc à la
-// première occasion d'appeler, celle qui vient la première dans la journée.
-// La numérotation se fait sur les passages RETENUS et non sur la mesure entière :
-// numérotés avant le filtre, un passage écarté aurait emporté l'identifiant nu
-// avec lui et la fiche serait devenue inatteignable.
-function passagesDuRayon(){
-  var vus={}, retenus=[];
+// UNE LIGNE PAR FICHE, ET NON PAR PASSAGE. La mesure rend deux passages par
+// fiche, l'un à l'aller, l'autre au retour (cf. fichesDuCouloir), et la liste
+// portait donc deux lignes pour une même enseigne : treize fiches faisaient
+// vingt-deux lignes à l'écran. Or ce ne sont pas des visites, ce sont des
+// APPELS. On ne téléphone pas deux fois à la même enseigne pour la même
+// journée. Les deux passages se fondent ici en un seul APPEL, qui les garde
+// tous les deux : c'est justement ce que le second passage permet de dire au
+// téléphone, l'abonnée pouvant proposer l'heure de l'aller ou celle du retour.
+//
+// L'ORDRE EST CELUI DE LA MONTÉE, du départ jusqu'au rendez-vous, et il tombe
+// tout seul : couloirCandidats est trié par cumul croissant depuis le départ,
+// donc le PREMIER passage d'une fiche est celui de l'aller, et l'ordre de
+// première apparition est l'ordre où la route croise les fiches en montant.
+// C'est cet ordre qui dit qui appeler en premier, et le rang s'y lit
+// directement. RIEN N'EST MÉMORISÉ : le rang se refait à chaque appel de cette
+// fonction, à partir du réglage courant du rayon, si bien que la liste reste
+// numérotée de un à N sans trou. Une fiche qui sort du rayon n'y laisse pas son
+// numéro, celles qui la suivaient remontent d'un rang. Le curseur du rayon
+// passe ici à chaque pixel pour son compte (cf. phraseDuCompte), le rendu de la
+// liste à chaque affichage (cf. renderCouloir) : les deux lisent la même
+// numérotation parce qu'ils la refont tous les deux.
+//
+// UN IDENTIFIANT PAR LIGNE, sans suffixe désormais : une fiche, une ligne, un
+// #sched-<id>. Le suffixe « --2 » qu'un second passage portait n'a plus d'objet,
+// et scrollToStop comme le bouton « Voir dans le panneau » atteignent toujours
+// la fiche, quel que soit le rayon.
+//
+// L'ÉCART EST LE PLUS COURT DES DEUX. Les deux moitiés se superposant depuis
+// demiTrajet, les deux passages le portent égal ; le minimum est pris quand
+// même, parce que c'est la mesure qui décide et non une symétrie supposée.
+function appelsDuRayon(){
+  var parId={}, appels=[];
   couloirCandidats.forEach(function(p){
     if(p.ecart>COULOIR_M) return;
-    var n=(vus[p.id]||0)+1;
-    vus[p.id]=n;
-    p.dom='sched-'+p.id+(n>1?'--'+n:'');
-    retenus.push(p);
+    var a=parId[p.id];
+    if(!a){
+      a={id:p.id, card:p.card, ecart:p.ecart, aller:null, retour:null, dom:'sched-'+p.id};
+      parId[p.id]=a;
+      appels.push(a);
+    }
+    if(p.retour){ if(a.retour===null) a.retour=p.t; }
+    else if(a.aller===null){ a.aller=p.t; }
+    if(p.ecart<a.ecart) a.ecart=p.ecart;
   });
-  return retenus;
-}
-
-// Le compteur dit des FICHES, pas des passages : croiser deux fois la même
-// enseigne ne fait pas deux appels à passer.
-function fichesDistinctes(passages){
-  var vus={}, n=0;
-  passages.forEach(function(p){ if(!vus[p.id]){vus[p.id]=1;n++;} });
-  return n;
+  appels.forEach(function(a,i){ a.rang=i+1; });
+  return appels;
 }
 
 // Le temps le long de la ligne, et l'index du rendez-vous dedans.
@@ -2718,63 +2816,103 @@ function proRata(px,py,debut,fin,total){
 }
 
 // ── LE RENDU DU COULOIR ──
-// UNE SEULE LISTE, du départ au retour, sans intertitre. Les deux blocs « Sur
-// l'aller » et « Au retour » partageaient en deux un classement qui bascule pour
-// 25 m, et forçaient une fiche à choisir son camp. Elle n'a plus à le faire :
-// elle paraît une fois par passage (cf. fichesDuCouloir), et c'est l'ORDRE — le
-// cumul depuis le départ, croissant d'un bout à l'autre du voyage — qui range
-// tout le monde, sans couper la liste.
+// UNE SEULE LISTE, ET UNE SEULE LIGNE PAR FICHE. Les deux blocs « Sur l'aller »
+// et « Au retour » partageaient en deux un classement qui bascule pour 25 m, et
+// forçaient une fiche à choisir son camp ; les deux lignes qui leur ont succédé,
+// une par passage, lui faisaient tenir les deux à la fois et donnaient
+// vingt-deux lignes pour treize fiches. Ni l'un ni l'autre : la fiche paraît UNE
+// FOIS, avec son rang d'appel et ses deux créneaux (cf. appelsDuRayon), et
+// l'ordre est celui de la montée, du départ jusqu'au rendez-vous.
 //
-// La ligne du rendez-vous s'insère à sa place : juste avant le premier passage
-// de RETOUR, c'est-à-dire au rebroussement. Ce qui est au-dessus se propose
-// avant lui, ce qui est en dessous après sa sortie. Elle est le point fixe de la
-// journée, et c'est de son heure que toutes les autres se déduisent — et elle
-// coupe toute série d'ex æquo en cours, une heure de l'aller et une heure du
-// retour ne se rattachant jamais l'une à l'autre.
+// LA LIGNE DU RENDEZ-VOUS FERME LA LISTE, et c'est la même place qu'avant. Elle
+// se posait au rebroussement, juste avant le premier passage de retour ; toutes
+// les lignes qui restent sont désormais des lignes d'aller, toutes situées avant
+// ce rebroussement, si bien qu'il tombe au bas de la liste. On y lit la journée
+// dans l'ordre où elle se fait : les appels à passer en montant, puis la
+// destination et son heure, la seule qui soit réelle et dont toutes les autres
+// se déduisent.
 // CE QUI SE REND EST CE QUE LE RAYON RETIENT, pas la mesure entière : celle-ci
 // va jusqu'au maximum du curseur et sert de réserve au réglage (cf.
-// passagesDuRayon). Relu à chaque rendu, si bien qu'un rayon changé se rend sans
+// appelsDuRayon). Relu à chaque rendu, si bien qu'un rayon changé se rend sans
 // que rien ne soit recalculé.
 function renderCouloir(){
   if(!couloirRdv) return;
 
-  var retenus=passagesDuRayon();
-  var html='', posee=false, precedente=null;
-  retenus.forEach(function(c){
-    if(!posee&&c.retour){ html+=ligneRendezVous(); posee=true; precedente=null; }
-    var quand=heureDePassage(c.t,c.retour)||fmtDuree(Math.round(c.t/60));
-    html+=ligneCandidat(c,quand,quand===precedente);
-    precedente=quand;
-  });
-  if(!posee) html+=ligneRendezVous();
-  if(!retenus.length){
+  var appels=appelsDuRayon();
+  var html=appels.map(ligneAppel).join('');
+  html+=ligneRendezVous();
+  if(!appels.length){
     html+='<div style="padding:16px 8px;text-align:center;color:var(--muted2);font-size:11px">Aucune fiche à moins de '+fmtEcart(COULOIR_M)+' de la route</div>';
   }
   document.getElementById('tour-body').innerHTML=html;
+  // Le même rang, sur la carte, dans le marqueur de chaque fiche.
+  numeroterLesMarqueurs(appels);
 
-  var n=fichesDistinctes(retenus);
-  // Même compte, même endroit unique qu'au panneau RDV : la pastille du bouton
-  // « Actions » est partie avec lui.
-  document.getElementById('tour-count').textContent=n+' à appeler';
+  // Un appel par fiche : la longueur de la liste EST le compte de fiches, il n'y
+  // a plus de doublon à écarter. Même endroit unique qu'au panneau RDV,
+  // l'en-tête, où le titre « À contacter » dit maintenant de quoi il s'agit.
+  document.getElementById('tour-count').textContent=appels.length+' à appeler';
   couloirAffiche=true;
   retirerCercles();
 }
 
-// La durée du rendez-vous, telle que le <select> la dit. Lue à chaque rendu :
-// c'est ce qui fait qu'en la changeant on déplace toute la seconde moitié de la
-// liste, et pas seulement la ligne « Sortie vers ».
+// ── LE RANG SE LIT AUSSI SUR LA CARTE ──
+// Ce que la liste numérote, le marqueur le porte : la route se lit alors d'un
+// coup d'œil, de un à N, sans que l'abonnée ait à faire de tête la
+// correspondance entre une liste ordonnée et un nuage de points qui ne l'est
+// pas.
+//
+// SEULS LES RANGS QUI CHANGENT SONT REPOSÉS. Le relevé de ce qui est posé se
+// garde d'un rendu à l'autre : une fiche qui garde son numéro n'est pas touchée,
+// une fiche qui sort du rayon retrouve son disque nu, une fiche qui y entre
+// prend le sien. La dépense serait de toute façon tenable sans ce tri, le banc
+// donnant 0,3 ms pour reposer les 480 marqueurs d'un portefeuille entier carte
+// large et 4,8 ms carte serrée (cf. createMupMarkerRang), et le rendu ne se
+// refaisant qu'à la validation du rayon et à chaque changement de durée du
+// rendez-vous. Le tri est là parce que changer la durée déplace les créneaux
+// sans déplacer personne dans l'ordre : aucun rang ne bouge, et rien n'a alors
+// à être reposé du tout.
+//
+// L'ANCRE DE LA BULLE SUIT LE DISQUE. bindPopup a posé un décalage de 4 px,
+// calculé pour un disque de rayon 7 par la règle « offset.y = 11 moins R » que
+// placeCard écrit et justifie. Le disque numéroté a pour rayon 8, donc 3 : sans
+// cet ajustement la pointe de la bulle entrerait d'un pixel dans le disque.
+var rangsPoses={};
+function numeroterLesMarqueurs(appels){
+  var voulus={};
+  appels.forEach(function(a){ voulus[a.id]=a.rang; });
+  function poser(id,rang){
+    var m=markers[id];
+    if(!m) return;
+    var col=stageColor(m.card.col);
+    m.marker.setIcon(rang?createMupMarkerRang(col,rang):createMupMarker(col));
+    var bulle=m.marker.getPopup();
+    if(bulle) bulle.options.offset=L.point(0,rang?3:4);
+  }
+  Object.keys(rangsPoses).forEach(function(id){ if(!voulus[id]) poser(id,0); });
+  Object.keys(voulus).forEach(function(id){ if(rangsPoses[id]!==voulus[id]) poser(id,voulus[id]); });
+  rangsPoses=voulus;
+}
+
+// La durée du rendez-vous, telle que le <select> la dit. Lue à chaque rendu, et
+// c'est ici qu'elle prend tout son sens : elle commande le SECOND CRÉNEAU de
+// chaque ligne. Un rendez-vous de deux heures plutôt que d'une repousse d'une
+// heure tout ce que l'abonnée peut proposer d'après-midi, ligne par ligne, et
+// pas seulement l'heure de sortie du rendez-vous lui-même.
 function dureeRdv(){return parseInt(document.getElementById('rdv-dur').value,10)||60;}
 
-// L'HEURE À LAQUELLE L'ABONNÉ PASSE DEVANT. Le rendez-vous est le seul point de
-// la journée dont on connaisse l'heure ; tout le reste s'en déduit par le cumul
-// de trajet. Avant lui, c'est son heure moins ce qu'il reste de route ; après,
+// L'HEURE À LAQUELLE L'ABONNÉ PASSE DEVANT, celle qu'il peut donc PROPOSER au
+// téléphone (cf. ligneAppel). Le rendez-vous est le seul point de la journée
+// dont on connaisse l'heure ; tout le reste s'en déduit par le cumul de
+// trajet. Avant lui, c'est son heure moins ce qu'il reste de route ; après,
 // il faut encore ajouter l'immobilisation — on ne repart pas d'un rendez-vous à
 // l'heure où on y arrive, et tout ce qui suit est décalé d'autant.
 //
-// La moitié est DITE par le passage, elle ne se devine plus en comparant le
+// La moitié est DITE par l'appelant, elle ne se devine plus en comparant le
 // cumul à celui du rendez-vous : les deux se valent exactement au rebroussement,
 // et un passage d'aller accroché là se voyait ajouter la durée d'un rendez-vous
-// qu'il n'avait pas encore eu.
+// qu'il n'avait pas encore eu. C'est creneauxAProposer qui appelle, une fois par
+// créneau, en disant de quelle moitié vient le cumul qu'il donne.
 //
 // Rend null quand le rendez-vous n'a pas d'action datée : il n'y a alors aucune
 // heure à laquelle rapporter le trajet, et la ligne se rabat sur le temps depuis
@@ -2786,58 +2924,106 @@ function heureDePassage(t,retour){
   return fmtHeure(Math.round(min));
 }
 
-// L'heure de passage en principal, l'écart à la route en second : ils ne disent
-// pas la même chose. L'heure situe la fiche dans la journée — et dans la même
-// colonne que celle du rendez-vous, pour que la liste se lise d'un trait ;
-// l'écart dit ce qu'il en coûte d'aller la voir — une fiche à 400 m de la route
-// et une à 14 km ne se proposent pas de la même façon au téléphone.
-// `quand` et `suite` viennent du rendu : l'heure d'une ligne se juge par rapport
-// à celle de la ligne précédente, que seule la boucle connaît. `suite` vrai dit
-// « même heure que celle du dessus » — l'heure n'est alors plus réécrite, le
-// rail la reporte (cf. .sched-time.sched-suite).
-function ligneCandidat(c,quand,suite){
-  var col=stageColor(c.card.col);
+// ── CE QUE L'ABONNÉE PEUT PROPOSER ──
+// L'HEURE A CHANGÉ DE SENS, ET LE TEXTE LE PORTE. La ligne disait une heure de
+// passage, et le lecteur y entendait « vous passerez devant à 13h39 ». C'était
+// faux : on ne s'arrête pas chez ces gens, on les APPELLE pour décrocher un
+// second rendez-vous le jour même. L'heure n'est pas un fait du trajet à venir,
+// c'est un ARGUMENT au téléphone, celle que l'abonnée peut proposer à son
+// interlocuteur puisque la route l'amène là à ce moment.
+//
+// DEUX HEURES ET NON UNE, parce qu'un prospect n'est pas toujours libre quand on
+// monte et l'est souvent quand on redescend : un rendez-vous à 13 h qui dure deux
+// heures fait une sortie à 15 h, et l'interlocuteur qui refuse 10 h reçoit à 18 h.
+// La ligne donne donc les DEUX heures, celle de l'aller et celle du retour, et
+// c'est exactement ce que les deux passages de la mesure servaient à savoir.
+// Le sélecteur de durée du rendez-vous commande la seconde : c'est ici qu'il
+// prend son sens, il déplace tout ce que l'abonnée peut proposer d'après-midi.
+//
+// LA FORMULATION EST MESURÉE AUTANT QUE CHOISIE. « Proposez 09h12 ou 17h48 »
+// occupe 145,4 px au banc, en panneau de 280 px et sous le badge le plus large ;
+// « à proposer : ... » en occupe 170,7 et « vous pouvez proposer ... » 221,3,
+// l'une comme l'autre passant à la ligne. L'impératif est le seul tour qui dise
+// le geste et tienne sur une ligne.
+//
+// L'écart à la route reste en dessous : il dit ce qu'il en coûte d'aller la
+// voir, et une fiche à 400 m ne se propose pas comme une fiche à 14 km.
+function ligneAppel(a){
+  var col=stageColor(a.card.col);
   // Même lecture que la bulle : saisie d'abord, projection en repli.
-  var tel=window.MUPProjection?window.MUPProjection.tel(c.card):(c.card.tel||'');
-  return '<div class="sched-item'+(suite?' sched-lie':'')+'" id="'+c.dom+'" style="cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+c.id+'\')">'
-    +(suite?'<div class="sched-time sched-suite" title="Même heure de passage"><span class="sched-rail"></span></div>'
-           :'<div class="sched-time">'+quand+'</div>')
-    +'<div class="sched-dot" style="background:'+col+'"></div>'
-    +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(c.card).titre)+'</div>'
-    +'<div class="sched-meta">à '+fmtEcart(c.ecart)+' de la route</div>'
+  var tel=window.MUPProjection?window.MUPProjection.tel(a.card):(a.card.tel||'');
+  var t=String(a.rang);
+  return '<div class="sched-item" id="'+a.dom+'" style="cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+a.id+'\')">'
+    +'<div class="sched-rang'+(t.length>2?' sched-rang-long':'')+'" style="background:'+col+'" title="Ordre d\'appel">'+t+'</div>'
+    +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(a.card).titre)+'</div>'
+    +'<div class="sched-creneaux">'+creneauxAProposer(a)+'</div>'
+    +'<div class="sched-meta">à '+fmtEcart(a.ecart)+' de la route</div>'
     // Le numéro est dans une ligne qui vole vers le marqueur au clic. Sans
     // arrêt de la propagation, appeler déclenchait aussi ce vol : le temps
     // que le combiné prenne la main, la carte s'était recentrée et avait
     // ouvert une infobulle sous l'appel. Même geste que le lien tel: de
-    // l'infobulle (cf. placeCard) — le href n'est pas touché, seule la
+    // l'infobulle (cf. placeCard) : le href n'est pas touché, seule la
     // remontée de l'événement au parent est coupée.
     +(tel?'<div class="sched-tel"><a href="tel:'+esc(window.MUPTel.lien(tel))+'" onclick="event.stopPropagation()">'+esc(window.MUPTel.format(tel))+'</a></div>':'')
     +'</div>'
-    +'<div class="sched-badge" style="background:'+col+'22;color:'+col+'">'+stageName(c.card.col)+'</div>'
+    +'<div class="sched-badge" style="background:'+col+'22;color:'+col+'">'+stageName(a.card.col)+'</div>'
     +'</div>';
 }
 
-// La destination. Même espace d'identifiants que les passages — #sched-<id> nu,
-// sans suffixe : scrollToStop vise celui-là, et le bouton « Voir dans le
-// panneau » de l'infobulle doit atteindre le rendez-vous comme le reste. Aucune
-// collision possible avec les passages : la fiche de destination est écartée de
-// la mesure, elle n'en produit donc aucun.
+// Les deux créneaux d'un appel, dans l'ordre de la journée : l'aller d'abord,
+// le retour ensuite. Une moitié dégénérée peut n'en rendre qu'un seul, la phrase
+// se réduit alors à l'heure qu'on sait (cf. appelsDuRayon).
+//
+// SANS CADRAN, ON NE PROPOSE PAS UNE HEURE. heureDePassage ne rend rien quand le
+// rendez-vous n'a pas d'action datée : il n'y a alors aucune heure à laquelle
+// rapporter le trajet, et « Proposez 09h12 » serait une invention. La phrase
+// bascule sur le temps depuis le départ, la même grandeur sans le cadran, et
+// l'immobilisation du rendez-vous entre dans le créneau du retour comme elle
+// entre dans son heure.
+function creneauxAProposer(a){
+  var cadran=[], sansCadran=[];
+  [[a.aller,false],[a.retour,true]].forEach(function(paire){
+    if(paire[0]===null) return;
+    var h=heureDePassage(paire[0],paire[1]);
+    if(h) cadran.push(h);
+    sansCadran.push(fmtDuree(Math.round(paire[0]/60)+(paire[1]?dureeRdv():0)));
+  });
+  if(cadran.length) return 'Proposez '+cadran.join(' ou ');
+  return sansCadran.length?('après '+sansCadran.join(' ou ')):'';
+}
+
+// La destination. Même espace d'identifiants que les appels, #sched-<id> :
+// scrollToStop vise celui-là, et le bouton « Voir dans le panneau » de
+// l'infobulle doit atteindre le rendez-vous comme le reste. Aucune collision
+// possible : la fiche de destination est écartée de la mesure, elle ne produit
+// donc aucun appel.
+//
+// ELLE N'EST PAS UN APPEL, ET SA COLONNE DE GAUCHE LE DIT. Les lignes d'appel y
+// portent leur rang ; celle-ci n'en a pas, on ne se téléphone pas un rendez-vous
+// déjà pris. Elle garde son point, rangé dans la même colonne de 16 px (cf.
+// .sched-slot) pour que les deux sortes de lignes s'alignent sur le même bord.
+// La colonne d'heure qui la précédait est partie avec celle des lignes d'appel.
+//
+// SON HEURE RESTE, ET ELLE EST LA SEULE RÉELLE. Les appels portent des créneaux
+// à proposer, déduits ; celle-ci porte un rendez-vous pris, à l'heure dite. Elle
+// se lit au même endroit que les créneaux et dans le même vêtement, en cyan
+// plutôt qu'en noir : l'arrivée, puis la sortie. L'heure de sortie ouvre la
+// seconde moitié de la journée : le <select> de #tour-controls la déplace, et
+// avec elle le second créneau de chaque appel (cf. heureDePassage). Ce qui
+// précède ne bouge pas, la route jusqu'ici étant faite quelle que soit la durée.
+// La date reste en dessous, sans son heure, qui est désormais dite au-dessus.
 function ligneRendezVous(){
   var c=couloirRdv;
   var na=nextActionOf(c.card);
   var st=na?actionStyle(na.type):actionStyle('rdv');
   var heure=na?(na.hour||'14:00'):null;
-  // L'heure de sortie ouvre la seconde moitié de la journée : le <select> de
-  // #tour-controls la déplace, et avec elle toutes les heures de passage des
-  // fiches situées après le rendez-vous (cf. heureDePassage). Ce qui précède ne
-  // bouge pas — la route jusqu'ici est faite quelle que soit la durée.
   var sortie=heure?fmtHeure(minutesDe(heure)+dureeRdv()):'';
+  var quand=heure?(fmtHeure(minutesDe(heure))+(sortie?', sortie vers '+sortie:'')):'Heure inconnue';
   return '<div class="sched-item" id="sched-'+c.id+'" style="border-color:#0BBCD4;background:rgba(11,188,212,.06);cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+c.id+'\')">'
-    +'<div class="sched-time" style="color:#0BBCD4">'+(heure?heure.replace(':','h'):'—')+'</div>'
-    +'<div class="sched-dot" style="background:#0BBCD4"></div>'
+    +'<div class="sched-slot"><div class="sched-dot" style="background:#0BBCD4"></div></div>'
     +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(c.card).titre)+'</div>'
-    +'<div class="sched-meta" style="color:'+st.color+';font-weight:600">'+st.label+(na?' — '+formatRdvDate(na.date.slice(0,10),na.hour):'')+'</div>'
-    +(sortie?'<div class="sched-meta">Sortie vers '+sortie+'</div>':'')
+    +'<div class="sched-creneaux" style="color:#0BBCD4">'+quand+'</div>'
+    +'<div class="sched-meta" style="color:'+st.color+';font-weight:600">'+st.label+(na?' · '+formatRdvDate(na.date.slice(0,10)):'')+'</div>'
     +'</div>'
     +'<div class="sched-badge" style="background:rgba(11,188,212,.12);color:#0BBCD4">RDV</div>'
     +'</div>';

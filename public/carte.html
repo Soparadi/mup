@@ -207,6 +207,19 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .sched-tel a:hover{text-decoration:underline}
 .sched-badge{font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0}
 
+/* LES EX ÆQUO. Un portefeuille concentré autour de la destination fait tomber
+   dix fiches à la même minute de trajet : la colonne répétait « 15h00 » huit
+   fois de suite et ne séparait plus rien — le « 0 min » de la veille sous une
+   autre unité. Rien à gagner à inventer des secondes que la mesure ne
+   distingue pas. L'heure ne se porte donc que sur la PREMIÈRE d'une série ;
+   les suivantes se resserrent contre elle et s'y rattachent par un rail
+   vertical, qui se lit « toujours celle-là ». Même mesure, dite une fois.
+   align-self:stretch sur la cellule d'heure, sinon elle n'a que la hauteur de
+   son texte — vide, elle n'en aurait aucune et le rail ne se verrait pas. */
+.sched-item.sched-lie{margin-top:-3px}
+.sched-time.sched-suite{align-self:stretch;display:flex;padding-left:5px}
+.sched-rail{width:2px;min-height:16px;border-radius:1px;background:var(--border2);align-self:stretch}
+
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:600;z-index:9000;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
@@ -1072,13 +1085,24 @@ function autoShowRdv(){
     }
   });
 
-  renderPanel();
+  // LA QUATRIÈME GARDE. Les trois posées ailleurs couvraient stopLocate, le
+  // watchPosition de locateUser et choisirRdv — trois gestes de l'abonné.
+  // Celle-ci couvre le seul appelant qui n'en soit pas un : agenda-sync rappelle
+  // autoShowRdv à chaque retour d'onglet (storage, visibilitychange, focus), et
+  // reprendre le focus suffisait à faire remplacer le couloir par la liste
+  // numérotée du panneau RDV — tracé toujours sur la carte, « 16 fiches » au
+  // compteur au lieu de « N à appeler », sans qu'aucun geste ait été fait.
+  // Seul le rendu de #tour-body est retiré : les cercles (gardés plus haut),
+  // rdvPanelIds, le badge et l'ouverture du panneau continuent leur travail. Le
+  // badge et le compteur ne sont pas perdus pour autant — sous couloir, c'est
+  // renderCouloir qui les tient, et ils disent les fiches de la route.
+  if(!couloirAffiche) renderPanel();
 
   // OUVERTURE AUTOMATIQUE. Tout ce qui précède — cercles de proximité,
-  // rdvPanelIds, et par renderPanel le badge, le compteur et l'état actif du
-  // bouton « Actions » — est calculé sans condition : le signal « il y a des
-  // RDV » passe par eux, pas par la saisie de l'écran. Seul le geste
-  // d'ouvrir est conditionné.
+  // rdvPanelIds, et hors couloir par renderPanel le badge, le compteur et
+  // l'état actif du bouton « Actions » — est calculé sans condition : le signal
+  // « il y a des RDV » passe par eux, pas par la saisie de l'écran. Seul le
+  // geste d'ouvrir est conditionné.
   //
   // Deux gardes s'ajoutent à l'ouverture courante :
   // — sous 640 (le seuil de la media query ci-dessus), jamais : le panneau y
@@ -1358,7 +1382,9 @@ var routeLine=null;
 var trajetMoities=[];
 // Ce que le dernier calcul a trouvé, gardé pour qu'un changement de durée du
 // rendez-vous se rende sans rappeler personne : la fiche de destination, et les
-// candidats déjà mesurés et rangés dans l'ordre du trajet.
+// PASSAGES déjà mesurés et rangés dans l'ordre du trajet. Des passages et non
+// des fiches : une même fiche en occupe deux quand la route la croise à l'aller
+// et au retour (cf. fichesDuCouloir).
 var couloirRdv=null;
 var couloirCandidats=[];
 // Le cumul de temps, depuis le départ, du nœud du rendez-vous. Seul point fixe
@@ -1460,7 +1486,9 @@ function calcTour(){
           // Différé de 400 ms : le trajet peut avoir été effacé entretemps
           // (« Effacer », ou un second calcul lancé dans la foulée).
           setTimeout(function(){if(routeLine)map.fitBounds(routeLine.getBounds(),{padding:[60,60]});},400);
-          var n=couloirCandidats.length;
+          // Des fiches, pas des passages : celle qu'on croise deux fois ne se
+          // rappelle qu'une.
+          var n=fichesDistinctes(couloirCandidats);
           toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
             +' · '+fmtDuree(Math.round(parcours.duration/60))+' de trajet aller-retour');
         })
@@ -1482,22 +1510,33 @@ function calcTour(){
 // françaises l'écart au grand cercle se compte en centimètres. Le facteur de
 // longitude se prend au premier point de la ligne, une fois pour toutes.
 //
-// SUR UN ALLER-RETOUR PAR LA MÊME ROUTE, les deux moitiés se superposent et une
-// fiche est à égale distance de l'une et de l'autre : le premier segment
-// rencontré l'emporte. Ce commentaire disait le mécanisme juste et sa portée
-// fausse — « c'est vrai plutôt qu'arbitraire », écrivait-il, en le prenant pour
-// un cas de bord. C'était le régime nominal : 55 % des fiches du couloir
-// changent de moitié pour 25 m de déplacement, et entre 4 et 35 minutes du
-// rendez-vous les deux moitiés passent à moins de 10 m l'une de l'autre. Aucun
-// seuil de minutes ne rend le classement stable au-delà.
+// DEUX MINIMA, UN PAR MOITIÉ, ET DONC DEUX PASSAGES POSSIBLES. La version
+// précédente prenait le minimum sur toute la polyligne : un seul segment
+// retenu, le premier rencontré à égalité. Sur un aller-retour par la même
+// route, les deux moitiés se superposent et le premier rencontré est toujours
+// celui de l'ALLER — la fiche se rangeait donc systématiquement avant le
+// rendez-vous. Départ de Nantes, rendez-vous à 14 h : la liste s'arrêtait à la
+// ligne du rendez-vous, rien en dessous. C'est l'inverse exact de l'usage —
+// rien ne se propose avant un rendez-vous du matin, tout se joue après la
+// sortie.
 //
-// D'où l'abandon de la distinction aller / retour. Le segment retenu reste
-// arbitraire, mais on ne lui fait plus porter un sens de trajet. Ce qu'on garde
-// de la mesure est ce qu'elle établit juste : la distance à la route, et le
-// cumul de temps depuis le DÉPART au point d'accrochage, qui croît tout au long
-// du voyage et donne l'ordre dans lequel l'abonné passe devant. C'était la
-// valeur absolue de l'écart au rendez-vous qui mentait près du rebroussement —
-// 171 km² à « 0 min », jusqu'à 15 km au-delà du rendez-vous — pas le cumul.
+// On ne choisit pas le « bon » côté à la place de l'abonné, et on ne le pourrait
+// pas : 55 % des fiches du couloir changent de moitié pour 25 m de déplacement,
+// et entre 4 et 35 minutes du rendez-vous les deux moitiés passent à moins de
+// 10 m l'une de l'autre. Aucun seuil ne rend ce classement stable. Mais la
+// vérité du trajet est justement qu'on passe devant DEUX FOIS : chaque moitié
+// garde son propre minimum, et chacune rend sa ligne dès lors qu'elle tient dans
+// le couloir. La liste double au pire exactement — jamais plus, chaque moitié ne
+// rendant qu'un passage par fiche — et les deux occurrences ne se suivent pas :
+// l'une tombe avant le rendez-vous, l'autre après sa sortie, chacune à son
+// heure. Le compteur, lui, continue de dire des fiches (cf. fichesDistinctes).
+//
+// Ce que chaque passage porte est ce que la mesure établit juste : la distance à
+// SA moitié de route, et le cumul de temps depuis le DÉPART au point
+// d'accrochage, qui croît tout au long du voyage et donne l'ordre dans lequel
+// l'abonné passe devant. C'était la valeur absolue de l'écart au rendez-vous qui
+// mentait près du rebroussement — 171 km² à « 0 min », jusqu'à 15 km au-delà du
+// rendez-vous — pas le cumul.
 function fichesDuCouloir(ligne){
   if(!ligne||ligne.length<2) return [];
   var kx=Math.cos(ligne[0][1]*Math.PI/180)*111320, ky=110540;
@@ -1507,6 +1546,16 @@ function fichesDuCouloir(ligne){
   // Posé pour le rendu : c'est l'origine des heures. Le cumul d'un candidat ne
   // devient une heure que rapporté à celui du rendez-vous, dont on sait l'heure.
   couloirTRdv=chrono.cumul[chrono.iRdv];
+
+  // Comparaison au carré, comme les distances de la boucle : une racine par
+  // passage retenu suffit.
+  var seuil2=COULOIR_M*COULOIR_M;
+  // Le point de la ligne le plus proche porte un temps : celui de son segment,
+  // interpolé à l'endroit exact où la fiche vient s'y accrocher.
+  function passageDe(mid,card,d2,segment,position,retour){
+    var t=chrono.cumul[segment]+position*(chrono.cumul[segment+1]-chrono.cumul[segment]);
+    return {id:mid, card:card, ecart:Math.sqrt(d2), t:t, retour:retour};
+  }
 
   var trouvees=[];
   Object.keys(markers).forEach(function(mid){
@@ -1518,7 +1567,11 @@ function fichesDuCouloir(ligne){
     // elle l'était quand seul `lost` était nommé.
     if(stageIdx(m.card.col)>COULOIR_FROID_MAX) return;
     var qx=m.latlng[1]*kx, qy=m.latlng[0]*ky;
-    var meilleur=Infinity, segment=0, position=0;
+    // Un seul parcours des segments, deux minima tenus en parallèle : le nœud du
+    // rendez-vous est la frontière des moitiés, les segments qui le précèdent
+    // sont l'aller, ceux qui le suivent le retour.
+    var mA=Infinity, segA=0, posA=0;
+    var mR=Infinity, segR=0, posR=0;
     for(var i=0;i<px.length-1;i++){
       var ax=px[i], ay=py[i], dx=px[i+1]-ax, dy=py[i+1]-ay;
       var l2=dx*dx+dy*dy;
@@ -1526,19 +1579,45 @@ function fichesDuCouloir(ligne){
       if(t<0)t=0; else if(t>1)t=1;
       var ex=ax+t*dx-qx, ey=ay+t*dy-qy;
       var d2=ex*ex+ey*ey;
-      if(d2<meilleur){meilleur=d2;segment=i;position=t;}
+      if(i<chrono.iRdv){ if(d2<mA){mA=d2;segA=i;posA=t;} }
+      else { if(d2<mR){mR=d2;segR=i;posR=t;} }
     }
-    var ecart=Math.sqrt(meilleur);
-    if(ecart>COULOIR_M) return;
-    // Le point de la ligne le plus proche porte un temps : celui de son segment,
-    // interpolé à l'endroit exact où la fiche vient s'y accrocher.
-    var t=chrono.cumul[segment]+position*(chrono.cumul[segment+1]-chrono.cumul[segment]);
-    trouvees.push({id:mid, card:m.card, ecart:ecart, t:t});
+    // Chaque moitié décide pour elle seule. Une fiche au bord de la route
+    // commune rend ses deux passages ; une fiche sur une variante que le retour
+    // n'emprunte pas n'en rend qu'un. Une moitié vide — géométrie dégénérée,
+    // rendez-vous au premier ou au dernier nœud — laisse son minimum à l'infini
+    // et ne rend rien, sans cas particulier à écrire.
+    if(mA<=seuil2) trouvees.push(passageDe(mid,m.card,mA,segA,posA,false));
+    if(mR<=seuil2) trouvees.push(passageDe(mid,m.card,mR,segR,posR,true));
   });
 
   // Une seule liste, dans l'ordre où l'abonné passe devant : le cumul depuis le
-  // départ, croissant, du premier kilomètre au retour à la maison.
-  return trouvees.sort(function(a,b){return a.t-b.t;});
+  // départ, croissant, du premier kilomètre au retour à la maison. À cumul égal
+  // — exactement au rebroussement — l'aller passe devant le retour, sinon la
+  // ligne du rendez-vous, posée au premier passage de retour, laisserait une
+  // fiche de l'aller sous elle avec une heure antérieure à la sienne.
+  trouvees.sort(function(a,b){return (a.t-b.t)||((a.retour?1:0)-(b.retour?1:0));});
+
+  // UN IDENTIFIANT PAR ÉLÉMENT. Deux passages d'une même fiche font deux
+  // lignes, et deux lignes ne peuvent pas porter le même id : le second
+  // passage prend un suffixe. Le PREMIER garde #sched-<id> nu — c'est la cible
+  // de scrollToStop et du bouton « Voir dans le panneau », qui mènent donc à la
+  // première occasion d'appeler, celle qui vient la première dans la journée.
+  var vus={};
+  trouvees.forEach(function(p){
+    var n=(vus[p.id]||0)+1;
+    vus[p.id]=n;
+    p.dom='sched-'+p.id+(n>1?'--'+n:'');
+  });
+  return trouvees;
+}
+
+// Le compteur dit des FICHES, pas des passages : croiser deux fois la même
+// enseigne ne fait pas deux appels à passer.
+function fichesDistinctes(passages){
+  var vus={}, n=0;
+  passages.forEach(function(p){ if(!vus[p.id]){vus[p.id]=1;n++;} });
+  return n;
 }
 
 // Le temps le long de la ligne, et l'index du rendez-vous dedans.
@@ -1591,23 +1670,27 @@ function proRata(px,py,debut,fin,total){
 
 // ── LE RENDU DU COULOIR ──
 // UNE SEULE LISTE, du départ au retour, sans intertitre. Les deux blocs « Sur
-// l'aller » et « Au retour » promettaient une distinction que la mesure ne sait
-// pas rendre (cf. fichesDuCouloir) : ils partageaient en deux un classement qui
-// bascule pour 25 m. Ce que la mesure sait rendre, c'est l'ORDRE — le cumul
-// depuis le départ croît d'un bout à l'autre du voyage — et c'est lui qui
-// ordonne la liste, sans la couper.
+// l'aller » et « Au retour » partageaient en deux un classement qui bascule pour
+// 25 m, et forçaient une fiche à choisir son camp. Elle n'a plus à le faire :
+// elle paraît une fois par passage (cf. fichesDuCouloir), et c'est l'ORDRE — le
+// cumul depuis le départ, croissant d'un bout à l'autre du voyage — qui range
+// tout le monde, sans couper la liste.
 //
-// La ligne du rendez-vous s'insère à sa place chronologique : ce qui est
-// au-dessus se propose avant lui, ce qui est en dessous après sa sortie. Elle
-// est le point fixe de la journée, et c'est de son heure que toutes les autres
-// se déduisent.
+// La ligne du rendez-vous s'insère à sa place : juste avant le premier passage
+// de RETOUR, c'est-à-dire au rebroussement. Ce qui est au-dessus se propose
+// avant lui, ce qui est en dessous après sa sortie. Elle est le point fixe de la
+// journée, et c'est de son heure que toutes les autres se déduisent — et elle
+// coupe toute série d'ex æquo en cours, une heure de l'aller et une heure du
+// retour ne se rattachant jamais l'une à l'autre.
 function renderCouloir(){
   if(!couloirRdv) return;
 
-  var html='', posee=false;
+  var html='', posee=false, precedente=null;
   couloirCandidats.forEach(function(c){
-    if(!posee&&c.t>=couloirTRdv){ html+=ligneRendezVous(); posee=true; }
-    html+=ligneCandidat(c);
+    if(!posee&&c.retour){ html+=ligneRendezVous(); posee=true; precedente=null; }
+    var quand=heureDePassage(c.t,c.retour)||fmtDuree(Math.round(c.t/60));
+    html+=ligneCandidat(c,quand,quand===precedente);
+    precedente=quand;
   });
   if(!posee) html+=ligneRendezVous();
   if(!couloirCandidats.length){
@@ -1615,7 +1698,7 @@ function renderCouloir(){
   }
   document.getElementById('tour-body').innerHTML=html;
 
-  var n=couloirCandidats.length;
+  var n=fichesDistinctes(couloirCandidats);
   var badge=document.getElementById('tour-badge');
   badge.style.display='inline';
   badge.textContent=n;
@@ -1636,13 +1719,18 @@ function dureeRdv(){return parseInt(document.getElementById('rdv-dur').value,10)
 // il faut encore ajouter l'immobilisation — on ne repart pas d'un rendez-vous à
 // l'heure où on y arrive, et tout ce qui suit est décalé d'autant.
 //
+// La moitié est DITE par le passage, elle ne se devine plus en comparant le
+// cumul à celui du rendez-vous : les deux se valent exactement au rebroussement,
+// et un passage d'aller accroché là se voyait ajouter la durée d'un rendez-vous
+// qu'il n'avait pas encore eu.
+//
 // Rend null quand le rendez-vous n'a pas d'action datée : il n'y a alors aucune
 // heure à laquelle rapporter le trajet, et la ligne se rabat sur le temps depuis
 // le départ — la même grandeur, sans le cadran.
-function heureDePassage(t){
+function heureDePassage(t,retour){
   var na=couloirRdv?nextActionOf(couloirRdv.card):null;
   if(!na) return null;
-  var min=minutesDe(na.hour||'14:00')+(t-couloirTRdv)/60+(t>=couloirTRdv?dureeRdv():0);
+  var min=minutesDe(na.hour||'14:00')+(t-couloirTRdv)/60+(retour?dureeRdv():0);
   return fmtHeure(Math.round(min));
 }
 
@@ -1651,13 +1739,17 @@ function heureDePassage(t){
 // colonne que celle du rendez-vous, pour que la liste se lise d'un trait ;
 // l'écart dit ce qu'il en coûte d'aller la voir — une fiche à 400 m de la route
 // et une à 14 km ne se proposent pas de la même façon au téléphone.
-function ligneCandidat(c){
+// `quand` et `suite` viennent du rendu : l'heure d'une ligne se juge par rapport
+// à celle de la ligne précédente, que seule la boucle connaît. `suite` vrai dit
+// « même heure que celle du dessus » — l'heure n'est alors plus réécrite, le
+// rail la reporte (cf. .sched-time.sched-suite).
+function ligneCandidat(c,quand,suite){
   var col=stageColor(c.card.col);
-  var quand=heureDePassage(c.t);
   // Même lecture que la bulle : saisie d'abord, projection en repli.
   var tel=window.MUPProjection?window.MUPProjection.tel(c.card):(c.card.tel||'');
-  return '<div class="sched-item" id="sched-'+c.id+'" style="cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+c.id+'\')">'
-    +'<div class="sched-time">'+(quand||fmtDuree(Math.round(c.t/60)))+'</div>'
+  return '<div class="sched-item'+(suite?' sched-lie':'')+'" id="'+c.dom+'" style="cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+c.id+'\')">'
+    +(suite?'<div class="sched-time sched-suite" title="Même heure de passage"><span class="sched-rail"></span></div>'
+           :'<div class="sched-time">'+quand+'</div>')
     +'<div class="sched-dot" style="background:'+col+'"></div>'
     +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(c.card).titre)+'</div>'
     +'<div class="sched-meta">à '+fmtEcart(c.ecart)+' de la route</div>'
@@ -1673,9 +1765,11 @@ function ligneCandidat(c){
     +'</div>';
 }
 
-// La destination. Même identifiant #sched-<id> que les candidats : scrollToStop
-// vise cet espace-là, et le bouton « Voir dans le panneau » de l'infobulle doit
-// atteindre le rendez-vous comme le reste.
+// La destination. Même espace d'identifiants que les passages — #sched-<id> nu,
+// sans suffixe : scrollToStop vise celui-là, et le bouton « Voir dans le
+// panneau » de l'infobulle doit atteindre le rendez-vous comme le reste. Aucune
+// collision possible avec les passages : la fiche de destination est écartée de
+// la mesure, elle n'en produit donc aucun.
 function ligneRendezVous(){
   var c=couloirRdv;
   var na=nextActionOf(c.card);

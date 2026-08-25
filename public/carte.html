@@ -457,9 +457,14 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 }
 /* LA PILE DES DEUX TEMPS, comme chez Visio et chez Devis. Les deux temps se
    remplacent au même endroit : ils y sont posés ensemble, tous deux mesurés, et
-   la carte garde la hauteur du plus long quel que soit celui qui paraît — elle
-   ne bouge donc pas d'un pixel quand la géolocalisation échoue. C'est `.actif`
-   qui les départage, jamais `display`. */
+   la carte garde la hauteur du plus long quel que soit celui qui paraît. C'est
+   `.actif` qui les départage, jamais `display`.
+   UNE SEULE CHOSE LA FAIT ENCORE VARIER, ET C'EST ASSUMÉ : les instructions
+   d'autorisation du second temps (#depart-reglages) ne valent que pour un accès
+   bloqué, et elles vivent en display:none dans les deux autres cas, donc hors
+   de la mesure. La carte s'allonge de leurs lignes le jour où elles paraissent.
+   Les garder toujours en flux creuserait un trou sous la cause chaque fois
+   qu'elles sont fausses, ce qui se voit bien davantage. */
 .mes-pile{display:grid}
 .mes-pile > *{grid-area:1 / 1;visibility:hidden}
 .mes-pile > .actif{visibility:visible}
@@ -623,10 +628,11 @@ body #mup-cookie-panel{z-index:60001}
      chez Visio et chez Devis, et pour la même raison.
 
      UN ENCART, DEUX TEMPS, DANS UNE PILE. Le premier propose la
-     géolocalisation. Le second paraît quand elle ne peut pas aboutir — refusée,
-     bloquée au navigateur, ou introuvable — et renvoie au champ d'adresse, qui
-     est la seconde voie vers le même point de départ. La carte ne change pas de
-     taille entre les deux : c'est ce que la pile garantit.
+     géolocalisation. Le second paraît quand elle ne peut pas aboutir : il dit
+     pourquoi, il explique comment rouvrir la porte quand elle est fermée, et sa
+     sortie principale est la relance. Le champ d'adresse reste offert, mais en
+     repli. La carte ne change pas de taille entre les deux : c'est ce que la
+     pile garantit.
 
      IL NE SE FERME SUR AUCUN GESTE au premier temps : ni Échap, ni clic au
      fond, ni croix — il n'en a pas. Il se retire quand sa raison d'être
@@ -653,23 +659,27 @@ body #mup-cookie-panel{z-index:60001}
           </div>
         </div>
 
-        <!-- SECOND TEMPS : LA SECONDE VOIE. Le titre y est le MÊME, et c'est
-             voulu : c'est le même encart et la même promesse — seul le chemin
-             pour y parvenir a changé. Il porte son propre id, aria-labelledby
-             suivant le temps affiché (cf. montrerTemps).
-             #depart-cause est écrit en JS et dit CE QUI a échoué : un refus, un
-             blocage, une position introuvable et un navigateur sans API ne se
-             rattrapent pas de la même façon.
-             « Réessayer » ne paraît que si la cause se retente : sur un refus,
-             un bouton qui rappellerait le navigateur sans que rien n'ait changé
-             serait un second bouton mort. -->
+        <!-- SECOND TEMPS : LA REMISE EN ROUTE. Le titre y est le MÊME, et
+             c'est voulu : c'est le même encart et la même promesse, seul le
+             chemin pour y parvenir a changé. Il porte son propre id,
+             aria-labelledby suivant le temps affiché (cf. montrerTemps).
+             TROIS CAS S'Y PARTAGENT LA MÊME MISE EN PAGE, et c'est le JS qui
+             les départage (cf. MODES_DEPART) : #depart-cause dit ce qui a
+             échoué, #depart-reglages n'est écrit que sur un accès bloqué, et
+             #depart-reessayer prend le libellé de ce que la relance attend.
+             LA RELANCE PORTE LE BOUTON NOIR, l'adresse descend en .mes-lien. Un
+             encart de mise en service ne renonce pas : il dit comment ouvrir la
+             porte, puis propose de recommencer une fois qu'elle est ouverte.
+             L'ordre des deux gestes est celui de la lecture, principal puis
+             repli. -->
         <div id="mesTempsAdresse">
           <h2 id="departTitreAdresse">Optimisez vos déplacements</h2>
           <p id="depart-cause"></p>
+          <p id="depart-reglages" style="display:none"></p>
           <p>Le champ d'adresse, en bas de la carte, mène au même point de départ : saisissez la ville d'où vous partez, puis Entrée.</p>
           <div class="mes-geste">
-            <button type="button" class="mes-btn" id="depart-adresse" onclick="allerAuChampAdresse()">Saisir mon adresse de départ</button>
-            <button type="button" class="mes-lien" id="depart-reessayer" style="display:none" onclick="releverPosition(true)">Réessayer</button>
+            <button type="button" class="mes-btn" id="depart-reessayer" onclick="releverPosition(true)">J'ai autorisé, réessayer</button>
+            <button type="button" class="mes-lien" id="depart-adresse" onclick="allerAuChampAdresse()">Saisir mon adresse de départ</button>
           </div>
         </div>
 
@@ -1478,11 +1488,18 @@ function autoShowRdv(){
 //
 // LES TROIS PHRASES D'ÉCHEC RESTENT, ET CHANGENT DE PLACE. Elles étaient dites
 // par toast, sous un bouton qui venait de s'éteindre sans un mot ; elles sont
-// désormais le texte du second temps de l'encart, là où la seconde voie est
-// proposée dans la même phrase. Trois causes, trois rattrapages différents : un
-// refus se lève dans les réglages du navigateur, une position introuvable se
-// retente, un navigateur sans API ne se rattrape pas du tout.
-var GEO_REFUS='La géolocalisation est refusée pour ce site. Vous pouvez l\'autoriser dans les réglages de votre navigateur.';
+// désormais le texte du second temps de l'encart, là où la suite est proposée
+// dans la même phrase.
+// LE CODE 1 NE DIT PAS « L'ABONNÉE A REFUSÉ MOVUP.IO ». Il tombe à l'identique
+// quand la localisation est coupée au niveau de l'appareil pour ce navigateur,
+// sans qu'aucun refus n'ait jamais été donné à ce site : l'API ne distingue pas
+// les deux niveaux. La phrase ne peut donc en affirmer aucun, et les
+// instructions doivent couvrir les deux, du plus proche du site au plus
+// lointain.
+// AUCUN NOM DE NAVIGATEUR NI DE SYSTÈME, ET AUCUNE DÉTECTION DE PLATEFORME : ce
+// texte doit survivre au prochain système sans que personne y revienne.
+var GEO_BLOQUEE='Nous n\'avons pas pu relever votre position : l\'accès à la localisation est bloqué.';
+var GEO_REGLAGES='Deux réglages à vérifier, dans cet ordre : l\'autorisation de position accordée à movup.io, puis le service de localisation de votre appareil pour ce navigateur.';
 var GEO_INTROUVABLE='Votre position est introuvable pour l\'instant.';
 var GEO_SANS_API='Votre navigateur ne donne pas accès à la position.';
 
@@ -1531,9 +1548,16 @@ function leverEncartDepart(){
   document.body.classList.add('mise-en-service');
   rendreLaPageInerte(true);
   // Après l'affichage, et pas avant : un .focus() dans une carte encore en
-  // display:none ne prend pas. Le bouton visé est celui du temps ouvert.
-  var actif=document.querySelector('#encartDepart .mes-pile > .actif .mes-btn');
-  if(actif) actif.focus();
+  // display:none ne prend pas. Le geste visé est celui du temps ouvert, et
+  // c'est le bouton noir partout où il y en a un. Le repli en .mes-lien n'est
+  // visé que là où le bouton noir manque, c'est-à-dire au seul cas du
+  // navigateur sans API : il n'a rien à retenter, sa relance est en
+  // display:none, et un focus dessus ne prendrait pas.
+  var ouvert=document.querySelector('#encartDepart .mes-pile > .actif');
+  var gestes=ouvert?ouvert.querySelectorAll('.mes-btn,.mes-lien'):[];
+  for(var i=0;i<gestes.length;i++){
+    if(gestes[i].offsetParent!==null){ gestes[i].focus(); break; }
+  }
 }
 function retirerEncartDepart(){
   var voile=document.getElementById('encartDepart');
@@ -1543,16 +1567,48 @@ function retirerEncartDepart(){
   rendreLaPageInerte(false);
 }
 
-// LA SORTIE OBLIGATOIRE. Refuser la géolocalisation, ou l'avoir bloquée au
-// navigateur, ne doit pas fermer la page : le champ d'adresse de départ mène au
-// même point, et l'encart le dit au lieu de laisser l'abonnée devant un bouton
-// qui ne répond plus.
-// `retentable` commande le seul « Réessayer » de la carte : sur un refus, il
-// rappellerait le navigateur sans que rien n'ait changé — un second bouton mort
-// à côté du premier. Sur une position introuvable, il est la bonne réponse.
-function passerAuSecondChemin(cause, retentable){
-  document.getElementById('depart-cause').textContent=cause;
-  document.getElementById('depart-reessayer').style.display=retentable?'':'none';
+// LA SORTIE OBLIGATOIRE. Ne pas obtenir la position ne doit pas fermer la page,
+// et un encart de mise en service ne renonce pas pour autant : il dit ce qui
+// s'est passé, comment y remédier quand il y a un remède, et propose de
+// recommencer. Le champ d'adresse mène au même point de départ, et il reste
+// offert, en repli.
+// TROIS CAS, ET NON PLUS UN BOOLÉEN. `retentable` ne commandait qu'un bouton,
+// et il le commandait mal : il éteignait la relance sur un accès bloqué au
+// motif qu'un rappel immédiat de getCurrentPosition ne rouvre aucune invite.
+// C'est exact, et ce n'est pas une raison de renoncer : la relance ne sert pas
+// dans la seconde qui suit, elle sert APRÈS que l'abonnée a changé un réglage,
+// et son libellé est là pour le dire. Ce qui varie d'un cas à l'autre, ce sont
+// trois choses qui ne varient pas ensemble : la cause, la présence
+// d'instructions, le libellé de la relance. Une position introuvable se retente
+// sans qu'aucune instruction soit vraie (rien n'est bloqué, elles mentiraient),
+// un navigateur sans API n'a ni instruction ni relance. Deux booléens croisés
+// laisseraient quatre combinaisons dont deux impossibles ; un mode nommé, plus
+// une table qui pose les réponses côte à côte, se lit d'un seul regard et se
+// complète sans toucher à la fonction.
+// `echec` est le mot du toast quand la relance retombe sur la MÊME cause : sans
+// lui l'écran serait identique au pixel près et rien ne dirait que le bouton a
+// répondu. Le toast passe devant le voile (cf. body.mise-en-service .toast).
+var DEPART_BLOQUEE='bloquee', DEPART_INTROUVABLE='introuvable', DEPART_SANS_API='sansApi';
+var MODES_DEPART={};
+MODES_DEPART[DEPART_BLOQUEE]={cause:GEO_BLOQUEE,reglages:GEO_REGLAGES,relance:'J\'ai autorisé, réessayer',echec:'Toujours pas d\'accès à votre position.'};
+MODES_DEPART[DEPART_INTROUVABLE]={cause:GEO_INTROUVABLE,reglages:'',relance:'Réessayer',echec:'Votre position reste introuvable.'};
+MODES_DEPART[DEPART_SANS_API]={cause:GEO_SANS_API,reglages:'',relance:'',echec:''};
+
+// Le mode couramment affiché au second temps. Il ne sert qu'à une chose : dire
+// si une relance retombe sur la même cause, seul cas où le toast a quelque
+// chose à annoncer.
+var modeDepart=null;
+
+function passerAuSecondChemin(mode){
+  var m=MODES_DEPART[mode]||MODES_DEPART[DEPART_INTROUVABLE];
+  document.getElementById('depart-cause').textContent=m.cause;
+  var reglages=document.getElementById('depart-reglages');
+  reglages.textContent=m.reglages;
+  reglages.style.display=m.reglages?'':'none';
+  var relance=document.getElementById('depart-reessayer');
+  relance.textContent=m.relance;
+  relance.style.display=m.relance?'':'none';
+  modeDepart=mode;
   montrerTemps('mesTempsAdresse');
 }
 
@@ -1577,16 +1633,24 @@ function allerAuChampAdresse(){
 // minute est le même point de départ, et l'accepter évite un relevé matériel
 // quand le navigateur en tient déjà un.
 function releverPosition(geste){
-  if(!navigator.geolocation){ passerAuSecondChemin(GEO_SANS_API,false); leverEncartDepart(); return; }
+  if(!navigator.geolocation){ passerAuSecondChemin(DEPART_SANS_API); leverEncartDepart(); return; }
   navigator.geolocation.getCurrentPosition(function(pos){
     poserPosition([pos.coords.latitude,pos.coords.longitude], geste);
     // L'encart ne se ferme pas : il se retire parce que sa raison d'être vient
     // de disparaître. La page connaît son point de départ.
     retirerEncartDepart();
   },function(err){
-    var refus=!!(err&&err.code===1);
-    passerAuSecondChemin(refus?GEO_REFUS:GEO_INTROUVABLE, !refus);
+    // Code 1 : bloqué, au site ou à l'appareil, l'API ne dit pas lequel. Codes
+    // 2 et 3, ou pas d'err du tout : introuvable, et rien n'est bloqué.
+    var mode=(err&&err.code===1)?DEPART_BLOQUEE:DEPART_INTROUVABLE;
+    // Relevé AVANT de repeindre : passerAuSecondChemin écrase modeDepart. Une
+    // relance qui retombe sur la même cause rend un écran identique au pixel
+    // près, et le toast est alors la seule chose qui dise que le bouton a
+    // répondu. Un premier échec, lui, change tout l'écran et se passe de toast.
+    var meme=(modeDepart===mode);
+    passerAuSecondChemin(mode);
     leverEncartDepart();
+    if(meme&&MODES_DEPART[mode].echec) toast(MODES_DEPART[mode].echec);
   },{enableHighAccuracy:false,maximumAge:60000,timeout:15000});
 }
 
@@ -1631,7 +1695,7 @@ function poserPosition(latlng, geste){
 // Aucun encart si le navigateur n'a pas d'API du tout — enfin si : à son second
 // temps, qui dit pourquoi et renvoie au champ d'adresse.
 async function ouvrirMiseEnRoute(){
-  if(!navigator.geolocation){ passerAuSecondChemin(GEO_SANS_API,false); leverEncartDepart(); return; }
+  if(!navigator.geolocation){ passerAuSecondChemin(DEPART_SANS_API); leverEncartDepart(); return; }
   var etat=null;
   try{
     if(navigator.permissions&&navigator.permissions.query){
@@ -1639,7 +1703,7 @@ async function ouvrirMiseEnRoute(){
     }
   }catch(e){}
   if(etat==='granted'||(etat===null&&temoinGeo())){ releverPosition(false); return; }
-  if(etat==='denied') passerAuSecondChemin(GEO_REFUS,false);
+  if(etat==='denied') passerAuSecondChemin(DEPART_BLOQUEE);
   leverEncartDepart();
 }
 

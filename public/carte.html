@@ -470,7 +470,8 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    et le compte du rayon tient sur une ligne fixe (cf. .mes-compte). Relevé au
    banc, fontes Geist chargées, en 600 px de large : géolocalisation 158,3 px,
    remise en route 192,7, choix du rendez-vous 239,3 à deux rendez-vous et 357,3
-   dès que la liste bute sur sa borne, rayon 254,3. Le plus long des quatre,
+   dès que la liste bute sur sa borne, rayon 278,3 depuis que la durée du trajet
+   s'y pose sur sa propre ligne, 254,3 avant elle. Le plus long des quatre,
    357,3 px, tient dans les 445 px que le corps offre sous le plancher commun,
    et la carte mesure 490 px sur ses quatre temps, à deux rendez-vous comme à
    douze.
@@ -552,6 +553,17 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .mes-bornes{display:flex;justify-content:space-between;margin-top:4px;font-size:11px;font-weight:600;color:var(--mes-surtitre)}
 .mes-compte{margin-top:14px;height:22px;font-size:14px;line-height:22px;color:var(--mes-corps);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mes-compte b{color:var(--mes-titre);font-weight:800}
+/* LA DURÉE DU TRAJET, SOUS LE COMPTE ET PLUS DISCRÈTE QUE LUI. Elle ne se règle
+   pas au curseur, elle ne change pas quand il bouge : elle informe la journée
+   quand le compte, lui, se décide. D'où le second rang, en plus petit et dans la
+   couleur des surtitres.
+   HAUTEUR FIXE, MÊME RAISON QU'AU COMPTE : la ligne est vide tant que la route
+   se mesure, et une ligne qui apparaît ferait sauter le curseur sous la main.
+   Relevé au banc, sa ligne coûte 24 px au temps du rayon, marge comprise. */
+.mes-duree{
+  margin-top:6px;height:18px;font-size:13px;line-height:18px;
+  color:var(--mes-surtitre);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 .mes-btn:disabled,.mes-curseur:disabled{opacity:.45;cursor:default}
 .mes-curseur:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px}
 /* LE PIED, VIDE, RECOPIÉ DE MAIL SANS RIEN Y CHANGER. Ce qu'il porte ici n'est
@@ -761,6 +773,12 @@ body #mup-cookie-panel{z-index:60001}
              s'écrit qu'une fois la route mesurée, jamais avant : tant qu'elle
              court, le curseur est figé et la ligne le dit (cf.
              rafraichirLeRayon).
+             LA DURÉE DU TRAJET EST SOUS LE COMPTE, ET C'EST SON SEUL ENDROIT
+             DEPUIS QUE LE TOAST SE TAIT ICI (cf. lancerCouloir). Elle ne dépend
+             pas du curseur et ne bouge pas avec lui : trois heures d'aller-retour
+             n'organisent pas la journée comme vingt minutes, et l'abonnée doit
+             l'avoir sous les yeux au moment où elle règle. Elle est vide tant que
+             la route se mesure, le compte disant déjà l'attente pour deux.
              LES BORNES SONT ÉCRITES DEUX FOIS, ET CE N'EST PAS UNE SOURCE
              DOUBLE : celles d'ici tiennent la mise en page avant toute
              ouverture, et ouvrirLeRayon les repose depuis COULOIR_MIN_M et
@@ -772,9 +790,10 @@ body #mup-cookie-panel{z-index:60001}
           <h2 id="departTitreRayon">Jusqu'où sortez-vous de la route ?</h2>
           <p>Réglez la largeur du couloir. Le compte suit votre réglage : c'est lui qui dit combien de fiches vous aurez à appeler.</p>
           <input type="range" class="mes-curseur" id="depart-rayon" min="500" max="50000" step="100" value="15000" disabled
-                 aria-label="Rayon autour de la route" aria-describedby="depart-compte" oninput="reglerLeRayon()">
+                 aria-label="Rayon autour de la route" aria-describedby="depart-compte depart-duree" oninput="reglerLeRayon()">
           <div class="mes-bornes" aria-hidden="true"><span id="depart-borne-min">500 m</span><span id="depart-borne-max">50 km</span></div>
           <div class="mes-compte" id="depart-compte"></div>
+          <div class="mes-duree" id="depart-duree"></div>
           <div class="mes-geste">
             <button type="button" class="mes-btn" id="depart-valider" disabled onclick="validerLeRayon()">Voir la liste</button>
           </div>
@@ -1950,8 +1969,8 @@ function reglerLeRayon(){
 // LES DEUX ÉTATS DU TEMPS DU RAYON : la route se mesure encore, ou elle est
 // mesurée. Le rayon n'est pas un cercle autour du départ, c'est un écart à la
 // ROUTE : tant qu'elle n'est pas connue, aucun compte n'est vrai et AUCUN N'EST
-// AVANCÉ. Le curseur est alors figé, son bouton avec lui, et la ligne dit ce
-// qu'on attend.
+// AVANCÉ. Le curseur est alors figé, son bouton avec lui, la ligne du compte dit
+// ce qu'on attend et celle de la durée reste vide.
 // couloirAffiche EST LE TÉMOIN de la mesure : clearTourPlan l'abaisse en tête de
 // calcul, renderCouloir le lève quand la liste est faite.
 // Appelée aussi quand l'encart est retiré, depuis lancerCouloir : elle n'écrit
@@ -1965,6 +1984,9 @@ function rafraichirLeRayon(){
   document.getElementById('depart-valider').disabled=!pret;
   var phrase=pret?phraseDuCompte():null;
   document.getElementById('depart-compte').innerHTML=phrase?phrase.html:'Mesure de la route en cours.';
+  // La durée suit le même partage, et se tait du même côté : tant que la route
+  // n'est pas mesurée elle n'est pas connue, et le compte dit déjà l'attente.
+  document.getElementById('depart-duree').textContent=pret?(fmtDuree(Math.round(couloirDuree/60))+' de trajet aller-retour'):'';
   if(phrase) curseur.setAttribute('aria-valuetext', phrase.texte);
   else curseur.removeAttribute('aria-valuetext');
   // Le geste vient d'être libéré : un focus posé sur lui quand il était figé
@@ -2196,6 +2218,11 @@ var couloirCandidats=[];
 // Le cumul de temps, depuis le départ, du nœud du rendez-vous. Seul point fixe
 // dont l'heure soit connue : toutes les heures de passage s'en déduisent.
 var couloirTRdv=0;
+// La durée de l'aller-retour, en secondes, telle que le calculateur la rend.
+// Gardée parce qu'elle se dit APRÈS le calcul, sous le compte du curseur, et que
+// le curseur, lui, ne recalcule rien : sans elle il faudrait relire la route à
+// chaque pixel pour redire un nombre qui n'a pas bougé.
+var couloirDuree=0;
 // « Un couloir occupe #tour-body ». Les trois gardes de renderPanel lisaient
 // anchorCard, qui n'existe plus ; un drapeau posé par le rendu et défait par
 // clearTourPlan dit la même chose sans corréler deux variables — startLatLng
@@ -2256,6 +2283,7 @@ function clearTourPlan(){
   couloirRdv=null;
   couloirCandidats=[];
   couloirTRdv=0;
+  couloirDuree=0;
   couloirAffiche=false;
   document.getElementById('tour-controls').style.display='none';
 }
@@ -2371,6 +2399,10 @@ function lancerCouloir(){
 
       document.getElementById('tour-controls').style.display='';
       renderCouloir();
+      // AVANT rafraichirLeRayon, qui la lit pour écrire sa ligne : la durée est
+      // le seul des deux nombres du temps du rayon qui vienne du calcul et non
+      // du curseur, et elle doit être posée quand ce temps se dégèle.
+      couloirDuree=demi.duration;
       // La route est mesurée : le temps du rayon peut se dégeler et écrire son
       // compte. Sans effet quand l'encart est retiré, ce qui est le cas de la
       // seconde voie, le bouton « Préparer » du panneau.
@@ -2383,11 +2415,26 @@ function lancerCouloir(){
       // Différé de 400 ms : le trajet peut avoir été effacé entretemps
       // (« Effacer », ou un second calcul lancé dans la foulée).
       setTimeout(function(){if(routeLine)map.fitBounds(routeLine.getBounds(),{padding:[60,60]});},400);
-      // Des fiches, pas des passages : celle qu'on croise deux fois ne se
-      // rappelle qu'une.
-      var n=fichesDistinctes(passagesDuRayon());
-      toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
-        +' · '+fmtDuree(Math.round(demi.duration/60))+' de trajet aller-retour');
+      // LE RÉSULTAT NE SE DIT QU'UNE FOIS, ET PAS PAR-DESSUS L'ENCART. Ce toast
+      // date du temps où le calcul était le geste final de la préparation. Il ne
+      // l'est plus : le réglage du rayon vient après lui, et le toast passe
+      // devant le voile (cf. body.mise-en-service .toast). L'abonnée réglerait
+      // son curseur entre un compte qui suit sa main et un compte figé au défaut
+      // qui le contredit. Sous l'encart, c'est le temps du rayon qui dit les deux
+      // nombres, et lui seul.
+      // IL GARDE TOUT SON SENS SUR LA SECONDE VOIE : le bouton « Préparer » du
+      // panneau lance le même calcul sans qu'aucun encart soit levé, et le
+      // résultat doit alors se dire quelque part. C'est le seul chemin où il
+      // parle encore.
+      // Les toasts d'ÉCHEC, eux, restent inconditionnels : ils disent une panne,
+      // pas un résultat, et renoncerAuRayon retire l'encart sur ces chemins.
+      if(!estOuvert('mesTempsRayon')){
+        // Des fiches, pas des passages : celle qu'on croise deux fois ne se
+        // rappelle qu'une.
+        var n=fichesDistinctes(passagesDuRayon());
+        toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
+          +' · '+fmtDuree(Math.round(demi.duration/60))+' de trajet aller-retour');
+      }
     })
     .catch(function(){toast('Erreur de calcul itinéraire');renoncerAuRayon();});
 }

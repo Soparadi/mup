@@ -1176,11 +1176,17 @@ var proximityCircles=[]; // array of L.circle
 // Purge les mises en évidence transitoires : cercles de proximité et opacité.
 // PLUS RIEN N'ESTOMPE. La restauration d'opacité répondait au planificateur
 // d'étapes, tombé depuis : il rabattait à 0,2 les fiches trop tardives pour
-// tenir le rendez-vous. Le couloir ne disqualifie personne et ne touche pas
-// aux marqueurs. La boucle reste parce qu'elle est le seul endroit du fichier
-// qui remette une opacité à 1 : elle parcourt markers sans condition, elle est
-// idempotente, elle coûte une itération par fiche, et elle tient la garantie
-// qu'« effacer » rende la carte pleine quoi qu'il ait pu l'assombrir.
+// tenir le rendez-vous. Le couloir ne disqualifie toujours personne, mais il
+// TOUCHE désormais aux marqueurs : il filtre la carte sur la journée, et il le
+// fait en RETIRANT du groupe ce qu'il écarte, jamais en le pâlissant (cf.
+// numeroterLesMarqueurs). Rendre ces fiches n'est pas le travail d'ici, c'est
+// celui de clearTourPlan, et un retour d'onglet ne doit surtout pas s'en
+// charger. La boucle reste parce qu'elle est le seul endroit du fichier
+// qui remette une opacité à 1 : elle parcourt markers sans condition, y compris
+// les fiches sorties du groupe (setOpacity sur un marqueur hors carte n'écrit
+// que son option, il n'a rien à mettre à jour), elle est idempotente, elle coûte
+// une itération par fiche, et elle tient la garantie qu'« effacer » rende la
+// carte pleine quoi qu'il ait pu l'assombrir.
 function resetOverlays(){
   retirerCercles();
   Object.keys(markers).forEach(function(id){markers[id].marker.setOpacity(1);});
@@ -1585,6 +1591,10 @@ function autoShowRdv(){
   // visibilitychange, focus). Sans ce reset, la boucle ci-dessous empile un jeu
   // de cercles supplémentaire à chaque passage. Portée volontairement limitée
   // aux overlays : un retour d'onglet ne doit pas effacer un trajet en cours.
+  // NI LE REPEUPLER. Depuis que le couloir filtre la carte, la question se pose
+  // pour ce chemin-là aussi : resetOverlays ne rend aucun marqueur au groupe, et
+  // rien d'autre ici n'en pose. Un retour d'onglet laisse donc la carte sur sa
+  // journée, comme il laisse le tracé et la liste.
   resetOverlays();
 
   rdvPanelIds=[];
@@ -2022,12 +2032,25 @@ function ouvrirLeRayon(){
 // fiche à sa distance à la route (cf. fichesDuCouloir) : bouger le curseur ne
 // rappelle personne, ne recalcule aucune route, et le compte se refait en
 // parcourant une liste déjà en main.
+//
+// LE COMPTE ET LA CARTE SE RESSERRENT ENSEMBLE. Le curseur n'écrivait que son
+// compte : la journée se réduisait à droite pendant que la gauche gardait le
+// portefeuille entier, et le tracé se dessinait sur des marqueurs qui n'en
+// étaient pas. Les deux passent maintenant par le même appelsDuRayon, dans cet
+// ordre, le compte d'abord parce qu'il est le retour immédiat du geste.
+// AUCUNE CADENCE ENTRE LES DEUX, et c'est mesuré : un pas de curseur coûte
+// 0,4 ms de carte sur six cents fiches (cf. numeroterLesMarqueurs). La carte
+// suit la main aussi directement que le compte.
+// La garde sur couloirRdv dit qu'il y a une route à filtrer. Le curseur est figé
+// tant qu'elle n'est pas mesurée (cf. rafraichirLeRayon), donc inatteignable
+// autrement, mais la déréférence qui suit n'a pas à être une supposition.
 function reglerLeRayon(){
   var curseur=document.getElementById('depart-rayon');
   COULOIR_M=parseInt(curseur.value,10)||COULOIR_DEFAUT_M;
   var phrase=phraseDuCompte();
   document.getElementById('depart-compte').innerHTML=phrase.html;
   curseur.setAttribute('aria-valuetext', phrase.texte);
+  if(couloirRdv) numeroterLesMarqueurs(appelsDuRayon(), couloirRdv.id);
 }
 
 // LES DEUX ÉTATS DU TEMPS DU RAYON : la route se mesure encore, ou elle est
@@ -2340,10 +2363,15 @@ var COULOIR_FROID_MAX=stageIdx('visio');
 // Ne touche ni rdvPanelIds ni les cercles de proximité : effacer un trajet
 // n'est pas effacer le panneau RDV. Ne touche pas rdvChoisi non plus : la
 // destination est une désignation de l'abonné, pas un résultat de calcul.
-// LES RANGS D'APPEL PARTENT AVEC LE TRAJET. Ils sont posés dans les marqueurs
-// eux-mêmes, hors de tout ce que cette fonction remet à zéro : sans ce retrait
-// la carte garderait les numéros d'une route effacée (cf.
-// numeroterLesMarqueurs, qu'une liste vide suffit à défaire).
+// LES RANGS D'APPEL PARTENT AVEC LE TRAJET, ET LA CARTE REDEVIENT ENTIÈRE. Les
+// deux tiennent au même appel. Les rangs sont posés dans les marqueurs eux-mêmes
+// et les fiches écartées sont sorties du groupe : l'un comme l'autre vivent hors
+// de tout ce que cette fonction remet à zéro, et sans ce retrait la carte
+// garderait les numéros d'une route effacée en ne montrant toujours que son
+// couloir. UNE LISTE VIDE ET AUCUNE DESTINATION : c'est l'absence de destination
+// qui dit « plus de couloir » et rend les fiches écartées, une liste vide seule
+// ne le dirait pas (cf. numeroterLesMarqueurs). « Effacer » passe par ici, et
+// c'est son seul chemin.
 function clearTourPlan(){
   if(routeLine){map.removeLayer(routeLine);routeLine=null;}
   numeroterLesMarqueurs([]);
@@ -2845,8 +2873,10 @@ function renderCouloir(){
     html+='<div style="padding:16px 8px;text-align:center;color:var(--muted2);font-size:11px">Aucune fiche à moins de '+fmtEcart(COULOIR_M)+' de la route</div>';
   }
   document.getElementById('tour-body').innerHTML=html;
-  // Le même rang, sur la carte, dans le marqueur de chaque fiche.
-  numeroterLesMarqueurs(appels);
+  // Le même rang, sur la carte, dans le marqueur de chaque fiche, et la carte
+  // réduite à ces fiches-là plus la destination : ce qui se lit ici et ce qui se
+  // voit à gauche sortent du même appelsDuRayon.
+  numeroterLesMarqueurs(appels, couloirRdv.id);
 
   // Un appel par fiche : la longueur de la liste EST le compte de fiches, il n'y
   // a plus de doublon à écarter. Même endroit unique qu'au panneau RDV,
@@ -2856,29 +2886,91 @@ function renderCouloir(){
   retirerCercles();
 }
 
-// ── LE RANG SE LIT AUSSI SUR LA CARTE ──
+// ── LA CARTE NE PORTE QUE LA JOURNÉE ──
 // Ce que la liste numérote, le marqueur le porte : la route se lit alors d'un
 // coup d'œil, de un à N, sans que l'abonnée ait à faire de tête la
 // correspondance entre une liste ordonnée et un nuage de points qui ne l'est
 // pas.
 //
-// SEULS LES RANGS QUI CHANGENT SONT REPOSÉS. Le relevé de ce qui est posé se
-// garde d'un rendu à l'autre : une fiche qui garde son numéro n'est pas touchée,
-// une fiche qui sort du rayon retrouve son disque nu, une fiche qui y entre
-// prend le sien. La dépense serait de toute façon tenable sans ce tri, le banc
-// donnant 0,3 ms pour reposer les 480 marqueurs d'un portefeuille entier carte
-// large et 4,8 ms carte serrée (cf. createMupMarkerRang), et le rendu ne se
-// refaisant qu'à la validation du rayon et à chaque changement de durée du
-// rendez-vous. Le tri est là parce que changer la durée déplace les créneaux
-// sans déplacer personne dans l'ordre : aucun rang ne bouge, et rien n'a alors
-// à être reposé du tout.
+// ET CE QUE LA LISTE ÉCARTE, LA CARTE NE LE PORTE PLUS. Elle n'avait jamais été
+// filtrée : elle gardait l'intégralité du pipeline depuis le chargement, et le
+// tracé se dessinait par-dessus des marqueurs qui n'avaient rien à voir avec la
+// journée. Relevé à l'écran sur un Dinan-Paris : une pastille de quatre fiches
+// près de Caen, d'autres vers Saint-Malo, Fougères, Nantes, toutes hors du
+// couloir et toutes affichées. Sous couloir, la carte ne porte donc que ce que
+// le couloir retient, plus la fiche de DESTINATION, qui n'est pas un candidat
+// mais l'une des deux bornes du voyage. L'autre borne, le point de départ, vit
+// hors du groupe (cf. poserDepart) et n'a rien à recevoir d'ici. Les marqueurs
+// de CONTACTS sont hors du groupe eux aussi, et ne relèvent pas de ce pipeline.
+// LE RÉFÉRENTIEL EST appelsDuRayon, la même source que la liste, que le compte
+// et que la numérotation : ce qui se lit à droite et ce qui se voit à gauche ne
+// peuvent pas diverger.
+//
+// ON RETIRE, ON N'ESTOMPE PAS. Un point pâle reste un point, et sur six cents
+// fiches l'estompage ne dégage rien. C'est déjà la règle que porte resetOverlays
+// (« PLUS RIEN N'ESTOMPE ») : ce filtrage ne la contredit pas, il la sert.
+//
+// `destination` DIT S'IL Y A UN COULOIR, et c'est le seul état que cette
+// fonction consulte. Absente, elle rend la carte entière : c'est le chemin de
+// clearTourPlan, donc d'« Effacer », qui appelle avec une liste vide et sans
+// destination. La liste vide n'aurait pas suffi à le dire, un couloir dont le
+// rayon ne retient personne rendant lui aussi zéro appel, la destination restant
+// alors seule à l'écran.
+//
+// SEUL CE QUI CHANGE EST TOUCHÉ, les rangs comme les retraits. Deux relevés se
+// gardent d'un rendu à l'autre, et ils ne se recouvrent pas : rangsPoses dit qui
+// porte un numéro, marqueursRetires dit qui est sorti du groupe, et la
+// destination est absente des deux. Une fiche qui garde son rang n'est pas
+// retouchée, une fiche qui sort du rayon quitte la carte, une fiche qui y entre
+// revient avec son numéro. Le tri des rangs vaut par ailleurs pour lui-même :
+// changer la durée du rendez-vous déplace les créneaux sans déplacer personne
+// dans l'ordre, et rien n'a alors à être reposé du tout.
+//
+// ── CE QUI A ÉTÉ MESURÉ, ET POURQUOI LE VERSEMENT SE FAIT EN LOT ────────────
+// Le curseur du rayon appelle ici à chaque pixel (cf. reglerLeRayon) : c'est le
+// seul endroit du couloir dont la dépense se répète, et il fallait la chiffrer.
+// Banc Chrome 151 sans tête, mêmes versions de Leaflet et de MarkerCluster que
+// celles chargées en tête, mêmes options de groupe (maxClusterRadius 30, mêmes
+// paliers d'icône), portefeuille synthétique déterministe de 600 fiches sur
+// 12 pôles français, 35 % strictement confondues et 15 % isolées, carte de
+// 1 280 × 720, 181 fiches retenues au rayon par défaut. Millisecondes, médiane
+// sur 40 relevés pour le pas de curseur, sur 10 pour le bond, un seul relevé
+// pour la coupe et pour « Effacer » :
+//
+//   carte large (zoom 6)              un par un   en lot   pastilles redessinées
+//   la coupe d'entrée, de 600 à 181      31,4       6,2        356 contre 19
+//   un pas de curseur, 100 m              0,4       0,4
+//   le pire pas relevé                    1,6       0,9
+//   un bond de 15 km à 50 km             35,2      14,7
+//   « Effacer », tout revient            31,1       9,4
+//
+//   carte serrée (zoom 12)            un par un   en lot
+//   la coupe d'entrée                    22,8       4,0
+//   le pire pas relevé                    4,8       0,5
+//   « Effacer »                           9,2       7,9
+//
+// CE QUE LA MESURE TRANCHE. Le geste qui se répète est le pas de curseur, et il
+// coûte 0,4 ms : quelques fiches traversent la frontière du rayon à chaque pas,
+// pas six cents. Ce sont les changements d'un seul bloc qui pèsent, et c'est là
+// que le lot décide : removeLayers et addLayers ne réorganisent le groupe
+// qu'une fois par appel au lieu d'une fois par fiche, 19 pastilles redessinées
+// contre 356 à la coupe d'entrée, et un cinquième du temps. Le pire cas
+// concevable reste le bond d'un bord du curseur à l'autre en un seul événement,
+// 14,7 ms, sous la trame de 16,7 ms, et un vrai glissement l'étale de toute
+// façon sur des dizaines d'événements à 0,4 ms.
+// AUCUNE CADENCE N'EST DONC POSÉE. La carte suit la main aussi directement que
+// le compte, qui reste écrit avant elle et sans rien attendre.
 //
 // L'ANCRE DE LA BULLE SUIT LE DISQUE. bindPopup a posé un décalage de 4 px,
 // calculé pour un disque de rayon 7 par la règle « offset.y = 11 moins R » que
 // placeCard écrit et justifie. Le disque numéroté a pour rayon 8, donc 3 : sans
 // cet ajustement la pointe de la bulle entrerait d'un pixel dans le disque.
 var rangsPoses={};
-function numeroterLesMarqueurs(appels){
+// Les fiches sorties du groupe, id -> true. Tenu à part de rangsPoses parce que
+// les deux ensembles diffèrent : la destination n'a pas de rang et reste
+// pourtant à l'écran.
+var marqueursRetires={};
+function numeroterLesMarqueurs(appels,destination){
   var voulus={};
   appels.forEach(function(a){ voulus[a.id]=a.rang; });
   function poser(id,rang){
@@ -2892,6 +2984,19 @@ function numeroterLesMarqueurs(appels){
   Object.keys(rangsPoses).forEach(function(id){ if(!voulus[id]) poser(id,0); });
   Object.keys(voulus).forEach(function(id){ if(rangsPoses[id]!==voulus[id]) poser(id,voulus[id]); });
   rangsPoses=voulus;
+
+  // Les deux listes se composent d'abord, le groupe ne les reçoit qu'ensuite :
+  // c'est tout l'écart entre 6,2 et 31,4 ms au tableau ci-dessus. Le retrait
+  // avant le rendu, dans cet ordre, pour que le groupe ne réorganise jamais un
+  // état qu'il va défaire.
+  var aRetirer=[], aRendre=[];
+  Object.keys(markers).forEach(function(id){
+    var garde=!destination||voulus[id]||id===destination;
+    if(garde&&marqueursRetires[id]){ aRendre.push(markers[id].marker); delete marqueursRetires[id]; }
+    else if(!garde&&!marqueursRetires[id]){ aRetirer.push(markers[id].marker); marqueursRetires[id]=true; }
+  });
+  if(aRetirer.length) ficheGroupe.removeLayers(aRetirer);
+  if(aRendre.length) ficheGroupe.addLayers(aRendre);
 }
 
 // La durée du rendez-vous, telle que le <select> la dit. Lue à chaque rendu, et

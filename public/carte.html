@@ -275,6 +275,21 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .sched-slot{width:16px;flex-shrink:0;display:flex;justify-content:center}
 .sched-creneaux{font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--text)}
 
+/* ── L'ÉCHEC DE LA MESURE, EN TÊTE DU PANNEAU ───────────────────────────────
+   La route ne s'est pas mesurée : le motif se dit, et la relance est là. Le
+   bloc se pose AU-DESSUS de la liste des rendez-vous, jamais à sa place (cf.
+   echecDeLaRoute) : recommencer le calcul et changer de destination sont deux
+   sorties, et l'abonnée doit avoir les deux sous les yeux. Il ne survit à aucun
+   rendu suivant, ce qui est bien ce qu'on attend d'un message d'échec.
+   Le rouge de la page pour le cadre, à 6 % pour le fond : assez pour que le
+   bloc se distingue des lignes de fiches, pas assez pour crier. La relance
+   reprend la géométrie de .tour-clear, le seul autre bouton du panneau. */
+.tour-echec{padding:10px;border-radius:9px;border:1px solid var(--red);background:rgba(204,0,0,.06);margin-bottom:8px}
+.tour-echec-titre{font-size:11.5px;font-weight:700;color:var(--text)}
+.tour-echec-motif{font-size:10px;color:var(--muted);margin-top:2px}
+.tour-echec-relance{margin-top:8px;width:100%;padding:7px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--text);transition:all .12s}
+.tour-echec-relance:hover{border-color:var(--text)}
+
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:600;z-index:9000;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
@@ -2131,17 +2146,58 @@ function phraseDuCompte(){
 
 // LA SORTIE DU DERNIER TEMPS. Le rayon est déjà posé, le curseur l'ayant écrit
 // à chaque pixel ; il ne reste qu'à rendre la liste et à retirer le voile.
+// PUIS LA JOURNÉE SE DÉROULE, et c'est ici sa place : le voile vient de tomber,
+// la carte est enfin visible en entier, et c'est l'instant où l'abonnée la
+// regarde. L'ÉTAT FINAL EST POSÉ AVANT LA MISE EN SCÈNE, jamais après : si quoi
+// que ce soit interrompt le déroulé, ce qui reste à l'écran est déjà juste.
 function validerLeRayon(){
   renderCouloir();
   retirerEncartDepart();
+  derouler();
 }
 
-// LA ROUTE N'A PAS PU SE CALCULER. Il n'y a alors rien à filtrer et rien à
-// régler : l'encart n'a plus à tenir la page, il se retire et laisse le motif
-// se dire au toast. La page reste utilisable telle quelle, le point de départ
-// étant acquis.
+// L'ENCART RENONCE. Il n'a plus rien à faire tenir : il n'y a ni couloir à
+// filtrer ni rayon à régler, et le laisser levé sur un curseur figé serait une
+// impasse. Il se retire, la page reste utilisable telle quelle, le point de
+// départ étant acquis. Le motif et la relance, eux, se disent ailleurs : le
+// premier au toast, la seconde en tête du panneau (cf. echecDeLaRoute), parce
+// qu'un encart retiré ne peut plus rien porter.
 function renoncerAuRayon(){
   if(estOuvert('mesTempsRayon')) retirerEncartDepart();
+}
+
+// ── LA ROUTE N'A PAS PU SE MESURER ───────────────────────────────────────────
+// TROIS CAUSES, UN SEUL TRAITEMENT : le calculateur ne rend aucun itinéraire, la
+// géométrie rendue ne se replie pas, ou l'appel n'aboutit pas dans le délai (cf.
+// COULOIR_ATTENTE_MS). Dans les trois cas il n'y a rien à filtrer, rien à régler,
+// et surtout RIEN À INVENTER : pas de couloir de repli mesuré au vol d'oiseau,
+// qui rendrait une liste fausse là où l'abonnée attend la seule chose que ce
+// produit promette, des fiches qui bordent vraiment sa route.
+//
+// TROIS SORTIES, ET AUCUNE N'EST UN CUL-DE-SAC. L'encart se retire, faute de
+// quoi la page resterait tenue par un voile qui n'attend plus rien. Le motif se
+// dit au toast, une fois, parce qu'il est daté. Et la RELANCE se pose en tête du
+// panneau, au-dessus de la liste des rendez-vous que renderPanel rétablit : on
+// peut recommencer le calcul, ou désigner une autre destination sur une ligne
+// juste en dessous. Le champ d'adresse, en bas de la carte, reste la seconde
+// voie vers un autre point de départ.
+//
+// LE BLOC NE SURVIT À AUCUN RENDU SUIVANT, et c'est voulu : il est écrit après
+// renderPanel, donc par-dessus lui, et le prochain rendu du panneau ou du
+// couloir l'emporte. Un message d'échec n'a pas à durer plus que sa cause.
+function echecDeLaRoute(motif){
+  renoncerAuRayon();
+  toast(motif);
+  ouvrirPanneau();
+  renderPanel();
+  var body=document.getElementById('tour-body');
+  if(!body) return;
+  body.insertAdjacentHTML('afterbegin',
+    '<div class="tour-echec">'
+    +'<div class="tour-echec-titre">La route n\'a pas pu être mesurée</div>'
+    +'<div class="tour-echec-motif">'+esc(motif)+'</div>'
+    +'<button type="button" class="tour-echec-relance" onclick="lancerCouloir()">Réessayer</button>'
+    +'</div>');
 }
 
 // Panel rendering
@@ -2344,6 +2400,12 @@ var routeLine=null;
 // qu'une et la replie, si bien que le retour est l'aller à l'envers, durées
 // de segment comprises.
 var trajetMoities=[];
+// LA POLYLIGNE DU TRAJET, telle que demiTrajet la rend : un [lng,lat] par nœud,
+// l'aller suivi de l'aller à l'envers. routeLine la dessine, et c'était jusqu'ici
+// le seul endroit où elle survivait au calcul. Le déroulé la reparcourt nœud par
+// nœud pour faire courir son trait (cf. derouler) : la garder en clair vaut mieux
+// que de la redemander au calque, qui l'a convertie en objets Leaflet.
+var couloirLigne=null;
 // Ce que le dernier calcul a trouvé, gardé pour qu'un changement de durée du
 // rendez-vous se rende sans rappeler personne : la fiche de destination, et les
 // PASSAGES déjà mesurés et rangés dans l'ordre du trajet. Des passages et non
@@ -2383,6 +2445,17 @@ var couloirAffiche=false;
 // (cf. clearTourPlan). La journée change, le réglage se refait.
 var COULOIR_MIN_M=500, COULOIR_MAX_M=50000, COULOIR_DEFAUT_M=15000;
 var COULOIR_M=COULOIR_DEFAUT_M;
+// LE DÉLAI D'ATTENTE DU CALCULATEUR, ET C'EST CELUI DU RELEVÉ DE POSITION :
+// quinze secondes, la même valeur pour le même genre d'appel réseau (cf.
+// releverPosition, dont le timeout vaut ce nombre). Rien ne justifiait de traiter
+// l'itinéraire autrement, et il était le seul des trois à n'être pas borné.
+// AUCUN REPLI SUR LE VOL D'OISEAU AU BOUT DE CE DÉLAI, et ce n'est pas un oubli.
+// Un couloir mesuré sur une ligne droite dirait qu'une fiche est sur la route
+// alors qu'elle en est à trente minutes : c'est l'inverse exact de ce que la
+// liste promet, et une liste fausse est pire qu'une liste absente. Quand la
+// route ne se mesure pas, on le dit et on propose de recommencer (cf.
+// echecDeLaRoute).
+var COULOIR_ATTENTE_MS=15000;
 // Au-delà de la visio, on n'appelle plus à froid : un rendez-vous est déjà
 // pris, un devis et une négociation sont une relation ouverte, un client gagné
 // ne se rappelle pas pour ça. Un SEUIL sur l'avancement plutôt que la liste des
@@ -2421,6 +2494,10 @@ var COULOIR_FROID_MAX=stageIdx('visio');
 // ne le dirait pas (cf. numeroterLesMarqueurs). « Effacer » passe par ici, et
 // c'est son seul chemin.
 function clearTourPlan(){
+  // Le déroulé se coupe AVANT tout le reste, et sans rien repeindre : il tient
+  // un trait, une bulle et des minuteurs sur un trajet qui n'existera plus à la
+  // ligne suivante (cf. arreterLeDeroule).
+  arreterLeDeroule();
   if(routeLine){map.removeLayer(routeLine);routeLine=null;}
   numeroterLesMarqueurs([]);
   // Le rayon repart du défaut, ici et nulle part ailleurs : c'est le seul point
@@ -2428,6 +2505,7 @@ function clearTourPlan(){
   // que l'encart conduit.
   COULOIR_M=COULOIR_DEFAUT_M;
   trajetMoities=[];
+  couloirLigne=null;
   couloirRdv=null;
   couloirCandidats=[];
   couloirTRdv=0;
@@ -2532,15 +2610,27 @@ function lancerCouloir(){
   // s'affiche nulle part.
   var d=startLatLng[1]+','+startLatLng[0]; // lng,lat pour OSRM
   var b=rdv.latlng[1]+','+rdv.latlng[0];
-  fetch(OSRM+'/route/v1/driving/'+d+';'+b+';'+d+'?overview=full&geometries=geojson&steps=false&annotations=duration')
-    .then(function(r){return r.json();})
+  // L'ATTENTE EST BORNÉE (cf. COULOIR_ATTENTE_MS). Le minuteur tombe, la requête
+  // est abandonnée, la promesse retombe dans le .catch et l'échec se dit. Sans
+  // lui, un calculateur muet laissait la promesse en suspens pour toujours :
+  // l'encart restait levé sur « Mesure de la route en cours », curseur figé,
+  // bouton éteint, et la page n'avait plus aucune sortie.
+  // attenteFinie plutôt qu'un clearTimeout recopié aux trois sorties : le
+  // minuteur se désarme une fois, quel que soit le chemin par lequel la réponse
+  // arrive, et le drapeau à null dit qu'il est déjà tombé.
+  var abandon=new AbortController();
+  var minuteur=setTimeout(function(){minuteur=null;abandon.abort();},COULOIR_ATTENTE_MS);
+  function attenteFinie(){ if(minuteur){clearTimeout(minuteur);minuteur=null;} }
+  fetch(OSRM+'/route/v1/driving/'+d+';'+b+';'+d+'?overview=full&geometries=geojson&steps=false&annotations=duration',{signal:abandon.signal})
+    .then(function(r){attenteFinie();return r.json();})
     .then(function(route){
-      if(!route.routes||!route.routes.length){toast('Impossible de calculer l\'itinéraire');renoncerAuRayon();return;}
+      if(!route.routes||!route.routes.length){echecDeLaRoute('Le calculateur ne rend aucun itinéraire.');return;}
       var demi=demiTrajet(route.routes[0],[rdv.latlng[1],rdv.latlng[0]]);
-      if(!demi){toast('Impossible de calculer l\'itinéraire');renoncerAuRayon();return;}
+      if(!demi){echecDeLaRoute('L\'itinéraire rendu ne se laisse pas replier.');return;}
       // Le tracé précédent a été retiré par clearTourPlan en tête de lancerCouloir.
       routeLine=L.geoJSON({type:'LineString',coordinates:demi.ligne},{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
       trajetMoities=demi.moities;
+      couloirLigne=demi.ligne;
 
       couloirRdv={id:String(rdvChoisi),card:rdv.card,latlng:rdv.latlng};
       couloirCandidats=fichesDuCouloir(demi.ligne);
@@ -2561,8 +2651,25 @@ function lancerCouloir(){
       // propre état.
       ouvrirPanneau();
       // Différé de 400 ms : le trajet peut avoir été effacé entretemps
-      // (« Effacer », ou un second calcul lancé dans la foulée).
-      setTimeout(function(){if(routeLine)map.fitBounds(routeLine.getBounds(),{padding:[60,60]});},400);
+      // (« Effacer », ou un second calcul lancé dans la foulée), et le panneau
+      // finit de s'ouvrir, son map.invalidateSize passant à 300 ms.
+      // LA CARTE SE CADRE ICI SUR TOUT LE TRAJET, DU DÉBUT À LA FIN, et elle ne
+      // bougera plus : le déroulé rejoue le même cadrage sur les mêmes bornes,
+      // ce qui ne déplace rien (cf. derouler).
+      // HORS ENCART, C'EST AUSSI ICI QUE LA JOURNÉE SE DÉROULE. Le bouton
+      // « Préparer » du panneau ne lève aucun voile : il n'y a pas de « Voir la
+      // liste » pour la révéler, et le déroulé part donc une fois la carte cadrée.
+      // Sous encart c'est validerLeRayon qui le lance, à la sortie du dernier
+      // temps, et le voile tombe juste avant.
+      setTimeout(function(){
+        if(!routeLine) return;
+        // Le déroulé a déjà pris la main, l'abonnée étant sortie de l'encart
+        // avant ces 400 ms : il a cadré lui-même sur les mêmes bornes, et le
+        // relancer d'ici le ferait repartir du départ.
+        if(derouleActif) return;
+        map.fitBounds(routeLine.getBounds(),{padding:[60,60]});
+        if(!estOuvert('mesTempsRayon')) derouler();
+      },400);
       // LE RÉSULTAT NE SE DIT QU'UNE FOIS, ET PAS PAR-DESSUS L'ENCART. Ce toast
       // date du temps où le calcul était le geste final de la préparation. Il ne
       // l'est plus : le réglage du rayon vient après lui, et le toast passe
@@ -2584,7 +2691,18 @@ function lancerCouloir(){
           +' · '+fmtDuree(Math.round(demi.duration/60))+' de trajet aller-retour');
       }
     })
-    .catch(function(){toast('Erreur de calcul itinéraire');renoncerAuRayon();});
+    .catch(function(err){
+      attenteFinie();
+      // La liste est déjà posée : ce qui a jeté ici n'est pas la route, c'est
+      // quelque chose après elle, et l'effacer par un échec serait mentir.
+      if(couloirAffiche) return;
+      // AbortError est le minuteur, et lui seul : rien d'autre n'abandonne cette
+      // requête. Les deux motifs se disent séparément parce qu'ils n'appellent
+      // pas le même geste, patienter un peu ou vérifier sa liaison.
+      echecDeLaRoute((err&&err.name==='AbortError')
+        ?('Le calculateur d\'itinéraire n\'a pas répondu en '+Math.round(COULOIR_ATTENTE_MS/1000)+' secondes.')
+        :'Le calculateur d\'itinéraire est injoignable.');
+    });
 }
 
 // ── UNE SEULE ROUTE, PARCOURUE DEUX FOIS ──
@@ -2738,9 +2856,14 @@ function fichesDuCouloir(ligne){
   var seuil2=COULOIR_MAX_M*COULOIR_MAX_M;
   // Le point de la ligne le plus proche porte un temps : celui de son segment,
   // interpolé à l'endroit exact où la fiche vient s'y accrocher.
+  // `seg` ET `pos` SONT CE POINT LUI-MÊME, gardés à côté du temps qu'ils
+  // produisent. Le temps situe la fiche dans la journée, eux la situent sur la
+  // LIGNE, et le déroulé a besoin des deux : c'est là qu'il arrête son trait
+  // pour ouvrir cette fiche (cf. derouler). Les recalculer ailleurs reviendrait
+  // à refaire la mesure une seconde fois pour retrouver ce qu'on tient déjà.
   function passageDe(mid,card,d2,segment,position,retour){
     var t=chrono.cumul[segment]+position*(chrono.cumul[segment+1]-chrono.cumul[segment]);
-    return {id:mid, card:card, ecart:Math.sqrt(d2), t:t, retour:retour};
+    return {id:mid, card:card, ecart:Math.sqrt(d2), t:t, retour:retour, seg:segment, pos:position};
   }
 
   var trouvees=[];
@@ -2831,7 +2954,10 @@ function appelsDuRayon(){
     if(p.ecart>COULOIR_M) return;
     var a=parId[p.id];
     if(!a){
-      a={id:p.id, card:p.card, ecart:p.ecart, aller:null, retour:null, dom:'sched-'+p.id};
+      // seg et pos viennent du PREMIER passage rencontré, donc du plus tôt dans
+      // le voyage, couloirCandidats étant trié par cumul croissant : c'est bien
+      // le point où le trait du déroulé s'arrête pour ouvrir cette fiche.
+      a={id:p.id, card:p.card, ecart:p.ecart, aller:null, retour:null, seg:p.seg, pos:p.pos, dom:'sched-'+p.id};
       parId[p.id]=a;
       appels.push(a);
     }
@@ -2913,6 +3039,14 @@ function proRata(px,py,debut,fin,total){
 // que rien ne soit recalculé.
 function renderCouloir(){
   if(!couloirRdv) return;
+  // LE DÉROULÉ POSE SES LIGNES LUI-MÊME, ET IL EST SEUL À LE FAIRE TANT QU'IL
+  // COURT. Un rendu complet au milieu de la mise en scène poserait toute la
+  // liste d'un coup, et le déroulé continuerait d'y ajouter par-dessus. Ce qui
+  // passe ici pendant qu'il court le TERMINE donc, et l'état final se pose : le
+  // sélecteur de durée du rendez-vous est le seul appelant qui puisse tomber là,
+  // et l'abonnée qui y touche demande la liste, pas la suite du spectacle.
+  // finirLeDeroule repeint en revenant ici, le drapeau étant alors baissé.
+  if(derouleActif){ finirLeDeroule(); return; }
 
   var appels=appelsDuRayon();
   var html=appels.map(ligneAppel).join('');
@@ -2933,6 +3067,259 @@ function renderCouloir(){
   couloirAffiche=true;
   retirerCercles();
 }
+
+// ── LE DÉROULÉ DE LA JOURNÉE ────────────────────────────────────────────────
+// LA LISTE NE TOMBE PLUS D'UN BLOC. Treize lignes qui paraissent d'un coup ne
+// disent pas d'où elles viennent : l'abonnée lit un tableau et doit croire sur
+// parole que ces fiches bordent sa route. Le déroulé le MONTRE, dans l'ordre
+// même de la journée. Le trait part du départ, se déroule le long de la route,
+// s'arrête à hauteur de la première fiche du couloir ; sa bulle s'ouvre sur la
+// carte, se laisse lire, se referme, et sa ligne se pose dans la liste à droite.
+// Le trait repart, et ainsi de suite jusqu'au rendez-vous.
+//
+// LA CARTE EST FIXE, cadrée sur tout le trajet du premier nœud au dernier. Elle
+// ne suit pas le trait, ne zoome pas, ne se déplace pas : seul le trait progresse
+// dedans. C'est aussi la raison d'être d'ouvrirBulleFixe, Leaflet recentrant
+// sinon la vue sur chaque bulle qui déborde.
+//
+// LA CADENCE EST DE DEUX SECONDES PAR FICHE, soit une trentaine de secondes sur
+// treize. Elle est la somme des trois constantes ci-dessous, et se règle en les
+// touchant : rien d'autre dans cette fonction ne porte de durée.
+//
+// LA SORTIE AU CLIC EST OBLIGATOIRE, et cette cadence la rend nécessaire :
+// trente secondes d'animation à la vingtième préparation seraient une prison. Un
+// clic n'importe où sur la carte interrompt le déroulé et pose immédiatement
+// l'état final, tracé complet et liste entière (cf. le récepteur en capture sur
+// #map, plus bas).
+//
+// L'ÉTAT FINAL EST CELUI DE renderCouloir, ET DE LUI SEUL. Le déroulé ne compose
+// rien qui lui soit propre : il pose les mêmes lignes, dans le même ordre, par le
+// même ligneAppel, et renderCouloir repeint tout à la sortie, la ligne du
+// rendez-vous comprise. Rien de ce qui se voit à la fin ne dépend de la façon
+// dont on y est arrivé, ni du moment où l'on a coupé.
+//
+// CE QUI NE BOUGE PAS PENDANT LE DÉROULÉ : les marqueurs et leurs rangs, posés
+// par le rendu qui précède, et le compte de l'en-tête, qui dit la journée entière
+// et non l'avancement de la mise en scène. Le déroulé ne touche qu'au trait, aux
+// bulles et aux lignes de la liste.
+var DEROULE_TRAIT_MS=600;    // le trait court du dernier arrêt jusqu'au suivant
+var DEROULE_LECTURE_MS=1100; // la bulle reste ouverte, le temps de la lire
+var DEROULE_POSE_MS=300;     // elle se referme, la ligne se pose, on enchaîne
+
+// Le drapeau dit qu'un déroulé court, et il commande tout : les trames s'y
+// arrêtent, renderCouloir s'y détourne, le clic s'y raccroche.
+var derouleActif=false;
+// Ce qui court : le trait provisoire, le minuteur du temps en cours, la trame
+// d'animation, et la bulle que le déroulé a ouverte (la sienne, jamais une autre,
+// pour n'avoir à fermer que ce qu'il a ouvert).
+var derouleTrait=null;
+var derouleMinuteur=null;
+var derouleTrame=null;
+var deroulePopup=null;
+// Le chemin en [lat,lng], ses longueurs cumulées, et la tête déjà posée : les
+// nœuds franchis s'accumulent une fois pour toutes, seul le dernier point est
+// interpolé à chaque trame (cf. poserLeTrait).
+var derouleChemin=[];
+var derouleCumul=[];
+var derouleTete=[];
+var derouleNoeud=0;
+var derouleD=0;
+// Les temps du déroulé, dans l'ordre : un par appel, plus un dernier sans appel
+// dont l'arrêt est le rendez-vous.
+var derouleTemps=[];
+var derouleRang=0;
+
+// LE DÉPART DU DÉROULÉ. Ses deux appelants sont les deux façons dont la liste se
+// révèle : validerLeRayon sous encart, lancerCouloir hors encart.
+function derouler(){
+  if(!couloirRdv||!couloirLigne||couloirLigne.length<3) return;
+  if(derouleActif) finirLeDeroule();
+  // Le cadrage sur tout le trajet, avant que le trait ne parte, et la carte ne
+  // bougera plus. Les mêmes bornes que celles de lancerCouloir : quand il est
+  // déjà passé, celui-ci ne déplace rien.
+  if(routeLine) map.fitBounds(routeLine.getBounds(),{padding:[60,60]});
+  var appels=appelsDuRayon();
+  // Personne sur la route : il n'y a rien à mettre en scène, et la liste que le
+  // rendu vient de poser est déjà juste.
+  if(!appels.length) return;
+
+  derouleChemin=couloirLigne.map(function(c){return [c[1],c[0]];});
+  derouleCumul=longueursCumulees(derouleChemin);
+  // Le rendez-vous est le point de repli, au milieu exact de la ligne : elle est
+  // l'aller suivi de l'aller à l'envers, son dernier nœud ne se répétant pas (cf.
+  // demiTrajet). L'arrondi n'a rien à corriger, il garde seulement l'index entier.
+  var dRdv=derouleCumul[Math.round((derouleChemin.length-1)/2)];
+  // Les arrêts, dans l'ordre de la liste. JAMAIS EN ARRIÈRE, JAMAIS AU-DELÀ DU
+  // REBROUSSEMENT : les deux bornes valent pour le cas dégénéré où une fiche ne
+  // rend qu'un passage de retour, dont le point d'accrochage tombe après le
+  // rendez-vous (cf. appelsDuRayon). Le trait s'arrête alors où il en était, la
+  // bulle s'ouvre quand même, et la liste garde son ordre.
+  var d=0;
+  derouleTemps=appels.map(function(a){
+    var da=longueurAu(a.seg,a.pos);
+    if(!(da>d)) da=d;
+    if(da>dRdv) da=dRdv;
+    d=da;
+    return {appel:a, d:da};
+  });
+  derouleTemps.push({appel:null, d:dRdv});
+
+  document.getElementById('tour-body').innerHTML='';
+  // Le tracé entier s'efface le temps du déroulé et son trait prend sa place, au
+  // même vêtement : la substitution ne se voit pas. Il revient tel quel à la
+  // sortie (cf. finirLeDeroule), le retour se superposant à l'aller.
+  if(routeLine) map.removeLayer(routeLine);
+  derouleTete=[derouleChemin[0]];
+  derouleNoeud=0;
+  derouleD=0;
+  derouleTrait=L.polyline([derouleChemin[0],derouleChemin[0]],{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}).addTo(map);
+  derouleRang=0;
+  derouleActif=true;
+  derouleEtape();
+}
+
+// UN TEMPS DU DÉROULÉ, et ils sont tous de la même forme : le trait court jusqu'à
+// l'arrêt, la fiche s'ouvre, se lit, se referme, sa ligne se pose. Le dernier n'a
+// pas de fiche : son arrêt est le rendez-vous, et il ferme le déroulé.
+function derouleEtape(){
+  if(!derouleActif) return;
+  var temps=derouleTemps[derouleRang];
+  if(!temps){ finirLeDeroule(); return; }
+  courirJusqua(temps.d, function(){
+    if(!temps.appel){ finirLeDeroule(); return; }
+    var m=markers[temps.appel.id];
+    // Une fiche sans marqueur ne se rencontre pas, les appels sortant de markers.
+    // Le temps se joue quand même, à vide : la ligne se posera comme les autres.
+    if(m) deroulePopup=ouvrirBulleFixe(m.marker);
+    derouleMinuteur=setTimeout(function(){
+      if(!derouleActif) return;
+      if(deroulePopup){deroulePopup.closePopup();deroulePopup=null;}
+      document.getElementById('tour-body').insertAdjacentHTML('beforeend',ligneAppel(temps.appel));
+      derouleMinuteur=setTimeout(function(){ derouleRang++; derouleEtape(); },DEROULE_POSE_MS);
+    },DEROULE_LECTURE_MS);
+  });
+}
+
+// LE TRAIT COURT À VITESSE RÉGULIÈRE AU SOL, et non par nœuds : la géométrie
+// d'OSRM est dense en traversée de bourg et clairsemée sur autoroute, et un pas
+// par nœud ferait piétiner le trait dans les villages pour filer sur les
+// quatre-voies. C'est la longueur cumulée qui commande, et le temps de course est
+// le même d'un arrêt au suivant, qu'il y ait deux kilomètres ou trente.
+function courirJusqua(cible,fini){
+  var depart=derouleD, t0=null;
+  function trame(t){
+    if(!derouleActif) return;
+    if(t0===null) t0=t;
+    var f=DEROULE_TRAIT_MS?Math.min(1,(t-t0)/DEROULE_TRAIT_MS):1;
+    derouleD=depart+(cible-depart)*f;
+    poserLeTrait(derouleD);
+    if(f<1){ derouleTrame=requestAnimationFrame(trame); return; }
+    derouleTrame=null;
+    fini();
+  }
+  derouleTrame=requestAnimationFrame(trame);
+}
+
+// Le trait depuis le départ jusqu'à la longueur `d`. Les nœuds franchis restent
+// acquis dans derouleTete, seul le point de tête est interpolé : une trame ne
+// reparcourt pas la ligne entière, elle avance dans ce qui reste.
+// Une polyligne veut deux points au moins : au tout premier instant, où la tête
+// n'a pas quitté le départ, le point de départ se donne deux fois.
+function poserLeTrait(d){
+  while(derouleNoeud+1<derouleChemin.length&&derouleCumul[derouleNoeud+1]<=d){
+    derouleNoeud++;
+    derouleTete.push(derouleChemin[derouleNoeud]);
+  }
+  var pts=derouleTete;
+  if(derouleNoeud+1<derouleChemin.length){
+    var a=derouleChemin[derouleNoeud], b=derouleChemin[derouleNoeud+1];
+    var l0=derouleCumul[derouleNoeud], l1=derouleCumul[derouleNoeud+1];
+    var f=(l1>l0)?(d-l0)/(l1-l0):0;
+    if(f<0)f=0; else if(f>1)f=1;
+    pts=derouleTete.concat([[a[0]+f*(b[0]-a[0]), a[1]+f*(b[1]-a[1])]]);
+  }
+  if(pts.length<2) pts=[derouleChemin[0],derouleChemin[0]];
+  derouleTrait.setLatLngs(pts);
+}
+
+// Les longueurs cumulées de la ligne, en projection équirectangulaire locale : la
+// même approximation que la mesure au couloir, et pour la même raison, sauf qu'il
+// ne s'agit ici que de régler une vitesse. Le facteur de longitude se prend au
+// premier point, une fois pour toutes.
+function longueursCumulees(chemin){
+  var kx=Math.cos(chemin[0][0]*Math.PI/180), c=[0];
+  for(var i=1;i<chemin.length;i++){
+    var dy=chemin[i][0]-chemin[i-1][0], dx=(chemin[i][1]-chemin[i-1][1])*kx;
+    c.push(c[i-1]+Math.sqrt(dx*dx+dy*dy));
+  }
+  return c;
+}
+
+// La longueur cumulée du point d'accrochage d'une fiche : le début de son
+// segment, plus la fraction que la mesure y a relevée (cf. passageDe). Un segment
+// hors ligne rend le bout du chemin, ce que le plafonnement de derouler ramènera
+// au rendez-vous.
+function longueurAu(seg,pos){
+  if(seg==null||seg<0||seg+1>=derouleCumul.length) return derouleCumul[derouleCumul.length-1];
+  return derouleCumul[seg]+(pos||0)*(derouleCumul[seg+1]-derouleCumul[seg]);
+}
+
+// LA BULLE S'OUVRE SANS DÉPLACER LA CARTE. Leaflet recentre la vue pour faire
+// tenir une bulle qui déborde (autoPan, actif par défaut), et la carte doit rester
+// fixe pendant le déroulé. L'option est rendue telle quelle aussitôt : elle est
+// lue à l'ouverture, et elle vaut pour le clic ordinaire, qui a bien besoin de ce
+// recentrage. LE CONTENU EST CELUI DE LA BULLE EXISTANTE, celle que placeCard a
+// liée : le déroulé n'écrit aucune fiche à lui.
+function ouvrirBulleFixe(marker){
+  var bulle=marker.getPopup();
+  if(!bulle) return null;
+  var avant=bulle.options.autoPan;
+  bulle.options.autoPan=false;
+  marker.openPopup();
+  bulle.options.autoPan=avant;
+  return marker;
+}
+
+// COUPER, SANS RIEN REPEINDRE. Ce que le déroulé tient et qui doit tomber quel
+// que soit ce qui l'arrête : le minuteur du temps courant, la trame en vol, le
+// trait provisoire, et sa bulle. clearTourPlan passe par là, sur un trajet qui
+// n'existera plus à la ligne suivante et qu'il n'y a donc pas à redessiner.
+function arreterLeDeroule(){
+  derouleActif=false;
+  if(derouleMinuteur){clearTimeout(derouleMinuteur);derouleMinuteur=null;}
+  if(derouleTrame){cancelAnimationFrame(derouleTrame);derouleTrame=null;}
+  if(derouleTrait){map.removeLayer(derouleTrait);derouleTrait=null;}
+  if(deroulePopup){deroulePopup.closePopup();deroulePopup=null;}
+  derouleTemps=[];
+}
+
+// ARRÊTER ET POSER L'ÉTAT FINAL, tracé complet et liste entière. C'est la sortie
+// normale, celle du dernier temps, et c'est aussi celle du clic : les deux
+// aboutissent au même écran, ce qui est toute la garantie que la mise en scène ne
+// décide de rien.
+// Le tracé entier revient avant le rendu, jamais après : renderCouloir renumérote
+// les marqueurs et refait l'éventail, et il vaut mieux qu'il travaille sur la
+// carte définitive.
+function finirLeDeroule(){
+  if(!derouleActif) return;
+  arreterLeDeroule();
+  if(routeLine&&!map.hasLayer(routeLine)) map.addLayer(routeLine);
+  renderCouloir();
+}
+
+// LA SORTIE AU CLIC, POSÉE SUR LE CONTENEUR ET EN CAPTURE. Sur map.on('click')
+// elle aurait manqué deux gestes sur trois : Leaflet ne tire cet événement que
+// pour le FOND de carte, jamais pour un marqueur ni pour une bulle, et le premier
+// clic après l'ouverture d'une bulle y est de toute façon consommé par la
+// fermeture (cf. clickClosesPopup). En capture sur #map, tout clic dans la carte
+// passe ici d'abord, marqueurs, bulles et commandes de zoom compris, et c'est bien
+// ce que « n'importe où sur la carte » veut dire.
+// ELLE NE FAIT RIEN HORS DÉROULÉ, et ne consomme alors aucun clic : le geste suit
+// son chemin ordinaire. Le panneau, lui, n'est pas dans #map : cliquer une ligne
+// de la liste n'interrompt rien, et n'a pas à le faire.
+document.getElementById('map').addEventListener('click',function(){
+  if(derouleActif) finirLeDeroule();
+},true);
 
 // ── LA CARTE NE PORTE QUE LA JOURNÉE ──
 // Ce que la liste numérote, le marqueur le porte : la route se lit alors d'un

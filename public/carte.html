@@ -2749,6 +2749,9 @@ var couloirAffiche=false;
 // sont ceux du curseur, et le balisage les répète en clair.
 // AUCUNE MÉMOIRE DU RÉGLAGE : COULOIR_M repart du défaut à chaque préparation
 // (cf. clearTourPlan). La journée change, le réglage se refait.
+// LES JOURNÉES DÉJÀ MESURÉES, par identifiant de rendez-vous (cf. le bloc qui
+// précède clearTourPlan pour ce qu'elles contiennent et ce qui les vide).
+var journeesMesurees={};
 var COULOIR_MIN_M=500, COULOIR_MAX_M=50000, COULOIR_DEFAUT_M=15000;
 var COULOIR_M=COULOIR_DEFAUT_M;
 // LE DÉLAI D'ATTENTE DU CALCULATEUR, ET C'EST CELUI DU RELEVÉ DE POSITION :
@@ -2770,6 +2773,53 @@ var COULOIR_ATTENTE_MS=15000;
 // STAGES, donc au-delà du seuil — la garde explicite qu'il avait n'est plus
 // nécessaire, celle-ci la couvre.
 var COULOIR_FROID_MAX=stageIdx('visio');
+
+// ── LA JOURNÉE DÉJÀ MESURÉE NE SE REMESURE PAS ──
+// PASSER D'UN RENDEZ-VOUS À L'AUTRE EST LE GESTE PRINCIPAL DE CETTE PAGE, et il
+// ne doit pas coûter un appel au calculateur. Une journée mesurée se garde donc,
+// par identifiant de rendez-vous, et revenir dessus la repose telle quelle.
+//
+// CE QUE L'ENTRÉE CONTIENT EST EXACTEMENT CE QUE LE CALCUL PRODUIT ET QUE
+// clearTourPlan VIDE : la géométrie du trajet, ses deux moitiés, les passages
+// mesurés et la durée de l'aller-retour. `ligne` EST le tracé — la couche
+// Leaflet n'en est que le vêtement, et poserLaJournee la refait (cf. le point
+// suivant). `moities` n'est lue par PERSONNE sur la voie retrouvée : son seul
+// lecteur est chronoDeLaLigne, appelée par la seule fichesDuCouloir, elle-même
+// l'unique chose que la voie retrouvée ne refait pas. Elle entre quand même,
+// par SYMÉTRIE : ce qui se restaure est ce que clearTourPlan vide, ni plus ni
+// moins, et une entrée à quatre champs sur cinq ferait chercher dans six mois
+// lequel manque et pourquoi.
+//
+// CE QUI N'Y ENTRE PAS, ET POURQUOI. La COUCHE Leaflet : routeLine est retirée
+// de la carte par clearTourPlan, et une couche retirée ne se remet pas telle
+// quelle sans risque — on garde les coordonnées et le L.geoJSON se reconstruit
+// au réaffichage, au même vêtement. COULOIR_M : le rayon repart du défaut à
+// chaque préparation, c'est la doctrine posée plus haut, et la réserve étant
+// prise à 50 km il se rejoue sur la mémoire sans rien recalculer. couloirRdv :
+// il se recompose de markers, que rien ne reconstruit en séance, et
+// poserLaJournee le fait déjà sur les deux voies. couloirAffiche et
+// fichesRevelees : le rendu lève le premier, lancerCouloir arme le second AVANT
+// de choisir sa voie — les deux voies en héritent également.
+//
+// ELLE VIT LE TEMPS DE LA SÉANCE. Une variable de page, que le rechargement
+// vide, sans péremption ni plafond : personne n'a quinze rendez-vous à venir, et
+// la route d'une journée ne change pas dans l'heure où on la prépare.
+// ELLE VIT À CÔTÉ DE clearTourPlan, ET NON DEDANS. clearTourPlan reste le seul
+// point de remise à zéro de l'ÉTAT COURANT, et il continue de tout vider ; la
+// mémoire n'est pas cet état, elle est ce qui permet de le reposer. Un seul
+// geste la vide, et c'est le changement de point de départ (cf. poserDepart).
+//
+// CE QU'UN RENDEZ-VOUS MODIFIÉ AILLEURS EN FAIT : rien. agenda-sync rappelle
+// autoShowRdv à chaque reprise de focus, mais il ne refait qu'agendaByFiche ;
+// ni markers, ni les cartes, ni aucune coordonnée. Or la route ne dépend que des
+// deux coordonnées, jamais de l'heure ni de la date : un rendez-vous déplacé ne
+// périme pas sa journée. Supprimé, il quitte rdvsAVenir, sa ligne quitte la tête
+// du panneau, et son entrée devient simplement inatteignable — elle meurt avec
+// la page. Aucune purge à écrire pour ce cas.
+// ET UNE FICHE REGÉOCODÉE NE SE RENCONTRE PAS : markers est construit une fois
+// au chargement et rien ne le reconstruit ; le seul chemin qui regéocode, la
+// fiche pleine page, écrit mup_contact_sync, sur quoi cette page se recharge
+// entière (cf. le récepteur storage, en bas). La mémoire tombe avec elle.
 
 // Efface le trajet dans son entier : le tracé qu'il pose, tout l'état de calcul,
 // et les affichages qui n'ont de sens que par lui. Seul point de remise à zéro,
@@ -2858,6 +2908,17 @@ function couloirSiPret(){
 // puisqu'il ne dit plus « je pars d'ici » mais « je suis ici ».
 function poserDepart(latlng, marqueurMaison){
   if(startMarker){map.removeLayer(startMarker);startMarker=null;}
+  // LE DÉPART CHANGE, TOUTE LA MÉMOIRE TOMBE. Chaque journée gardée a été
+  // mesurée depuis un point de départ, et ce point entre dans la mesure : la
+  // reposer depuis un autre départ afficherait une route qui ne part pas d'où
+  // l'on part. Rien de plus fin que ce geste-là, qui est le geste rare — se
+  // relocaliser, ou saisir une autre adresse — et la règle la plus simple. C'est
+  // ici, et nulle part ailleurs, parce que cette fonction est le seul endroit
+  // par lequel startLatLng passe.
+  // LA GIGUE D'UN RELEVÉ REDEMANDÉ PURGE AUSSI, et c'est le bon côté de
+  // l'erreur : quelques mètres d'écart vident une mémoire qu'on refera, là où
+  // une tolérance garderait une journée fausse.
+  if(startLatLng&&(startLatLng[0]!==latlng[0]||startLatLng[1]!==latlng[1])) journeesMesurees={};
   startLatLng=latlng;
   if(marqueurMaison){
     var icon=L.divIcon({
@@ -2904,7 +2965,21 @@ function departDepuisAdresse(){
 // les deux points existent — d'où l'absence de toast ici : rien de ce qu'il
 // rencontrerait ne serait le fait d'un geste mal formé.
 function lancerCouloir(){
-  var rdv=markers[String(rdvChoisi)];
+  // L'IDENTIFIANT DE LA JOURNÉE, PRIS UNE FOIS ET TENU JUSQU'AU BOUT. Il vaut
+  // String(rdvChoisi) à cet instant, et c'est LUI qui classe la journée dans la
+  // mémoire, jamais la désignation courante relue au retour de la requête : rien
+  // n'abandonne un calcul en cours quand un second part, et la réponse du
+  // premier peut donc arriver après que l'abonnée a changé de rendez-vous. Sans
+  // cette prise, cette réponse retardataire rangerait SA route sous l'identifiant
+  // de la journée SUIVANTE, et la mémoire rejouerait cette erreur à chaque retour
+  // sur elle. Avec, chaque route est classée sous le rendez-vous pour lequel elle
+  // a été mesurée.
+  // CE QU'ELLE NE RÈGLE PAS, et qui ne date pas de la mémoire : cette même
+  // réponse retardataire repose quand même son tracé et sa liste par-dessus la
+  // journée en cours. C'est le comportement d'aujourd'hui, il n'est pas touché
+  // ici — seul ce qui se GARDE est mis à l'abri.
+  var idRdv=String(rdvChoisi);
+  var rdv=markers[idRdv];
   // La désignation ne pointe une fiche absente de markers dans aucun chemin
   // connu — rdvChoisi ne se remplit que d'identifiants venus de renderPanel,
   // qui les lit de markers. La garde est là pour que la déréférence de la ligne
@@ -2963,6 +3038,19 @@ function lancerCouloir(){
   // les deux par là, ni l'un ni l'autre ne laisse de bulle orpheline.
   ouvrirBulleFixe(rdv.marker);
 
+  // LA JOURNÉE DÉJÀ MESURÉE SE REPOSE ICI, ET LE CALCULATEUR N'EST PAS DÉRANGÉ.
+  // C'est le seul embranchement des deux voies, et il tombe APRÈS tout ce que la
+  // préparation fait de commun — la remise à zéro, la carte vidée sur ses deux
+  // bornes, fichesRevelees armée, la bulle de la destination ouverte — et AVANT
+  // la seule chose qui les sépare, l'appel réseau. Ce qui suit est le même
+  // poserLaJournee des deux côtés : même pose du tracé, même renderCouloir, même
+  // rafraichirLeRayon, même cadrage différé, même déroulé, même toast.
+  // LE DÉROULÉ SE REJOUE DONC SUR UNE JOURNÉE RETROUVÉE, et c'est voulu : il est
+  // ce qui montre le travail, et passer d'une journée à l'autre est précisément
+  // le moment où il a du sens.
+  var gardee=journeesMesurees[idRdv];
+  if(gardee){ poserLaJournee(rdv, gardee.ligne, gardee.moities, gardee.duree, gardee.candidats); return; }
+
   // Le trajet : trois points de passage, départ → rendez-vous → départ, dont on
   // ne garde QU'UNE MOITIÉ, repliée (cf. demiTrajet). La journée est un
   // aller-retour, pas un aller simple : on revient de son rendez-vous, et la
@@ -2991,6 +3079,19 @@ function lancerCouloir(){
       var demi=demiTrajet(route.routes[0],[rdv.latlng[1],rdv.latlng[0]]);
       if(!demi){echecDeLaRoute('L\'itinéraire rendu ne se laisse pas replier.');return;}
       poserLaJournee(rdv, demi.ligne, demi.moities, demi.duration);
+      // LA JOURNÉE SE RETIENT ICI, ET SUR CETTE VOIE SEULE : celle qui vient de
+      // mesurer. La retenir dans poserLaJournee la ferait réécrire à l'identique
+      // à chaque réaffichage, pour rien. Les quatre champs se lisent de l'état
+      // que l'appel ci-dessus vient de poser, et non des arguments : c'est ce
+      // qui est EN PLACE qu'on garde, couloirCandidats n'existant d'ailleurs
+      // qu'après lui. Un échec de route ne passe pas par ici et ne retient donc
+      // rien (cf. echecDeLaRoute).
+      journeesMesurees[idRdv]={
+        ligne:couloirLigne,
+        moities:trajetMoities,
+        candidats:couloirCandidats,
+        duree:couloirDuree
+      };
     })
     .catch(function(err){
       attenteFinie();
@@ -3023,14 +3124,22 @@ function lancerCouloir(){
 // LE TOAST LIT couloirDuree PLUTÔT QUE LA DURÉE REÇUE, et c'est la même
 // seconde : la ligne qui la pose est deux blocs plus haut. Elle ne dépend plus
 // ainsi que de l'état de la page, comme le reste de ce qui s'affiche ici.
-function poserLaJournee(rdv, ligne, moities, duree){
+function poserLaJournee(rdv, ligne, moities, duree, candidats){
   // Le tracé précédent a été retiré par clearTourPlan en tête de lancerCouloir.
   routeLine=L.geoJSON({type:'LineString',coordinates:ligne},{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
   trajetMoities=moities;
   couloirLigne=ligne;
 
   couloirRdv={id:String(rdvChoisi),card:rdv.card,latlng:rdv.latlng};
-  couloirCandidats=fichesDuCouloir(ligne);
+  // LA MESURE DES FICHES EST LA SEULE CHOSE QUE LA VOIE RETROUVÉE APPORTE TOUTE
+  // FAITE, et le seul mot de cette fonction qui distingue les deux voies. Ce
+  // n'est pas un second chemin d'affichage : tout ce qui suit est identique, et
+  // ce qui est reçu est ce que fichesDuCouloir avait rendu, sur la même ligne,
+  // au même seuil de 50 km. La mesure passe fichesDuCouloir APRÈS couloirRdv,
+  // qu'elle lit pour écarter la destination et situer le rebroussement : d'où
+  // l'ordre de ces deux lignes, et d'où l'impossibilité pour l'appelant de la
+  // faire lui-même avant d'appeler.
+  couloirCandidats=candidats?candidats:fichesDuCouloir(ligne);
 
   renderCouloir();
   // AVANT rafraichirLeRayon, qui la lit pour écrire sa ligne : la durée est

@@ -2373,8 +2373,20 @@ function echecDeLaRoute(motif){
 // LE NUMÉRO AUSSI : il court d'un bloc à l'autre, les rendez-vous d'abord, les
 // prospects ensuite, si bien que le panneau se numérote de haut en bas comme
 // une seule liste.
-// event.stopPropagation sur le bouton parce que le corps de la ligne garde
-// flyTo, dans tous ses états.
+// event.stopPropagation sur le bouton parce que le corps de la ligne porte
+// elle aussi un geste, dans tous ses états.
+// LE CORPS DE LA LIGNE NE VOLE PLUS TOUJOURS VERS UN POINT, et c'est le couloir
+// qui en décide. Hors couloir, flyTo : il n'y a rien d'autre à montrer que la
+// fiche. Sous couloir, une ligne de rendez-vous ne désigne plus un point isolé,
+// elle désigne une JOURNÉE, et les deux cas se séparent.
+// LA LIGNE PRÉPARÉE REND LE CADRE DU TRAJET (cf. revoirLeTrajet). Voler vers sa
+// fiche serait montrer le point d'arrivée d'un voyage dont tout le reste est à
+// l'écran : c'est le voyage entier qu'elle nomme.
+// UNE AUTRE LIGNE DE RENDEZ-VOUS VAUT CHANGEMENT DE JOURNÉE, donc le même geste
+// que son propre bouton « Préparer ». Sa fiche est hors de la journée affichée,
+// donc rangée en « hors » par numeroterLesMarqueurs et le plus souvent absente
+// de la carte : y voler emmènerait la vue sur un point vide sans rien ouvrir.
+// La seule chose qu'on puisse vouloir d'un autre rendez-vous est de le préparer.
 function lignePanneau(it, n, dom){
   var distStr=it.dist!==null&&it.dist!==undefined?(it.dist>=1000?Math.round(it.dist/1000)+' km':Math.round(it.dist)+' m'):'';
   var col=stageColor(it.card.col);
@@ -2386,7 +2398,13 @@ function lignePanneau(it, n, dom){
   // « Préparé » ne fait rien : sous couloir l'annulation est refusée, et un
   // bouton qui ne répond pas ne peut pas s'appeler « Annuler » (cf. choisirRdv).
   var geste=retenue?(couloirAffiche?'Préparé':'Annuler'):'Préparer';
-  return '<div class="tour-item'+(retenue?' retenue':'')+'" id="'+dom+'" style="cursor:pointer;'+(it.isRdv?'border-color:'+labelColor+';background:'+labelColor+'14':'')+'" onclick="flyTo(\''+it.id+'\')">'
+  // Sous couloir ce bloc ne porte que des rendez-vous, les prospects cédant la
+  // place aux appels (cf. renderPanel) : la garde sur isRdv n'est là que pour
+  // que la règle se lise seule.
+  var clic=(couloirAffiche&&it.isRdv)
+    ? (retenue?'revoirLeTrajet()':'choisirRdv(\''+it.id+'\')')
+    : 'flyTo(\''+it.id+'\')';
+  return '<div class="tour-item'+(retenue?' retenue':'')+'" id="'+dom+'" style="cursor:pointer;'+(it.isRdv?'border-color:'+labelColor+';background:'+labelColor+'14':'')+'" onclick="'+clic+'">'
     +'<div class="tour-num" style="background:'+col+'">'+n+'</div>'
     +'<div class="tour-info">'
     +'<div class="tour-info-name">'+esc(nomsCarte(it.card).titre)+'</div>'
@@ -2508,7 +2526,9 @@ function renderPanel(){
 
 // Désigne la fiche vers laquelle le trajet se calcule, ou défait cette
 // désignation. Un second clic sur la fiche déjà retenue remet rdvChoisi à null.
-// Le clic sur le corps de la ligne, lui, appelle flyTo dans tous les cas.
+// Le clic sur le corps de la ligne, lui, a son propre geste (cf. lignePanneau),
+// et sous couloir il appelle CETTE fonction sur toute ligne qui n'est pas la
+// ligne préparée : le corps et le bouton y disent la même chose.
 // PLUS D'ANNULATION TANT QU'UN COULOIR EST AFFICHÉ, et c'est nouveau. Ce bouton
 // était inatteignable sous couloir : la liste des rendez-vous avait cédé toute
 // la place aux appels, ses lignes n'existaient plus. Elle reste en tête
@@ -2551,13 +2571,59 @@ function ouvrirLaBulle(marker){
   ficheGroupe.zoomToShowLayer(marker, function(){ marker.openPopup(); });
 }
 
+// LE RETOUR AU TRAJET. La carte se cadre sur la journée entière au bout du
+// calcul, puis l'abonnée panoramique, roule sa molette, suit une fiche : la vue
+// s'en va, et rien ne la ramenait. Cette fonction la rend, et elle ne mesure
+// rien — routeLine porte le tracé, ses bornes sont déjà là.
+// LES MÊMES BORNES QUE lancerCouloir ET derouler, PAR LE MÊME ARBITRE : elle ne
+// déplace donc rien tant qu'on n'est pas parti, et elle ramène si on l'est.
+// ELLE NE TOUCHE PAS AU DÉROULÉ, et c'est ce qui la distingue des autres gestes
+// du panneau (cf. flyTo). Un geste qui emmène la vue AILLEURS pendant la mise en
+// scène la laisserait se jouer hors cadre, il la termine ; celui-ci REND le
+// cadre dans lequel elle se joue. Ni derouleActif, ni fichesRevelees, ni le
+// minuteur ne le regardent : le trait continue de courir, dans le cadre revenu.
+// ET LA BULLE DU RENDEZ-VOUS SE ROUVRE AVEC LUI. Elle est la forme arrêtée de la
+// journée, ouverte du lancement du calcul jusqu'à la sortie ; un clic de
+// l'abonnée sur une autre fiche a pu la faire tomber entretemps. Par
+// ouvrirBulleFixe, sans autoPan : le cadrage vient d'être posé et rien ne doit
+// le reprendre.
+// routeLine EST LA SEULE GARDE : sans tracé il n'y a pas de journée à revoir.
+function revoirLeTrajet(){
+  if(!routeLine) return;
+  cadrerSurLeTrajet(routeLine.getBounds());
+  var rdv=couloirRdv&&markers[couloirRdv.id];
+  if(rdv) ouvrirBulleFixe(rdv.marker);
+}
+
 function flyTo(id){
   var info=markers[String(id)];
   if(!info) return;
+  // LA MISE EN SCÈNE SE TERMINE AVANT LE VOL, et c'est la règle de tout geste du
+  // panneau qui emmène la vue ailleurs : la carte est fixe pendant le déroulé,
+  // cadrée sur tout le trajet, et le déplacer laisserait le trait courir hors du
+  // cadre. Même sortie que le clic sur la carte, donc même écran d'arrivée :
+  // tracé complet et liste entière (cf. finirLeDeroule). Elle passe aussi les
+  // fiches à nu, ce dont l'ouverture ci-dessous a besoin.
+  if(derouleActif) finirLeDeroule();
   map.setView(info.latlng,13);
-  // Même échec silencieux que le récepteur de ?fiche= : depuis le panneau, un
-  // clic sur une fiche groupée déplaçait la vue sans jamais ouvrir de bulle.
-  ouvrirLaBulle(info.marker);
+  // SOUS COULOIR, L'OUVERTURE NE FAIT PLUS TOMBER LA BULLE DU RENDEZ-VOUS. Elle
+  // doit rester ouverte du lancement du calcul jusqu'à la sortie, et Leaflet ne
+  // tient qu'une bulle courante : Popup.openOn retire celle de la carte dès
+  // qu'une autre s'ouvre, autoClose valant vrai par défaut. On la nomme donc en
+  // second argument, exactement comme le déroulé le fait à chaque temps (cf.
+  // ouvrirBulleFixe). Aucun drapeau ne reste posé sur elle.
+  // PAS ouvrirLaBulle ICI : les fiches du couloir sont posées à nu, hors du
+  // groupe (cf. numeroterLesMarqueurs), et il n'y a donc aucune pastille à
+  // éclater. Hors couloir elle reste la voie, le groupe existant là — et c'est
+  // le même échec silencieux que le récepteur de ?fiche= qu'elle règle : depuis
+  // le panneau, un clic sur une fiche groupée déplaçait la vue sans jamais
+  // ouvrir de bulle.
+  if(couloirAffiche){
+    var rdv=couloirRdv&&markers[couloirRdv.id];
+    ouvrirBulleFixe(info.marker, rdv?rdv.marker.getPopup():null);
+  } else {
+    ouvrirLaBulle(info.marker);
+  }
 }
 
 // LE PANNEAU S'OUVRE, IL NE BASCULE PLUS. Le bouton « Actions » était la seule

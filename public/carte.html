@@ -732,6 +732,22 @@ body #mup-cookie-panel{z-index:60001}
       <input type="range" class="mes-curseur" id="tour-rayon" step="100" style="margin-top:0"
              aria-label="Rayon autour de la route" aria-describedby="tour-rayon-compte" oninput="reglerLeRayonDuPanneau()">
       <div class="mes-compte" id="tour-rayon-compte"></div>
+      <!-- LE RETOUR AU TRAJET, ET IL LUI FAUT UN BOUTON. Les lignes du panneau
+           ramènent déjà la vue, chacune à sa façon (cf. lignePanneau), mais le
+           panoramique et la molette ne passent par aucune ligne : la carte s'en
+           va sans qu'aucun geste de la liste ait eu lieu, et rien ne la
+           ramenait. Ce bouton est la seule porte qui ne demande de cliquer
+           aucune fiche.
+           DANS CE BLOC, ET PAS AILLEURS : il paraît et disparaît avec le
+           couloir, exactement comme le curseur au-dessus de lui — ouvert par
+           renderCouloir, refermé par clearTourPlan. Aucun état de plus à tenir,
+           et pas de bouton qui rendrait le cadre d'un trajet effacé.
+           SOUS LE CURSEUR : on règle la largeur du couloir, puis on revient le
+           voir. L'ordre de lecture est celui des gestes.
+           .tour-echec-relance POUR LA GÉOMÉTRIE, seul bouton pleine largeur que
+           le panneau garde : ses 8 px de marge haute l'écartent de la phrase du
+           compte, et rien de nouveau n'est à choisir, ni couleur ni graisse. -->
+      <button type="button" class="tour-echec-relance" onclick="revoirLeTrajet()">Revoir le trajet</button>
     </div>
     <!-- LE CORPS DU PANNEAU PORTE DEUX BLOCS, ET IL SE LIT DE HAUT EN BAS.
          UN SEUL CONTENEUR VIVAIT ICI, ET LES DEUX RENDUS SE LE DISPUTAIENT :

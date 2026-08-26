@@ -3614,6 +3614,35 @@ var rangsPoses={};
 // Tenu à part de rangsPoses parce que les deux ensembles diffèrent : la
 // destination est 'nu' sans porter de rang.
 var etatMarqueur={};
+
+// LE GROUPE GARDE UNE PRISE SUR CE QU'IL A LÂCHÉ, et c'est cette prise qui
+// ramenait les fiches dans les pastilles au milieu de la mise en scène.
+// MarkerCluster ÉCOUTE LE DÉPLACEMENT DE CHACUN DE SES MEMBRES : _addLayer pose
+// sur le marqueur trois écouteurs (dragstart, move, dragend), et sur « move »
+// le groupe se le retire puis se le RAJOUTE pour le reclasser
+// (_childMarkerMoved, puis _moveChild). removeLayer, au singulier, défait ces
+// écouteurs avant de rendre la main. removeLayers, celui du lot, ne les défait
+// PAS (leaflet.markercluster 1.5.3, la version chargée en tête). Un marqueur
+// sorti du groupe par le lot en reste donc l'écoute, et le premier setLatLng
+// venu l'y fait rentrer.
+// CE setLatLng EST CELUI DE L'ÉVENTAIL (cf. eventailler), et c'était tout le
+// défaut : la carte partait bien nue, puis dès que deux fiches révélées se
+// confondaient, l'écartement les renvoyait au groupe. La pastille reparaissait
+// autour du départ, les rangs disparaissaient dedans, et l'éventail ne se
+// voyait jamais puisque le groupe reprenait ses membres à l'instant même où il
+// les écartait. Relevé au banc sur une scène de quinze fiches dont six serrées
+// autour du départ : zéro dans le groupe au lancement, puis 2, 3, 4, 5, 6 à
+// mesure que les confondues se révélaient, jusqu'à voir la carte en perdre la
+// moitié.
+// LE LOT RESTE, pour tout ce que le relevé plus bas lui vaut : on lui ajoute
+// seulement le geste qu'il oublie, sur les seuls marqueurs qu'il vient de
+// rendre. Rien à défaire au retour, le groupe rattachant lui-même ses écouteurs
+// quand la fiche lui revient (addLayers passe par _addLayer).
+function detacherDuGroupe(liste){
+  var ecoutes=ficheGroupe._childMarkerEventHandlers;
+  if(!ecoutes) return;
+  liste.forEach(function(m){ m.off(ecoutes, ficheGroupe); });
+}
 function numeroterLesMarqueurs(appels,destination){
   var voulus={};
   appels.forEach(function(a){ voulus[a.id]=a.rang; });
@@ -3660,8 +3689,12 @@ function numeroterLesMarqueurs(appels,destination){
   // alors qu'il est encore membre verrait son icône emportée au retrait
   // suivant. Le retrait avant le rendu, dans cet ordre, pour que le groupe ne
   // réorganise jamais un état qu'il va défaire.
+  // ET LE RETRAIT VA JUSQU'AU BOUT, écouteurs compris : sortir du groupe ne
+  // suffisait pas, il fallait aussi cesser de lui répondre (cf.
+  // detacherDuGroupe). Sans cette seconde moitié, le premier écartement de
+  // l'éventail rendait la fiche au groupe et la pastille reparaissait.
   aOter.forEach(function(m){ map.removeLayer(m); });
-  if(aRetirer.length) ficheGroupe.removeLayers(aRetirer);
+  if(aRetirer.length){ ficheGroupe.removeLayers(aRetirer); detacherDuGroupe(aRetirer); }
   if(aRendre.length) ficheGroupe.addLayers(aRendre);
   aPoser.forEach(function(m){ map.addLayer(m); });
 
@@ -3696,6 +3729,12 @@ function numeroterLesMarqueurs(appels,destination){
 // le décalage linéaire de ±0,0004° qui avait été chassé pour cette raison
 // précise (cf. le bloc du groupe), et il n'est pas question de le faire rentrer
 // par la fenêtre.
+// LE SEUL setLatLng DE LA PAGE EST ICI, ET IL NE PASSE PAS INAPERÇU DU GROUPE.
+// MarkerCluster écoute le « move » de tout marqueur qu'il a reçu, et cette
+// écoute lui survit quand le retrait se fait en lot : un marqueur écarté par
+// l'éventail rentrait dans le groupe à l'instant où on l'écartait, pastille
+// comprise. C'est detacherDuGroupe qui coupe l'écoute au retrait, et sans elle
+// rien de ce qui suit ne se voit.
 //
 // 26 px POUR « CONFONDUS », 28 px DE RAYON. Ce sont des valeurs de mécanique et
 // non de direction artistique : elles se jugent à l'écran, et les faire bouger

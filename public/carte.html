@@ -2311,7 +2311,8 @@ function phraseDuCompte(){
 
 // LA SORTIE DU DERNIER TEMPS. Le rayon est déjà posé, le curseur l'ayant écrit
 // à chaque pixel ; il ne reste qu'à rendre la liste et à retirer le voile.
-// PUIS LA JOURNÉE SE DÉROULE, et c'est ici sa place : le voile vient de tomber,
+// PUIS LA JOURNÉE SE DÉROULE — sauf si elle est retrouvée — et c'est ici sa
+// place : le voile vient de tomber,
 // la carte est enfin visible en entier, et c'est l'instant où l'abonnée la
 // regarde. LA LISTE ENTIÈRE EST COMPOSÉE AVANT LA MISE EN SCÈNE, jamais après :
 // si quoi que ce soit interrompt le déroulé, ce qui se lit à droite est déjà
@@ -2322,7 +2323,12 @@ function phraseDuCompte(){
 function validerLeRayon(){
   renderCouloir();
   retirerEncartDepart();
-  derouler();
+  // SAUF SUR UNE JOURNÉE RETROUVÉE, qui ne se déroule pas (cf. lancerCouloir).
+  // Le renderCouloir ci-dessus a déjà posé l'état final, carte comprise, le
+  // voile de fichesRevelees ayant été désarmé à l'embranchement : le retrait du
+  // voile de l'encart découvre la journée entière, et il n'y a rien à mettre en
+  // scène d'un travail qui a déjà été regardé.
+  if(!journeeRetrouvee) derouler();
 }
 
 // L'ENCART RENONCE. Il n'a plus rien à faire tenir : il n'y a ni couloir à
@@ -2752,6 +2758,19 @@ var couloirAffiche=false;
 // LES JOURNÉES DÉJÀ MESURÉES, par identifiant de rendez-vous (cf. le bloc qui
 // précède clearTourPlan pour ce qu'elles contiennent et ce qui les vide).
 var journeesMesurees={};
+// LA JOURNÉE QUI S'AFFICHE VIENT-ELLE DE LA MÉMOIRE ? Posé à l'embranchement de
+// lancerCouloir, et là seulement, pour les DEUX PORTES DU DÉROULÉ : le différé
+// de poserLaJournee hors encart, validerLeRayon sous encart. La règle qu'il
+// porte est « une journée retrouvée ne se déroule pas », et elle vaut pour le
+// déroulé entier, pas pour l'une de ses deux entrées.
+// SOUS ENCART LE CAS NE SE RENCONTRE PAS AUJOURD'HUI, et le drapeau y est donc
+// toujours faux : l'encart ne se lève qu'au démarrage et ne revient jamais — ses
+// trois sorties retirent le voile, aucun de ses gestes ne le relève ensuite — si
+// bien que tout calcul lancé sous lui est le premier depuis ce départ, la
+// mémoire ayant été purgée par poserDepart. La garde de validerLeRayon est là
+// pour que la règle ne dépende pas de cette lecture-là : le jour où l'encart
+// gagnerait un retour en arrière, elle tiendrait toujours.
+var journeeRetrouvee=false;
 var COULOIR_MIN_M=500, COULOIR_MAX_M=50000, COULOIR_DEFAUT_M=15000;
 var COULOIR_M=COULOIR_DEFAUT_M;
 // LE DÉLAI D'ATTENTE DU CALCULATEUR, ET C'EST CELUI DU RELEVÉ DE POSITION :
@@ -2999,7 +3018,8 @@ function lancerCouloir(){
   // déplacement. Aucune candidate n'est posée, elles paraîtront une à une, à
   // l'instant où le trait les croise (cf. revelerLaFiche).
   // fichesRevelees S'ARME ICI, ET DE NULLE PART AILLEURS : tant qu'elle est
-  // levée, la carte ne porte que ce qui a déjà été découvert.
+  // levée, la carte ne porte que ce qui a déjà été découvert. La journée
+  // retrouvée la désarme quelques lignes plus bas, n'ayant rien à découvrir.
   // LE PRIX EST D'UNE BASCULE DE PLUS sur un recalcul : clearTourPlan vient de
   // rendre les six cents fiches au groupe, et la ligne suivante les en retire.
   // Une fois par calcul, sur un geste unique, au tarif de la bascule « tout
@@ -3044,12 +3064,40 @@ function lancerCouloir(){
   // bornes, fichesRevelees armée, la bulle de la destination ouverte — et AVANT
   // la seule chose qui les sépare, l'appel réseau. Ce qui suit est le même
   // poserLaJournee des deux côtés : même pose du tracé, même renderCouloir, même
-  // rafraichirLeRayon, même cadrage différé, même déroulé, même toast.
-  // LE DÉROULÉ SE REJOUE DONC SUR UNE JOURNÉE RETROUVÉE, et c'est voulu : il est
-  // ce qui montre le travail, et passer d'une journée à l'autre est précisément
-  // le moment où il a du sens.
+  // rafraichirLeRayon, même cadrage différé, même toast. LE DÉROULÉ EST LA SEULE
+  // CHOSE QUI NE SOIT PAS DES DEUX CÔTÉS, et c'est le drapeau ci-dessous qui le
+  // dit ; l'écran d'arrivée, lui, est le même, et il est posé par le même chemin.
+  // LE DÉROULÉ NE SE REJOUE PAS SUR UNE JOURNÉE RETROUVÉE, et c'est tout ce qui
+  // sépare encore les deux voies une fois la route en main. La mise en scène
+  // montre un travail qui vient de se faire ; sur une journée déjà vue, elle
+  // ferait attendre vingt secondes pour redire ce qui a déjà été regardé. Le
+  // clic sur la ligne repose l'ÉTAT FINAL immédiatement — tracé complet, liste
+  // entière, fiches du rayon à leur rang, bulle du rendez-vous ouverte, carte
+  // cadrée sur le trajet — et il le repose PAR LE MÊME CHEMIN, renderCouloir,
+  // sans qu'aucune ligne d'affichage lui soit propre.
+  // LE DRAPEAU SE POSE ICI, POUR LES DEUX VOIES ET DANS LES DEUX SENS : la voie
+  // mesurée le rabaisse, faute de quoi une journée neuve demandée après une
+  // journée retrouvée hériterait de son silence et ne se déroulerait pas.
   var gardee=journeesMesurees[idRdv];
-  if(gardee){ poserLaJournee(rdv, gardee.ligne, gardee.moities, gardee.duree, gardee.candidats); return; }
+  journeeRetrouvee=!!gardee;
+  if(gardee){
+    // ET LE VOILE DES CANDIDATES TOMBE AVEC LUI. fichesRevelees a été armée
+    // quelques lignes plus haut, avant que la branche ne se décide : elle devait
+    // l'être, la carte restant vide tant qu'on ne sait pas d'où vient la
+    // journée. Ici on le sait, et il n'y a RIEN À RÉVÉLER — aucun trait ne va
+    // courir le long de la route pour découvrir les fiches une à une. La
+    // désarmer avant l'affichage est ce qui permet au renderCouloir de
+    // poserLaJournee de poser la carte D'UN COUP, par son numeroterLesMarqueurs
+    // ordinaire : armée, elle y retiendrait chaque candidate à « hors » et la
+    // carte resterait vide sur ses deux bornes.
+    // CE N'EST PAS LA CARTE QUE L'ARMEMENT VIDE, et c'est pour cela qu'il peut
+    // rester commun aux deux voies : le vidage est le fait du
+    // numeroterLesMarqueurs à liste vide qui le suit, dont le résultat ne
+    // dépend pas du drapeau. Celui-ci ne compte qu'au rendu SUIVANT.
+    fichesRevelees=null;
+    poserLaJournee(rdv, gardee.ligne, gardee.moities, gardee.duree, gardee.candidats);
+    return;
+  }
 
   // Le trajet : trois points de passage, départ → rendez-vous → départ, dont on
   // ne garde QU'UNE MOITIÉ, repliée (cf. demiTrajet). La journée est un
@@ -3170,6 +3218,15 @@ function poserLaJournee(rdv, ligne, moities, duree, candidats){
   // liste » pour la révéler, et le déroulé part donc une fois la carte cadrée.
   // Sous encart c'est validerLeRayon qui le lance, à la sortie du dernier
   // temps, et le voile tombe juste avant.
+  // LE DIFFÉRÉ RESTE QUAND LE DÉROULÉ NE PART PAS, et il garde toute sa raison
+  // d'être : ce qu'il attend n'est pas la mise en scène, c'est le
+  // map.invalidateSize que ouvrirPanneau arme à 300 ms. Un fitBounds posé avant
+  // lui calcule le cadre sur une carte qui n'a pas encore la largeur qu'elle
+  // aura. Sur le clic d'une ligne le panneau est déjà ouvert, la garde de
+  // ouvrirPanneau sort sans rien armer et les 400 ms ne protègent rien — mais
+  // le même différé sert le chemin où le panneau s'ouvre pour de bon, et un
+  // second cadrage posé à côté pour ce seul cas ferait deux chemins là où il en
+  // faut un. Quatre cents millisecondes sur un cadrage ne se voient pas.
   setTimeout(function(){
     if(!routeLine) return;
     // Le déroulé a déjà pris la main, l'abonnée étant sortie de l'encart
@@ -3177,7 +3234,11 @@ function poserLaJournee(rdv, ligne, moities, duree, candidats){
     // relancer d'ici le ferait repartir du départ.
     if(derouleActif) return;
     cadrerSurLeTrajet(routeLine.getBounds());
-    if(!estOuvert('mesTempsRayon')) derouler();
+    // LE CADRAGE EST INCONDITIONNEL, LE DÉROULÉ NON. La journée retrouvée pose
+    // son état final sans mise en scène (cf. lancerCouloir), et la carte se
+    // cadre pour elle exactement comme pour une journée neuve : c'est le même
+    // écran d'arrivée, il doit être vu en entier.
+    if(!journeeRetrouvee&&!estOuvert('mesTempsRayon')) derouler();
   },400);
   // LE RÉSULTAT NE SE DIT QU'UNE FOIS, ET PAS PAR-DESSUS L'ENCART. Ce toast
   // date du temps où le calcul était le geste final de la préparation. Il ne
@@ -3703,8 +3764,9 @@ var derouleRang=0;
 // ELLE S'ARME AU LANCEMENT DU CALCUL, PAS AU DÉPART DU DÉROULÉ : entre les deux
 // il y a la mesure de la route, et parfois le réglage du rayon sous encart, et
 // la carte doit rester vide tout du long. Elle se désarme partout où le déroulé
-// s'arrête ou ne part pas : arreterLeDeroule, toutRevele, et l'échec de la
-// route.
+// s'arrête ou ne part pas : arreterLeDeroule, toutRevele, l'échec de la route,
+// et l'embranchement de la journée retrouvée, seul endroit où l'on sache dès le
+// lancement qu'aucun trait ne viendra découvrir les fiches (cf. lancerCouloir).
 var fichesRevelees=null;
 
 // UNE FICHE PARAÎT, à l'instant où le trait arrive à sa hauteur. Le rendu de la

@@ -167,33 +167,37 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    22 px de .tour-num, donc la ligne ne grandit pas. */
 .tour-pick{font-family:inherit;font-size:9.5px;font-weight:700;line-height:1;padding:5px 9px;border-radius:6px;border:1px solid var(--border2);background:var(--card);color:var(--muted);white-space:nowrap;flex-shrink:0;cursor:pointer}
 .tour-pick.on{border-color:var(--text);background:var(--text);color:var(--card)}
-.tour-footer{padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0}
 /* ----------------------------------------------------------------------------
-   « EFFACER » — 44px TOUCHABLES, 29 VISIBLES
+   LE PIED DU PANNEAU N'EST PLUS, ET « EFFACER » AVEC LUI
    ----------------------------------------------------------------------------
-   Ici on ne peut pas agrandir la boîte. .tour-clear vit dans .tour-footer, qui
-   est un flex-shrink:0 d'une colonne de hauteur imposée : tout pixel donné au
-   pied est un pixel repris à .tour-body, la liste des fiches, qui est le
-   flex:1 en face. Quinze pixels de bouton coûteraient quinze pixels de liste.
+   CE QUI VIVAIT ICI : .tour-footer, une bande en flex-shrink:0 sous la liste,
+   dix pixels de remplissage en haut et en bas, seize de côté, un filet au
+   dessus ; et .tour-clear dedans, un bouton de 29 px visibles porté à 44 px
+   touchables par un ::after en absolute à inset -9px 0 (commit 77b44ad). Le
+   calcul de ce -9 se lisait ici : l'inset se compte depuis la boîte de
+   padding, le bouton portait 1 px de bordure, ses 29 px visibles n'en
+   faisaient donc que 27, et 27+18 passait la barre des 44 plutôt que de
+   l'effleurer, sans mordre sur la liste ni sous le pied.
 
-   Le pseudo-élément du commit 77b44ad : position:relative sur le bouton, un
-   ::after en absolute à inset négatif. Il n'a ni fond ni contenu, il ne se
-   voit pas ; il hérite du pointer-events du bouton, donc elementFromPoint y
-   répond « .tour-clear ». La géométrie, elle, ne connaît pas les absolus :
-   .tour-body garde ses 674,2px à 1280 et ses 602,5px à 390, au dixième près,
-   avant comme après.
+   POURQUOI LE BOUTON PART. Il rendait la carte au portefeuille entier, c'est
+   à dire sortait du mode journée. Or cette page prépare des journées, et le
+   besoin réel est de passer de l'une à l'autre : c'est le geste de changement
+   de rendez-vous qui le couvrira, sur sa propre ligne. Le retour au
+   portefeuille entier demande désormais de recharger la page, et c'est assumé.
 
-   -9px et pas -7,5 : l'inset se compte depuis la boîte de PADDING, et le
-   bouton a une bordure de 1px — les 29px visibles n'en font que 27 pour le
-   calcul. 27+18 = 45 : on passe la barre plutôt que de l'effleurer, ce qui
-   laisse aussi de quoi absorber le pixel que la fonte fait varier sur la
-   hauteur visible. Ces 9px restent à l'intérieur des 10px de padding du pied,
-   en haut comme en bas : la zone ne mord ni sur .tour-body ni sous le pied.
-   Rien horizontalement, le bouton est déjà en width:100% (247px).
+   POURQUOI LA BANDE PART AVEC LUI. Vidée, elle laissait 21 px sous la liste,
+   un filet et deux fois dix pixels de remplissage, sans rien à porter. Une
+   bande vide sous une liste n'annonce rien.
+
+   CE QUE LA LISTE GAGNE : 51 px, mesurés au banc et non estimés. La colonne
+   est de hauteur imposée et .tour-body en est le flex:1, si bien que tout
+   pixel repris au pied lui revient et que le chiffre ne dépend pas de la
+   fenêtre. Relevé identique de part et d'autre du seuil de 640 : à 1280 x 720,
+   584,75 px de liste avant le retrait et 635,75 après ; sous le seuil, où le
+   panneau passe en surimpression, 693 avant et 744 après. Le pied mesurait
+   51 px de haut, dont 30 pour le bouton, 20 pour son remplissage et 1 pour le
+   filet.
    -------------------------------------------------------------------------- */
-.tour-clear{position:relative;width:100%;padding:7px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .12s}
-.tour-clear::after{content:'';position:absolute;inset:-9px 0}
-.tour-clear:hover{border-color:var(--red);color:var(--red)}
 
 /* ----------------------------------------------------------------------------
    LES COMMANDES DE ZOOM — 44px. Leaflet donne 26px à ses deux boutons, 30 si
@@ -278,7 +282,9 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    rendu suivant, ce qui est bien ce qu'on attend d'un message d'échec.
    Le rouge de la page pour le cadre, à 6 % pour le fond : assez pour que le
    bloc se distingue des lignes de fiches, pas assez pour crier. La relance
-   reprend la géométrie de .tour-clear, le seul autre bouton du panneau. */
+   porte sa géométrie EN PROPRE, et c'est nouveau : elle la tenait de
+   .tour-clear, parti avec le pied du panneau, et elle est désormais le seul
+   bouton pleine largeur que le panneau garde. */
 .tour-echec{padding:10px;border-radius:9px;border:1px solid var(--red);background:rgba(204,0,0,.06);margin-bottom:8px}
 .tour-echec-titre{font-size:11.5px;font-weight:700;color:var(--text)}
 .tour-echec-motif{font-size:10px;color:var(--muted);margin-top:2px}
@@ -397,9 +403,12 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
      PANNEAU OUVERT, LA BARRE DISPARAÎT. Sous ce seuil le panneau est en
      surimpression pleine hauteur : la barre est dessous, entièrement
-     recouverte — le relevé du commit 2 mesurait un elementFromPoint
-     tombant sur .tour-clear, le pied du panneau. Une surface qu'on ne
-     peut ni voir ni atteindre n'a pas à rester dans l'arbre. La classe
+     recouverte. Le relevé du commit 2 mesurait un elementFromPoint
+     tombant sur le pied du panneau, qui portait alors « Effacer » ; ce
+     pied n'est plus, et la barre reste tout aussi recouverte par la
+     liste qui a pris sa hauteur.
+     Une surface qu'on ne peut ni voir ni atteindre n'a pas à rester
+     dans l'arbre. La classe
      pivot fournit l'état, aucune ligne de JS n'a à en poser un.
      -------------------------------------------------------------------- */
   .tour-input-bar{left:16px;right:16px;width:auto;max-width:none;transform:none}
@@ -728,9 +737,12 @@ body #mup-cookie-panel{z-index:60001}
       <div class="mes-compte" id="tour-rayon-compte"></div>
     </div>
     <div class="tour-body" id="tour-body"></div>
-    <div class="tour-footer">
-      <button class="tour-clear" onclick="clearTour()">Effacer</button>
-    </div>
+    <!-- PLUS DE PIED SOUS LA LISTE. Il ne portait qu'« Effacer », et le bouton
+         est parti avec ce qu'il faisait : rendre la carte au portefeuille
+         entier, c'est à dire sortir du mode journée. La bande vide qui serait
+         restée n'aurait rien annoncé, et la liste reprend ses 51 px (cf. le
+         bloc de style qui tenait .tour-footer). Le geste de changement de
+         rendez-vous viendra ici, sur sa propre ligne. -->
   </div>
 
   <div class="tour-input-bar">
@@ -1240,8 +1252,8 @@ var proximityCircles=[]; // array of L.circle
 // qui remette une opacité à 1 : elle parcourt markers sans condition, y compris
 // les fiches sorties du groupe (setOpacity sur un marqueur hors carte n'écrit
 // que son option, il n'a rien à mettre à jour), elle est idempotente, elle coûte
-// une itération par fiche, et elle tient la garantie qu'« effacer » rende la
-// carte pleine quoi qu'il ait pu l'assombrir.
+// une itération par fiche, et elle tient la garantie qu'un clic sur le fond de
+// carte la rende pleine quoi qu'il ait pu l'assombrir.
 function resetOverlays(){
   retirerCercles();
   Object.keys(markers).forEach(function(id){markers[id].marker.setOpacity(1);});
@@ -1319,9 +1331,9 @@ map.on('click',function(){
 // zoom 11 à 0,8 s, puis finish() à 8,2 s, en plein déroulé, qui la rend au
 // zoom 7 et à la moitié de la France pour tout le reste de la mise en scène.
 // LA MISE EN SCÈNE N'A PAS CRÉÉ CE DÉFAUT, ELLE L'A RENDU CERTAIN : le déroulé
-// tient l'écran deux secondes par fiche, une trentaine de secondes sur une
-// journée ordinaire, là où la pose d'un bloc ne laissait presque aucune fenêtre
-// à un repli tardif.
+// tient l'écran une seconde et demie par fiche, une vingtaine de secondes sur
+// une journée ordinaire, là où la pose d'un bloc ne laissait presque aucune
+// fenêtre à un repli tardif.
 //
 // L'arbitrage vaut dans les deux sens d'arrivée. Vue demandée d'abord : le
 // drapeau retient le fitBounds. Cadrage global d'abord : la vue demandée
@@ -2311,8 +2323,8 @@ function echecDeLaRoute(motif){
   // fiche à fiche. Cette route n'existera pas : laisser le portefeuille caché
   // derrière un message d'échec serait retirer à l'abonnée, au moment où elle
   // n'obtient rien, ce qu'elle avait avant de demander. Une liste vide et
-  // aucune destination, la même façon qu'« Effacer » de dire qu'il n'y a plus
-  // de couloir (cf. numeroterLesMarqueurs).
+  // aucune destination, la même façon que clearTourPlan de dire qu'il n'y a
+  // plus de couloir (cf. numeroterLesMarqueurs).
   fichesRevelees=null;
   numeroterLesMarqueurs([]);
   renoncerAuRayon();
@@ -2479,7 +2491,7 @@ function flyTo(id){
 // soit de trop, ni l'un ni l'autre n'ayant à connaître son voisin. Un
 // troisième, scrollToStop, est parti avec le bouton « Voir dans le panneau »
 // qui l'appelait.
-// resetOverlays n'est pas perdue : le clic sur le fond de carte et « Effacer »
+// resetOverlays n'est pas perdue : le clic sur le fond de carte et autoShowRdv
 // l'appellent toujours.
 function ouvrirPanneau(){
   var panel=document.getElementById('tour-panel');
@@ -2489,12 +2501,16 @@ function ouvrirPanneau(){
   setTimeout(function(){map.invalidateSize();},300);
 }
 
-function clearTour(){
-  clearTourPlan();
-  rdvPanelIds=[];
-  resetOverlays();
-  renderPanel();
-}
+// clearTour N'EST PLUS, ET SON BOUTON NON PLUS. Elle enchaînait quatre gestes
+// pour rendre la carte au portefeuille entier : clearTourPlan, le vidage de
+// rdvPanelIds, resetOverlays, renderPanel. AUCUN DES QUATRE N'EST PERDU, et
+// c'est le relevé qui l'a dit avant la coupe : clearTourPlan reste appelée en
+// tête de lancerCouloir, rdvPanelIds est vidée par autoShowRdv, resetOverlays
+// par le clic sur le fond de carte et par autoShowRdv, renderPanel par tous ses
+// appelants ordinaires. Seul l'ENCHAÎNEMENT disparaît, donc la sortie du mode
+// journée : elle demande maintenant de recharger la page, et c'est assumé.
+// Le besoin réel est ailleurs, et il vient : cette page prépare des journées,
+// passer de l'une à l'autre est le geste de changement de rendez-vous.
 
 renderPanel();
 
@@ -2583,8 +2599,9 @@ var COULOIR_FROID_MAX=stageIdx('visio');
 
 // Efface le trajet dans son entier : le tracé qu'il pose, tout l'état de calcul,
 // et les affichages qui n'ont de sens que par lui. Seul point de remise à zéro,
-// appelé par clearTour et en tête de lancerCouloir — il remplace les retraits
-// ponctuels de routeLine qui vivaient au milieu du calcul.
+// appelé en tête de lancerCouloir, et de nulle part ailleurs depuis que
+// « Effacer » est parti : il remplace les retraits ponctuels de routeLine qui
+// vivaient au milieu du calcul.
 //
 // LE POINT DE DÉPART N'EN EST PLUS, et c'est le seul changement de cette
 // fonction. startLatLng et startMarker en sortaient jusqu'ici parce qu'une seule
@@ -2594,8 +2611,8 @@ var COULOIR_FROID_MAX=stageIdx('visio');
 // L'effacer avec le trajet le rendrait irrécupérable : l'encart ne paraît qu'une
 // fois, au chargement, et une autorisation déjà accordée l'empêche même de
 // reparaître — l'abonnée n'aurait plus rien pour redire d'où elle part.
-// « Effacer » efface un trajet, pas la connaissance qu'a la page d'où part la
-// journée. C'est poserDepart qui retire le marqueur précédent, au moment de
+// CETTE FONCTION EFFACE UN TRAJET, pas la connaissance qu'a la page d'où part
+// la journée. C'est poserDepart qui retire le marqueur précédent, au moment de
 // poser le suivant.
 // Ne touche ni rdvPanelIds ni les cercles de proximité : effacer un trajet
 // n'est pas effacer le panneau RDV. Ne touche pas rdvChoisi non plus : la
@@ -2607,8 +2624,9 @@ var COULOIR_FROID_MAX=stageIdx('visio');
 // garderait les numéros d'une route effacée en ne montrant toujours que son
 // couloir. UNE LISTE VIDE ET AUCUNE DESTINATION : c'est l'absence de destination
 // qui dit « plus de couloir » et rend les fiches écartées, une liste vide seule
-// ne le dirait pas (cf. numeroterLesMarqueurs). « Effacer » passe par ici, et
-// c'est son seul chemin.
+// ne le dirait pas (cf. numeroterLesMarqueurs). C'est donc au tout début de
+// chaque calcul que la carte redevient entière, le temps d'une ligne, avant que
+// lancerCouloir ne la revide sur ses deux bornes.
 function clearTourPlan(){
   // Le déroulé se coupe AVANT tout le reste, et sans rien repeindre : il tient
   // un trait, une bulle et des minuteurs sur un trajet qui n'existera plus à la
@@ -2617,8 +2635,8 @@ function clearTourPlan(){
   if(routeLine){map.removeLayer(routeLine);routeLine=null;}
   numeroterLesMarqueurs([]);
   // Le rayon repart du défaut, ici et nulle part ailleurs : c'est le seul point
-  // par lequel toute préparation passe, celle qui suit « Effacer » comme celle
-  // que l'encart conduit.
+  // par lequel toute préparation passe, le recalcul d'une journée déjà affichée
+  // comme celle que l'encart conduit.
   COULOIR_M=COULOIR_DEFAUT_M;
   trajetMoities=[];
   couloirLigne=null;
@@ -2735,8 +2753,8 @@ function lancerCouloir(){
   // levée, la carte ne porte que ce qui a déjà été découvert.
   // LE PRIX EST D'UNE BASCULE DE PLUS sur un recalcul : clearTourPlan vient de
   // rendre les six cents fiches au groupe, et la ligne suivante les en retire.
-  // Une fois par calcul, sur un geste unique, au tarif d'« Effacer » (cf. le
-  // relevé de numeroterLesMarqueurs).
+  // Une fois par calcul, sur un geste unique, au tarif de la bascule « tout
+  // revient » (cf. le relevé de numeroterLesMarqueurs).
   fichesRevelees={};
   numeroterLesMarqueurs([], String(rdvChoisi));
 
@@ -2767,8 +2785,8 @@ function lancerCouloir(){
   // toujours par ouvrirBulleFixe, donc sans autoPan.
   // ELLE NE SURVIT À AUCUN RETOUR AU GROUPE : le marqueur rendu au groupe sort
   // d'abord de la carte (cf. numeroterLesMarqueurs), et Leaflet ferme la bulle
-  // d'un layer retiré. L'échec de la route, « Effacer » et le calcul suivant
-  // passent tous les trois par là, aucun ne laisse de bulle orpheline.
+  // d'un layer retiré. L'échec de la route et le calcul suivant passent tous
+  // les deux par là, ni l'un ni l'autre ne laisse de bulle orpheline.
   ouvrirBulleFixe(rdv.marker);
 
   // Le trajet : trois points de passage, départ → rendez-vous → départ, dont on
@@ -2820,8 +2838,8 @@ function lancerCouloir(){
       // Plus de test d'ouverture avant l'appel : ouvrirPanneau est gardée par son
       // propre état.
       ouvrirPanneau();
-      // Différé de 400 ms : le trajet peut avoir été effacé entretemps
-      // (« Effacer », ou un second calcul lancé dans la foulée), et le panneau
+      // Différé de 400 ms : le trajet peut avoir été effacé entretemps par un
+      // second calcul lancé dans la foulée, et le panneau
       // finit de s'ouvrir, son map.invalidateSize passant à 300 ms.
       // LA CARTE SE CADRE ICI SUR TOUT LE TRAJET, DU DÉBUT À LA FIN, et elle ne
       // bougera plus : le déroulé rejoue le même cadrage sur les mêmes bornes,
@@ -3287,15 +3305,24 @@ function renderCouloir(){
 // dedans. C'est aussi la raison d'être d'ouvrirBulleFixe, Leaflet recentrant
 // sinon la vue sur chaque bulle qui déborde.
 //
-// LA CADENCE EST DE DEUX SECONDES PAR FICHE, soit une trentaine de secondes sur
-// treize. Elle est la somme des trois constantes ci-dessous, et se règle en les
-// touchant : rien d'autre dans cette fonction ne porte de durée.
+// LA CADENCE EST D'UNE SECONDE ET DEMIE PAR FICHE, soit une vingtaine de
+// secondes sur treize. Elle est la somme des trois constantes ci-dessous, et se
+// règle en les touchant : rien d'autre dans cette fonction ne porte de durée.
 //
-// LA SORTIE AU CLIC EST OBLIGATOIRE, et cette cadence la rend nécessaire :
-// trente secondes d'animation à la vingtième préparation seraient une prison. Un
-// clic n'importe où sur la carte interrompt le déroulé et pose immédiatement
-// l'état final, tracé complet et liste entière (cf. le récepteur en capture sur
-// #map, plus bas).
+// CE N'EST PAS UNE ATTENTE QU'ON SUBIT, C'EST UNE DÉMONSTRATION QUE L'ABONNÉ
+// BORNE LUI-MÊME, et deux soupapes suffisent à la borner.
+// LA PREMIÈRE ÉCOURTE, la seconde RACCOURCIT AVANT MÊME LE DÉPART.
+// Un clic n'importe où sur la carte interrompt le déroulé à tout instant et
+// pose immédiatement l'état final, tracé complet et liste entière (cf. le
+// récepteur en capture sur #map, plus bas). Et le curseur du rayon resserre le
+// couloir avant que le trait ne parte : sur un portefeuille dense, on ne
+// regarde pas défiler deux cents fiches, on redescend le rayon, et la mise en
+// scène est courte parce que la journée l'est.
+//
+// LA CADENCE EST DONC UN RÉGLAGE DE RYTHME, ET NON UN CORRECTIF DE DURÉE. La
+// durée totale, les deux soupapes s'en chargent ; ces trois constantes ne
+// décident que de la façon dont chaque fiche se donne à lire. Une seconde et
+// demie garde la bulle lisible et cesse de faire traîner le trait.
 //
 // L'ÉTAT FINAL EST CELUI DE renderCouloir, ET DE LUI SEUL. Le déroulé ne compose
 // rien qui lui soit propre : il pose les mêmes lignes, dans le même ordre, par le
@@ -3316,9 +3343,15 @@ function renderCouloir(){
 // de l'en-tête ne bouge pas davantage, il dit la journée et non l'avancement de
 // la mise en scène. Le déroulé ne touche donc qu'au trait, aux marqueurs qu'il
 // découvre, aux bulles et aux lignes de la liste.
-var DEROULE_TRAIT_MS=600;    // le trait court du dernier arrêt jusqu'au suivant
-var DEROULE_LECTURE_MS=1100; // la bulle reste ouverte, le temps de la lire
-var DEROULE_POSE_MS=300;     // elle se referme, la ligne se pose, on enchaîne
+// LA RÉPARTITION DES 1 500 MS, ET CE QUI L'A DÉCIDÉE. Les cinq cents
+// millisecondes reprises aux deux mille d'avant tombent d'abord sur le LIANT :
+// le trait perd 200 ms et la pose 100, la bulle 200 seulement. La bulle garde
+// ainsi la majorité du temps, et sa part monte de 55 à 60 % : c'est elle qu'on
+// lit, le trait et la pose ne font que relier deux lectures. Trois centaines
+// rondes, pour que le prochain réglage se fasse à vue.
+var DEROULE_TRAIT_MS=400;    // le trait court du dernier arrêt jusqu'au suivant
+var DEROULE_LECTURE_MS=900;  // la bulle reste ouverte, le temps de la lire
+var DEROULE_POSE_MS=200;     // elle se referme, la ligne se pose, on enchaîne
 
 // Le drapeau dit qu'un déroulé court, et il commande tout : les trames s'y
 // arrêtent, renderCouloir s'y détourne, le clic s'y raccroche.
@@ -3360,8 +3393,8 @@ var fichesRevelees=null;
 // numeroterLesMarqueurs ne touche que ce qui change (les rangs sont déjà posés,
 // la seule différence est cette fiche qui passe de « hors » à « nu »), et
 // l'éventail se refait sur l'amas qui grossit, ce qu'un ajout isolé ne saurait
-// pas faire. Un temps de déroulé dure deux secondes, la milliseconde que cela
-// coûte ne se dispute pas.
+// pas faire. Un temps de déroulé dure une seconde et demie, la milliseconde que
+// cela coûte ne se dispute pas.
 function revelerLaFiche(id){
   if(!fichesRevelees||fichesRevelees[id]) return;
   fichesRevelees[id]=true;
@@ -3396,7 +3429,7 @@ function derouler(){
   // bougera plus de toute la mise en scène. Les mêmes bornes que celles de
   // lancerCouloir : quand il est déjà passé, celui-ci ne déplace rien.
   // PAR L'ARBITRE, LUI AUSSI (cf. ARBITRE DE CADRAGE) : c'est ce qui tient le
-  // cadrage global du portefeuille à distance pendant les vingt à trente
+  // cadrage global du portefeuille à distance pendant les quinze à vingt
   // secondes que le déroulé occupe l'écran.
   if(routeLine) cadrerSurLeTrajet(routeLine.getBounds());
   var appels=appelsDuRayon();
@@ -3690,22 +3723,27 @@ document.getElementById('map').addEventListener('click',function(){
 //   un pas de curseur, 100 m                0,2      0,2
 //   le pire pas relevé                      0,8      1,8
 //   un bond d'un bord du curseur à l'autre  6,7      9,2
-//   « Effacer », tout revient               8,8     17,3
+//   la bascule « tout revient »             8,8     17,3
 //
 //   carte serrée (zoom 12)              au groupe   à nu
 //   la coupe d'entrée                       5,2     11,9
 //   un pas de curseur                       0,2      0,2
 //   le pire pas relevé                      0,5      1,6
-//   « Effacer »                             8,5     15,8
+//   la bascule « tout revient »             8,5     15,8
 //
+// LA LIGNE « TOUT REVIENT » A ÉTÉ RELEVÉE SUR « EFFACER », qui n'existe plus.
+// Ce qu'elle chiffre n'a pas bougé pour autant : le retour des six cents fiches
+// au groupe passe par numeroterLesMarqueurs appelée sans destination, et ce
+// chemin reste ouvert par clearTourPlan, en tête de chaque calcul. Le geste qui
+// le déclenche a changé, le travail mesuré est le même.
 // LE GESTE QUI SE RÉPÈTE NE COÛTE RIEN DE PLUS : le pas de curseur reste à
 // 0,2 ms, parce qu'il ne touche plus le groupe du tout. Une fiche qui entre
 // dans le rayon est ajoutée à la carte, une qui en sort en est retirée, et le
 // groupe ne se réorganise pas. Ce sont les BASCULES qui doublent, l'entrée dans
-// le couloir et « Effacer », parce qu'elles font traverser la frontière aux six
-// cents. Elles arrivent une fois chacune, et « Effacer » à 17,3 ms coûte une
-// trame perdue sur un geste unique. Aucune cadence n'est posée pour autant : la
-// carte suit la main aussi directement que le compte.
+// le couloir et le retour au portefeuille entier, parce qu'elles font traverser
+// la frontière aux six cents. Elles arrivent une fois par calcul, et 17,3 ms
+// coûtent une trame perdue. Aucune cadence n'est posée pour autant : la carte
+// suit la main aussi directement que le compte.
 // L'ÉVENTAIL N'EST DANS AUCUNE DE CES COLONNES : il n'existait pas quand elles
 // ont été relevées. Il se pose après le versement, et son propre relevé est tenu
 // à part (cf. eventailler) ; la part qu'il ajoute au pas de curseur vaut de 0,6
@@ -3716,7 +3754,7 @@ document.getElementById('map').addEventListener('click',function(){
 // elles rendent 183 numéros et aucune pastille.
 //
 // `destination` DIT S'IL Y A UN COULOIR. Absente, cette fonction rend la carte
-// entière : c'est le chemin de clearTourPlan, donc d'« Effacer », qui appelle
+// entière : c'est le chemin de clearTourPlan, qui appelle
 // avec une liste vide et sans destination. La liste vide n'aurait pas suffi à le
 // dire, un couloir dont le rayon ne retient personne rendant lui aussi zéro
 // appel, la destination restant alors seule à l'écran.
@@ -3751,7 +3789,8 @@ document.getElementById('map').addEventListener('click',function(){
 // LE LOT VAUT TOUJOURS, ET C'EST CE RELEVÉ QUI L'A DÉCIDÉ. Il date de l'état où
 // les retenues restaient dans le groupe, et ses colonnes chiffrent donc des
 // opérations de groupe : c'est exactement ce qui reste en jeu aux BASCULES,
-// l'entrée dans le couloir et « Effacer », où les six cents fiches traversent
+// l'entrée dans le couloir et le retour au portefeuille entier, où les six
+// cents fiches traversent
 // la frontière du groupe d'un seul bloc. Le pas de curseur, lui, ne touche plus
 // le groupe du tout (cf. le relevé plus haut) ; les lignes qui le concernent
 // ci-dessous disent l'état d'avant, gardées pour ce qu'elles ont tranché.
@@ -3763,19 +3802,20 @@ document.getElementById('map').addEventListener('click',function(){
 // 12 pôles français, 35 % strictement confondues et 15 % isolées, carte de
 // 1 280 × 720, 181 fiches retenues au rayon par défaut. Millisecondes, médiane
 // sur 40 relevés pour le pas de curseur, sur 10 pour le bond, un seul relevé
-// pour la coupe et pour « Effacer » :
+// pour la coupe et pour la bascule inverse, alors déclenchée par « Effacer » et
+// déclenchée depuis par clearTourPlan en tête de calcul :
 //
 //   carte large (zoom 6)              un par un   en lot   pastilles redessinées
 //   la coupe d'entrée, de 600 à 181      31,4       6,2        356 contre 19
 //   un pas de curseur, 100 m              0,4       0,4
 //   le pire pas relevé                    1,6       0,9
 //   un bond de 15 km à 50 km             35,2      14,7
-//   « Effacer », tout revient            31,1       9,4
+//   la bascule « tout revient »          31,1       9,4
 //
 //   carte serrée (zoom 12)            un par un   en lot
 //   la coupe d'entrée                    22,8       4,0
 //   le pire pas relevé                    4,8       0,5
-//   « Effacer »                           9,2       7,9
+//   la bascule « tout revient »           9,2       7,9
 //
 // CE QUE LA MESURE TRANCHE. Le geste qui se répète est le pas de curseur, et il
 // coûtait déjà 0,4 ms : quelques fiches traversent la frontière du rayon à

@@ -238,9 +238,9 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    reportée sur les suivantes par un rail vertical, parce qu'un portefeuille
    concentré autour de la destination faisait tomber dix fiches à la même
    minute et répétait « 15h00 » huit fois de suite. Ce problème n'a plus de
-   lieu où se poser : la ligne ne porte plus une heure de passage mais DEUX
-   CRÉNEAUX à proposer, et sa colonne de gauche porte un rang d'appel, unique
-   par construction. Rien à resserrer, rien à reporter.
+   lieu où se poser : la ligne d'appel ne porte AUCUNE heure, ni de passage ni
+   à proposer (cf. ligneAppel), et sa colonne de gauche porte un rang d'appel,
+   unique par construction. Rien à resserrer, rien à reporter.
 
    .sched-rang est ce rang : un disque de 16 px, dans la couleur d'étape de la
    fiche, chiffre blanc au centre. Le marqueur de la carte porte le même
@@ -260,12 +260,11 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    même bord. Le point y garde ses 4 px de margin-top et tombe donc au même
    centre que le disque de rang, à 8 px du haut de la ligne.
 
-   .sched-creneaux porte les deux heures. Mesuré au banc en panneau de 280 px,
-   fontes Geist chargées : « Proposez 09h12 ou 17h48 » occupe 145,4 px dans les
-   158,3 px que laisse le badge le plus large (« Prospects »), et ne se replie
-   à aucun des jeux essayés, de 1 à 150 appels. Toute formulation plus longue
-   passe à la ligne et coûte 12 px par fiche : « à proposer : ... » en occupe
-   170,7 et « vous pouvez proposer ... » 221,3. */
+   .sched-creneaux ne sert plus qu'à UNE ligne, celle du rendez-vous, et n'y
+   porte qu'un fait : l'heure du rendez-vous obtenu (cf. ligneRendezVous). Les
+   lignes d'appel s'en sont défaites avec les créneaux. La règle reste écrite
+   ici, à sa place dans la famille .sched, parce qu'elle habille toujours cette
+   ligne-là, et sous son nom, qui nomme la colonne et non son contenu. */
 .sched-rang{width:16px;height:16px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;font-weight:800;color:#fff;line-height:1}
 .sched-rang.sched-rang-long{font-size:7px}
 .sched-slot{width:16px;flex-shrink:0;display:flex;justify-content:center}
@@ -695,21 +694,15 @@ body #mup-cookie-panel{z-index:60001}
       <span class="tour-title">À contacter</span>
       <span class="tour-count" id="tour-count">0 fiches</span>
     </div>
-    <div id="tour-controls" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
-      <div style="display:flex;align-items:center;gap:8px">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)">Durée du RDV</span>
-        <select id="rdv-dur" onchange="renderCouloir()" style="margin-left:auto;border:1.5px solid var(--border);border-radius:7px;padding:4px 8px;font-family:var(--font);font-size:11px;font-weight:700;color:var(--text);background:var(--surface);outline:none;cursor:pointer">
-          <option value="30">30 min</option>
-          <option value="45">45 min</option>
-          <option value="60" selected>1 h</option>
-          <option value="90">1 h 30</option>
-          <option value="120">2 h</option>
-          <option value="150">2 h 30</option>
-          <option value="180">3 h</option>
-        </select>
-      </div>
-    </div>
+    <!-- LE BLOC DE COMMANDES N'EST PLUS. Il ne portait qu'une chose, le
+         sélecteur de durée du rendez-vous, et cette durée ne s'estime pas :
+         si un second rendez-vous est décroché derrière, l'abonné écourte le
+         premier, et c'est le rendez-vous décroché qui fixe la sortie, jamais
+         un réglage posé d'avance. Le sélecteur parti, le bloc ne contenait
+         plus rien : une boîte vide entre l'en-tête et la liste aurait gardé
+         son filet et ses 10 px de haut sans rien dire. Le curseur de largeur
+         du couloir, qui vit aujourd'hui dans l'encart de mise en service, a
+         vocation à venir habiter ici : le bloc se réécrira alors avec lui. -->
     <div class="tour-body" id="tour-body"></div>
     <div class="tour-footer">
       <button class="tour-clear" onclick="clearTour()">Effacer</button>
@@ -2441,13 +2434,9 @@ var couloirLigne=null;
 // PASSAGES déjà mesurés et rangés dans l'ordre du trajet. Des passages et non
 // des fiches : une même fiche en occupe deux quand la route la croise à l'aller
 // et au retour (cf. fichesDuCouloir). C'est la réserve, pas la liste : le rendu
-// les refond en un appel par fiche, portant les deux heures (cf.
-// appelsDuRayon).
+// les refond en un appel par fiche (cf. appelsDuRayon).
 var couloirRdv=null;
 var couloirCandidats=[];
-// Le cumul de temps, depuis le départ, du nœud du rendez-vous. Seul point fixe
-// dont l'heure soit connue : toutes les heures de passage s'en déduisent.
-var couloirTRdv=0;
 // La durée de l'aller-retour, en secondes, telle que le calculateur la rend.
 // Gardée parce qu'elle se dit APRÈS le calcul, sous le compte du curseur, et que
 // le curseur, lui, ne recalcule rien : sans elle il faudrait relire la route à
@@ -2538,10 +2527,8 @@ function clearTourPlan(){
   couloirLigne=null;
   couloirRdv=null;
   couloirCandidats=[];
-  couloirTRdv=0;
   couloirDuree=0;
   couloirAffiche=false;
-  document.getElementById('tour-controls').style.display='none';
 }
 
 // ── LE CALCUL PART DE LUI-MÊME ───────────────────────────────────────────────
@@ -2716,7 +2703,6 @@ function lancerCouloir(){
       couloirRdv={id:String(rdvChoisi),card:rdv.card,latlng:rdv.latlng};
       couloirCandidats=fichesDuCouloir(demi.ligne);
 
-      document.getElementById('tour-controls').style.display='';
       renderCouloir();
       // AVANT rafraichirLeRayon, qui la lit pour écrire sa ligne : la durée est
       // le seul des deux nombres du temps du rayon qui vienne du calcul et non
@@ -2920,15 +2906,19 @@ function demiTrajet(parcours,rdvLngLat){
 // l'abonné passe devant. C'était la valeur absolue de l'écart au rendez-vous qui
 // mentait près du rebroussement — 171 km² à « 0 min », jusqu'à 15 km au-delà du
 // rendez-vous — pas le cumul.
+//
+// LE CUMUL RESTE, ET IL NE SERT PLUS QU'À CLASSER. Il donnait aussi les heures
+// des lignes d'appel ; elles sont parties, faute de fondement (cf. ligneAppel).
+// Ce qu'il établit est un ORDRE, pas un cadran : qui l'abonné croise en premier
+// sur sa route, et c'est de là que tombent le rang d'appel et la place de chaque
+// ligne dans la liste. Un ordre ne suppose aucune durée de rendez-vous, il ne
+// suppose que la route. Il reste donc entier.
 function fichesDuCouloir(ligne){
   if(!ligne||ligne.length<2) return [];
   var kx=Math.cos(ligne[0][1]*Math.PI/180)*111320, ky=110540;
   var px=new Array(ligne.length), py=new Array(ligne.length);
   for(var i=0;i<ligne.length;i++){px[i]=ligne[i][0]*kx;py[i]=ligne[i][1]*ky;}
   var chrono=chronoDeLaLigne(px,py,couloirRdv.latlng[1]*kx,couloirRdv.latlng[0]*ky);
-  // Posé pour le rendu : c'est l'origine des heures. Le cumul d'un candidat ne
-  // devient une heure que rapporté à celui du rendez-vous, dont on sait l'heure.
-  couloirTRdv=chrono.cumul[chrono.iRdv];
 
   // Comparaison au carré, comme les distances de la boucle : une racine par
   // passage retenu suffit.
@@ -3008,9 +2998,12 @@ function fichesDuCouloir(ligne){
 // portait donc deux lignes pour une même enseigne : treize fiches faisaient
 // vingt-deux lignes à l'écran. Or ce ne sont pas des visites, ce sont des
 // APPELS. On ne téléphone pas deux fois à la même enseigne pour la même
-// journée. Les deux passages se fondent ici en un seul APPEL, qui les garde
-// tous les deux : c'est justement ce que le second passage permet de dire au
-// téléphone, l'abonnée pouvant proposer l'heure de l'aller ou celle du retour.
+// journée. Les deux passages se fondent ici en un seul APPEL, et l'appel ne
+// retient d'eux que ce qui lui sert : le point d'accrochage du premier, et le
+// plus court des deux écarts. Les deux heures qu'il portait, celle de l'aller et
+// celle du retour, sont parties avec les créneaux (cf. ligneAppel). Le second
+// passage n'a pas cessé d'être mesuré pour autant : c'est lui qui départage les
+// ex æquo au rebroussement, et c'est de ce classement que sort le rang d'appel.
 //
 // L'ORDRE EST CELUI DE LA MONTÉE, du départ jusqu'au rendez-vous, et il tombe
 // tout seul : couloirCandidats est trié par cumul croissant depuis le départ,
@@ -3042,12 +3035,10 @@ function appelsDuRayon(){
       // seg et pos viennent du PREMIER passage rencontré, donc du plus tôt dans
       // le voyage, couloirCandidats étant trié par cumul croissant : c'est bien
       // le point où le trait du déroulé s'arrête pour ouvrir cette fiche.
-      a={id:p.id, card:p.card, ecart:p.ecart, aller:null, retour:null, seg:p.seg, pos:p.pos, dom:'sched-'+p.id};
+      a={id:p.id, card:p.card, ecart:p.ecart, seg:p.seg, pos:p.pos, dom:'sched-'+p.id};
       parId[p.id]=a;
       appels.push(a);
     }
-    if(p.retour){ if(a.retour===null) a.retour=p.t; }
-    else if(a.aller===null){ a.aller=p.t; }
     if(p.ecart<a.ecart) a.ecart=p.ecart;
   });
   appels.forEach(function(a,i){ a.rang=i+1; });
@@ -3060,9 +3051,11 @@ function appelsDuRayon(){
 // temps de chaque nœud. Si l'annotation manque ou ne recouvre pas la ligne —
 // un serveur qui la refuse, une géométrie qui ne coïncide pas — on retombe sur
 // une répartition au prorata de la longueur des segments, moitié par moitié.
-// Grossier là où une autoroute précède une départementale, mais la liste reste
-// entière : la rendre sans ses minutes serait la rendre amputée de ce qui la
-// fait lire.
+// Grossier là où une autoroute précède une départementale, et cela ne se voit
+// plus nulle part : aucune minute de ce cumul n'est affichée, il ne sert qu'à
+// ranger les fiches dans l'ordre où la route les croise. Le repli garde donc cet
+// ordre à peu près juste là où l'annotation manque, et c'est tout ce qu'on lui
+// demande.
 function chronoDeLaLigne(px,py,rx,ry){
   var n=px.length-1;
   var a0=trajetMoities[0]&&trajetMoities[0].annotation&&trajetMoities[0].annotation.duration;
@@ -3108,16 +3101,15 @@ function proRata(px,py,debut,fin,total){
 // forçaient une fiche à choisir son camp ; les deux lignes qui leur ont succédé,
 // une par passage, lui faisaient tenir les deux à la fois et donnaient
 // vingt-deux lignes pour treize fiches. Ni l'un ni l'autre : la fiche paraît UNE
-// FOIS, avec son rang d'appel et ses deux créneaux (cf. appelsDuRayon), et
-// l'ordre est celui de la montée, du départ jusqu'au rendez-vous.
+// FOIS, avec son rang d'appel (cf. appelsDuRayon), et l'ordre est celui de la
+// montée, du départ jusqu'au rendez-vous.
 //
 // LA LIGNE DU RENDEZ-VOUS FERME LA LISTE, et c'est la même place qu'avant. Elle
 // se posait au rebroussement, juste avant le premier passage de retour ; toutes
 // les lignes qui restent sont désormais des lignes d'aller, toutes situées avant
 // ce rebroussement, si bien qu'il tombe au bas de la liste. On y lit la journée
 // dans l'ordre où elle se fait : les appels à passer en montant, puis la
-// destination et son heure, la seule qui soit réelle et dont toutes les autres
-// se déduisent.
+// destination et son heure, la seule que la journée connaisse.
 // CE QUI SE REND EST CE QUE LE RAYON RETIENT, pas la mesure entière : celle-ci
 // va jusqu'au maximum du curseur et sert de réserve au réglage (cf.
 // appelsDuRayon). Relu à chaque rendu, si bien qu'un rayon changé se rend sans
@@ -3127,10 +3119,15 @@ function renderCouloir(){
   // LE DÉROULÉ POSE SES LIGNES LUI-MÊME, ET IL EST SEUL À LE FAIRE TANT QU'IL
   // COURT. Un rendu complet au milieu de la mise en scène poserait toute la
   // liste d'un coup, et le déroulé continuerait d'y ajouter par-dessus. Ce qui
-  // passe ici pendant qu'il court le TERMINE donc, et l'état final se pose : le
-  // sélecteur de durée du rendez-vous est le seul appelant qui puisse tomber là,
-  // et l'abonnée qui y touche demande la liste, pas la suite du spectacle.
-  // finirLeDeroule repeint en revenant ici, le drapeau étant alors baissé.
+  // passe ici pendant qu'il court le TERMINE donc, et l'état final se pose.
+  // AUCUN APPELANT N'ATTEINT PLUS CETTE BRANCHE. Le sélecteur de durée du
+  // rendez-vous était le seul qui pût tomber là, et il n'est plus (cf.
+  // ligneAppel) : les trois appelants qui restent passent tous hors déroulé,
+  // validerLeRayon et lancerCouloir avant qu'il ne parte, finirLeDeroule le
+  // drapeau baissé. Le garde reste écrit : il coûte un test, et il tient la règle
+  // pour le prochain appelant, quel qu'il soit. Un rendu complet au milieu de la
+  // mise en scène poserait toute la liste d'un coup, et le déroulé continuerait
+  // d'y ajouter par-dessus.
   if(derouleActif){ finirLeDeroule(); return; }
 
   var appels=appelsDuRayon();
@@ -4008,60 +4005,25 @@ function eventailler(){
 }
 map.on('zoomend', eventailler);
 
-// La durée du rendez-vous, telle que le <select> la dit. Lue à chaque rendu, et
-// c'est ici qu'elle prend tout son sens : elle commande le SECOND CRÉNEAU de
-// chaque ligne. Un rendez-vous de deux heures plutôt que d'une repousse d'une
-// heure tout ce que l'abonnée peut proposer d'après-midi, ligne par ligne, et
-// pas seulement l'heure de sortie du rendez-vous lui-même.
-function dureeRdv(){return parseInt(document.getElementById('rdv-dur').value,10)||60;}
-
-// L'HEURE À LAQUELLE L'ABONNÉ PASSE DEVANT, celle qu'il peut donc PROPOSER au
-// téléphone (cf. ligneAppel). Le rendez-vous est le seul point de la journée
-// dont on connaisse l'heure ; tout le reste s'en déduit par le cumul de
-// trajet. Avant lui, c'est son heure moins ce qu'il reste de route ; après,
-// il faut encore ajouter l'immobilisation — on ne repart pas d'un rendez-vous à
-// l'heure où on y arrive, et tout ce qui suit est décalé d'autant.
+// ── LA LIGNE D'APPEL NE PROPOSE PLUS D'HEURE ──
+// LA SEULE HEURE CONNUE DE LA JOURNÉE EST CELLE DU RENDEZ-VOUS OBTENU, et c'est
+// la doctrine de toute cette liste. La ligne portait « Proposez 13h28 ou 17h02 »,
+// deux créneaux à souffler au téléphone. Ils reposaient l'un et l'autre sur une
+// durée de rendez-vous réglée d'avance, et cette durée ne s'estime pas : si un
+// second rendez-vous est décroché derrière, l'abonné écourte le premier, et c'est
+// le rendez-vous décroché qui fixe la sortie, jamais un réglage posé d'avance.
+// Une heure de sortie affichée avant l'appel est donc une prévision que rien ne
+// fonde, et deux créneaux calculés dessus le sont autant. Ils sont partis, le
+// libellé avec eux.
 //
-// La moitié est DITE par l'appelant, elle ne se devine plus en comparant le
-// cumul à celui du rendez-vous : les deux se valent exactement au rebroussement,
-// et un passage d'aller accroché là se voyait ajouter la durée d'un rendez-vous
-// qu'il n'avait pas encore eu. C'est creneauxAProposer qui appelle, une fois par
-// créneau, en disant de quelle moitié vient le cumul qu'il donne.
+// ET L'ABONNÉ JUGE LUI-MÊME DE LA FAISABILITÉ. Le produit lui donne les faits de
+// sa journée, il n'a pas à lui souffler ce qu'il doit dire au téléphone.
 //
-// Rend null quand le rendez-vous n'a pas d'action datée : il n'y a alors aucune
-// heure à laquelle rapporter le trajet, et la ligne se rabat sur le temps depuis
-// le départ — la même grandeur, sans le cadran.
-function heureDePassage(t,retour){
-  var na=couloirRdv?nextActionOf(couloirRdv.card):null;
-  if(!na) return null;
-  var min=minutesDe(na.hour||'14:00')+(t-couloirTRdv)/60+(retour?dureeRdv():0);
-  return fmtHeure(Math.round(min));
-}
-
-// ── CE QUE L'ABONNÉE PEUT PROPOSER ──
-// L'HEURE A CHANGÉ DE SENS, ET LE TEXTE LE PORTE. La ligne disait une heure de
-// passage, et le lecteur y entendait « vous passerez devant à 13h39 ». C'était
-// faux : on ne s'arrête pas chez ces gens, on les APPELLE pour décrocher un
-// second rendez-vous le jour même. L'heure n'est pas un fait du trajet à venir,
-// c'est un ARGUMENT au téléphone, celle que l'abonnée peut proposer à son
-// interlocuteur puisque la route l'amène là à ce moment.
-//
-// DEUX HEURES ET NON UNE, parce qu'un prospect n'est pas toujours libre quand on
-// monte et l'est souvent quand on redescend : un rendez-vous à 13 h qui dure deux
-// heures fait une sortie à 15 h, et l'interlocuteur qui refuse 10 h reçoit à 18 h.
-// La ligne donne donc les DEUX heures, celle de l'aller et celle du retour, et
-// c'est exactement ce que les deux passages de la mesure servaient à savoir.
-// Le sélecteur de durée du rendez-vous commande la seconde : c'est ici qu'il
-// prend son sens, il déplace tout ce que l'abonnée peut proposer d'après-midi.
-//
-// LA FORMULATION EST MESURÉE AUTANT QUE CHOISIE. « Proposez 09h12 ou 17h48 »
-// occupe 145,4 px au banc, en panneau de 280 px et sous le badge le plus large ;
-// « à proposer : ... » en occupe 170,7 et « vous pouvez proposer ... » 221,3,
-// l'une comme l'autre passant à la ligne. L'impératif est le seul tour qui dise
-// le geste et tienne sur une ligne.
-//
-// L'écart à la route reste en dessous : il dit ce qu'il en coûte d'aller la
-// voir, et une fiche à 400 m ne se propose pas comme une fiche à 14 km.
+// CE QUI RESTE EST FACTUEL, ET C'EST TOUT CE QUI RESTE : le rang d'appel, qui dit
+// dans quel ordre la route croise les fiches (cf. appelsDuRayon) ; le nom ;
+// l'étiquette de colonne ; l'écart à la route, qui dit ce qu'il en coûte d'aller
+// la voir, une fiche à 400 m ne se proposant pas comme une fiche à 14 km ; et le
+// téléphone quand il existe.
 function ligneAppel(a){
   var col=stageColor(a.card.col);
   // Même lecture que la bulle : saisie d'abord, projection en repli.
@@ -4070,7 +4032,6 @@ function ligneAppel(a){
   return '<div class="sched-item" id="'+a.dom+'" style="cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+a.id+'\')">'
     +'<div class="sched-rang'+(t.length>2?' sched-rang-long':'')+'" style="background:'+col+'" title="Ordre d\'appel">'+t+'</div>'
     +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(a.card).titre)+'</div>'
-    +'<div class="sched-creneaux">'+creneauxAProposer(a)+'</div>'
     +'<div class="sched-meta">à '+fmtEcart(a.ecart)+' de la route</div>'
     // Le numéro est dans une ligne qui vole vers le marqueur au clic. Sans
     // arrêt de la propagation, appeler déclenchait aussi ce vol : le temps
@@ -4084,28 +4045,6 @@ function ligneAppel(a){
     +'</div>';
 }
 
-// Les deux créneaux d'un appel, dans l'ordre de la journée : l'aller d'abord,
-// le retour ensuite. Une moitié dégénérée peut n'en rendre qu'un seul, la phrase
-// se réduit alors à l'heure qu'on sait (cf. appelsDuRayon).
-//
-// SANS CADRAN, ON NE PROPOSE PAS UNE HEURE. heureDePassage ne rend rien quand le
-// rendez-vous n'a pas d'action datée : il n'y a alors aucune heure à laquelle
-// rapporter le trajet, et « Proposez 09h12 » serait une invention. La phrase
-// bascule sur le temps depuis le départ, la même grandeur sans le cadran, et
-// l'immobilisation du rendez-vous entre dans le créneau du retour comme elle
-// entre dans son heure.
-function creneauxAProposer(a){
-  var cadran=[], sansCadran=[];
-  [[a.aller,false],[a.retour,true]].forEach(function(paire){
-    if(paire[0]===null) return;
-    var h=heureDePassage(paire[0],paire[1]);
-    if(h) cadran.push(h);
-    sansCadran.push(fmtDuree(Math.round(paire[0]/60)+(paire[1]?dureeRdv():0)));
-  });
-  if(cadran.length) return 'Proposez '+cadran.join(' ou ');
-  return sansCadran.length?('après '+sansCadran.join(' ou ')):'';
-}
-
 // La destination. Même espace d'identifiants que les appels, #sched-<id> :
 // aucune collision possible, la fiche de destination étant écartée de la
 // mesure, elle ne produit donc aucun appel. Plus aucun code ne va chercher cet
@@ -4117,21 +4056,26 @@ function creneauxAProposer(a){
 // .sched-slot) pour que les deux sortes de lignes s'alignent sur le même bord.
 // La colonne d'heure qui la précédait est partie avec celle des lignes d'appel.
 //
-// SON HEURE RESTE, ET ELLE EST LA SEULE RÉELLE. Les appels portent des créneaux
-// à proposer, déduits ; celle-ci porte un rendez-vous pris, à l'heure dite. Elle
-// se lit au même endroit que les créneaux et dans le même vêtement, en cyan
-// plutôt qu'en noir : l'arrivée, puis la sortie. L'heure de sortie ouvre la
-// seconde moitié de la journée : le <select> de #tour-controls la déplace, et
-// avec elle le second créneau de chaque appel (cf. heureDePassage). Ce qui
-// précède ne bouge pas, la route jusqu'ici étant faite quelle que soit la durée.
-// La date reste en dessous, sans son heure, qui est désormais dite au-dessus.
+// SON HEURE RESTE, ET ELLE EST LA SEULE DE LA JOURNÉE. Les lignes d'appel n'en
+// portent plus aucune (cf. ligneAppel) ; celle-ci porte un rendez-vous pris, à
+// l'heure dite. C'est un FAIT, et sa date en est un autre : les deux restent.
+//
+// L'HEURE DE SORTIE, ELLE, EST PARTIE. Elle se lisait à côté, « sortie vers
+// 15h00 », et elle n'était qu'une addition : l'heure du rendez-vous plus une
+// durée réglée d'avance. Or cette durée ne s'estime pas. Si un second
+// rendez-vous est décroché derrière, l'abonné écourte le premier, et c'est le
+// rendez-vous décroché qui fixe la sortie, jamais un réglage posé d'avance. Une
+// heure de sortie affichée avant l'appel est donc une prévision que rien ne
+// fonde. La ligne ne dit plus que ce qu'elle sait.
+// Le vêtement ne change pas : la même colonne que les lignes d'appel, en cyan
+// plutôt qu'en noir. La date reste en dessous, sans son heure, qui est dite
+// au-dessus.
 function ligneRendezVous(){
   var c=couloirRdv;
   var na=nextActionOf(c.card);
   var st=na?actionStyle(na.type):actionStyle('rdv');
   var heure=na?(na.hour||'14:00'):null;
-  var sortie=heure?fmtHeure(minutesDe(heure)+dureeRdv()):'';
-  var quand=heure?(fmtHeure(minutesDe(heure))+(sortie?', sortie vers '+sortie:'')):'Heure inconnue';
+  var quand=heure?fmtHeure(minutesDe(heure)):'Heure inconnue';
   return '<div class="sched-item" id="sched-'+c.id+'" style="border-color:#0BBCD4;background:rgba(11,188,212,.06);cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+c.id+'\')">'
     +'<div class="sched-slot"><div class="sched-dot" style="background:#0BBCD4"></div></div>'
     +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(c.card).titre)+'</div>'

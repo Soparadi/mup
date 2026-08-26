@@ -226,7 +226,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 /* SCHEDULE ITEMS */
 .sched-item{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:5px;background:var(--surface)}
-.sched-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
 .sched-info{flex:1;min-width:0}
 .sched-name{font-size:11.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sched-meta{font-size:10px;color:var(--muted);font-family:var(--mono)}
@@ -259,24 +258,21 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    qu'un seuil l'impose. Le chiffre suit : 9 px jusqu'à 99, 7 px au-delà, où
    trois chiffres tiennent encore dans les 12 px intérieurs du disque.
 
-   .sched-slot est la même colonne, vide de rang : la ligne du rendez-vous s'y
-   range avec son point, pour que les deux sortes de lignes s'alignent sur le
-   même bord. Le point y garde ses 4 px de margin-top et tombe donc au même
-   centre que le disque de rang, à 8 px du haut de la ligne.
-
-   .sched-creneaux ne sert plus qu'à UNE ligne, celle du rendez-vous, et n'y
-   porte qu'un fait : l'heure du rendez-vous obtenu (cf. ligneRendezVous). Les
-   lignes d'appel s'en sont défaites avec les créneaux. La règle reste écrite
-   ici, à sa place dans la famille .sched, parce qu'elle habille toujours cette
-   ligne-là, et sous son nom, qui nomme la colonne et non son contenu. */
+   TROIS RÈGLES SONT PARTIES D'ICI, ET LA LIGNE QU'ELLES HABILLAIENT AVEC
+   ELLES : .sched-slot, la même colonne de 16 px vidée de son rang ;
+   .sched-creneaux, qui n'y portait plus qu'un fait, l'heure du rendez-vous
+   obtenu ; et .sched-dot, le point cyan qui se rangeait dans la colonne. Toutes
+   trois ne servaient qu'à la ligne de destination qui fermait la liste, et
+   celle-ci n'est plus : les rendez-vous à venir se lisent en tête du panneau, et
+   elle y faisait doublon. Il ne reste donc dans cette famille que la ligne
+   d'appel, qui porte un rang et jamais d'heure. */
 .sched-rang{width:16px;height:16px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;font-weight:800;color:#fff;line-height:1}
 .sched-rang.sched-rang-long{font-size:7px}
-.sched-slot{width:16px;flex-shrink:0;display:flex;justify-content:center}
-.sched-creneaux{font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--text)}
 
-/* ── L'ÉCHEC DE LA MESURE, EN TÊTE DU PANNEAU ───────────────────────────────
+/* ── L'ÉCHEC DE LA MESURE, EN TÊTE DU BLOC DU BAS ───────────────────────────
    La route ne s'est pas mesurée : le motif se dit, et la relance est là. Le
-   bloc se pose AU-DESSUS de la liste des rendez-vous, jamais à sa place (cf.
+   bloc se pose en tête du bloc du bas, donc JUSTE SOUS la liste des rendez-vous,
+   qui tient la tête du panneau en permanence, et jamais à sa place (cf.
    echecDeLaRoute) : recommencer le calcul et changer de destination sont deux
    sorties, et l'abonnée doit avoir les deux sous les yeux. Il ne survit à aucun
    rendu suivant, ce qui est bien ce qu'on attend d'un message d'échec.
@@ -705,7 +701,8 @@ body #mup-cookie-panel{z-index:60001}
     </div>
     <!-- LE BLOC DE COMMANDES EST DE RETOUR, ET IL NE PORTE QUE LE CURSEUR DU
          RAYON. Le sélecteur de durée du rendez-vous qui l'occupait est parti
-         sans retour (cf. ligneRendezVous), et le commentaire qui gardait la
+         sans retour, avec la ligne de destination qu'il réglait, et le
+         commentaire qui gardait la
          place annonçait ce curseur : il l'occupe. Ce que cela change : la
          largeur du couloir se règle tant que la journée est affichée, alors
          qu'elle ne se réglait que sous l'encart de mise en service et partait
@@ -736,7 +733,24 @@ body #mup-cookie-panel{z-index:60001}
              aria-label="Rayon autour de la route" aria-describedby="tour-rayon-compte" oninput="reglerLeRayonDuPanneau()">
       <div class="mes-compte" id="tour-rayon-compte"></div>
     </div>
-    <div class="tour-body" id="tour-body"></div>
+    <!-- LE CORPS DU PANNEAU PORTE DEUX BLOCS, ET IL SE LIT DE HAUT EN BAS.
+         UN SEUL CONTENEUR VIVAIT ICI, ET LES DEUX RENDUS SE LE DISPUTAIENT :
+         celui des rendez-vous et celui de la liste d'appels y remplaçaient tour
+         à tour tout le contenu, si bien que l'un chassait l'autre. La liste des
+         rendez-vous cédait entièrement la place dès qu'un couloir s'affichait,
+         et revenir aux autres rendez-vous demandait de tout recommencer.
+         #tour-rdvs porte les rendez-vous à venir, tous, en permanence, dans
+         l'ordre de la journée (cf. renderPanel). #tour-liste porte ce qui se lit
+         SOUS eux : les prospects du voisinage tant qu'aucune route n'est
+         calculée, la liste des appels de la route dès qu'elle l'est (cf.
+         renderCouloir).
+         UN SEUL ASCENSEUR POUR LES DEUX, celui de .tour-body : les deux blocs
+         sont en flux ordinaire, sans hauteur propre, sans marge et sans style à
+         eux, et la lecture descend de l'un à l'autre d'un seul geste. -->
+    <div class="tour-body" id="tour-body">
+      <div id="tour-rdvs"></div>
+      <div id="tour-liste"></div>
+    </div>
     <!-- PLUS DE PIED SOUS LA LISTE. Il ne portait qu'« Effacer », et le bouton
          est parti avec ce qu'il faisait : rendre la carte au portefeuille
          entier, c'est à dire sortir du mode journée. La bande vide qui serait
@@ -1720,18 +1734,23 @@ function autoShowRdv(){
     }
   });
 
-  // LA QUATRIÈME GARDE. Les trois posées ailleurs couvraient le relevé de
-  // position, poserPosition et choisirRdv — trois suites de gestes de l'abonnée.
-  // Celle-ci couvre le seul appelant qui n'en soit pas un : agenda-sync rappelle
-  // autoShowRdv à chaque retour d'onglet (storage, visibilitychange, focus), et
-  // reprendre le focus suffisait à faire remplacer le couloir par la liste
-  // numérotée du panneau RDV — tracé toujours sur la carte, « 16 fiches » au
-  // compteur au lieu de « N à appeler », sans qu'aucun geste ait été fait.
-  // Seul le rendu de #tour-body est retiré : les cercles (gardés plus haut),
-  // rdvPanelIds, le badge et l'ouverture du panneau continuent leur travail. Le
-  // badge et le compteur ne sont pas perdus pour autant — sous couloir, c'est
-  // renderCouloir qui les tient, et ils disent les fiches de la route.
-  if(!couloirAffiche) renderPanel();
+  // LE RENDU DU PANNEAU N'EST PLUS CONDITIONNÉ, ET C'EST ICI QUE CELA COMPTE LE
+  // PLUS. Une garde vivait à cette ligne, et elle couvrait le seul appelant qui
+  // ne soit pas un geste de l'abonnée : agenda-sync rappelle autoShowRdv à
+  // chaque retour d'onglet (storage, visibilitychange, focus), et reprendre le
+  // focus suffisait à faire remplacer le couloir par la liste numérotée du
+  // panneau, tracé toujours sur la carte et « 16 fiches » au compteur au lieu de
+  // « N à appeler », sans qu'aucun geste ait été fait.
+  // CE QU'ELLE PROTÉGEAIT EST PROTÉGÉ AILLEURS, et plus étroitement : renderPanel
+  // n'écrit ni le bloc du bas ni le compteur tant qu'un couloir est affiché. Un
+  // retour d'onglet réécrit donc le seul bloc des rendez-vous, ce qui est
+  // exactement ce que la synchronisation d'agenda vient faire, et la journée
+  // calculée reste intacte, liste, compteur et curseur compris.
+  // ET LA PLACE DE LECTURE AVEC ELLE : le bloc du haut n'est pas réécrit quand
+  // son contenu n'a pas changé, ce qui est le cas ordinaire d'un retour
+  // d'onglet, et l'ascenseur du corps est rendu à sa position quand il l'est
+  // (cf. poserLesLignes).
+  renderPanel();
 
   // OUVERTURE AUTOMATIQUE. Tout ce qui précède — cercles de proximité,
   // rdvPanelIds, et hors couloir par renderPanel le badge, le compteur et
@@ -1983,11 +2002,11 @@ function poserPosition(latlng, geste){
   userMarker=L.marker(userLatLng,{icon:icon,zIndexOffset:1000}).addTo(map);
   try{ localStorage.setItem(TEMOIN_GEO,'1'); }catch(e){}
   if(geste||!vueDemandee) cadrerSur(userLatLng,11);
-  // Le relevé sert à trier le panneau RDV par distance — mais renderPanel et le
-  // rendu du couloir se disputent #tour-body, et la liste des candidats ne
-  // dépend pas de la position. Tant qu'un couloir est affiché, un relevé ne le
-  // remplace pas.
-  if(!couloirAffiche) renderPanel();
+  // Le relevé sert à trier le panneau par distance. Plus de garde ici : les deux
+  // listes ne se disputent plus le corps du panneau, et renderPanel se garde
+  // elle-même d'écrire le bloc du bas sous couloir, où la liste des appels ne
+  // dépend pas de la position.
+  renderPanel();
   // Sans marqueur maison : le point bleu ci-dessus marque déjà cette coordonnée,
   // et deux marqueurs superposés diraient deux fois la même chose (cf.
   // poserDepart). C'est aussi cet appel qui lance le calcul si la destination
@@ -2040,9 +2059,11 @@ function enchainerApresPosition(){
   if(!rdvs.length){ retirerEncartDepart(); return; }
   if(rdvs.length>1&&!rdvChoisi){ peuplerLesRdvs(rdvs); ouvrirTemps('mesTempsRdv'); return; }
   // La désignation d'office de renderPanel a normalement déjà posé rdvChoisi au
-  // rendez-vous unique. Elle est refaite ici plutôt que supposée : renderPanel
-  // ne la pose que sur les fiches qu'il liste, et il ne liste rien tant qu'un
-  // couloir occupe #tour-body.
+  // rendez-vous unique, et elle la pose maintenant en toute circonstance : le
+  // bloc des rendez-vous se rend même sous couloir, la raison qui faisait douter
+  // de cette ligne est tombée avec les gardes. Elle est refaite ici plutôt que
+  // supposée, pour le seul cas qui reste : un enchaînement qui précéderait tout
+  // rendu du panneau.
   if(!rdvChoisi){ designerDepuisEncart(rdvs[0].id); return; }
   ouvrirLeRayon();
 }
@@ -2089,8 +2110,8 @@ function peuplerLesRdvs(rdvs){
 function designerDepuisEncart(id){
   rdvChoisi=String(id);
   // Le panneau porte la même désignation : elle vient d'ailleurs, elle s'y voit
-  // pareil. Même garde qu'à choisirRdv, pour la même raison.
-  if(!couloirAffiche) renderPanel();
+  // pareil. Sans garde, comme à choisirRdv et pour la même raison.
+  renderPanel();
   couloirSiPret();
   ouvrirLeRayon();
 }
@@ -2309,10 +2330,10 @@ function renoncerAuRayon(){
 // TROIS SORTIES, ET AUCUNE N'EST UN CUL-DE-SAC. L'encart se retire, faute de
 // quoi la page resterait tenue par un voile qui n'attend plus rien. Le motif se
 // dit au toast, une fois, parce qu'il est daté. Et la RELANCE se pose en tête du
-// panneau, au-dessus de la liste des rendez-vous que renderPanel rétablit : on
-// peut recommencer le calcul, ou désigner une autre destination sur une ligne
-// juste en dessous. Le champ d'adresse, en bas de la carte, reste la seconde
-// voie vers un autre point de départ.
+// BLOC DU BAS, donc juste sous la liste des rendez-vous, qui tient la tête du
+// panneau en permanence : on peut recommencer le calcul, ou désigner une autre
+// destination sur une ligne juste au-dessus. Le champ d'adresse, en bas de la
+// carte, reste la seconde voie vers un autre point de départ.
 //
 // LE BLOC NE SURVIT À AUCUN RENDU SUIVANT, et c'est voulu : il est écrit après
 // renderPanel, donc par-dessus lui, et le prochain rendu du panneau ou du
@@ -2331,9 +2352,9 @@ function echecDeLaRoute(motif){
   toast(motif);
   ouvrirPanneau();
   renderPanel();
-  var body=document.getElementById('tour-body');
-  if(!body) return;
-  body.insertAdjacentHTML('afterbegin',
+  var bas=document.getElementById('tour-liste');
+  if(!bas) return;
+  bas.insertAdjacentHTML('afterbegin',
     '<div class="tour-echec">'
     +'<div class="tour-echec-titre">La route n\'a pas pu être mesurée</div>'
     +'<div class="tour-echec-motif">'+esc(motif)+'</div>'
@@ -2341,53 +2362,92 @@ function echecDeLaRoute(motif){
     +'</div>');
 }
 
+// ── LE CORPS DU PANNEAU, DEUX BLOCS ET UNE SEULE FORME DE LIGNE ─────────────
+// LA MÊME LIGNE POUR LES DEUX BLOCS, et c'est celle qui existait quand la liste
+// n'en faisait qu'une : un numéro, un nom, une seconde ligne portant l'étiquette
+// et l'écart au départ, un bouton de désignation sur les seules fiches à
+// rendez-vous, et la date sous le tout. Rien n'y est ajouté, rien n'en est
+// retiré.
+// L'IDENTIFIANT VIENT DE L'APPELANT, ET IL LE FAUT : les deux blocs coexistent
+// désormais, et la même fiche peut se lire dans les deux (cf. renderPanel).
+// LE NUMÉRO AUSSI : il court d'un bloc à l'autre, les rendez-vous d'abord, les
+// prospects ensuite, si bien que le panneau se numérote de haut en bas comme
+// une seule liste.
+// event.stopPropagation sur le bouton parce que le corps de la ligne garde
+// flyTo, dans tous ses états.
+function lignePanneau(it, n, dom){
+  var distStr=it.dist!==null&&it.dist!==undefined?(it.dist>=1000?Math.round(it.dist/1000)+' km':Math.round(it.dist)+' m'):'';
+  var col=stageColor(it.card.col);
+  var actSt=it.isRdv?actionStyle(it.nextAction.type):null;
+  var label=it.isRdv?actSt.label:'Prospect';
+  var labelColor=it.isRdv?actSt.color:'#6E6E73';
+  var retenue=(rdvChoisi===it.id);
+  // TROIS LIBELLÉS, DEUX GESTES. « Préparer » désigne, « Annuler » défait,
+  // « Préparé » ne fait rien : sous couloir l'annulation est refusée, et un
+  // bouton qui ne répond pas ne peut pas s'appeler « Annuler » (cf. choisirRdv).
+  var geste=retenue?(couloirAffiche?'Préparé':'Annuler'):'Préparer';
+  return '<div class="tour-item'+(retenue?' retenue':'')+'" id="'+dom+'" style="cursor:pointer;'+(it.isRdv?'border-color:'+labelColor+';background:'+labelColor+'14':'')+'" onclick="flyTo(\''+it.id+'\')">'
+    +'<div class="tour-num" style="background:'+col+'">'+n+'</div>'
+    +'<div class="tour-info">'
+    +'<div class="tour-info-name">'+esc(nomsCarte(it.card).titre)+'</div>'
+    +'<div class="tour-info-dist">'+label+(distStr?' · '+distStr:'')+'</div>'
+    +'</div>'
+    +(it.isRdv?'<button class="tour-pick'+(retenue?' on':'')+'" onclick="event.stopPropagation();choisirRdv(\''+it.id+'\')">'+geste+'</button>':'')
+    // La date et l'heure, sur les seules fiches à rendez-vous. Même composition
+    // que l'infobulle du marqueur : formatRdvDate rend « Mardi 26 août · 9h ».
+    // « RDV » seul ne dit pas si c'est à 9h ou à 16h, et c'est cette heure là qui
+    // commande la journée, c'est elle aussi qui ordonne le bloc du haut. Hors de
+    // .tour-info et après le bouton : la règle .tour-info-rdv dit pourquoi (la
+    // place, mesurée).
+    +(it.isRdv?'<div class="tour-info-rdv" style="color:'+labelColor+'">'+formatRdvDate(it.nextAction.date.slice(0,10),it.nextAction.hour)+'</div>':'')
+    +'</div>';
+}
+
+// L'écart entre le point de départ de la journée et une fiche, ou rien quand on
+// ne sait pas encore d'où part l'abonnée. Le tri du bloc des prospects en
+// dépend, et la seconde ligne de chaque ligne l'affiche.
+function ecartAuDepart(info){
+  if(!info||!userLatLng) return null;
+  return map.distance(L.latLng(userLatLng),L.latLng(info.latlng));
+}
+
+// ── LE RENDU QUI NE DÉTRUIT NI LA JOURNÉE NI LA PLACE DE LECTURE ────────────
+// agenda-sync rappelle autoShowRdv, donc renderPanel, à chaque storage, chaque
+// visibilitychange et chaque focus : reprendre l'onglet repeint le panneau. Deux
+// précautions, et elles ne valent que par cet appelant là.
+// ON N'ÉCRIT PAS CE QUI NE CHANGE PAS. Un retour d'onglet qui ne rapporte aucun
+// événement nouveau produit le même HTML au caractère près : le poser
+// rejouerait le rendu du navigateur pour rien.
+// ET L'ASCENSEUR EST RENDU À SA PLACE quand il y a vraiment à écrire. Le corps
+// du panneau est le seul à défiler et les deux blocs sont dedans : remplacer le
+// contenu du premier peut rogner la position du second, et l'abonnée qui lisait
+// le bas de sa liste d'appels s'y retrouverait remontée.
+function poserLesLignes(el, html){
+  if(el.innerHTML===html) return;
+  var corps=document.getElementById('tour-body');
+  var place=corps?corps.scrollTop:0;
+  el.innerHTML=html;
+  if(corps) corps.scrollTop=place;
+}
+
 // Panel rendering
+// LE PANNEAU SE LIT DE HAUT EN BAS, ET LES DEUX LISTES NE SE CHASSENT PLUS.
+// renderPanel écrit le BLOC DU HAUT à chaque appel, quoi qu'il arrive, et le
+// BLOC DU BAS seulement quand aucun couloir ne l'occupe. C'est tout ce qui reste
+// des quatre gardes qui vivaient chez ses appelants : la protection est
+// descendue ici, et elle a rétréci de « ce rendu n'a pas lieu » à « ce rendu ne
+// touche ni le bas ni le compteur ».
 function renderPanel(){
-  var body=document.getElementById('tour-body');
-  // LE COMPTE NE SE DIT PLUS QU'À UN ENDROIT. Il s'écrivait deux fois : dans
-  // #tour-count, à l'en-tête du panneau, et dans une pastille logée DANS le
-  // bouton « Actions ». Ce bouton est parti, la pastille avec lui, et l'état
-  // « actif » qu'il portait n'a plus de bouton à teindre. L'en-tête suffit : il
-  // est visible dès que le panneau est ouvert, et le panneau s'ouvre de lui-même
-  // dès qu'il a quelque chose à montrer.
-  var count=document.getElementById('tour-count');
-  count.textContent=rdvPanelIds.length+' fiche'+(rdvPanelIds.length>1?'s':'');
+  var haut=document.getElementById('tour-rdvs');
+  var bas=document.getElementById('tour-liste');
+  if(!haut||!bas) return;
 
-  if(!rdvPanelIds.length){
-    body.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Aucun RDV dans le pipeline</div>';
-    return;
-  }
-
-  var items=rdvPanelIds.map(function(id){
-    var info=markers[id];
-    if(!info) return null;
-    var dist=null;
-    if(userLatLng) dist=map.distance(L.latLng(userLatLng),L.latLng(info.latlng));
-    var na=nextActionOf(info.card);
-    return{id:id,card:info.card,dist:dist,latlng:info.latlng,isRdv:!!na,nextAction:na};
-  }).filter(Boolean);
-
-  // L'ORDRE DES LIGNES. Trier tout le monde par distance mélangeait les deux
-  // natures de fiche : un prospect à 200 m passait devant le rendez-vous de 9h.
-  // Or ce panneau se lit comme une journée, et une journée est commandée par
-  // ses rendez-vous. D'où deux blocs concaténés :
-  //   — les fiches à rendez-vous en tête, par date puis heure. Clé
-  //     date + 'T' + hour comparée en chaînes, la même que nextActionOf emploie
-  //     pour élire l'événement à venir ; hour est déjà défaulté à '14:00' là-bas,
-  //     donc jamais vide ici.
-  //   — le reste ensuite, par distance si et seulement si on sait où est
-  //     l'abonné. Sans position, aucun tri : l'ordre d'insertion est conservé,
-  //     Array.sort n'étant même pas appelé.
-  // Le numéro de .tour-num suit l'ordre final, il se lit sur l'index du map.
-  var avecRdv=items.filter(function(it){return it.isRdv;});
-  var sansRdv=items.filter(function(it){return !it.isRdv;});
-  avecRdv.sort(function(a,b){
-    var ka=a.nextAction.date+'T'+a.nextAction.hour;
-    var kb=b.nextAction.date+'T'+b.nextAction.hour;
-    return ka<kb?-1:(ka>kb?1:0);
-  });
-  if(userLatLng) sansRdv.sort(function(a,b){return(a.dist||0)-(b.dist||0);});
-  items=avecRdv.concat(sansRdv);
+  // LE BLOC DU HAUT : TOUS LES RENDEZ-VOUS À VENIR, EN PERMANENCE. Sans fenêtre
+  // de temps, sans plafond, sans troncature : deux ou trois est le cas courant,
+  // personne n'en a quinze devant lui. Lus de rdvsAVenir, la même source et le
+  // même tri que l'encart, et non de rdvPanelIds, qui mêle les prospects du
+  // voisinage aux rendez-vous.
+  var rdvs=rdvsAVenir();
 
   // DÉSIGNATION D'OFFICE. Ordonnée ici, avant la construction du HTML, et non
   // par un second rendu : renderPanel ne se rappelle jamais elle-même, le rendu
@@ -2395,58 +2455,77 @@ function renderPanel(){
   // À un seul candidat, choisir n'est pas choisir : la fiche est retenue sans
   // qu'on la clique. À partir de deux, personne ne tranche à la place de
   // l'abonné. Et une annulation ne se mémorise pas : rdvChoisi repassé à null,
-  // le rendu suivant reposera la désignation s'il n'y a toujours qu'un candidat
-  // — c'est le prix admis d'une annulation qui ne laisse aucune trace à tenir.
-  var candidats=items.filter(function(it){return it.isRdv;});
-  if(!rdvChoisi&&candidats.length===1) rdvChoisi=candidats[0].id;
+  // le rendu suivant reposera la désignation s'il n'y a toujours qu'un candidat,
+  // c'est le prix admis d'une annulation qui ne laisse aucune trace à tenir.
+  if(!rdvChoisi&&rdvs.length===1) rdvChoisi=rdvs[0].id;
 
-  body.innerHTML=items.map(function(it,i){
-    var distStr=it.dist!==null?(it.dist>=1000?Math.round(it.dist/1000)+' km':Math.round(it.dist)+' m'):'';
-    var col=stageColor(it.card.col);
-    var actSt=it.isRdv?actionStyle(it.nextAction.type):null;
-    var label=it.isRdv?actSt.label:'Prospect';
-    var labelColor=it.isRdv?actSt.color:'#6E6E73';
-    // Même espace d'identifiants que les lignes du couloir (ligneAppel et
-    // ligneRendezVous) : les deux rendus remplacent #tour-body en entier et ne
-    // coexistent jamais, donc pas de collision. Plus rien ne lit ces
-    // identifiants depuis le retrait du bouton « Voir dans le panneau », seul
-    // appelant de scrollToStop ; ils sont gardés parce qu'ils nomment la ligne
-    // et que la règle d'unicité vaut pour la suite. Le bouton de désignation,
-    // lui, ne va que sur les fiches à rendez-vous : le trajet se calcule vers
-    // un rendez-vous, un prospect n'en est jamais la destination.
-    // event.stopPropagation parce que le corps de la ligne garde flyTo, dans
-    // les deux états du bouton.
-    var retenue=(rdvChoisi===it.id);
-    return '<div class="tour-item'+(retenue?' retenue':'')+'" id="sched-'+it.id+'" style="cursor:pointer;'+(it.isRdv?'border-color:'+labelColor+';background:'+labelColor+'14':'')+'" onclick="flyTo(\''+it.id+'\')">'
-      +'<div class="tour-num" style="background:'+col+'">'+(i+1)+'</div>'
-      +'<div class="tour-info">'
-      +'<div class="tour-info-name">'+esc(nomsCarte(it.card).titre)+'</div>'
-      +'<div class="tour-info-dist">'+label+(distStr?' · '+distStr:'')+'</div>'
-      +'</div>'
-      +(it.isRdv?'<button class="tour-pick'+(retenue?' on':'')+'" onclick="event.stopPropagation();choisirRdv(\''+it.id+'\')">'+(retenue?'Annuler':'Préparer')+'</button>':'')
-      // La date et l'heure, sur les seules fiches à rendez-vous. Même
-      // composition que l'infobulle du marqueur : formatRdvDate rend
-      // « Mardi 26 août · 9h ». « RDV » seul ne dit pas si c'est à 9h ou à 16h,
-      // et c'est cette heure-là qui commande la journée — c'est elle aussi qui
-      // ordonne les lignes ci-dessus. Hors de .tour-info et après le bouton :
-      // la règle .tour-info-rdv dit pourquoi (la place, mesurée).
-      +(it.isRdv?'<div class="tour-info-rdv" style="color:'+labelColor+'">'+formatRdvDate(it.nextAction.date.slice(0,10),it.nextAction.hour)+'</div>':'')
-      +'</div>';
-  }).join('');
+  // DEUX ESPACES D'IDENTIFIANTS, ET C'EST NOUVEAU. Les deux rendus remplaçaient
+  // tout le corps du panneau et ne coexistaient jamais : #sched-<id> suffisait
+  // aux trois sortes de lignes. Ils coexistent maintenant, et deux fiches y
+  // porteraient le même identifiant, le rendez-vous préparé d'abord, puis tout
+  // autre rendez-vous à venir qui borde la route, fichesDuCouloir n'écartant que
+  // la destination. Le bloc du haut prend donc le sien, #rdv-<id>, et laisse
+  // #sched-<id> aux lignes du bas. Personne ne vise ces identifiants depuis le
+  // retrait du bouton « Voir dans le panneau » : ils nomment la ligne, et la
+  // règle d'unicité vaut pour la suite.
+  poserLesLignes(haut, rdvs.map(function(r,i){
+    return lignePanneau({id:r.id, card:r.card, dist:ecartAuDepart(markers[r.id]), isRdv:true, nextAction:r.na}, i+1, 'rdv-'+r.id);
+  }).join(''));
+
+  // SOUS COULOIR, LE BAS ET LE COMPTEUR APPARTIENNENT À LA LISTE DES APPELS, et
+  // renderPanel s'arrête là. Le compteur se dit à un seul endroit, #tour-count à
+  // l'en-tête, et les deux rendus l'écrivent : « N fiches » ici, « N à appeler »
+  // chez renderCouloir. Sans cette sortie, un retour d'onglet le ramènerait au
+  // compte du portefeuille alors que la liste dessous parle de la route.
+  if(couloirAffiche) return;
+
+  // LE BLOC DU BAS HORS COULOIR : les prospects du voisinage, ceux que les
+  // cercles de 30 km ont ramassés autour des rendez-vous. Ils cèdent la place
+  // aux appels dès qu'une route est calculée, et c'est bien la substitution
+  // voulue : la liste des fiches à appeler sur la route dit la même chose en
+  // mieux. Par distance si et seulement si on sait où est l'abonnée ; sans
+  // position aucun tri, l'ordre de ramassage est conservé.
+  var prospects=rdvPanelIds.map(function(id){
+    var info=markers[id];
+    if(!info||nextActionOf(info.card)) return null;
+    return {id:id, card:info.card, dist:ecartAuDepart(info), isRdv:false, nextAction:null};
+  }).filter(Boolean);
+  if(userLatLng) prospects.sort(function(a,b){return(a.dist||0)-(b.dist||0);});
+
+  // LE COMPTE NE SE DIT QU'À UN ENDROIT, l'en-tête du panneau, et il dit ce que
+  // le panneau porte : les rendez-vous plus les prospects.
+  var total=rdvs.length+prospects.length;
+  document.getElementById('tour-count').textContent=total+' fiche'+(total>1?'s':'');
+
+  if(!total){
+    bas.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted2);font-size:12px">Aucun RDV dans le pipeline</div>';
+    return;
+  }
+  poserLesLignes(bas, prospects.map(function(it,i){
+    return lignePanneau(it, rdvs.length+i+1, 'sched-'+it.id);
+  }).join(''));
 }
 
 // Désigne la fiche vers laquelle le trajet se calcule, ou défait cette
-// désignation. Un seul bouton, deux états : un second clic sur la fiche déjà
-// retenue remet rdvChoisi à null. Rien d'autre ne bouge — le clic sur le corps
-// de la ligne continue d'appeler flyTo dans les deux cas.
+// désignation. Un second clic sur la fiche déjà retenue remet rdvChoisi à null.
+// Le clic sur le corps de la ligne, lui, appelle flyTo dans tous les cas.
+// PLUS D'ANNULATION TANT QU'UN COULOIR EST AFFICHÉ, et c'est nouveau. Ce bouton
+// était inatteignable sous couloir : la liste des rendez-vous avait cédé toute
+// la place aux appels, ses lignes n'existaient plus. Elle reste en tête
+// désormais, et le bouton répond. Or une annulation laisserait la route sur la
+// carte, les rangs sur les marqueurs et les appels dans le panneau sans qu'aucun
+// rendez-vous ne soit désigné : un écran qui dit deux choses contraires.
+// ON CHANGE D'AVIS EN CLIQUANT UN AUTRE RENDEZ-VOUS, ce qui relance le calcul
+// sur cette journée là. La ligne retenue, elle, porte « Préparé » et son clic ne
+// fait rien : un bouton qui ne défait plus rien ne s'appelle pas « Annuler »
+// (cf. lignePanneau). Hors couloir le bouton garde ses deux états.
 function choisirRdv(id){
   id=String(id);
+  if(couloirAffiche&&rdvChoisi===id) return;
   rdvChoisi=(rdvChoisi===id)?null:id;
-  // Même garde qu'ailleurs : renderPanel et le rendu du couloir se disputent
-  // #tour-body, et un couloir affiché ne se laisse pas remplacer par la liste.
-  // Inatteignable d'ici — un couloir affiché a remplacé les lignes, donc ce
-  // bouton n'existe plus — mais la règle du fichier vaut à tous ses appelants.
-  if(!couloirAffiche) renderPanel();
+  // Sans garde : le rendu réécrit le bloc des rendez-vous, où le rail change de
+  // ligne, et laisse le bloc du bas à la liste des appels.
+  renderPanel();
   // « Qui est sur la route » a disparu : le calcul part de lui-même dès que ses
   // DEUX inconnues sont levées. Celle-ci en est une, et c'est ici qu'elle tombe.
   // Sans cette ligne, une abonnée qui se géolocalise AVANT de désigner son
@@ -2555,10 +2634,23 @@ var couloirCandidats=[];
 // le curseur, lui, ne recalcule rien : sans elle il faudrait relire la route à
 // chaque pixel pour redire un nombre qui n'a pas bougé.
 var couloirDuree=0;
-// « Un couloir occupe #tour-body ». Les trois gardes de renderPanel lisaient
-// anchorCard, qui n'existe plus ; un drapeau posé par le rendu et défait par
-// clearTourPlan dit la même chose sans corréler deux variables — startLatLng
-// seul n'aurait pas suffi, il est posé avant que l'itinéraire ne réponde.
+// « UN COULOIR OCCUPE LE BAS DU CORPS DU PANNEAU », ET C'EST TOUT CE QUE CE
+// DRAPEAU DIT DÉSORMAIS. Il en disait plus : « un couloir occupe #tour-body »,
+// et quatre gardes en tiraient qu'un rendu de rendez-vous ne devait pas s'y
+// substituer, donc ne devait pas avoir lieu du tout (poserPosition, choisirRdv,
+// designerDepuisEncart, autoShowRdv). Les deux listes cohabitent maintenant dans
+// deux conteneurs (cf. le balisage de .tour-body) : les quatre gardes sont
+// tombées, leurs appelants rendent le panneau sans condition, et ce qu'elles
+// protégeaient est protégé à l'intérieur de renderPanel, qui n'écrit ni le bloc
+// du bas ni le compteur tant que le drapeau est levé.
+// CE QU'IL COMMANDE ENCORE, HORS DU PANNEAU : le cercle de 30 km, qu'un retour
+// d'onglet reposerait sur une carte qui n'en veut plus (cf. autoShowRdv) ; le
+// libellé du bouton de désignation et l'annulation qu'il refuse sous couloir
+// (cf. choisirRdv) ; et l'échec de route qui ne s'affiche pas par-dessus une
+// liste déjà posée (cf. le .catch de lancerCouloir).
+// Un drapeau posé par le rendu et défait par clearTourPlan, plutôt que deux
+// variables corrélées : startLatLng seul n'aurait pas suffi, il est posé avant
+// que l'itinéraire ne réponde.
 var couloirAffiche=false;
 // LE COULOIR N'A PLUS DE LARGEUR FIXE. C'était 15 km de part et d'autre du
 // trajet, seuil unique et sans distinction ville/province : la distinction
@@ -3225,12 +3317,16 @@ function proRata(px,py,debut,fin,total){
 // FOIS, avec son rang d'appel (cf. appelsDuRayon), et l'ordre est celui de la
 // montée, du départ jusqu'au rendez-vous.
 //
-// LA LIGNE DU RENDEZ-VOUS FERME LA LISTE, et c'est la même place qu'avant. Elle
-// se posait au rebroussement, juste avant le premier passage de retour ; toutes
-// les lignes qui restent sont désormais des lignes d'aller, toutes situées avant
-// ce rebroussement, si bien qu'il tombe au bas de la liste. On y lit la journée
-// dans l'ordre où elle se fait : les appels à passer en montant, puis la
-// destination et son heure, la seule que la journée connaisse.
+// LA LIGNE DU RENDEZ-VOUS NE FERME PLUS LA LISTE, ET ELLE N'EST PLUS DU TOUT.
+// Elle se posait au rebroussement, donc au bas de la liste, et portait le nom de
+// la destination, son heure et sa date. Les rendez-vous à venir se lisent
+// maintenant EN TÊTE du panneau, en permanence, celui qui est préparé portant
+// son rail, son heure et sa date sur sa propre ligne (cf. renderPanel) : la
+// ligne du bas redisait mot pour mot ce qui se lit deux blocs plus haut, et
+// faisait porter le même identifiant à deux lignes du même panneau. Ce que la
+// liste perd est cette redite ; ce qu'elle disait en propre, « après ces appels
+// vous y êtes », est dit par l'ordre même du panneau, qui va du rendez-vous
+// préparé aux appels de sa route.
 // CE QUI SE REND EST CE QUE LE RAYON RETIENT, pas la mesure entière : celle-ci
 // va jusqu'au maximum du curseur et sert de réserve au réglage (cf.
 // appelsDuRayon). Relu à chaque rendu, si bien qu'un rayon changé se rend sans
@@ -3245,7 +3341,7 @@ function renderCouloir(){
   // rayon logé dans le panneau (cf. reglerLeRayonDuPanneau). Il est le seul, les
   // trois autres passant tous hors déroulé, validerLeRayon et lancerCouloir avant
   // qu'il ne parte, finirLeDeroule le drapeau baissé. Le sélecteur de durée du
-  // rendez-vous, qui tombait là autrefois, n'est plus (cf. ligneRendezVous).
+  // rendez-vous, qui tombait là autrefois, n'est plus.
   // CE QUE LE CURSEUR PROVOQUE EN PASSANT ICI EST DONC LA FIN DU DÉROULÉ, au
   // nouveau réglage : finirLeDeroule rend le tracé entier puis rappelle cette
   // fonction, drapeau baissé, et l'état final se pose. C'est le même écran que la
@@ -3254,11 +3350,14 @@ function renderCouloir(){
 
   var appels=appelsDuRayon();
   var html=appels.map(ligneAppel).join('');
-  html+=ligneRendezVous();
   if(!appels.length){
     html+='<div style="padding:16px 8px;text-align:center;color:var(--muted2);font-size:11px">Aucune fiche à moins de '+fmtEcart(COULOIR_M)+' de la route</div>';
   }
-  document.getElementById('tour-body').innerHTML=html;
+  // DANS LE BLOC DU BAS, ET LÀ SEULEMENT : le bloc des rendez-vous, au-dessus,
+  // ne se touche pas d'ici. C'est lui qui reste en tête pendant que la liste des
+  // appels se refait, à chaque pixel du curseur du rayon comme à chaque journée
+  // recalculée.
+  document.getElementById('tour-liste').innerHTML=html;
   // Le même rang, sur la carte, dans le marqueur de chaque fiche, et la carte
   // réduite à ces fiches-là plus la destination : ce qui se lit ici et ce qui se
   // voit à gauche sortent du même appelsDuRayon.
@@ -3287,7 +3386,15 @@ function renderCouloir(){
   document.getElementById('tour-controls').style.display='';
   poserLeRayonSurLeCurseur('tour-rayon','tour-rayon-compte');
 
+  // LE DRAPEAU SE LÈVE ICI, ET LE BLOC DES RENDEZ-VOUS DOIT L'APPRENDRE. Il a
+  // été rendu avant lui, donc avec « Annuler » sur la ligne retenue, et ce
+  // bouton n'annule plus rien sous couloir (cf. choisirRdv) : sans ce rendu il
+  // dirait un geste qui ne répond pas. Au SEUL passage du drapeau, jamais à
+  // chaque rendu : cette fonction est rappelée à chaque pixel du curseur du
+  // rayon, et rdvsAVenir relit tous les marqueurs.
+  var etaitAffiche=couloirAffiche;
   couloirAffiche=true;
+  if(!etaitAffiche) renderPanel();
   retirerCercles();
 }
 
@@ -3459,7 +3566,9 @@ function derouler(){
   });
   derouleTemps.push({appel:null, d:dRdv});
 
-  document.getElementById('tour-body').innerHTML='';
+  // Le bloc du bas seul se vide : le déroulé va y reposer ses lignes une à une,
+  // et les rendez-vous en tête ne le regardent pas.
+  document.getElementById('tour-liste').innerHTML='';
   // Le tracé entier s'efface le temps du déroulé et son trait prend sa place, au
   // même vêtement : la substitution ne se voit pas. Il revient tel quel à la
   // sortie (cf. finirLeDeroule), le retour se superposant à l'aller.
@@ -3500,7 +3609,7 @@ function derouleEtape(){
     derouleMinuteur=setTimeout(function(){
       if(!derouleActif) return;
       if(deroulePopup){deroulePopup.closePopup();deroulePopup=null;}
-      document.getElementById('tour-body').insertAdjacentHTML('beforeend',ligneAppel(temps.appel));
+      document.getElementById('tour-liste').insertAdjacentHTML('beforeend',ligneAppel(temps.appel));
       derouleMinuteur=setTimeout(function(){ derouleRang++; derouleEtape(); },DEROULE_POSE_MS);
     },DEROULE_LECTURE_MS);
   });
@@ -4204,49 +4313,29 @@ function ligneAppel(a){
     +'</div>';
 }
 
-// La destination. Même espace d'identifiants que les appels, #sched-<id> :
-// aucune collision possible, la fiche de destination étant écartée de la
-// mesure, elle ne produit donc aucun appel. Plus aucun code ne va chercher cet
-// identifiant depuis le retrait du bouton « Voir dans le panneau ».
+// ── LA LIGNE DE LA DESTINATION N'EST PLUS ───────────────────────────────────
+// CE QUI VIVAIT ICI : ligneRendezVous, la ligne qui fermait la liste des appels.
+// Elle se posait au rebroussement du trajet, portait le nom de la destination,
+// son point cyan dans une colonne sans rang (on ne se téléphone pas un
+// rendez-vous déjà pris), l'heure du rendez-vous obtenu, et sa date en dessous.
+// Elle avait déjà perdu son heure de sortie, qui n'était qu'une addition sans
+// fondement, et sa colonne d'heure de passage.
 //
-// ELLE N'EST PAS UN APPEL, ET SA COLONNE DE GAUCHE LE DIT. Les lignes d'appel y
-// portent leur rang ; celle-ci n'en a pas, on ne se téléphone pas un rendez-vous
-// déjà pris. Elle garde son point, rangé dans la même colonne de 16 px (cf.
-// .sched-slot) pour que les deux sortes de lignes s'alignent sur le même bord.
-// La colonne d'heure qui la précédait est partie avec celle des lignes d'appel.
+// POURQUOI ELLE PART. Les rendez-vous à venir se lisent maintenant EN TÊTE du
+// panneau, en permanence, et celui qui est préparé y porte son rail, son nom,
+// son heure et sa date (cf. renderPanel). Cette ligne redisait les quatre, deux
+// blocs plus bas, dans le même panneau et sous le même identifiant. Un doublon
+// n'apprend rien et coûte une ligne de liste.
+// CE QU'ELLE DISAIT EN PROPRE, « après ces appels vous y êtes », n'est pas
+// perdu : le panneau se lit de haut en bas, du rendez-vous préparé aux appels
+// que sa route croise, et cet ordre le dit mieux qu'une ligne de fin.
 //
-// SON HEURE RESTE, ET ELLE EST LA SEULE DE LA JOURNÉE. Les lignes d'appel n'en
-// portent plus aucune (cf. ligneAppel) ; celle-ci porte un rendez-vous pris, à
-// l'heure dite. C'est un FAIT, et sa date en est un autre : les deux restent.
-//
-// L'HEURE DE SORTIE, ELLE, EST PARTIE. Elle se lisait à côté, « sortie vers
-// 15h00 », et elle n'était qu'une addition : l'heure du rendez-vous plus une
-// durée réglée d'avance. Or cette durée ne s'estime pas. Si un second
-// rendez-vous est décroché derrière, l'abonné écourte le premier, et c'est le
-// rendez-vous décroché qui fixe la sortie, jamais un réglage posé d'avance. Une
-// heure de sortie affichée avant l'appel est donc une prévision que rien ne
-// fonde. La ligne ne dit plus que ce qu'elle sait.
-// Le vêtement ne change pas : la même colonne que les lignes d'appel, en cyan
-// plutôt qu'en noir. La date reste en dessous, sans son heure, qui est dite
-// au-dessus.
-function ligneRendezVous(){
-  var c=couloirRdv;
-  var na=nextActionOf(c.card);
-  var st=na?actionStyle(na.type):actionStyle('rdv');
-  var heure=na?(na.hour||'14:00'):null;
-  var quand=heure?fmtHeure(minutesDe(heure)):'Heure inconnue';
-  return '<div class="sched-item" id="sched-'+c.id+'" style="border-color:#0BBCD4;background:rgba(11,188,212,.06);cursor:pointer;transition:box-shadow .3s" onclick="flyTo(\''+c.id+'\')">'
-    +'<div class="sched-slot"><div class="sched-dot" style="background:#0BBCD4"></div></div>'
-    +'<div class="sched-info"><div class="sched-name">'+esc(nomsCarte(c.card).titre)+'</div>'
-    +'<div class="sched-creneaux" style="color:#0BBCD4">'+quand+'</div>'
-    +'<div class="sched-meta" style="color:'+st.color+';font-weight:600">'+st.label+(na?' · '+formatRdvDate(na.date.slice(0,10)):'')+'</div>'
-    +'</div>'
-    +'<div class="sched-badge" style="background:rgba(11,188,212,.12);color:#0BBCD4">RDV</div>'
-    +'</div>';
-}
+// CE QUI PART AVEC ELLE, faute d'un autre appelant : minutesDe et fmtHeure, qui
+// ne servaient qu'à composer son heure, et les trois règles de style qui
+// l'habillaient, .sched-slot, .sched-creneaux et .sched-dot. fmtDuree reste, la
+// durée du trajet aller-retour se disant toujours sous le curseur de l'encart et
+// au toast (cf. ouvrirLeRayon).
 
-function minutesDe(hhmm){var p=String(hhmm).split(':');return parseInt(p[0],10)*60+(parseInt(p[1],10)||0);}
-function fmtHeure(min){min=((min%1440)+1440)%1440;return String(Math.floor(min/60)).padStart(2,'0')+'h'+String(min%60).padStart(2,'0');}
 function fmtDuree(min){
   if(min<60) return min+' min';
   var m=min%60;

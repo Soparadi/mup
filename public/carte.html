@@ -2990,72 +2990,7 @@ function lancerCouloir(){
       if(!route.routes||!route.routes.length){echecDeLaRoute('Le calculateur ne rend aucun itinéraire.');return;}
       var demi=demiTrajet(route.routes[0],[rdv.latlng[1],rdv.latlng[0]]);
       if(!demi){echecDeLaRoute('L\'itinéraire rendu ne se laisse pas replier.');return;}
-      // Le tracé précédent a été retiré par clearTourPlan en tête de lancerCouloir.
-      routeLine=L.geoJSON({type:'LineString',coordinates:demi.ligne},{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
-      trajetMoities=demi.moities;
-      couloirLigne=demi.ligne;
-
-      couloirRdv={id:String(rdvChoisi),card:rdv.card,latlng:rdv.latlng};
-      couloirCandidats=fichesDuCouloir(demi.ligne);
-
-      renderCouloir();
-      // AVANT rafraichirLeRayon, qui la lit pour écrire sa ligne : la durée est
-      // le seul des deux nombres du temps du rayon qui vienne du calcul et non
-      // du curseur, et elle doit être posée quand ce temps se dégèle.
-      couloirDuree=demi.duration;
-      // La route est mesurée : le temps du rayon peut se dégeler et écrire son
-      // compte. Sans effet quand l'encart est retiré, ce qui est le cas de la
-      // seconde voie, le bouton « Préparer » du panneau.
-      rafraichirLeRayon();
-
-      // Le panneau s'ouvre parce qu'il a maintenant quelque chose à montrer.
-      // Plus de test d'ouverture avant l'appel : ouvrirPanneau est gardée par son
-      // propre état.
-      ouvrirPanneau();
-      // Différé de 400 ms : le trajet peut avoir été effacé entretemps par un
-      // second calcul lancé dans la foulée, et le panneau
-      // finit de s'ouvrir, son map.invalidateSize passant à 300 ms.
-      // LA CARTE SE CADRE ICI SUR TOUT LE TRAJET, DU DÉBUT À LA FIN, et elle ne
-      // bougera plus : le déroulé rejoue le même cadrage sur les mêmes bornes,
-      // ce qui ne déplace rien (cf. derouler).
-      // PAR L'ARBITRE, ET NON PAR UN fitBounds POSÉ À CÔTÉ DE LUI. Le cadrage
-      // global du portefeuille attend son dernier géocodage, donc rien de borné,
-      // et il retombait par-dessus celui-ci sans que le drapeau l'en empêche
-      // (cf. ARBITRE DE CADRAGE).
-      // HORS ENCART, C'EST AUSSI ICI QUE LA JOURNÉE SE DÉROULE. Le bouton
-      // « Préparer » du panneau ne lève aucun voile : il n'y a pas de « Voir la
-      // liste » pour la révéler, et le déroulé part donc une fois la carte cadrée.
-      // Sous encart c'est validerLeRayon qui le lance, à la sortie du dernier
-      // temps, et le voile tombe juste avant.
-      setTimeout(function(){
-        if(!routeLine) return;
-        // Le déroulé a déjà pris la main, l'abonnée étant sortie de l'encart
-        // avant ces 400 ms : il a cadré lui-même sur les mêmes bornes, et le
-        // relancer d'ici le ferait repartir du départ.
-        if(derouleActif) return;
-        cadrerSurLeTrajet(routeLine.getBounds());
-        if(!estOuvert('mesTempsRayon')) derouler();
-      },400);
-      // LE RÉSULTAT NE SE DIT QU'UNE FOIS, ET PAS PAR-DESSUS L'ENCART. Ce toast
-      // date du temps où le calcul était le geste final de la préparation. Il ne
-      // l'est plus : le réglage du rayon vient après lui, et le toast passe
-      // devant le voile (cf. body.mise-en-service .toast). L'abonnée réglerait
-      // son curseur entre un compte qui suit sa main et un compte figé au défaut
-      // qui le contredit. Sous l'encart, c'est le temps du rayon qui dit les deux
-      // nombres, et lui seul.
-      // IL GARDE TOUT SON SENS SUR LA SECONDE VOIE : le bouton « Préparer » du
-      // panneau lance le même calcul sans qu'aucun encart soit levé, et le
-      // résultat doit alors se dire quelque part. C'est le seul chemin où il
-      // parle encore.
-      // Les toasts d'ÉCHEC, eux, restent inconditionnels : ils disent une panne,
-      // pas un résultat, et renoncerAuRayon retire l'encart sur ces chemins.
-      if(!estOuvert('mesTempsRayon')){
-        // Des fiches, pas des passages : celle qu'on croise deux fois ne se
-        // rappelle qu'une, et la liste ne lui donne qu'une ligne.
-        var n=appelsDuRayon().length;
-        toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
-          +' · '+fmtDuree(Math.round(demi.duration/60))+' de trajet aller-retour');
-      }
+      poserLaJournee(rdv, demi.ligne, demi.moities, demi.duration);
     })
     .catch(function(err){
       attenteFinie();
@@ -3069,6 +3004,92 @@ function lancerCouloir(){
         ?('Le calculateur d\'itinéraire n\'a pas répondu en '+Math.round(COULOIR_ATTENTE_MS/1000)+' secondes.')
         :'Le calculateur d\'itinéraire est injoignable.');
     });
+}
+
+// ── CE QUI SUIT LA MESURE ───────────────────────────────────────────────────
+// TOUT L'AFFICHAGE D'UNE JOURNÉE, ET RIEN DE SA MESURE. Ce bloc vivait dans le
+// .then de lancerCouloir, à la suite immédiate de la réponse du calculateur :
+// il en est sorti tel quel, sans qu'une ligne change d'ordre ni de sens. Ce
+// qu'il reçoit est exactement ce que demiTrajet rend et que le .then lui passe
+// désormais — la géométrie repliée, ses deux moitiés, la durée de
+// l'aller-retour — plus la fiche de destination que lancerCouloir tient déjà.
+// SON SEUL APPELANT EST CE .then, et l'extraction ne change donc rien à
+// l'écran : elle donne un point d'entrée à l'affichage d'une journée, pour que
+// ce qui l'afficherait sans la remesurer emprunte le même chemin, au lieu d'en
+// ouvrir un second.
+// `rdvChoisi` SE LIT ENCORE ICI, comme avant, pour composer couloirRdv : la
+// destination est celle que la page tient au moment où la journée se pose, et
+// le `rdv` reçu est son entrée dans markers.
+// LE TOAST LIT couloirDuree PLUTÔT QUE LA DURÉE REÇUE, et c'est la même
+// seconde : la ligne qui la pose est deux blocs plus haut. Elle ne dépend plus
+// ainsi que de l'état de la page, comme le reste de ce qui s'affiche ici.
+function poserLaJournee(rdv, ligne, moities, duree){
+  // Le tracé précédent a été retiré par clearTourPlan en tête de lancerCouloir.
+  routeLine=L.geoJSON({type:'LineString',coordinates:ligne},{style:{color:'#1D1D1F',weight:3,dashArray:'8 6',opacity:0.7}}).addTo(map);
+  trajetMoities=moities;
+  couloirLigne=ligne;
+
+  couloirRdv={id:String(rdvChoisi),card:rdv.card,latlng:rdv.latlng};
+  couloirCandidats=fichesDuCouloir(ligne);
+
+  renderCouloir();
+  // AVANT rafraichirLeRayon, qui la lit pour écrire sa ligne : la durée est
+  // le seul des deux nombres du temps du rayon qui vienne du calcul et non
+  // du curseur, et elle doit être posée quand ce temps se dégèle.
+  couloirDuree=duree;
+  // La route est mesurée : le temps du rayon peut se dégeler et écrire son
+  // compte. Sans effet quand l'encart est retiré, ce qui est le cas de la
+  // seconde voie, le bouton « Préparer » du panneau.
+  rafraichirLeRayon();
+
+  // Le panneau s'ouvre parce qu'il a maintenant quelque chose à montrer.
+  // Plus de test d'ouverture avant l'appel : ouvrirPanneau est gardée par son
+  // propre état.
+  ouvrirPanneau();
+  // Différé de 400 ms : le trajet peut avoir été effacé entretemps par un
+  // second calcul lancé dans la foulée, et le panneau
+  // finit de s'ouvrir, son map.invalidateSize passant à 300 ms.
+  // LA CARTE SE CADRE ICI SUR TOUT LE TRAJET, DU DÉBUT À LA FIN, et elle ne
+  // bougera plus : le déroulé rejoue le même cadrage sur les mêmes bornes,
+  // ce qui ne déplace rien (cf. derouler).
+  // PAR L'ARBITRE, ET NON PAR UN fitBounds POSÉ À CÔTÉ DE LUI. Le cadrage
+  // global du portefeuille attend son dernier géocodage, donc rien de borné,
+  // et il retombait par-dessus celui-ci sans que le drapeau l'en empêche
+  // (cf. ARBITRE DE CADRAGE).
+  // HORS ENCART, C'EST AUSSI ICI QUE LA JOURNÉE SE DÉROULE. Le bouton
+  // « Préparer » du panneau ne lève aucun voile : il n'y a pas de « Voir la
+  // liste » pour la révéler, et le déroulé part donc une fois la carte cadrée.
+  // Sous encart c'est validerLeRayon qui le lance, à la sortie du dernier
+  // temps, et le voile tombe juste avant.
+  setTimeout(function(){
+    if(!routeLine) return;
+    // Le déroulé a déjà pris la main, l'abonnée étant sortie de l'encart
+    // avant ces 400 ms : il a cadré lui-même sur les mêmes bornes, et le
+    // relancer d'ici le ferait repartir du départ.
+    if(derouleActif) return;
+    cadrerSurLeTrajet(routeLine.getBounds());
+    if(!estOuvert('mesTempsRayon')) derouler();
+  },400);
+  // LE RÉSULTAT NE SE DIT QU'UNE FOIS, ET PAS PAR-DESSUS L'ENCART. Ce toast
+  // date du temps où le calcul était le geste final de la préparation. Il ne
+  // l'est plus : le réglage du rayon vient après lui, et le toast passe
+  // devant le voile (cf. body.mise-en-service .toast). L'abonnée réglerait
+  // son curseur entre un compte qui suit sa main et un compte figé au défaut
+  // qui le contredit. Sous l'encart, c'est le temps du rayon qui dit les deux
+  // nombres, et lui seul.
+  // IL GARDE TOUT SON SENS SUR LA SECONDE VOIE : le bouton « Préparer » du
+  // panneau lance le même calcul sans qu'aucun encart soit levé, et le
+  // résultat doit alors se dire quelque part. C'est le seul chemin où il
+  // parle encore.
+  // Les toasts d'ÉCHEC, eux, restent inconditionnels : ils disent une panne,
+  // pas un résultat, et renoncerAuRayon retire l'encart sur ces chemins.
+  if(!estOuvert('mesTempsRayon')){
+    // Des fiches, pas des passages : celle qu'on croise deux fois ne se
+    // rappelle qu'une, et la liste ne lui donne qu'une ligne.
+    var n=appelsDuRayon().length;
+    toast((n?n+' fiche'+(n>1?'s':'')+' à appeler':'Personne sur la route')
+      +' · '+fmtDuree(Math.round(couloirDuree/60))+' de trajet aller-retour');
+  }
 }
 
 // ── UNE SEULE ROUTE, PARCOURUE DEUX FOIS ──

@@ -253,10 +253,11 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    SEIZE ET PAS VINGT tenait au seuil de regroupement, et ce seuil n'a plus
    cours ici : sous couloir la carte ne regroupe RIEN (cf.
    numeroterLesMarqueurs), aucune pastille ne peut donc mordre un chiffre, et
-   l'arithmétique du 30 px ne contraint plus rien. Seize demeure pour ce qu'il
-   vaut à l'écran, non parce qu'un seuil l'impose. Le chiffre suit : 9 px
-   jusqu'à 99, 7 px au-delà, où trois chiffres tiennent encore dans les 12 px
-   intérieurs du disque.
+   l'arithmétique du 30 px ne contraint plus rien. L'éventail des marqueurs
+   confondus n'en rétablit aucune : il écarte les disques au lieu de les avaler
+   (cf. eventailler). Seize demeure pour ce qu'il vaut à l'écran, non parce
+   qu'un seuil l'impose. Le chiffre suit : 9 px jusqu'à 99, 7 px au-delà, où
+   trois chiffres tiennent encore dans les 12 px intérieurs du disque.
 
    .sched-slot est la même colonne, vide de rang : la ligne du rendez-vous s'y
    range avec son point, pour que les deux sortes de lignes s'alignent sur le
@@ -996,6 +997,12 @@ function createMupMarker(color){
 // du disque de rang de la liste, celle qui fait lire le même objet des deux
 // côtés de l'écran, et rien dans ce lot ne demandait de la revoir.
 //
+// IL COMMANDE À SON TOUR, SANS ÊTRE COMMANDÉ. Ses 16 px plus deux bords blancs
+// de 2 px font un disque de 20 px à l'écran, et c'est cette largeur qui fixe le
+// rayon minimal d'un amas de l'éventail : deux voisins sur un cercle de rayon R
+// sont distants de 2 R sin(pi / n), et il faut 20 px pour que deux disques ne
+// se touchent pas (cf. eventailler).
+//
 // LE COÛT EN TEMPS EST NUL, mesuré au banc sur 480 marqueurs, MarkerCluster
 // 1.5.3, trois tirs médians : reposer l'icône des 480 coûte 4,8 ms quand ils
 // sont posés un à un, ce qui est désormais leur état sous couloir. Un vidage
@@ -1103,12 +1110,19 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
 //
 // SON DOMAINE S'ARRÊTE AU COULOIR. Tout ce qui précède vaut pour le
 // portefeuille entier, six cents fiches sans rang ni ordre, où rassembler les
-// points confondus est le seul moyen de rendre la carte lisible. Sous couloir
-// il n'y a plus ni six cents fiches ni points anonymes : une dizaine de fiches
-// numérotées dont chaque rang doit se lire, et une pastille les avalerait
-// justement au moment où la carte doit prouver la liste. Les retenues quittent
-// donc le groupe et se posent à nu sur la carte, à tous les niveaux de zoom ;
-// elles y reviennent à la sortie (cf. numeroterLesMarqueurs).
+// points confondus dans une pastille est ce qui rend la carte lisible. Sous
+// couloir il n'y a plus ni six cents fiches ni points anonymes : une dizaine de
+// fiches numérotées dont chaque rang doit se lire, et une pastille les
+// avalerait justement au moment où la carte doit prouver la liste. Les retenues
+// quittent donc le groupe et se posent à nu sur la carte, à tous les niveaux de
+// zoom ; elles y reviennent à la sortie (cf. numeroterLesMarqueurs).
+//
+// LES POINTS CONFONDUS NE DISPARAISSENT PAS AVEC LA PASTILLE, et sous couloir
+// c'est l'éventail qui les traite (cf. eventailler) : au lieu d'être avalés,
+// les marqueurs confondus s'écartent en cercle autour de leur barycentre, et
+// une ligne fine rattache chacun à sa position réelle. Deux réponses au même
+// problème, chacune dans son domaine : la pastille là où le nombre compte, le
+// cercle là où chaque rang doit rester lisible.
 var ficheGroupe = L.markerClusterGroup({
   maxClusterRadius: 30,
   showCoverageOnHover: false,
@@ -2054,6 +2068,10 @@ function ouvrirLeRayon(){
 // AUCUNE CADENCE ENTRE LES DEUX, et c'est mesuré : un pas de curseur coûte
 // 0,4 ms de carte sur six cents fiches (cf. numeroterLesMarqueurs). La carte
 // suit la main aussi directement que le compte.
+// L'ÉVENTAIL S'AJOUTE À CE PAS DEPUIS, sans en changer l'ordre : sa part vaut
+// 0,8 ms en médiane au zoom 11 sur cent quatre-vingt-une fiches retenues, 4,7 ms
+// sur six cents, et elle tombe à rien quand le pas ne déplace aucun amas (cf.
+// eventailler).
 // La garde sur couloirRdv dit qu'il y a une route à filtrer. Le curseur est figé
 // tant qu'elle n'est pas mesurée (cf. rafraichirLeRayon), donc inatteignable
 // autrement, mais la déréférence qui suit n'a pas à être une supposition.
@@ -3003,6 +3021,11 @@ function renderCouloir(){
 // cents. Elles arrivent une fois chacune, et « Effacer » à 17,3 ms coûte une
 // trame perdue sur un geste unique. Aucune cadence n'est posée pour autant : la
 // carte suit la main aussi directement que le compte.
+// L'ÉVENTAIL N'EST DANS AUCUNE DE CES COLONNES : il n'existait pas quand elles
+// ont été relevées. Il se pose après le versement, et son propre relevé est tenu
+// à part (cf. eventailler) ; la part qu'il ajoute au pas de curseur vaut de 0,6
+// à 4,7 ms selon la scène, et le cran de molette est le seul geste qu'il
+// alourdisse vraiment.
 // CE QUE LE MÊME BANC DIT DE LA LISIBILITÉ, et c'est ce qui décide : au zoom 6,
 // les 183 retenues rendaient 8 numéros visibles et 12 pastilles ; posées à nu
 // elles rendent 183 numéros et aucune pastille.
@@ -3074,7 +3097,8 @@ var rangsPoses={};
 // qu'il y a désormais trois sorts possibles :
 //   'groupe' hors couloir, la place par défaut, celle où placeCard verse ;
 //   'nu'     sous couloir, posé directement sur la carte avec son rang, ou
-//            sans rang pour la destination ;
+//            sans rang pour la destination, et écarté de quelques pixels de sa
+//            position vraie quand l'éventail le demande (cf. eventailler) ;
 //   'hors'   sous couloir, écarté par le rayon, absent de la carte.
 // Tenu à part de rangsPoses parce que les deux ensembles diffèrent : la
 // destination est 'nu' sans porter de rang.
@@ -3097,10 +3121,20 @@ function numeroterLesMarqueurs(appels,destination){
   // Les quatre listes se composent d'abord, la carte et le groupe ne les
   // reçoivent qu'ensuite : c'est tout l'écart entre 6,2 et 31,4 ms au tableau
   // ci-dessus, et il vaut toujours pour les bascules.
-  var aOter=[], aRetirer=[], aRendre=[], aPoser=[];
+  var aOter=[], aRetirer=[], aRendre=[], aPoser=[], nus=[];
   Object.keys(markers).forEach(function(id){
     var m=markers[id].marker;
     var vise=!destination ? 'groupe' : (voulus[id]||id===destination) ? 'nu' : 'hors';
+    // L'ÉVENTAIL SE REPLIE AVANT LE VERSEMENT, JAMAIS APRÈS. Un marqueur écarté
+    // qui rentrerait au groupe y entrerait sur sa position d'affichage, et le
+    // groupe le rangerait dans la pastille du voisin : ce serait rendre au
+    // registre le mensonge que le groupe avait justement remplacé. Le repli
+    // remet la position vraie, et il vaut aussi pour la fiche que le rayon
+    // écarte de la carte, qui reviendra un jour et doit revenir juste.
+    // La liste des nus se compose ici parce que c'est le seul endroit qui sache
+    // qui l'est : ceux que la boucle laisse passer sans rien faire en sont
+    // aussi.
+    if(vise==='nu') nus.push(id); else if(eventailEcarts[id]) replierUn(id);
     var etat=etatMarqueur[id]||'groupe';
     if(vise===etat) return;
     if(etat==='nu') aOter.push(m); else if(etat==='groupe') aRetirer.push(m);
@@ -3117,7 +3151,238 @@ function numeroterLesMarqueurs(appels,destination){
   if(aRetirer.length) ficheGroupe.removeLayers(aRetirer);
   if(aRendre.length) ficheGroupe.addLayers(aRendre);
   aPoser.forEach(function(m){ map.addLayer(m); });
+
+  // ET L'ÉVENTAIL SE REFAIT UNE FOIS TOUT POSÉ : il travaille sur des positions
+  // à l'écran, donc sur des marqueurs déjà à leur place.
+  eventailNus=nus;
+  eventailler();
 }
+
+// ── L'ÉVENTAIL DES MARQUEURS CONFONDUS ──────────────────────────────────────
+// SOUS COULOIR, LA CARTE NE REGROUPE PLUS, ET C'EST CE QUI POSE LE PROBLÈME QUE
+// L'ÉVENTAIL RÈGLE. Les fiches retenues sont posées à nu, chacune à sa
+// coordonnée exacte (cf. numeroterLesMarqueurs), et à l'échelle où l'on juge un
+// trajet elles se recouvrent : sur le couloir de Dinan relevé au lot précédent,
+// dix marqueurs sur treize se chevauchaient au cadrage de la journée, six
+// tombant exactement au même point. Sans rien faire on échangeait la pastille
+// mensongère contre un amas illisible, au niveau de zoom précisément où
+// l'abonnée regarde son voyage.
+//
+// LA MÉCANIQUE, EN TROIS TEMPS :
+//   les marqueurs dont les positions à l'écran sont confondues s'écartent en
+//   cercle autour de leur barycentre ;
+//   une ligne fine rattache chacun à sa position réelle, pour que l'écartement
+//   ne se lise pas comme un déplacement ;
+//   l'éventail se replie dès que le zoom les sépare naturellement.
+//
+// LA DONNÉE NE BOUGE PAS, ET C'EST LA CONDITION DE TOUT LE RESTE.
+// `markers[id].latlng` garde la coordonnée exacte, celle que lisent le cadrage,
+// les distances du panneau et la mesure du couloir. Seule la position Leaflet du
+// marqueur est déplacée, comme le regroupement déplace ses membres dans une
+// pastille : l'écart est un fait d'affichage, jamais un fait de registre. C'est
+// le décalage linéaire de ±0,0004° qui avait été chassé pour cette raison
+// précise (cf. le bloc du groupe), et il n'est pas question de le faire rentrer
+// par la fenêtre.
+//
+// 26 px POUR « CONFONDUS », 28 px DE RAYON. Ce sont des valeurs de mécanique et
+// non de direction artistique : elles se jugent à l'écran, et les faire bouger
+// ne demande rien d'autre que de changer les deux nombres ci-dessous.
+//
+// L'AMAS SE FORME AUTOUR D'UNE GRAINE, IL NE SE PROPAGE PAS DE PROCHE EN PROCHE.
+// Le marqueur de plus petit rang non encore pris ouvre un amas, et y entrent
+// tous ceux qui sont à moins de 26 px DE LUI. Un enchaînement transitif aurait
+// avalé, au zoom large, une file entière de marqueurs distants de 25 px les uns
+// des autres, et posé cinquante fiches sur un cercle de 28 px : ici l'amas fait
+// 52 px de diamètre au plus, par construction. La graine est le plus petit rang,
+// donc l'ordre d'appel, et l'éventail se lit dans le sens des aiguilles à partir
+// du haut ; la destination, qui n'a pas de rang, ouvre l'amas où elle tombe.
+// Le tri par rang rend aussi l'amas indépendant du zoom : sa composition ne
+// change que lorsqu'une distance à l'écran franchit le seuil, jamais parce que
+// le calcul a rencontré les fiches dans un autre ordre.
+//
+// LE RAYON GRANDIT QUAND L'AMAS L'EXIGE. Deux voisins sur le cercle sont
+// distants de 2 R sin(pi / n), et le disque numéroté fait 20 px bords blancs
+// compris (cf. createMupMarkerRang) : R ne peut donc pas descendre sous
+// 10 / sin(pi / n). Le calcul mord à partir de neuf fiches, où il demande
+// 29,2 px ; en deçà, les 28 px gouvernent seuls.
+//
+// ── CE QUE COÛTE LE RECALCUL, ET POURQUOI IL NE SAUTE PAS ───────────────────
+// L'ÉVENTAIL SE CALCULE EN PIXELS, DONC IL EST JUSTE À UN ZOOM ET FAUX AU
+// SUIVANT. Il se refait à chaque changement d'échelle, et à chaque rendu du
+// couloir. Le déplacement, lui, ne le touche pas : un panoramique ne change
+// aucune distance à l'écran, et le repère de calque que Leaflet recentre en
+// chemin n'entre pas dans le calcul, qui ne travaille que sur des écarts.
+//
+// RIEN NE DÉRIVE, parce que le calcul repart CHAQUE FOIS de la position vraie et
+// jamais de la position écartée. Cinquante recalculs d'affilée rendent la même
+// chose que le premier.
+//
+// RIEN NE TRAÎNE, parce que seul ce qui change est reposé. Chaque marqueur
+// écarté retient l'écart en pixels qu'on lui a donné et le zoom où on le lui a
+// donné : au pas de curseur, l'amas que le rayon n'a pas touché rend le même
+// écart au même zoom, et son marqueur n'est pas reposé du tout. Au changement de
+// zoom la clé tombe d'elle-même, et tout l'éventail se refait.
+//
+// ── CE QUE LE RECALCUL COÛTE, MESURÉ ────────────────────────────────────────
+// Banc Chrome 151 sans tête, Leaflet 1.9.4 et MarkerCluster 1.5.3 aux versions
+// chargées en tête, portefeuille synthétique déterministe de 600 fiches sur
+// 12 pôles français (35 % strictement confondues, 15 % isolées), carte de
+// 1 280 × 720, le code de cette page extrait tel quel. Un CRAN DE MOLETTE
+// ENTIER, éventail compris, médiane de neuf, en millisecondes : la même scène
+// est mesurée deux fois, avec le seuil à 26 px et avec le seuil à 0, qui
+// interdit tout amas et rend donc la carte d'avant. « Chevauchés » compte les
+// marqueurs posés à nu qui ont un voisin à moins de 20 px, la largeur du disque.
+//
+//   181 retenues, rayon par défaut      sans    avec   écartés   chevauchés
+//     zoom 6, la France entière          7,7    56,8      139     143 → 130
+//     zoom 9                             7,0    15,2       72      72 → 14
+//     zoom 11                            7,2    11,9       63      63 → 6
+//     zoom 13                            7,0     9,8       63      63 → 6
+//
+//   600 retenues, rayon maximal         sans    avec   écartés   chevauchés
+//     zoom 6                            26,7   243,4      542     546 → 493
+//     zoom 9                            32,4    49,5      283     246 → 160
+//     zoom 11                           24,9    31,5      201     201 → 124
+//
+// À L'ÉCHELLE OÙ L'ON JUGE LE TRAJET, L'ÉVENTAIL EST GRATUIT ET DÉCISIF. La
+// carte se resserre sur la journée dès que le couloir se pose, donc autour des
+// zooms 11 à 13 : le cran y passe de 7,0 à 9,8 ou 11,9 ms, et le chevauchement
+// de 63 marqueurs à 6. Trois à cinq millisecondes que personne ne verra, contre
+// une carte qui cesse de mentir sur ce qu'elle montre.
+//
+// LE PAS DE CURSEUR NE CHANGE PAS D'ORDRE : 0,9 à 5,0 ms selon la scène avec
+// l'éventail, 1,2 à 9,4 sans, la part de l'éventail allant de 0,6 à 4,7 ms en
+// médiane. C'est la clé qui le tient : un pas qui ne touche aucun amas ne repose
+// aucun marqueur et ne redessine pas le tracé.
+//
+// IL SE REPLIE BIEN QUAND LE ZOOM SÉPARE, et il ne se replie que là. Sur les 181
+// retenues du banc, les écartés tombent de 139 au zoom 6 à 85, 65, puis 63 aux
+// zooms 8, 10 et 12, et n'en bougent plus jusqu'au zoom 20 : ces 63 derniers
+// partagent tous une coordonnée exacte avec un autre écarté, et aucune échelle
+// ne les séparera jamais. C'est le cas que l'éventail existe pour traiter.
+//
+// LE ZOOM LARGE EST L'AUTRE BOUT, ET IL EST DIT ICI TEL QUEL : c'est là que
+// l'éventail coûte le plus et rend le moins. Au zoom 6, sur les retenues du
+// rayon par défaut, 56,8 ms au lieu de 7,7 pour faire tomber le chevauchement de
+// 143 à 130 seulement. Au rayon maximal, avec les six cents fiches retenues, le
+// cran passe de 26,7 à 243,4 ms, le chevauchement de 546 à 493, et le rayon
+// croissant projette un marqueur jusqu'à 160 px de son point. À cette échelle un
+// amas n'est plus une adresse partagée, c'est une ville vue de cinq cents
+// kilomètres : l'écarter en cercle ne la rend pas lisible, et la molette traîne.
+// CETTE SCÈNE EST SYNTHÉTIQUE et n'est pas tenue pour atteignable : il y faut une
+// route passant à moins de 50 km de six cents fiches réparties sur douze villes,
+// c'est-à-dire pas une journée de travail. RIEN N'EST POSÉ POUR LA BORNER, faute
+// d'arbitrage : ni plafond au nombre de fiches d'un amas, ni zoom en deçà duquel
+// l'éventail ne se déploierait pas. Les deux se tiennent en une ligne le jour où
+// l'écran le demandera.
+//
+var EVENTAIL_SEUIL_PX=26;
+var EVENTAIL_RAYON_PX=28;
+// La largeur du disque à l'écran, bords blancs compris : elle n'est pas un
+// réglage, elle est prise sur createMupMarkerRang, et c'est elle qui commande la
+// croissance du rayon.
+var EVENTAIL_DISQUE_PX=20;
+// Les fiches posées à nu, composées par numeroterLesMarqueurs qui est le seul à
+// savoir qui l'est.
+var eventailNus=[];
+// Les marqueurs effectivement écartés, id -> {cle, ll}. La clé porte l'écart en
+// pixels ET le zoom auquel il a été calculé : c'est elle qui dit si le marqueur
+// est déjà à sa place. `ll` est la coordonnée d'affichage qu'elle a produite,
+// gardée pour que le trait se redessine sans reprojeter ce qui n'a pas bougé.
+var eventailEcarts={};
+// UN SEUL TRACÉ POUR TOUS LES TRAITS. Une polyligne par marqueur, c'était un
+// élément SVG par fiche à créer, à déplacer et à détruire au moindre changement
+// d'échelle. Les deux versions ont été mesurées sur la même scène, la pire du
+// banc : 236,7 ms de recalcul pour 505 polylignes contre 191,0 pour un tracé
+// unique à segments multiples, soit un cinquième de moins, et le tracé lui-même
+// ne coûte jamais plus de 1,7 ms, ses 542 segments compris. Le gros de la
+// dépense est ailleurs, dans le repositionnement des marqueurs, et rien ici ne
+// l'évite (cf. le relevé ci-dessous).
+// LE PRIX EST LA COULEUR : un tracé ne porte qu'un trait, donc aucun segment ne
+// peut prendre celle de sa fiche. Le gris de la page (--muted2) les porte tous,
+// comme les jambes du regroupement portent le leur, et c'est aussi bien : le
+// trait dit un rattachement, il n'a pas à disputer sa couleur au disque qu'il
+// rattache.
+var eventailTrait=null;
+// LE TRACÉ NE SE REFAIT QUE S'IL A CHANGÉ. Un pas de curseur qui ne touche aucun
+// amas ne redessine rien du tout. Le drapeau existe parce que le repli passe
+// aussi par la boucle d'état, hors du calcul, et que ce qu'elle défait doit se
+// lire ici.
+var eventailSale=false;
+
+// LE REPLI D'UN SEUL : la position vraie revient dans le marqueur, et le tracé
+// est à refaire. Appelé par la boucle d'état pour ceux qui cessent d'être nus,
+// et par le calcul pour ceux que le zoom vient de séparer.
+function replierUn(id){
+  if(!eventailEcarts[id]) return;
+  delete eventailEcarts[id];
+  eventailSale=true;
+  var m=markers[id];
+  if(m) m.marker.setLatLng(m.latlng);
+}
+
+function eventailler(){
+  var z=map.getZoom(), pts=[];
+  eventailNus.forEach(function(id){
+    var m=markers[id];
+    if(m) pts.push({id:id, rang:rangsPoses[id]||0, p:map.latLngToLayerPoint(L.latLng(m.latlng))});
+  });
+  pts.sort(function(a,b){ return (a.rang-b.rang)||(a.id<b.id?-1:1); });
+
+  // Les amas d'abord, les positions ensuite, la carte en dernier : le calcul ne
+  // touche à rien tant qu'il n'a pas fini de décider.
+  var pris={}, cibles={}, seuil2=EVENTAIL_SEUIL_PX*EVENTAIL_SEUIL_PX;
+  for(var i=0;i<pts.length;i++){
+    if(pris[pts[i].id]) continue;
+    pris[pts[i].id]=1;
+    var amas=[pts[i]];
+    for(var j=i+1;j<pts.length;j++){
+      if(pris[pts[j].id]) continue;
+      var dx=pts[j].p.x-pts[i].p.x, dy=pts[j].p.y-pts[i].p.y;
+      if(dx*dx+dy*dy<seuil2){ pris[pts[j].id]=1; amas.push(pts[j]); }
+    }
+    if(amas.length<2) continue;
+    var cx=0, cy=0;
+    for(var k=0;k<amas.length;k++){ cx+=amas[k].p.x; cy+=amas[k].p.y; }
+    cx/=amas.length; cy/=amas.length;
+    var r=Math.max(EVENTAIL_RAYON_PX, (EVENTAIL_DISQUE_PX/2)/Math.sin(Math.PI/amas.length));
+    for(var q=0;q<amas.length;q++){
+      // Le premier au sommet, puis dans le sens des aiguilles.
+      var ang=-Math.PI/2+2*Math.PI*q/amas.length;
+      cibles[amas[q].id]={
+        p:amas[q].p,
+        dx:Math.round(cx+r*Math.cos(ang)-amas[q].p.x),
+        dy:Math.round(cy+r*Math.sin(ang)-amas[q].p.y)
+      };
+    }
+  }
+
+  var change=eventailSale;
+  eventailSale=false;
+  Object.keys(eventailEcarts).forEach(function(id){ if(!cibles[id]){ replierUn(id); change=true; } });
+  var traits=[];
+  Object.keys(cibles).forEach(function(id){
+    var c=cibles[id], cle=c.dx+','+c.dy+','+z, e=eventailEcarts[id], m=markers[id], ll;
+    if(e&&e.cle===cle){ ll=e.ll; }
+    else{
+      ll=map.layerPointToLatLng(L.point(c.p.x+c.dx, c.p.y+c.dy));
+      m.marker.setLatLng(ll);
+      eventailEcarts[id]={cle:cle, ll:ll};
+      change=true;
+    }
+    traits.push([m.latlng, ll]);
+  });
+  if(!change) return;
+  if(!traits.length){
+    if(eventailTrait){ map.removeLayer(eventailTrait); eventailTrait=null; }
+    return;
+  }
+  // Le tracé ne prend aucun clic, la bulle restant l'affaire du marqueur ; et il
+  // passe sous les disques, le plan des tracés étant sous celui des marqueurs.
+  if(eventailTrait) eventailTrait.setLatLngs(traits);
+  else eventailTrait=L.polyline(traits,{color:'#AEAEB2', weight:1, opacity:0.9, interactive:false}).addTo(map);
+}
+map.on('zoomend', eventailler);
 
 // La durée du rendez-vous, telle que le <select> la dit. Lue à chaque rendu, et
 // c'est ici qu'elle prend tout son sens : elle commande le SECOND CRÉNEAU de

@@ -2090,6 +2090,15 @@ function ouvrirLeRayon(){
 // La garde sur couloirRdv dit qu'il y a une route à filtrer. Le curseur est figé
 // tant qu'elle n'est pas mesurée (cf. rafraichirLeRayon), donc inatteignable
 // autrement, mais la déréférence qui suit n'a pas à être une supposition.
+//
+// CE QUE LA CARTE MONTRE PENDANT CE RÉGLAGE A CHANGÉ, ET LE COMPTE NON.
+// Le curseur ne vit que dans l'encart, donc avant le déroulé, et le calcul a
+// vidé la carte sur ses deux bornes en partant (cf. lancerCouloir) : la ligne
+// ci-dessous s'exécute bien à chaque pixel, ne trouve aucune fiche révélée et ne
+// repose que la destination. La carte ne se resserre donc plus sous la main,
+// elle attend la route. Ce qui répond au geste, c'est le compte, et il dit la
+// journée entière à chaque pixel : c'est lui qui porte le réglage, et les rangs
+// que cette ligne pose sont ceux avec lesquels les fiches paraîtront.
 function reglerLeRayon(){
   var curseur=document.getElementById('depart-rayon');
   COULOIR_M=parseInt(curseur.value,10)||COULOIR_DEFAUT_M;
@@ -2148,8 +2157,12 @@ function phraseDuCompte(){
 // à chaque pixel ; il ne reste qu'à rendre la liste et à retirer le voile.
 // PUIS LA JOURNÉE SE DÉROULE, et c'est ici sa place : le voile vient de tomber,
 // la carte est enfin visible en entier, et c'est l'instant où l'abonnée la
-// regarde. L'ÉTAT FINAL EST POSÉ AVANT LA MISE EN SCÈNE, jamais après : si quoi
-// que ce soit interrompt le déroulé, ce qui reste à l'écran est déjà juste.
+// regarde. LA LISTE ENTIÈRE EST COMPOSÉE AVANT LA MISE EN SCÈNE, jamais après :
+// si quoi que ce soit interrompt le déroulé, ce qui se lit à droite est déjà
+// juste. LA CARTE, ELLE, EST VIDE DE CANDIDATES depuis le lancement du calcul,
+// et c'est la route qui l'emplit (cf. lancerCouloir) : une interruption la rend
+// d'un coup, par le renderCouloir de finirLeDeroule, qui travaille alors sans
+// rien retenir.
 function validerLeRayon(){
   renderCouloir();
   retirerEncartDepart();
@@ -2186,6 +2199,15 @@ function renoncerAuRayon(){
 // renderPanel, donc par-dessus lui, et le prochain rendu du panneau ou du
 // couloir l'emporte. Un message d'échec n'a pas à durer plus que sa cause.
 function echecDeLaRoute(motif){
+  // LA CARTE REVIENT D'ABORD. Le calcul l'avait vidée sur ses deux bornes en
+  // partant (cf. lancerCouloir), en gage d'une route qui allait la repeupler
+  // fiche à fiche. Cette route n'existera pas : laisser le portefeuille caché
+  // derrière un message d'échec serait retirer à l'abonnée, au moment où elle
+  // n'obtient rien, ce qu'elle avait avant de demander. Une liste vide et
+  // aucune destination, la même façon qu'« Effacer » de dire qu'il n'y a plus
+  // de couloir (cf. numeroterLesMarqueurs).
+  fichesRevelees=null;
+  numeroterLesMarqueurs([]);
   renoncerAuRayon();
   toast(motif);
   ouvrirPanneau();
@@ -2599,6 +2621,26 @@ function lancerCouloir(){
   // suivante ne soit pas une supposition.
   if(!rdv) return;
   clearTourPlan();
+
+  // LA CARTE SE VIDE ICI, AU LANCEMENT, ET NON À L'ARRIVÉE DE LA ROUTE.
+  // LA ROUTE RÉVÈLE LES FICHES, elle ne les trouve pas déjà posées. Le filtre
+  // tombait à la fin, quand renderCouloir numérotait : la carte gardait le
+  // portefeuille entier pendant toute la mesure, les fiches retenues
+  // paraissaient d'un bloc, et le déroulé courait ensuite sur des marqueurs
+  // qu'il n'avait plus rien à découvrir. Il tombe maintenant AU DÉPART, avant
+  // même que la requête parte. Ne restent à l'écran que les deux bornes du
+  // voyage : le point de départ, qui vit hors du groupe (cf. poserDepart), et la
+  // fiche du RENDEZ-VOUS, qui n'a pas à se découvrir puisqu'elle est l'objet du
+  // déplacement. Aucune candidate n'est posée, elles paraîtront une à une, à
+  // l'instant où le trait les croise (cf. revelerLaFiche).
+  // fichesRevelees S'ARME ICI, ET DE NULLE PART AILLEURS : tant qu'elle est
+  // levée, la carte ne porte que ce qui a déjà été découvert.
+  // LE PRIX EST D'UNE BASCULE DE PLUS sur un recalcul : clearTourPlan vient de
+  // rendre les six cents fiches au groupe, et la ligne suivante les en retire.
+  // Une fois par calcul, sur un geste unique, au tarif d'« Effacer » (cf. le
+  // relevé de numeroterLesMarqueurs).
+  fichesRevelees={};
+  numeroterLesMarqueurs([], String(rdvChoisi));
 
   // Le trajet : trois points de passage, départ → rendez-vous → départ, dont on
   // ne garde QU'UNE MOITIÉ, repliée (cf. demiTrajet). La journée est un
@@ -3058,6 +3100,10 @@ function renderCouloir(){
   // Le même rang, sur la carte, dans le marqueur de chaque fiche, et la carte
   // réduite à ces fiches-là plus la destination : ce qui se lit ici et ce qui se
   // voit à gauche sortent du même appelsDuRayon.
+  // PENDANT LA MISE EN SCÈNE, LA GAUCHE EST EN RETARD SUR LA DROITE, et c'est
+  // voulu : au premier rendu de la journée la carte vient d'être vidée par le
+  // lancement du calcul, et elle ne posera ces fiches qu'à mesure que le trait
+  // les croise (cf. fichesRevelees). Les rangs, eux, se posent tous ici.
   numeroterLesMarqueurs(appels, couloirRdv.id);
 
   // Un appel par fiche : la longueur de la liste EST le compte de fiches, il n'y
@@ -3098,10 +3144,19 @@ function renderCouloir(){
 // rendez-vous comprise. Rien de ce qui se voit à la fin ne dépend de la façon
 // dont on y est arrivé, ni du moment où l'on a coupé.
 //
-// CE QUI NE BOUGE PAS PENDANT LE DÉROULÉ : les marqueurs et leurs rangs, posés
-// par le rendu qui précède, et le compte de l'en-tête, qui dit la journée entière
-// et non l'avancement de la mise en scène. Le déroulé ne touche qu'au trait, aux
-// bulles et aux lignes de la liste.
+// LES MARQUEURS PARAISSENT AVEC LEURS LIGNES, ET C'EST LE CŒUR DE LA MISE EN
+// SCÈNE. La carte s'est vidée au lancement du calcul sur ses deux bornes (cf.
+// lancerCouloir) : chaque fiche du couloir se pose à l'instant où le trait
+// arrive à sa hauteur, juste avant que sa bulle s'ouvre, et le trait ne repart
+// qu'une fois sa ligne posée à droite. La route révèle les fiches.
+// ET CE QUI EST RÉVÉLÉ RESTE. Une fiche découverte fait partie de la journée :
+// la faire disparaître au temps suivant effacerait le travail à mesure qu'il se
+// fait. La carte se peuple, elle ne défile pas.
+// LES RANGS, EUX, NE BOUGENT PAS : ils sont posés par le rendu qui précède, sur
+// la journée entière, et une fiche paraît avec son numéro définitif. Le compte
+// de l'en-tête ne bouge pas davantage, il dit la journée et non l'avancement de
+// la mise en scène. Le déroulé ne touche donc qu'au trait, aux marqueurs qu'il
+// découvre, aux bulles et aux lignes de la liste.
 var DEROULE_TRAIT_MS=600;    // le trait court du dernier arrêt jusqu'au suivant
 var DEROULE_LECTURE_MS=1100; // la bulle reste ouverte, le temps de la lire
 var DEROULE_POSE_MS=300;     // elle se referme, la ligne se pose, on enchaîne
@@ -3128,11 +3183,55 @@ var derouleD=0;
 // dont l'arrêt est le rendez-vous.
 var derouleTemps=[];
 var derouleRang=0;
+// CE QUI A DÉJÀ ÉTÉ RÉVÉLÉ, id -> true, et null hors mise en scène.
+// LES DEUX ÉTATS DE LA CARTE SE LISENT DANS CETTE SEULE VARIABLE. À null, elle
+// porte tout ce que le rayon retient : c'est l'état ordinaire, celui du curseur
+// et celui d'après le déroulé. Armée, elle borne ce que la carte porte à ce que
+// la route a déjà croisé, la destination mise à part, qui n'est pas une
+// candidate et paraît dès le premier instant.
+// ELLE S'ARME AU LANCEMENT DU CALCUL, PAS AU DÉPART DU DÉROULÉ : entre les deux
+// il y a la mesure de la route, et parfois le réglage du rayon sous encart, et
+// la carte doit rester vide tout du long. Elle se désarme partout où le déroulé
+// s'arrête ou ne part pas : arreterLeDeroule, toutRevele, et l'échec de la
+// route.
+var fichesRevelees=null;
+
+// UNE FICHE PARAÎT, à l'instant où le trait arrive à sa hauteur. Le rendu de la
+// carte est relu en entier plutôt que le seul marqueur ajouté :
+// numeroterLesMarqueurs ne touche que ce qui change (les rangs sont déjà posés,
+// la seule différence est cette fiche qui passe de « hors » à « nu »), et
+// l'éventail se refait sur l'amas qui grossit, ce qu'un ajout isolé ne saurait
+// pas faire. Un temps de déroulé dure deux secondes, la milliseconde que cela
+// coûte ne se dispute pas.
+function revelerLaFiche(id){
+  if(!fichesRevelees||fichesRevelees[id]) return;
+  fichesRevelees[id]=true;
+  if(couloirRdv) numeroterLesMarqueurs(appelsDuRayon(), couloirRdv.id);
+}
+
+// LA MISE EN SCÈNE REND LA MAIN : plus rien n'est retenu, la carte porte tout ce
+// que le rayon garde. C'est la sortie de ceux qui ne repeignent pas d'eux-mêmes,
+// les deux renoncements de derouler ; finirLeDeroule, lui, passe par
+// arreterLeDeroule puis par renderCouloir, qui repose la carte entière.
+// SANS EFFET SI RIEN N'ÉTAIT ARMÉ, et c'est ce qui la rend appelable partout.
+function toutRevele(){
+  var arme=!!fichesRevelees;
+  fichesRevelees=null;
+  if(!arme) return;
+  // Deux façons de rendre la carte, selon qu'il y a un couloir ou non : la
+  // seconde ne se rencontre pas (la carte n'a pu se vider que sous un calcul),
+  // mais une carte vidée doit pouvoir se remplir dans tous les cas, y compris
+  // celui qu'on n'a pas su nommer.
+  if(couloirRdv) numeroterLesMarqueurs(appelsDuRayon(), couloirRdv.id);
+  else numeroterLesMarqueurs([]);
+}
 
 // LE DÉPART DU DÉROULÉ. Ses deux appelants sont les deux façons dont la liste se
 // révèle : validerLeRayon sous encart, lancerCouloir hors encart.
 function derouler(){
-  if(!couloirRdv||!couloirLigne||couloirLigne.length<3) return;
+  // Pas de route à parcourir : la carte, vidée au lancement, doit revenir à ce
+  // que le rayon retient, faute de quoi la journée resterait invisible.
+  if(!couloirRdv||!couloirLigne||couloirLigne.length<3){ toutRevele(); return; }
   if(derouleActif) finirLeDeroule();
   // Le cadrage sur tout le trajet, avant que le trait ne parte, et la carte ne
   // bougera plus. Les mêmes bornes que celles de lancerCouloir : quand il est
@@ -3140,8 +3239,9 @@ function derouler(){
   if(routeLine) map.fitBounds(routeLine.getBounds(),{padding:[60,60]});
   var appels=appelsDuRayon();
   // Personne sur la route : il n'y a rien à mettre en scène, et la liste que le
-  // rendu vient de poser est déjà juste.
-  if(!appels.length) return;
+  // rendu vient de poser est déjà juste. La carte se rend quand même, ce qui ne
+  // repose ici que la destination, seule chose que le couloir garde.
+  if(!appels.length){ toutRevele(); return; }
 
   derouleChemin=couloirLigne.map(function(c){return [c[1],c[0]];});
   derouleCumul=longueursCumulees(derouleChemin);
@@ -3190,7 +3290,13 @@ function derouleEtape(){
     var m=markers[temps.appel.id];
     // Une fiche sans marqueur ne se rencontre pas, les appels sortant de markers.
     // Le temps se joue quand même, à vide : la ligne se posera comme les autres.
-    if(m) deroulePopup=ouvrirBulleFixe(m.marker);
+    // LA RÉVÉLATION PRÉCÈDE L'OUVERTURE, et pas seulement pour l'ordre du
+    // spectacle : openPopup ne rend rien sur un marqueur qui n'est pas sur la
+    // carte, et jusqu'à cette ligne il n'y était pas.
+    if(m){
+      revelerLaFiche(temps.appel.id);
+      deroulePopup=ouvrirBulleFixe(m.marker);
+    }
     derouleMinuteur=setTimeout(function(){
       if(!derouleActif) return;
       if(deroulePopup){deroulePopup.closePopup();deroulePopup=null;}
@@ -3286,6 +3392,10 @@ function ouvrirBulleFixe(marker){
 // n'existera plus à la ligne suivante et qu'il n'y a donc pas à redessiner.
 function arreterLeDeroule(){
   derouleActif=false;
+  // Ce qui retenait les fiches tombe ici, SANS REPEINDRE : les deux appelants
+  // savent quoi poser derrière, renderCouloir pour finirLeDeroule, une carte
+  // sans couloir du tout pour clearTourPlan.
+  fichesRevelees=null;
   if(derouleMinuteur){clearTimeout(derouleMinuteur);derouleMinuteur=null;}
   if(derouleTrame){cancelAnimationFrame(derouleTrame);derouleTrame=null;}
   if(derouleTrait){map.removeLayer(derouleTrait);derouleTrait=null;}
@@ -3417,12 +3527,26 @@ document.getElementById('map').addEventListener('click',function(){
 // les 183 retenues rendaient 8 numéros visibles et 12 pastilles ; posées à nu
 // elles rendent 183 numéros et aucune pastille.
 //
-// `destination` DIT S'IL Y A UN COULOIR, et c'est le seul état que cette
-// fonction consulte. Absente, elle rend la carte entière : c'est le chemin de
-// clearTourPlan, donc d'« Effacer », qui appelle avec une liste vide et sans
-// destination. La liste vide n'aurait pas suffi à le dire, un couloir dont le
-// rayon ne retient personne rendant lui aussi zéro appel, la destination restant
-// alors seule à l'écran.
+// `destination` DIT S'IL Y A UN COULOIR. Absente, cette fonction rend la carte
+// entière : c'est le chemin de clearTourPlan, donc d'« Effacer », qui appelle
+// avec une liste vide et sans destination. La liste vide n'aurait pas suffi à le
+// dire, un couloir dont le rayon ne retient personne rendant lui aussi zéro
+// appel, la destination restant alors seule à l'écran.
+//
+// ET `fichesRevelees` DIT CE QUI EST DÉJÀ DÉCOUVERT. C'est le second état que
+// cette fonction consulte, et le seul autre. La carte ne se peuple plus d'un
+// bloc : elle se vide au lancement du calcul, et la route la repeuple fiche à
+// fiche (cf. lancerCouloir et revelerLaFiche). Tant que cette variable est
+// armée, une fiche retenue par le rayon mais pas encore croisée reste 'hors' ;
+// elle passe 'nu' quand le trait arrive à sa hauteur, et n'en redescend plus,
+// une fiche découverte faisant désormais partie de la journée. À null, la mise
+// en scène est finie ou n'a pas eu lieu, et tout ce que le rayon retient est
+// posé : c'est l'état du curseur, qui répond au geste sans rien retenir.
+// LE RANG NE DÉPEND PAS DE LA RÉVÉLATION, et les deux boucles ci-dessous sont
+// séparées pour cela : `voulus` porte la journée entière, si bien qu'une fiche
+// paraît avec le numéro qu'elle gardera jusqu'au bout. Poser une icône sur un
+// marqueur hors carte ne coûte que ce que coûte setIcon, et rien ne s'en voit
+// avant qu'il paraisse.
 //
 // SEUL CE QUI CHANGE EST TOUCHÉ, les rangs comme les places. Deux relevés se
 // gardent d'un rendu à l'autre, et ils ne se recouvrent pas : rangsPoses dit qui
@@ -3511,7 +3635,9 @@ function numeroterLesMarqueurs(appels,destination){
   var aOter=[], aRetirer=[], aRendre=[], aPoser=[], nus=[];
   Object.keys(markers).forEach(function(id){
     var m=markers[id].marker;
-    var vise=!destination ? 'groupe' : (voulus[id]||id===destination) ? 'nu' : 'hors';
+    var vise=!destination ? 'groupe'
+      : (id===destination||(voulus[id]&&(!fichesRevelees||fichesRevelees[id]))) ? 'nu'
+      : 'hors';
     // L'ÉVENTAIL SE REPLIE AVANT LE VERSEMENT, JAMAIS APRÈS. Un marqueur écarté
     // qui rentrerait au groupe y entrerait sur sa position d'affichage, et le
     // groupe le rangerait dans la pastille du voisin : ce serait rendre au

@@ -694,15 +694,39 @@ body #mup-cookie-panel{z-index:60001}
       <span class="tour-title">À contacter</span>
       <span class="tour-count" id="tour-count">0 fiches</span>
     </div>
-    <!-- LE BLOC DE COMMANDES N'EST PLUS. Il ne portait qu'une chose, le
-         sélecteur de durée du rendez-vous, et cette durée ne s'estime pas :
-         si un second rendez-vous est décroché derrière, l'abonné écourte le
-         premier, et c'est le rendez-vous décroché qui fixe la sortie, jamais
-         un réglage posé d'avance. Le sélecteur parti, le bloc ne contenait
-         plus rien : une boîte vide entre l'en-tête et la liste aurait gardé
-         son filet et ses 10 px de haut sans rien dire. Le curseur de largeur
-         du couloir, qui vit aujourd'hui dans l'encart de mise en service, a
-         vocation à venir habiter ici : le bloc se réécrira alors avec lui. -->
+    <!-- LE BLOC DE COMMANDES EST DE RETOUR, ET IL NE PORTE QUE LE CURSEUR DU
+         RAYON. Le sélecteur de durée du rendez-vous qui l'occupait est parti
+         sans retour (cf. ligneRendezVous), et le commentaire qui gardait la
+         place annonçait ce curseur : il l'occupe. Ce que cela change : la
+         largeur du couloir se règle tant que la journée est affichée, alors
+         qu'elle ne se réglait que sous l'encart de mise en service et partait
+         avec lui. Élargir ou resserrer le champ d'action ne demande plus de
+         tout recommencer.
+         MÊME MÉCANIQUE D'AFFICHAGE QUE CELLE DU BLOC D'AVANT : fermé tant qu'il
+         n'y a pas de couloir (clearTourPlan le referme, et c'est l'état de
+         départ écrit ici), ouvert par le rendu qui pose la liste (cf.
+         renderCouloir). Même géométrie aussi : dix pixels de remplissage en
+         haut et en bas, quatorze de côté, un filet sous le bloc, et pas de
+         part dans la hauteur que la liste se partage.
+         DEUX VUES D'UN SEUL RÉGLAGE, celui-ci et celui de l'encart. COULOIR_M
+         est la valeur, chacun des deux la lit et l'écrit, et
+         poserLeRayonSurLeCurseur remet l'autre d'accord à chaque geste.
+         PAS DE BORNES CHIFFRÉES DANS CE BALISAGE, et ce n'est pas le choix de
+         l'encart : là-bas le curseur doit tenir sa mise en page avant toute
+         ouverture, ici le bloc est fermé jusqu'à son premier rendu, qui pose
+         les bornes depuis COULOIR_MIN_M et COULOIR_MAX_M. Rien à tenir, donc
+         rien à écrire deux fois.
+         LE COMPTE EST SOUS LE CURSEUR, dans la phrase que la page compose déjà
+         pour l'encart (cf. phraseDuCompte) : sans lui le curseur serait
+         aveugle, il dit combien de fiches le réglage retient.
+         margin-top:0, seul écart au vêtement de l'encart : les 22 px de
+         .mes-curseur l'écartaient d'un paragraphe qui n'existe pas ici, et ils
+         auraient laissé un blanc sous le filet de l'en-tête. -->
+    <div id="tour-controls" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input type="range" class="mes-curseur" id="tour-rayon" step="100" style="margin-top:0"
+             aria-label="Rayon autour de la route" aria-describedby="tour-rayon-compte" oninput="reglerLeRayonDuPanneau()">
+      <div class="mes-compte" id="tour-rayon-compte"></div>
+    </div>
     <div class="tour-body" id="tour-body"></div>
     <div class="tour-footer">
       <button class="tour-clear" onclick="clearTour()">Effacer</button>
@@ -2102,20 +2126,73 @@ function ouvrirLeRayon(){
 // autrement, mais la déréférence qui suit n'a pas à être une supposition.
 //
 // CE QUE LA CARTE MONTRE PENDANT CE RÉGLAGE A CHANGÉ, ET LE COMPTE NON.
-// Le curseur ne vit que dans l'encart, donc avant le déroulé, et le calcul a
-// vidé la carte sur ses deux bornes en partant (cf. lancerCouloir) : la ligne
-// ci-dessous s'exécute bien à chaque pixel, ne trouve aucune fiche révélée et ne
-// repose que la destination. La carte ne se resserre donc plus sous la main,
-// elle attend la route. Ce qui répond au geste, c'est le compte, et il dit la
-// journée entière à chaque pixel : c'est lui qui porte le réglage, et les rangs
-// que cette ligne pose sont ceux avec lesquels les fiches paraîtront.
+// CE CURSEUR-CI ne vit que dans l'encart, donc avant le déroulé (l'autre, celui
+// du panneau, vit après : cf. reglerLeRayonDuPanneau), et le calcul a vidé la
+// carte sur ses deux bornes en partant (cf. lancerCouloir) : la ligne du bas
+// s'exécute bien à chaque pixel, ne trouve aucune fiche révélée et ne repose que
+// la destination. La carte ne se resserre donc plus sous la main, elle attend la
+// route. Ce qui répond au geste, c'est le compte, et il dit la journée entière à
+// chaque pixel : c'est lui qui porte le réglage, et les rangs que cette ligne
+// pose sont ceux avec lesquels les fiches paraîtront.
+// L'AUTRE VUE SE MET D'ACCORD AU MÊME INSTANT, alors même qu'elle est derrière
+// le voile et que personne ne la regarde : elle sera juste à la seconde où le
+// voile tombera, et le rendu qui la lève n'aura rien à rattraper.
 function reglerLeRayon(){
-  var curseur=document.getElementById('depart-rayon');
-  COULOIR_M=parseInt(curseur.value,10)||COULOIR_DEFAUT_M;
-  var phrase=phraseDuCompte();
-  document.getElementById('depart-compte').innerHTML=phrase.html;
-  curseur.setAttribute('aria-valuetext', phrase.texte);
+  COULOIR_M=parseInt(document.getElementById('depart-rayon').value,10)||COULOIR_DEFAUT_M;
+  poserLeRayonSurLeCurseur('depart-rayon','depart-compte');
+  poserLeRayonSurLeCurseur('tour-rayon','tour-rayon-compte');
   if(couloirRdv) numeroterLesMarqueurs(appelsDuRayon(), couloirRdv.id);
+}
+
+// ── UN SEUL RÉGLAGE, DEUX VUES ───────────────────────────────────────────────
+// COULOIR_M EST LA VALEUR, ET LES DEUX CURSEURS N'EN SONT QUE DES VUES. Celui
+// de l'encart règle la préparation, celui du panneau règle la journée affichée ;
+// ils ne se répartissent pas le réglage, ils le montrent tous les deux. Poser
+// une vue, c'est y écrire la valeur courante et le compte qui en découle, et
+// c'est ce qui tient leur accord DANS LES DEUX SENS : chaque geste écrit
+// COULOIR_M puis repose l'autre vue.
+// LES BORNES AVANT LA VALEUR, et l'ordre n'est pas décoratif : un curseur qui
+// n'a pas encore reçu ses bornes est sur 0 à 100, et lui écrire 15000 le
+// raboterait à 100, valeur que le geste suivant relirait comme le réglage.
+// APPELABLE SUR UNE VUE ABSENTE, et c'est la garde du haut : le panneau et
+// l'encart vivent dans deux sous-arbres distincts, et rien n'oblige les deux à
+// être là. L'encart, lui, n'est jamais retiré du document, seulement masqué (cf.
+// retirerEncartDepart) : écrire dedans hors service ne vise rien et ne coûte rien.
+function poserLeRayonSurLeCurseur(idCurseur,idCompte){
+  var curseur=document.getElementById(idCurseur);
+  if(!curseur) return;
+  curseur.min=COULOIR_MIN_M;
+  curseur.max=COULOIR_MAX_M;
+  curseur.value=COULOIR_M;
+  var phrase=phraseDuCompte();
+  document.getElementById(idCompte).innerHTML=phrase.html;
+  curseur.setAttribute('aria-valuetext', phrase.texte);
+}
+
+// LE CURSEUR DU PANNEAU, QUI RÈGLE UNE JOURNÉE DÉJÀ AFFICHÉE. Même réserve et
+// même geste que celui de l'encart : la mesure a rangé chaque fiche à sa
+// distance à la route jusqu'au maximum du curseur (cf. fichesDuCouloir), et
+// refiltrer cette réserve ne rappelle personne. AUCUN APPEL AU CALCULATEUR
+// D'ITINÉRAIRE NE PART D'ICI, à aucun pixel.
+// IL DEMANDE LE RENDU, LÀ OÙ CELUI DE L'ENCART NE POSE QUE LA CARTE, et c'est
+// toute la différence entre les deux : sous l'encart la liste est cachée et se
+// pose à la sortie, ici elle est sous les yeux. renderCouloir refait la liste,
+// les rangs, le compte de l'en-tête, la carte, et repose cette vue-ci au passage
+// (c'est pourquoi elle n'est pas posée avant l'appel, seule l'autre l'est).
+// SI LE DÉROULÉ COURT, IL SE TERMINE, et c'est renderCouloir qui le décide :
+// son garde de tête retrouve ici l'appelant qu'il avait perdu. C'est la chose la
+// plus simple qui ne laisse pas la carte et la liste en désaccord. Pendant la
+// mise en scène la liste se pose ligne à ligne et la carte ne porte que les
+// fiches déjà croisées (cf. fichesRevelees) : changer le rayon sous ce régime
+// demanderait de renuméroter une liste partielle et de décider du sort des
+// fiches révélées qui sortent du rayon. Terminer le déroulé pose l'état final au
+// nouveau réglage, tracé complet et liste entière, exactement ce que la sortie
+// au clic pose déjà. La fiche révélée qui sort du rayon disparaît alors des deux
+// côtés à la fois, comme n'importe quelle fiche que le rayon écarte.
+function reglerLeRayonDuPanneau(){
+  COULOIR_M=parseInt(document.getElementById('tour-rayon').value,10)||COULOIR_DEFAUT_M;
+  poserLeRayonSurLeCurseur('depart-rayon','depart-compte');
+  renderCouloir();
 }
 
 // LES DEUX ÉTATS DU TEMPS DU RAYON : la route se mesure encore, ou elle est
@@ -2150,8 +2227,28 @@ function rafraichirLeRayon(){
 // LE COMPTE, EN TOUTES LETTRES. Des fiches et non des passages : croiser deux
 // fois la même enseigne ne fait pas deux appels à passer, et c'est déjà la
 // forme que rend appelsDuRayon, un appel par fiche.
-// Le rayon est redit dans la même phrase, faute de quoi le nombre ne se
-// rapporterait à rien.
+// LE RAYON EST REDIT DANS LA MÊME PHRASE, faute de quoi le nombre ne se
+// rapporterait à rien : c'est le réglage qui vient de bouger sous la main, et
+// il n'est écrit nulle part ailleurs en toutes lettres. LA ROUTE, ELLE, N'Y EST
+// PLUS. Elle est le sujet de l'encart entier comme celui du panneau : là le
+// titre posé au-dessus du curseur demande jusqu'où l'on en sort, ici le panneau
+// ne montre que la journée d'une route et rien d'autre. La redire sous chaque
+// réglage coûtait la ligne sans rien apprendre.
+// LA MÊME PHRASE POUR LES DEUX VUES, raccourcie pour les deux : deux formes
+// selon le lieu feraient deux vérités pour un seul réglage.
+// CE QUE CELA REND, MESURÉ AU BANC, fontes Geist chargées, dans la ligne fixe
+// de .mes-compte : la queue coûtait 71,4 px, et la phrase entière débordait des
+// 251 px du panneau sur sept des neuf cas relevés. Raccourcie, aucun ne déborde
+// plus. Le plus large est le compte nul à la borne basse du curseur, « Aucune
+// fiche à moins de 500 m », 211,4 px, qui laisse 39,6 px de marge ; viennent
+// ensuite le compte nul aux écarts les plus larges en glyphes, 211,3 px, et
+// celui de la borne haute, 209,7. Le portefeuille entier à la borne haute,
+// « 600 fiches à moins de 50 km », tient en 193,5 px, et le réglage par défaut
+// à treize fiches en 176,9 : c'est le compte nul qui commande la largeur, pas
+// le nombre. Quatre chiffres ne la reprennent pas non plus, 204,7 px.
+// DANS L'ENCART LA PHRASE EST LA MÊME et sa ligne est large de 530 px, corps
+// déduit : le cas le plus large y laisse 318,6 px. Ce n'est pas là que le
+// problème se posait, et il ne s'y pose toujours pas.
 // DEUX FORMES DE LA MÊME PHRASE, écrites d'un seul jeu de morceaux : celle qui
 // se voit, où le nombre est gras, et celle qui s'entend, que le curseur porte en
 // aria-valuetext. Sans elle, une prise vocale annoncerait « 15 000 », valeur
@@ -2159,7 +2256,7 @@ function rafraichirLeRayon(){
 function phraseDuCompte(){
   var n=appelsDuRayon().length;
   var tete=n?(n+' fiche'+(n>1?'s':'')):'Aucune fiche';
-  var queue=' à moins de '+fmtEcart(COULOIR_M)+' de la route';
+  var queue=' à moins de '+fmtEcart(COULOIR_M);
   return {html:'<b>'+tete+'</b>'+queue, texte:tete+queue};
 }
 
@@ -2529,6 +2626,12 @@ function clearTourPlan(){
   couloirCandidats=[];
   couloirDuree=0;
   couloirAffiche=false;
+  // Le bloc du curseur se referme avec le trajet, et pour la même raison que les
+  // rangs partent : il réglerait la largeur d'un couloir qui n'existe plus, et
+  // son compte parlerait d'une route effacée. Il rouvrira au premier rendu de la
+  // journée suivante (cf. renderCouloir), sur le défaut que la ligne du dessus
+  // vient de reposer.
+  document.getElementById('tour-controls').style.display='none';
 }
 
 // ── LE CALCUL PART DE LUI-MÊME ───────────────────────────────────────────────
@@ -3120,14 +3223,15 @@ function renderCouloir(){
   // COURT. Un rendu complet au milieu de la mise en scène poserait toute la
   // liste d'un coup, et le déroulé continuerait d'y ajouter par-dessus. Ce qui
   // passe ici pendant qu'il court le TERMINE donc, et l'état final se pose.
-  // AUCUN APPELANT N'ATTEINT PLUS CETTE BRANCHE. Le sélecteur de durée du
-  // rendez-vous était le seul qui pût tomber là, et il n'est plus (cf.
-  // ligneAppel) : les trois appelants qui restent passent tous hors déroulé,
-  // validerLeRayon et lancerCouloir avant qu'il ne parte, finirLeDeroule le
-  // drapeau baissé. Le garde reste écrit : il coûte un test, et il tient la règle
-  // pour le prochain appelant, quel qu'il soit. Un rendu complet au milieu de la
-  // mise en scène poserait toute la liste d'un coup, et le déroulé continuerait
-  // d'y ajouter par-dessus.
+  // ET LE GARDE A DE NOUVEAU UN APPELANT CAPABLE DE L'ATTEINDRE : le curseur du
+  // rayon logé dans le panneau (cf. reglerLeRayonDuPanneau). Il est le seul, les
+  // trois autres passant tous hors déroulé, validerLeRayon et lancerCouloir avant
+  // qu'il ne parte, finirLeDeroule le drapeau baissé. Le sélecteur de durée du
+  // rendez-vous, qui tombait là autrefois, n'est plus (cf. ligneRendezVous).
+  // CE QUE LE CURSEUR PROVOQUE EN PASSANT ICI EST DONC LA FIN DU DÉROULÉ, au
+  // nouveau réglage : finirLeDeroule rend le tracé entier puis rappelle cette
+  // fonction, drapeau baissé, et l'état final se pose. C'est le même écran que la
+  // sortie au clic, et la carte comme la liste y disent le même rayon.
   if(derouleActif){ finirLeDeroule(); return; }
 
   var appels=appelsDuRayon();
@@ -3150,6 +3254,21 @@ function renderCouloir(){
   // a plus de doublon à écarter. Même endroit unique qu'au panneau RDV,
   // l'en-tête, où le titre « À contacter » dit maintenant de quoi il s'agit.
   document.getElementById('tour-count').textContent=appels.length+' à appeler';
+
+  // LE CURSEUR DU PANNEAU PARAÎT AVEC LA LISTE, et se range sur le réglage
+  // courant. C'est ici, et nulle part ailleurs, que sa vue se pose : tout ce qui
+  // affiche la liste passe par cette fonction, la fin du calcul comme la sortie
+  // de l'encart comme la fin du déroulé, et le bloc n'a donc pas d'autre porte.
+  // CE QU'IL MONTRE QUAND UNE PRÉPARATION REPART DU DÉFAUT : le défaut. Le bloc
+  // a été refermé par clearTourPlan, qui a remis COULOIR_M en même temps, et le
+  // premier rendu de la journée suivante le rouvre sur cette valeur-là avec le
+  // compte de cette journée-là. Aucune mémoire d'une préparation à l'autre, pas
+  // plus ici que dans l'encart.
+  // POSÉ À CHAQUE RENDU, y compris à chaque pixel de ce curseur : lui écrire la
+  // valeur qu'il porte déjà ne fait rien bouger sous la main.
+  document.getElementById('tour-controls').style.display='';
+  poserLeRayonSurLeCurseur('tour-rayon','tour-rayon-compte');
+
   couloirAffiche=true;
   retirerCercles();
 }

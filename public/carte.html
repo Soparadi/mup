@@ -95,10 +95,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .pop-days{font-size:10px;font-weight:600;color:var(--muted2);background:var(--surface);border-radius:4px;padding:2px 6px}
 .pop-stage{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;margin-top:6px}
 .pop-progress{display:flex;align-items:center;gap:2px;margin-top:8px}
-.pop-actions{display:flex;gap:6px;margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
-.pop-btn{flex:1;padding:5px 0;border-radius:7px;border:1px solid var(--border);background:var(--card);font-family:var(--font);font-size:10px;font-weight:600;cursor:pointer;color:var(--text);text-align:center;transition:all .12s}
-.pop-btn:hover{border-color:var(--text);background:var(--surface)}
-.pop-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
 
 /* USER LOCATION PULSE */
 @keyframes pulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(3);opacity:0}}
@@ -148,15 +144,15 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 /* ----------------------------------------------------------------------------
    LA FICHE RETENUE POUR LE TRAJET
    ----------------------------------------------------------------------------
-   Trois signaux se posent sur la même ligne et ne doivent pas se confondre :
+   Deux signaux se posent sur la même ligne et ne doivent pas se confondre :
    — le teintage par couleur de type d'action, qui dit « cette fiche porte un
      rendez-vous » et tient border-color et background en style en ligne ;
-   — le liseré de scrollToStop, qui dit « c'est celle que vous cherchiez » et
-     tient box-shadow, mais 1,5 s seulement ;
    — celui-ci, permanent, qui dit « c'est la destination du trajet ».
    D'où un rail plein en pseudo-élément : il ne touche ni border-color, ni
    background, ni box-shadow, et dessine une barre là où l'autre dessine un
-   contour. Il survit au clignotement, qui écrase puis rend le seul box-shadow.
+   contour. Le liseré de 1,5 s qui écrasait puis rendait box-shadow est parti
+   avec le bouton « Voir dans le panneau » qui le déclenchait ; le rail, lui,
+   n'a jamais dépendu de cette propriété.
    position:relative sur .retenue seule : la classe de base n'a aucun descendant
    en absolute à ancrer, et rien n'oblige à lui en donner un contexte.
 ---------------------------------------------------------------------------- */
@@ -1395,9 +1391,6 @@ function placeCard(c, clat, clng){
     +progressHtml(c.col)
     +(nextAct?'<div style="font-size:11px;color:var(--text);margin-top:8px;padding:6px 8px;background:var(--surface);border-radius:6px;font-weight:600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="'+actStyle.color+'" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+actStyle.label+' — '+formatRdvDate(nextAct.date.slice(0,10),nextAct.hour||'14:00')+'</div>':'')
     +(telAppel?'<div style="margin-top:8px;font-size:11px"><a href="tel:'+esc(window.MUPTel.lien(telAppel))+'" style="color:var(--blue);text-decoration:none;display:flex;align-items:center;gap:5px" onclick="event.stopPropagation()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'+esc(window.MUPTel.format(telAppel))+'</a></div>':'')
-    +'<div class="pop-actions">'
-    +'<button class="pop-btn" onclick="scrollToStop(\''+c.id+'\')">Voir dans le panneau</button>'
-    +'</div>'
     +'</div>';
   // offset : Leaflet pose l'apex de la pointe à « centre du marqueur + offset.y
   // − 10,5 px » (20 px de margin-bottom de .leaflet-popup, moins la hauteur
@@ -2313,11 +2306,14 @@ function renderPanel(){
     var labelColor=it.isRdv?actSt.color:'#6E6E73';
     // Même espace d'identifiants que les lignes du couloir (ligneAppel et
     // ligneRendezVous) : les deux rendus remplacent #tour-body en entier et ne
-    // coexistent jamais, donc pas de collision. C'est ce qui donne une cible à
-    // scrollToStop hors couloir. Le bouton ne va que sur les fiches à
-    // rendez-vous : le trajet se calcule vers un rendez-vous, un prospect n'en
-    // est jamais la destination. event.stopPropagation parce que le corps de la
-    // ligne garde flyTo, dans les deux états du bouton.
+    // coexistent jamais, donc pas de collision. Plus rien ne lit ces
+    // identifiants depuis le retrait du bouton « Voir dans le panneau », seul
+    // appelant de scrollToStop ; ils sont gardés parce qu'ils nomment la ligne
+    // et que la règle d'unicité vaut pour la suite. Le bouton de désignation,
+    // lui, ne va que sur les fiches à rendez-vous : le trajet se calcule vers
+    // un rendez-vous, un prospect n'en est jamais la destination.
+    // event.stopPropagation parce que le corps de la ligne garde flyTo, dans
+    // les deux états du bouton.
     var retenue=(rdvChoisi===it.id);
     return '<div class="tour-item'+(retenue?' retenue':'')+'" id="sched-'+it.id+'" style="cursor:pointer;'+(it.isRdv?'border-color:'+labelColor+';background:'+labelColor+'14':'')+'" onclick="flyTo(\''+it.id+'\')">'
       +'<div class="tour-num" style="background:'+col+'">'+(i+1)+'</div>'
@@ -2383,28 +2379,16 @@ function flyTo(id){
   ouvrirLaBulle(info.marker);
 }
 
-// Cible cherchée AVANT d'ouvrir le panneau : une fiche posée sur la carte mais
-// absente du panneau — hors des 30 km d'un RDV — n'y a pas de ligne, et ouvrir
-// pour ne rien montrer était l'échec silencieux. getElementById et non
-// querySelector : les identifiants portent un « : » qu'un sélecteur CSS
-// n'accepterait pas sans échappement.
-function scrollToStop(id){
-  var el=document.getElementById('sched-'+id);
-  if(!el){toast('Fiche absente du panneau');return;}
-  ouvrirPanneau();
-  el.scrollIntoView({behavior:'smooth',block:'center'});
-  el.style.boxShadow='0 0 0 2px var(--text)';
-  setTimeout(function(){el.style.boxShadow='';},1500);
-}
-
 // LE PANNEAU S'OUVRE, IL NE BASCULE PLUS. Le bouton « Actions » était la seule
 // bascule, et le seul endroit d'où une fermeture pouvait partir ; il est parti,
 // et avec lui la moitié « fermer » de cette fonction — la remise à zéro des
 // mises en évidence qui l'accompagnait, et le drapeau qu'elle posait.
 // Elle est GARDÉE PAR SON PROPRE ÉTAT : appelée deux fois, elle ne fait rien la
-// seconde. Ses trois appelants (autoShowRdv, scrollToStop, lancerCouloir)
-// testaient l'ouverture avant d'appeler ; ils peuvent continuer sans que la
-// garde d'ici soit de trop, aucun d'eux n'ayant à connaître les deux autres.
+// seconde. Ses deux appelants (autoShowRdv, lancerCouloir) testaient
+// l'ouverture avant d'appeler ; ils peuvent continuer sans que la garde d'ici
+// soit de trop, ni l'un ni l'autre n'ayant à connaître son voisin. Un
+// troisième, scrollToStop, est parti avec le bouton « Voir dans le panneau »
+// qui l'appelait.
 // resetOverlays n'est pas perdue : le clic sur le fond de carte et « Effacer »
 // l'appellent toujours.
 function ouvrirPanneau(){
@@ -3042,9 +3026,9 @@ function fichesDuCouloir(ligne){
 // numérotation parce qu'ils la refont tous les deux.
 //
 // UN IDENTIFIANT PAR LIGNE, sans suffixe désormais : une fiche, une ligne, un
-// #sched-<id>. Le suffixe « --2 » qu'un second passage portait n'a plus d'objet,
-// et scrollToStop comme le bouton « Voir dans le panneau » atteignent toujours
-// la fiche, quel que soit le rayon.
+// #sched-<id>. Le suffixe « --2 » qu'un second passage portait n'a plus
+// d'objet. Personne ne vise plus ces identifiants depuis le retrait du bouton
+// « Voir dans le panneau » : ils nomment la ligne, et rien de plus.
 //
 // L'ÉCART EST LE PLUS COURT DES DEUX. Les deux moitiés se superposant depuis
 // demiTrajet, les deux passages le portent égal ; le minimum est pris quand
@@ -4123,10 +4107,9 @@ function creneauxAProposer(a){
 }
 
 // La destination. Même espace d'identifiants que les appels, #sched-<id> :
-// scrollToStop vise celui-là, et le bouton « Voir dans le panneau » de
-// l'infobulle doit atteindre le rendez-vous comme le reste. Aucune collision
-// possible : la fiche de destination est écartée de la mesure, elle ne produit
-// donc aucun appel.
+// aucune collision possible, la fiche de destination étant écartée de la
+// mesure, elle ne produit donc aucun appel. Plus aucun code ne va chercher cet
+// identifiant depuis le retrait du bouton « Voir dans le panneau ».
 //
 // ELLE N'EST PAS UN APPEL, ET SA COLONNE DE GAUCHE LE DIT. Les lignes d'appel y
 // portent leur rang ; celle-ci n'en a pas, on ne se téléphone pas un rendez-vous

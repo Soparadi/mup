@@ -2678,11 +2678,19 @@ function lancerCouloir(){
   // PAS ouvrirLaBulle : elle interroge le groupe et zoome pour éclater une
   // pastille, ce qui déplacerait la carte au moment précis où ce marqueur vient
   // d'en sortir.
-  // LEAFLET NE TIENT QU'UNE BULLE OUVERTE À LA FOIS, et c'est accepté : quand le
-  // trait atteint la première fiche du couloir, sa bulle chasse celle-ci. Rien à
-  // contourner, ni popup détachée, ni autoClose:false, ni seconde couche. Cette
-  // bulle tient de l'affichage jusqu'au premier temps du déroulé, la mise en
-  // scène reprend la main ensuite.
+  // ET ELLE NE TOMBE PLUS SOUS CELLE DE LA PREMIÈRE CANDIDATE. Leaflet ne tient
+  // qu'une bulle courante : Popup.openOn retire celle de la carte dès qu'une autre
+  // s'ouvre, sous la seule condition que l'option autoClose de la bulle courante
+  // soit vraie, et elle l'est par défaut. C'est par là que celle-ci tombait, dans
+  // la pile même de l'ouverture de la première fiche du couloir. Le déroulé la
+  // nomme donc à ouvrirBulleFixe, qui passe son autoClose à faux le temps de
+  // l'ouverture et le lui rend aussitôt (cf. ouvrirBulleFixe).
+  // AUCUN DRAPEAU NE RESTE POSÉ SUR ELLE : hors de ces ouvertures-là son autoClose
+  // vaut vrai, et un clic de l'abonnée sur une autre fiche la referme comme avant.
+  // DEUX BULLES SE VOIENT DONC PENDANT CHAQUE TEMPS DU DÉROULÉ, celle du
+  // rendez-vous et celle de la candidate en cours ; une seule à la fin, celle du
+  // rendez-vous. La carte, elle, ne bouge pas davantage : l'ouverture passe
+  // toujours par ouvrirBulleFixe, donc sans autoPan.
   // ELLE NE SURVIT À AUCUN RETOUR AU GROUPE : le marqueur rendu au groupe sort
   // d'abord de la carte (cf. numeroterLesMarqueurs), et Leaflet ferme la bulle
   // d'un layer retiré. L'échec de la route, « Effacer » et le calcul suivant
@@ -3349,7 +3357,12 @@ function derouleEtape(){
     // carte, et jusqu'à cette ligne il n'y était pas.
     if(m){
       revelerLaFiche(temps.appel.id);
-      deroulePopup=ouvrirBulleFixe(m.marker);
+      // LA BULLE DU RENDEZ-VOUS EST ÉPARGNÉE, celle-ci s'ouvre à côté d'elle et non
+      // à sa place (cf. ouvrirBulleFixe). Le déroulé n'en dispose que si le couloir
+      // a un rendez-vous ET que son marqueur est là : sans quoi le second argument
+      // reste nul et l'ouverture se fait comme avant.
+      var rdvM=couloirRdv?markers[couloirRdv.id]:null;
+      deroulePopup=ouvrirBulleFixe(m.marker, rdvM?rdvM.marker.getPopup():null);
     }
     derouleMinuteur=setTimeout(function(){
       if(!derouleActif) return;
@@ -3432,17 +3445,32 @@ function longueurAu(seg,pos){
 // lue à l'ouverture, et elle vaut pour le clic ordinaire, qui a bien besoin de ce
 // recentrage. LE CONTENU EST CELUI DE LA BULLE EXISTANTE, celle que placeCard a
 // liée : ni le déroulé ni le lancement n'écrivent de fiche à eux.
-// DEUX APPELANTS, UN SEUL QUI RETIENT LE RETOUR : derouleEtape garde le marqueur
-// rendu pour refermer sa bulle au temps suivant, lancerCouloir n'a rien à en
-// faire, la bulle du rendez-vous se fermant d'elle-même sous la première du
-// couloir.
-function ouvrirBulleFixe(marker){
+// DEUX APPELANTS, UN SEUL QUI RETIENT LE RETOUR ET UN SEUL QUI ÉPARGNE : derouleEtape
+// garde le marqueur rendu pour refermer sa bulle au temps suivant, et nomme en
+// second argument la bulle du RENDEZ-VOUS, qui doit rester ouverte derrière la
+// candidate ; lancerCouloir ne retient rien et ne nomme rien, son ouverture est la
+// première de la séquence.
+// CE QUE FAIT LE SECOND ARGUMENT : Popup.openOn retire la bulle courante de la
+// carte quand une autre s'ouvre, sous la seule condition que l'option autoClose de
+// cette bulle courante soit vraie, et elle l'est par défaut. On la passe à faux le
+// temps de l'ouverture et on la rend telle quelle aussitôt, exactement comme
+// autoPan deux lignes plus bas. AUCUN DRAPEAU PERMANENT : hors de cette
+// ouverture-là autoClose vaut vrai, et un clic de l'abonnée sur une autre fiche
+// referme bien la bulle épargnée.
+// DEUX BULLES VISIBLES NE SONT PAS DEUX BULLES OUVERTES : quand Leaflet retire une
+// bulle, DivOverlay.onRemove la passe en opacité nulle et ne détache son nœud
+// qu'au bout d'un fondu de 200 ms. Compter les nœuds du document juste après une
+// ouverture ne dit donc rien de ce qui est ouvert, il faut attendre le fondu.
+function ouvrirBulleFixe(marker,epargnee){
   var bulle=marker.getPopup();
   if(!bulle) return null;
+  var avantClose=epargnee?epargnee.options.autoClose:null;
+  if(epargnee) epargnee.options.autoClose=false;
   var avant=bulle.options.autoPan;
   bulle.options.autoPan=false;
   marker.openPopup();
   bulle.options.autoPan=avant;
+  if(epargnee) epargnee.options.autoClose=avantClose;
   return marker;
 }
 

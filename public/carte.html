@@ -247,14 +247,16 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
    par construction. Rien à resserrer, rien à reporter.
 
    .sched-rang est ce rang : un disque de 16 px, dans la couleur d'étape de la
-   fiche, chiffre blanc au centre. SEIZE ET PAS VINGT, et le chiffre est
-   mesuré, pas choisi. Le seuil de regroupement vaut 30 px et son arithmétique
-   est écrite plus bas (cf. ficheGroupe) : la plus grosse pastille fait 44 px,
-   rayon 22, et un point isolé ne mord son chiffre que si les deux rayons
-   dépassent 30. Un disque de 16 px a pour rayon 8, et 22 + 8 = 30 tout juste.
-   Numéroter les marqueurs ne coûte donc rien au regroupement, pas même un
-   pixel de seuil. Le chiffre suit : 9 px jusqu'à 99, 7 px au-delà, où trois
-   chiffres tiennent encore dans les 12 px intérieurs du disque.
+   fiche, chiffre blanc au centre. Le marqueur de la carte porte le même
+   disque, à la même taille : les deux se lisent comme un seul objet d'un bord
+   à l'autre de l'écran.
+   SEIZE ET PAS VINGT tenait au seuil de regroupement, et ce seuil n'a plus
+   cours ici : sous couloir la carte ne regroupe RIEN (cf.
+   numeroterLesMarqueurs), aucune pastille ne peut donc mordre un chiffre, et
+   l'arithmétique du 30 px ne contraint plus rien. Seize demeure pour ce qu'il
+   vaut à l'écran, non parce qu'un seuil l'impose. Le chiffre suit : 9 px
+   jusqu'à 99, 7 px au-delà, où trois chiffres tiennent encore dans les 12 px
+   intérieurs du disque.
 
    .sched-slot est la même colonne, vide de rang : la ligne du rendez-vous s'y
    range avec son point, pour que les deux sortes de lignes s'alignent sur le
@@ -982,22 +984,24 @@ function createMupMarker(color){
 // correspondance de tête entre une liste ordonnée et un nuage de points qui ne
 // l'est pas. La route se lit alors d'un coup d'œil, de un à N.
 //
-// SEIZE PIXELS, ET C'EST LE REGROUPEMENT QUI L'IMPOSE. Le seuil de
-// maxClusterRadius vaut 30 px et son arithmétique est écrite au groupe : la
-// plus grosse pastille fait 44 px, rayon 22, et un point isolé lui mord son
-// chiffre dès que la somme des deux rayons dépasse le seuil. Le disque nu fait
-// 14 px, rayon 7, et 22 + 7 = 29 tenait sous 30. Un disque de 16 px a pour
-// rayon 8, et 22 + 8 = 30 tient encore, tout juste. Vingt pixels auraient
-// demandé de relever le seuil pour un état qui ne dure que le temps d'un
-// couloir : le chiffre s'est rangé au seuil plutôt que l'inverse.
+// SEIZE PIXELS, ET PLUS AUCUN SEUIL NE LES COMMANDE. Le chiffre s'était rangé
+// au seuil de regroupement : maxClusterRadius vaut 30 px, la plus grosse
+// pastille fait 44 px donc rayon 22, et un point isolé lui mordait son chiffre
+// dès que la somme des deux rayons dépassait le seuil. Un disque de 16 px a
+// pour rayon 8, et 22 + 8 = 30 passait tout juste ; vingt pixels auraient
+// demandé de relever le seuil. CE CALCUL N'A PLUS D'OBJET : sous couloir la
+// carte ne regroupe rien, aucune pastille ne cohabite avec un chiffre, et le
+// repli au seuil tombe avec le groupe qui le portait (cf.
+// numeroterLesMarqueurs). Seize reste pourtant, et par choix : c'est la taille
+// du disque de rang de la liste, celle qui fait lire le même objet des deux
+// côtés de l'écran, et rien dans ce lot ne demandait de la revoir.
 //
 // LE COÛT EN TEMPS EST NUL, mesuré au banc sur 480 marqueurs, MarkerCluster
-// 1.5.3, trois tirs médians : reposer l'icône des 480 coûte 0,3 ms carte large
-// (les fiches dorment dans les pastilles) et 4,8 ms carte serrée (elles sont
-// posées une à une). Un vidage suivi d'un réajout complet du groupe, la voie
-// brutale, en coûte 20,6. Le rendu de la liste ne touche de toute façon que les
-// rangs qui ont changé (cf. numeroterLesMarqueurs) : régler le curseur du rayon
-// ne relève jamais les 480.
+// 1.5.3, trois tirs médians : reposer l'icône des 480 coûte 4,8 ms quand ils
+// sont posés un à un, ce qui est désormais leur état sous couloir. Un vidage
+// suivi d'un réajout complet, la voie brutale, en coûte 20,6. Le rendu de la
+// liste ne touche de toute façon que les rangs qui ont changé (cf.
+// numeroterLesMarqueurs) : régler le curseur du rayon ne relève jamais les 480.
 //
 // La police est celle des chiffres de la page, et sa taille suit le nombre de
 // chiffres : 9 px jusqu'à 99, 7 px au-delà, où trois chiffres tiennent encore
@@ -1096,6 +1100,15 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
 // strictement confondues ne peut pas se séparer par le zoom, la bibliothèque le
 // détecte et l'éclate (spiderfy) au clic ; une pastille mixte zoome sur son
 // contenu.
+//
+// SON DOMAINE S'ARRÊTE AU COULOIR. Tout ce qui précède vaut pour le
+// portefeuille entier, six cents fiches sans rang ni ordre, où rassembler les
+// points confondus est le seul moyen de rendre la carte lisible. Sous couloir
+// il n'y a plus ni six cents fiches ni points anonymes : une dizaine de fiches
+// numérotées dont chaque rang doit se lire, et une pastille les avalerait
+// justement au moment où la carte doit prouver la liste. Les retenues quittent
+// donc le groupe et se posent à nu sur la carte, à tous les niveaux de zoom ;
+// elles y reviennent à la sortie (cf. numeroterLesMarqueurs).
 var ficheGroupe = L.markerClusterGroup({
   maxClusterRadius: 30,
   showCoverageOnHover: false,
@@ -1339,8 +1352,11 @@ function placeCard(c, clat, clng){
   // quand offset.y = 11 − R ; ici R = 7, donc 4. Mesuré au rendu, pas déduit :
   // avec l'ancien −10 la bulle flottait 13 px au-dessus du disque.
   // Versé dans le groupe, non posé sur la carte : c'est le groupe qui décide de
-  // montrer le marqueur ou de le compter dans une pastille. Les marqueurs de
-  // CONTACTS restent hors du groupe, posés directement (cf. plus bas).
+  // montrer le marqueur ou de le compter dans une pastille. Le versement n'est
+  // pas définitif pour autant : sous couloir, les fiches retenues sortent du
+  // groupe et se posent à nu, puis y reviennent à la sortie (cf.
+  // numeroterLesMarqueurs). Les marqueurs de CONTACTS, eux, n'entrent jamais
+  // dans le groupe : ils sont posés directement (cf. plus bas).
   var m=L.marker([clat,clng],{icon:icon,zIndexOffset:isRdv?500:0}).bindPopup(popup,{maxWidth:240,closeButton:true,offset:[0,4],autoPanPadding:[24,24]});
   ficheGroupe.addLayer(m);
   markers[String(c.id)]={marker:m,card:c,latlng:[clat,clng]};
@@ -1494,12 +1510,9 @@ async function revelerEnFlux(poses){
     cadrerSur(info.latlng, 14);
     // Un marqueur avalé dans une pastille n'est PAS sur la carte : openPopup y
     // échouait en silence — la vue tombait au bon endroit, sans bulle.
-    // zoomToShowLayer est le helper de la bibliothèque pour ce cas : il rend le
-    // marqueur visible — un simple pan s'il l'est déjà, un zoom sur le contenu
-    // de la pastille, ou son éclatement quand le zoom ne peut pas la séparer —
-    // puis rappelle. Toujours aucun délai inventé : c'est la bibliothèque qui
-    // dit quand le marqueur est là.
-    ficheGroupe.zoomToShowLayer(info.marker, function(){ info.marker.openPopup(); });
+    // ouvrirLaBulle règle les deux cas, celui du groupe et celui du marqueur
+    // posé à nu sous couloir.
+    ouvrirLaBulle(info.marker);
   }
 
   // Les deux chargements convergent ici : les géocodages, comptés par pending,
@@ -2223,14 +2236,31 @@ function choisirRdv(id){
   couloirSiPret();
 }
 
+// Rend un marqueur visible, puis ouvre sa bulle. DEUX CAS, ET C'EST
+// L'APPARTENANCE AU GROUPE QUI TRANCHE. Un marqueur versé dans le groupe peut
+// dormir dans une pastille, et openPopup y échouait en silence.
+// zoomToShowLayer est le helper de la bibliothèque pour ce cas. Il rend le
+// marqueur visible, par un simple pan s'il l'est déjà, par un zoom sur le
+// contenu de la pastille, ou par son éclatement quand le zoom ne peut pas la
+// séparer, puis il rappelle. Aucun délai inventé : c'est la bibliothèque qui
+// dit quand le marqueur est là.
+// Un marqueur POSÉ À NU, lui, est déjà sur la carte et n'a rien à attendre. Il
+// ne peut pas passer par zoomToShowLayer non plus : ce helper lit __parent, la
+// pastille parente que seul le groupe pose, et un marqueur qui n'est pas
+// membre n'en a pas. hasLayer pose la question au groupe lui-même plutôt que
+// de tenir un état de plus.
+function ouvrirLaBulle(marker){
+  if(!ficheGroupe.hasLayer(marker)){ marker.openPopup(); return; }
+  ficheGroupe.zoomToShowLayer(marker, function(){ marker.openPopup(); });
+}
+
 function flyTo(id){
   var info=markers[String(id)];
   if(!info) return;
   map.setView(info.latlng,13);
   // Même échec silencieux que le récepteur de ?fiche= : depuis le panneau, un
   // clic sur une fiche groupée déplaçait la vue sans jamais ouvrir de bulle.
-  // zoomToShowLayer rend d'abord le marqueur visible, puis rappelle.
-  ficheGroupe.zoomToShowLayer(info.marker, function(){ info.marker.openPopup(); });
+  ouvrirLaBulle(info.marker);
 }
 
 // Cible cherchée AVANT d'ouvrir le panneau : une fiche posée sur la carte mais
@@ -2910,6 +2940,73 @@ function renderCouloir(){
 // fiches l'estompage ne dégage rien. C'est déjà la règle que porte resetOverlays
 // (« PLUS RIEN N'ESTOMPE ») : ce filtrage ne la contredit pas, il la sert.
 //
+// ── ET SOUS COULOIR, ON NE REGROUPE PLUS ────────────────────────────────────
+// LE REGROUPEMENT MENTAIT AU MOMENT OÙ LA CARTE DEVAIT PROUVER LA LISTE.
+// Relevé à l'écran sur un Dinan vers Saint-Malo, treize fiches retenues, puis
+// rejoué au banc sur les coordonnées réelles de ces treize fiches : au cadrage
+// du couloir (fitBounds sur le tracé, zoom 11, carte de 1 096 × 775) la carte
+// posait DEUX PASTILLES, un « 2 » à Saint-Malo et un « 8 » à Dinan, et laissait
+// quatre numéros isolés. Dix marqueurs sur quatorze étaient avalés. Un rang
+// qu'on ne peut pas lire ne sert à rien, et une pastille qui compte deux fiches
+// là où la liste en numérote une contredit le panneau.
+// Le regroupement garde tout son sens sur le portefeuille entier : six cents
+// points anonymes, sans rang ni ordre, qu'il faut bien rassembler. Il n'en a
+// aucun sur treize points numérotés. Sous couloir, les fiches retenues sortent
+// donc du groupe et se posent À NU sur la carte, chacune avec son rang, à tous
+// les niveaux de zoom ; elles y reviennent à la sortie.
+//
+// LA DESTINATION N'EST PAS UNE CANDIDATE, et c'est elle qui produisait le
+// « 2 ». Trois natures cohabitent sur cette carte : le point de départ, le
+// point d'arrivée, et les fiches à appeler entre les deux. Le départ vit déjà
+// hors du groupe (cf. poserDepart) ; l'arrivée y tombait avec les candidates et
+// se faisait compter comme l'une d'elles. Elle est désormais posée à nu comme
+// les retenues, jamais regroupée, toujours visible. ELLE SE DISTINGUE PAR LA
+// COULEUR SEULE, celle de sa colonne, qu'elle porte déjà : fichesDuCouloir
+// l'écarte des candidates, elle n'entre donc jamais dans `voulus`, et la boucle
+// des rangs la repose en disque nu (même forme, même taille, même dessin que
+// n'importe quelle fiche, sa couleur d'étape pour toute différence).
+//
+// CE QUI SE SUPERPOSE, ET CE QUE ÇA COÛTE. Sans pastille, les fiches massées au
+// départ ne se cachent plus derrière un chiffre faux, elles se chevauchent. Au
+// même banc, les huit fiches du centre de Dinan tombent dans une boîte de
+// 6 × 17 px au zoom 11 : deux chiffres sur huit restent lisibles, et deux
+// fiches distantes de 8 m ne se sépareraient qu'au zoom 18. C'EST ASSUMÉ, et
+// c'est le moindre des deux maux : un amas dit qu'il y a plusieurs fiches là et
+// laisse le zoom trancher, une pastille « 2 » affirme un compte que la liste
+// dément. Aucun décalage d'affichage n'est posé pour autant : l'écarter en
+// éventail demanderait 21 px de rayon, soit 1 045 m au sol à ce zoom, et
+// remettrait le marqueur ailleurs que sur son adresse, ce que le regroupement
+// avait justement été introduit pour cesser de faire.
+//
+// LE PRIX EN TEMPS, mesuré au même banc que le tableau ci-dessous, portefeuille
+// synthétique de 600 fiches, 183 retenues, médiane de cinq campagnes.
+// « au groupe » est l'état d'avant, « à nu » celui d'après :
+//
+//   carte large (zoom 6)                au groupe   à nu
+//   la coupe d'entrée                       6,4     12,6
+//   un pas de curseur, 100 m                0,2      0,2
+//   le pire pas relevé                      0,8      1,8
+//   un bond d'un bord du curseur à l'autre  6,7      9,2
+//   « Effacer », tout revient               8,8     17,3
+//
+//   carte serrée (zoom 12)              au groupe   à nu
+//   la coupe d'entrée                       5,2     11,9
+//   un pas de curseur                       0,2      0,2
+//   le pire pas relevé                      0,5      1,6
+//   « Effacer »                             8,5     15,8
+//
+// LE GESTE QUI SE RÉPÈTE NE COÛTE RIEN DE PLUS : le pas de curseur reste à
+// 0,2 ms, parce qu'il ne touche plus le groupe du tout. Une fiche qui entre
+// dans le rayon est ajoutée à la carte, une qui en sort en est retirée, et le
+// groupe ne se réorganise pas. Ce sont les BASCULES qui doublent, l'entrée dans
+// le couloir et « Effacer », parce qu'elles font traverser la frontière aux six
+// cents. Elles arrivent une fois chacune, et « Effacer » à 17,3 ms coûte une
+// trame perdue sur un geste unique. Aucune cadence n'est posée pour autant : la
+// carte suit la main aussi directement que le compte.
+// CE QUE LE MÊME BANC DIT DE LA LISIBILITÉ, et c'est ce qui décide : au zoom 6,
+// les 183 retenues rendaient 8 numéros visibles et 12 pastilles ; posées à nu
+// elles rendent 183 numéros et aucune pastille.
+//
 // `destination` DIT S'IL Y A UN COULOIR, et c'est le seul état que cette
 // fonction consulte. Absente, elle rend la carte entière : c'est le chemin de
 // clearTourPlan, donc d'« Effacer », qui appelle avec une liste vide et sans
@@ -2917,16 +3014,25 @@ function renderCouloir(){
 // rayon ne retient personne rendant lui aussi zéro appel, la destination restant
 // alors seule à l'écran.
 //
-// SEUL CE QUI CHANGE EST TOUCHÉ, les rangs comme les retraits. Deux relevés se
+// SEUL CE QUI CHANGE EST TOUCHÉ, les rangs comme les places. Deux relevés se
 // gardent d'un rendu à l'autre, et ils ne se recouvrent pas : rangsPoses dit qui
-// porte un numéro, marqueursRetires dit qui est sorti du groupe, et la
-// destination est absente des deux. Une fiche qui garde son rang n'est pas
+// porte un numéro, etatMarqueur dit où chaque marqueur est posé. La destination
+// est absente du premier et présente dans le second, et c'est précisément
+// pourquoi les deux sont tenus séparément : elle n'a pas de rang et doit
+// pourtant rester à l'écran. Une fiche qui garde son rang et sa place n'est pas
 // retouchée, une fiche qui sort du rayon quitte la carte, une fiche qui y entre
 // revient avec son numéro. Le tri des rangs vaut par ailleurs pour lui-même :
 // changer la durée du rendez-vous déplace les créneaux sans déplacer personne
 // dans l'ordre, et rien n'a alors à être reposé du tout.
 //
 // ── CE QUI A ÉTÉ MESURÉ, ET POURQUOI LE VERSEMENT SE FAIT EN LOT ────────────
+// LE LOT VAUT TOUJOURS, ET C'EST CE RELEVÉ QUI L'A DÉCIDÉ. Il date de l'état où
+// les retenues restaient dans le groupe, et ses colonnes chiffrent donc des
+// opérations de groupe : c'est exactement ce qui reste en jeu aux BASCULES,
+// l'entrée dans le couloir et « Effacer », où les six cents fiches traversent
+// la frontière du groupe d'un seul bloc. Le pas de curseur, lui, ne touche plus
+// le groupe du tout (cf. le relevé plus haut) ; les lignes qui le concernent
+// ci-dessous disent l'état d'avant, gardées pour ce qu'elles ont tranché.
 // Le curseur du rayon appelle ici à chaque pixel (cf. reglerLeRayon) : c'est le
 // seul endroit du couloir dont la dépense se répète, et il fallait la chiffrer.
 // Banc Chrome 151 sans tête, mêmes versions de Leaflet et de MarkerCluster que
@@ -2950,26 +3056,29 @@ function renderCouloir(){
 //   « Effacer »                           9,2       7,9
 //
 // CE QUE LA MESURE TRANCHE. Le geste qui se répète est le pas de curseur, et il
-// coûte 0,4 ms : quelques fiches traversent la frontière du rayon à chaque pas,
-// pas six cents. Ce sont les changements d'un seul bloc qui pèsent, et c'est là
-// que le lot décide : removeLayers et addLayers ne réorganisent le groupe
-// qu'une fois par appel au lieu d'une fois par fiche, 19 pastilles redessinées
-// contre 356 à la coupe d'entrée, et un cinquième du temps. Le pire cas
-// concevable reste le bond d'un bord du curseur à l'autre en un seul événement,
-// 14,7 ms, sous la trame de 16,7 ms, et un vrai glissement l'étale de toute
-// façon sur des dizaines d'événements à 0,4 ms.
-// AUCUNE CADENCE N'EST DONC POSÉE. La carte suit la main aussi directement que
-// le compte, qui reste écrit avant elle et sans rien attendre.
+// coûtait déjà 0,4 ms : quelques fiches traversent la frontière du rayon à
+// chaque pas, pas six cents. Ce sont les changements d'un seul bloc qui pèsent,
+// et c'est là que le lot décide : removeLayers et addLayers ne réorganisent le
+// groupe qu'une fois par appel au lieu d'une fois par fiche, 19 pastilles
+// redessinées contre 356 à la coupe d'entrée, et un cinquième du temps. Ce
+// verdict porte tel quel sur les bascules, seuls appels qui versent encore au
+// groupe par paquets de six cents, et c'est pourquoi les deux listes se
+// composent toujours avant d'être versées.
 //
 // L'ANCRE DE LA BULLE SUIT LE DISQUE. bindPopup a posé un décalage de 4 px,
 // calculé pour un disque de rayon 7 par la règle « offset.y = 11 moins R » que
 // placeCard écrit et justifie. Le disque numéroté a pour rayon 8, donc 3 : sans
 // cet ajustement la pointe de la bulle entrerait d'un pixel dans le disque.
 var rangsPoses={};
-// Les fiches sorties du groupe, id -> true. Tenu à part de rangsPoses parce que
-// les deux ensembles diffèrent : la destination n'a pas de rang et reste
-// pourtant à l'écran.
-var marqueursRetires={};
+// OÙ CHAQUE MARQUEUR EST POSÉ, id -> place. Trois places et non deux, parce
+// qu'il y a désormais trois sorts possibles :
+//   'groupe' hors couloir, la place par défaut, celle où placeCard verse ;
+//   'nu'     sous couloir, posé directement sur la carte avec son rang, ou
+//            sans rang pour la destination ;
+//   'hors'   sous couloir, écarté par le rayon, absent de la carte.
+// Tenu à part de rangsPoses parce que les deux ensembles diffèrent : la
+// destination est 'nu' sans porter de rang.
+var etatMarqueur={};
 function numeroterLesMarqueurs(appels,destination){
   var voulus={};
   appels.forEach(function(a){ voulus[a.id]=a.rang; });
@@ -2985,18 +3094,29 @@ function numeroterLesMarqueurs(appels,destination){
   Object.keys(voulus).forEach(function(id){ if(rangsPoses[id]!==voulus[id]) poser(id,voulus[id]); });
   rangsPoses=voulus;
 
-  // Les deux listes se composent d'abord, le groupe ne les reçoit qu'ensuite :
-  // c'est tout l'écart entre 6,2 et 31,4 ms au tableau ci-dessus. Le retrait
-  // avant le rendu, dans cet ordre, pour que le groupe ne réorganise jamais un
-  // état qu'il va défaire.
-  var aRetirer=[], aRendre=[];
+  // Les quatre listes se composent d'abord, la carte et le groupe ne les
+  // reçoivent qu'ensuite : c'est tout l'écart entre 6,2 et 31,4 ms au tableau
+  // ci-dessus, et il vaut toujours pour les bascules.
+  var aOter=[], aRetirer=[], aRendre=[], aPoser=[];
   Object.keys(markers).forEach(function(id){
-    var garde=!destination||voulus[id]||id===destination;
-    if(garde&&marqueursRetires[id]){ aRendre.push(markers[id].marker); delete marqueursRetires[id]; }
-    else if(!garde&&!marqueursRetires[id]){ aRetirer.push(markers[id].marker); marqueursRetires[id]=true; }
+    var m=markers[id].marker;
+    var vise=!destination ? 'groupe' : (voulus[id]||id===destination) ? 'nu' : 'hors';
+    var etat=etatMarqueur[id]||'groupe';
+    if(vise===etat) return;
+    if(etat==='nu') aOter.push(m); else if(etat==='groupe') aRetirer.push(m);
+    if(vise==='nu') aPoser.push(m); else if(vise==='groupe') aRendre.push(m);
+    etatMarqueur[id]=vise;
   });
+  // ON RETIRE PARTOUT AVANT DE POSER NULLE PART. Un marqueur ne doit jamais
+  // être tenu par le groupe et par la carte en même temps : c'est le groupe qui
+  // pose et retire l'icône de ses membres, et un marqueur ajouté à la carte
+  // alors qu'il est encore membre verrait son icône emportée au retrait
+  // suivant. Le retrait avant le rendu, dans cet ordre, pour que le groupe ne
+  // réorganise jamais un état qu'il va défaire.
+  aOter.forEach(function(m){ map.removeLayer(m); });
   if(aRetirer.length) ficheGroupe.removeLayers(aRetirer);
   if(aRendre.length) ficheGroupe.addLayers(aRendre);
+  aPoser.forEach(function(m){ map.addLayer(m); });
 }
 
 // La durée du rendez-vous, telle que le <select> la dit. Lue à chaque rendu, et

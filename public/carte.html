@@ -2666,6 +2666,29 @@ function lancerCouloir(){
   fichesRevelees={};
   numeroterLesMarqueurs([], String(rdvChoisi));
 
+  // ET LA FICHE DU RENDEZ-VOUS OUVRE SA BULLE, ICI ET PAS AILLEURS. Elle est le
+  // point d'arrivée du voyage : la laisser en marqueur muet pendant que le
+  // calcul court, c'est ne rien dire de ce qu'on a demandé. La ligne
+  // ci-dessus est le premier instant où l'ouverture rend quelque chose : avant
+  // elle le marqueur est encore membre du groupe, et openPopup sur un membre
+  // n'ouvre rien.
+  // PAR ouvrirBulleFixe, ET PAR RIEN D'AUTRE : elle ouvre sans autoPan, seule
+  // façon que la carte ne se déplace pas. Le cadrage sur le trajet tombe 400 ms
+  // plus tard, par l'arbitre, et c'est lui qui décide de la vue.
+  // PAS ouvrirLaBulle : elle interroge le groupe et zoome pour éclater une
+  // pastille, ce qui déplacerait la carte au moment précis où ce marqueur vient
+  // d'en sortir.
+  // LEAFLET NE TIENT QU'UNE BULLE OUVERTE À LA FOIS, et c'est accepté : quand le
+  // trait atteint la première fiche du couloir, sa bulle chasse celle-ci. Rien à
+  // contourner, ni popup détachée, ni autoClose:false, ni seconde couche. Cette
+  // bulle tient de l'affichage jusqu'au premier temps du déroulé, la mise en
+  // scène reprend la main ensuite.
+  // ELLE NE SURVIT À AUCUN RETOUR AU GROUPE : le marqueur rendu au groupe sort
+  // d'abord de la carte (cf. numeroterLesMarqueurs), et Leaflet ferme la bulle
+  // d'un layer retiré. L'échec de la route, « Effacer » et le calcul suivant
+  // passent tous les trois par là, aucun ne laisse de bulle orpheline.
+  ouvrirBulleFixe(rdv.marker);
+
   // Le trajet : trois points de passage, départ → rendez-vous → départ, dont on
   // ne garde QU'UNE MOITIÉ, repliée (cf. demiTrajet). La journée est un
   // aller-retour, pas un aller simple : on revient de son rendez-vous, et la
@@ -3402,11 +3425,17 @@ function longueurAu(seg,pos){
 }
 
 // LA BULLE S'OUVRE SANS DÉPLACER LA CARTE. Leaflet recentre la vue pour faire
-// tenir une bulle qui déborde (autoPan, actif par défaut), et la carte doit rester
-// fixe pendant le déroulé. L'option est rendue telle quelle aussitôt : elle est
+// tenir une bulle qui déborde (autoPan, actif par défaut), et la carte ne doit
+// pas bouger : ni pendant le déroulé, ni au lancement du calcul, où la fiche du
+// rendez-vous ouvre la sienne avant que le cadrage sur le trajet soit décidé
+// (cf. lancerCouloir). L'option est rendue telle quelle aussitôt : elle est
 // lue à l'ouverture, et elle vaut pour le clic ordinaire, qui a bien besoin de ce
 // recentrage. LE CONTENU EST CELUI DE LA BULLE EXISTANTE, celle que placeCard a
-// liée : le déroulé n'écrit aucune fiche à lui.
+// liée : ni le déroulé ni le lancement n'écrivent de fiche à eux.
+// DEUX APPELANTS, UN SEUL QUI RETIENT LE RETOUR : derouleEtape garde le marqueur
+// rendu pour refermer sa bulle au temps suivant, lancerCouloir n'a rien à en
+// faire, la bulle du rendez-vous se fermant d'elle-même sous la première du
+// couloir.
 function ouvrirBulleFixe(marker){
   var bulle=marker.getPopup();
   if(!bulle) return null;

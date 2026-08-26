@@ -1295,12 +1295,36 @@ map.on('click',function(){
 // ni cadrage. Un relevé qui n'aboutit pas ne le supprime pas davantage : il
 // n'atteint jamais cadrerSur.
 //
+// LE TRAJET EST LA TROISIÈME VUE DEMANDÉE, et il l'est autant que les deux
+// autres : désigner un rendez-vous et lancer le calcul est un geste explicite,
+// et ce que l'abonnée veut voir alors, c'est sa journée. Ce cadrage-là passait
+// à côté de l'arbitre, par un fitBounds posé à même la carte : le drapeau
+// restait baissé, et le cadrage global du portefeuille repassait par-dessus
+// dès que son dernier géocodage retombait, ce que rien ne borne dans le temps.
+// RELEVÉ AU BANC, portefeuille de quatorze fiches dont une seule restait à
+// géocoder, la réponse rendue à huit secondes : carte cadrée sur le trajet au
+// zoom 11 à 0,8 s, puis finish() à 8,2 s, en plein déroulé, qui la rend au
+// zoom 7 et à la moitié de la France pour tout le reste de la mise en scène.
+// LA MISE EN SCÈNE N'A PAS CRÉÉ CE DÉFAUT, ELLE L'A RENDU CERTAIN : le déroulé
+// tient l'écran deux secondes par fiche, une trentaine de secondes sur une
+// journée ordinaire, là où la pose d'un bloc ne laissait presque aucune fenêtre
+// à un repli tardif.
+//
 // L'arbitrage vaut dans les deux sens d'arrivée. Vue demandée d'abord : le
 // drapeau retient le fitBounds. Cadrage global d'abord : la vue demandée
 // l'écrase ensuite. L'intention explicite gagne, quel que soit l'ordre.
 var vueDemandee=false;
 function cadrerSur(latlng, zoom){
   map.setView(latlng, zoom);
+  vueDemandee=true;
+}
+// LA MÊME RÈGLE, SUR DES BORNES PLUTÔT QUE SUR UN POINT. Un trajet ne se dit pas
+// par un centre et un zoom, il se dit par ce qu'il faut faire tenir à l'écran.
+// Deux entrées, un seul drapeau, un seul arbitre : le padding vit ici et non
+// chez les appelants, les deux cadrages du couloir ayant toujours demandé le
+// même (cf. lancerCouloir et derouler).
+function cadrerSurLeTrajet(bornes){
+  map.fitBounds(bornes,{padding:[60,60]});
   vueDemandee=true;
 }
 
@@ -2698,6 +2722,10 @@ function lancerCouloir(){
       // LA CARTE SE CADRE ICI SUR TOUT LE TRAJET, DU DÉBUT À LA FIN, et elle ne
       // bougera plus : le déroulé rejoue le même cadrage sur les mêmes bornes,
       // ce qui ne déplace rien (cf. derouler).
+      // PAR L'ARBITRE, ET NON PAR UN fitBounds POSÉ À CÔTÉ DE LUI. Le cadrage
+      // global du portefeuille attend son dernier géocodage, donc rien de borné,
+      // et il retombait par-dessus celui-ci sans que le drapeau l'en empêche
+      // (cf. ARBITRE DE CADRAGE).
       // HORS ENCART, C'EST AUSSI ICI QUE LA JOURNÉE SE DÉROULE. Le bouton
       // « Préparer » du panneau ne lève aucun voile : il n'y a pas de « Voir la
       // liste » pour la révéler, et le déroulé part donc une fois la carte cadrée.
@@ -2709,7 +2737,7 @@ function lancerCouloir(){
         // avant ces 400 ms : il a cadré lui-même sur les mêmes bornes, et le
         // relancer d'ici le ferait repartir du départ.
         if(derouleActif) return;
-        map.fitBounds(routeLine.getBounds(),{padding:[60,60]});
+        cadrerSurLeTrajet(routeLine.getBounds());
         if(!estOuvert('mesTempsRayon')) derouler();
       },400);
       // LE RÉSULTAT NE SE DIT QU'UNE FOIS, ET PAS PAR-DESSUS L'ENCART. Ce toast
@@ -3234,9 +3262,12 @@ function derouler(){
   if(!couloirRdv||!couloirLigne||couloirLigne.length<3){ toutRevele(); return; }
   if(derouleActif) finirLeDeroule();
   // Le cadrage sur tout le trajet, avant que le trait ne parte, et la carte ne
-  // bougera plus. Les mêmes bornes que celles de lancerCouloir : quand il est
-  // déjà passé, celui-ci ne déplace rien.
-  if(routeLine) map.fitBounds(routeLine.getBounds(),{padding:[60,60]});
+  // bougera plus de toute la mise en scène. Les mêmes bornes que celles de
+  // lancerCouloir : quand il est déjà passé, celui-ci ne déplace rien.
+  // PAR L'ARBITRE, LUI AUSSI (cf. ARBITRE DE CADRAGE) : c'est ce qui tient le
+  // cadrage global du portefeuille à distance pendant les vingt à trente
+  // secondes que le déroulé occupe l'écran.
+  if(routeLine) cadrerSurLeTrajet(routeLine.getBounds());
   var appels=appelsDuRayon();
   // Personne sur la route : il n'y a rien à mettre en scène, et la liste que le
   // rendu vient de poser est déjà juste. La carte se rend quand même, ce qui ne

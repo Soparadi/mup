@@ -1,13 +1,16 @@
 // Météo de l'abonné — acquisition commune au tableau de bord et à l'agenda.
 //
 // La position ne vient PLUS d'une ville en dur : elle est résolue côté serveur
-// par /api/meteo/position, qui applique la cascade réglage → compte → adresse
-// réseau (server/services/meteo-position.js). Ce module ne fait que deux
-// choses : demander cette position, puis interroger Open-Meteo dessus. Le rendu
-// reste à chaque page, qui a sa propre charte et son propre gabarit.
+// par /api/meteo/position, qui applique la cascade adresse de départ → compte →
+// adresse réseau (server/services/meteo-position.js). Ce module y intercale UN
+// RANG QUI N'EXISTE QU'ICI — le relevé de position de la Carte, écrit en
+// mémoire locale — puis interroge Open-Meteo sur ce qui a gagné. Le rendu reste
+// à chaque page, qui a sa propre charte et son propre gabarit.
 //
 // AUCUN APPEL À navigator.geolocation : on ne demande pas une permission de
-// géolocalisation pour afficher une température.
+// géolocalisation pour afficher une température. Le relevé du rang 2 n'en est
+// pas un non plus — c'est la Carte qui l'a pris, sur un geste, et ce module ne
+// fait que le relire.
 window.MupMeteo = (function () {
   'use strict';
 
@@ -17,12 +20,43 @@ window.MupMeteo = (function () {
   // que le réglage n'a pas de nouvelle adresse, un lien mort vaudrait moins que
   // du texte.
 
-  // Mention portée quand la position vient du rang 3 (adresse réseau captée à
+  // Mention portée quand la position vient du rang 4 (adresse réseau captée à
   // l'inscription) : l'abonné doit pouvoir comprendre pourquoi la ville
   // affichée n'est pas la sienne.
   var MENTION_RESEAU = 'd’après votre connexion';
 
   var INVITATION = 'Renseigner mon adresse de départ';
+
+  // ── RANG 2 — LE RELEVÉ DE POSITION DE LA CARTE ──
+  // Écrit par carte.html quand l'abonné s'y géolocalise (poserPosition), commune
+  // déjà résolue. Un CONSTAT : il passe derrière l'adresse de départ, la seule
+  // position que l'abonné ait lui-même déclarée, et devant le compte et
+  // l'adresse réseau, qui datent tous deux de l'inscription et ne bougent plus.
+  //
+  // ÂGE GLISSANT DE VINGT-QUATRE HEURES depuis l'horodatage, jamais une clef de
+  // jour : un relevé de 23 h ne doit pas mourir à minuit. L'entrée périmée est
+  // IGNORÉE à la lecture, et le relevé suivant la remplace — rien à effacer,
+  // aucune purge à écrire.
+  //
+  // LA BASCULE EST MUETTE. La météo suit la position sans la commenter : pas de
+  // mention portée sur ce rang, pas un mot sur le changement de ville d'un jour
+  // à l'autre. Le libellé est le nom de la commune, comme pour le rang 1.
+  var MEMOIRE_POSITION = 'mup_meteo_position';
+  var AGE_MAX_MS = 24 * 60 * 60 * 1000;
+
+  function releveCarte() {
+    try {
+      var brut = localStorage.getItem(MEMOIRE_POSITION);
+      if (!brut) return null;
+      var e = JSON.parse(brut);
+      if (!e || typeof e.ts !== 'number') return null;
+      if (Date.now() - e.ts > AGE_MAX_MS) return null;
+      if (typeof e.lat !== 'number' || typeof e.lon !== 'number' || !e.ville) return null;
+      return { lat: e.lat, lon: e.lon, ville: String(e.ville), source: 'carte' };
+    } catch (err) {
+      return null;
+    }
+  }
 
   // Rend une promesse toujours tenue, jamais rejetée :
   //   { etat:'ok',      temp, code, ville, source, approx }
@@ -42,6 +76,14 @@ window.MupMeteo = (function () {
         return r.json();
       })
       .then(function (pos) {
+        // La cascade se referme ici. Le rang 1 est le seul à passer devant le
+        // relevé : une position déclarée prime sur un constat, y compris sur un
+        // constat plus récent. Tous les autres rangs passent derrière, y compris
+        // le silence — un relevé frais vaut mieux qu'une invitation.
+        if (!pos || pos.source !== 'depart') {
+          var releve = releveCarte();
+          if (releve) pos = releve;
+        }
         if (!pos || !pos.source) return { etat: 'absent' };
         var url = 'https://api.open-meteo.com/v1/forecast'
           + '?latitude=' + encodeURIComponent(pos.lat)

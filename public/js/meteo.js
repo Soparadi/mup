@@ -67,7 +67,18 @@ window.MupMeteo = (function () {
   // l'abonné une panne de réseau.
   function charger(timeoutMs) {
     var t = timeoutMs || 6000;
-    return fetch('/api/meteo/position', {
+    // Lu UNE FOIS, avant tout appel : le rang 2 ne dépend d'aucun réseau, et il
+    // sert aussi bien à coiffer la cascade serveur qu'à la remplacer si elle ne
+    // répond pas.
+    var releve = releveCarte();
+
+    // DEUX ÉCHECS À NE PAS CONFONDRE, d'où les deux filets séparés qui suivent.
+    // Celui-ci ne couvre que L'OBTENTION DE LA POSITION : quand la cascade
+    // serveur jette ou répond en erreur, il ne manque que la cascade, et un
+    // relevé frais est un point parfaitement valable — l'appel météo part
+    // dessus. Sans relevé exploitable on relance l'échec : c'est une panne, et
+    // elle sort en 'erreur' comme aujourd'hui, on ne l'habille pas.
+    var position = fetch('/api/meteo/position', {
       credentials: 'same-origin',
       signal: AbortSignal.timeout(t)
     })
@@ -75,15 +86,18 @@ window.MupMeteo = (function () {
         if (!r.ok) throw new Error('position ' + r.status);
         return r.json();
       })
+      .catch(function (err) {
+        if (releve) return releve;
+        throw err;
+      });
+
+    return position
       .then(function (pos) {
         // La cascade se referme ici. Le rang 1 est le seul à passer devant le
         // relevé : une position déclarée prime sur un constat, y compris sur un
         // constat plus récent. Tous les autres rangs passent derrière, y compris
         // le silence — un relevé frais vaut mieux qu'une invitation.
-        if (!pos || pos.source !== 'depart') {
-          var releve = releveCarte();
-          if (releve) pos = releve;
-        }
+        if (releve && (!pos || pos.source !== 'depart')) pos = releve;
         if (!pos || !pos.source) return { etat: 'absent' };
         var url = 'https://api.open-meteo.com/v1/forecast'
           + '?latitude=' + encodeURIComponent(pos.lat)
@@ -110,6 +124,10 @@ window.MupMeteo = (function () {
             };
           });
       })
+      // Le second filet. Une PANNE D'OPEN-METEO reste une panne, quel que soit
+      // le rang qui a fourni le point : aucun rattrapage ici, rien à substituer
+      // à une température qu'on n'a pas. Il recueille aussi le rejet relancé
+      // plus haut, position injoignable et sans relevé.
       .catch(function () { return { etat: 'erreur' }; });
   }
 

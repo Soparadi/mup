@@ -1179,25 +1179,65 @@ var fondIGN=L.maplibreGL({
 // pixel étiré) mais n'apporte aucun détail de plus.
 map.setMaxZoom(19);
 
-// COUCHES ÉTEINTES. On coupe par source-layer et non par identifiant : le style
-// en compte 425, les noms sont libellés en clair et changeront, la couche
-// source ne bouge pas. L'extinction attend l'événement load : avant lui,
-// getStyle() ne rend pas encore les couches.
+// COUCHES ÉTEINTES PAR SOURCE-LAYER. Premier des deux registres d'extinction :
+// celui-ci porte les couches dont le source-layer ne contient rien qu'on veuille
+// garder, et se coupe donc à cette maille. C'est la forme préférable : le style
+// compte 425 couches, leurs identifiants sont des libellés en clair et
+// changeront, le nom de la couche source ne bouge pas. L'extinction attend
+// l'événement load : avant lui, getStyle() ne rend pas encore les couches.
 //
 // « ocs_lin » ne figure PAS dans cette liste : aucune couche du style gris ne
 // porte ce source-layer (le seul voisin est toponyme_ocs_lin, qui est un
 // toponyme). L'inscrire aurait été un nom qui ne désigne rien.
-//
-// « limite_lin » est le seul source-layer de limites du style, et il porte les
-// limites administratives (commune, département, région, état) au milieu de
-// treize autres traits : clôtures, layons, enceintes militaires, contours de
-// parcs naturels et trait de côte. 18 couches en tout, que l'extinction par
-// source-layer emporte ensemble. « toponyme_limite_ponc » n'est pas une limite
-// mais un libellé (parcs, zones militaires) : ses 5 couches restent allumées.
 var COUCHES_ETEINTES=['routier_chemin','routier_chemin_sup','routier_chemin_sou',
   'oro_relief','oro_courbe','oro_lin','oro_ponc',
-  'ocs_vegetation_surf','ocs_nature_sol_surf',
-  'limite_lin'];
+  'ocs_vegetation_surf','ocs_nature_sol_surf'];
+
+// COUCHES ÉTEINTES PAR IDENTIFIANT. Second registre : celui des source-layers
+// qui mélangent ce qu'on veut éteindre et ce qu'on veut garder, et qu'une coupe
+// à leur maille emporterait d'un bloc.
+//
+// « limite_lin » porte 18 couches. En partent les limites administratives
+// (commune, département, région), les limites d'état, les clôtures, layons et
+// enceintes militaires, les contours de parcs naturels et de parcs marins :
+// 17 traits qui découpent le fond sans rien dire d'une tournée. Reste allumée
+// « limite cote », le liseré qui sépare la terre de la mer entre les zooms 7 et
+// 10, soit exactement la plage où l'on regarde une tournée à l'échelle
+// régionale, sur une côte découpée : sans lui, le littoral se dissout.
+//
+// « toponyme_limite_ponc » porte 5 libellés, et ils nomment tous l'une des trois
+// familles dont le contour vient de s'éteindre : parcs naturels, parcs marins,
+// zones militaires. Aucun ne désigne autre chose, ils partent donc tous les 5 :
+// un nom seul, posé sur un contour effacé, flotterait sans rien désigner.
+//
+// CE REGISTRE EST FRAGILE, et on le sait en l'écrivant : un identifiant de style
+// est un libellé en clair, que l'IGN peut renommer d'une livraison à l'autre
+// sans prévenir, là où un nom de source-layer tient. On l'accepte ici faute de
+// mieux, le source-layer ne permettant pas de séparer ce qu'on éteint de ce
+// qu'on garde. Le prix s'en paie plus bas, au relevé : tout identifiant inscrit
+// qui ne trouve plus sa couche est compté et signalé en console, pour qu'un
+// renommage se voie au lieu de passer pour une extinction réussie.
+var COUCHES_ETEINTES_PAR_ID=[
+  'limite admin - limite de commune',
+  'limite admin - limite de département bandeau',
+  'limite admin - limite de département tiret',
+  'limite admin - limite de région bandeau',
+  'limite admin - limite de région tiret',
+  'limite etat 1','limite etat 2',
+  'Limite - cloture','Limite - layon',
+  'Zone Règlementee - Enceinte militaire',
+  'limite zone naturelle',
+  'limite zone naturelle - Parc naturel 10',
+  'limite zone naturelle - Parc naturel 11',
+  'limite zone naturelle - Parc naturel 12',
+  'limite zone naturelle - Parc naturel 13',
+  'limite zone naturelle - Parc naturel 14',
+  'limite zone naturelle - Parc marin',
+  'toponyme - limite parc ponc 1 et 2',
+  'toponyme - limite parc ponc 3 et 4',
+  'toponyme - limite parc marin',
+  'toponyme - limite militaire ponc 1 et 2',
+  'toponyme - limite militaire ponc 3 et 4'];
 // ROUTES ATTÉNUÉES. Le style gris dessine ses routes en gris soutenu (#B4B4B4,
 // #878787, #727272...), qui rivalise avec les points de fiches et le tracé de
 // tournée : on les transpose vers le blanc, canal par canal, sans jamais
@@ -1241,6 +1281,19 @@ glIGN.on('load',function(){
     if(COUCHES_ETEINTES.indexOf(couche['source-layer'])<0)return;
     glIGN.setLayoutProperty(couche.id,'visibility','none');
   });
+
+  // Extinction par identifiant. getLayer rend undefined sur un nom que le style
+  // ne porte pas : c'est là qu'un renommage IGN se détecte, et on le compte au
+  // lieu de laisser setLayoutProperty lever.
+  var identifiantsOrphelins=0;
+  COUCHES_ETEINTES_PAR_ID.forEach(function(identifiant){
+    if(!glIGN.getLayer(identifiant)){identifiantsOrphelins++;return;}
+    glIGN.setLayoutProperty(identifiant,'visibility','none');
+  });
+  if(identifiantsOrphelins){
+    console.warn('Plan IGN : '+identifiantsOrphelins+' identifiant(s) de couche à éteindre sur '
+      +COUCHES_ETEINTES_PAR_ID.length+' sans correspondance dans le style, libellé(s) renommé(s) côté IGN.');
+  }
 
   var releve={chaines:0,rampes:0,intactes:0};
   glIGN.getStyle().layers.forEach(function(couche){

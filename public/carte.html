@@ -6,6 +6,7 @@
 <title>MovUP — Carte</title>
 <link rel="stylesheet" href="/styles/fonts.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
 <!-- MarkerCluster — même version et mêmes sources que Prospection
      (prospection.html:13-15). Les DEUX feuilles sont requises : MarkerCluster.css
      porte l'animation d'éclatement, MarkerCluster.Default.css les jambes
@@ -78,11 +79,6 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 /* LEAFLET OVERRIDES */
 .leaflet-container{font-family:var(--font)!important}
-/* Essai Plan IGN v2 : la désaturation porte sur le conteneur de la couche
-   de tuiles (.leaflet-layer dans le pane des tuiles), jamais sur le pane
-   entier ni sur la carte — marqueurs, tracé et bulles gardent leurs
-   couleurs. Valeurs d'essai, à ajuster. */
-.leaflet-tile-pane .leaflet-layer{filter:saturate(0.25) brightness(1.05)}
 .leaflet-popup-content-wrapper{border-radius:12px!important;border:1px solid var(--border)!important;box-shadow:0 10px 28px rgba(0,0,0,.12)!important;padding:0!important;overflow:hidden}
 .leaflet-popup-content{margin:0!important;width:auto!important}
 /* La pointe reste au rendu Leaflet standard — triangle blanc sans bordure.
@@ -915,6 +911,11 @@ body #mup-cookie-panel{z-index:60001}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<!-- MapLibre GL et le pont vers Leaflet, chargés du CDN comme Leaflet et
+     MarkerCluster. L'ordre est imposé : le pont lit les globales L et
+     maplibregl au moment où il s'évalue. -->
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
 <script>
 // Index agenda events par ficheId — alimenté par loadAllAgenda() au boot.
 // Source unique de vérité : table agenda en SurrealDB.
@@ -1145,15 +1146,57 @@ function progressHtml(col){
 // éviter (cf. le bloc des commandes de zoom dans la feuille de style).
 var map=L.map('map',{center:[46.5,2.5],zoom:5,zoomControl:false});
 L.control.zoom({zoomInTitle:'Zoom avant',zoomOutTitle:'Zoom arrière'}).addTo(map);
-// Essai du Plan IGN v2 (Géoplateforme) sur cette seule page ; les autres
-// restent sur CartoDB Positron. L'URL n'a pas de {s}, donc pas de subdomains ;
-// les tuiles s'arrêtent au zoom 19, au-delà Leaflet étire la dernière rangée.
+// Fond Plan IGN VECTORIEL (Géoplateforme) sur cette seule page ; les autres
+// restent sur CartoDB Positron. Le rendu passe à MapLibre GL, posé dans Leaflet
+// par le pont @maplibre/maplibre-gl-leaflet : Leaflet reste le moteur, il garde
+// la vue, les panes, les marqueurs et les bulles, seul le fond change.
 // OpenStreetMap reste cité : le tracé de tournée vient d'OSRM, donc de données
-// OSM, indépendamment du fond.
-L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png',{
-  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; Plan IGN v2 &middot; &copy; IGN / G&eacute;oplateforme',
-  maxNativeZoom:19, maxZoom:20, opacity:0.85
+// OSM, indépendamment du fond. Le produit vectoriel s'appelle PLAN.IGN, sans
+// « v2 » : le « v2 » était le nom de la couche WMTS raster qu'on quitte.
+//
+// L'ATTRIBUTION PASSE PAR attributionControl.customAttribution, pas par
+// l'option attribution. Le pont redéfinit getAttribution() : il lit
+// options.attributionControl.customAttribution, et à défaut il va chercher le
+// champ attribution des sources du style, que le style IGN ne porte pas. Une
+// option attribution serait donc lue par personne. Cet objet ne fuit pas vers
+// MapLibre : le pont force attributionControl:false côté GL.
+var fondIGN=L.maplibreGL({
+  style:'https://data.geopf.fr/annexes/ressources/vectorTiles/styles/PLAN.IGN/gris.json',
+  attributionControl:{customAttribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; Plan IGN &middot; &copy; IGN / G&eacute;oplateforme'}
 }).addTo(map);
+
+// LE PLAFOND DE ZOOM SE POSE SUR LA CARTE, PAS SUR LA COUCHE. Leaflet ne lit
+// options.maxZoom que des couches qui appellent _addZoomLimit, et seul
+// GridLayer le fait, dans son beforeAdd. Le pont étend L.Layer, pas GridLayer :
+// un maxZoom posé dans ses options ne serait lu par personne, et la carte,
+// privée de sa seule couche à bornes, remonterait à getMaxZoom() === Infinity.
+//
+// 19, et c'est mesuré, pas supposé. Le pont cale MapLibre sur getZoom() - 1
+// (tuiles vectorielles de 512 px contre 256 px chez Leaflet) et la source
+// PLAN.IGN annonce maxzoom 18 dans sa metadata.json : le dernier niveau de
+// tuiles réellement servi tombe donc au zoom Leaflet 19. Au-delà, MapLibre
+// agrandit la géométrie du z18, ce qui reste net (c'est du vecteur, pas du
+// pixel étiré) mais n'apporte aucun détail de plus.
+map.setMaxZoom(19);
+
+// COUCHES ÉTEINTES. On coupe par source-layer et non par identifiant : le style
+// en compte 425, les noms sont libellés en clair et changeront, la couche
+// source ne bouge pas. L'extinction attend l'événement load : avant lui,
+// getStyle() ne rend pas encore les couches.
+//
+// « ocs_lin » ne figure PAS dans cette liste : aucune couche du style gris ne
+// porte ce source-layer (le seul voisin est toponyme_ocs_lin, qui est un
+// toponyme). L'inscrire aurait été un nom qui ne désigne rien.
+var COUCHES_ETEINTES=['routier_chemin','routier_chemin_sup','routier_chemin_sou',
+  'oro_relief','oro_courbe','oro_lin','oro_ponc',
+  'ocs_vegetation_surf','ocs_nature_sol_surf'];
+var glIGN=fondIGN.getMaplibreMap();
+glIGN.on('load',function(){
+  glIGN.getStyle().layers.forEach(function(couche){
+    if(COUCHES_ETEINTES.indexOf(couche['source-layer'])<0)return;
+    glIGN.setLayoutProperty(couche.id,'visibility','none');
+  });
+});
 
 // ── REGROUPEMENT DES FICHES ──
 // Les fiches partageant une adresse tombaient sur la même coordonnée et se

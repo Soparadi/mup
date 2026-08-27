@@ -319,6 +319,16 @@
       // Repli sans observateur (navigateur ancien) : on pose tout de suite,
       // plutôt que de laisser une carte sans fond.
       if (!element || typeof IntersectionObserver === 'undefined') { allumer(); return; }
+      // MILLE PIXELS D'AVANCE, ET NON DEUX CENTS. Le montage du fond se mesure
+      // au-delà de deux secondes cache froid : 200 px ne couvraient pas ce délai,
+      // le visiteur arrivait sur la carte avant qu'elle ne soit peinte et voyait
+      // un cadre blanc, la démonstration attendant le fond pour poser ses points.
+      // Mille pixels déclenchent le chargement bien avant l'entrée à l'écran.
+      //
+      // CE QUE CELA COÛTE : l'économie du report tient toujours, un visiteur qui
+      // ne descend pas ne charge rien, mais le seuil se déplace. Celui qui
+      // s'arrête à moins de mille pixels de la carte paiera le chargement sans
+      // voir la carte. C'est le compromis retenu.
       var observateur = new IntersectionObserver(function (entrees) {
         for (var i = 0; i < entrees.length; i++) {
           if (!entrees[i].isIntersecting) continue;
@@ -326,7 +336,7 @@
           allumer();
           return;
         }
-      }, { rootMargin: '200px' });   // 200 px d'avance : le fond commence à venir juste avant d'être vu
+      }, { rootMargin: '1000px' });
       observateur.observe(element);
     });
   }

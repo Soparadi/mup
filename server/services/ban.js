@@ -29,3 +29,40 @@ export async function geocode({ adresse, code_postal, ville }) {
     return null
   }
 }
+
+// Reverse — la commune d'un point, par le /reverse/ de la même API publique.
+// POURQUOI ICI. Le navigateur ne parle qu'à nos routes ; la Carte a besoin du
+// nom de la commune où elle vient de relever une position, et ce nom se résout
+// UNE FOIS, au relevé, pas à chaque ouverture d'une page qui l'affiche.
+//
+// LA COMMUNE SE PREND TELLE QUE LA BAN LA REND : sur le reverse, `city` est un
+// champ à part entière — rien à découper dans un libellé, contrairement à une
+// adresse saisie librement.
+//
+// Rend { ville, label } ou null : hors du domaine couvert (mer, étranger),
+// panne, ou réponse sans commune exploitable. L'appelant décide de ce que vaut
+// un null ; ici on n'invente pas de nom.
+export async function reverseGeocode({ lat, lon }) {
+  const la = Number(lat)
+  const lo = Number(lon)
+  if (!Number.isFinite(la) || !Number.isFinite(lo)) return null
+  const url = 'https://api-adresse.data.gouv.fr/reverse/?lat=' + encodeURIComponent(la)
+    + '&lon=' + encodeURIComponent(lo) + '&limit=1'
+
+  try {
+    const r = await fetch(url)
+    if (!r.ok) {
+      console.error('[ban] reverse error', r.status)
+      return null
+    }
+    const data = await r.json()
+    const p = data?.features?.[0]?.properties
+    if (!p) return null
+    const ville = p.city ? String(p.city).trim() : ''
+    if (!ville) return null
+    return { ville, label: p.label || null }
+  } catch (e) {
+    console.error('[ban] reverse crash', e.message)
+    return null
+  }
+}

@@ -56,7 +56,7 @@ import { rapprocherDepartementAtoutFrance } from './server/services/rapprochemen
 import { runMentionsLegalesJob, enrichirMentionsLegales } from './server/services/mentions-legales.js'
 import { hostBlacklisted } from './server/services/recherche-web.js'
 import { resoudrePositionMeteo } from './server/services/meteo-position.js'
-import { geocode } from './server/services/ban.js'
+import { geocode, reverseGeocode } from './server/services/ban.js'
 import { normText } from './server/services/overpass.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
 import { startCronJobs, startActualitesCron } from './server/services/cron.js'
@@ -5403,6 +5403,26 @@ app.post('/api/enrich/:siret', async (req, res) => {
     console.error('[enrich]', err.message)
     if (!res.headersSent) res.status(500).json({ error: 'Enrichissement indisponible' })
   }
+})
+
+// Reverse — la commune d'un point. SYMÉTRIQUE DE /api/geocode ci-dessous, et
+// sous le même geocodeLimiter : app.use('/api/geocode', …) borne le préfixe,
+// donc cette sous-route avec. Le navigateur ne parle qu'à nous.
+// APPELÉE AU RELEVÉ, PAS À L'AFFICHAGE : la Carte résout le nom de la commune
+// une fois, quand elle relève une position ; un nom de commune ne bouge pas, et
+// le résoudre à chaque ouverture de page coûterait un appel par ouverture.
+// ÉCHEC = 404, jamais un 200 vide. L'appelant doit pouvoir ne RIEN écrire
+// plutôt que de garder des coordonnées sans nom.
+app.get('/api/geocode/reverse', async (req, res) => {
+  const lat = Number(req.query.lat)
+  const lon = Number(req.query.lon)
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)
+      || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    return res.status(400).json({ error: 'Coordonnées invalides' })
+  }
+  const r = await reverseGeocode({ lat, lon })
+  if (!r) return res.status(404).json({ error: 'Commune introuvable' })
+  res.json({ ville: r.ville, label: r.label })
 })
 
 app.get('/api/geocode', async (req, res) => {

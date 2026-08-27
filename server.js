@@ -2327,6 +2327,9 @@ async function materialiserProspect(userId, body, lookups) {
     const agg = String(body.address).trim()
     adresse = agg.replace(/\s+\d{5}\s+.+$/, '').trim() || agg
   }
+  // Un seul calcul, trois destinations : le record `societes`, la face société
+  // dupliquée sur chaque contact, et la carte pipeline. Une quatrième
+  // destination se servira de ces deux constantes, elle ne les recalculera pas.
   const zip = body.adresse_code_postal || ''
   const ville = body.adresse_libelle_commune || ''
   const adresseComplete = [adresse, zip, ville].filter(Boolean).join(' ').trim()
@@ -2449,6 +2452,17 @@ async function materialiserProspect(userId, body, lookups) {
       siret,
       sector: body.naf_libelle || '',
       address: adresseComplete,
+      // Code postal et ville : les valeurs mêmes que cette transaction écrit sur
+      // le record société et sur la face société de chaque contact, jamais une
+      // variante recalculée. L'agrégat `address` ne change pas, la carte le
+      // garde et se complète.
+      // CLÉS POSÉES SEULEMENT SI RENSEIGNÉES, dans l'esprit du couple lat/lng
+      // ci-dessous : client sans code postal ni ville, la carte est écrite
+      // exactement comme avant, aucune clé vide posée pour rien. Clé par clé et
+      // non par couple, contrairement aux coordonnées : un code postal seul
+      // reste lisible et filtrable, quand une latitude seule ne place rien.
+      ...(zip ? { zip } : {}),
+      ...(ville ? { ville } : {}),
       contact: contactCarte,
       email: '',
       phone: '',

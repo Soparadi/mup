@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="/styles/fonts.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Fond de carte partagé : charge MapLibre et le pont lui-même, après Leaflet -->
+<script src="/_mup-fond.js"></script>
 <link rel="stylesheet" href="/styles/sidebar.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -261,7 +263,21 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .history-date{font-size:10px;color:var(--muted2);font-family:var(--mono);flex-shrink:0;margin-top:2px}
 .notes-area{width:100%;min-height:70px;border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;font-size:12.5px;font-family:var(--font);color:var(--text);background:var(--surface);resize:vertical;outline:none;line-height:1.6;transition:border-color .15s}
 .notes-area:focus{border-color:var(--text);background:var(--card)}
-#detail-map{width:100%;height:180px;border-radius:10px;border:1px solid var(--border);z-index:0}
+#detail-map{width:100%;height:180px;border-radius:10px;border:1px solid var(--border);z-index:0;position:relative}
+/* Message d'échec de localisation, EN COUVERTURE de la carte et non à sa place.
+   Il s'écrivait dans le innerHTML de #detail-map, ce qui arrachait les panneaux
+   de Leaflet : sans conséquence tant que la carte était refaite à l'ouverture
+   suivante, fatal maintenant qu'elle vit d'un bout à l'autre de la session.
+   Rayon 9 px : le rayon intérieur du conteneur, dont les 10 px se prennent au
+   dehors d'une bordure de 1 px.
+   z-index 1100, et pas 1000 : les coins de commandes de Leaflet, qui portent
+   l'attribution, sont eux-mêmes à 1000 et viennent après dans l'ordre du
+   document. À égalité ils passeraient devant, et la mention se lirait par-dessus
+   le message. Couvrir l'attribution est ici juste : aucune donnée de carte n'est
+   plus affichée. Le conteneur porte z-index:0 et position:relative, il forme
+   donc son propre contexte d'empilement : ce 1100 ne sort pas de la carte. */
+#detail-map-echec{position:absolute;inset:0;z-index:1100;display:none;align-items:center;justify-content:center;background:#F5F5F7;color:#8E8E93;font-size:12px;border-radius:9px}
+#detail-map-echec.on{display:flex}
 .timeline-line{position:relative;padding-left:20px}
 .timeline-line::before{content:'';position:absolute;left:7px;top:0;bottom:0;width:1.5px;background:var(--border)}
 .tl-item{position:relative;padding-bottom:14px}
@@ -622,7 +638,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
       <!-- CARTE LEAFLET -->
       <div class="detail-section" id="d-map-section" style="display:none">
-        <div id="detail-map"></div>
+        <!-- La couverture d'échec est écrite ici, et non fabriquée en JavaScript :
+             Leaflet n'efface pas le contenu du conteneur qu'on lui confie, il y
+             ajoute ses panneaux. Elle survit donc à la carte et lui survivrait. -->
+        <div id="detail-map"><div id="detail-map-echec"></div></div>
       </div>
 
       <!-- La grille porte AUSSI les trois coordonnées société (site, email, tél),
@@ -1812,13 +1831,68 @@ async function deleteCard(id) {
 }
 
 // ── DÉTAIL ──
+// LA CARTE DE LA FICHE NAÎT UNE FOIS ET SE DÉPLACE ENSUITE. Elle était détruite
+// puis refaite à chaque ouverture de fiche. Avec le fond raster, ce cycle coûtait
+// 162 ms ; avec le Plan IGN vectoriel il coûte 2 400 ms, à chaque clic. Le fond
+// se monte donc une seule fois pour la session, et les ouvertures suivantes ne
+// font plus que déplacer la vue et reposer un marqueur.
 let detailMap = null;
 let detailMarker = null;
 // Identifiant de la fiche dont la carte est en cours de résolution, ou null.
 // Garde d'appel en vol : openDetail() est rejoué à chaque rafraîchissement de
 // la fiche ouverte (enregistrement, commit de montant, retour d'enrichissement)
-// et relançait à chaque fois le géocodage complet.
+// et relançait à chaque fois le géocodage complet. CETTE GARDE NE REPOSE PAS SUR
+// LA CARTE : elle porte sur la fiche, par son identifiant, et traverse le
+// passage à la carte unique sans rien changer.
 let detailGeoFiche = null;
+// JETON DE LA RÉSOLUTION COURANTE, ET REMPLAÇANT DU TEST DE CARTE VIVANTE.
+// Tant que la carte était refaite à chaque ouverture, il suffisait de comparer
+// l'objet carte à celui qu'on avait pris au départ (detailMap === maCarte) pour
+// savoir si une réponse tardive s'adressait encore à la carte à l'écran. La carte
+// ne change plus d'identité : cette comparaison serait vraie pour toujours, y
+// compris après la fermeture de la fiche, et un géocodage revenu en retard
+// poserait son marqueur sur la fiche suivante. Le test perd son objet, il est
+// donc retiré, et un compteur prend le relais : il monte à chaque résolution
+// lancée, à chaque fiche sans adresse et à chaque fermeture ; une réponse ne pose
+// rien si le numéro qu'elle tient n'est plus le numéro courant. Même idiome que
+// _filJeton, juste en dessous, qui garde le fil d'activités de la même façon.
+let detailCarteJeton = 0;
+
+// Naissance unique de la carte de fiche. Le fond passe par le module partagé
+// /_mup-fond.js et n'est monté qu'une fois : c'est tout l'objet du changement.
+// La vue d'ouverture ne sert que le premier appel, la première fiche la remplace.
+function assurerCarteFiche() {
+  if(detailMap) return detailMap;
+  detailMap = L.map('detail-map', { zoomControl:false }).setView([48.4, -1.75], 10);
+  // Le plafond monte de 18 à 19, borne réelle de la source (cf. le module).
+  MUPFond.poser(detailMap)
+    .catch(function(e){ console.warn('Fond de carte indisponible :', e); });
+  return detailMap;
+}
+
+// Le marqueur de la fiche précédente partait avec la carte détruite. La carte
+// reste : il se retire à la main, dès que la carte change de sujet.
+function viderMarqueurFiche() {
+  if(detailMarker && detailMap) { try { detailMap.removeLayer(detailMarker); } catch(e){} }
+  detailMarker = null;
+}
+
+// Les deux causes d'échec, distinctes à l'écran : le service a répondu sans rien
+// trouver, ou le service n'a pas répondu.
+const MSG_CARTE_INTROUVABLE = 'Adresse non localisable';
+const MSG_CARTE_PANNE = 'Localisation indisponible';
+function afficherEchecCarte(msg) {
+  var el = document.getElementById('detail-map-echec');
+  if(!el) return;
+  el.textContent = msg;
+  el.classList.add('on');
+}
+function masquerEchecCarte() {
+  var el = document.getElementById('detail-map-echec');
+  if(!el) return;
+  el.classList.remove('on');
+  el.textContent = '';
+}
 
 // Le fil de la fiche ouverte, tel que la dernière lecture l'a rendu. Le
 // calendrier inline y prend ses pastilles de notes : il est synchrone, le fil
@@ -2077,21 +2151,36 @@ async function openDetail(id) {
     // se rejouer. La garde est levée par fini(), quelle que soit l'issue.
     if(detailGeoFiche !== String(c.id)) {
       detailGeoFiche = String(c.id);
+      // LE JETON SE PREND ICI, PAS DANS LE DIFFÉRÉ. Entre cet appel et le réveil
+      // du minuteur, une autre fiche peut prendre la main : la résolution qui
+      // s'éveille doit alors s'apercevoir qu'elle n'est plus le sujet, et pour
+      // cela il faut qu'elle tienne un numéro pris avant l'attente.
+      const monJeton = ++detailCarteJeton;
       setTimeout(() => {
         // Levée de la garde, quelle que soit l'issue. Conditionnelle : une autre
         // fiche a pu prendre la main entre-temps, sa garde ne nous appartient pas.
         function fini(){ if(detailGeoFiche === String(c.id)) detailGeoFiche = null; }
 
-        if(detailMap) { detailMap.remove(); detailMap = null; }
-        detailMap = L.map('detail-map', { zoomControl:false }).setView([48.4, -1.75], 10);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:18, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' }).addTo(detailMap);
-        detailMap.invalidateSize();
-
         // La résolution est asynchrone : la fiche peut changer, ou être fermée
         // puis rouverte, avant qu'elle n'aboutisse. Rien ne doit alors être posé
-        // sur la carte à l'écran, qui n'est plus celle-ci.
-        var maCarte = detailMap;
-        function carteVivante(){ return detailMap === maCarte; }
+        // sur la carte à l'écran, qui ne montre plus ce sujet. C'est ce que
+        // faisait le test de carte vivante en comparant deux objets carte, du
+        // temps où il y en avait un par ouverture : une réponse ne pose rien si
+        // le numéro qu'elle tient n'est plus le numéro courant.
+        function aMoi(){ return detailCarteJeton === monJeton; }
+
+        // Le sujet a changé pendant les 300 ms d'attente : on ne monte rien.
+        if(!aMoi()) { fini(); return; }
+
+        // Carte unique : créée au premier passage, retrouvée aux suivants. Ce qui
+        // partait avec la carte détruite se retire ici, à la main, avant de poser
+        // le nouveau sujet : le marqueur de la fiche précédente et, s'il y en
+        // avait un, son message d'échec.
+        assurerCarteFiche();
+        viderMarqueurFiche();
+        masquerEchecCarte();
+        // Le panneau vient de s'ouvrir, ou de changer de largeur : Leaflet remesure.
+        detailMap.invalidateSize();
 
         // Récupérer la couleur de la colonne pour le marker
         var colColor = '#1D1D1F';
@@ -2138,15 +2227,6 @@ async function openDetail(id) {
               autoPanPadding: [10, 10]
             });
           detailMarker.openPopup();
-        }
-
-        // Les deux causes d'échec, distinctes à l'écran : le service a répondu
-        // sans rien trouver, ou le service n'a pas répondu.
-        var MSG_INTROUVABLE = 'Adresse non localisable';
-        var MSG_PANNE = 'Localisation indisponible';
-        function afficherEchec(msg) {
-          var mapEl = document.getElementById('detail-map');
-          if(mapEl) mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#8E8E93;font-size:12px;background:#F5F5F7;">'+msg+'</div>';
         }
 
         // a. Coordonnées portées par la fiche : placement direct, zéro réseau.
@@ -2197,7 +2277,7 @@ async function openDetail(id) {
                 var lng = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
                 cache[cacheKey] = { lat: lat, lon: lng, ts: Date.now() };
                 try { localStorage.setItem(GEO_KEY, JSON.stringify(cache)); } catch(e){}
-                if(carteVivante()) placeMarker(lat, lng, c.address);
+                if(aMoi()) placeMarker(lat, lng, c.address);
                 return 'ok';
               }
               return 'vide';
@@ -2209,15 +2289,15 @@ async function openDetail(id) {
         }
 
         geocode(c.address, false).then(function(issue){
-          if(!carteVivante() || issue === 'ok') { fini(); return; }
-          if(issue === 'panne') { afficherEchec(MSG_PANNE); fini(); return; }
+          if(!aMoi() || issue === 'ok') { fini(); return; }
+          if(issue === 'panne') { afficherEchecCarte(MSG_CARTE_PANNE); fini(); return; }
           // Repli : extraire CP (5 chiffres) + ville (mots qui suivent)
           var m = c.address.match(/(\d{5})\s*([A-Za-z\u00C0-\u017F\-\s]+)/);
-          if(!m) { afficherEchec(MSG_INTROUVABLE); fini(); return; }
+          if(!m) { afficherEchecCarte(MSG_CARTE_INTROUVABLE); fini(); return; }
           geocode(m[1] + ' ' + m[2].trim(), true).then(function(issue2){
-            if(carteVivante()) {
-              if(issue2 === 'vide') afficherEchec(MSG_INTROUVABLE);
-              else if(issue2 === 'panne') afficherEchec(MSG_PANNE);
+            if(aMoi()) {
+              if(issue2 === 'vide') afficherEchecCarte(MSG_CARTE_INTROUVABLE);
+              else if(issue2 === 'panne') afficherEchecCarte(MSG_CARTE_PANNE);
             }
             fini();
           });
@@ -2226,6 +2306,15 @@ async function openDetail(id) {
     }
   } else {
     mapSection.style.display = 'none';
+    // Fiche sans adresse : la section se masque, mais la carte change quand même
+    // de sujet. Le numéro courant monte pour qu'une résolution encore en vol ne
+    // pose rien derrière la section masquée, et le marqueur de la fiche
+    // précédente part avec elle. Rien de tout cela n'était nécessaire du temps
+    // où la carte mourait à chaque ouverture.
+    detailCarteJeton++;
+    detailGeoFiche = null;
+    viderMarqueurFiche();
+    masquerEchecCarte();
   }
 
   // Adaptation Visio si la carte est dans la colonne "visio"
@@ -2353,9 +2442,15 @@ async function refreshEnrichButtonState(siret){
 function closeDetail() {
   document.getElementById('detail-overlay').classList.remove('open');
   document.getElementById('detail-panel').classList.remove('open');
-  if(detailMap) { detailMap.remove(); detailMap = null; detailMarker = null; }
-  // La carte fermée est morte : une résolution encore en vol ne posera plus
-  // rien (carteVivante), et la garde ne doit pas bloquer la réouverture.
+  // LA CARTE N'EST PLUS DÉTRUITE : elle naît une fois et sert toutes les fiches.
+  // Ce qui partait avec elle se retire donc ici, à la main. Le numéro courant
+  // monte : une résolution encore en vol ne posera plus rien, comme le test de
+  // carte vivante l'assurait quand la fermeture emportait l'objet carte. La
+  // garde d'appel en vol, elle, se lève comme avant : elle ne doit pas bloquer
+  // la réouverture.
+  detailCarteJeton++;
+  viderMarqueurFiche();
+  masquerEchecCarte();
   detailGeoFiche = null;
   currentId = null;
   // Mode iframe (?fiche=) : prévenir la page parente

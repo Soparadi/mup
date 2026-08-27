@@ -253,6 +253,25 @@
     var plafond = options.plafondZoom || PLAFOND_ZOOM;
     var paleur = (typeof options.paleurRoutes === 'number') ? options.paleurRoutes : PALEUR_ROUTES;
 
+    // LE PLAFOND DE ZOOM SE POSE SUR LA CARTE, PAS SUR LA COUCHE. Leaflet ne lit
+    // options.maxZoom que des couches qui appellent _addZoomLimit, et seul
+    // GridLayer le fait, dans son beforeAdd. Le pont étend L.Layer, pas
+    // GridLayer : un maxZoom posé dans ses options ne serait lu par personne, et
+    // la carte, privée de sa seule couche à bornes, remonterait à
+    // getMaxZoom() === Infinity.
+    //
+    // ET IL SE POSE TOUT DE SUITE, avant même de charger les bibliothèques. Le
+    // fond raster qu'on quitte bornait la carte dès sa création, en synchrone ;
+    // ici MapLibre et le pont viennent du réseau, et entre l'appel et leur
+    // arrivée la carte n'a aucune borne. Or getMaxZoom() === Infinity n'est pas
+    // une gêne d'affichage, c'est une panne : L.markerClusterGroup lève « Map has
+    // no maxZoom specified » dans son onAdd quand la borne n'est pas finie, et il
+    // la lève aussi longtemps que le fond tarde ou ne vient jamais (unpkg
+    // injoignable). Une page qui pose des points regroupés perdrait ses points
+    // faute de fond. Le plafond ne dépend pas de la couche : il n'a aucune raison
+    // de l'attendre.
+    map.setMaxZoom(plafond);
+
     return charger().then(function () {
       // L'ATTRIBUTION PASSE PAR attributionControl.customAttribution, pas par
       // l'option attribution. Le pont redéfinit getAttribution() : il lit
@@ -264,14 +283,6 @@
         style: STYLE,
         attributionControl: { customAttribution: ATTRIBUTION }
       }).addTo(map);
-
-      // LE PLAFOND DE ZOOM SE POSE SUR LA CARTE, PAS SUR LA COUCHE. Leaflet ne
-      // lit options.maxZoom que des couches qui appellent _addZoomLimit, et seul
-      // GridLayer le fait, dans son beforeAdd. Le pont étend L.Layer, pas
-      // GridLayer : un maxZoom posé dans ses options ne serait lu par personne,
-      // et la carte, privée de sa seule couche à bornes, remonterait à
-      // getMaxZoom() === Infinity.
-      map.setMaxZoom(plafond);
 
       if (options.opacite !== undefined && couche.getContainer()) {
         couche.getContainer().style.opacity = String(options.opacite);

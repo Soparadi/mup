@@ -485,6 +485,8 @@
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<!-- Fond de carte partagé : charge MapLibre et le pont lui-même, après Leaflet -->
+<script src="/_mup-fond.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function(){
@@ -1235,7 +1237,48 @@
     document.getElementById('week-pills').innerHTML = html;
   }
 
+  // LA CARTE DES ZONES CHAUDES NAÎT UNE FOIS ET SE REPEINT ENSUITE. Elle était
+  // détruite puis refaite à CHAQUE rendu, et render() est rejoué à chaque
+  // changement de période, à chaque saisie d'objectif annuel et à chaque
+  // notification de storage. Avec le fond raster ce cycle était court ; avec le
+  // Plan IGN vectoriel il remonte tout le style, ce qu'aucun de ces gestes ne
+  // justifie. La carte reste donc en place, et chaque rendu ne fait plus que
+  // vider ses couches, reposer les zones du jeu courant et recadrer.
   var hotMap = null, hotLayers = [];
+
+  // Naissance unique. La vue d'ouverture est celle du premier rendu ; les rendus
+  // suivants la refont eux-mêmes, juste après.
+  function assurerCarteZones(mapEl, center){
+    if(hotMap) return hotMap;
+    hotMap = L.map(mapEl, { zoomControl:true }).setView(center, 7);
+    // PLAFOND 14, ET C'EST VOULU. La source sert jusqu'à 19, et les autres cartes
+    // du produit y montent : celle-ci s'arrête à 14 parce qu'une carte de chaleur
+    // n'a plus de sens à l'échelle de la rue. Des cercles de 30 km de rayon et un
+    // classement CHAUD / TIÈDE / FROID se lisent à l'échelle régionale ; zoomer
+    // au numéro de rue ne montrerait qu'un aplat vert sans bord. C'est une
+    // décision de lecture, pas une limite technique : ne pas l'aligner sur les
+    // autres pages en croyant corriger un oubli.
+    //
+    // Le module est un script à part : s'il n'est pas arrivé, la carte reste nue
+    // plutôt que d'emporter la suite du rendu. Le même appel peint aussi la liste
+    // des zones plus bas, et render() enchaîne ensuite sur deux autres blocs.
+    if(window.MUPFond){
+      MUPFond.poser(hotMap, { plafondZoom: 14 })
+        .catch(function(e){ console.warn('Fond de carte indisponible :', e); });
+    }
+    return hotMap;
+  }
+
+  // Les cercles et les marqueurs du rendu précédent partaient avec la carte
+  // détruite, et hotLayers se vidait avec elle. La carte reste : ils se retirent
+  // un à un, avant de reposer ceux du jeu courant. Sans cela ils s'empileraient
+  // à chaque rendu, et la carte montrerait l'histoire de la page au lieu de son
+  // état.
+  function viderZones(){
+    hotLayers.forEach(function(couche){ try{ hotMap.removeLayer(couche); }catch(e){} });
+    hotLayers = [];
+  }
+
   function renderHotZones(){
     var won = pipeline.filter(function(c){ return c.col === 'won'; });
     var open = pipeline.filter(function(c){ return c.col !== 'won' && c.col !== 'lost'; });
@@ -1266,11 +1309,15 @@
 
     var mapEl = document.getElementById('hotmap');
     if(typeof L === 'undefined') return;
-    if(hotMap){ try{ hotMap.remove(); }catch(e){} hotMap = null; hotLayers = []; }
 
     var center = wonGeo.length > 0 ? [wonGeo[0].lat, wonGeo[0].lon] : (openWithScore.length > 0 ? [openWithScore[0].lat, openWithScore[0].lon] : [46.6, 2.5]);
-    hotMap = L.map(mapEl, { zoomControl:true }).setView(center, 7);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:14, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' }).addTo(hotMap);
+    assurerCarteZones(mapEl, center);
+    viderZones();
+    // Le cadrage se refait à chaque jeu de données, comme du temps où la carte
+    // renaissait à sa vue d'ouverture. Sans animation : un rendu rejoué par un
+    // changement de période ne doit pas faire survoler la France à la carte, il
+    // doit la reposer où elle était.
+    hotMap.setView(center, 7, { animate:false });
 
     var bounds = [];
     wonGeo.forEach(function(w){
@@ -1287,7 +1334,7 @@
       bounds.push([o.lat, o.lon]);
     });
 
-    if(bounds.length > 1){ try{ hotMap.fitBounds(bounds, { padding:[30,30], maxZoom:9 }); }catch(e){} }
+    if(bounds.length > 1){ try{ hotMap.fitBounds(bounds, { padding:[30,30], maxZoom:9, animate:false }); }catch(e){} }
     setTimeout(function(){ if(hotMap) hotMap.invalidateSize(); }, 100);
 
     var listHtml = '';

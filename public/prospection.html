@@ -12,6 +12,8 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<!-- Fond de carte partagé : charge MapLibre et le pont lui-même, après Leaflet -->
+<script src="/_mup-fond.js"></script>
 <link rel="stylesheet" href="/styles/sidebar.css">
 <style>
 /* ═══════════════════════════════════════════════
@@ -1932,15 +1934,23 @@ var S = {
 // MAP INIT
 // ════════════════════════════════════════════════════════════════
 var map = L.map('map', { center:[46.5,2.5], zoom:6, zoomControl:true, scrollWheelZoom:true });
-// CartoDB Positron : style gris/blanc minimaliste, gratuit, illimité, sans
-// clé API. Compromis : certains labels pays/régions restent en anglais
-// (Stadia Alidade Smooth lang=fr exige une clé, OSM France est trop saturé).
-// Labels FR à zoom utile (villes/communes) restent corrects. Backlog V1.1.
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  subdomains: 'abcd',
-  maxZoom: 20
-}).addTo(map);
+// Fond Plan IGN vectoriel, réglé dans le module partagé /_mup-fond.js : style,
+// attribution, plafond de zoom, extinctions et pâleur des routes y vivent en un
+// seul exemplaire pour toutes les cartes du produit. Cette page ne demande aucun
+// écart, elle prend le réglage commun tel quel.
+//
+// LE PLAFOND DESCEND DE 20 À 19, borne réelle de la source : la tuile PLAN.IGN
+// annonce maxzoom 18 dans sa metadata.json et le pont cale MapLibre sur
+// getZoom() - 1. Le 20 annoncé jusqu'ici promettait un niveau que personne ne
+// sert. Le module le pose en SYNCHRONE, dès cet appel, sans attendre le réseau :
+// le groupe de regroupement exige une borne finie à son entrée sur la carte, et
+// il la vérifie (cf. _ensureCluster plus bas).
+//
+// La réserve inscrite ici du temps de CartoDB tombe avec lui : ce fond laissait
+// des libellés de pays et de régions en anglais, faute de variante française
+// sans clé. Le Plan IGN est français de bout en bout, la réserve n'a plus d'objet.
+MUPFond.poser(map)
+  .catch(function(e){ console.warn('Fond de carte indisponible :', e); });
 
 // SEULE couche de marqueurs de la page : tout point posé y entre, du premier au
 // dernier. Le regroupement est donc permanent, comme sur la démonstration de

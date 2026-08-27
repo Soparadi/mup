@@ -16,7 +16,7 @@ import { startWatchdog } from './lib/watchdog.js'
 import { encrypt, decrypt, isCryptoReady } from './lib/crypto.js'
 import { getUserId, requireUserId } from './lib/auth.js'
 import { cleanRecordId } from './lib/db.js'
-import { normaliserSociete, comparerNumero, parserAdresseAgregee, voiesConcordent } from './lib/societes.js'
+import { normaliserSociete, comparerNumero, parserAdresseAgregee, voiesConcordent, decouperAdresseAgregee } from './lib/societes.js'
 import { libelleFormeJuridique } from './lib/formes-juridiques.js'
 import { analyserImport, analyserImportDetaille } from './lib/import.js'
 import { normalizePersonFields } from './lib/person-fields.js'
@@ -2081,6 +2081,112 @@ app.post('/api/admin/rapprochement/dept', requireSuperadmin, async (req, res) =>
   }
 })
 
+// ── L'ADRESSE : TROIS CASES QUI FONT AUTORITÉ, UN AGRÉGAT QUI SE DÉRIVE ───
+//
+// LE DÉFAUT QUE CE BLOC FERME. Une fiche porte son adresse en TROIS cases,
+// `adresse` (la voie), `zip`, `ville`, et à côté un AGRÉGAT monobloc `address`
+// (alias ancien `location`) que lisent la Carte, le géocodage, les devis et les
+// factures. Deux vérités pour une seule adresse, et le second point d'entrée
+// écrivait faux : la fiche société pose aujourd'hui `address` = la VOIE SEULE,
+// si bien qu'une carte née de la prospection, dont l'agrégat porte
+// « 12 RUE DES FORGES 35270 COMBOURG », se retrouve avec « 12 RUE DES FORGES »
+// dès le premier enregistrement de la fiche. Le code postal et la ville
+// disparaissent de la seule valeur que le géocodage lit.
+//
+// LE PARTAGE : les trois cases font autorité, elles seules se saisissent, et
+// l'agrégat cesse d'être une donnée pour devenir une DÉRIVÉE, recomposée à
+// l'écriture à partir des trois. La recomposition vit ICI, côté serveur, parce
+// que c'est le seul point que TOUTES les écritures traversent. Posée dans une
+// page, la règle se rouvrirait à la page suivante : chaque écran qui écrit
+// pourrait rouvrir le trou, et il faudrait la reposer à chacun.
+//
+// LE CORPS EST PARTIEL, et il le reste (PUT /api/contacts/:id écrit en MERGE) :
+// une case éditée seule n'envoie que sa clé. Les deux autres se lisent donc sur
+// l'ENREGISTREMENT RELU, que les deux routes tiennent déjà pour leur contrôle
+// d'appartenance. Une frappe dans la seule case « ville » recompose bien les
+// trois, et non la ville seule.
+//
+// GARDE STRICTE SUR LA DÉCOUPE. Un enregistrement dont les trois cases sont
+// vides ne porte son adresse que dans l'agrégat : la base des trois est alors
+// la DÉCOUPE de cet agrégat (decouperAdresseAgregee, ancre en fin). Dès qu'UNE
+// des trois est renseignée, la découpe ne joue plus. Un enregistrement portant
+// déjà un code postal ou une ville n'est JAMAIS redécoupé : une correction
+// manuelle ne doit jamais être écrasée par une déduction.
+//
+// RIEN N'EST ÉCRIT SANS VOIE CONNUE. La découpe écartée, il arrive qu'aucune
+// voie ne soit connue alors que l'agrégat en porte une. C'est l'état exact
+// d'une carte née de la prospection depuis le commit voisin : code postal et
+// ville en cases, voie nulle part ailleurs que dans l'agrégat. Recomposer
+// l'effacerait. On s'abstient donc, et l'agrégat reste ce qu'il est jusqu'à la
+// première écriture qui apporte une voie. Une voie EFFACÉE est un cas
+// différent, et c'est un geste : la case portait quelque chose, le corps la
+// vide, l'agrégat suit.
+//
+// AUCUNE MIGRATION. Rien n'est réécrit en base ici : la recomposition ne joue
+// qu'au passage d'une écriture, sur le seul enregistrement que cette écriture
+// vise. La base reste ce qu'elle est, et se remet en phase fiche par fiche.
+//
+// `societes` n'est pas concernée : ce record porte les trois cases et AUCUN
+// agrégat, il n'y a rien à y dériver.
+const CASES_ADRESSE = ['adresse', 'zip', 'ville']
+
+// Vue chaîne comparable d'une case : absent, null et chaîne vide sont un seul et
+// même « pas renseigné » (même convention que valeurPont, plus bas).
+const texteAdresse = (v) => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v).trim()))
+
+// Rend l'agrégat à écrire, ou null quand il n'y a rien à recomposer.
+//
+// `etat` est ce que porte la fiche EN DEHORS des clés qu'apporte le corps :
+// l'enregistrement relu pour une mise à jour, le corps lui-même pour une
+// création, où il n'y a rien d'autre.
+function recomposerAdresseAgregee(etat, corps) {
+  // DÉCLENCHEMENT : le corps touche à l'une des trois cases. Un corps qui n'en
+  // porte aucune (colonne déplacée, note, rendez-vous, coordonnées société)
+  // ressort exactement comme il est entré.
+  if (!corps || !CASES_ADRESSE.some((cle) => cle in corps)) return null
+
+  let base = {
+    adresse: texteAdresse(etat?.adresse),
+    zip: texteAdresse(etat?.zip),
+    ville: texteAdresse(etat?.ville)
+  }
+  // L'agrégat tel qu'il est aujourd'hui, sous l'un ou l'autre de ses deux noms.
+  const agregatExistant = texteAdresse(etat?.address) || texteAdresse(etat?.location)
+  // LA GARDE, et elle est stricte : les TROIS cases vides, et elles seules.
+  if (!base.adresse && !base.zip && !base.ville) {
+    const d = decouperAdresseAgregee(agregatExistant)
+    base = { adresse: d.voie, zip: d.code_postal, ville: d.ville }
+  }
+
+  // Le corps l'emporte sur la base, CLÉ PAR CLÉ ET PAR PRÉSENCE : une clé
+  // absente n'est pas modifiée, une clé à chaîne vide est un effacement voulu.
+  // C'est la même distinction que celle que le MERGE porte jusqu'en base.
+  const trois = {
+    adresse: 'adresse' in corps ? texteAdresse(corps.adresse) : base.adresse,
+    zip: 'zip' in corps ? texteAdresse(corps.zip) : base.zip,
+    ville: 'ville' in corps ? texteAdresse(corps.ville) : base.ville
+  }
+  // Voie inconnue ET agrégat existant : la voie ne vit que dans l'agrégat,
+  // recomposer la perdrait. On s'abstient. `!base.adresse` distingue l'inconnue
+  // de l'effacée : la case portait une voie, le corps la vide, l'agrégat suit.
+  if (!trois.adresse && !base.adresse && agregatExistant) return null
+
+  return [trois.adresse, trois.zip, trois.ville].filter(Boolean).join(' ')
+}
+
+// Pose l'agrégat recomposé sur le corps, SOUS SES DEUX NOMS. `location` est
+// l'alias ancien du même agrégat, et trois écrans le lisent encore en repli
+// quand `address` est vide (pipeline, Carte, Dashboard : `if(c.location &&
+// !c.address) c.address = c.location`). Les laisser diverger ferait reparaitre
+// par la porte du repli une adresse que les trois cases viennent d'effacer.
+// Ils bougent donc ensemble, d'une seule valeur, tant que ce repli existe.
+function poserAdresseAgregee(etat, corps) {
+  const agregat = recomposerAdresseAgregee(etat, corps)
+  if (agregat === null) return
+  corps.address = agregat
+  corps.location = agregat
+}
+
 app.get('/api/pipeline', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
@@ -2117,6 +2223,10 @@ app.post('/api/pipeline', async (req, res) => {
     if (!body.created_at) {
       body.created_at = body.createdAt || new Date().toISOString()
     }
+
+    // Agrégat dérivé des trois cases. À la création il n'y a pas
+    // d'enregistrement d'avant : l'état, c'est le corps.
+    poserAdresseAgregee(body, body)
 
     const db = await getDb()
 
@@ -2977,6 +3087,11 @@ app.put('/api/pipeline/:id', async (req, res) => {
     // pas : si le corps en porte une autre, celle du record gagne.
     const dateCreationOrigine = rec.created_at || rec.createdAt
     if (dateCreationOrigine) cleanBody.created_at = dateCreationOrigine
+    // Agrégat dérivé des trois cases, à partir de l'enregistrement RELU
+    // ci-dessus : le corps d'une case éditée seule ne porte que sa clé.
+    // Posé AVANT l'écriture, et donc avant le rattrapage de position, qui lit
+    // `corps.address` et reçoit ainsi l'agrégat complet plutôt que la voie.
+    poserAdresseAgregee(rec, cleanBody)
     const result = await db.query('UPDATE type::record("pipeline", $id) CONTENT $body', { id, body: cleanBody })
     // Enrichissement additif du référentiel mutualisé (clé SIRET) — motif calqué
     // sur PUT /api/contacts/:id, même intention : ce que l'abonné saisit ou enrichit
@@ -3075,6 +3190,8 @@ app.post('/api/contacts', async (req, res) => {
     // Brique A — face personne : champs additifs garantis + sync emails[]/email
     // et telephones[]/phone. Non destructif (voir lib/person-fields.js).
     Object.assign(body, normalizePersonFields(body))
+    // Agrégat dérivé des trois cases (cf. POST /api/pipeline, même geste).
+    poserAdresseAgregee(body, body)
     const db = await getDb()
     const cleanId = cleanRecordId('contacts', body?.id)
     if (cleanId) {
@@ -3233,6 +3350,16 @@ app.put('/api/contacts/:id', async (req, res) => {
     if (Object.keys(cleanBody).length <= 1) return res.json(rec)
     // Brique A — face personne (table contacts uniquement, jamais pipeline).
     if (tb === 'contacts') Object.assign(cleanBody, normaliserFacePersonnePartielle(rec, cleanBody))
+    // Trace d'usage : la liste des champs modifiés est arrêtée ICI, AVANT que
+    // l'agrégat dérivé ne soit posé sur le corps. Un dérivé n'est pas une
+    // saisie et n'a rien à faire dans une trace de saisie, qui est LUE
+    // (agrégation par recherche, export RGPD) : sans cela, une frappe dans la
+    // seule case « ville » compterait trois champs modifiés au lieu d'un.
+    const champsSaisisModifies = champsModifies(rec, cleanBody)
+    // Agrégat dérivé des trois cases, à partir de l'enregistrement RELU
+    // ci-dessus. Cette route sert les DEUX tables selon le préfixe de l'id : la
+    // règle est la même des deux côtés, l'agrégat porte le même nom.
+    poserAdresseAgregee(rec, cleanBody)
 
     // ── ÉCRITURE CIBLÉE : LES SEULES CLÉS REÇUES, JAMAIS LE RECORD ENTIER ──
     //
@@ -3287,7 +3414,7 @@ app.put('/api/contacts/:id', async (req, res) => {
       searchId: rec.search_id,
       contactTable: tb,
       contactId: id,
-      champs: champsModifies(rec, cleanBody)
+      champs: champsSaisisModifies
     }).catch(() => {})
     // Enrichissement additif du référentiel mutualisé (clé SIRET) depuis la saisie
     // abonné — FIRE-AND-FORGET (sans await) : ne bloque pas la réponse déjà servie,

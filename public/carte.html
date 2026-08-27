@@ -2005,6 +2005,32 @@ function releverPosition(geste){
   },{enableHighAccuracy:false,maximumAge:60000,timeout:15000});
 }
 
+// LE RELEVÉ SERT AUSSI À LA MÉTÉO, et c'est le seul endroit d'où il peut la
+// servir : une position relevée est un CONSTAT, de la même nature que ce que
+// mesure un appareil, là où une adresse tapée est une position DÉCLARÉE — du
+// même rang que l'adresse de départ, et qui n'a rien à faire dans une mémoire
+// périssable. D'où le branchement ici et non dans poserDepart, qui reçoit les
+// deux.
+// LA COMMUNE SE RÉSOUT MAINTENANT, par notre route : le navigateur ne parle
+// qu'à nous, et le nom d'un point ne bouge pas — le résoudre à l'affichage
+// coûterait un appel par ouverture de page pour la même réponse.
+// SANS COMMUNE, ON N'ÉCRIT RIEN. Des coordonnées orphelines afficheraient une
+// température sous « Renseigner mon adresse de départ ». La cascade météo se
+// referme alors sur ses autres rangs et l'écran reste celui d'aujourd'hui.
+// L'horodatage porte l'âge : c'est meteo.js qui ignore une entrée de plus de
+// vingt-quatre heures, il n'y a pas de purge à faire ici — le relevé suivant
+// remplace le précédent.
+var MEMOIRE_METEO='mup_meteo_position';
+function memoriserPositionPourMeteo(latlng){
+  fetch('/api/geocode/reverse?lat='+encodeURIComponent(latlng[0])+'&lon='+encodeURIComponent(latlng[1]),{credentials:'same-origin'})
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(d){
+      if(!d||!d.ville) return;
+      try{ localStorage.setItem(MEMOIRE_METEO,JSON.stringify({ts:Date.now(),lat:latlng[0],lon:latlng[1],ville:d.ville})); }catch(e){}
+    })
+    .catch(function(){});
+}
+
 // Ce que le relevé pose : le marqueur, le tri du panneau par distance, et le
 // point de départ du trajet.
 // LE CADRAGE PASSE PAR L'ARBITRE, et pas par setView (cf. ARBITRE DE CADRAGE).
@@ -2017,6 +2043,7 @@ function poserPosition(latlng, geste){
   var icon=L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]});
   userMarker=L.marker(userLatLng,{icon:icon,zIndexOffset:1000}).addTo(map);
   try{ localStorage.setItem(TEMOIN_GEO,'1'); }catch(e){}
+  memoriserPositionPourMeteo(userLatLng);
   if(geste||!vueDemandee) cadrerSur(userLatLng,11);
   // Le relevé sert à trier le panneau par distance. Plus de garde ici : les deux
   // listes ne se disputent plus le corps du panneau, et renderPanel se garde

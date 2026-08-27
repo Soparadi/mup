@@ -78,7 +78,11 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 
 /* LEAFLET OVERRIDES */
 .leaflet-container{font-family:var(--font)!important}
-.leaflet-tile-pane{filter:grayscale(100%) contrast(1.1)}
+/* Essai Plan IGN v2 : la désaturation porte sur le conteneur de la couche
+   de tuiles (.leaflet-layer dans le pane des tuiles), jamais sur le pane
+   entier ni sur la carte — marqueurs, tracé et bulles gardent leurs
+   couleurs. Valeurs d'essai, à ajuster. */
+.leaflet-tile-pane .leaflet-layer{filter:saturate(0.25) brightness(1.05)}
 .leaflet-popup-content-wrapper{border-radius:12px!important;border:1px solid var(--border)!important;box-shadow:0 10px 28px rgba(0,0,0,.12)!important;padding:0!important;overflow:hidden}
 .leaflet-popup-content{margin:0!important;width:auto!important}
 /* La pointe reste au rendu Leaflet standard — triangle blanc sans bordure.
@@ -1141,10 +1145,14 @@ function progressHtml(col){
 // éviter (cf. le bloc des commandes de zoom dans la feuille de style).
 var map=L.map('map',{center:[46.5,2.5],zoom:5,zoomControl:false});
 L.control.zoom({zoomInTitle:'Zoom avant',zoomOutTitle:'Zoom arrière'}).addTo(map);
-// CartoDB Positron (cf prospection.html pour le détail du choix).
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  subdomains:'abcd', maxZoom:20, opacity:0.85
+// Essai du Plan IGN v2 (Géoplateforme) sur cette seule page ; les autres
+// restent sur CartoDB Positron. L'URL n'a pas de {s}, donc pas de subdomains ;
+// les tuiles s'arrêtent au zoom 19, au-delà Leaflet étire la dernière rangée.
+// OpenStreetMap reste cité : le tracé de tournée vient d'OSRM, donc de données
+// OSM, indépendamment du fond.
+L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png',{
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; Plan IGN v2 &middot; &copy; IGN / G&eacute;oplateforme',
+  maxNativeZoom:19, maxZoom:20, opacity:0.85
 }).addTo(map);
 
 // ── REGROUPEMENT DES FICHES ──

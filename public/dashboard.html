@@ -111,7 +111,6 @@
      enfant ; overflow:hidden et les rayons de coin bas ne changent pas. */
   .map-box{height:auto;position:relative;overflow:hidden;border-bottom-left-radius:16px;border-bottom-right-radius:16px;}
   .leaflet-container{font-family:var(--font)!important;}
-  .leaflet-tile-pane{filter:grayscale(100%) contrast(1.1);}
   .leaflet-popup-content-wrapper{border-radius:12px!important;border:1px solid var(--border)!important;box-shadow:0 10px 28px rgba(0,0,0,.12)!important;padding:0!important;overflow:hidden;}
   .leaflet-popup-content{margin:0!important;width:auto!important;}
   /* La pointe reste au rendu Leaflet standard — triangle blanc sans bordure.
@@ -703,6 +702,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/_mup-fond.js"></script>
 <script>
 // ── MAP — pipeline addresses from localStorage ──
 var _pipelineCache = null;
@@ -764,13 +764,16 @@ var map = L.map('dashboard-map', {
   zoom: 5,
   zoomControl: true
 });
-// CartoDB Positron (cf prospection.html pour le détail du choix).
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  subdomains: 'abcd',
-  maxZoom: 20,
-  opacity: 0.85
-}).addTo(map);
+// Fond Plan IGN vectoriel, réglé dans le module partagé /_mup-fond.js : style,
+// attribution, plafond de zoom, extinctions et pâleur des routes y vivent en un
+// seul exemplaire, pour les six cartes du produit. Cette page n'en garde que son
+// écart propre, l'opacité de sa vignette.
+//
+// LE PLAFOND DESCEND DE 20 À 19, et c'est la borne réelle de la source : la
+// tuile PLAN.IGN annonce maxzoom 18, et le pont cale MapLibre sur getZoom() - 1.
+// Le 20 annoncé jusqu'ici promettait un niveau que personne ne sert.
+MUPFond.poser(map, { opacite: 0.85 })
+  .catch(function(e){ console.warn('Fond de carte indisponible :', e); });
 setTimeout(function(){ map.invalidateSize(); }, 100);
 
 // Le fond de carte mène à la Carte, comme le reste de la vignette : la carte

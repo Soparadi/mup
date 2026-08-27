@@ -1190,12 +1190,90 @@ map.setMaxZoom(19);
 var COUCHES_ETEINTES=['routier_chemin','routier_chemin_sup','routier_chemin_sou',
   'oro_relief','oro_courbe','oro_lin','oro_ponc',
   'ocs_vegetation_surf','ocs_nature_sol_surf'];
+// ROUTES ATTÉNUÉES. Le style gris dessine ses routes en gris soutenu (#B4B4B4,
+// #878787, #727272...), qui rivalise avec les points de fiches et le tracé de
+// tournée : on les transpose vers le blanc, canal par canal, sans jamais
+// toucher l'alpha. Le périmètre se prend par source-layer, comme l'extinction :
+// 94 couches, 98 propriétés de couleur au relevé du style. Les toponymes
+// routiers (bornes, numéros, odonymes) restent à pleine force, ce sont eux qui
+// portent la lecture.
+//
+// FACTEUR_PALEUR_ROUTES : 0 laisse la couleur d'origine, 1 rend du blanc pur.
+// Un seul chiffre à changer pour rendre les routes plus ou moins présentes.
+var FACTEUR_PALEUR_ROUTES=0.5;
+var COUCHES_ROUTIERES=['routier_route','routier_route_sup','routier_route_sou',
+  'routier_liaison','routier_surf'];
+
+// DEUX FORMES DE VALEUR CIRCULENT DANS CE STYLE, et il faut savoir lire les
+// deux : la chaîne simple ('#RRGGBB' ou 'rgba(r, g, b, a)'), et la fonction de
+// zoom héritée ({stops:[[zoom, couleur], ...]}, parfois avec une clé base).
+// palirCouleur ne connaît que la chaîne et rend null sur ce qu'elle ne sait pas
+// lire, pour que l'appelant compte ces cas plutôt que de les taire.
+function palirCouleur(couleur){
+  if(typeof couleur!=='string')return null;
+  function versBlanc(canal){return Math.round(canal+(255-canal)*FACTEUR_PALEUR_ROUTES);}
+  var hexa=/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(couleur);
+  if(hexa){
+    return '#'+[1,2,3].map(function(rang){
+      return ('0'+versBlanc(parseInt(hexa[rang],16)).toString(16)).slice(-2);
+    }).join('').toUpperCase();
+  }
+  var rgb=/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*(?:,\s*([0-9.]+)\s*)?\)$/i.exec(couleur);
+  if(rgb){
+    var canaux=[1,2,3].map(function(rang){return versBlanc(parseFloat(rgb[rang]));}).join(', ');
+    // L'alpha repart tel quel, jamais recalculé.
+    return rgb[4]===undefined?'rgb('+canaux+')':'rgba('+canaux+', '+rgb[4]+')';
+  }
+  return null;
+}
+
 var glIGN=fondIGN.getMaplibreMap();
 glIGN.on('load',function(){
   glIGN.getStyle().layers.forEach(function(couche){
     if(COUCHES_ETEINTES.indexOf(couche['source-layer'])<0)return;
     glIGN.setLayoutProperty(couche.id,'visibility','none');
   });
+
+  var releve={chaines:0,rampes:0,intactes:0};
+  glIGN.getStyle().layers.forEach(function(couche){
+    if(COUCHES_ROUTIERES.indexOf(couche['source-layer'])<0)return;
+    var peinture=couche.paint||{};
+    Object.keys(peinture).forEach(function(propriete){
+      if(propriete.indexOf('color')<0)return;
+      var valeur=peinture[propriete];
+      if(typeof valeur==='string'){
+        var pale=palirCouleur(valeur);
+        if(pale===null){releve.intactes++;return;}
+        glIGN.setPaintProperty(couche.id,propriete,pale);
+        releve.chaines++;
+        return;
+      }
+      if(valeur&&typeof valeur==='object'&&Array.isArray(valeur.stops)){
+        // On recopie la rampe au lieu de la muter : l'objet rendu par
+        // getStyle() est celui que MapLibre garde, le modifier sur place
+        // brouillerait la comparaison faite par setPaintProperty.
+        var complete=true;
+        var paliers=valeur.stops.map(function(palier){
+          var pale=palirCouleur(palier[1]);
+          if(pale===null)complete=false;
+          return [palier[0],pale===null?palier[1]:pale];
+        });
+        if(!complete){releve.intactes++;return;}
+        var rampe={stops:paliers};
+        if('base' in valeur)rampe.base=valeur.base;
+        glIGN.setPaintProperty(couche.id,propriete,rampe);
+        releve.rampes++;
+        return;
+      }
+      // Expression moderne en tableau ou forme inconnue : laissée telle quelle,
+      // mais comptée, pour qu'un silence ne passe pas pour un traitement.
+      releve.intactes++;
+    });
+  });
+  if(releve.intactes){
+    console.warn('Plan IGN : '+releve.intactes+' propriété(s) de couleur routière laissée(s) intacte(s) sur '
+      +(releve.chaines+releve.rampes+releve.intactes)+', forme de valeur non reconnue.');
+  }
 });
 
 // ── REGROUPEMENT DES FICHES ──

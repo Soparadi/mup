@@ -3453,6 +3453,22 @@ function clientCorrespond(p, q){
 function clientSociete(p){ return String(p.enseigne || p.nom || '').trim(); }
 function clientPersonne(p){ return String(p.contact_nom || p.contact || '').trim(); }
 
+// L'ADRESSE DU DOCUMENT SE COMPOSE, elle ne se recopie pas. Sur une fiche
+// saisie à la main, `adresse` porte souvent la ligne entière et `zip`/`ville`
+// restent vides. Sur une fiche née de la matérialisation d'un prospect,
+// `adresse` ne porte QUE la voie : le code postal vit dans `zip`, la commune
+// dans `ville`. Lire `adresse` seule faisait donc partir chez le client un
+// devis adressé à « 12 rue du Commerce », sans code postal ni ville.
+// Les trois champs existent côte à côte : on les joint, dans l'ordre postal,
+// en sautant ceux qui sont vides. Rien n'est extrait d'une chaîne agrégée, et
+// une fiche qui ne porte que `adresse` rend exactement `adresse`.
+function clientAdresse(p){
+  return [p.adresse, p.zip, p.ville]
+    .map(v => String(v == null ? '' : v).trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
 function fermeResultats(){
   const box = document.getElementById('client-results');
   if(box){ box.hidden = true; box.innerHTML = ''; }
@@ -3552,7 +3568,7 @@ function choisitClient(i){
   document.getElementById('e-name').value  = clientPersonne(p);
   document.getElementById('e-co').value    = clientSociete(p);
   document.getElementById('e-email').value = String(p.email || '');
-  document.getElementById('e-addr').value  = String(p.adresse || '');
+  document.getElementById('e-addr').value  = clientAdresse(p);
   // LE SIRET ARRIVE PAR SON CHAMP, comme les quatre autres valeurs, et non par
   // une écriture posée à part sur le document : une seule voie l'écrit, celle
   // que l'abonné voit et peut corriger. Il est mis en forme comme sur la fiche

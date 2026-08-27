@@ -4306,6 +4306,7 @@ c18 -20 19 -43 22 -358 5 -578 -14 -1556 -31 -1625 -17 -69 -42 -97 -85 -98
 <script src="/js/sector-search.js"></script>
 <script src="/js/sector-autocomplete.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/_mup-fond.js"></script>
 <script>
 /* ───────────────── REVEAL ON SCROLL ───────────────── */
 const observer = new IntersectionObserver((entries) => {
@@ -4460,6 +4461,9 @@ function toggleFaq(btn) {
 let leadsMap = null;
 let leadMarkers = [];
 let leadsHomeView = null;
+// Promesse de pose du fond, retenue par initLeadsMap : elle ne se résout qu'une
+// fois le style peint. La démonstration jouée d'elle-même s'y accroche.
+let fondLeadsPret = null;
 // Minuteries de la révélation progressive (mode auto). Vidées à chaque nouvelle
 // recherche pour ne pas laisser une pose en attente peindre un point orphelin.
 let demoRevealTimers = [];
@@ -4488,12 +4492,24 @@ function initLeadsMap() {
   // Vue d'ouverture, mémorisée pour le repli silencieux
   leadsHomeView = { center: leadsMap.getCenter(), zoom: leadsMap.getZoom() };
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    subdomains: 'abcd',
-    maxZoom: 18,
-    opacity: 0.92,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  }).addTo(leadsMap);
+  // Fond Plan IGN vectoriel, réglé dans le module partagé /_mup-fond.js : style,
+  // attribution, plafond de zoom, extinctions et pâleur des routes y vivent en un
+  // seul exemplaire pour toutes les cartes du produit. Cette page n'en garde que
+  // son écart propre, l'opacité de son cadre.
+  //
+  // POSE DIFFÉRÉE, À L'ENTRÉE DE LA CARTE DANS LE CHAMP DE L'ÉCRAN. C'est la seule
+  // page publique du produit, et la seule dont la carte commence sous la ligne de
+  // flottaison (963 px du haut du document, mesuré au banc en 1440 de large) : un
+  // visiteur qui ne fait pas défiler ne télécharge pas les 275 ko gzip de MapLibre.
+  //
+  // LA PROMESSE EST RETENUE dans fondLeadsPret : la démonstration s'y accroche et
+  // ne pose ses points qu'une fois le fond peint (cf. autoRunDemo).
+  //
+  // Le plafond passe de 18 à 19, borne réelle de la source : la tuile PLAN.IGN
+  // annonce maxzoom 18 dans sa metadata.json et le pont cale MapLibre sur
+  // getZoom() - 1. Le 18 annoncé ici retranchait un niveau réellement servi.
+  fondLeadsPret = MUPFond.poserAuDefilement(leadsMap, mapEl, { opacite: 0.92 });
+  fondLeadsPret.catch(function (e) { console.warn('Fond de carte indisponible :', e); });
 
   // Forcer le recalcul de la taille après render initial
   setTimeout(() => {
@@ -5267,6 +5283,25 @@ async function autoRunDemo() {
 
   // Autocomplétion indisponible → abandon avant toute modification de la page.
   if (!sectorAC) return;
+
+  // LE FOND D'ABORD, LES POINTS ENSUITE. La carte charge son fond au défilement :
+  // tant que le visiteur n'est pas descendu jusqu'à elle, le cadre est nu, et des
+  // points posés dessus flotteraient sur du vide. On attend donc la promesse de
+  // pose, qui ne se résout qu'une fois le style peint. Effet voulu : la
+  // démonstration ne se joue plus au chargement mais à l'arrivée du visiteur sur
+  // l'outil, c'est-à-dire au moment où il la regarde.
+  //
+  // Second motif, moins visible : c'est la pose du fond qui appelle setMaxZoom(19).
+  // Avant elle la carte n'a aucune couche à bornes et getMaxZoom() vaut Infinity ;
+  // getBoundsZoom, employé plus bas pour calculer le zoom d'arrivée et le
+  // regroupement des points, rendrait alors un niveau que la vue n'atteint jamais.
+  //
+  // Fond injoignable : la démonstration se joue quand même, sur cadre nu. Une
+  // vitrine muette coûterait plus cher qu'une vitrine sans fond.
+  initLeadsMap();
+  if (fondLeadsPret) {
+    try { await fondLeadsPret; } catch (e) { /* déjà signalé en console par la pose */ }
+  }
 
   // a. région → change (peuple les départements)
   if (!regionEl.querySelector('option[value="' + DEMO_AUTO.regionSlug + '"]')) return;

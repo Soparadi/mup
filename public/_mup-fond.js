@@ -289,9 +289,13 @@
 
   // ── POSE DIFFÉRÉE, À L'ENTRÉE DANS LE CHAMP DE L'ÉCRAN ─────────────────
   // Pour l'accueil public seul : MapLibre pèse 275 ko gzip, et la carte de
-  // démonstration commence à 940 px du haut du document (mesuré en 1440x900,
-  // fenêtre de 900) : elle n'est jamais visible sans défilement. Un visiteur qui
-  // ne fait pas défiler la page ne télécharge donc rien.
+  // démonstration commence à 963 px du haut du document (mesuré au banc en 1440
+  // de large) : elle n'est jamais visible sans défilement. Un visiteur qui ne
+  // fait pas défiler la page ne télécharge donc rien. Sur une fenêtre de 900 px
+  // de haut, la carte n'est qu'à 63 px sous le pli, donc dans la marge d'avance
+  // de 200 px posée plus bas : le fond part alors aussitôt, et le report ne mord
+  // que sur les fenêtres plus courtes (mesuré : rien de chargé en 1440x500 tant
+  // qu'on ne défile pas).
   //
   // La promesse rendue est celle de poser() : elle ne se résout qu'une fois le
   // fond peint. C'est à elle que la mise en scène de la démonstration s'accroche,

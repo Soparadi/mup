@@ -1011,7 +1011,10 @@ async function init(){
             id: p.id,
             nom: p.co || p.nom || p.name || '',
             company: p.co || p.nom || '',
-            contact: p.name || '',
+            // La personne se lit dans `contact`. `name` n'en était qu'un alias,
+            // que migrateCard réécrivait à chaque lecture de fiche : il ne dit
+            // plus la personne dès qu'une carte est reprise.
+            contact: p.contact || '',
             email: p.email || '',
             tel: p.tel || p.telephone || '',
             // Les trois cases telles que la carte les porte, et l'agrégat à
@@ -1076,7 +1079,9 @@ async function init(){
               id: p.id,
               nom: p.co || p.nom || p.name || '',
               company: p.co || p.nom || '',
-              contact: p.name || '',
+              // Même lecture que la branche serveur : la personne est dans
+              // `contact`, pas dans l'alias `name`.
+              contact: p.contact || '',
               email: p.email || '',
               tel: p.tel || p.telephone || '',
               // Mêmes trois cases et même agrégat que la branche serveur.

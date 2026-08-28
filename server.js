@@ -2200,6 +2200,15 @@ function poserAdresseAgregee(etat, corps) {
 // compatibilité, quatre lectures du produit ne connaissant que lui, et il cesse
 // d'être une saisie pour devenir un dérivé.
 //
+// DEUX TABLES, DEUX NOMS POUR LA MÊME CHAÎNE, ET C'EST LE SEUL PARAMÈTRE. Sur
+// `contacts` la chaîne dérivée s'appelle `contact_nom` ; sur une carte
+// `pipeline` elle s'appelle `contact`, et c'est là que les lectures de la
+// personne vont la chercher depuis 17ad975 et 789c240. Le nom de la clé est
+// DONNÉ PAR L'APPELANT, jamais deviné : rien ici ne lit `contact` à défaut de
+// `contact_nom` ni l'inverse. Un repli entre les deux serait un poison, puisque
+// `contact` porte la RAISON SOCIALE sur un record `contacts`, où migrateProspect
+// l'y verse depuis toujours.
+//
 // LE CORPS EST PARTIEL, et il le reste : PUT /api/contacts/:id écrit en MERGE,
 // une case éditée seule n'envoie que sa clé. L'autre se lit donc sur
 // l'ENREGISTREMENT RELU, que la route tient déjà pour son contrôle
@@ -2220,11 +2229,21 @@ function poserAdresseAgregee(etat, corps) {
 // jamais, il ne fait que joindre ce que le corps et l'enregistrement portent.
 //
 // PAS DE CASE, PAS DE VOYAGE, et c'est le calque de « pas de voie, pas de
-// voyage ». Les deux cases ressortent vides ALORS QU'ELLES L'ÉTAIENT DÉJÀ, et
-// une chaîne existe : ce nom ne vit que dans la chaîne, la recomposer
-// l'effacerait. On s'abstient. C'est exactement ce que fait savePerson
+// voyage ». Les deux cases ressortent vides ALORS QU'ELLES L'ÉTAIENT DÉJÀ : on
+// s'abstient, et la présence d'une chaîne ne change rien à cette abstention.
+// Chaîne présente, ce nom ne vit que dans la chaîne et la recomposer
+// l'effacerait, et c'est exactement ce que fait savePerson
 // (contact-societe.html) sur un bloc amorcé et non touché, qui envoie l'objet
 // ENTIER, donc ses deux cases vides à côté de la chaîne qui porte le nom.
+// Chaîne absente, il n'y a tout simplement rien à écrire : poser une chaîne
+// vide ajouterait une clé à un enregistrement qui n'a rien demandé.
+//
+// CE SECOND CAS N'EST PAS UN DÉTAIL, ET C'EST LA TABLE `pipeline` QUI LE MONTRE.
+// `contacts` s'écrit en MERGE et son écran n'envoie les deux cases que lorsqu'il
+// les édite. Une carte s'écrit en CONTENT et la page envoie la CARTE ENTIÈRE,
+// donc ses deux cases, à chaque note et à chaque déplacement de colonne. Sans
+// cette abstention, une carte qui ne porte aucune personne se verrait poser
+// `contact: ''` à chaque geste n'ayant rien à voir avec un nom.
 //
 // UNE CASE VIDÉE EST UN GESTE, et c'est le cas différent : la case portait
 // quelque chose sur l'enregistrement relu, le corps la vide, la chaîne suit et
@@ -2257,22 +2276,29 @@ function recomposerNomComplet(etat, corps) {
     prenom: 'prenom' in corps ? texteNom(corps.prenom) : base.prenom,
     nom_personne: 'nom_personne' in corps ? texteNom(corps.nom_personne) : base.nom_personne
   }
-  // Nom inconnu des deux cases ET chaîne existante : le nom ne vit que dans la
-  // chaîne, recomposer le perdrait. On s'abstient. `!base.prenom &&
-  // !base.nom_personne` distingue l'inconnu de l'effacé : les cases portaient
-  // quelque chose, le corps les vide, la chaîne suit.
-  if (!deux.prenom && !deux.nom_personne && !base.prenom && !base.nom_personne
-      && texteNom(etat?.contact_nom)) return null
+  // Rien dans les deux cases, et rien qui y était : il n'y a pas de nom à
+  // recomposer, on s'abstient. La chaîne ancienne, s'il y en a une, garde le nom
+  // qu'elle seule porte ; s'il n'y en a pas, aucune clé vide n'est ajoutée.
+  // `!base.prenom && !base.nom_personne` distingue l'inconnu de l'effacé : les
+  // cases portaient quelque chose, le corps les vide, la chaîne suit.
+  //
+  // LA CHAÎNE N'EST PLUS LUE POUR EN DÉCIDER, et c'est ce qui rend cette
+  // fonction indifférente au nom de la clé cible : seul poserNomComplet le
+  // connaît.
+  if (!deux.prenom && !deux.nom_personne && !base.prenom && !base.nom_personne) return null
 
   return composerNomComplet(deux)
 }
 
-// Pose la chaîne recomposée sur le corps. Un seul nom, contrairement à
-// l'agrégat d'adresse qui en porte deux : `contact_nom` n'a pas d'alias.
-function poserNomComplet(etat, corps) {
+// Pose la chaîne recomposée sur le corps, SOUS LA CLÉ QUE L'APPELANT NOMME :
+// `contact_nom` par défaut, celle de la table `contacts` ; `contact` pour une
+// carte `pipeline`. Une seule clé à la fois, contrairement à l'agrégat d'adresse
+// qui en pose deux d'un coup : la chaîne n'a pas d'alias, elle a un nom par
+// table.
+function poserNomComplet(etat, corps, cle = 'contact_nom') {
   const chaine = recomposerNomComplet(etat, corps)
   if (chaine === null) return
-  corps.contact_nom = chaine
+  corps[cle] = chaine
 }
 
 app.get('/api/pipeline', async (req, res) => {
@@ -2315,6 +2341,12 @@ app.post('/api/pipeline', async (req, res) => {
     // Agrégat dérivé des trois cases. À la création il n'y a pas
     // d'enregistrement d'avant : l'état, c'est le corps.
     poserAdresseAgregee(body, body)
+
+    // Chaîne dérivée des deux cases, sous le nom qu'elle porte sur une carte :
+    // `contact`, et non `contact_nom`. Même état que pour l'agrégat ci-dessus,
+    // le corps lui-même. Une création qui n'apporte aucune des deux cases
+    // ressort intacte, garde de déclenchement comprise.
+    poserNomComplet(body, body, 'contact')
 
     const db = await getDb()
 
@@ -3496,6 +3528,19 @@ app.put('/api/pipeline/:id', async (req, res) => {
     // Posé AVANT l'écriture, et donc avant le rattrapage de position, qui lit
     // `corps.address` et reçoit ainsi l'agrégat complet plutôt que la voie.
     poserAdresseAgregee(rec, cleanBody)
+    // Chaîne dérivée des deux cases, sous le nom qu'elle porte sur une carte :
+    // `contact`. Même geste et même fonction que PUT /api/contacts/:id, à la clé
+    // près.
+    //
+    // LA GARDE COMPTE DOUBLE ICI, et c'est ce qui sépare cette route de sa
+    // jumelle. On écrit en CONTENT et la page envoie la carte ENTIÈRE : les deux
+    // cases seront dans le corps de TOUS les PUT, y compris ceux qui
+    // n'enregistrent qu'une note ou un déplacement de colonne. L'abstention
+    // « deux cases vides, et vides sur l'enregistrement » tient les deux cas que
+    // cela ouvre : une carte sans personne ne se voit pas poser `contact: ''`,
+    // et une carte dont la personne ne vit que dans `contact` ne se la voit pas
+    // effacer.
+    poserNomComplet(rec, cleanBody, 'contact')
     const result = await db.query('UPDATE type::record("pipeline", $id) CONTENT $body', { id, body: cleanBody })
     // Enrichissement additif du référentiel mutualisé (clé SIRET) — motif calqué
     // sur PUT /api/contacts/:id, même intention : ce que l'abonné saisit ou enrichit
@@ -3793,14 +3838,20 @@ app.put('/api/contacts/:id', async (req, res) => {
     // posée au même endroit que l'agrégat : après l'arrêt de la trace de saisie,
     // un dérivé n'étant pas une saisie.
     //
-    // LA TABLE `contacts` SEULE, à la différence de l'adresse juste au-dessus.
-    // Cette route sert les deux tables selon le préfixe de l'id ; les trois cases
-    // d'adresse existent des deux côtés et la règle y est la même, tandis qu'une
-    // carte pipeline ne porte pas de face personne. Sa colonne `name` porte le
-    // dirigeant d'un seul tenant, aucun écran n'y saisit de personne, et rien de
-    // ce lot ne lui donne de cases. Même garde que la face personne partielle
-    // trois lignes plus haut.
-    if (tb === 'contacts') poserNomComplet(rec, cleanBody)
+    // LES DEUX TABLES, COMME L'ADRESSE JUSTE AU-DESSUS, MAIS SOUS DEUX NOMS DE
+    // CLÉ. La note qui tenait ici écartait `pipeline` en affirmant qu'une carte
+    // ne porte pas de face personne, que sa colonne `name` porte le dirigeant
+    // d'un seul tenant et que rien ne lui donnerait de cases. Les trois sont
+    // fausses : la personne d'une carte est dans `contact` depuis 17ad975, `name`
+    // est redevenu la raison sociale (c486034, `name === co` sur 300 cartes sur
+    // 300), et ce lot-ci lui donne ses deux cases. La chaîne dérivée porte donc
+    // le nom de sa table, `contact_nom` d'un côté et `contact` de l'autre.
+    //
+    // LA FACE PERSONNE PARTIELLE, TROIS LIGNES PLUS HAUT, GARDE SA RESTRICTION à
+    // `contacts` : elle normalise quinze champs de personne (emails[],
+    // telephones[], consentement RGPD) qu'une carte ne porte pas. Ces deux
+    // gardes ne disent pas la même chose et n'ont pas à bouger ensemble.
+    poserNomComplet(rec, cleanBody, tb === 'pipeline' ? 'contact' : 'contact_nom')
 
     // ── ÉCRITURE CIBLÉE : LES SEULES CLÉS REÇUES, JAMAIS LE RECORD ENTIER ──
     //

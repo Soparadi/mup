@@ -539,11 +539,23 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
       <!-- MANUAL TAB -->
       <div class="tab-panel" id="tab-manual">
         <div class="form-grid">
+          <!-- DEUX CASES, comme partout ailleurs dans l'application. Il n'y en
+               avait qu'une, « Prénom Nom », et c'est par elle que naissait le
+               seul enregistrement du produit à ne porter qu'une chaîne : la
+               fiche société montrait alors ses deux cases VIDES sous un nom
+               qu'elle affichait quand même, et ce nom était inéditable. Les
+               deux cases font autorité, la chaîne en découle.
+               Société passe en pleine largeur pour que la rangée libérée ne
+               décale pas les appariements du reste de la grille. -->
           <div class="form-group">
-            <label class="form-label">Prénom Nom *</label>
-            <input class="form-input" id="f-name" placeholder="Jean Dupont">
+            <label class="form-label">Prénom</label>
+            <input class="form-input" id="f-prenom" autocomplete="off" placeholder="Jean">
           </div>
           <div class="form-group">
+            <label class="form-label">Nom *</label>
+            <input class="form-input" id="f-nom" autocomplete="off" placeholder="Dupont">
+          </div>
+          <div class="form-group full">
             <label class="form-label">Société *</label>
             <input class="form-input" id="f-company" placeholder="Event Pro SARL">
           </div>
@@ -675,6 +687,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <div class="toast" id="toast"></div>
 
 <script src="/js/adresse-agregee.js"></script>
+<script src="/js/nom-personne.js"></script>
 <script src="/_mup-nom.js"></script>
 <script src="/_mup-tel.js"></script>
 <script src="/_mup-projection.js"></script>
@@ -1513,6 +1526,15 @@ function renderTable(){
     adresseComposee(p).toLowerCase().includes(q) ||
     String(p.address||p.location||'').toLowerCase().includes(q) ||
     (p.email||'').toLowerCase().includes(q) ||
+    // LE NOM CHERCHÉ EST CELUI QU'ON LIT, ET LA CHAÎNE AVEC. Même geste que
+    // l'adresse deux lignes plus haut : la ligne composée des deux cases est
+    // interrogée, et la chaîne ancienne reste interrogée À CÔTÉ, non à la place.
+    // La ligne composée couvre déjà les enregistrements qui ne portent que la
+    // chaîne, puisqu'elle l'amorce sous garde ; ce qu'elle ne couvre pas, c'est
+    // le repli `p.contact`, que migrateProspect aligne sur la RAISON SOCIALE et
+    // qui n'a jamais été un nom de personne. Le retirer ferait perdre des
+    // résultats que la barre rend depuis toujours.
+    nomPersonne(p).toLowerCase().includes(q) ||
     (p.contact_nom||p.contact||'').toLowerCase().includes(q) ||
     (p.siren||'').toLowerCase().includes(q) ||
     (p.notes||'').toLowerCase().includes(q)
@@ -2049,13 +2071,31 @@ async function confirmImport(){
     startImportFlow();
     return;
   } else if(activeModalTab==='manual'){
-    const name=document.getElementById('f-name').value.trim();
+    // LES DEUX CASES SONT LA SAISIE, telles que l'abonné les a remplies : rien
+    // n'est découpé ici. La découpe ne sert qu'à AMORCER une case vide depuis
+    // une chaîne ancienne ; deux cases remplies à la main se respectent, comme
+    // personnesDeLigne respecte deux colonnes remplies dans un fichier importé.
+    // Une civilité tapée dans « Prénom » y reste donc : la détacher serait
+    // déplacer une saisie, et ce formulaire n'a pas de case pour l'accueillir.
+    const cases={ prenom:document.getElementById('f-prenom').value.trim(),
+                  nom_personne:document.getElementById('f-nom').value.trim() };
+    // LA CHAÎNE EST DÉRIVÉE DES DEUX CASES, jamais l'inverse, et par la
+    // composition partagée. Le serveur ne la recompose pas encore (c'est le
+    // commit du serveur) : sans cette ligne, un contact naîtrait avec
+    // `contact_nom` vide, et il serait introuvable par la recherche de client
+    // d'un devis comme par le dédoublonnage d'un import, qui lisent tous deux
+    // cette seule clé. La composition n'est pas une variante d'écran, c'est
+    // composerNomComplet ; le jour où le serveur la posera, il posera la MÊME
+    // valeur, et cette ligne pourra tomber.
+    const nomComplet=composerNomComplet(cases);
     const company=document.getElementById('f-company').value.trim();
-    if(!name&&!company){toast('Nom ou société requis');return;}
+    if(!nomComplet&&!company){toast('Nom ou société requis');return;}
     const p = migrateProspect({
       id: newContactId(),
-      nom: company || name,
-      contact_nom: name,
+      nom: company || nomComplet,
+      prenom: cases.prenom,
+      nom_personne: cases.nom_personne,
+      contact_nom: nomComplet,
       email: document.getElementById('f-email').value.trim(),
       phone: window.MUPTel.format(document.getElementById('f-phone').value),
       // Les trois cases, chacune dans son champ. L'agrégat n'est pas envoyé :
@@ -2080,7 +2120,7 @@ async function confirmImport(){
     enregistre = await save([p]);
     // save() a déjà dit l'échec : pas de toast de succès par-dessus.
     if(enregistre){
-      ['f-name','f-company','f-email','f-phone','f-loc','f-zip','f-ville','f-website','f-notes','f-linkedin','f-facebook','f-instagram'].forEach(id=>document.getElementById(id).value='');
+      ['f-prenom','f-nom','f-company','f-email','f-phone','f-loc','f-zip','f-ville','f-website','f-notes','f-linkedin','f-facebook','f-instagram'].forEach(id=>document.getElementById(id).value='');
       toast('Contact ajouté');
     }
   } else if(activeModalTab==='paste'){
@@ -2125,10 +2165,38 @@ async function confirmImport(){
       const loc=parts.find(s=>!/\S+@/.test(s)&&s!==phone&&s!==name&&s!==company);
       const d=decouperAdresseAgregee(loc||'');
       if(loc && !d.code_postal) sansCodePostal++;
+      // ── LE NOM COLLÉ SE DÉCOUPE, ET C'EST LE MÊME RÉGIME QUE L'ADRESSE ──
+      // Le premier morceau de la ligne est une chaîne « Prénom Nom » d'origine
+      // inconnue : le seul endroit du produit, avec le champ d'adresse
+      // ci-dessus, où l'abonné colle ce qu'il veut. La règle positionnelle
+      // pré-remplit les deux cases, elle ne décide de rien : les cases sont
+      // éditables sur la fiche société, où la correction se fait.
+      //
+      // CE QU'ELLE RATE, et il faut le savoir plutôt que le supposer : un prénom
+      // composé sans trait d'union, un « DUPONT Jean » en format annuaire, un
+      // « Dupont, Jean » dont la virgule est déjà partie en séparateur de
+      // colonnes juste au-dessus. Elle n'a pas d'ancre, contrairement au code
+      // postal, et c'est pourquoi elle ne fait qu'amorcer.
+      //
+      // LA CIVILITÉ DE TÊTE PART DANS SA CASE. « M. Jean Dupont » ne laisse pas
+      // « M. » dans le prénom : la détacher ici n'est pas déplacer une saisie,
+      // c'est lire une chaîne collée, et la case existe sur la fiche.
+      //
+      // `name` reste la chaîne BRUTE, et le doit : l'heuristique de tri
+      // ci-dessus s'en sert pour écarter le morceau déjà pris, et `nom` retombe
+      // dessus quand la ligne ne porte pas de société.
+      const dn=decouperNomComplet(name);
       return migrateProspect({
         id: newContactId(),
         nom: company || name,
-        contact_nom: name,
+        civilite: dn.civilite,
+        prenom: dn.prenom,
+        nom_personne: dn.nom_personne,
+        // Dérivée des deux cases par la composition partagée, pas recopiée de la
+        // chaîne collée : les espaces multiples y sont donc ramenés à un, et la
+        // civilité n'y est plus. Même raison qu'à l'onglet Manuel, le serveur ne
+        // recomposant pas encore.
+        contact_nom: composerNomComplet(dn),
         email: email || '',
         phone: phone || '',
         adresse: d.voie,

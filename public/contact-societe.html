@@ -915,6 +915,40 @@ async function refreshEnrichButtonState(){
   }
 }
 
+// ── LES TROIS CASES D'ADRESSE DE LA FICHE, TELLES QU'ELLE LES MONTRE ──
+// Les cases du record quand il en porte ; la découpe de l'agrégat quand les
+// trois sont vides. Cette fiche sert les deux tables selon le préfixe de l'id :
+// une carte pipeline d'avant les trois cases ne porte que son `address`
+// monobloc (alias ancien `location`), et c'est de lui que ses cases se tirent.
+//
+// LA GARDE EST STRICTE : les TROIS cases vides, et elles seules. Un
+// enregistrement portant déjà un code postal ou une ville n'est JAMAIS
+// redécoupé, sans quoi une correction manuelle serait écrasée par une
+// déduction. C'est mot pour mot la garde que le serveur applique à la
+// recomposition de l'agrégat, et celle de la fiche Pipeline.
+//
+// LA DÉCOUPE EST CELLE DE TOUT LE MONDE : decouperAdresseAgregee, jumeau
+// navigateur de lib/societes.js, ancré en FIN sur le dernier bloc de cinq
+// chiffres. Rien n'est fabriqué : sans bloc de cinq chiffres, tout part dans la
+// voie et les deux autres cases restent vides.
+//
+// LECTURE PURE : rien n'est posé sur le record. Ce que l'abonnée ne corrige pas
+// ne s'écrit pas, et une déduction ne devient jamais une saisie par surprise.
+//
+// DEUX APPELANTS, UNE SEULE VÉRITÉ : le remplissage du formulaire ci-dessous, et
+// la composition de la carte envoyée au Pipeline. Ce que la fiche montre est
+// exactement ce qu'elle envoie.
+function casesAdresseFiche(c){
+  const voie = String((c && c.adresse) || '').trim();
+  const zip = String((c && c.zip) || '').trim();
+  const ville = String((c && c.ville) || '').trim();
+  if (voie || zip || ville) return { adresse: voie, zip: zip, ville: ville };
+  const agregat = String((c && (c.address || c.location)) || '').trim();
+  if (!agregat) return { adresse: '', zip: '', ville: '' };
+  const d = decouperAdresseAgregee(agregat);
+  return { adresse: d.voie, zip: d.code_postal, ville: d.ville };
+}
+
 function populate(){
   const c = contact;
   // Tout ce qui suit repeint les champs depuis le record : aucune saisie n'est
@@ -970,39 +1004,14 @@ function populate(){
   document.getElementById('f-website').value = c.website || '';
   document.getElementById('f-societe-email').value = c.societe_email || '';
   document.getElementById('f-societe-tel').value = c.societe_tel || '';
-  // ── ADRESSE : LA DÉCOUPE À LA LECTURE, ET SA GARDE ──
-  // Une carte pipeline porte son adresse en un `address` monobloc (alias ancien
-  // `location`) là où ce formulaire attend trois cases : la voie, le code
-  // postal, la ville. Les trois cases vides et un agrégat présent, on le
-  // découpe pour les remplir.
-  //
-  // LA GARDE EST STRICTE : les TROIS cases vides, et elles seules. Un
-  // enregistrement portant déjà un code postal ou une ville n'est JAMAIS
-  // redécoupé, sans quoi une correction manuelle serait écrasée par une
-  // déduction. C'est mot pour mot la garde que le serveur applique à la
-  // recomposition de l'agrégat.
-  //
-  // LA DÉCOUPE EST CELLE DE TOUT LE MONDE : decouperAdresseAgregee, jumeau
-  // navigateur de la fonction de lib/societes.js, chargé ici pour la première
-  // fois (aucune page ne le chargeait encore). Son ancre est en FIN, sur le
-  // DERNIER bloc de cinq chiffres de la chaîne. Le motif maison qu'elle
-  // remplace était ancré au DÉBUT : sur « CS 20101 35270 COMBOURG » il coupait
-  // à « CS », prenait le code de service 20101 pour un code postal et laissait
-  // « 35270 COMBOURG » en guise de ville. Ce triplet faux ne restait pas à
-  // l'écran : societeDeLaFiche() l'envoie tel quel à /api/societes.
-  //
-  // Rien n'est fabriqué : sans aucun bloc de cinq chiffres, tout part dans la
-  // voie et les deux autres cases restent vides.
-  let fAdresse = c.adresse || '', fZip = c.zip || '', fVille = c.ville || '';
-  if (!c.adresse && !c.zip && !c.ville && (c.address || c.location)) {
-    const decoupe = decouperAdresseAgregee(c.address || c.location);
-    fAdresse = decoupe.voie;
-    fZip = decoupe.code_postal;
-    fVille = decoupe.ville;
-  }
-  document.getElementById('f-adresse').value = fAdresse;
-  document.getElementById('f-zip').value = fZip;
-  document.getElementById('f-ville').value = fVille;
+  // Adresse : les trois cases telles que la fiche les montre, découpe de
+  // l'agrégat comprise quand les trois sont vides (cf. casesAdresseFiche
+  // ci-dessus, où la garde est écrite). Le triplet qui remplit ces trois cases
+  // est celui-là même que l'envoi au Pipeline emporte.
+  const casesFiche = casesAdresseFiche(c);
+  document.getElementById('f-adresse').value = casesFiche.adresse;
+  document.getElementById('f-zip').value = casesFiche.zip;
+  document.getElementById('f-ville').value = casesFiche.ville;
   // f-linkedin = LinkedIn SOCIÉTÉ (/company/) ; le LinkedIn personne (/in/) vit
   // dans le bloc personne (pf-linkedin). On lit donc societe_linkedin, pas c.linkedin.
   document.getElementById('f-linkedin').value = c.societe_linkedin || c.linkedin || '';
@@ -2065,7 +2074,16 @@ async function contactAlreadyInPipeline(){
 
 function buildPipelineCard(col){
   const c = contact || {};
-  const addr = [c.adresse, c.zip, c.ville].filter(Boolean).join(' ').trim();
+  // LES TROIS CASES, ET PLUS L'AGRÉGAT. La carte partait avec `address` composé
+  // ici et `zip`, mais SANS `ville` : la ville se perdait à l'envoi, et la carte
+  // naissait avec un code postal orphelin. Elle emporte maintenant les trois, et
+  // les mêmes que celles affichées, découpe comprise.
+  //
+  // L'AGRÉGAT N'EST PLUS ENVOYÉ, et il n'a pas à l'être : ce chemin passe par
+  // POST /api/pipeline, la route qui le recompose des trois clés reçues, à la
+  // création comme à la mise à jour. La carte naît donc avec son agrégat, que la
+  // Carte et le Tableau de bord géocodent.
+  const cases = casesAdresseFiche(c);
   const now = new Date().toISOString();
   return {
     id: pipelineLocalId(),
@@ -2077,8 +2095,9 @@ function buildPipelineCard(col){
     sector: c.sector || '',
     website: c.website || '',
     val: 0,
-    address: addr || c.address || '',
-    zip: c.zip || '',
+    adresse: cases.adresse,
+    zip: cases.zip,
+    ville: cases.ville,
     linkedin: c.societe_linkedin || c.linkedin || '',
     facebook: c.facebook || '',
     instagram: c.instagram || '',

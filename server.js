@@ -20,6 +20,7 @@ import { normaliserSociete, comparerNumero, parserAdresseAgregee, voiesConcorden
 import { libelleFormeJuridique } from './lib/formes-juridiques.js'
 import { analyserImport, analyserImportDetaille } from './lib/import.js'
 import { normalizePersonFields } from './lib/person-fields.js'
+import { composerNomComplet } from './lib/nom-personne.js'
 import { router as authRouter } from './server/auth/routes.js'
 import { router as stripeRouter, webhookHandler as stripeWebhookHandler } from './server/routes/stripe.js'
 import { requireAuth, requireAuthHtml, readSessionToken } from './server/middleware/requireAuth.js'
@@ -2187,6 +2188,93 @@ function poserAdresseAgregee(etat, corps) {
   corps.location = agregat
 }
 
+// ── LE NOM D'UNE PERSONNE, RECOMPOSÉ AU PASSAGE D'UNE ÉCRITURE ──
+//
+// Frère de recomposerAdresseAgregee juste au-dessus, et jumeau EN ÉCRITURE de
+// composerNomComplet (lib/nom-personne.js) : là-bas la page compose la ligne
+// pour l'AFFICHER, ici le serveur compose la même, avec la même fonction, pour
+// l'ÉCRIRE dans `contact_nom`. Une seule règle, deux emplois.
+//
+// LES DEUX CASES FONT AUTORITÉ, LA CHAÎNE EN DÉCOULE. `contact_nom` est le champ
+// ancien qui portait « Prénom Nom » d'un seul tenant ; il reste alimenté pour la
+// compatibilité, quatre lectures du produit ne connaissant que lui, et il cesse
+// d'être une saisie pour devenir un dérivé.
+//
+// LE CORPS EST PARTIEL, et il le reste : PUT /api/contacts/:id écrit en MERGE,
+// une case éditée seule n'envoie que sa clé. L'autre se lit donc sur
+// l'ENREGISTREMENT RELU, que la route tient déjà pour son contrôle
+// d'appartenance. Une frappe dans la seule case « Nom » recompose bien les deux.
+//
+// DÉCLENCHEMENT : le corps touche l'une des deux cases. UN CORPS QUI N'EN PORTE
+// AUCUNE RESSORT INTACT. C'est la garde qui compte le plus ici : sans elle, un
+// enregistrement de note, de colonne ou de coordonnées société recomposerait la
+// chaîne à partir de deux cases vides et EFFACERAIT un nom saisi d'un seul
+// tenant, que personne n'aurait touché.
+//
+// AUCUNE DÉCOUPE, ET C'EST LA DIFFÉRENCE DE FOND AVEC L'ADRESSE.
+// recomposerAdresseAgregee accepte de partir de la DÉCOUPE de l'agrégat quand
+// les trois cases sont vides, parce que la découpe postale s'ancre sur un bloc
+// de cinq chiffres et se vérifie. Un nom n'a pas d'ancre : sa découpe est une
+// conjecture, elle sert à AMORCER les cases d'un écran éditable et ne s'écrit
+// que lorsque l'abonné a touché l'une d'elles. Le serveur ne découpe donc
+// jamais, il ne fait que joindre ce que le corps et l'enregistrement portent.
+//
+// PAS DE CASE, PAS DE VOYAGE, et c'est le calque de « pas de voie, pas de
+// voyage ». Les deux cases ressortent vides ALORS QU'ELLES L'ÉTAIENT DÉJÀ, et
+// une chaîne existe : ce nom ne vit que dans la chaîne, la recomposer
+// l'effacerait. On s'abstient. C'est exactement ce que fait savePerson
+// (contact-societe.html) sur un bloc amorcé et non touché, qui envoie l'objet
+// ENTIER, donc ses deux cases vides à côté de la chaîne qui porte le nom.
+//
+// UNE CASE VIDÉE EST UN GESTE, et c'est le cas différent : la case portait
+// quelque chose sur l'enregistrement relu, le corps la vide, la chaîne suit et
+// se vide avec. C'est le second défaut traité à la fiche société, tenu ici aussi.
+//
+// AUCUNE MIGRATION. Rien n'est réécrit en base : la recomposition ne joue qu'au
+// passage d'une écriture, sur le seul enregistrement que cette écriture vise.
+const CASES_NOM = ['prenom', 'nom_personne']
+
+// Vue chaîne comparable d'une case : absent, null et chaîne vide sont un seul et
+// même « pas renseigné ». Même convention que texteAdresse et valeurPont.
+const texteNom = (v) => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v).trim()))
+
+// Rend la chaîne à écrire, ou null quand il n'y a rien à recomposer.
+//
+// `etat` est ce que porte la fiche EN DEHORS des clés qu'apporte le corps :
+// l'enregistrement relu pour une mise à jour, le corps lui-même pour une
+// création, où il n'y a rien d'autre.
+function recomposerNomComplet(etat, corps) {
+  if (!corps || !CASES_NOM.some((cle) => cle in corps)) return null
+
+  const base = {
+    prenom: texteNom(etat?.prenom),
+    nom_personne: texteNom(etat?.nom_personne)
+  }
+  // Le corps l'emporte sur la base, CLÉ PAR CLÉ ET PAR PRÉSENCE : une clé
+  // absente n'est pas modifiée, une clé à chaîne vide est un effacement voulu.
+  // C'est la même distinction que celle que le MERGE porte jusqu'en base.
+  const deux = {
+    prenom: 'prenom' in corps ? texteNom(corps.prenom) : base.prenom,
+    nom_personne: 'nom_personne' in corps ? texteNom(corps.nom_personne) : base.nom_personne
+  }
+  // Nom inconnu des deux cases ET chaîne existante : le nom ne vit que dans la
+  // chaîne, recomposer le perdrait. On s'abstient. `!base.prenom &&
+  // !base.nom_personne` distingue l'inconnu de l'effacé : les cases portaient
+  // quelque chose, le corps les vide, la chaîne suit.
+  if (!deux.prenom && !deux.nom_personne && !base.prenom && !base.nom_personne
+      && texteNom(etat?.contact_nom)) return null
+
+  return composerNomComplet(deux)
+}
+
+// Pose la chaîne recomposée sur le corps. Un seul nom, contrairement à
+// l'agrégat d'adresse qui en porte deux : `contact_nom` n'a pas d'alias.
+function poserNomComplet(etat, corps) {
+  const chaine = recomposerNomComplet(etat, corps)
+  if (chaine === null) return
+  corps.contact_nom = chaine
+}
+
 app.get('/api/pipeline', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
@@ -3518,6 +3606,16 @@ app.post('/api/contacts', async (req, res) => {
     if ('societe_id' in body && !(typeof body.societe_id === 'string' && body.societe_id.trim())) {
       body.societe_id = null
     }
+    // Chaîne dérivée des deux cases, POSÉE AVANT LA NORMALISATION, et l'ordre
+    // compte ici alors qu'il est indifférent pour l'adresse. Le déclenchement de
+    // la recomposition lit « le corps porte-t-il l'une des deux cases » ; or
+    // normalizePersonFields GARANTIT la présence des quinze champs personne,
+    // `prenom` et `nom_personne` compris. Passer après elle rendrait la question
+    // toujours vraie et ferait recomposer la chaîne de tout contact créé, y
+    // compris celui qui n'apporte qu'un nom d'un seul tenant. Les trois cases
+    // d'adresse, elles, ne sont pas des champs personne : rien ne les ajoute au
+    // corps, et poserAdresseAgregee peut rester où il est.
+    poserNomComplet(body, body)
     // Brique A — face personne : champs additifs garantis + sync emails[]/email
     // et telephones[]/phone. Non destructif (voir lib/person-fields.js).
     Object.assign(body, normalizePersonFields(body))
@@ -3691,6 +3789,18 @@ app.put('/api/contacts/:id', async (req, res) => {
     // ci-dessus. Cette route sert les DEUX tables selon le préfixe de l'id : la
     // règle est la même des deux côtés, l'agrégat porte le même nom.
     poserAdresseAgregee(rec, cleanBody)
+    // Chaîne dérivée des deux cases, à partir du même enregistrement RELU, et
+    // posée au même endroit que l'agrégat : après l'arrêt de la trace de saisie,
+    // un dérivé n'étant pas une saisie.
+    //
+    // LA TABLE `contacts` SEULE, à la différence de l'adresse juste au-dessus.
+    // Cette route sert les deux tables selon le préfixe de l'id ; les trois cases
+    // d'adresse existent des deux côtés et la règle y est la même, tandis qu'une
+    // carte pipeline ne porte pas de face personne. Sa colonne `name` porte le
+    // dirigeant d'un seul tenant, aucun écran n'y saisit de personne, et rien de
+    // ce lot ne lui donne de cases. Même garde que la face personne partielle
+    // trois lignes plus haut.
+    if (tb === 'contacts') poserNomComplet(rec, cleanBody)
 
     // ── ÉCRITURE CIBLÉE : LES SEULES CLÉS REÇUES, JAMAIS LE RECORD ENTIER ──
     //

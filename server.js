@@ -2823,17 +2823,17 @@ app.post('/api/pipeline/from-leads', async (req, res) => {
 // du SQL : un nom de champ interpolé vient toujours d'ici, jamais d'une clé
 // reçue dans un corps de requête.
 //
-// HORS PÉRIMÈTRE, volontairement : l'adresse, la raison sociale
-// (ses alias sont réécrits par `migrateCard` à chaque chargement), `siret` et
-// `siren` (ils sont la CLÉ du pont, ils ne voyagent pas) et tout champ de
-// personne.
+// HORS PÉRIMÈTRE, volontairement : la raison sociale (ses alias sont réécrits
+// par `migrateCard` à chaque chargement), `siret` et `siren` (ils sont la CLÉ du
+// pont, ils ne voyagent pas) et tout champ de personne.
 //
-// L'ADRESSE EN RESTE DEHORS, MAIS PLUS POUR LA RAISON D'AVANT. Ce qui l'en
-// excluait, c'était l'asymétrie des deux tables : un bloc d'un côté, voie, code
-// postal et ville de l'autre. Cette asymétrie a disparu, les deux portent
-// désormais les trois cases et l'agrégat qui s'en dérive. Faire voyager
-// l'adresse entre jumeaux serait donc devenu possible : ce n'est pas décidé, et
-// rien ici ne le fait. Consigné, non traité.
+// L'ADRESSE Y ENTRE, ET ELLE VOYAGE D'UN SEUL BLOC. Ce qui l'en excluait, c'était
+// l'asymétrie des deux tables : un bloc d'un côté, voie, code postal et ville de
+// l'autre. Cette asymétrie a disparu, les deux portent les trois cases et
+// l'agrégat qui s'en dérive. Cinq clés entrent donc dans la table, sous le même
+// nom des deux côtés, mais elles NE PASSENT PAS par la boucle générique : elles
+// portent `unite`, qui l'en écarte, et sont traitées ensemble par
+// patchAdressePont. La raison est écrite là-bas.
 const CHAMPS_PONT_SOCIETE = [
   // même nom des deux côtés
   { pipeline: 'sector', contacts: 'sector' },
@@ -2847,7 +2847,15 @@ const CHAMPS_PONT_SOCIETE = [
   { pipeline: 'forme', contacts: 'forme_juridique' },
   { pipeline: 'naf', contacts: 'code_naf' },
   { pipeline: 'notes', contacts: 'note_societe' },
-  { pipeline: 'linkedin', contacts: 'societe_linkedin' }
+  { pipeline: 'linkedin', contacts: 'societe_linkedin' },
+  // L'adresse : cinq clés, un seul geste. `unite` les écarte de la boucle
+  // générique de patchPontSociete ; elles restent ici parce que c'est de cette
+  // table, et d'elle seule, que se dérive la liste blanche du SQL.
+  { pipeline: 'adresse', contacts: 'adresse', unite: 'adresse' },
+  { pipeline: 'zip', contacts: 'zip', unite: 'adresse' },
+  { pipeline: 'ville', contacts: 'ville', unite: 'adresse' },
+  { pipeline: 'address', contacts: 'address', unite: 'adresse' },
+  { pipeline: 'location', contacts: 'location', unite: 'adresse' }
 ]
 
 // Clé d'un champ du pont dans la table visée — l'unique lecture autorisée de la
@@ -2869,25 +2877,85 @@ const valeurPont = (v) => (typeof v === 'string' ? v.trim() : (v == null ? '' : 
 //     Sans ce filtre, un formulaire qui n'envoie simplement pas la clé effacerait
 //     la fiche jumelle à chaque geste.
 //   • INCHANGÉ NON RETENU — c'est la garde de déclenchement, et elle porte sur
-//     les onze champs : aucun d'eux modifié, patch vide, le pont ne cherche rien
-//     et n'écrit rien. Les pages enregistrent en continu et la quasi-totalité de
-//     leurs PUT ne touchent aucun de ces champs (colonne déplacée, note de
-//     personne, rendez-vous). C'est cette garde qui tient le coût, la table
-//     jumelle étant balayée sans index.
+//     les onze champs de la boucle ET sur l'adresse : rien de modifié, patch
+//     vide, le pont ne cherche rien et n'écrit rien. Les pages enregistrent en
+//     continu et la quasi-totalité de leurs PUT ne touchent aucun de ces champs
+//     (colonne déplacée, note de personne, rendez-vous). C'est cette garde qui
+//     tient le coût, la table jumelle étant balayée sans index.
 //
 // Le patch est rendu DÉJÀ TRADUIT — clés de la table de DESTINATION — et ne
-// porte que les champs modifiés, jamais les onze en bloc.
+// porte que les champs modifiés, jamais les onze en bloc. L'adresse s'y ajoute
+// à part, et elle, d'un bloc, par patchAdressePont.
 function patchPontSociete(rec, body, source) {
   const patch = {}
   const destination = source === 'pipeline' ? 'contacts' : 'pipeline'
   for (const champ of CHAMPS_PONT_SOCIETE) {
+    if (champ.unite) continue
     const lu = clePont(champ, source)
     const apres = valeurPont(body?.[lu])
     if (!apres) continue
     if (valeurPont(rec?.[lu]) === apres) continue
     patch[clePont(champ, destination)] = apres
   }
+  Object.assign(patch, patchAdressePont(rec, body))
   return patch
+}
+
+// ── L'ADRESSE SUR LE PONT : LES TROIS CASES ET L'AGRÉGAT, D'UN SEUL BLOC ──
+//
+// POURQUOI PAS LA BOUCLE GÉNÉRIQUE. Elle ne retient que les champs MODIFIÉS et
+// NON VIDES, un par un. Appliquée à l'adresse, elle enverrait le tiers qui vient
+// de bouger : une ville corrigée d'un côté irait s'asseoir sur le jumeau à côté
+// d'une voie qui n'est pas la sienne, et la fiche jumelle porterait une adresse
+// composée de deux saisies différentes. C'est exactement la double vérité que ce
+// lot ferme. Les trois cases sont UN SEUL renseignement en trois morceaux : ou
+// bien elles voyagent ensemble, ou bien elles ne voyagent pas.
+//
+// DÉCLENCHEMENT : l'une des trois cases a changé. La comparaison porte sur les
+// trois, et le corps étant partiel, les cases qu'il n'apporte pas se lisent sur
+// l'enregistrement AVANT, que les deux routes ont déjà relu.
+//
+// UNE ADRESSE SANS VOIE NE VOYAGE PAS. C'est la forme que prend ici le filtre
+// « vide non retenu » de la boucle générique : le pont propage une saisie, il ne
+// propage pas une suppression, et un couple code postal + ville sans voie n'est
+// pas une adresse qu'on impose à un jumeau qui en a peut-être une entière.
+//
+// L'AGRÉGAT SUIT, ET C'EST LE POINT QUI COMPTE. Le pont écrit DIRECTEMENT en
+// base, sans traverser les routes qui recomposent : les trois cases passées
+// seules laisseraient au jumeau un `address` périmé, celui-là même que la Carte
+// géocode et que les listes affichent. Il est donc composé ICI, des trois mêmes
+// valeurs et par la même règle que le serveur, et il voyage avec elles. Comme
+// les trois cases sont celles de la source, la valeur composée vaut pour TOUS
+// les jumeaux : aucun n'a besoin d'être relu. `location`, alias ancien du même
+// agrégat, ne se sépare jamais d'`address`.
+//
+// L'ÉCRASEMENT RESTE LA RÈGLE, et il est plus juste ici qu'ailleurs. Le pont est
+// clé sur le SIRET, c'est-à-dire sur l'ÉTABLISSEMENT : les deux enregistrements
+// décrivent le même lieu, qui n'a qu'une adresse. Entre deux états du même lieu,
+// la saisie la plus récente fait foi, et elle arrive entière plutôt qu'en
+// morceaux. Ce que l'écrasement coûte est nommé : une adresse corrigée sur la
+// fiche est remplacée si la carte est modifiée ensuite, et le geste le plus
+// récent gagne sans avertir. C'est le régime du pont depuis toujours, et le
+// tenir champ par champ pour l'adresse serait pire, pas mieux.
+const CASES_ADRESSE_PONT = ['adresse', 'zip', 'ville']
+function patchAdressePont(rec, body) {
+  const corps = body || {}
+  const bouge = CASES_ADRESSE_PONT.some(
+    (cle) => cle in corps && valeurPont(corps[cle]) !== valeurPont(rec?.[cle])
+  )
+  if (!bouge) return {}
+  const trois = {}
+  for (const cle of CASES_ADRESSE_PONT) {
+    trois[cle] = cle in corps ? valeurPont(corps[cle]) : valeurPont(rec?.[cle])
+  }
+  if (!trois.adresse) return {}
+  // AUCUNE DÉDUCTION NE TRAVERSE LE PONT. Les trois valeurs sont lues dans les
+  // CASES, jamais découpées d'un agrégat : la découpe amorce les cases d'un
+  // enregistrement à sa propre lecture, elle n'a pas à écrire une voie déduite
+  // sur un AUTRE enregistrement. Une source qui ne porte encore que son agrégat
+  // ne propage donc rien, et c'est le bon défaut.
+  const agregat = [trois.adresse, trois.zip, trois.ville].filter(Boolean).join(' ')
+  return { ...trois, address: agregat, location: agregat }
 }
 
 // Recopie les coordonnées société modifiées sur les enregistrements du MÊME

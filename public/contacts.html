@@ -555,9 +555,22 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
             <label class="form-label">Téléphone</label>
             <input class="form-input" id="f-phone" autocomplete="off" placeholder="06 12 34 56 78">
           </div>
+          <!-- Trois cases, comme partout ailleurs. Il n'y en avait qu'une,
+               « Adresse / Localisation », qui recevait indifféremment une voie,
+               une ville ou une région : le contact naissait avec « Rennes (35),
+               Bretagne » dans le champ que le reste de l'application lit comme
+               une voie. -->
           <div class="form-group full">
-            <label class="form-label">Adresse / Localisation</label>
-            <input class="form-input" id="f-loc" autocomplete="off" placeholder="Rennes (35), Bretagne">
+            <label class="form-label">Adresse</label>
+            <input class="form-input" id="f-loc" autocomplete="off" placeholder="12 rue des Lilas">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Code postal</label>
+            <input class="form-input" id="f-zip" autocomplete="off" placeholder="35000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ville</label>
+            <input class="form-input" id="f-ville" autocomplete="off" placeholder="Rennes">
           </div>
           <div class="form-group">
             <label class="form-label">Secteur</label>
@@ -612,8 +625,8 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
         <div style="font-size:12px;color:var(--muted);margin-bottom:8px">
           Collez du texte structuré (depuis Excel, un email, un annuaire). Le système détecte automatiquement les champs.
         </div>
-        <textarea id="paste-input" style="width:100%;height:180px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:12px;resize:vertical;outline:none;color:var(--text)" placeholder="Coller ici : nom, société, email, tél, ville…&#10;&#10;Ex:&#10;Marie Dupont · Event Agency · marie@ea.fr · 06 12 34 56 78 · Nantes&#10;Pierre Martin · Château du Loire · p.martin@chateau.com · Angers"></textarea>
-        <div style="margin-top:8px;font-size:11px;color:var(--muted)">Séparateurs détectés : virgule, point-virgule, tabulation, ·</div>
+        <textarea id="paste-input" style="width:100%;height:180px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:12px;resize:vertical;outline:none;color:var(--text)" placeholder="Coller ici : nom, société, email, tél, adresse…&#10;&#10;Ex:&#10;Marie Dupont · Event Agency · marie@ea.fr · 06 12 34 56 78 · 12 rue des Lilas 44000 Nantes&#10;Pierre Martin · Château du Loire · p.martin@chateau.com · 3 quai Ligny 49100 Angers"></textarea>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted)">Séparateurs détectés : virgule, point-virgule, tabulation, ·<br>L'adresse se découpe sur le code postal : sans code postal reconnu, tout reste dans la voie et se corrige sur la fiche.</div>
       </div>
     </div>
 
@@ -661,6 +674,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="/js/adresse-agregee.js"></script>
 <script src="/_mup-nom.js"></script>
 <script src="/_mup-tel.js"></script>
 <script src="/_mup-projection.js"></script>
@@ -842,9 +856,28 @@ async function save(touches){
 }
 
 function migrateProspect(p){
-  // Unification des champs : nom (canonique), adresse (canonique)
+  // Unification des champs : nom (canonique), adresse en TROIS cases
   if(!p.nom) p.nom = p.company || p.name || p.contact || '—';
-  if(!p.adresse) p.adresse = p.address || p.location || '';
+  // ── L'ADRESSE NE S'APLATIT PLUS SUR UN SEUL NOM ──
+  // Cette fonction faisait deux gestes qui se contredisaient : elle versait
+  // l'agrégat dans `adresse` quand celui-ci était vide, puis RECOPIAIT `adresse`
+  // sur `address` et `location`. Les trois noms finissaient donc à la même
+  // valeur, et cette valeur n'était pas la même chose selon l'origine de la
+  // fiche : la VOIE pour une fiche née de la prospection, la LIGNE ENTIÈRE pour
+  // une carte pipeline, une VILLE ou une RÉGION pour une fiche saisie ou collée.
+  // La colonne qui l'affiche rendait donc trois choses différentes sous un seul
+  // libellé. La recopie est partie ; les trois cases restent distinctes.
+  //
+  // La découpe amorce les cases d'un enregistrement qui ne porte que son
+  // agrégat, sous la GARDE habituelle : les TROIS cases vides, et elles seules.
+  // Un enregistrement portant déjà un code postal ou une ville n'est jamais
+  // redécoupé, une correction manuelle n'est jamais écrasée par une déduction.
+  if(!p.adresse && !p.zip && !p.ville && (p.address || p.location)){
+    const d = decouperAdresseAgregee(p.address || p.location);
+    p.adresse = d.voie;
+    p.zip = d.code_postal;
+    p.ville = d.ville;
+  }
   if(!p.source) p.source = p.col === 'won' || p.col === 'lost' ? 'pipeline' : (p.source || 'manual');
   if(!p.entity_origine) p.entity_origine = 'mup';
   if(!Array.isArray(p.factures_ids)) p.factures_ids = [];
@@ -854,8 +887,6 @@ function migrateProspect(p){
   p.name = p.nom;
   p.company = p.company || p.nom;
   p.contact = p.contact || p.nom;
-  p.address = p.adresse;
-  p.location = p.adresse;
   p.tel = p.phone || p.tel || '';
   if(!p.emailStatus) p.emailStatus = 'new';
   if(!p.lastContact) p.lastContact = '';
@@ -972,7 +1003,15 @@ async function init(){
             contact: p.name || '',
             email: p.email || '',
             tel: p.tel || p.telephone || '',
-            adresse: p.address || p.adresse || '',
+            // Les trois cases telles que la carte les porte, et l'agrégat à
+            // côté d'elles : c'est migrateProspect qui décide, sous garde, s'il
+            // y a lieu de découper. Cette ligne versait l'agrégat dans `adresse`
+            // et la voie s'y confondait avec la ligne entière.
+            adresse: p.adresse || '',
+            zip: p.zip || '',
+            ville: p.ville || '',
+            address: p.address || '',
+            location: p.location || '',
             linkedin: p.linkedin || '',
             facebook: p.facebook || '',
             instagram: p.instagram || '',
@@ -1029,7 +1068,12 @@ async function init(){
               contact: p.name || '',
               email: p.email || '',
               tel: p.tel || p.telephone || '',
-              adresse: p.address || p.adresse || '',
+              // Mêmes trois cases et même agrégat que la branche serveur.
+              adresse: p.adresse || '',
+              zip: p.zip || '',
+              ville: p.ville || '',
+              address: p.address || '',
+              location: p.location || '',
               linkedin: p.linkedin || '',
               facebook: p.facebook || '',
               instagram: p.instagram || '',
@@ -2004,7 +2048,12 @@ async function confirmImport(){
       contact_nom: name,
       email: document.getElementById('f-email').value.trim(),
       phone: window.MUPTel.format(document.getElementById('f-phone').value),
+      // Les trois cases, chacune dans son champ. L'agrégat n'est pas envoyé :
+      // POST /api/contacts le compose des trois clés reçues (à la création,
+      // l'état c'est le corps), et c'est la seule composition qui vaille.
       adresse: document.getElementById('f-loc').value.trim(),
+      zip: document.getElementById('f-zip').value.trim(),
+      ville: document.getElementById('f-ville').value.trim(),
       sector: document.getElementById('f-sector').value,
       website: document.getElementById('f-website').value.trim(),
       notes: document.getElementById('f-notes').value.trim(),
@@ -2021,27 +2070,60 @@ async function confirmImport(){
     enregistre = await save([p]);
     // save() a déjà dit l'échec : pas de toast de succès par-dessus.
     if(enregistre){
-      ['f-name','f-company','f-email','f-phone','f-loc','f-website','f-notes','f-linkedin','f-facebook','f-instagram'].forEach(id=>document.getElementById(id).value='');
+      ['f-name','f-company','f-email','f-phone','f-loc','f-zip','f-ville','f-website','f-notes','f-linkedin','f-facebook','f-instagram'].forEach(id=>document.getElementById(id).value='');
       toast('Contact ajouté');
     }
   } else if(activeModalTab==='paste'){
     const raw=document.getElementById('paste-input').value.trim();
     if(!raw){toast('Aucune donnée');return;}
     const lines=raw.split('\n').filter(l=>l.trim());
+    // ── LA DÉCOUPE SUR SAISIE VRAIMENT LIBRE, LE SEUL ENDROIT DU LOT ──
+    // Partout ailleurs la découpe s'applique à un agrégat de grammaire connue :
+    // une adresse Etalab, un libellé BAN, l'`address` d'une carte. Ici l'abonné
+    // colle ce qu'il veut, et le morceau retenu comme localisation par
+    // l'heuristique de tri ci-dessous peut être n'importe quoi.
+    //
+    // CE QUE LA FONCTION PARTAGÉE EN FAIT : elle cherche le DERNIER bloc de cinq
+    // chiffres. « 12 rue des Lilas 44000 Nantes » se découpe juste, code de
+    // service compris (« CS 20101 35270 Combourg »). SANS BLOC DE CINQ CHIFFRES
+    // ELLE NE FABRIQUE RIEN : tout part dans la voie et les deux autres cases
+    // restent vides. Une ville seule, « Nantes », atterrit donc dans la voie, et
+    // « Rennes (35), Bretagne » aussi. C'est sa limite, et elle est voulue :
+    // deviner qu'un mot est une commune supposerait un référentiel, et une
+    // commune devinée n'est pas une commune.
+    //
+    // CE QUI EST PERMIS ET CE QUI NE L'EST PAS : découper pour PRÉ-REMPLIR un
+    // champ éditable est permis, l'abonné voit et corrige sur la fiche, où les
+    // trois cases sont éditables. Ce qui reste interdit, c'est de géocoder sur
+    // une commune déduite. Rien ici ne géocode.
+    //
+    // CE QUI EST PROPOSÉ À L'ABONNÉ quand aucun code postal n'est trouvé : on le
+    // lui DIT, en comptant les lignes concernées dans le message de fin, plutôt
+    // que de les laisser passer en silence. À lui d'ouvrir ces fiches.
+    let sansCodePostal = 0;
     const added=lines.map((line)=>{
       const parts=line.split(/[,;·\t]+/).map(s=>s.trim()).filter(Boolean);
       const email=parts.find(s=>/\S+@\S+\.\S+/.test(s));
       const phone=parts.find(s=>/^[\d\s\+\(\)\-\.]{8,}$/.test(s.replace(/\s/g,'')));
       const name=parts[0]||'';
       const company=parts[1]||name;
-      const loc=parts.find(s=>!/\S+@/.test(s)&&!/^\d/.test(s.replace(/\s/g,''))&&s!==name&&s!==company);
+      // L'heuristique de tri est celle d'avant, à un point près : un morceau qui
+      // commence par un chiffre était écarté comme « numérique », ce qui jetait
+      // « 12 rue des Lilas 44000 Nantes ». Une adresse commence couramment par
+      // son numéro. On n'écarte donc que ce qui n'est QUE des chiffres et de la
+      // ponctuation de téléphone, c'est-à-dire ce que `phone` a déjà pris.
+      const loc=parts.find(s=>!/\S+@/.test(s)&&s!==phone&&s!==name&&s!==company);
+      const d=decouperAdresseAgregee(loc||'');
+      if(loc && !d.code_postal) sansCodePostal++;
       return migrateProspect({
         id: newContactId(),
         nom: company || name,
         contact_nom: name,
         email: email || '',
         phone: phone || '',
-        adresse: loc || '',
+        adresse: d.voie,
+        zip: d.code_postal,
+        ville: d.ville,
         source: 'paste',
         entity_origine: 'mup',
         factures_ids: [],
@@ -2054,7 +2136,13 @@ async function confirmImport(){
     // save() a déjà dit l'échec : pas de toast de succès par-dessus.
     if(enregistre){
       document.getElementById('paste-input').value='';
-      toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}`);
+      // Le compte des lignes sans code postal reconnu est DIT, pas tu : ce sont
+      // celles dont la localisation est restée entière dans la voie, et qui
+      // demandent un coup d'oeil sur la fiche.
+      const reste = sansCodePostal
+        ? ` · ${sansCodePostal} sans code postal reconnu, à compléter sur la fiche`
+        : '';
+      toast(`${added.length} contact${added.length>1?'s':''} importé${added.length>1?'s':''}${reste}`);
     }
   }
   if(enregistre) closeModal();

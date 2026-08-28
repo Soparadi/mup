@@ -263,17 +263,50 @@
             <input type="text" id="new-client-siret" placeholder="000 000 000 00000" maxlength="17" />
           </div>
         </div>
+        <!-- TROIS CASES, comme partout ailleurs dans l'application. Il n'y en
+             avait qu'une, dont le gris d'attente disait « Rue, code postal,
+             ville » : elle DEMANDAIT la ligne entière, et c'est cette ligne qui
+             partait ensuite sur la fiche du client. Le code postal et la ville
+             se partagent une rangée, la fenêtre en portant déjà d'autres. -->
         <div class="field">
           <label>Adresse</label>
-          <input type="text" id="new-client-adresse" autocomplete="off" placeholder="Rue, code postal, ville" />
+          <input type="text" id="new-client-adresse" autocomplete="off" placeholder="12 rue du Commerce" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Code postal</label>
+            <input type="text" id="new-client-zip" autocomplete="off" inputmode="numeric" placeholder="75001" />
+          </div>
+          <div class="field">
+            <label>Ville</label>
+            <input type="text" id="new-client-ville" autocomplete="off" placeholder="Paris" />
+          </div>
         </div>
         <div class="checkbox-row">
           <input type="checkbox" id="new-livraison-diff" />
           <label for="new-livraison-diff" style="margin:0;text-transform:none;letter-spacing:0;font-weight:500;font-size:12px;color:var(--text);cursor:pointer;">Adresse de livraison différente</label>
         </div>
-        <div class="field" id="new-livraison-wrap" style="display:none;">
-          <label>Adresse de livraison</label>
-          <input type="text" id="new-client-livraison" autocomplete="off" placeholder="Rue, code postal, ville" />
+        <!-- L'ADRESSE DE LIVRAISON PREND LES TROIS CASES ELLE AUSSI, et pour la
+             seule raison qui vaille : c'est une adresse, et une adresse a trois
+             morceaux. Elle NE VOYAGE PAS pour autant, et jamais : la fiche et la
+             carte d'un SIRET portent l'adresse de l'ÉTABLISSEMENT, celle où
+             l'entreprise est établie, pas celle où telle commande a été
+             livrée. La livraison est une mention de CETTE facture. -->
+        <div id="new-livraison-wrap" style="display:none;">
+          <div class="field">
+            <label>Adresse de livraison</label>
+            <input type="text" id="new-client-livraison" autocomplete="off" placeholder="12 rue du Commerce" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Code postal de livraison</label>
+              <input type="text" id="new-livraison-zip" autocomplete="off" inputmode="numeric" placeholder="75001" />
+            </div>
+            <div class="field">
+              <label>Ville de livraison</label>
+              <input type="text" id="new-livraison-ville" autocomplete="off" placeholder="Paris" />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -966,6 +999,78 @@
     return { adresse: d.voie, zip: d.code_postal, ville: d.ville };
   }
 
+  // ── LES DEUX ADRESSES D'UNE FACTURE, LUES EN TROIS CASES ──
+  // Le client porte désormais ses trois cases dans le sous-objet
+  // `adresse_cases`, et la livraison dans `livraison_cases`. Un sous-objet et
+  // non trois clés à plat, pour la même raison qu'à `societe_adresse` sur les
+  // réglages : la clé `adresse` est DÉJÀ PRISE sur cet objet client, par la
+  // ligne imprimable, et deux `adresse` de sens contraire dans le même objet
+  // auraient fini par se lire l'une pour l'autre.
+  //
+  // `client.adresse` ET `client.adresse_livraison` RESTENT, ET DEVIENNENT
+  // DÉRIVÉS. Ce sont eux que la feuille imprime et qu'une facture d'avant porte
+  // seuls. Les renommer aurait cassé chaque facture déjà émise ; les doubler
+  // d'une seconde ligne imprimable en aurait fait deux vérités.
+  //
+  // LA GARDE EST CELLE DE TOUT LE LOT, et elle est stricte : les trois cases
+  // vides, et elles seules, autorisent la découpe de la ligne. Une facture
+  // d'avant en profite, une facture qui porte déjà ses cases n'est JAMAIS
+  // redécoupée.
+  //
+  // LE REPLI PASSE PAR casesDepuisLigne ET NON PAR casesAdresse, et cette
+  // nuance compte : casesDepuisLigne fait passer cleanAdresse AVANT la découpe,
+  // ce qui retire les queues qu'une extraction de PDF ramasse derrière l'adresse
+  // (« SIRET … », « Tél : … », « DESTINATAIRE … »). C'est exactement ce que la
+  // synchronisation faisait déjà sur ces mêmes lignes ; l'abandonner ferait
+  // remonter ces queues sur les fiches.
+  function troisCases(cases, ligne){
+    var c = cases || {};
+    var voie = String(c.adresse == null ? '' : c.adresse).trim();
+    var zip = String(c.zip == null ? '' : c.zip).trim();
+    var ville = String(c.ville == null ? '' : c.ville).trim();
+    if(voie || zip || ville) return { adresse: voie, zip: zip, ville: ville };
+    return casesDepuisLigne(ligne);
+  }
+  function casesClientFacture(client){
+    var c = client || {};
+    return troisCases(c.adresse_cases, c.adresse);
+  }
+  // Le bloc à ÉCRIRE sur un client de facture : les trois cases et la ligne qui
+  // s'en dérive. À la CRÉATION, la ligne est la simple composition des trois et
+  // il n'y a pas de repli à ménager : aucun enregistrement d'avant ne porte
+  // d'agrégat dont une voie serait à préserver. C'est mot pour mot ce que le
+  // serveur fait à la création d'une carte ou d'une fiche, où l'état est le
+  // corps. La composition est celle du module partagé, jamais une variante.
+  function blocAdresseFacture(trois){
+    return {
+      cases: { adresse: trois.adresse, zip: trois.zip, ville: trois.ville },
+      ligne: adresseComposee({ adresse: trois.adresse, zip: trois.zip, ville: trois.ville })
+    };
+  }
+
+  // LE CLIENT D'UNE FACTURE IMPORTÉE. Les deux imports, PDF et CSV, ne
+  // connaissent de l'adresse qu'UNE LIGNE : celle qu'une extraction a relevée
+  // dans le document, celle qu'une colonne du fichier porte. Ils la DÉCOUPENT
+  // désormais, au lieu de la verser entière dans la case de la voie, et la ligne
+  // imprimable se recompose des trois morceaux.
+  //
+  // AUCUNE ADRESSE DE LIVRAISON N'EST IMPORTÉE, et c'était déjà le cas : ni
+  // l'extraction ni le format du fichier n'en portent. Le sous-objet naît donc
+  // vide, comme la ligne.
+  function clientImporte(nom, ligne, siret, siren){
+    var bloc = blocAdresseFacture(casesDepuisLigne(ligne || ''));
+    var vide = blocAdresseFacture({ adresse: '', zip: '', ville: '' });
+    return {
+      nom: nom || '—',
+      adresse: bloc.ligne,
+      adresse_cases: bloc.cases,
+      siret: siret || '',
+      siren: siren || '',
+      adresse_livraison: vide.ligne,
+      livraison_cases: vide.cases
+    };
+  }
+
   // Une fiche ne porte AUCUNE adresse : ni l'une des trois cases, ni l'agrégat.
   // casesAdresse lit les trois et retombe sur l'agrégat sous garde, c'est donc
   // la seule lecture qui réponde vraiment à la question.
@@ -1000,7 +1105,15 @@
     var contactIdx = contacts.findIndex(function(c){ return c.siret === siret; });
     var geocoded = false;
     var contact;
-    var cases = casesDepuisLigne(facture.client.adresse);
+    // LES CASES DU CLIENT, ET JAMAIS CELLES DE LA LIVRAISON. La fiche et la
+    // carte d'un SIRET portent l'adresse de l'ÉTABLISSEMENT ; l'adresse de
+    // livraison est une mention de CETTE facture et ne quitte pas la facture.
+    //
+    // La lecture passe par le lecteur du document : il rend les cases quand la
+    // facture les porte, et retombe sur la découpe de la ligne pour les factures
+    // d'avant, sous la garde stricte. Le comportement de ces dernières est donc
+    // inchangé à l'octet.
+    var cases = casesClientFacture(facture.client);
     if(contactIdx === -1){
       contact = {
         id: 'contact_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
@@ -1465,7 +1578,9 @@
 
   function openNewModal(prefill){
     // Reset
-    ['new-client-nom','new-client-siren','new-client-siret','new-client-adresse','new-client-livraison'].forEach(function(id){ document.getElementById(id).value = ''; });
+    ['new-client-nom','new-client-siren','new-client-siret',
+     'new-client-adresse','new-client-zip','new-client-ville',
+     'new-client-livraison','new-livraison-zip','new-livraison-ville'].forEach(function(id){ document.getElementById(id).value = ''; });
     document.getElementById('new-livraison-diff').checked = false;
     document.getElementById('new-livraison-wrap').style.display = 'none';
     document.getElementById('new-nature').value = 'prestation_services';
@@ -1501,7 +1616,15 @@
       if(prefill.client_nom) document.getElementById('new-client-nom').value = prefill.client_nom;
       if(prefill.client_siren) document.getElementById('new-client-siren').value = prefill.client_siren;
       if(prefill.client_siret) document.getElementById('new-client-siret').value = prefill.client_siret;
-      if(prefill.client_adresse) document.getElementById('new-client-adresse').value = prefill.client_adresse;
+      // LA LIGNE REÇUE EST DÉCOUPÉE, et non plus posée entière dans la case de
+      // la voie. Le prefill n'a qu'une clé d'adresse, une ligne : casesDepuisLigne
+      // en rend les trois morceaux, sous la même règle que partout ailleurs.
+      if(prefill.client_adresse){
+        var casesPre = casesDepuisLigne(prefill.client_adresse);
+        document.getElementById('new-client-adresse').value = casesPre.adresse;
+        document.getElementById('new-client-zip').value = casesPre.zip;
+        document.getElementById('new-client-ville').value = casesPre.ville;
+      }
       // entity_origine du prefill : déjà pris en compte à la construction du sélecteur
       // ci-dessus (cas multi-entités) et relu au save (cas mono-entité).
       if(Array.isArray(prefill.lignes) && prefill.lignes.length){
@@ -1513,6 +1636,41 @@
     document.getElementById('modal-new').classList.add('show');
     document.getElementById('modal-new')._prefill = prefill || null;
   }
+  // LE CLIENT D'UNE FACTURE NEUVE, ET SES DEUX ADRESSES. Les trois cases sont
+  // l'autorité, la ligne imprimable en découle : elle n'est plus saisie.
+  //
+  // LA LIVRAISON RESTE HORS PROPAGATION, et c'est écrit ici parce que c'est ici
+  // qu'elle naît. Elle prend les trois cases comme l'autre, parce que c'est une
+  // adresse ; elle ne voyage vers aucune fiche ni aucune carte, parce que la
+  // fiche et la carte d'un SIRET portent l'adresse de l'ÉTABLISSEMENT, celle où
+  // l'entreprise est établie, et non celle où telle commande a été livrée. La
+  // recopier ferait porter à la fiche une adresse qui n'est pas la sienne, et
+  // le pont la propagerait ensuite à tous les jumeaux du même SIRET.
+  //
+  // LA CASE À COCHER DÉCIDE DES DEUX, la ligne comme les cases : décochée, il
+  // n'y a pas d'adresse de livraison, et le sous-objet naît vide plutôt qu'à
+  // demi rempli de ce qu'un champ caché porterait encore. C'est la règle qui
+  // gouvernait déjà la ligne seule.
+  function clientNeuf(clientNom){
+    var lu = function(id){ return document.getElementById(id).value.trim(); };
+    var client = blocAdresseFacture({
+      adresse: lu('new-client-adresse'), zip: lu('new-client-zip'), ville: lu('new-client-ville')
+    });
+    var livre = document.getElementById('new-livraison-diff').checked;
+    var livraison = blocAdresseFacture(livre
+      ? { adresse: lu('new-client-livraison'), zip: lu('new-livraison-zip'), ville: lu('new-livraison-ville') }
+      : { adresse: '', zip: '', ville: '' });
+    return {
+      nom: clientNom,
+      adresse: client.ligne,
+      adresse_cases: client.cases,
+      siret: document.getElementById('new-client-siret').value.trim(),
+      siren: document.getElementById('new-client-siren').value.trim(),
+      adresse_livraison: livraison.ligne,
+      livraison_cases: livraison.cases
+    };
+  }
+
   function closeNewModal(){ document.getElementById('modal-new').classList.remove('show'); }
 
   document.getElementById('btn-new').addEventListener('click', function(){ openNewModal(); });
@@ -1599,13 +1757,7 @@
       date_emission: todayISO(),
       date_prestation: document.getElementById('new-date-prestation').value || null,
       emetteur: emetteurForEntity(entityKey),
-      client: {
-        nom: clientNom,
-        adresse: document.getElementById('new-client-adresse').value.trim(),
-        siret: document.getElementById('new-client-siret').value.trim(),
-        siren: document.getElementById('new-client-siren').value.trim(),
-        adresse_livraison: document.getElementById('new-livraison-diff').checked ? document.getElementById('new-client-livraison').value.trim() : ''
-      },
+      client: clientNeuf(clientNom),
       nature_operation: document.getElementById('new-nature').value,
       lignes: lignes,
       total_ht: totalHt,
@@ -1708,7 +1860,12 @@
         date_emission: r.date_emission || todayISO(),
         date_prestation: r.date_emission || todayISO(),
         emetteur: emetteurForEntity(r.entity_origine || DEFAULT_ENTITY),
-        client: { nom: r.client_nom||'—', adresse: r.client_adresse||'', siret: r.client_siret||'', siren: r.client_siren||'', adresse_livraison:'' },
+        // LA COLONNE D'ADRESSE EST DÉCOUPÉE, et non plus versée entière dans la
+        // case de la voie. La colonne du fichier porte une ligne ; les trois
+        // cases en sortent, et la ligne imprimable s'en recompose. Sans bloc de
+        // cinq chiffres, tout reste dans la voie, et cela se corrige sur la
+        // fiche.
+        client: clientImporte(r.client_nom, r.client_adresse, r.client_siret, r.client_siren),
         nature_operation: r.nature_operation || 'prestation_services',
         lignes: [{ designation: r.designation||'Import CSV', date: r.date_emission||null, quantite: qty, prix_unitaire: pu, total: totalHt }],
         total_ht: totalHt, tva_applicable: regime.tva_applicable, taux_tva: regime.taux_tva, montant_tva: montantTva, total_ttc: round2(totalHt + montantTva),
@@ -1919,7 +2076,14 @@
         date_emission: c.date_emission || todayISO(),
         date_prestation: c.date_emission || todayISO(),
         emetteur: emetteurForEntity(c.entity_origine || DEFAULT_ENTITY),
-        client: { nom: c.client_nom||'—', adresse: c.client_adresse||'', siret: c.client_siret||'', siren: c.client_siren||'', adresse_livraison:'' },
+        // L'IMPORT DÉCOUPE CE QU'IL EXTRAIT. L'adresse relevée dans le PDF,
+        // relue et corrigée dans le panneau de contrôle, était versée ENTIÈRE
+        // dans la case de la voie : la facture naissait avec une ligne complète
+        // là où le reste de l'application attend une voie, et cette ligne
+        // partait telle quelle sur la fiche du client. casesDepuisLigne la
+        // découpe, cleanAdresse passant avant l'ancre pour retirer les queues
+        // que l'extraction ramasse.
+        client: clientImporte(c.client_nom, c.client_adresse, c.client_siret, c.client_siren),
         nature_operation: 'prestation_services',
         lignes: [{ designation: designation, date: c.date_emission||null, quantite: 1, prix_unitaire: totalHt, total: totalHt }],
         total_ht: totalHt, tva_applicable: tvaApplicable, taux_tva: taux, montant_tva: montantTva, total_ttc: totalTtc,

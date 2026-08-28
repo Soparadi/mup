@@ -1495,42 +1495,27 @@ const CHAMPS_CARTE = [
 ];
 
 // ── LA DÉCOUPE À LA LECTURE, QUI AMORCE LES TROIS CASES D'ADRESSE ──
-// Les cartes n'ont jamais porté que l'agrégat : `address` monobloc (alias
-// ancien `location`), rempli à la matérialisation d'un prospect ou à la fenêtre
-// de création. Les trois cases seraient donc vides sur toutes les fiches
-// existantes si rien ne les amorçait. On les amorce par la découpe de
-// l'agrégat, decouperAdresseAgregee, la même fonction que la fiche société et
-// que le serveur, ancrée en FIN sur le dernier bloc de cinq chiffres.
+// Les cartes d'avant ne portent que l'agrégat : `address` monobloc (alias ancien
+// `location`). Leurs trois cases se tirent de sa découpe, par casesAdresse du
+// module partagé /js/adresse-agregee.js, où la garde et la doctrine sont
+// écrites. Cette page en tenait sa propre copie ; il n'y en a plus qu'une.
 //
-// LA GARDE EST STRICTE : la découpe ne joue QUE si les TROIS cases sont vides.
-// Une carte portant déjà un code postal ou une ville n'est jamais redécoupée,
-// une correction manuelle n'est jamais écrasée par une déduction.
-//
-// LECTURE PURE, ET C'EST ESSENTIEL : rien n'est posé sur l'objet carte. save()
-// sérialise la carte ENTIÈRE en PUT, sans liste blanche, et boucle sur TOUTES
-// les cartes : une valeur déduite posée ici partirait en base au premier
-// enregistrement venu, sur les huit cents cartes à la fois, et deviendrait
-// indiscernable d'une saisie. C'est la règle que dateCreation() tient déjà pour
-// la date de création, et pour la même raison. La déduction ne devient une
-// saisie qu'au commit d'une case, sur la seule carte éditée (cf. startEditCarte).
+// LECTURE PURE, ET ICI C'EST ESSENTIEL : casesAdresse ne pose rien sur l'objet
+// carte. save() sérialise la carte ENTIÈRE en PUT, sans liste blanche, et boucle
+// sur TOUTES les cartes : une valeur déduite posée à la lecture partirait en
+// base au premier enregistrement venu, sur les huit cents cartes à la fois, et
+// deviendrait indiscernable d'une saisie. C'est la règle que dateCreation()
+// tient déjà pour la date de création, et pour la même raison. La déduction ne
+// devient une saisie qu'au commit d'une case, sur la seule carte éditée
+// (cf. startEditCarte).
 const CASES_ADRESSE_CARTE = ['adresse', 'zip', 'ville'];
-function casesAdresseCarte(c){
-  const voie = String(c.adresse || '').trim();
-  const zip = String(c.zip || '').trim();
-  const ville = String(c.ville || '').trim();
-  if(voie || zip || ville) return { adresse:voie, zip:zip, ville:ville };
-  const agregat = String(c.address || c.location || '').trim();
-  if(!agregat) return { adresse:'', zip:'', ville:'' };
-  const d = decouperAdresseAgregee(agregat);
-  return { adresse:d.voie, zip:d.code_postal, ville:d.ville };
-}
 // Valeur d'une case : ce que porte la carte, sauf pour les trois cases
 // d'adresse, qui passent par la découpe ci-dessus. Un seul point de lecture,
 // pour l'affichage comme pour la graine de l'éditeur : les deux ne peuvent pas
 // diverger.
 function valeurCarte(ch, c){
   if(CASES_ADRESSE_CARTE.indexOf(ch.prop) === -1) return String(c[ch.prop] || '');
-  return casesAdresseCarte(c)[ch.prop];
+  return casesAdresse(c)[ch.prop];
 }
 
 // Le contenu d'une case, décrit à UN SEUL endroit : openDetail le pose, la
@@ -1594,7 +1579,7 @@ function startEditCarte(ch){
     // parce qu'on l'édite. Les trois sont lues AVANT l'écriture de la case,
     // faute de quoi la découpe verrait déjà la nouvelle valeur.
     if(CASES_ADRESSE_CARTE.indexOf(ch.prop) !== -1){
-      const cases = casesAdresseCarte(c);
+      const cases = casesAdresse(c);
       CASES_ADRESSE_CARTE.forEach(function(p){ c[p] = cases[p]; });
     }
     c[ch.prop] = v;
@@ -2245,14 +2230,12 @@ async function openDetail(id) {
   // chercher l'adresse qu'on vient précisément de rejeter, alors même que la
   // correction efface lat/lng pour la faire regéocoder.
   //
-  // Sans voie connue, l'agrégat reste maître : c'est la règle du serveur, mot
-  // pour mot. Composer « 04000 DIGNE-LES-BAINS » là où l'agrégat porte encore
-  // « LE PEAGE ROUTE DE NICE 04000 DIGNE-LES-BAINS » poserait le marqueur au
-  // centre de la commune au lieu de la rue.
-  const casesCarte = casesAdresseCarte(c);
-  const agregatCarte = String(c.address || c.location || '').trim();
-  const composeCarte = [casesCarte.adresse, casesCarte.zip, casesCarte.ville].filter(Boolean).join(' ');
-  const adresseCarte = casesCarte.adresse ? composeCarte : (agregatCarte || composeCarte);
+  // adresseComposee, du module partagé : la MÊME ligne que celle affichée dans
+  // les listes de Contacts, de Frais et de Visio. Sans voie connue, elle rend
+  // l'agrégat entier, ce qui évite de poser le marqueur au centre de la commune
+  // quand la voie ne vit que là.
+  const casesCarte = casesAdresse(c);
+  const adresseCarte = adresseComposee(c);
   if(adresseCarte) {
     mapSection.style.display = '';
     // Une fiche déjà en cours de résolution ne relance rien : la carte posée

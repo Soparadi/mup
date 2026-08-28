@@ -872,12 +872,10 @@ function migrateProspect(p){
   // agrégat, sous la GARDE habituelle : les TROIS cases vides, et elles seules.
   // Un enregistrement portant déjà un code postal ou une ville n'est jamais
   // redécoupé, une correction manuelle n'est jamais écrasée par une déduction.
-  if(!p.adresse && !p.zip && !p.ville && (p.address || p.location)){
-    const d = decouperAdresseAgregee(p.address || p.location);
-    p.adresse = d.voie;
-    p.zip = d.code_postal;
-    p.ville = d.ville;
-  }
+  const casesLues = casesAdresse(p);
+  p.adresse = casesLues.adresse;
+  p.zip = casesLues.zip;
+  p.ville = casesLues.ville;
   if(!p.source) p.source = p.col === 'won' || p.col === 'lost' ? 'pipeline' : (p.source || 'manual');
   if(!p.entity_origine) p.entity_origine = 'mup';
   if(!Array.isArray(p.factures_ids)) p.factures_ids = [];
@@ -1506,7 +1504,14 @@ function renderTable(){
   if(q) list = list.filter(p =>
     (p.nom||'').toLowerCase().includes(q) ||
     (p.enseigne||'').toLowerCase().includes(q) ||
-    (p.adresse||'').toLowerCase().includes(q) ||
+    // L'ADRESSE CHERCHÉE EST CELLE QU'ON LIT, ET L'AGRÉGAT AVEC. La ligne
+    // affichée est composée des trois cases : chercher la seule voie ferait
+    // qu'une fiche cesse d'être trouvable par le code postal ou la ville qu'on
+    // voit sur sa ligne. L'agrégat reste interrogé À CÔTÉ, et non à la place :
+    // sur une carte que la découpe n'a pas su amorcer, c'est lui qui porte
+    // encore l'adresse, et la recherche ne doit pas voir moins qu'avant.
+    adresseComposee(p).toLowerCase().includes(q) ||
+    String(p.address||p.location||'').toLowerCase().includes(q) ||
     (p.email||'').toLowerCase().includes(q) ||
     (p.contact_nom||p.contact||'').toLowerCase().includes(q) ||
     (p.siren||'').toLowerCase().includes(q) ||
@@ -1623,11 +1628,16 @@ function renderTable(){
       ? window.MUPNom.compose({ enseigne: p.enseigne, nomJuridique: p.nom })
       : { titre: p.nom || '', sousTitre: '' };
     const nom = esc(composed.titre || '—');
-    const ville = esc(p.adresse || '');
+    // `ville` était le nom de cette variable, et elle n'a jamais porté de ville :
+    // la voie sur un contact, la ligne entière sur une carte projetée, une
+    // région sur une fiche collée. Le nom a déjà égaré une lecture, il tombe.
+    // La ligne est composée des trois cases par adresseComposee, la MÊME
+    // composition que partout ailleurs, et non une variante de plus.
+    const ligneAdresse = esc(adresseComposee(p));
     const nbPers = p._nbPers || 1;
     const subParts = [];
     if(composed.sousTitre) subParts.push(composed.sousTitre);
-    if(ville) subParts.push(ville);
+    if(ligneAdresse) subParts.push(ligneAdresse);
     subParts.push(nbPers + ' personne' + (nbPers>1?'s':''));
     const meta = subParts.join(' · ');
 

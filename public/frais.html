@@ -894,6 +894,7 @@
   </div>
 </div>
 
+<script src="/js/adresse-agregee.js"></script>
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
@@ -1142,7 +1143,16 @@
       nom: c.co || c.nom || c.name || '',
       contact_nom: c.name || c.title || '',
       email: c.email || '',
-      adresse: c.address || c.adresse || '',
+      // Les trois cases telles que la carte les porte, et l'agrégat à côté :
+      // c'est adresseComposee qui décide, sous garde, ce qui s'affiche et ce qui
+      // se cherche. Cette ligne versait l'agrégat dans `adresse`, si bien que le
+      // champ rendait la LIGNE ENTIÈRE sur une carte et la seule VOIE sur un
+      // contact, sous le même nom et dans la même colonne.
+      adresse: c.adresse || '',
+      zip: c.zip || '',
+      ville: c.ville || '',
+      address: c.address || '',
+      location: c.location || '',
       siren: c.siren || '',
       siret: c.siret || '',
       col: c.col || 'leads'
@@ -1206,7 +1216,8 @@
   function prospectCorrespond(p, q){
     return (p.nom||'').toLowerCase().includes(q) ||
            (p.enseigne||'').toLowerCase().includes(q) ||
-           (p.adresse||'').toLowerCase().includes(q) ||
+           adresseComposee(p).toLowerCase().includes(q) ||
+           String(p.address||p.location||'').toLowerCase().includes(q) ||
            (p.email||'').toLowerCase().includes(q) ||
            (p.contact_nom||p.contact||'').toLowerCase().includes(q) ||
            (p.siren||'').toLowerCase().includes(q) ||
@@ -1224,7 +1235,7 @@
   function prospectRepli(p){
     var sr = String(p.siret || '').replace(/\s/g,'');
     if(sr) return sr.replace(/(\d{3})(\d{3})(\d{3})(\d{5})/,'$1 $2 $3 $4');
-    return String(p.adresse || '').trim();
+    return adresseComposee(p);
   }
 
   // LE NOM D'UNE FICHE QU'ON PARCOURT, et lui seul : le titre d'une ligne de la
@@ -1867,7 +1878,7 @@
       etat.index = -1;
       box.innerHTML = etat.resultats.map(function(p, i){
         var titre = prospectTitre(p);
-        var meta = [prospectPersonne(p), p.email || '', p.adresse || '']
+        var meta = [prospectPersonne(p), p.email || '', adresseComposee(p)]
           .filter(function(v){ return v && v !== titre; }).join(' · ');
         return '<div class="pros-hit" role="option" data-i="' + i + '">' +
                  '<div class="pros-hit-t">' + esc(titre) + '</div>' +

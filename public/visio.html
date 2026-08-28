@@ -1577,6 +1577,7 @@ body #mup-cookie-panel{z-index:60001}
 
 <div class="toast" id="toast"></div>
 
+<script src="/js/adresse-agregee.js"></script>
 <script src="/_mup-tel.js"></script>
 <script src="/_mup-nom.js"></script>
 <script src="/_mup-fil.js"></script>
@@ -2427,7 +2428,11 @@ async function collectVisioRdvs(){
       societe: noms.second,
       email: (p && p.email) || '',
       tel: (p && (p.tel || p.telephone)) || '',
-      adresse: (p && (p.address || p.adresse)) || '',
+      // La LIGNE d'adresse, composée des trois cases par le module partagé, et
+      // non plus un champ qui rendait la ligne entière sur une carte et la seule
+      // voie sur un contact. Sans voie connue, adresseComposee rend l'agrégat
+      // entier : ce briefing ne perd rien de ce qu'il montrait.
+      adresse: p ? adresseComposee(p) : '',
       date: dateIso,
       duree: _dureeRdv(e, p),
       provider: (p && p.visio_provider) || detectProvider((p && p.visio_link) || ''),
@@ -3067,7 +3072,9 @@ async function renderBriefing(rdv){
   const initials = (rdv.prospectName || '?').split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase();
   const email = rdv.email || contact?.email;
   const tel = rdv.tel || contact?.tel || contact?.telephone;
-  const adresse = rdv.adresse || contact?.adresse;
+  // Même composition que la liste : le rendez-vous la porte déjà, la fiche
+  // rapprochée sert de repli et passe par la même fonction.
+  const adresse = rdv.adresse || (contact ? adresseComposee(contact) : '');
 
   // Imminent ?
   const diff = new Date(rdv.date) - new Date();

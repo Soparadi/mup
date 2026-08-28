@@ -915,40 +915,16 @@ async function refreshEnrichButtonState(){
   }
 }
 
-// ── LES TROIS CASES D'ADRESSE DE LA FICHE, TELLES QU'ELLE LES MONTRE ──
-// Les cases du record quand il en porte ; la découpe de l'agrégat quand les
-// trois sont vides. Cette fiche sert les deux tables selon le préfixe de l'id :
-// une carte pipeline d'avant les trois cases ne porte que son `address`
-// monobloc (alias ancien `location`), et c'est de lui que ses cases se tirent.
-//
-// LA GARDE EST STRICTE : les TROIS cases vides, et elles seules. Un
-// enregistrement portant déjà un code postal ou une ville n'est JAMAIS
-// redécoupé, sans quoi une correction manuelle serait écrasée par une
-// déduction. C'est mot pour mot la garde que le serveur applique à la
-// recomposition de l'agrégat, et celle de la fiche Pipeline.
-//
-// LA DÉCOUPE EST CELLE DE TOUT LE MONDE : decouperAdresseAgregee, jumeau
-// navigateur de lib/societes.js, ancré en FIN sur le dernier bloc de cinq
-// chiffres. Rien n'est fabriqué : sans bloc de cinq chiffres, tout part dans la
-// voie et les deux autres cases restent vides.
-//
-// LECTURE PURE : rien n'est posé sur le record. Ce que l'abonnée ne corrige pas
-// ne s'écrit pas, et une déduction ne devient jamais une saisie par surprise.
-//
-// DEUX APPELANTS, UNE SEULE VÉRITÉ : le remplissage du formulaire ci-dessous, et
-// la composition de la carte envoyée au Pipeline. Ce que la fiche montre est
+// Les trois cases d'adresse de la fiche : casesAdresse, du module partagé
+// /js/adresse-agregee.js, où la garde et la doctrine sont écrites. Cette page
+// en tenait sa propre copie, mot pour mot identique ; il n'y en a plus qu'une,
+// lue par toutes les surfaces. Deux appelants ici : le remplissage du formulaire
+// et la composition de la carte envoyée au Pipeline. Ce que la fiche montre est
 // exactement ce qu'elle envoie.
-function casesAdresseFiche(c){
-  const voie = String((c && c.adresse) || '').trim();
-  const zip = String((c && c.zip) || '').trim();
-  const ville = String((c && c.ville) || '').trim();
-  if (voie || zip || ville) return { adresse: voie, zip: zip, ville: ville };
-  const agregat = String((c && (c.address || c.location)) || '').trim();
-  if (!agregat) return { adresse: '', zip: '', ville: '' };
-  const d = decouperAdresseAgregee(agregat);
-  return { adresse: d.voie, zip: d.code_postal, ville: d.ville };
-}
-
+//
+// Cette fiche sert les DEUX tables selon le préfixe de l'id, et c'est ce qui
+// rend la découpe nécessaire : une carte pipeline d'avant les trois cases ne
+// porte que son `address` monobloc.
 function populate(){
   const c = contact;
   // Tout ce qui suit repeint les champs depuis le record : aucune saisie n'est
@@ -1005,10 +981,10 @@ function populate(){
   document.getElementById('f-societe-email').value = c.societe_email || '';
   document.getElementById('f-societe-tel').value = c.societe_tel || '';
   // Adresse : les trois cases telles que la fiche les montre, découpe de
-  // l'agrégat comprise quand les trois sont vides (cf. casesAdresseFiche
-  // ci-dessus, où la garde est écrite). Le triplet qui remplit ces trois cases
-  // est celui-là même que l'envoi au Pipeline emporte.
-  const casesFiche = casesAdresseFiche(c);
+  // l'agrégat comprise quand les trois sont vides (cf. casesAdresse, du module
+  // partagé, où la garde est écrite). Le triplet qui remplit ces trois cases est
+  // celui-là même que l'envoi au Pipeline emporte.
+  const casesFiche = casesAdresse(c);
   document.getElementById('f-adresse').value = casesFiche.adresse;
   document.getElementById('f-zip').value = casesFiche.zip;
   document.getElementById('f-ville').value = casesFiche.ville;
@@ -2083,7 +2059,7 @@ function buildPipelineCard(col){
   // POST /api/pipeline, la route qui le recompose des trois clés reçues, à la
   // création comme à la mise à jour. La carte naît donc avec son agrégat, que la
   // Carte et le Tableau de bord géocodent.
-  const cases = casesAdresseFiche(c);
+  const cases = casesAdresse(c);
   const now = new Date().toISOString();
   return {
     id: pipelineLocalId(),

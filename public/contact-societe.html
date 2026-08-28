@@ -627,6 +627,7 @@ button.dropdown-item{width:100%;background:transparent;border:none;font-family:i
 <div class="toast" id="toast"></div>
 
 <script src="/js/person-fields.js"></script>
+<script src="/js/adresse-agregee.js"></script>
 <script src="/_mup-nom.js"></script>
 <script src="/_mup-tel.js"></script>
 <script src="/_mup-fil.js"></script>
@@ -969,20 +970,35 @@ function populate(){
   document.getElementById('f-website').value = c.website || '';
   document.getElementById('f-societe-email').value = c.societe_email || '';
   document.getElementById('f-societe-tel').value = c.societe_tel || '';
-  // Adresse : la carte pipeline porte un champ `address` monobloc là où le
-  // formulaire attend adresse / zip / ville. Si les champs éclatés sont absents
-  // et qu'`address` existe, on le découpe sur le CP (pivot \d{5}, motif repris
-  // de pipeline.html:1494). Sinon on ne fabrique aucune valeur.
+  // ── ADRESSE : LA DÉCOUPE À LA LECTURE, ET SA GARDE ──
+  // Une carte pipeline porte son adresse en un `address` monobloc (alias ancien
+  // `location`) là où ce formulaire attend trois cases : la voie, le code
+  // postal, la ville. Les trois cases vides et un agrégat présent, on le
+  // découpe pour les remplir.
+  //
+  // LA GARDE EST STRICTE : les TROIS cases vides, et elles seules. Un
+  // enregistrement portant déjà un code postal ou une ville n'est JAMAIS
+  // redécoupé, sans quoi une correction manuelle serait écrasée par une
+  // déduction. C'est mot pour mot la garde que le serveur applique à la
+  // recomposition de l'agrégat.
+  //
+  // LA DÉCOUPE EST CELLE DE TOUT LE MONDE : decouperAdresseAgregee, jumeau
+  // navigateur de la fonction de lib/societes.js, chargé ici pour la première
+  // fois (aucune page ne le chargeait encore). Son ancre est en FIN, sur le
+  // DERNIER bloc de cinq chiffres de la chaîne. Le motif maison qu'elle
+  // remplace était ancré au DÉBUT : sur « CS 20101 35270 COMBOURG » il coupait
+  // à « CS », prenait le code de service 20101 pour un code postal et laissait
+  // « 35270 COMBOURG » en guise de ville. Ce triplet faux ne restait pas à
+  // l'écran : societeDeLaFiche() l'envoie tel quel à /api/societes.
+  //
+  // Rien n'est fabriqué : sans aucun bloc de cinq chiffres, tout part dans la
+  // voie et les deux autres cases restent vides.
   let fAdresse = c.adresse || '', fZip = c.zip || '', fVille = c.ville || '';
-  if (!c.adresse && !c.zip && !c.ville && c.address) {
-    const m = c.address.match(/^(.*?)(\d{5})\s*(.*)$/);
-    if (m) {
-      fAdresse = m[1].replace(/[,\s]+$/, '').trim();
-      fZip = m[2];
-      fVille = m[3].trim();
-    } else {
-      fAdresse = c.address;   // pas de CP : tout dans l'adresse, zip/ville vides
-    }
+  if (!c.adresse && !c.zip && !c.ville && (c.address || c.location)) {
+    const decoupe = decouperAdresseAgregee(c.address || c.location);
+    fAdresse = decoupe.voie;
+    fZip = decoupe.code_postal;
+    fVille = decoupe.ville;
   }
   document.getElementById('f-adresse').value = fAdresse;
   document.getElementById('f-zip').value = fZip;
@@ -1324,12 +1340,18 @@ function captureFields(){
   saisi('f-website', v => poser('website', v.trim()));
   saisi('f-societe-email', v => poser('societe_email', v.trim()));
   saisi('f-societe-tel', v => poser('societe_tel', window.MUPTel.format(v)));
-  // Même règle pour les trois noms de l'adresse : ils voyagent ensemble ou pas
-  // du tout (une carte pipeline porte `address`, une fiche `adresse`).
-  saisi('f-adresse', v => {
-    const a = v.trim();
-    poser('adresse', a); poser('address', a); poser('location', a);
-  });
+  // LA CASE DE VOIE N'ÉCRIT QUE LA VOIE. Elle posait aussi `address` et
+  // `location`, les deux noms de l'AGRÉGAT, et y mettait la voie SEULE : une
+  // carte pipeline dont l'agrégat portait « 12 RUE DES FORGES 35270 COMBOURG »
+  // se retrouvait avec « 12 RUE DES FORGES » au premier enregistrement de la
+  // fiche, et le géocodage, qui ne lit que l'agrégat, repartait sur la
+  // première voie homonyme de France.
+  //
+  // Ce n'est PAS une règle de préséance qui arbitrerait entre deux vérités :
+  // c'est le SECOND POINT D'ENTRÉE QUI DISPARAÎT. L'agrégat n'est plus écrit
+  // ici parce qu'il n'est plus une donnée saisie. Le serveur le recompose à
+  // chaque écriture, à partir de ces trois cases et d'elles seules.
+  saisi('f-adresse', v => poser('adresse', v.trim()));
   saisi('f-zip', v => poser('zip', v.trim()));
   saisi('f-ville', v => poser('ville', v.trim()));
   saisi('f-note-societe', v => poser('note_societe', v.trim()));

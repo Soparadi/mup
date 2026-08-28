@@ -838,9 +838,23 @@
       <input type="text" id="set-raison" placeholder="Nom de votre société" />
       <div class="field-help">Émetteur affiché sur vos factures.</div>
     </div>
+    <!-- TROIS CASES, comme partout ailleurs dans l'application. Il n'y en avait
+         qu'une, dont le gris d'attente disait « N°, rue, code postal, ville » :
+         le tiroir DEMANDAIT la ligne entière, et cette ligne partait dans le
+         champ que le reste de l'application lit comme une VOIE. Le tiroir fait
+         420 px de large et empile déjà ses champs : les trois se suivent, sans
+         rangée à composer. -->
     <div class="field">
       <label>Adresse</label>
-      <input type="text" id="set-adresse" placeholder="N°, rue, code postal, ville" />
+      <input type="text" id="set-adresse" placeholder="12 rue des Lilas" />
+    </div>
+    <div class="field">
+      <label>Code postal</label>
+      <input type="text" id="set-zip" inputmode="numeric" placeholder="35000" />
+    </div>
+    <div class="field">
+      <label>Ville</label>
+      <input type="text" id="set-ville" placeholder="Rennes" />
     </div>
     <div class="field">
       <label>Forme juridique</label>
@@ -1005,7 +1019,11 @@
   async function ecrire(url, options, quoi){
     try {
       var r = await fetch(url, options);
-      if(r.ok) return { ok:true };
+      // LA RÉPONSE VOYAGE AVEC LE VERDICT, et aucun appelant n'est tenu de la
+      // lire. Le tiroir Société en a besoin : l'agrégat d'adresse est composé
+      // par le serveur, et c'est le corps du PUT qui le rapporte. Les autres
+      // appelants ne regardent que `ok`, et rien ne change pour eux.
+      if(r.ok) return { ok:true, reponse:r };
       return { ok:false, motif: quoi + ' : ' + raisonHttp(r.status) };
     } catch(e){
       return { ok:false, motif: quoi + ' : le serveur est injoignable. Vérifiez votre connexion.' };
@@ -1030,9 +1048,23 @@
   async function enregistrerRegle(r){
     return await ecrire('/api/frais-recurrents', envoiUnitaire(r), 'Ce frais récurrent');
   }
+  // LE TIROIR N'ENVOIE PLUS QUE SES PROPRES CLÉS, et c'est un défaut réparé.
+  // Il réémettait l'objet `settings` ENTIER, celui que la page a lu à l'init :
+  // toute clé écrite ailleurs entre cette lecture et cet enregistrement était
+  // reposée à sa valeur d'avant. Devis écrit `conditionsVente`, `email` et,
+  // depuis ce lot, l'adresse de l'émetteur, sur la même table et par la même
+  // route ; un onglet Frais resté ouvert les ramenait donc en arrière au
+  // premier « Enregistrer » du tiroir. Devis s'en gardait déjà de son côté, en
+  // relisant avant d'écrire et en n'envoyant que ses clés, et sa note disait
+  // que cette moitié-là de la parade manquait ici. Elle est posée.
+  //
+  // LA LISTE EST CELLE DES CHAMPS DU TIROIR, et de rien d'autre. Le PUT est en
+  // MERGE côté serveur : les clés absentes ne sont pas touchées.
+  var CLES_TIROIR_SOCIETE = ['raisonSociale', 'tvaAssujetti', 'formeJuridique', 'siret', 'tvaIntra', 'tauxTvaDefaut'];
   async function enregistrerReglages(v){
-    // Le tiroir Société garde son PUT : il n'a jamais réémis qu'un objet.
-    return await ecrire('/api/user-settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(v) }, 'Vos informations de société');
+    var corps = { societe_adresse: v.societe_adresse };
+    CLES_TIROIR_SOCIETE.forEach(function(k){ corps[k] = v[k]; });
+    return await ecrire('/api/user-settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corps) }, 'Vos informations de société');
   }
 
   // LE SEUL LOT QUI SUBSISTE, et il appartient à la génération des occurrences
@@ -2542,7 +2574,21 @@
       return;
     }
     document.getElementById('set-raison').value = settings.raisonSociale || '';
-    document.getElementById('set-adresse').value = settings.adresse || '';
+    // LES TROIS CASES VIENNENT DU SOUS-OBJET `societe_adresse`, que le GET rend
+    // BRUT : le serveur transporte et ne déduit rien, c'est l'écran qui passe
+    // par casesAdresse, la fonction partagée, avec l'agrégat à côté. Elle
+    // apporte la garde habituelle, et elle est stricte : la découpe n'amorce
+    // que si les TROIS cases sont vides. Un compte qui n'a jamais renseigné que
+    // sa ligne entière la voit découpée à l'ouverture du tiroir, une seule fois
+    // et sans que rien soit écrit ; un compte dont une seule des trois est
+    // renseignée n'est JAMAIS redécoupé.
+    var casesSociete = casesAdresse({ adresse: (settings.societe_adresse || {}).adresse,
+                                      zip: (settings.societe_adresse || {}).zip,
+                                      ville: (settings.societe_adresse || {}).ville,
+                                      address: settings.adresse });
+    document.getElementById('set-adresse').value = casesSociete.adresse;
+    document.getElementById('set-zip').value = casesSociete.zip;
+    document.getElementById('set-ville').value = casesSociete.ville;
     document.getElementById('set-tva').value = String(!!settings.tvaAssujetti);
     document.getElementById('set-forme').value = settings.formeJuridique || '';
     document.getElementById('set-siret').value = settings.siret || '';
@@ -2569,7 +2615,18 @@
       return;
     }
     settings.raisonSociale = document.getElementById('set-raison').value.trim();
-    settings.adresse = document.getElementById('set-adresse').value.trim();
+    // LE SOUS-OBJET `societe_adresse` EST LA SEULE PORTE, et `adresse` n'est
+    // plus écrit en un champ. Sur ce payload la clé `adresse` est prise par
+    // l'AGRÉGAT, celui que les devis et les factures impriment : y écrire la
+    // voie seule aurait fait porter au même nom deux choses de sens contraire,
+    // et continuer d'y écrire la ligne entière aurait laissé l'enregistrement
+    // avec une ligne dans une case de voie et deux cases vides à côté, l'état
+    // exact que la garde stricte interdit ensuite de redécouper.
+    settings.societe_adresse = {
+      adresse: document.getElementById('set-adresse').value.trim(),
+      zip:     document.getElementById('set-zip').value.trim(),
+      ville:   document.getElementById('set-ville').value.trim()
+    };
     settings.tvaAssujetti = (document.getElementById('set-tva').value === 'true');
     settings.formeJuridique = document.getElementById('set-forme').value;
     settings.siret = document.getElementById('set-siret').value.trim();
@@ -2581,6 +2638,20 @@
       await mupAlert('Réglages non enregistrés', verdict.motif, 'Fermer');
       return;
     }
+    // L'AGRÉGAT VIENT DU SERVEUR, ET DE NULLE PART AILLEURS. Le PUT rend
+    // l'enregistrement mis à jour, et sa clé `adresse` est la ligne composée
+    // par recomposerAdresseAgregee. La recomposer ici en ferait une SECONDE
+    // composition, celle que ce lot bannit, et les deux divergeraient sur la
+    // première règle qui bougerait. Sur une réponse illisible on garde ce que
+    // l'on avait : rien de ce que la page affiche n'en dépend, et le prochain
+    // chargement lira la valeur vraie. Le cas de l'abstention est couvert par
+    // la même ligne, le serveur ne touchant alors pas à `adresse`.
+    try {
+      var enregistre = await verdict.reponse.json();
+      if(enregistre && typeof enregistre === 'object' && !Array.isArray(enregistre)){
+        settings.adresse = String(enregistre.adresse || '');
+      }
+    } catch(e){}
     // Aucun frais n'est réécrit : rien ici ne dépend plus du statut de TVA.
     closeSettings();
     renderAll();

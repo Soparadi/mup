@@ -1267,9 +1267,12 @@ function migrateCard(c){
 function nomsCarte(c){
   var n=window.MUPNom
     ? window.MUPNom.compose({enseigne:c.enseigne,nomJuridique:c.co||c.name})
-    : {titre:c.co||c.name||'',sousTitre:(c.co&&c.name?c.name:'')};
+    : {titre:c.co||c.name||'',sousTitre:(c.co&&c.contact?c.contact:'')};
   var titre=n.titre||'';
-  var dirigeant=String(c.name==null?'':c.name).trim();
+  // Le dirigeant se lit dans `contact`. `name` n'en est qu'un alias, que
+  // migrateCard écrase à chaque lecture : il porte la personne tant que la
+  // fiche n'a pas été reprise, et le nom de société une fois qu'elle l'a été.
+  var dirigeant=String(c.contact==null?'':c.contact).trim();
   var second=n.sousTitre||(dirigeant.toLowerCase()!==titre.toLowerCase()?dirigeant:'');
   return {titre:titre,second:second};
 }

@@ -1531,7 +1531,10 @@ async function renderDashboardAgenda() {
             ? list.slice(0,3).map(function(item){
                 var ev = item.event, card = item.card;
                 var name = (card && (card.co || card.name)) || ev.title || 'Action';
-                var contact = (card && card.name) || ev.contact || '';
+                // La personne se lit dans `contact`, jamais dans `name` :
+                // `name` est un alias de compatibilité que migrateCard écrase,
+                // et qui ne dit plus la personne dès qu'une fiche est reprise.
+                var contact = (card && card.contact) || ev.contact || '';
                 var meta = contact + (ev.start ? ' · ' + ev.start : '');
                 return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(name)+'</div><div class="today-meta">'+esc(meta)+'</div></div></div>';
               }).join('')
@@ -1545,7 +1548,7 @@ async function renderDashboardAgenda() {
           // à composer : saisie d'abord, projection du référentiel en repli.
           // Lecture seule, comme partout : rien n'est écrit sur la fiche.
           items=colCards.length?colCards.map(function(c){
-            var sousTitre = c.name || (window.MUPProjection ? window.MUPProjection.tel(c) : '');
+            var sousTitre = c.contact || (window.MUPProjection ? window.MUPProjection.tel(c) : '');
             return '<div class="today-action"><div class="today-dot" style="background:'+tc.color+'"></div><div><div class="today-name">'+esc(c.co||c.name)+'</div><div class="today-meta">'+esc(sousTitre)+'</div></div></div>';
           }).join(''):'<div style="font-size:11px;color:var(--muted2);padding:4px 0;">Aucun</div>';
         }

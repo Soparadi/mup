@@ -2727,7 +2727,7 @@ function loadCampaignRecipients(){
   // SIRET déjà payé et retire les fiches opposées : ce qui arrive ici est
   // adressable.
   var recipients = filtered.map(function(c){ var email = window.MUPProjection ? window.MUPProjection.email(c) : (c.email || c.societe_email || c.mail || c.contactEmail); if(!email) return null;
-    return { email, prenom: (c.contactFirstName || c.firstName || (c.name || '').split(' ')[0] || '').trim(), entreprise: (c.co || c.company || '').trim(), secteur: (c.naf || c.sector || '').trim(), ville: (c.city || '').trim() };
+    return { email, prenom: (c.contactFirstName || c.firstName || (c.contact || '').split(' ')[0] || '').trim(), entreprise: (c.co || c.company || '').trim(), secteur: (c.naf || c.sector || '').trim(), ville: (c.city || '').trim() };
   }).filter(Boolean);
   window.__currentRecipients = recipients;
   var info = document.getElementById('cm-recipients-info'); var preview = document.getElementById('cm-recipients-preview');

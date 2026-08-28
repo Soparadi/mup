@@ -2854,7 +2854,8 @@ async function saveRdv() {
     start: time,
     end: endStr,
     title: c.co || c.name || '',
-    contact: c.name || '',
+    // Consigné dans l'événement, donc écrit : `contact` et pas l'alias `name`.
+    contact: c.contact || '',
     type: actionType,
     notes: '',
     ficheId: String(c.id)

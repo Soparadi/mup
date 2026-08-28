@@ -1173,7 +1173,10 @@
     return {
       id: c.id,
       nom: c.co || c.nom || c.name || '',
-      contact_nom: c.name || c.title || '',
+      // Écriture, pas affichage : ce nom est recopié sur le frais créé et y
+      // reste. Il se prend dans `contact`, le champ qui porte la personne,
+      // et non dans l'alias `name` que migrateCard écrase.
+      contact_nom: c.contact || c.title || '',
       email: c.email || '',
       // Les trois cases telles que la carte les porte, et l'agrégat à côté :
       // c'est adresseComposee qui décide, sous garde, ce qui s'affiche et ce qui

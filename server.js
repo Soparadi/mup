@@ -7444,14 +7444,78 @@ app.delete('/api/frais-recurrents/:id', async (req, res) => {
 
 // ── USER SETTINGS ── (1 record par user, partagé Frais/Statistiques)
 // PUT en MERGE pour que Frais et Statistiques cohabitent sans s'écraser.
+
+// ══════════════════════════════════════════════════════════════════════════
+// L'ADRESSE DE L'ÉMETTEUR : TROIS CASES SUR `user`, AGRÉGAT DÉRIVÉ SUR
+// `user_settings`
+// --------------------------------------------------------------------------
+// ELLE VIVAIT EN DEUX ENDROITS, ET AUCUN DES DEUX N'ÉTAIT LE BON TOUT SEUL.
+// `user_settings.adresse` porte un AGRÉGAT, écrit en un champ par Devis et par
+// Frais, lu par Devis, Factures et Frais : c'est ce que les documents
+// impriment. `user.adresse`, `user.code_postal`, `user.ville` sont ÉCLATÉS,
+// déclarés au schéma depuis l'origine, lus par trois surfaces (le payload
+// /auth/me, la fiche de compte du superadmin, le rang 2b de la cascade météo)
+// et écrits par AUCUNE. Deux vérités pour une adresse, dont une vide.
+//
+// L'AUTORITÉ VA AUX TROIS CASES, SUR `user`, ET L'AGRÉGAT EN DÉCOULE. Trois
+// raisons, dans cet ordre :
+//
+//   LES TROIS CHAMPS SONT DÉJÀ DÉCLARÉS, éclatés, au bon nom, et VIDES sur tous
+//   les comptes. Rien à migrer, rien à démêler, aucun risque.
+//
+//   `user_settings.adresse` GARDE LE SENS QU'IL A. Y loger la voie seule aurait
+//   laissé les enregistrements existants avec une ligne entière dans une case de
+//   voie et deux cases vides à côté : exactement l'état que la garde stricte
+//   interdit de redécouper. Il aurait fallu un correctif de lecture propre à
+//   cette table, c'est-à-dire la variante par écran que ce lot bannit.
+//
+//   DEVIS, FACTURES ET FRAIS NE CHANGENT PAS D'UNE LIGNE. Ils lisent
+//   `user_settings.adresse` et continueront : ce champ devient simplement
+//   DÉRIVÉ, composé ici et plus jamais écrit par un écran.
+//
+// UNE SEULE PORTE D'ÉCRITURE, et c'est PUT /api/user-settings. Le corps porte
+// les trois cases dans un sous-objet `societe_adresse` : sur ce payload la clé
+// `adresse` est déjà prise par l'agrégat, et deux `adresse` de sens contraire
+// dans le même objet auraient fini par se lire l'une pour l'autre. Le
+// sous-objet parle le vocabulaire des trois cases du produit (`adresse`,
+// `zip`, `ville`) ; la traduction vers les noms du schéma `user`
+// (`code_postal`) se fait ICI, à la couture, une fois.
+//
+// L'AGRÉGAT EST COMPOSÉ PAR recomposerAdresseAgregee, la fonction du CRM, et
+// par elle seule : aucune seconde composition n'est écrite. Elle attend un
+// enregistrement au vocabulaire du produit, on lui en construit un depuis le
+// record `user` et l'agrégat courant. Elle apporte au passage ses deux gardes :
+// la découpe n'amorce que si les trois cases sont vides, et rien n'est recomposé
+// quand la voie n'est connue que dans l'agrégat.
+//
+// LA LECTURE NE DÉDUIT RIEN. Le GET rend les trois cases TELLES QU'ELLES SONT
+// en base, sans découpe : c'est l'écran qui les passe à casesAdresse avec
+// l'agrégat à côté, la même fonction partagée que partout ailleurs. Le serveur
+// transporte, il n'invente pas une seconde garde.
+// ══════════════════════════════════════════════════════════════════════════
+
+// Les trois cases de l'émetteur telles qu'elles sont sur le record `user`.
+// BRUTES : aucune découpe, aucune déduction. La traduction de nom est ici.
+function casesEmetteur(u) {
+  return {
+    adresse: texteAdresse(u?.adresse),
+    zip: texteAdresse(u?.code_postal),
+    ville: texteAdresse(u?.ville)
+  }
+}
+
 app.get('/api/user-settings', async (req, res) => {
   const userId = requireUserId(req, res)
   if (!userId) return
   try {
     const db = await getDb()
     const rec = (await queryOrEmpty(db, 'SELECT * FROM type::record("user_settings", $id)', { id: userId }))[0]
-    if (!rec) return res.json({ tvaAssujetti: false, formeJuridique: '', siret: '' })
-    res.json(rec)
+    // Les trois cases voyagent avec les réglages, mais elles ne viennent PAS de
+    // la même table : req.authUser est le record `user` complet, déjà posé par
+    // requireAuth, aucune relecture n'est faite pour lui.
+    const societe_adresse = casesEmetteur(req.authUser)
+    if (!rec) return res.json({ tvaAssujetti: false, formeJuridique: '', siret: '', societe_adresse })
+    res.json({ ...rec, societe_adresse })
   } catch (err) {
     console.error('[user-settings:get]', err.message)
     res.status(500).json({ error: 'Lecture user settings impossible' })
@@ -7469,6 +7533,46 @@ app.put('/api/user-settings', async (req, res) => {
     cleanBody.updatedAt = new Date().toISOString()
     const sel = await db.query('SELECT * FROM type::record("user_settings", $id)', { id: userId })
     const exists = sel[0]?.[0]
+
+    // ── L'ADRESSE DE L'ÉMETTEUR, quand le corps la porte ──
+    // Le sous-objet ne va JAMAIS en base sous ce nom : il est retiré du corps
+    // quelle que soit sa forme, y compris quand il n'en a pas. Un corps qui ne
+    // le porte pas ressort exactement comme il est entré, et les écrans qui
+    // écrivent encore `adresse` en un champ continuent de fonctionner tels
+    // quels : c'est ce qui laisse Devis et Frais passer à trois cases chacun à
+    // son tour, sans que le socle les attende.
+    const casesRecues = cleanBody.societe_adresse
+    delete cleanBody.societe_adresse
+    if (casesRecues && typeof casesRecues === 'object' && !Array.isArray(casesRecues)) {
+      const trois = {
+        adresse: texteAdresse(casesRecues.adresse),
+        zip: texteAdresse(casesRecues.zip),
+        ville: texteAdresse(casesRecues.ville)
+      }
+      // L'état d'avant, au vocabulaire du produit : les trois cases telles
+      // qu'elles sont sur `user`, et l'agrégat d'aujourd'hui sous le nom que la
+      // fonction partagée lui connaît.
+      const etat = { ...casesEmetteur(req.authUser), address: texteAdresse(exists?.adresse) }
+      const agregat = recomposerAdresseAgregee(etat, trois)
+
+      // LES CASES D'ABORD, L'AGRÉGAT ENSUITE, et l'ordre est un choix. Les trois
+      // cases sont l'autorité, l'agrégat n'en est que la trace imprimable. Si
+      // l'écriture des réglages échoue après celle-ci, la vérité est en base et
+      // l'agrégat se remet en phase au prochain enregistrement. L'inverse
+      // laisserait un document juste au-dessus d'une autorité vide.
+      //
+      // Une clé à chaîne vide est un effacement voulu, comme partout ailleurs :
+      // les trois champs sont `option<string>` au schéma, la chaîne vide y est
+      // une valeur.
+      await db.query(
+        'UPDATE type::record("user", $uid) SET adresse = $a, code_postal = $cp, ville = $v',
+        { uid: userId, a: trois.adresse, cp: trois.zip, v: trois.ville }
+      )
+      // null : la voie n'est connue que dans l'agrégat, recomposer la perdrait.
+      // On laisse l'agrégat tel qu'il est, la fonction partagée l'a décidé.
+      if (agregat !== null) cleanBody.adresse = agregat
+    }
+
     if (exists) {
       const r = await db.query('UPDATE type::record("user_settings", $id) MERGE $body', { id: userId, body: cleanBody })
       return res.status(200).json(r[0]?.[0] || r[0] || null)

@@ -152,6 +152,31 @@
   var PALEUR_SURFACES_EAU = 0.2;
   var COUCHES_SURFACES_EAU = ['hydro_surf'];
 
+  // CONTOUR DE L'HYDRO SURFACIQUE. Quand fill-outline-color est absent, MapLibre
+  // trace le bord du polygone dans la couleur de l'aplat : l'eau n'a aucun trait
+  // à elle, son contour ne vaut que ce que vaut son remplissage une fois pâli.
+  // Tant que « limite cote » est allumée, le littoral tient par ce liseré ; mais
+  // sa donnée LIM_COTE s'arrête au niveau 9, et au franchissement du zoom 11 le
+  // trait de côte s'éteint d'un coup sans que rien ne prenne le relais. C'est
+  // cette rupture de densité qui décide ici, pas l'aspect : on désolidarise la
+  // valeur du contour de celle de l'aplat, sur la seule couche « hydro
+  // surfacique », pour que le bord de l'eau cesse de dépendre du pâlissement de
+  // son intérieur.
+  //
+  // LA VALEUR S'ÉCRIT BRUTE, avant la passe de pâlissement. Posée sur la couche,
+  // elle est relue par palirCouches comme n'importe quelle propriété de couleur
+  // du périmètre, et emprunte donc le chemin commun sans traitement à part.
+  // #8C8C8C rend #A3A3A3 au facteur 0.2, à trois points du #A0A0A0 de « limite
+  // cote » : le relais se prend à densité égale.
+  //
+  // CE QUE CELA CERNE EN PLUS, ET C'EST ACCEPTÉ : la couche porte la mer et les
+  // eaux intérieures d'un même trait, sans que l'étiquette « symbo » permette de
+  // les séparer au zoom courant. Lacs, bassins et étendues d'eau reçoivent donc
+  // le même contour dès le zoom 8, où la couche entre. Un plan d'eau cerné ne
+  // coûte rien à la lecture d'une tournée ; un littoral qui se dissout, si.
+  var COUCHE_HYDRO_SURF = 'hydro surfacique';
+  var CONTOUR_HYDRO_SURF = '#8C8C8C';
+
   // TOPONYMES ATTÉNUÉS. Le style écrit ses noms en noir franc (#000000 pour les
   // communes, les quartiers et les lieux-dits) et en gris soutenus pour le reste :
   // sur un fond dont les routes et les eaux viennent de reculer, ce sont eux qui
@@ -223,6 +248,15 @@
     signalerReleve('routière', palirCouches(glMap, paleur, function (couche) {
       return COUCHES_ROUTIERES.indexOf(couche['source-layer']) >= 0;
     }));
+    // LE CONTOUR SE POSE AVANT LA PASSE, et c'est tout le montage : palirCouches
+    // relit le style, il y trouvera cette propriété et la traitera avec les
+    // autres couleurs du périmètre. Posée après, elle resterait brute.
+    if (glMap.getLayer(COUCHE_HYDRO_SURF)) {
+      glMap.setPaintProperty(COUCHE_HYDRO_SURF, 'fill-outline-color', CONTOUR_HYDRO_SURF);
+    } else {
+      console.warn('Plan IGN : couche « ' + COUCHE_HYDRO_SURF + ' » absente du style, '
+        + 'contour de l\'eau non posé, libellé renommé côté IGN.');
+    }
     signalerReleve("de surface d'eau", palirCouches(glMap, PALEUR_SURFACES_EAU, function (couche) {
       return COUCHES_SURFACES_EAU.indexOf(couche['source-layer']) >= 0;
     }));

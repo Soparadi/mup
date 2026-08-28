@@ -671,14 +671,26 @@ body.list-open .list-rail-chev{transform:rotate(180deg)}
 }
 .mes-carte p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
 
-/* —— LES QUATRE CHAMPS ——
-   Deux tiennent la largeur entière parce qu'ils la remplissent — une raison
-   sociale et une adresse sont longues ; les deux autres se partagent la ligne,
-   un SIRET et un courriel étant courts et se lisant d'un coup d'œil. Sous
-   560px, la carte n'a plus de quoi tenir deux colonnes et tout repasse en une. */
+/* ── LES SIX CHAMPS ──
+   La raison sociale tient la largeur entière parce qu'elle la remplit ; le
+   SIRET et le courriel se partagent la ligne, étant courts et se lisant d'un
+   coup d'œil. Sous 560px, la carte n'a plus de quoi tenir deux colonnes et tout
+   repasse en une.
+   L'ADRESSE PREND TROIS CASES SUR UNE SEULE RANGÉE, et la rangée compte pour
+   une. C'est ce qui laisse la carte à la hauteur qui a été MESURÉE au banc :
+   481,39 px sous le plancher commun de 490 (cf. --mes-hauteur-commune). Empiler
+   le code postal et la ville sous la voie aurait ajouté une quatrième rangée,
+   poussé Devis au-dessus de ce plancher, et défait entre les trois pages la
+   taille constante que ce nombre existe pour tenir. Trois colonnes dans une
+   rangée n'ajoutent aucune ligne : mêmes libellés, mêmes hauteurs de champ.
+   LES LARGEURS SUIVENT CE QU'ELLES PORTENT : la voie est longue, le code postal
+   fait cinq chiffres, la ville tient entre les deux. Le 1fr du code postal lui
+   laisse de quoi ne pas replier son libellé sur deux lignes, ce qui rendrait
+   fausse la rangée unique que l'on vient de gagner. */
 .mes-champs{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;margin-top:24px}
 .mes-champ{display:flex;flex-direction:column;gap:6px;min-width:0}
 .mes-champ-large{grid-column:1 / -1}
+.mes-champ-adresse{grid-column:1 / -1;display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:14px 16px}
 .mes-champ label{
   font-size:9.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
   color:var(--mes-surtitre);
@@ -1492,9 +1504,26 @@ body #mup-cookie-panel{z-index:60001}
               <label for="coord-raison">Raison sociale</label>
               <input type="text" id="coord-raison" autocomplete="organization" placeholder="Nom de votre entreprise">
             </div>
-            <div class="mes-champ mes-champ-large">
-              <label for="coord-adresse">Adresse</label>
-              <input type="text" id="coord-adresse" autocomplete="street-address" placeholder="N°, rue, code postal, ville">
+            <!-- TROIS CASES, comme partout ailleurs dans l'application. Il n'y
+                 en avait qu'une, dont le gris d'attente disait « N°, rue, code
+                 postal, ville » : l'abonné y écrivait la ligne entière, et
+                 c'est cette ligne qui partait dans le champ que tout le reste
+                 lit comme une VOIE. Elles tiennent une seule rangée pour ne pas
+                 pousser la carte au-dessus du plancher commun (cf.
+                 .mes-champ-adresse). -->
+            <div class="mes-champ-adresse">
+              <div class="mes-champ">
+                <label for="coord-adresse">Adresse</label>
+                <input type="text" id="coord-adresse" autocomplete="street-address" placeholder="12 rue des Lilas">
+              </div>
+              <div class="mes-champ">
+                <label for="coord-zip">Code postal</label>
+                <input type="text" id="coord-zip" autocomplete="postal-code" inputmode="numeric" placeholder="35000">
+              </div>
+              <div class="mes-champ">
+                <label for="coord-ville">Ville</label>
+                <input type="text" id="coord-ville" autocomplete="address-level2" placeholder="Rennes">
+              </div>
             </div>
             <div class="mes-champ">
               <label for="coord-siret">SIRET</label>
@@ -1758,8 +1787,17 @@ function coordonneesManquent(){ return reglagesLus && !identiteRenseignee(); }
 //
 // L'ADRESSE N'A PAS DE SECONDE SOURCE : le payload injecté n'en porte pas. Il
 // porte bien `billing_address`, mais c'est l'adresse de FACTURATION Stripe, qui
-// n'est pas l'adresse de l'émetteur d'un devis — la confondre écrirait une
+// n'est pas l'adresse de l'émetteur d'un devis : la confondre écrirait une
 // adresse fausse sur un document envoyé.
+//
+// LES TROIS CASES VIENNENT DU SOUS-OBJET `societe_adresse`, que le GET rend
+// BRUT, sans découpe : le serveur transporte, il ne déduit rien. C'est donc ici
+// qu'elles passent par casesAdresse, la fonction partagée, avec l'agrégat à
+// côté, et elle apporte la garde habituelle : la découpe n'amorce que si les
+// TROIS cases sont vides. Un compte qui n'a jamais renseigné que sa ligne
+// entière voit celle-ci découpée à l'affichage, une seule fois, et rien n'est
+// écrit tant que « Enregistrer » n'est pas cliqué. Un compte dont une seule des
+// trois est renseignée n'est JAMAIS redécoupé.
 //
 // Les valeurs proposées restent MODIFIABLES : c'est une proposition, pas un
 // constat, et rien n'est écrit tant que « Enregistrer » n'est pas cliqué.
@@ -1767,7 +1805,10 @@ function remplirEncartCoordonnees(){
   const u = window.__USER__ || {};
   const pose = (id, valeur) => { const el = document.getElementById(id); if(el) el.value = String(valeur || '').trim(); };
   pose('coord-raison',  accountSettings.raisonSociale || u.raison_sociale);
-  pose('coord-adresse', accountSettings.adresse);
+  const cases = casesAdresse({ ...(accountSettings.societe_adresse || {}), address: accountSettings.adresse });
+  pose('coord-adresse', cases.adresse);
+  pose('coord-zip',     cases.zip);
+  pose('coord-ville',   cases.ville);
   pose('coord-siret',   accountSettings.siret || u.siret);
   pose('coord-email',   accountSettings.email || u.email);
 }
@@ -1889,12 +1930,24 @@ function fermerCoordonnees(){
 // Rend true quand l'écriture a abouti, false sinon. L'encart ne se retire QUE
 // sur true : se fermer sur un refus perdrait la saisie sans rien dire.
 async function ecrireCoordonnees(){
+  // LE SOUS-OBJET `societe_adresse` EST LA SEULE PORTE, et `adresse` n'est plus
+  // envoyé en un champ. Sur ce payload la clé `adresse` est prise par
+  // l'AGRÉGAT, celui que Devis, Factures et Frais impriment : y écrire la voie
+  // seule aurait fait porter au même nom deux choses de sens contraire, et
+  // continuer d'y écrire la ligne entière aurait laissé l'enregistrement avec
+  // une ligne dans une case de voie et deux cases vides à côté, l'état exact
+  // que la garde stricte interdit ensuite de redécouper.
   const cles = {
     raisonSociale: document.getElementById('coord-raison').value.trim(),
-    adresse:       document.getElementById('coord-adresse').value.trim(),
     siret:         document.getElementById('coord-siret').value.trim(),
-    email:         document.getElementById('coord-email').value.trim()
+    email:         document.getElementById('coord-email').value.trim(),
+    societe_adresse: {
+      adresse: document.getElementById('coord-adresse').value.trim(),
+      zip:     document.getElementById('coord-zip').value.trim(),
+      ville:   document.getElementById('coord-ville').value.trim()
+    }
   };
+  let enregistre = null;
   try {
     const r = await fetch('/api/user-settings');
     if(r.ok) accountSettings = await r.json() || {};
@@ -1904,11 +1957,24 @@ async function ecrireCoordonnees(){
       body: JSON.stringify(cles)
     });
     if(!w.ok){ console.warn('[devis] écriture des coordonnées refusée', w.status); return false; }
+    enregistre = await w.json().catch(() => null);
   } catch(e){
     console.warn('[devis] écriture des coordonnées', e);
     return false;
   }
   Object.assign(accountSettings, cles);
+  // L'AGRÉGAT VIENT DU SERVEUR, ET DE NULLE PART AILLEURS. Le PUT rend
+  // l'enregistrement mis à jour, et sa clé `adresse` est la ligne composée par
+  // recomposerAdresseAgregee. La recomposer ici en ferait une SECONDE
+  // composition, exactement celle que ce lot bannit, et les deux finiraient par
+  // diverger sur la première règle qui bougerait. Sur une réponse illisible on
+  // garde ce que l'on avait : le document imprimerait au pire l'adresse d'avant,
+  // jamais une adresse fabriquée par l'écran. Le cas de l'abstention est couvert
+  // par la même ligne : quand la fonction partagée rend null, le serveur ne
+  // touche pas à `adresse` et la réponse porte donc la valeur d'avant.
+  if(enregistre && typeof enregistre === 'object' && !Array.isArray(enregistre)){
+    accountSettings.adresse = String(enregistre.adresse || '');
+  }
   // La relecture ci-dessus a remplacé accountSettings en entier : le taux par
   // défaut se recalcule sur elle, sinon le miroir mentirait sur un point que
   // l'objet vient de rafraîchir. Ce n'est PAS un choix de régime — l'encart n'en

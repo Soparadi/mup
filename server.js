@@ -2424,8 +2424,9 @@ async function materialiserProspect(userId, body, lookups) {
   // l'enseigne entre parenthèses en fin — on la retire pour ne stocker que le
   // nom juridique. Repli sur la valeur brute si le nettoyage vide tout.
   const raisonClean = raison.replace(/\s*\([^()]*\)\s*$/, '').trim() || raison
-  // Adresse « voie » (numéro + type + libellé) pour le record société et la
-  // face société dupliquée ; adresse « complète » (+ CP + ville) pour la carte.
+  // Adresse « voie » (numéro + type + libellé) pour le record société, la face
+  // société dupliquée ET la carte pipeline ; adresse « complète » (+ CP +
+  // ville) pour l'agrégat que la carte porte à côté de ses trois cases.
   let adresse = [body.adresse_numero_voie, body.adresse_type_voie, body.adresse_libelle_voie]
     .filter(Boolean).join(' ').trim()
   // Repli (option A) : les matching_etablissements de recherche-entreprises ne
@@ -2437,9 +2438,11 @@ async function materialiserProspect(userId, body, lookups) {
     const agg = String(body.address).trim()
     adresse = agg.replace(/\s+\d{5}\s+.+$/, '').trim() || agg
   }
-  // Un seul calcul, trois destinations : le record `societes`, la face société
-  // dupliquée sur chaque contact, et la carte pipeline. Une quatrième
-  // destination se servira de ces deux constantes, elle ne les recalculera pas.
+  // TROIS VALEURS, TROIS DESTINATIONS CHACUNE : la voie ci-dessus, le code
+  // postal et la ville ci-dessous vont ensemble au record `societes`, à la face
+  // société dupliquée sur chaque contact, et à la carte pipeline. Un seul calcul
+  // pour les trois destinations : aucune ne recalcule, aucune ne peut diverger.
+  // L'agrégat `adresseComplete` en est composé, et n'est composé que là.
   const zip = body.adresse_code_postal || ''
   const ville = body.adresse_libelle_commune || ''
   const adresseComplete = [adresse, zip, ville].filter(Boolean).join(' ').trim()
@@ -2562,15 +2565,22 @@ async function materialiserProspect(userId, body, lookups) {
       siret,
       sector: body.naf_libelle || '',
       address: adresseComplete,
-      // Code postal et ville : les valeurs mêmes que cette transaction écrit sur
-      // le record société et sur la face société de chaque contact, jamais une
-      // variante recalculée. L'agrégat `address` ne change pas, la carte le
-      // garde et se complète.
+      // Voie, code postal et ville : les valeurs mêmes que cette transaction
+      // écrit sur le record société et sur la face société de chaque contact,
+      // jamais une variante recalculée. L'agrégat `address` ne change pas, la
+      // carte le garde et se complète.
       // CLÉS POSÉES SEULEMENT SI RENSEIGNÉES, dans l'esprit du couple lat/lng
-      // ci-dessous : client sans code postal ni ville, la carte est écrite
-      // exactement comme avant, aucune clé vide posée pour rien. Clé par clé et
-      // non par couple, contrairement aux coordonnées : un code postal seul
-      // reste lisible et filtrable, quand une latitude seule ne place rien.
+      // ci-dessous : client sans voie, sans code postal ni ville, la carte est
+      // écrite exactement comme avant, aucune clé vide posée pour rien. Clé par
+      // clé et non par couple, contrairement aux coordonnées : un code postal
+      // seul reste lisible et filtrable, quand une latitude seule ne place rien.
+      // La voie manquait, et son absence se voyait : la fiche Pipeline et la
+      // fiche société amorcent leurs trois cases par la découpe de l'agrégat,
+      // mais SEULEMENT si les trois sont vides. Une carte née avec son code
+      // postal et sa ville, et sans voie, portait donc une case de voie vide
+      // que la garde interdisait de remplir. Elle naît maintenant avec les
+      // trois, et la garde n'a plus à jouer.
+      ...(adresse ? { adresse } : {}),
       ...(zip ? { zip } : {}),
       ...(ville ? { ville } : {}),
       contact: contactCarte,
@@ -2813,11 +2823,17 @@ app.post('/api/pipeline/from-leads', async (req, res) => {
 // du SQL : un nom de champ interpolé vient toujours d'ici, jamais d'une clé
 // reçue dans un corps de requête.
 //
-// HORS PÉRIMÈTRE, volontairement : l'adresse (les deux tables ne la découpent
-// pas pareil — un bloc d'un côté, voie/CP/ville de l'autre), la raison sociale
+// HORS PÉRIMÈTRE, volontairement : l'adresse, la raison sociale
 // (ses alias sont réécrits par `migrateCard` à chaque chargement), `siret` et
 // `siren` (ils sont la CLÉ du pont, ils ne voyagent pas) et tout champ de
 // personne.
+//
+// L'ADRESSE EN RESTE DEHORS, MAIS PLUS POUR LA RAISON D'AVANT. Ce qui l'en
+// excluait, c'était l'asymétrie des deux tables : un bloc d'un côté, voie, code
+// postal et ville de l'autre. Cette asymétrie a disparu, les deux portent
+// désormais les trois cases et l'agrégat qui s'en dérive. Faire voyager
+// l'adresse entre jumeaux serait donc devenu possible : ce n'est pas décidé, et
+// rien ici ne le fait. Consigné, non traité.
 const CHAMPS_PONT_SOCIETE = [
   // même nom des deux côtés
   { pipeline: 'sector', contacts: 'sector' },

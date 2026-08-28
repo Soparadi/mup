@@ -1548,6 +1548,7 @@ body #mup-cookie-panel{z-index:60001}
 
 <script src="/js/mup-confirm.js"></script>
 <script src="/js/mup-lecture.js"></script>
+<script src="/js/adresse-agregee.js"></script>
 <script>
 const MONTHS_FR = ['jan.','fév.','mar.','avr.','mai','jun.','jul.','aoû.','sep.','oct.','nov.','déc.'];
 // Les mois entiers, réservés au DOCUMENT. Une feuille qui sort de
@@ -3439,7 +3440,14 @@ function chargeContacts(){
 function clientCorrespond(p, q){
   return (p.nom||'').toLowerCase().includes(q) ||
          (p.enseigne||'').toLowerCase().includes(q) ||
-         (p.adresse||'').toLowerCase().includes(q) ||
+         // L'ADRESSE CHERCHÉE EST CELLE QU'ON LIT, ET L'AGRÉGAT AVEC. Reprise
+         // mot pour mot de contacts.html, dont ce prédicat est la transposition :
+         // chercher la seule voie ferait qu'un client cesse d'être trouvable par
+         // le code postal ou la ville qui figurent sur la ligne qu'on lui voit.
+         // L'agrégat est interrogé À CÔTÉ, et non à la place : sur une fiche que
+         // la découpe n'a pas su amorcer, c'est lui qui porte encore l'adresse.
+         adresseComposee(p).toLowerCase().includes(q) ||
+         String(p.address||p.location||'').toLowerCase().includes(q) ||
          (p.email||'').toLowerCase().includes(q) ||
          (p.contact_nom||p.contact||'').toLowerCase().includes(q) ||
          (p.siren||'').toLowerCase().includes(q) ||
@@ -3452,22 +3460,6 @@ function clientCorrespond(p, q){
 // « Prénom Nom ».
 function clientSociete(p){ return String(p.enseigne || p.nom || '').trim(); }
 function clientPersonne(p){ return String(p.contact_nom || p.contact || '').trim(); }
-
-// L'ADRESSE DU DOCUMENT SE COMPOSE, elle ne se recopie pas. Sur une fiche
-// saisie à la main, `adresse` porte souvent la ligne entière et `zip`/`ville`
-// restent vides. Sur une fiche née de la matérialisation d'un prospect,
-// `adresse` ne porte QUE la voie : le code postal vit dans `zip`, la commune
-// dans `ville`. Lire `adresse` seule faisait donc partir chez le client un
-// devis adressé à « 12 rue du Commerce », sans code postal ni ville.
-// Les trois champs existent côte à côte : on les joint, dans l'ordre postal,
-// en sautant ceux qui sont vides. Rien n'est extrait d'une chaîne agrégée, et
-// une fiche qui ne porte que `adresse` rend exactement `adresse`.
-function clientAdresse(p){
-  return [p.adresse, p.zip, p.ville]
-    .map(v => String(v == null ? '' : v).trim())
-    .filter(Boolean)
-    .join(' ');
-}
 
 function fermeResultats(){
   const box = document.getElementById('client-results');
@@ -3519,7 +3511,10 @@ function afficheResultats(){
   clientIndex = -1;
   box.innerHTML = clientResultats.map((p, i) => {
     const titre = clientSociete(p) || clientPersonne(p) || 'Sans nom';
-    const meta = [clientPersonne(p), p.email || '', p.adresse || '']
+    // La même ligne que celle qui partira dans le champ : montrer la voie seule
+    // ici et poser l'adresse entière au clic, ce serait deux adresses pour un
+    // client.
+    const meta = [clientPersonne(p), p.email || '', adresseComposee(p)]
       .filter(v => v && v !== titre).join(' · ');
     return '<div class="client-hit" role="option" data-i="' + i + '">' +
              '<div class="client-hit-t">' + esc(titre) + '</div>' +
@@ -3568,7 +3563,19 @@ function choisitClient(i){
   document.getElementById('e-name').value  = clientPersonne(p);
   document.getElementById('e-co').value    = clientSociete(p);
   document.getElementById('e-email').value = String(p.email || '');
-  document.getElementById('e-addr').value  = clientAdresse(p);
+  // L'ADRESSE DU DOCUMENT SE COMPOSE, ET PAR LA COMPOSITION PARTAGÉE :
+  // adresseComposee, la même fonction que la liste des contacts, la fiche
+  // société, la fiche Pipeline et le briefing de la Visio.
+  //
+  // CE QUE LA VARIANTE LOCALE N'AVAIT PAS. Elle joignait bien les trois cases,
+  // dans le même ordre, en sautant les vides : sur une fiche qui les porte,
+  // elle rend exactement la même chaîne. Il lui manquait LE REPLI SUR
+  // L'AGRÉGAT. Une fiche dont les trois cases sont vides garde son adresse dans
+  // son `address` monobloc, et la variante rendait alors une chaîne VIDE : le
+  // devis partait chez le client sans aucune adresse, en silence. C'est l'état
+  // de la quasi-totalité des cartes du produit, celles que la matérialisation
+  // d'un prospect a créées avant que la voie ne soit posée en case.
+  document.getElementById('e-addr').value  = adresseComposee(p);
   // LE SIRET ARRIVE PAR SON CHAMP, comme les quatre autres valeurs, et non par
   // une écriture posée à part sur le document : une seule voie l'écrit, celle
   // que l'abonné voit et peut corriger. Il est mis en forme comme sur la fiche

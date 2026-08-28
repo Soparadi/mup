@@ -8,12 +8,15 @@
 
    TOUTE SURFACE QUI PORTE UNE CARTE PASSE PAR ICI : carte, dashboard,
    accueil, pipeline, prospection, statistiques. Le style, l'attribution,
-   le plafond de zoom, les deux registres d'extinction, la transposition
-   des routes vers le blanc et son facteur vivent dans ce fichier et
-   nulle part ailleurs. Une page qui veut s'écarter du réglage commun le
-   demande par PARAMÈTRE D'APPEL (plafondZoom, opacite, paleurRoutes) ;
-   elle ne recopie rien. Une recopie ferait diverger les réglages au
-   premier changement.
+   le plafond de zoom, les deux registres d'extinction, les trois
+   transpositions vers le blanc (routes, surfaces d'eau, toponymes) et
+   leurs facteurs vivent dans ce fichier et nulle part ailleurs. Une page
+   qui veut s'écarter du réglage commun le demande par PARAMÈTRE D'APPEL
+   (plafondZoom, opacite, paleurRoutes) ; elle ne recopie rien. Une
+   recopie ferait diverger les réglages au premier changement. Les deux
+   facteurs des surfaces d'eau et des toponymes n'ont, eux, pas de
+   paramètre : aucune page n'a demandé à s'en écarter, et un réglage de
+   fond qui ne varie pas ne prend pas de porte d'entrée.
 
    Script classique attaché à window (pas de bundler côté MUP), sur le
    modèle de _mup-nom.js.
@@ -110,9 +113,9 @@
   // #878787, #727272...), qui rivalise avec les points de fiches et le tracé de
   // tournée : on les transpose vers le blanc, canal par canal, sans jamais
   // toucher l'alpha. Le périmètre se prend par source-layer, comme l'extinction :
-  // 94 couches, 98 propriétés de couleur au relevé du style. Les toponymes
-  // routiers (bornes, numéros, odonymes) restent à pleine force, ce sont eux qui
-  // portent la lecture.
+  // 94 couches, 98 propriétés de couleur au relevé du style. Le trait de la route
+  // seul : les toponymes routiers (bornes, numéros, odonymes) ont désormais leur
+  // propre facteur, plus bas.
   //
   // PALEUR_ROUTES : 0 laisse la couleur d'origine, 1 rend du blanc pur. Un seul
   // chiffre à changer pour rendre les routes plus ou moins présentes, sur toutes
@@ -120,6 +123,58 @@
   var PALEUR_ROUTES = 0.6;
   var COUCHES_ROUTIERES = ['routier_route', 'routier_route_sup', 'routier_route_sou',
     'routier_liaison', 'routier_surf'];
+
+  // SURFACES D'EAU ATTÉNUÉES. Le style gris pose la mer, l'estran et les étendues
+  // d'eau en aplats gris soutenus (#CFCFCF, #DCDCDC, #D4D4D4) : sur une côte
+  // découpée, une baie occupe la moitié du cadre et pèse plus lourd que les points
+  // de fiches posés dessus. Même mécanique que les routes, transposition vers le
+  // blanc canal par canal, alpha jamais touché.
+  //
+  // LE PÉRIMÈTRE SE PREND PAR SOURCE-LAYER, ET « hydro_surf » SE PREND EN ENTIER.
+  // C'est le relevé du 27 août qui l'impose : la couche « hydro surfacique » porte
+  // la mer ET les eaux intérieures d'un même trait, sous une étiquette « symbo »
+  // qui change avec le zoom (ZONE_MARINE, SURFACE_D_EAU, BASSIN) ; un filtre sur
+  // l'étiquette aurait laissé à pleine force ce qu'elle ne nomme pas au zoom
+  // courant. On teint la couche entière, sans filtrer. Les quatre autres couches du
+  // source-layer sont de la même eau : estran, lagon, surface temporaire, marais.
+  //
+  // L'ESTRAN Y EST, ET IL LE FAUT. Il borde toute la côte bretonne, où se fait le
+  // gros des tournées. Laissé à #DCDCDC pendant que la mer s'éclaircit, il aurait
+  // fait tout au long du littoral un liseré plus soutenu que l'eau qu'il longe :
+  // l'inverse exact du geste.
+  //
+  // Deux couches ne coûtent rien au relevé : « hydro surfacique - marais » ne peint
+  // qu'un fill-pattern, sans propriété de couleur, donc rien à transposer et rien à
+  // compter. Et les cours d'eau restent dehors : ce sont des traits, pas des
+  // aplats, et hydro_reseau n'est pas dans ce périmètre.
+  //
+  // PALEUR_SURFACES_EAU : 0 laisse la couleur d'origine, 1 rend du blanc pur.
+  var PALEUR_SURFACES_EAU = 0.2;
+  var COUCHES_SURFACES_EAU = ['hydro_surf'];
+
+  // TOPONYMES ATTÉNUÉS. Le style écrit ses noms en noir franc (#000000 pour les
+  // communes, les quartiers et les lieux-dits) et en gris soutenus pour le reste :
+  // sur un fond dont les routes et les eaux viennent de reculer, ce sont eux qui
+  // restent en avant, et ils tiennent tête aux points de fiches.
+  //
+  // LE PÉRIMÈTRE SE PREND AU PRÉFIXE DU SOURCE-LAYER. Les 15 source-layers de
+  // texte du style commencent tous par « toponyme » et aucun autre ne commence
+  // ainsi : le préfixe désigne exactement la famille, sans liste à tenir à jour.
+  // 131 couches, 240 propriétés de couleur au relevé du style.
+  //
+  // LE HALO ENTRE DANS LE PÉRIMÈTRE, comme tout ce qui porte « color », et il n'y
+  // perd presque rien : sur les 240 propriétés, 106 sont des halos, dont 103 déjà
+  // blancs que la transposition vers le blanc laisse blancs, alpha compris. Le
+  // geste ne porte donc en pratique que sur les 131 couleurs de texte et les 3
+  // couleurs d'icône. Restent deux couches à contre-emploi, le numéro de route
+  // nationale et celui d'autoroute, écrits en clair sur un halo sombre : leur halo
+  // s'éclaircit lui aussi et le cartouche pâlit des deux côtés. C'est le prix d'un
+  // périmètre pris d'un bloc, et il se paie sur deux couches qui ne portent pas la
+  // lecture d'une tournée.
+  //
+  // PALEUR_TOPONYMES : 0 laisse la couleur d'origine, 1 rend du blanc pur.
+  var PALEUR_TOPONYMES = 0.5;
+  var PREFIXE_TOPONYME = 'toponyme';
 
   // DEUX FORMES DE VALEUR CIRCULENT DANS CE STYLE, et il faut savoir lire les
   // deux : la chaîne simple ('#RRGGBB' ou 'rgba(r, g, b, a)'), et la fonction de
@@ -165,15 +220,32 @@
         + COUCHES_ETEINTES_PAR_ID.length + ' sans correspondance dans le style, libellé(s) renommé(s) côté IGN.');
     }
 
+    signalerReleve('routière', palirCouches(glMap, paleur, function (couche) {
+      return COUCHES_ROUTIERES.indexOf(couche['source-layer']) >= 0;
+    }));
+    signalerReleve("de surface d'eau", palirCouches(glMap, PALEUR_SURFACES_EAU, function (couche) {
+      return COUCHES_SURFACES_EAU.indexOf(couche['source-layer']) >= 0;
+    }));
+    signalerReleve('de toponyme', palirCouches(glMap, PALEUR_TOPONYMES, function (couche) {
+      var source = couche['source-layer'];
+      return typeof source === 'string' && source.indexOf(PREFIXE_TOPONYME) === 0;
+    }));
+  }
+
+  // LA TRANSPOSITION EST LA MÊME POUR LES TROIS PÉRIMÈTRES, elle n'est donc
+  // écrite qu'une fois : les routes, les surfaces d'eau et les toponymes ne
+  // diffèrent que par la couche retenue et par le facteur. Rend le relevé, à
+  // charge de l'appelant de le signaler.
+  function palirCouches(glMap, facteur, estConcernee) {
     var releve = { chaines: 0, rampes: 0, intactes: 0 };
     glMap.getStyle().layers.forEach(function (couche) {
-      if (COUCHES_ROUTIERES.indexOf(couche['source-layer']) < 0) return;
+      if (!estConcernee(couche)) return;
       var peinture = couche.paint || {};
       Object.keys(peinture).forEach(function (propriete) {
         if (propriete.indexOf('color') < 0) return;
         var valeur = peinture[propriete];
         if (typeof valeur === 'string') {
-          var pale = palirCouleur(valeur, paleur);
+          var pale = palirCouleur(valeur, facteur);
           if (pale === null) { releve.intactes++; return; }
           glMap.setPaintProperty(couche.id, propriete, pale);
           releve.chaines++;
@@ -185,7 +257,7 @@
           // brouillerait la comparaison faite par setPaintProperty.
           var complete = true;
           var paliers = valeur.stops.map(function (palier) {
-            var pale2 = palirCouleur(palier[1], paleur);
+            var pale2 = palirCouleur(palier[1], facteur);
             if (pale2 === null) complete = false;
             return [palier[0], pale2 === null ? palier[1] : pale2];
           });
@@ -201,10 +273,16 @@
         releve.intactes++;
       });
     });
-    if (releve.intactes) {
-      console.warn('Plan IGN : ' + releve.intactes + ' propriété(s) de couleur routière laissée(s) intacte(s) sur '
-        + (releve.chaines + releve.rampes + releve.intactes) + ', forme de valeur non reconnue.');
-    }
+    return releve;
+  }
+
+  // Un silence ne doit pas passer pour un traitement : ce qui n'a pas été relu
+  // se dit, périmètre par périmètre, avec son dénominateur.
+  function signalerReleve(famille, releve) {
+    if (!releve.intactes) return;
+    console.warn('Plan IGN : ' + releve.intactes + ' propriété(s) de couleur ' + famille
+      + ' laissée(s) intacte(s) sur ' + (releve.chaines + releve.rampes + releve.intactes)
+      + ', forme de valeur non reconnue.');
   }
 
   // ── CHARGEMENT DES DEUX BIBLIOTHÈQUES ──────────────────────────────────

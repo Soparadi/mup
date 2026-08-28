@@ -2079,14 +2079,14 @@ async function confirmImport(){
     // déplacer une saisie, et ce formulaire n'a pas de case pour l'accueillir.
     const cases={ prenom:document.getElementById('f-prenom').value.trim(),
                   nom_personne:document.getElementById('f-nom').value.trim() };
-    // LA CHAÎNE EST DÉRIVÉE DES DEUX CASES, jamais l'inverse, et par la
-    // composition partagée. Le serveur ne la recompose pas encore (c'est le
-    // commit du serveur) : sans cette ligne, un contact naîtrait avec
-    // `contact_nom` vide, et il serait introuvable par la recherche de client
-    // d'un devis comme par le dédoublonnage d'un import, qui lisent tous deux
-    // cette seule clé. La composition n'est pas une variante d'écran, c'est
-    // composerNomComplet ; le jour où le serveur la posera, il posera la MÊME
-    // valeur, et cette ligne pourra tomber.
+    // LA CHAÎNE N'EST PAS ENVOYÉE : POST /api/contacts la compose des deux cases
+    // reçues (à la création, l'état c'est le corps), et c'est la seule
+    // composition qui vaille. Même règle que les trois cases d'adresse, six
+    // champs plus bas, dont l'agrégat n'est pas envoyé non plus.
+    //
+    // La ligne composée sert encore ICI, mais à deux autres fins : décider si la
+    // saisie est vide, et servir de repli à la RAISON SOCIALE quand aucune
+    // société n'est donnée. Ce sont des lectures, pas l'écriture de la chaîne.
     const nomComplet=composerNomComplet(cases);
     const company=document.getElementById('f-company').value.trim();
     if(!nomComplet&&!company){toast('Nom ou société requis');return;}
@@ -2095,7 +2095,6 @@ async function confirmImport(){
       nom: company || nomComplet,
       prenom: cases.prenom,
       nom_personne: cases.nom_personne,
-      contact_nom: nomComplet,
       email: document.getElementById('f-email').value.trim(),
       phone: window.MUPTel.format(document.getElementById('f-phone').value),
       // Les trois cases, chacune dans son champ. L'agrégat n'est pas envoyé :
@@ -2189,14 +2188,13 @@ async function confirmImport(){
       return migrateProspect({
         id: newContactId(),
         nom: company || name,
+        // Les deux cases, chacune dans son champ, et la civilité à part. La
+        // chaîne n'est pas envoyée : la route la compose des deux cases reçues.
+        // Elle en ressort donc aux espaces multiples ramenés à un, et sans la
+        // civilité de tête, qui a rejoint sa propre case.
         civilite: dn.civilite,
         prenom: dn.prenom,
         nom_personne: dn.nom_personne,
-        // Dérivée des deux cases par la composition partagée, pas recopiée de la
-        // chaîne collée : les espaces multiples y sont donc ramenés à un, et la
-        // civilité n'y est plus. Même raison qu'à l'onglet Manuel, le serveur ne
-        // recomposant pas encore.
-        contact_nom: composerNomComplet(dn),
         email: email || '',
         phone: phone || '',
         adresse: d.voie,

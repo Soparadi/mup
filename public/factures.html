@@ -401,6 +401,7 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js"></script>
 <script src="/js/mup-confirm.js"></script>
+<script src="/js/adresse-agregee.js"></script>
 <script>
 (async function(){
   if(typeof pdfjsLib !== 'undefined'){ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js'; }
@@ -936,6 +937,43 @@
   }
   var state = { status:'all', entity:'all', year:'all', currentId:null, clientSiretFilter:null };
 
+  // ── L'ADRESSE D'UNE FACTURE, RENDUE AUX TROIS CASES ──
+  // Le client d'une facture porte son adresse en UN champ : saisi à la main
+  // dans la fenêtre de création, extrait du texte d'un PDF à l'import. La fiche,
+  // elle, la porte en TROIS cases, `adresse` (la voie), `zip`, `ville`, et
+  // c'est cette forme qui fait autorité.
+  //
+  // CE QUE CES DEUX FONCTIONS FERMENT. La synchronisation versait la ligne
+  // ENTIÈRE dans `adresse`, la case de la VOIE, en laissant `zip` et `ville`
+  // vides. Deux dégâts, et le second ne se rattrape pas tout seul : la fiche
+  // affichait « 12 rue du Commerce 75001 Paris » là où toutes les autres
+  // n'affichent que la voie ; et surtout, les trois cases n'étant plus toutes
+  // vides, LA GARDE STRICTE de la découpe se refermait sur elle. Cette fiche
+  // n'aurait plus jamais eu ni code postal ni ville, sur aucun écran, et aucune
+  // relecture ne le lui aurait rendu.
+  //
+  // LA DÉCOUPE EST CELLE DU MODULE PARTAGÉ, la même que le serveur : ancre en
+  // fin, ville facultative, rien d'inventé. Sans bloc de cinq chiffres, tout
+  // reste dans la voie, ce qui est l'état exact d'une saisie qui n'a pas donné
+  // de code postal, et se corrige sur la fiche.
+  //
+  // cleanAdresse passe AVANT la découpe, et pas après : il retire les queues que
+  // l'extraction d'un PDF ramasse derrière l'adresse (« SIRET … », « Tél : … »,
+  // « DESTINATAIRE … »). Après la découpe, il travaillerait sur trois morceaux
+  // dont deux ne peuvent rien contenir de tel.
+  function casesDepuisLigne(ligne){
+    var d = decouperAdresseAgregee(cleanAdresse(ligne || ''));
+    return { adresse: d.voie, zip: d.code_postal, ville: d.ville };
+  }
+
+  // Une fiche ne porte AUCUNE adresse : ni l'une des trois cases, ni l'agrégat.
+  // casesAdresse lit les trois et retombe sur l'agrégat sous garde, c'est donc
+  // la seule lecture qui réponde vraiment à la question.
+  function sansAdresse(rec){
+    var t = casesAdresse(rec);
+    return !t.adresse && !t.zip && !t.ville;
+  }
+
   // ── GÉOCODAGE BAN ──
   async function geocodeAdresse(adresse){
     if(!adresse) return null;
@@ -962,13 +1000,19 @@
     var contactIdx = contacts.findIndex(function(c){ return c.siret === siret; });
     var geocoded = false;
     var contact;
+    var cases = casesDepuisLigne(facture.client.adresse);
     if(contactIdx === -1){
       contact = {
         id: 'contact_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
         nom: facture.client.nom || '—',
         siret: siret,
         siren: facture.client.siren || '',
-        adresse: cleanAdresse(facture.client.adresse || ''),
+        // LES TROIS CASES, ET PAS D'AGRÉGAT. `address` est un DÉRIVÉ, que le
+        // serveur recompose des trois à l'écriture (poserAdresseAgregee). Le
+        // poser ici en ferait une seconde vérité, écrite par un écran.
+        adresse: cases.adresse,
+        zip: cases.zip,
+        ville: cases.ville,
         latitude: null, longitude: null,
         entity_origine: facture.entity_origine || 'mup',
         source: 'facture_import',
@@ -976,18 +1020,37 @@
         ca_total: 0,
         created_at: new Date().toISOString()
       };
-      if(contact.adresse){
-        var geo = await geocodeAdresse(contact.adresse);
+      // LE GÉOCODEUR VEUT LA LIGNE, PAS LA VOIE. Lui envoyer `adresse` seule
+      // depuis ce lot lui enverrait « 12 rue du Commerce » sans commune : la BAN
+      // répondrait au hasard du pays. adresseComposee rend la même ligne que
+      // celle affichée partout ailleurs.
+      var ligneNeuve = adresseComposee(contact);
+      if(ligneNeuve){
+        var geo = await geocodeAdresse(ligneNeuve);
         if(geo){ contact.latitude = geo.latitude; contact.longitude = geo.longitude; contact.adresse_normalisee = geo.label; geocoded = true; }
       }
       contacts.push(contact);
       contactIdx = contacts.length - 1;
     } else {
       contact = contacts[contactIdx];
-      if(!contact.adresse && facture.client.adresse) contact.adresse = cleanAdresse(facture.client.adresse);
-      else if(contact.adresse) contact.adresse = cleanAdresse(contact.adresse);
-      if(!contact.latitude && contact.adresse){
-        var geo2 = await geocodeAdresse(contact.adresse);
+      // ADDITIF, ET D'UN SEUL BLOC. Une facture APPORTE une adresse à une fiche
+      // qui n'en a aucune ; elle ne corrige pas celle qui est là. Les trois
+      // cases sont un seul renseignement en trois morceaux : elles arrivent
+      // ensemble ou pas du tout, sans quoi la fiche porterait la ville de la
+      // facture à côté d'une voie qui n'est pas la sienne.
+      //
+      // LA VOIE DE LA FICHE N'EST PLUS RÉÉCRITE. La ligne d'avant repassait
+      // cleanAdresse sur `contact.adresse` à chaque synchronisation : un outil
+      // d'extraction de PDF appliqué à une voie que le CRM a saisie, qui coupe
+      // sur « TVA », « SIRET » ou « Tél : ». Rien ne le demandait.
+      if(sansAdresse(contact) && (cases.adresse || cases.zip || cases.ville)){
+        contact.adresse = cases.adresse;
+        contact.zip = cases.zip;
+        contact.ville = cases.ville;
+      }
+      var ligneMaj = adresseComposee(contact);
+      if(!contact.latitude && ligneMaj){
+        var geo2 = await geocodeAdresse(ligneMaj);
         if(geo2){ contact.latitude = geo2.latitude; contact.longitude = geo2.longitude; contact.adresse_normalisee = geo2.label; geocoded = true; }
       }
     }
@@ -1006,6 +1069,10 @@
     var pipeline = await loadJSON('mup_pipeline', []);
     if(!Array.isArray(pipeline)) pipeline = [];
     var ficheIdx = pipeline.findIndex(function(p){ return p.siret === contact.siret; });
+    // Les trois cases de la FICHE, telles qu'il faut les lire : les cases quand
+    // elle les porte, la découpe de son agrégat quand elle n'a que lui. Une
+    // seule lecture pour les deux branches, et c'est celle du module partagé.
+    var casesFiche = casesAdresse(contact);
     if(ficheIdx === -1){
       pipeline.push({
         id: 'pipeline_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
@@ -1013,7 +1080,11 @@
         contact: contact.nom,
         siret: contact.siret,
         siren: contact.siren || '',
-        address: contact.adresse || '',
+        // Les trois cases, pas l'agrégat : le serveur le recompose à l'écriture,
+        // et la carte porte alors exactement la ligne de la fiche.
+        adresse: casesFiche.adresse,
+        zip: casesFiche.zip,
+        ville: casesFiche.ville,
         latitude: contact.latitude || null,
         longitude: contact.longitude || null,
         col: 'won',
@@ -1028,7 +1099,15 @@
       var f = pipeline[ficheIdx];
       f.value = contact.ca_total || 0;
       f.col = 'won';
-      f.address = contact.adresse || f.address;
+      // MÊME RÉGIME QUE VERS LA FICHE : d'un bloc, et seulement vers une carte
+      // qui ne porte aucune adresse. La ligne d'avant écrasait l'agrégat de la
+      // carte avec la seule voie de la fiche, ce qui lui retirait son code
+      // postal et sa ville à chaque facture enregistrée.
+      if(sansAdresse(f) && (casesFiche.adresse || casesFiche.zip || casesFiche.ville)){
+        f.adresse = casesFiche.adresse;
+        f.zip = casesFiche.zip;
+        f.ville = casesFiche.ville;
+      }
       f.latitude = contact.latitude || f.latitude;
       f.longitude = contact.longitude || f.longitude;
       f.entity_origine = contact.entity_origine || f.entity_origine || 'ei';
@@ -1050,6 +1129,10 @@
       if(!c || !c.siret) return;
       if(c.source !== 'facture_import') return;
       var idx = pipeline.findIndex(function(p){ return p.siret === c.siret; });
+      // Même lecture qu'à la synchronisation, et pour la même raison : cette
+      // reprise naissait avec la voie de la fiche versée dans l'agrégat de la
+      // carte, code postal et ville perdus au passage.
+      var casesFiche = casesAdresse(c);
       if(idx === -1){
         pipeline.push({
           id: 'pipeline_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
@@ -1057,7 +1140,9 @@
           contact: c.nom,
           siret: c.siret,
           siren: c.siren || '',
-          address: c.adresse || '',
+          adresse: casesFiche.adresse,
+          zip: casesFiche.zip,
+          ville: casesFiche.ville,
           latitude: c.latitude || null,
           longitude: c.longitude || null,
           col: 'won',

@@ -1359,10 +1359,28 @@
     renderPlanActuel();
   }
 
+  // ── L'OBJECTIF ANNUEL N'EMPORTE PLUS QUE LUI-MÊME ──
+  // Cette page ne possède qu'UNE clé des réglages, `yearTarget`, et elle
+  // reposait l'objet `settings` ENTIER, celui qu'elle a lu à l'init. Tout ce que
+  // les autres écrans écrivent sur cette même table et par cette même route
+  // repartait donc en arrière, à sa valeur du chargement de la page : la raison
+  // sociale, le SIRET, le régime et le taux de TVA, les conditions de vente, le
+  // logo, le courriel de document, et depuis ce lot l'agrégat d'adresse de
+  // l'émetteur. Un onglet Statistiques ouvert le matin réécrivait les réglages
+  // du soir.
+  //
+  // ET IL LE FAISAIT À CHAQUE FRAPPE, l'écouteur étant sur `input` : un objectif
+  // saisi en cinq chiffres partait cinq fois, avec cinq fois le même retour en
+  // arrière. La fréquence n'est pas corrigée ici, ce n'est pas l'objet de ce
+  // geste et elle ne coûte plus rien maintenant que le corps ne porte qu'un
+  // nombre.
+  //
+  // LE PUT EST EN MERGE côté serveur : la clé absente n'est pas touchée. Le
+  // miroir de page continue d'être tenu à jour, renderCalYear lisant `settings`.
   document.getElementById('calyear-target').addEventListener('input', async function(e){
     var v = parseFloat(e.target.value) || 0;
     settings.yearTarget = v;
-    await saveJSON('mup_user_settings', settings);
+    await saveJSON('mup_user_settings', { yearTarget: v });
     renderCalYear();
   });
 

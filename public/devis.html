@@ -1660,12 +1660,16 @@ async function loadAccountRegime() {
 // devis ; les réglages ne remplissent qu'un devis NEUF (newDoc) et ne
 // relisent jamais les anciens. Même règle que le taux de TVA, déjà en place.
 //
-// LE PIÈGE, déjà documenté ailleurs : Frais et Statistiques renvoient leur
-// objet settings ENTIER en PUT, si bien qu'un onglet resté ouvert sur l'une
-// de ces pages écraserait ce que Devis vient d'écrire. Deux précautions, pas
-// une : on RELIT les réglages juste avant d'écrire, et on n'envoie QUE la clé
-// des conditions. Le PUT est en MERGE côté serveur, aucune route nouvelle
-// n'est nécessaire.
+// LE PIÈGE, déjà documenté ailleurs : un écran qui renvoie son objet settings
+// ENTIER en PUT écrase, depuis un onglet resté ouvert, ce que Devis vient
+// d'écrire. Deux précautions, pas une : on RELIT les réglages juste avant
+// d'écrire, et on n'envoie QUE la clé des conditions. Le PUT est en MERGE côté
+// serveur, aucune route nouvelle n'est nécessaire.
+//
+// LES DEUX AUTRES ÉCRANS NE LE FONT PLUS. Frais et Statistiques renvoyaient
+// bien leur objet entier ; chacun n'envoie désormais que ses propres clés, à
+// leur tour dans ce lot. La précaution reste ici parce qu'elle est bonne en
+// elle-même et qu'elle ne dépend d'aucune promesse tenue ailleurs.
 //
 // Silencieuse de bout en bout : la montée est un effet du geste
 // « Enregistrer », pas un geste de plus. Un refus d'abonnement lève déjà sa
@@ -1906,20 +1910,20 @@ function fermerCoordonnees(){
 }
 
 // —— L'ÉCRITURE ——
-// LE PIÈGE DU CORPS ENTIER, déjà documenté à monteConditionsAuCompte : Frais et
-// Statistiques renvoient leur objet settings ENTIER en PUT, si bien qu'un onglet
-// resté ouvert sur l'une de ces pages écraserait ce que Devis vient d'écrire.
-// La même parade, à l'identique, et il en faut les deux moitiés : on RELIT les
-// réglages juste avant d'écrire, et on n'envoie QUE ses quatre clés. Le PUT est
-// en MERGE côté serveur — aucune route nouvelle n'est nécessaire.
+// LE PIÈGE DU CORPS ENTIER, déjà documenté à monteConditionsAuCompte. La même
+// parade, à l'identique, et il en faut les deux moitiés : on RELIT les réglages
+// juste avant d'écrire, et on n'envoie QUE ses propres clés. Le PUT est en MERGE
+// côté serveur, aucune route nouvelle n'est nécessaire.
 //
 // CE QUE CETTE PARADE NE COUVRE PAS, et il vaut mieux l'écrire que le taire :
 // elle empêche Devis d'écraser les clés des autres, elle n'empêche PAS un onglet
-// Frais ouvert AVANT cette écriture de reposer ensuite ses vieilles valeurs
-// par-dessus. Le MERGE n'y peut rien : la clé est présente dans son corps, avec
-// l'ancienne valeur. C'est une faille préexistante et symétrique — Frais et
-// Statistiques s'écrasent déjà ainsi — et la corriger demanderait de faire
-// relire Frais avant d'écrire. Hors de ce lot.
+// Frais ouvert AVANT cette écriture de reposer ensuite ses SEPT clés à leur
+// valeur du chargement. Le MERGE n'y peut rien : les clés sont présentes dans
+// son corps, avec l'ancienne valeur. Ce qui est fermé depuis ce lot, c'est la
+// CONTAMINATION : Frais et Statistiques n'emportent plus que leurs propres clés,
+// si bien qu'aucun des deux ne ramène en arrière l'adresse, les conditions de
+// vente, le courriel ou le logo. Fermer le reste demanderait de faire relire
+// Frais avant d'écrire. Hors de ce lot.
 //
 // `email` EST UNE CLÉ NEUVE. user_settings est SCHEMALESS : elle naît au premier
 // PUT, sans migration ni route. C'est là qu'elle va et non sur le record `user`,

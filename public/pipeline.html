@@ -1116,8 +1116,10 @@ function migrateCard(c){
   if(c.location && !c.address) c.address = c.location;
   if(c.director && !c.contact) c.contact = c.director;
   // Keep backward compat aliases
+  // `name` n'est plus réaligné sur `contact`. Cet alias réécrivait le champ
+  // à chaque lecture de fiche, et la fiche repartait en base avec la valeur
+  // réécrite : la saisie d'origine était perdue sans que rien ne la demande.
   c.co = c.company || '';
-  c.name = c.contact || '';
   c.tel = c.phone || '';
   // Date de création : created_at est le nom canonique. Une carte qui ne porte
   // que createdAt (nom abandonné) se voit poser created_at à la lecture, pour

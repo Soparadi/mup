@@ -1232,7 +1232,10 @@ function migrateCard(c){
   if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
   if(!c.company&&c.contact)c.company=c.contact;if(c.tel&&!c.phone)c.phone=c.tel;
   if(c.location&&!c.address)c.address=c.location;if(c.director&&!c.contact)c.contact=c.director;
-  c.co=c.company||'';c.name=c.contact||'';c.tel=c.phone||'';return c;
+  // `name` n'est plus réaligné sur `contact`. Cet alias réécrivait le champ
+  // à chaque lecture de fiche, et la fiche repartait en base avec la valeur
+  // réécrite : la saisie d'origine était perdue sans que rien ne la demande.
+  c.co=c.company||'';c.tel=c.phone||'';return c;
 }
 
 // ── NOM D'ENTREPRISE — une seule composition, pour toute la page ──────────

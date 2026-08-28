@@ -812,7 +812,13 @@ map.on('click',function(){
 
   function migrateCard(c){
     if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
-    if(!c.company&&c.contact)c.company=c.contact;if(c.tel&&!c.phone)c.phone=c.tel;
+    // Le dirigeant ne devient pas le nom de société. Cette branche versait
+    // `contact` dans `company`, et la ligne `c.co=c.company` plus bas le
+    // portait jusque dans `co` : la seule colonne restée intacte, et le seul
+    // chemin de réparation des fiches dont `name` a été écrasé. Elle n'a jamais
+    // tiré en production. Une fiche sans nom de société reste sans nom de
+    // société, elle ne prend pas celui de la personne.
+    if(c.tel&&!c.phone)c.phone=c.tel;
     if(c.location&&!c.address)c.address=c.location;if(c.director&&!c.contact)c.contact=c.director;
     // `name` n'est plus réaligné sur `contact`. Cet alias réécrivait le champ
     // à chaque lecture de fiche, et la fiche repartait en base avec la valeur
@@ -1441,7 +1447,13 @@ async function renderDashboardAgenda() {
     function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
     function migrateCard(c){
       if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
-      if(!c.company&&c.contact)c.company=c.contact;if(c.tel&&!c.phone)c.phone=c.tel;
+      // Le dirigeant ne devient pas le nom de société. Cette branche versait
+      // `contact` dans `company`, et la ligne `c.co=c.company` plus bas le
+      // portait jusque dans `co` : la seule colonne restée intacte, et le seul
+      // chemin de réparation des fiches dont `name` a été écrasé. Elle n'a jamais
+      // tiré en production. Une fiche sans nom de société reste sans nom de
+      // société, elle ne prend pas celui de la personne.
+      if(c.tel&&!c.phone)c.phone=c.tel;
       if(c.location&&!c.address)c.address=c.location;if(c.director&&!c.contact)c.contact=c.director;
       // `name` n'est plus réaligné sur `contact`. Cet alias réécrivait le champ
       // à chaque lecture de fiche, et la fiche repartait en base avec la valeur

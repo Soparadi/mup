@@ -3020,6 +3020,67 @@ async function ponterCoordonneesSociete({ userId, siret, table, patch }) {
   }
 }
 
+// ── `societes` CESSE D'ÊTRE UNE TABLE FIGÉE ─────────────────────────────────
+//
+// LE DÉFAUT, ET IL SE LIT DANS LE RATTRAPAGE DE POSITION JUSTE EN DESSOUS. Sa
+// voie 2 refuse de géocoder tant qu'elle n'a pas un code postal ET une ville, et
+// elle va les chercher dans `societes` (jointure userId + siret). Or ce record
+// n'est écrit qu'UNE FOIS, à la prospection, avec ce qu'Etalab en disait ce
+// jour-là. Rien ne le rouvre ensuite : ni la fiche société, ni la carte, ni le
+// pont. Une abonnée qui corrige le code postal ou la commune d'une carte
+// n'améliore donc RIEN pour le géocodage : le repli continue de lire la valeur
+// d'origine, et l'écart entre les deux dure aussi longtemps que la carte.
+//
+// LES TROIS CASES, ET RIEN D'AUTRE. `societes` porte `adresse`, `zip` et
+// `ville`, et AUCUN agrégat : il n'y a rien à y dériver, et `address` comme
+// `location` n'y ont pas de sens. Ce sont donc exactement trois clés qui
+// partent, jamais les cinq du pont.
+//
+// LA GARDE EST CELLE DU PONT, MOT POUR MOT, et elle est obtenue en réutilisant
+// sa fonction plutôt qu'en la redisant : patchAdressePont rend un bloc vide tant
+// qu'aucune des trois cases n'a bougé, et il rend un bloc vide quand la voie est
+// inconnue. PAS DE VOIE, PAS DE VOYAGE : un couple code postal + ville sans voie
+// n'est pas une adresse qu'on impose, et aucune déduction ne traverse, les trois
+// valeurs étant lues dans les CASES et jamais découpées d'un agrégat.
+//
+// LA CLÉ EST CELLE QUE LE REPLI LUI-MÊME EMPLOIE : userId + siret. Elle n'est
+// pas la clé de dédup de la table, qui est le SIREN, et cela mérite d'être dit :
+// deux établissements d'une même unité légale partagent UN record `societes`,
+// dont le `siret` est celui du premier arrivé. Une correction portée sur le
+// second ne trouve donc aucune ligne et n'écrit rien. C'est le comportement
+// juste, et non une limite subie : le repli de géocodage interroge exactement la
+// même clé, si bien que la ligne qu'on ne répare pas est aussi celle qu'il ne
+// lira jamais pour ce SIRET. Réparer par le SIREN ferait descendre l'adresse
+// d'un établissement sur le record que l'autre consulte.
+//
+// FIRE-AND-FORGET, NO-THROW, même régime que le pont et que l'enrichissement du
+// référentiel : appelée sans await, tout échec avalé et journalisé. Aucune ligne
+// trouvée rend 0 ligne modifiée, ce qui est un silence et non une erreur.
+async function reparerAdresseSociete({ userId, siret, rec, corps }) {
+  try {
+    if (!userId) return
+    const cleanSiret = String(siret || '').replace(/\s+/g, '')
+    if (!cleanSiret) return
+    const bloc = patchAdressePont(rec, corps)
+    // Bloc vide : rien n'a bougé, ou la voie est inconnue. Le pont l'a décidé.
+    if (!('adresse' in bloc)) return
+    const db = await getDb()
+    await db.query(
+      'UPDATE societes SET adresse = $adresse, zip = $zip, ville = $ville, updated_at = $now WHERE userId = $userId AND siret = $siret',
+      {
+        adresse: bloc.adresse,
+        zip: bloc.zip,
+        ville: bloc.ville,
+        now: new Date().toISOString(),
+        userId,
+        siret: cleanSiret
+      }
+    )
+  } catch (e) {
+    console.warn('[societes-adresse]', String(e?.message || e).slice(0, 80))
+  }
+}
+
 // ── Rattrapage de position d'une carte pipeline ─────────────────────────────
 // DÉFAUT VISÉ : pipeline.html:1441 efface lat/lng dès qu'une adresse est
 // corrigée, en comptant sur la Carte pour les refaire au passage suivant. Une
@@ -3202,6 +3263,18 @@ app.put('/api/pipeline/:id', async (req, res) => {
       table: 'contacts',
       patch: patchPontSociete(rec, cleanBody, 'pipeline')
     })
+    // Réparation de `societes` : l'adresse corrigée sur la carte rejoint le
+    // record société du même SIRET, pour que le repli de géocodage cesse de lire
+    // la valeur du jour de la prospection. FIRE-AND-FORGET (sans await).
+    //
+    // APPELÉE AVANT LE RATTRAPAGE, ET L'ORDRE COMPTE. La voie 2 du rattrapage va
+    // chercher dans `societes` le code postal et la ville sans lesquels elle ne
+    // géocode pas. Les deux partent sans await et rien ne garantit leur ordre
+    // d'arrivée en base : ce que cet ordre donne, c'est la MEILLEURE chance que
+    // la correction précède la lecture, jamais une certitude. Le cas où elle
+    // arrive après n'est pas un défaut, seulement une occasion manquée : la
+    // correction reste écrite, et le rattrapage suivant la lira.
+    reparerAdresseSociete({ userId, siret: cleanBody.siret, rec, corps: cleanBody })
     // Rattrapage de position — la carte vient d'être écrite sans coordonnées
     // exploitables alors qu'elle porte une adresse. FIRE-AND-FORGET (sans
     // await), no-throw : cf. rattraperPositionCarte ci-dessus.
@@ -3530,6 +3603,14 @@ app.put('/api/contacts/:id', async (req, res) => {
       table: tb === 'pipeline' ? 'contacts' : 'pipeline',
       patch: patchPontSociete(rec, cleanBody, tb)
     })
+    // Réparation de `societes` : l'adresse corrigée sur la fiche rejoint le
+    // record société du même SIRET, pour que le repli de géocodage cesse de lire
+    // la valeur du jour de la prospection. FIRE-AND-FORGET (sans await).
+    //
+    // POSÉE SUR LES DEUX FACES DE CETTE ROUTE POLYMORPHE, et donc appelée une
+    // seule fois quelle que soit la table écrite : la réparation vise `societes`
+    // et non la table jumelle, elle n'a pas de destination à choisir.
+    reparerAdresseSociete({ userId, siret: siretEcriture, rec, corps: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
     console.error('[contacts:put]', err)

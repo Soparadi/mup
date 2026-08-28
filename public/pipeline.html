@@ -546,9 +546,16 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
           </select>
         </div>
       </div>
+      <!-- La case d'adresse n'invite plus la ligne entière : son gris d'attente
+           disait « 10 rue de la vigne 14650 Carpiquet », et une fiche créée sur
+           cette invite naissait avec le code postal et la ville dans la voie.
+           Elle demande une voie, le code postal et la ville ont chacun la leur.
+           LinkedIn quitte la rangée du code postal pour la ville, et passe
+           pleine largeur comme le Code NAF plus haut : c'est une adresse web,
+           elle y gagne. -->
       <div class="frow">
         <div class="flabel">Adresse</div>
-        <input class="finput" id="m-addr" autocomplete="off" placeholder="10 rue de la vigne 14650 Carpiquet">
+        <input class="finput" id="m-addr" autocomplete="off" placeholder="10 rue de la vigne">
       </div>
       <div class="f2">
         <div class="frow">
@@ -556,9 +563,13 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
           <input class="finput" id="m-zip" autocomplete="off" placeholder="14650">
         </div>
         <div class="frow">
-          <div class="flabel">LinkedIn</div>
-          <input class="finput" id="m-linkedin" type="url" placeholder="https://linkedin.com/company/…">
+          <div class="flabel">Ville</div>
+          <input class="finput" id="m-ville" autocomplete="off" placeholder="Carpiquet">
         </div>
+      </div>
+      <div class="frow">
+        <div class="flabel">LinkedIn</div>
+        <input class="finput" id="m-linkedin" type="url" placeholder="https://linkedin.com/company/…">
       </div>
       <div class="f2">
         <div class="frow">
@@ -1416,7 +1427,7 @@ function startEditVal(){
 
 // ── LES SIX CHAMPS DE LA CARTE QUI S'ÉDITENT DANS LA FICHE ──
 // Raison sociale, secteur, voie, code postal, ville et notes société ne se
-// modifiaient que par la fenêtre à seize champs, ouverte depuis le crayon de la
+// modifiaient que par la fenêtre de création, ouverte depuis le crayon de la
 // carte du Kanban. Ce crayon est parti : la fiche est désormais le seul chemin
 // d'édition du Pipeline, et ces six cases s'y éditent en ligne.
 // Éditeur GÉNÉRIQUE, partagé par les six, parce qu'ils n'ont ni la conversion
@@ -1817,10 +1828,11 @@ function onDrop(e, colId) {
 }
 
 // ── MODAL ──
-// La fenêtre à seize champs ne sert plus qu'à la CRÉATION, par le + en tête de
-// colonne. Le crayon de la carte, son unique autre appelant, est parti : une
-// fiche existante se modifie dans la fiche, champ par champ.
-const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-linkedin','m-facebook','m-instagram','m-societe-email','m-societe-tel','m-notes'];
+// La fenêtre à dix-sept champs ne sert plus qu'à la CRÉATION, par le + en tête
+// de colonne. Le crayon de la carte, son unique autre appelant, est parti : une
+// fiche existante se modifie dans la fiche, champ par champ. Elle en comptait
+// seize : la ville est le dix-septième.
+const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-ville','m-linkedin','m-facebook','m-instagram','m-societe-email','m-societe-tel','m-notes'];
 function openModal(colId) {
   MODAL_FIELDS.forEach(fid => document.getElementById(fid).value = '');
   document.getElementById('m-col').value = colId || 'prospects';
@@ -1841,8 +1853,19 @@ function saveCard() {
     sector: document.getElementById('m-sector').value.trim(),
     website: document.getElementById('m-website').value.trim(),
     val: parseFloat(document.getElementById('m-val').value.replace(',', '.'))||0,
-    address: document.getElementById('m-addr').value.trim(),
+    // LES TROIS CASES, ET PLUS L'AGRÉGAT. La fenêtre posait `address`, le champ
+    // monobloc, à partir d'une case qui invitait la ligne entière : une fiche
+    // créée ici naissait donc dans l'état exact que la garde de découpe
+    // n'autorise pas à réparer, code postal en case et voie nulle part ailleurs
+    // que dans l'agrégat, et sa case Adresse s'ouvrait vide. Elle naît
+    // maintenant avec ses trois cases, comme une fiche née de la prospection.
+    //
+    // L'AGRÉGAT N'EST PLUS ENVOYÉ, et il n'a pas à l'être : POST /api/pipeline
+    // le compose des trois clés reçues, à la création comme à la mise à jour.
+    // C'était le dernier écran qui l'écrivait.
+    adresse: document.getElementById('m-addr').value.trim(),
     zip: document.getElementById('m-zip').value.trim(),
+    ville: document.getElementById('m-ville').value.trim(),
     linkedin: document.getElementById('m-linkedin').value.trim(),
     facebook: document.getElementById('m-facebook').value.trim(),
     instagram: document.getElementById('m-instagram').value.trim(),

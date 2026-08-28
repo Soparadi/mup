@@ -627,6 +627,7 @@ button.dropdown-item{width:100%;background:transparent;border:none;font-family:i
 <div class="toast" id="toast"></div>
 
 <script src="/js/person-fields.js"></script>
+<script src="/js/nom-personne.js"></script>
 <script src="/js/adresse-agregee.js"></script>
 <script src="/_mup-nom.js"></script>
 <script src="/_mup-tel.js"></script>
@@ -641,6 +642,13 @@ let people = [];            // Modèle A : records contacts liés par societe_id
 let personSaveTimers = {};  // débounce de sauvegarde par personne (clé = index)
 let personLocks = {};       // verrou « save en vol » par personne (anti double POST)
 let personDirty = {};       // re-save demandé pendant un save en vol (coalescing)
+// Blocs personne dont l'abonné a touché l'une des trois cases d'identité
+// (civilité, prénom, nom). Clé = index dans people[]. Tant qu'un bloc AMORCÉ
+// n'y figure pas, capturePersonBlock refuse d'écrire ces cases : ce que la
+// découpe de `contact_nom` a mis à l'écran est une conjecture, et une conjecture
+// ne devient pas une donnée sur une frappe passée dans le téléphone. Vidé à
+// chaque reconstruction de people[] (loadPeople), les index changeant avec elle.
+let identiteTouchee = new Set();
 
 // ── CE QUI S'ENREGISTRE : LE GESTE, PAS L'AFFICHAGE ──
 // Les champs contact société sont peints par DEUX sources : le record de
@@ -797,10 +805,13 @@ function hasPersonIdentity(c){
   return !!(c.civilite || c.prenom || c.nom_personne || c.contact_nom || c.poste || c.linkedin || e || t);
 }
 
-// Nom d'affichage d'une personne (civilité non incluse ici).
+// Nom d'affichage d'une personne, par la composition partagée (civilité non
+// incluse, elle est une case à part). nomPersonne joint les deux cases et, quand
+// elles sont vides, les AMORCE par la découpe de `contact_nom` : le repli sur la
+// chaîne brute qui tenait ce rôle ici n'a plus lieu d'être, la chaîne revenant
+// telle quelle de sa propre découpe recomposée.
 function personDisplayName(p){
-  const full = [p.prenom, p.nom_personne].filter(Boolean).join(' ').trim();
-  return full || p.contact_nom || '—';
+  return nomPersonne(p) || '—';
 }
 
 // Charge les personnes liées (records contacts de même societe_id). Le record
@@ -808,6 +819,7 @@ function personDisplayName(p){
 // pour rester synchrone avec l'autosave société.
 async function loadPeople(){
   people = [];
+  identiteTouchee.clear();   // les index repartent de zéro, les touchers avec
   const myKey = socKey(contact);
   let fetched = [];
   if (myKey){
@@ -1133,17 +1145,29 @@ function pfMulti(cls, type, label, values, addClass){
 }
 
 // Un bloc personne entièrement éditable. `idx` = index dans people[].
+//
+// LES TROIS CASES D'IDENTITÉ SONT AMORCÉES, jamais lues brutes. Un
+// enregistrement qui ne porte son nom que dans `contact_nom` affichait jusqu'ici
+// ce nom en tête de bloc, par le repli de personDisplayName, ET DEUX CASES
+// VIDES juste en dessous : le nom était lisible et inéditable. casesNomPersonne
+// les remplit de la découpe de la chaîne, sous la garde stricte qui veut que les
+// DEUX cases soient vides pour que la découpe joue.
+//
+// CE QUI EST À L'ÉCRAN N'EST PAS ENCORE EN BASE. L'amorce est une CONJECTURE
+// posée dans un champ éditable, pas une valeur : capturePersonBlock refuse de
+// l'écrire tant que l'abonné n'a touché aucune des trois. Voir la garde là-bas.
 function renderPersonBlock(p, idx){
+  const ident = casesNomPersonne(p);
   const civ = () => {
-    const opt = (val, lbl) => '<option value="' + val + '"' + (String(p.civilite||'')===val ? ' selected' : '') + '>' + lbl + '</option>';
+    const opt = (val, lbl) => '<option value="' + val + '"' + (String(ident.civilite||'')===val ? ' selected' : '') + '>' + lbl + '</option>';
     return '<select class="select pf-civilite">' + opt('', '—') + opt('M.', 'M.') + opt('Mme', 'Mme') + '</select>';
   };
   return '<div class="person-block" data-pidx="' + idx + '">'
     + '<div class="pf-row">'
     +   '<div class="field" style="flex:0 0 92px"><label class="label">Civilité</label>' + civ() + '</div>'
-    +   '<div class="field"><label class="label">Prénom</label><input class="input pf-prenom" type="text" value="' + esc(p.prenom) + '"></div>'
+    +   '<div class="field"><label class="label">Prénom</label><input class="input pf-prenom" type="text" value="' + esc(ident.prenom) + '"></div>'
     + '</div>'
-    + '<div class="field"><label class="label">Nom</label><input class="input pf-nom" type="text" value="' + esc(p.nom_personne) + '"></div>'
+    + '<div class="field"><label class="label">Nom</label><input class="input pf-nom" type="text" value="' + esc(ident.nom_personne) + '"></div>'
     + '<div class="field"><label class="label">Poste</label><input class="input pf-poste" type="text" value="' + esc(p.poste) + '"></div>'
     + '<div class="field"><label class="label">Anniversaire</label><input class="input pf-anniv" type="text" value="' + esc(p.anniversaire) + '"></div>'
     + pfMulti('pf-email', 'email', 'Emails', p.emails, 'email')
@@ -1782,9 +1806,42 @@ function capturePersonBlock(idx){
   const block = document.querySelector('.person-block[data-pidx="' + idx + '"]');
   if (!block) return;
   const val = (sel) => { const el = block.querySelector(sel); return el ? el.value.trim() : ''; };
-  p.civilite = val('.pf-civilite');
-  p.prenom = val('.pf-prenom');
-  p.nom_personne = val('.pf-nom');
+  // ── LA GARDE : UNE CONJECTURE NE DEVIENT PAS UNE DONNÉE ──
+  //
+  // LE BLOC EST AMORCÉ quand l'enregistrement ne porte AUCUNE de ses deux cases
+  // de nom et porte une chaîne : les trois cases d'identité à l'écran sortent
+  // alors de la découpe de `contact_nom`, et cette découpe est une conjecture,
+  // pas une lecture (voir lib/nom-personne.js).
+  //
+  // OR CETTE FONCTION RELIT LE BLOC ENTIER À CHAQUE FRAPPE. Sans garde, corriger
+  // un TÉLÉPHONE écrirait la découpe du nom en base sans que personne ne l'ait
+  // touchée : « Service commercial » deviendrait un prénom et un nom, à demeure,
+  // sur un geste qui n'a rien à voir. On n'écrit que ce que l'on corrige.
+  //
+  // LES TROIS CASES D'IDENTITÉ VOYAGENT D'UN BLOC, et il le faut : sur une fiche
+  // amorcée « Jean Dupont », rectifier le seul Nom en « Dupond » et n'écrire que
+  // lui perdrait « Jean », resté dans une case que l'enregistrement ne porte pas.
+  // Toucher l'une des trois les valide donc toutes les trois. C'est la règle des
+  // trois cases d'adresse, qui voyagent d'un bloc et jamais du tiers qui bouge.
+  //
+  // LA CIVILITÉ EST DANS LE BLOC, et c'est le seul point où ce commit va plus
+  // loin que « l'une des deux cases de nom ». Elle sort de la MÊME chaîne : un
+  // « M. Jean Dupont » amorce « M. » dans le sélecteur. L'exclure laisserait le
+  // choix de deux maux, perdre ce « M. » à la première correction de nom, ou
+  // avaler en silence le geste d'un abonné qui ne touche que le sélecteur.
+  //
+  // HORS AMORCE, RIEN NE CHANGE : un enregistrement portant déjà un prénom ou un
+  // nom voit ses cases lues telles quelles, sans conjecture à garder, et les
+  // trois s'écrivent à chaque frappe comme avant ce commit.
+  const amorce = !String(p.prenom || '').trim()
+              && !String(p.nom_personne || '').trim()
+              && !!String(p.contact_nom || '').trim();
+  const ecrireIdentite = !amorce || identiteTouchee.has(idx);
+  if (ecrireIdentite){
+    p.civilite = val('.pf-civilite');
+    p.prenom = val('.pf-prenom');
+    p.nom_personne = val('.pf-nom');
+  }
   p.poste = val('.pf-poste');
   p.anniversaire = val('.pf-anniv');
   p.emails = [...block.querySelectorAll('.pf-email')].map(i => i.value.trim()).filter(Boolean);
@@ -1796,8 +1853,21 @@ function capturePersonBlock(idx){
   p.facebook_perso = val('.pf-facebook');
   const note = block.querySelector('.pf-note');
   p.note_personne = note ? note.value.trim() : '';
-  // contact_nom maintenu pour compat (Prénom Nom complet).
-  p.contact_nom = [p.prenom, p.nom_personne].filter(Boolean).join(' ').trim() || p.contact_nom || '';
+  // ── LA CHAÎNE EST DÉRIVÉE DES DEUX CASES, ET ELLE SE VIDE AVEC ELLES ──
+  //
+  // Elle se composait ici même, mais elle se PROTÉGEAIT : le `|| p.contact_nom`
+  // qui fermait la ligne rendait l'effacement impossible. Vider les deux cases
+  // laissait la chaîne en place, et la recherche continuait de trouver un nom
+  // que l'écran n'affichait plus, sur les contacts comme sur la liste des
+  // clients d'un devis, qui n'interrogent que cette clé. Une case vidée est un
+  // GESTE et non une absence, c'est la distinction que le MERGE porte déjà
+  // jusqu'en base.
+  //
+  // La composition est celle du module partagé, la même que le serveur posera,
+  // et elle n'a lieu QUE si les deux cases viennent d'être écrites : sur un bloc
+  // amorcé et non touché, la chaîne reste exactement ce que l'enregistrement
+  // porte, puisque c'est elle qu'on n'a pas encore le droit de traduire.
+  if (ecrireIdentite) p.contact_nom = composerNomComplet(p);
   // Quand ce bloc EST le record ouvert, ses valeurs viennent d'être posées sur
   // `contact` et partiront par l'autosave société (cf. schedulePersonSave). Les
   // champs .pf-* n'ont pas d'id : ils ne s'inscrivent pas au registre des
@@ -1810,16 +1880,30 @@ function capturePersonBlock(idx){
   // record ouvert, au lieu du record entier : c'est un ordre de grandeur gagné,
   // pas la perfection. Descendre au champ demanderait un registre par bloc,
   // et c'est un autre lot.
-  if (p === contact) CLES_BLOC_PERSONNE.forEach(k => champsPoses.add(k));
+  //
+  // LES QUATRE CLÉS D'IDENTITÉ NE SE DÉCLARENT QUE SI ELLES VIENNENT D'ÊTRE
+  // ÉCRITES. Les déclarer sur un bloc amorcé et non touché ferait partir au
+  // corps partiel des valeurs que la garde vient justement de refuser d'écrire :
+  // ce qu'on ne modifie pas, on ne l'envoie pas, et c'est la règle de l'écriture
+  // ciblée telle qu'autoSave la tient déjà.
+  if (p === contact){
+    CLES_BLOC_PERSONNE.forEach(k => champsPoses.add(k));
+    if (ecrireIdentite) CLES_IDENTITE_PERSONNE.forEach(k => champsPoses.add(k));
+  }
 }
 
-// Les clés que capturePersonBlock pose, et elles seules — `rgpd_consent_personne`
-// n'en est pas (aucun champ ne l'édite dans le bloc), les champs société non plus.
+// Les clés que capturePersonBlock pose sur un bloc quelconque, et elles seules.
+// `rgpd_consent_personne` n'en est pas (aucun champ ne l'édite dans le bloc),
+// les champs société non plus.
 const CLES_BLOC_PERSONNE = [
-  'civilite', 'prenom', 'nom_personne', 'poste', 'anniversaire',
+  'poste', 'anniversaire',
   'emails', 'email', 'telephones', 'phone',
-  'linkedin', 'instagram_perso', 'facebook_perso', 'note_personne', 'contact_nom'
+  'linkedin', 'instagram_perso', 'facebook_perso', 'note_personne'
 ];
+
+// Les quatre clés d'identité, soumises à la garde d'amorce : elles ne partent au
+// corps partiel que lorsque capturePersonBlock a eu le droit de les écrire.
+const CLES_IDENTITE_PERSONNE = ['civilite', 'prenom', 'nom_personne', 'contact_nom'];
 
 function schedulePersonSave(idx){
   // SOURCE DE VÉRITÉ UNIQUE pour le record courant : si ce bloc EST le record
@@ -1953,6 +2037,13 @@ function wirePeople(){
     if (!block) return;
     const idx = parseInt(block.getAttribute('data-pidx'), 10);
     if (isNaN(idx)) return;
+    // LE TOUCHER QUI ARME L'ÉCRITURE DE L'IDENTITÉ, et lui seul : les trois
+    // cases amorcées par la découpe de `contact_nom`. Une frappe dans le
+    // téléphone, l'email, le poste, l'anniversaire, un réseau ou la note passe
+    // ici comme avant et n'arme rien : la conjecture reste à l'écran, elle ne
+    // descend pas en base. Le drapeau est posé AVANT la capture, pour que la
+    // frappe qui arme soit aussi celle qui écrit.
+    if (e.target.closest('.pf-prenom, .pf-nom, .pf-civilite')) identiteTouchee.add(idx);
     saisieGen++;
     capturePersonBlock(idx);
     schedulePersonSave(idx);

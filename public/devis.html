@@ -1286,9 +1286,22 @@ body #mup-cookie-panel{z-index:60001}
           <div class="flabel">Email</div>
           <input class="finput" id="e-email" placeholder="l.morin@legrand.fr" type="email" autocomplete="off" oninput="liveUpdate()">
         </div>
+        <!-- TROIS CASES, comme partout ailleurs dans l'application. Il n'y en
+             avait qu'une, dont le gris d'attente disait « 12 rue du Commerce,
+             75001 Paris » : elle DEMANDAIT la ligne entière, et cette ligne
+             était la seule chose que le devis savait de l'adresse de son
+             client. Le panneau empile ses rangées : les trois se suivent. -->
         <div class="frow">
           <div class="flabel">Adresse</div>
-          <input class="finput" id="e-addr" placeholder="12 rue du Commerce, 75001 Paris" autocomplete="off" oninput="liveUpdate()">
+          <input class="finput" id="e-addr" placeholder="12 rue du Commerce" autocomplete="off" oninput="liveUpdate()">
+        </div>
+        <div class="frow">
+          <div class="flabel">Code postal</div>
+          <input class="finput" id="e-zip" placeholder="75001" inputmode="numeric" autocomplete="off" oninput="liveUpdate()">
+        </div>
+        <div class="frow">
+          <div class="flabel">Ville</div>
+          <input class="finput" id="e-ville" placeholder="Paris" autocomplete="off" oninput="liveUpdate()">
         </div>
         <!-- LE SIRET DU CLIENT est une coordonnée comme les quatre autres :
              saisissable à la main, rempli au choix d'un client, corrigeable
@@ -3081,12 +3094,30 @@ function descNormalisee(v){
 function empreinteDevis(d, lignes){
   if(!d) return '';
   const src = lignes || d.lines || [];
+  const casesClient = casesClientDevis(d);
   return JSON.stringify({
     num: numeroDuDoc(d),
     name: String(d.name || ''),
     co: String(d.co || ''),
     email: String(d.email || ''),
     addr: String(d.addr || ''),
+    // LES TROIS CASES ENTRENT DANS L'EMPREINTE, et il le faut. `addr` seul ne
+    // suffit pas : corriger la DÉCOUPE sans changer la composition ne le fait
+    // pas bouger d'un octet. « 12 rue X 75011 » remis en « 12 rue X » plus
+    // « 75011 » compose la même ligne, et c'est exactement le geste que ce lot
+    // rend possible. Sans ces trois clés, la correction ne marquerait pas le
+    // devis comme modifié et se perdrait au premier changement de document.
+    //
+    // ELLES SONT LUES PAR LE LECTEUR, jamais sur les clés brutes, et c'est ce
+    // qui rend la comparaison stable des deux côtés : un devis d'avant ne porte
+    // aucune des trois, et le lecteur lui rend la découpe de son `addr`, la même
+    // que celle qui sera matérialisée le jour où l'abonné corrigera l'adresse.
+    // Sur les clés brutes, l'empreinte d'avant aurait porté trois chaînes vides
+    // et celle d'après la découpe, et tout devis ancien se serait déclaré
+    // modifié à la première frappe venue.
+    client_adresse: casesClient.adresse,
+    client_zip: casesClient.zip,
+    client_ville: casesClient.ville,
     siret: devisSiret(d),
     date: String(d.date || ''),
     validity: parseInt(d.validity, 10) || 30,
@@ -3316,7 +3347,7 @@ window.addEventListener('beforeunload', function(e){
 // chemin resté ouvert. Elle s'éteint donc avec les champs qu'elle remplit,
 // et prend au passage l'aplat inerte de .finput[readonly] et la raison au
 // survol.
-const CHAMPS_EDITEUR = ['e-client-q','e-num','e-name','e-co','e-email','e-addr','e-siret','e-date','e-validity','e-tva','e-status','e-notes'];
+const CHAMPS_EDITEUR = ['e-client-q','e-num','e-name','e-co','e-email','e-addr','e-zip','e-ville','e-siret','e-date','e-validity','e-tva','e-status','e-notes'];
 
 // LA RAISON, et non plus un booléen. Le title au survol dit POURQUOI le
 // champ ne se laisse pas écrire : il n'a donc lieu d'être que lorsqu'il y
@@ -3633,19 +3664,21 @@ function choisitClient(i){
   document.getElementById('e-name').value  = clientPersonne(p);
   document.getElementById('e-co').value    = clientSociete(p);
   document.getElementById('e-email').value = String(p.email || '');
-  // L'ADRESSE DU DOCUMENT SE COMPOSE, ET PAR LA COMPOSITION PARTAGÉE :
-  // adresseComposee, la même fonction que la liste des contacts, la fiche
-  // société, la fiche Pipeline et le briefing de la Visio.
+  // L'ADRESSE ARRIVE EN TROIS MORCEAUX, ET PAR LA LECTURE PARTAGÉE :
+  // casesAdresse, la même fonction que la liste des contacts, la fiche société,
+  // la fiche Pipeline et le briefing de la Visio. Le document prenait la ligne
+  // COMPOSÉE, et il la prenait entière dans une case unique ; il prend
+  // maintenant les trois cases de la fiche, chacune dans la sienne, et c'est
+  // liveUpdate qui en dérive la ligne imprimable.
   //
-  // CE QUE LA VARIANTE LOCALE N'AVAIT PAS. Elle joignait bien les trois cases,
-  // dans le même ordre, en sautant les vides : sur une fiche qui les porte,
-  // elle rend exactement la même chaîne. Il lui manquait LE REPLI SUR
-  // L'AGRÉGAT. Une fiche dont les trois cases sont vides garde son adresse dans
-  // son `address` monobloc, et la variante rendait alors une chaîne VIDE : le
-  // devis partait chez le client sans aucune adresse, en silence. C'est l'état
-  // de la quasi-totalité des cartes du produit, celles que la matérialisation
-  // d'un prospect a créées avant que la voie ne soit posée en case.
-  document.getElementById('e-addr').value  = adresseComposee(p);
+  // LE REPLI SUR L'AGRÉGAT EST DANS LA FONCTION, et il compte : une fiche dont
+  // les trois cases sont vides garde son adresse dans son `address` monobloc, et
+  // c'est l'état de la quasi-totalité des cartes du produit. La garde stricte y
+  // découpe cet agrégat, et le devis part avec l'adresse plutôt que sans.
+  const casesClient = casesAdresse(p);
+  document.getElementById('e-addr').value  = casesClient.adresse;
+  document.getElementById('e-zip').value   = casesClient.zip;
+  document.getElementById('e-ville').value = casesClient.ville;
   // LE SIRET ARRIVE PAR SON CHAMP, comme les quatre autres valeurs, et non par
   // une écriture posée à part sur le document : une seule voie l'écrit, celle
   // que l'abonné voit et peut corriger. Il est mis en forme comme sur la fiche
@@ -3671,6 +3704,64 @@ function choisitClient(i){
 // acceptées parce que trois chemins écrivent un devis — l'éditeur d'ici, la
 // conversion serveur, l'import de factures — et qu'aucun n'a la même forme.
 let clientSiretFilter = null;
+
+// ══════════════════════════════════════════════════════════════════════
+// L'ADRESSE DU CLIENT SUR LE DOCUMENT : TROIS CASES, L'AGRÉGAT DÉRIVÉ
+// ----------------------------------------------------------------------
+// LE DOCUMENT NE CONNAISSAIT QUE `addr`, une ligne entière saisie à la main ou
+// recopiée d'une fiche. Il porte désormais les trois cases sous
+// `client_adresse`, `client_zip` et `client_ville`, au voisinage de
+// `client_siret` et pour la même raison de lisibilité : sur un devis, tout ce
+// qui n'est pas l'émetteur est le client, et le préfixe le dit.
+//
+// `addr` RESTE, ET DEVIENT DÉRIVÉ. C'est lui que la feuille imprime, lui que
+// l'empreinte compare, lui que les devis d'avant portent seuls. Le renommer
+// aurait cassé chaque devis déjà enregistré ; le doubler d'une seconde ligne
+// imprimable en aurait fait deux vérités. Il est donc composé des trois cases,
+// par la MÊME règle que le serveur applique aux fiches et aux cartes.
+//
+// LA LECTURE PASSE PAR casesAdresse, la fonction partagée, à qui l'on donne le
+// document dans le vocabulaire qu'elle connaît. Elle apporte sa garde stricte :
+// la découpe de `addr` n'amorce que si les TROIS cases sont vides, c'est-à-dire
+// sur les devis d'avant, et un document dont une seule case est renseignée n'est
+// JAMAIS redécoupé.
+function casesClientDevis(d) {
+  return casesAdresse({
+    adresse: d && d.client_adresse,
+    zip: d && d.client_zip,
+    ville: d && d.client_ville,
+    address: d && d.addr
+  });
+}
+
+// Écrit les trois cases sur le document et en DÉRIVE l'agrégat imprimable.
+// C'est le jumeau de page de recomposerAdresseAgregee, et il porte la même
+// abstention : quand la voie n'était connue QUE dans l'agrégat et qu'aucune
+// n'est saisie, composer la perdrait, on laisse l'agrégat tel qu'il est. Une
+// voie EFFACÉE est un cas différent et c'est un geste : la case portait quelque
+// chose, le champ la vide, l'agrégat suit.
+//
+// LA BASE EST LUE AVANT L'ÉCRITURE, et l'ordre n'est pas indifférent :
+// casesClientDevis lit les clés que les trois lignes suivantes remplacent.
+function poseAdresseClientDevis(d, trois) {
+  const base = casesClientDevis(d);
+  // RIEN N'A BOUGÉ, ON NE TOUCHE À RIEN, et cette garde n'est pas une économie.
+  // liveUpdate est appelée à chaque frappe de N'IMPORTE QUEL champ de
+  // l'éditeur. Sans elle, une frappe dans les notes matérialiserait les trois
+  // cases et RECOMPOSERAIT `addr` : une adresse ancienne saisie « 12 rue du
+  // Commerce, 75001 Paris » y perdrait sa virgule, la feuille changerait, et un
+  // devis auquel personne n'a touché se déclarerait modifié. La ligne
+  // imprimable ne se recompose donc que sur une correction des trois cases,
+  // c'est-à-dire sur un geste. C'est la même règle que la matérialisation au
+  // commit de la fiche Pipeline : on n'écrit que ce que l'on corrige.
+  if (trois.adresse === base.adresse && trois.zip === base.zip && trois.ville === base.ville) return;
+  const agregatExistant = String(d.addr == null ? '' : d.addr).trim();
+  d.client_adresse = trois.adresse;
+  d.client_zip = trois.zip;
+  d.client_ville = trois.ville;
+  if (!trois.adresse && !base.adresse && agregatExistant) return;
+  d.addr = [trois.adresse, trois.zip, trois.ville].filter(Boolean).join(' ');
+}
 
 // LE REPLI NE JOUE QUE SUR UNE CLÉ ABSENTE, jamais sur une clé vide. Depuis
 // que le champ SIRET de la section Client écrit `client_siret`, une chaîne
@@ -3840,7 +3931,14 @@ function loadDocToEditor(d) {
   document.getElementById('e-name').value = d.name||'';
   document.getElementById('e-co').value = d.co||'';
   document.getElementById('e-email').value = d.email||'';
-  document.getElementById('e-addr').value = d.addr||'';
+  // LES TROIS CASES DU CLIENT, par le lecteur du document : il connaît les trois
+  // clés et le repli sur `addr` que les devis d'avant portent seuls, sous la
+  // garde stricte. Un devis déjà enregistré rouvre donc avec son adresse
+  // découpée, sans que rien soit écrit tant que l'abonné ne touche à rien.
+  const casesDoc = casesClientDevis(d);
+  document.getElementById('e-addr').value = casesDoc.adresse;
+  document.getElementById('e-zip').value = casesDoc.zip;
+  document.getElementById('e-ville').value = casesDoc.ville;
   // Le SIRET revient par devisSiret, seul lecteur à connaître les trois clés
   // sous lesquelles un devis peut le porter, et reparaît groupé comme sur la
   // fiche société : le champ montre des espaces, le document n'en garde pas.
@@ -4054,7 +4152,14 @@ function liveUpdate() {
   d.name = document.getElementById('e-name').value;
   d.co = document.getElementById('e-co').value;
   d.email = document.getElementById('e-email').value;
-  d.addr = document.getElementById('e-addr').value;
+  // LES TROIS CASES SONT L'AUTORITÉ, `addr` EN DÉCOULE. La ligne imprimable
+  // n'est plus saisie : elle est composée des trois par la même règle que le
+  // serveur applique aux fiches et aux cartes, abstention comprise.
+  poseAdresseClientDevis(d, {
+    adresse: document.getElementById('e-addr').value.trim(),
+    zip: document.getElementById('e-zip').value.trim(),
+    ville: document.getElementById('e-ville').value.trim()
+  });
   // LE SIRET DU CLIENT, normalisé ICI et jamais dans le champ : l'abonné y
   // saisit ses quatorze chiffres comme ils figurent sur ses papiers, espaces
   // compris, et c'est le document qui reçoit la forme canonique : celle que

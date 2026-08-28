@@ -3081,6 +3081,177 @@ async function reparerAdresseSociete({ userId, siret, rec, corps }) {
   }
 }
 
+// ── LE PONT DES DOCUMENTS : LES DEVIS ET LE CRM, DANS LES DEUX SENS ─────────
+//
+// CE QU'IL FAIT. Une adresse corrigée sur un devis rejoint la fiche et la carte
+// du même SIRET ; une adresse corrigée sur une fiche ou une carte rejoint les
+// devis du même SIRET. C'est le pont société existant, appliqué au seul bloc
+// d'adresse et étendu à une troisième table.
+//
+// LES FACTURES N'EN SONT PAS, ET ELLES N'EN SERONT PAS PAR OUBLI. Une facture
+// est un document comptable ÉMIS : elle prend son numéro séquentiel à la
+// création et part chez le client. L'adresse qu'elle porte est celle du jour de
+// l'émission, et la réécrire après coup, en tâche de fond, serait modifier une
+// pièce. Elle ne reçoit donc jamais, et elle ne propage pas non plus.
+//
+// LE PRODUIT LA TRAITAIT DÉJÀ COMME FIGÉE SANS LE NOMMER : le panneau d'édition
+// d'une facture n'offre que le statut et la date de paiement, son adresse client
+// n'étant éditable nulle part après la création. Il faut cependant DIRE que
+// l'absence d'état de figeage côté factures est un FAIT DU PRODUIT et non une
+// décision de ce commit : `PUT /api/factures/:id` ne porte aucune garde, à la
+// différence de son homologue devis, et seul le numéro y est verrouillé. Le jour
+// où une facture deviendra éditable après émission, la question se rouvrira, et
+// elle se rouvrira sur une pièce légale.
+//
+// CÔTÉ DEVIS, LE PRÉDICAT EXISTE ET IL EST DÉJÀ GARDÉ sur les trois écritures du
+// document : un devis dont le client a renvoyé la pièce signée ne se réécrit
+// plus. Il ne propage donc plus et ne reçoit plus. Dans le sens qui part du
+// devis, la garde est déjà passée en amont, les routes refusant en 409 avant
+// d'écrire ; dans le sens qui va vers les devis, elle est posée ici, la liste des
+// pièces signées de l'abonné étant lue avant d'écrire.
+//
+// LES GARDES SONT CELLES DU PONT, ET ELLES LE SONT PARCE QUE C'EST LA MÊME
+// FONCTION QUI LES PORTE : patchAdressePont rend un bloc vide tant qu'aucune des
+// trois cases n'a bougé, et un bloc vide quand la voie est inconnue. Les trois
+// cases voyagent D'UN BLOC, jamais le tiers qui vient de bouger. Pas de voie, pas
+// de voyage. Aucune déduction ne traverse, les trois valeurs étant lues dans les
+// CASES et jamais découpées d'un agrégat.
+
+// Les noms des trois cases sur un devis. Le document les porte à plat, préfixées,
+// au voisinage de `client_siret` : sur un devis, ce qui n'est pas l'émetteur est
+// le client. `addr` est l'agrégat imprimable, dérivé des trois.
+const CLES_ADRESSE_DEVIS = { adresse: 'client_adresse', zip: 'client_zip', ville: 'client_ville', agregat: 'addr' }
+
+// Le SIRET d'un devis, jumeau serveur de devisSiret (public/devis.html), et il
+// en reprend la règle À LA LETTRE, repli compris : le repli ne joue que sur une
+// clé ABSENTE, jamais sur une clé vide. Depuis que le champ de la section Client
+// écrit `client_siret`, une chaîne vide y est une RÉPONSE, l'abonné a effacé le
+// numéro. Les devis venus d'ailleurs, eux, n'ont pas la clé du tout.
+//
+// LA FORME CANONIQUE EST « LES SEULS CHIFFRES », celle sous laquelle le champ
+// écrit et sous laquelle ?client_siret= filtre. C'est donc dans cette forme que
+// se fait la comparaison des deux côtés du pont, et non dans celle du pont
+// société, qui ne retire que les espaces : un numéro saisi avec des points sur un
+// devis se compare quand même à celui de la carte.
+function siretDevis(d) {
+  if (!d) return ''
+  const pose = d.client_siret !== undefined && d.client_siret !== null
+  const s = pose ? d.client_siret : ((d.client && d.client.siret) || d.siret || '')
+  return String(s).replace(/\D/g, '')
+}
+
+// Un devis vu au vocabulaire des trois cases, celui que patchAdressePont connaît.
+//
+// LES CLÉS SONT REPORTÉES PAR PRÉSENCE, et c'est tout l'objet de cette fonction.
+// patchAdressePont décide qu'une case a bougé en comparant `cle in corps` avant
+// de comparer les valeurs : une vue qui poserait les trois clés à `undefined`
+// ferait croire à trois saisies vides et déclencherait le pont sur un devis dont
+// personne n'a touché l'adresse. Un devis d'avant n'en porte aucune, et sa vue
+// est donc vide, comme il se doit.
+//
+// L'AGRÉGAT N'EST PAS DE LA VUE : patchAdressePont ne le lit jamais, il le
+// compose lui-même des trois cases.
+function vueAdresseDevis(d) {
+  const vue = {}
+  if (!d) return vue
+  for (const nom of ['adresse', 'zip', 'ville']) {
+    const cle = CLES_ADRESSE_DEVIS[nom]
+    if (cle in d) vue[nom] = d[cle]
+  }
+  return vue
+}
+
+// ── SENS 1 : LE DEVIS VERS LA FICHE ET LA CARTE ──
+//
+// LES DEUX TABLES, ET NON L'UNE OU L'AUTRE. Le pont société est un aller-retour
+// entre deux tables jumelles : écrire l'une, rejoindre l'autre. Un devis n'est le
+// jumeau de personne, il n'a donc pas de « table d'en face » : il a DEUX
+// destinations, et le même SIRET peut porter une carte, des fiches, ou les deux.
+//
+// L'ÉCRITURE PASSE PAR ponterCoordonneesSociete, la fonction du pont, et non par
+// une seconde écriture écrite ici. Elle apporte ses garanties sans qu'on ait à
+// les redire : la liste blanche du SQL dérivée de la table de correspondance et
+// jamais d'une clé reçue, le `WHERE` qui porte lui-même `userId`, tous les
+// jumeaux du SIRET et non le premier trouvé, et le no-throw. Le patch qu'on lui
+// donne ne porte que les cinq clés de l'adresse : les onze autres champs du pont
+// ne sont pas dans le corps, ils ne sont donc pas dans les assignations.
+//
+// FIRE-AND-FORGET, NO-THROW, comme tout ce qui suit une écriture de document :
+// le pont ne doit jamais faire échouer l'enregistrement qui l'a déclenché.
+function ponterAdresseDepuisDevis({ userId, avant, apres }) {
+  try {
+    if (!userId) return
+    const siret = siretDevis(apres)
+    if (!siret) return
+    const patch = patchAdressePont(vueAdresseDevis(avant), vueAdresseDevis(apres))
+    if (!('adresse' in patch)) return
+    for (const table of ['contacts', 'pipeline']) {
+      ponterCoordonneesSociete({ userId, siret, table, patch })
+    }
+  } catch (e) {
+    console.warn('[pont-devis:depuis]', String(e?.message || e).slice(0, 80))
+  }
+}
+
+// ── SENS 2 : LA FICHE OU LA CARTE VERS LES DEVIS ──
+//
+// POURQUOI CE SENS NE PEUT PAS EMPRUNTER ponterCoordonneesSociete. Celle-ci
+// interpole ses noms de champ depuis la table de correspondance, qui ne connaît
+// que `pipeline` et `contacts` ; et son `WHERE` porte sur une colonne `siret`,
+// que le devis ne garantit pas, pouvant le porter sous trois clés. Le SQL est
+// donc écrit ici, en toutes lettres et sans aucune interpolation : quatre noms
+// de champ en dur, aucun ne venant d'un corps reçu.
+//
+// LES DEVIS SONT RELUS PROJETÉS, sur l'identifiant et les trois clés qui
+// décident du SIRET. Une adresse corrigée est rare, c'est la garde du bloc vide
+// qui tient le coût, et cette lecture ne part qu'après elle.
+//
+// L'APPARTENANCE VIENT DE LA LECTURE, et c'est le motif d'upsertRecord : le
+// SELECT porte `userId`, aucun identifiant d'un autre abonné ne peut donc entrer
+// dans la boucle qui écrit. La cible étant un enregistrement désigné, l'UPDATE
+// n'a pas de `WHERE` où reposer la garde.
+//
+// LES PIÈCES SIGNÉES SONT ÉCARTÉES, et leur liste n'est lue QU'APRÈS le filtre
+// sur le SIRET : sans devis concerné, il n'y a personne à écarter et rien à lire.
+// listeDevisSignes est la lecture que la page emploie déjà pour poser sa
+// pastille, scopée par `userId`, et les identifiants en sortent nettoyés, forme
+// sous laquelle ils servent de clé.
+//
+// L'HORODATAGE EST POSÉ, à la différence du pont société qui n'en pose pas sur
+// ses jumeaux. Le devis est bien modifié en base, et toutes les autres écritures
+// qui le visent l'horodatent : le laisser en arrière ferait mentir le champ. Rien
+// n'en dépend par ailleurs, la liste des devis étant ordonnée sur la date
+// d'émission puis la date de création.
+async function ponterAdresseVersDevis({ userId, siret, rec, corps }) {
+  try {
+    if (!userId) return
+    const cible = String(siret || '').replace(/\D/g, '')
+    if (!cible) return
+    const patch = patchAdressePont(rec, corps)
+    if (!('adresse' in patch)) return
+    const db = await getDb()
+    const lignes = await queryOrEmpty(
+      db, 'SELECT id, client_siret, client, siret FROM devis WHERE userId = $userId', { userId })
+    const candidats = []
+    for (const d of lignes) {
+      if (siretDevis(d) !== cible) continue
+      const id = cleanRecordId('devis', String(d.id)) || String(d.id)
+      if (id) candidats.push(id)
+    }
+    if (!candidats.length) return
+    const signes = new Set(await listeDevisSignes(db, userId))
+    const now = new Date().toISOString()
+    for (const id of candidats) {
+      if (signes.has(id)) continue
+      await db.query(
+        'UPDATE type::record("devis", $id) SET client_adresse = $a, client_zip = $z, client_ville = $v, addr = $ag, updated_at = $now',
+        { id, a: patch.adresse, z: patch.zip, v: patch.ville, ag: patch.address, now })
+    }
+  } catch (e) {
+    console.warn('[pont-devis:vers]', String(e?.message || e).slice(0, 80))
+  }
+}
+
 // ── Rattrapage de position d'une carte pipeline ─────────────────────────────
 // DÉFAUT VISÉ : pipeline.html:1441 efface lat/lng dès qu'une adresse est
 // corrigée, en comptant sur la Carte pour les refaire au passage suivant. Une
@@ -3275,6 +3446,9 @@ app.put('/api/pipeline/:id', async (req, res) => {
     // arrive après n'est pas un défaut, seulement une occasion manquée : la
     // correction reste écrite, et le rattrapage suivant la lira.
     reparerAdresseSociete({ userId, siret: cleanBody.siret, rec, corps: cleanBody })
+    // Pont des documents : l'adresse corrigée sur la carte rejoint les devis non
+    // signés du même SIRET. FIRE-AND-FORGET (sans await).
+    ponterAdresseVersDevis({ userId, siret: cleanBody.siret, rec, corps: cleanBody })
     // Rattrapage de position — la carte vient d'être écrite sans coordonnées
     // exploitables alors qu'elle porte une adresse. FIRE-AND-FORGET (sans
     // await), no-throw : cf. rattraperPositionCarte ci-dessus.
@@ -3611,6 +3785,13 @@ app.put('/api/contacts/:id', async (req, res) => {
     // seule fois quelle que soit la table écrite : la réparation vise `societes`
     // et non la table jumelle, elle n'a pas de destination à choisir.
     reparerAdresseSociete({ userId, siret: siretEcriture, rec, corps: cleanBody })
+    // Pont des documents : l'adresse corrigée sur la fiche rejoint les devis non
+    // signés du même SIRET. FIRE-AND-FORGET (sans await).
+    //
+    // POSÉE UNE SEULE FOIS sur cette route polymorphe, comme la réparation de
+    // `societes` : les devis sont la destination quelle que soit la table que
+    // l'on vient d'écrire, il n'y a pas de jumelle à choisir.
+    ponterAdresseVersDevis({ userId, siret: siretEcriture, rec, corps: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
     console.error('[contacts:put]', err)
@@ -7032,10 +7213,32 @@ app.post('/api/devis', async (req, res) => {
       if (await pieceSigneeExiste(db, cleanId)) {
         return res.status(409).json({ error: DEVIS_FIGE })
       }
+      // L'ÉTAT D'AVANT, LU PROJETÉ, ET IL EST LU POUR LE PONT SEUL. La garde du
+      // pont compare les trois cases avant et après : sans l'état d'avant, tout
+      // enregistrement de devis propagerait son adresse. C'est une lecture d'un
+      // enregistrement DÉSIGNÉ, sur quatre colonnes, à côté de celle que le
+      // figeage vient de faire.
+      //
+      // UNE CRÉATION N'A PAS D'ÉTAT D'AVANT, et la vue est alors vide : la
+      // fonction partagée y voit trois cases qui passent du néant à une saisie,
+      // et le devis propage son adresse. C'est le bon défaut, et il vaut dans les
+      // deux cas de figure. Quand le client a été choisi dans une fiche,
+      // l'adresse en VIENT et la reposer sur elle ne change rien. Quand elle a
+      // été frappée à la main, c'est une saisie, et le pont propage les saisies.
+      // Sans cela, une adresse corrigée sur un devis neuf ne partirait jamais :
+      // au deuxième enregistrement, elle n'aurait plus bougé.
+      const avant = (await queryOrEmpty(
+        db, 'SELECT client_adresse, client_zip, client_ville, addr FROM type::record("devis", $id)',
+        { id: cleanId }))[0] || null
       const { record, status } = await upsertRecord(db, 'devis', cleanId, body)
+      // Pont des documents, sur le SEUL succès : un 404 d'appartenance refusée
+      // n'a rien écrit et n'a donc rien à propager. FIRE-AND-FORGET (sans await).
+      if (status !== 404) ponterAdresseDepuisDevis({ userId, avant, apres: body })
       return res.status(status).json(record)
     }
     const result = await db.query('CREATE devis CONTENT $body', { body })
+    // Création sans identifiant fourni : aucun état d'avant, la vue est vide.
+    ponterAdresseDepuisDevis({ userId, avant: null, apres: body })
     res.status(201).json(result[0]?.[0] || result[0] || null)
   } catch (err) {
     console.error('[devis:post]', err.message)
@@ -7067,6 +7270,15 @@ app.put('/api/devis/:id', async (req, res) => {
     if (rec.numero_seq) cleanBody.numero_seq = rec.numero_seq
     if (rec.numero_year) cleanBody.numero_year = rec.numero_year
     const result = await db.query('UPDATE type::record("devis", $id) CONTENT $body', { id, body: cleanBody })
+    // Pont des documents : l'adresse corrigée sur le devis rejoint la fiche et
+    // la carte du même SIRET. Le figeage est déjà passé, en 409, quelques lignes
+    // plus haut : un devis signé n'arrive pas ici. FIRE-AND-FORGET (sans await).
+    //
+    // CETTE ROUTE N'EST PAS CELLE DE LA PAGE, qui enregistre par POST en upsert.
+    // Le pont y est posé quand même : c'est une porte d'écriture du document, et
+    // une porte qui écrit sans propager rouvrirait le trou à la première requête
+    // qui l'emprunte.
+    ponterAdresseDepuisDevis({ userId, avant: rec, apres: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
     console.error('[devis:put]', err.message)

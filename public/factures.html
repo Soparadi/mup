@@ -1316,89 +1316,6 @@
     await saveJSON('mup_pipeline', pipeline);
   }
 
-  async function migratePipelineFromContacts(){
-    var contacts = await loadJSON('mup_contacts', []);
-    if(!Array.isArray(contacts) || contacts.length === 0) return;
-    var pipeline = await loadJSON('mup_pipeline', []);
-    if(!Array.isArray(pipeline)) pipeline = [];
-    var changed = false;
-    contacts.forEach(function(c){
-      if(!c || !c.siret) return;
-      if(c.source !== 'facture_import') return;
-      var idx = pipeline.findIndex(function(p){ return p.siret === c.siret; });
-      // Même lecture qu'à la synchronisation, et pour la même raison : cette
-      // reprise naissait avec la voie de la fiche versée dans l'agrégat de la
-      // carte, code postal et ville perdus au passage.
-      var casesFiche = casesAdresse(c);
-      if(idx === -1){
-        pipeline.push({
-          id: 'pipeline_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-          company: c.nom,
-          contact: c.nom,
-          siret: c.siret,
-          siren: c.siren || '',
-          adresse: casesFiche.adresse,
-          zip: casesFiche.zip,
-          ville: casesFiche.ville,
-          latitude: c.latitude || null,
-          longitude: c.longitude || null,
-          col: 'won',
-          value: c.ca_total || 0,
-          entity_origine: c.entity_origine || 'ei',
-          source: 'facture_import',
-          contact_id: c.id,
-          created_at: c.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-        changed = true;
-      } else {
-        var f = pipeline[idx];
-        if(f.col !== 'won' || (f.value || 0) !== (c.ca_total || 0) || f.source !== 'facture_import'){
-          f.col = 'won';
-          f.value = c.ca_total || 0;
-          f.source = 'facture_import';
-          f.contact_id = c.id;
-          f.updated_at = new Date().toISOString();
-          pipeline[idx] = f;
-          changed = true;
-        }
-      }
-    });
-    if(changed){
-      await saveJSON('mup_pipeline', pipeline);
-      console.log('migratePipelineFromContacts : fiches won synchronisées');
-    }
-  }
-
-  async function migrateContactsExistants(){
-    var contacts = await loadJSON('mup_contacts', []);
-    if(!Array.isArray(contacts) || contacts.length === 0) return;
-    var allFactures = await loadJSON('mup_factures', []);
-    if(!Array.isArray(allFactures)) allFactures = [];
-    var changed = false;
-    for(var i = 0; i < contacts.length; i++){
-      var c = contacts[i];
-      if(!c || !c.siret) continue;
-      var cleaned = cleanAdresse(c.adresse || '');
-      if(cleaned !== c.adresse){ c.adresse = cleaned; changed = true; }
-      var clientFactures = allFactures.filter(function(f){ return f.client && f.client.siret === c.siret; });
-      var newIds = clientFactures.map(function(f){ return f.id; });
-      var newCa = clientFactures.reduce(function(sum, f){ return sum + (f.total_ttc || 0); }, 0);
-      var oldIds = Array.isArray(c.factures_ids) ? c.factures_ids : [];
-      if(newIds.length !== oldIds.length || newIds.some(function(id, idx){ return id !== oldIds[idx]; }) || (c.ca_total || 0) !== newCa){
-        c.factures_ids = newIds;
-        c.ca_total = newCa;
-        c.updated_at = new Date().toISOString();
-        changed = true;
-      }
-      contacts[i] = c;
-    }
-    if(changed){
-      await saveJSON('mup_contacts', contacts);
-      console.log('migrateContactsExistants : contacts réparés');
-    }
-  }
-
   function generateNextNumero(){
     var maxSeq = factures.reduce(function(m,f){ return Math.max(m, f.numero_seq || 0); }, 0);
     var nextSeq = maxSeq + 1;
@@ -2267,10 +2184,6 @@
   catch(e){ console.warn('[factures] user-settings load failed', e); }
   buildImportDropdown();
   refreshYearFilter();
-  // Migration auto contacts existants (clean adresse + recalc factures_ids/ca_total)
-  migrateContactsExistants().catch(function(e){ console.error('migrateContactsExistants', e); });
-  // Migration auto pipeline (fiches won pour chaque contact issu d'une facture)
-  migratePipelineFromContacts().catch(function(e){ console.error('migratePipelineFromContacts', e); });
   // Filtre URL ?client_siret=
   var clientSiretParam = (window.location.search.match(/[?&]client_siret=([^&]+)/) || [])[1];
   if(clientSiretParam){ await applyClientFilter(decodeURIComponent(clientSiretParam)); }

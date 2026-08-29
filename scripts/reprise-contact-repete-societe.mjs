@@ -41,10 +41,10 @@
 // n'est écrite : ni `name`, ni `co`, ni `company`. Aucune découpe en prénom et
 // nom : la reprise vide une case mal remplie, elle n'en remplit pas d'autres.
 //
-// LES 28 CARTES À CONTACT VIDE NE SONT PAS TOUCHÉES. Elles sortent par la
+// LES 19 CARTES À CONTACT VIDE NE SONT PAS TOUCHÉES. Elles sortent par la
 // condition 1, qui exige `contact` renseigné. Leur compte sert de garde.
 //
-// CINQ GARDES DE POPULATION, toutes obligatoires, toutes avant la première
+// SEPT GARDES DE POPULATION, toutes obligatoires, toutes avant la première
 // écriture. Si l'une cède, RIEN ne s'écrit : un écart signifie que la base a
 // bougé depuis le relevé arbitré, et la reprise ne s'exécute pas sur une
 // population qu'elle n'a pas vue.
@@ -53,7 +53,18 @@
 //   G3  exactement une carte est écartée au titre du code 2210 ;
 //   G4  aucune carte de la population ne porte un code de niveau 1 ;
 //   G5  les cartes à contact vide comptent exactement VIDES, et aucune d'entre
-//       elles n'est entrée dans la population.
+//       elles n'est entrée dans la population ;
+//   G6  le total de la table tient dans sa tolérance, TOTAL ± MARGE. Les deux
+//       gardes de comptage exact ne disent rien de ce qui s'est créé à côté :
+//       une table qui a beaucoup bougé depuis le relevé n'est plus la table
+//       arbitrée, même si la population, elle, retombe sur ses pieds. La borne
+//       est une fourchette et non une égalité : des cartes naissent au fil de
+//       l'usage, et cela n'invalide pas le relevé ;
+//   G7  aucune carte de la population ne porte `prenom` ou `nom_personne`. Ces
+//       deux cases sont l'autorité sur la personne d'une carte. Une carte qui
+//       les porte a été vue et saisie sur ce plan : son `contact` n'est plus le
+//       résidu d'un versement automatique, et la reprise n'a pas à en juger.
+//       Une seule suffit à tout arrêter, et elle est journalisée nominativement.
 // S'y ajoute, à l'écriture, une relecture de chaque carte juste avant son
 // UPDATE : la carte qui a quitté le prédicat depuis le SELECT est écartée, une
 // saisie de l'abonné prime sur la reprise.
@@ -70,9 +81,16 @@ if (!process.env.SURREAL_URL?.includes(EXPECTED_HOST) && process.env.ALLOW_ANY_H
 const { getDb, close } = await import('../lib/surreal.js')
 
 const ECRIRE = process.argv.includes('--ecrire')
-const CANDIDATS = 72   // les trois conditions, exclusion non faite
-const ATTENDU   = 71   // la population, code 2210 écarté
-const VIDES     = 28   // cartes à contact vide, intouchées
+// Constantes arbitrées sur les deux passages à blanc du 29 août, pris à quatre
+// minutes d'intervalle après l'arrêt du versement, et identiques ligne pour
+// ligne. Les valeurs de la phase 2 (72 / 71 / 28) ont été relevées AVANT cet
+// arrêt : migrateCard versait encore, neuf cartes ont quitté le contact vide et
+// le prédicat s'est élargi de 97 à 203 répétitions pendant l'intervalle.
+const CANDIDATS = 81   // les trois conditions, exclusion non faite
+const ATTENDU   = 80   // la population, code 2210 écarté
+const VIDES     = 19   // cartes à contact vide, intouchées
+const TOTAL     = 517  // total de la table au relevé
+const MARGE     = 10   // tolérance sur ce total, en plus comme en moins
 const CODE_EXCLU = '2210'
 
 const first = (r) => (Array.isArray(r) ? r[0] : r) || []
@@ -82,9 +100,14 @@ const localId = (id) => (id && typeof id === 'object' && id.id != null ? String(
 const societeDe = (c) => t(c.co) || t(c.company) || t(c.enseigne)
 const niveau1 = (code) => t(code).startsWith('1')
 
-try {
-  const db = await getDb()
-  const rows = first(await db.query('SELECT id, contact, name, co, company, enseigne, siret FROM pipeline'))
+const personne = (c) => t(c.prenom) || t(c.nom_personne)
+
+// LE TAMIS, en une fonction, pour être rejoué mot pour mot après l'écriture.
+// Le contrôle d'après-passe ne vaut que s'il applique le MÊME prédicat que
+// celui qui a désigné la population : un recompte approximatif ne prouve rien.
+// Il repart d'une lecture fraîche de la table et refait la jointure.
+async function tamiser(db) {
+  const rows = first(await db.query('SELECT id, contact, name, co, company, enseigne, siret, prenom, nom_personne FROM pipeline'))
 
   // Condition 1 seule. Le compte des cartes à contact vide est prélevé ici, sur
   // la même lecture, pour que la garde G5 porte sur le même instant.
@@ -112,18 +135,28 @@ try {
     candidats.push({ ...c, code })
   }
 
-  const exclues = candidats.filter(c => c.code === CODE_EXCLU)
-  const population = candidats.filter(c => c.code !== CODE_EXCLU)
+  return {
+    rows, vides, repetent, sansCode, niveau1Sorties, candidats,
+    exclues: candidats.filter(c => c.code === CODE_EXCLU),
+    population: candidats.filter(c => c.code !== CODE_EXCLU),
+  }
+}
+
+try {
+  const db = await getDb()
+  const { rows, vides, repetent, sansCode, niveau1Sorties, candidats, exclues, population } = await tamiser(db)
 
   console.log((ECRIRE ? 'ÉCRITURE' : 'À BLANC') + '   ' + rows.length + ' cartes en base\n')
   console.log('TAMIS')
+  console.log('  total de la table                     ' + rows.length + '   attendu ' + TOTAL + ' ± ' + MARGE)
   console.log('  contact répète la société             ' + repetent.length)
   console.log('  dont sans code au référentiel         ' + sansCode.length + '   (SIRET absent ou sans catégorie juridique, non touchées)')
   console.log('  dont code de niveau 1                 ' + niveau1Sorties.length + '   (entrepreneurs individuels, non touchées)')
   console.log('  candidats des trois conditions        ' + candidats.length + '   attendu ' + CANDIDATS)
   console.log('  écartées code ' + CODE_EXCLU + '                    ' + exclues.length)
   console.log('  POPULATION DE REPRISE                 ' + population.length + '   attendu ' + ATTENDU)
-  console.log('  cartes à contact vide, intouchées     ' + vides.length + '   attendu ' + VIDES + '\n')
+  console.log('  cartes à contact vide, intouchées     ' + vides.length + '   attendu ' + VIDES)
+  console.log('  dont population portant une case de personne  ' + population.filter(personne).length + '   attendu 0\n')
 
   const parCode = new Map()
   for (const c of population) parCode.set(c.code, (parCode.get(c.code) || 0) + 1)
@@ -148,6 +181,7 @@ try {
     console.log('    contact actuel   « ' + t(c.contact) + ' »   devient « »')
     console.log('    société          « ' + societeDe(c) + ' »')
     console.log('    name             « ' + t(c.name) + ' »   (non touché)')
+    console.log('    prenom « ' + t(c.prenom) + ' »   nom_personne « ' + t(c.nom_personne) + ' »   (non touchés)')
   }
   console.log('')
 
@@ -161,9 +195,21 @@ try {
   const fuiteVide = population.filter(c => idsVides.has(localId(c.id)))
   if (vides.length !== VIDES) cedees.push('G5 contact vide ' + vides.length + ', attendu ' + VIDES)
   if (fuiteVide.length) cedees.push('G5 ' + fuiteVide.length + ' carte(s) à contact vide dans la population')
+  if (Math.abs(rows.length - TOTAL) > MARGE) cedees.push('G6 total de la table ' + rows.length + ', hors de ' + TOTAL + ' ± ' + MARGE)
+  const fuitePersonne = population.filter(personne)
+  if (fuitePersonne.length) cedees.push('G7 ' + fuitePersonne.length + ' carte(s) de la population portant prenom ou nom_personne')
+
+  if (fuitePersonne.length) {
+    console.log('CARTES DE LA POPULATION PORTANT UNE CASE DE PERSONNE, G7')
+    for (const c of fuitePersonne) {
+      console.log('  ' + localId(c.id) + '   prenom « ' + t(c.prenom) + ' »   nom_personne « ' + t(c.nom_personne) + ' »')
+      console.log('    contact « ' + t(c.contact) + ' »   société « ' + societeDe(c) + ' »')
+    }
+    console.log('')
+  }
 
   console.log('GARDES DE POPULATION')
-  if (!cedees.length) console.log('  les cinq tiennent.')
+  if (!cedees.length) console.log('  les sept tiennent.')
   for (const m of cedees) console.log('  CÈDE   ' + m)
   console.log('')
 
@@ -194,12 +240,25 @@ try {
     }
     console.log('\nécrites ' + ecrites + '   écartées ' + ecartees + '   sur ' + population.length)
 
-    // Contre-épreuve : le tamis rejoué sur une lecture fraîche.
-    const apres = first(await db.query('SELECT id, contact, co, company, enseigne FROM pipeline'))
-    const repetentApres = apres.filter(c => t(c.contact) && societeDe(c) && norm(c.contact) === norm(societeDe(c)))
-    const videsApres = apres.filter(c => !t(c.contact))
-    console.log('\nCONTRÔLE DE POPULATION')
-    console.log('  contact répète la société   ' + repetent.length + ' avant   ' + repetentApres.length + ' après   (attendu ' + (repetent.length - ATTENDU) + ')')
-    console.log('  contact vide                ' + vides.length + ' avant   ' + videsApres.length + ' après   (attendu ' + (vides.length + ATTENDU) + ')')
+    // CONTRE-ÉPREUVE : le tamis entier rejoué sur une lecture fraîche, par la
+    // même fonction et le même prédicat. Le travail n'est fait que si le tamis
+    // ne trouve plus de candidat : zéro. Le compte des écartées est retranché
+    // des attendus, une carte non écrite étant restée dans sa population.
+    const ap = await tamiser(db)
+    const l = (nom, avant, apres, attendu) =>
+      console.log('  ' + nom.padEnd(30) + String(avant).padStart(4) + ' avant  ' + String(apres).padStart(4) + ' après   attendu ' + attendu +
+                  (apres === attendu ? '' : '   ÉCART'))
+    console.log('\nCONTRÔLE DE POPULATION, LE TAMIS REJOUÉ')
+    l('total de la table', rows.length, ap.rows.length, rows.length)
+    l('contact répète la société', repetent.length, ap.repetent.length, repetent.length - ecrites)
+    l('dont code de niveau 1', niveau1Sorties.length, ap.niveau1Sorties.length, niveau1Sorties.length)
+    l('candidats des trois conditions', candidats.length, ap.candidats.length, ecartees + exclues.length)
+    l('écartées code ' + CODE_EXCLU, exclues.length, ap.exclues.length, exclues.length)
+    l('POPULATION DE REPRISE', population.length, ap.population.length, ecartees)
+    l('contact vide', vides.length, ap.vides.length, vides.length + ecrites)
+    if (ap.population.length) {
+      console.log('\n  cartes encore dans la population :')
+      for (const c of ap.population) console.log('    ' + localId(c.id) + '   contact « ' + t(c.contact) + ' »')
+    }
   }
 } finally { await close() }

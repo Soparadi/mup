@@ -105,6 +105,10 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 .kcard-val{font-size:11px;font-weight:600;font-family:var(--mono);color:#6E6E73}
 .kcard-days{font-size:10px;font-weight:600;color:var(--muted2);background:var(--surface);border-radius:5px;padding:2px 6px;margin-left:auto}
 .kcard-src{font-size:9.5px;color:var(--muted2);margin-top:4px}
+/* Carte que le serveur n'a pas confirmee : pointille, et le mot qui le dit.
+   Meme gabarit que .kcard-src, aucune couleur d'alerte, aucune icone. */
+.kcard--nonconf{border-style:dashed;border-color:var(--muted2)}
+.kcard-nonconf{font-size:9.5px;color:var(--muted2);margin-top:4px}
 .kcard-actions{position:absolute;top:8px;right:8px;display:none;gap:3px}
 .kcard:hover .kcard-actions{display:flex}
 .kcard-btn{width:20px;height:20px;border-radius:5px;border:none;background:var(--surface2);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .12s}
@@ -1090,7 +1094,18 @@ async function save(carte) {
   // Une carte sans id n'est pas encore au serveur : rien à lui envoyer, et le
   // cache s'écrit comme avant.
   if (carte && carte.id) {
+    // L'ÉCRAN SUIT LE REGISTRE, ET IL FAUT LE LUI DIRE. renderCard lit le
+    // registre au moment du rendu, mais presque aucun appelant de save() ne
+    // redessine après le verdict : le champ d'une fiche, le glissé d'une
+    // colonne, l'entrée d'activité écrivent et rendent la main. Sans ce
+    // rappel, la marque n'apparaîtrait qu'au prochain rendu venu d'ailleurs,
+    // et surtout ne DISPARAÎTRAIT pas quand une écriture ultérieure confirme
+    // enfin la carte : l'abonné lirait « Non enregistrée » sur une fiche que
+    // le serveur a. On compare donc l'appartenance avant et après, et on ne
+    // redessine que sur changement — une écriture ordinaire ne coûte rien.
+    const marqueeAvant = cartesNonConfirmees.has(carte.id);
     const verdict = await enregistrerCarte(carte);
+    if (marqueeAvant !== cartesNonConfirmees.has(carte.id)) renderKanban();
     if (verdict === 'plafond') {
       // Fiche refusee par le peage : rollback a la verite serveur, sans ecrire le cache.
       // Le toast/modal est deja affiche par l'intercepteur 402 global (trial-expired-modal.js).
@@ -1938,13 +1953,18 @@ function renderKanban() {
   }).join('');
 }
 
+// LA MARQUE EST LUE AU RENDU, et non posée sur la carte : le registre est la
+// seule source, une carte qu'il ne porte plus se redessine sans marque. Elle
+// ne répare rien — elle retire le « sans le dire » : jusqu'ici une fiche que
+// le serveur n'avait pas confirmée était à l'écran comme les autres.
 function renderCard(c, color) {
+  const nonConfirmee = cartesNonConfirmees.has(c.id);
   const valFmt = fmtVal(c.val);
   // Nom société composé (enseigne en titre, nom juridique en 2e rang) — module partagé.
   const _nomC = window.MUPNom
     ? window.MUPNom.compose({ enseigne: c.enseigne, nomJuridique: c.co || c.name })
     : { titre: c.co || c.name || '', sousTitre: c.co && c.name ? c.name : '' };
-  return `<div class="kcard kcard--nobtn" id="kcard-${c.id}"
+  return `<div class="kcard kcard--nobtn${nonConfirmee ? ' kcard--nonconf' : ''}" id="kcard-${c.id}"
       draggable="true"
       ondragstart="onDragStart(event,'${c.id}')"
       ondragend="onDragEnd(event)"
@@ -1964,6 +1984,7 @@ function renderCard(c, color) {
       ${badgeJours(c)}
     </div>
     ${c.src?`<div class="kcard-src">↳ ${esc(c.src)}</div>`:''}
+    ${nonConfirmee?`<div class="kcard-nonconf">Non enregistrée</div>`:''}
     ${renderProgress(c)}
   </div>`;
 }

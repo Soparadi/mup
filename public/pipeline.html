@@ -3045,6 +3045,25 @@ async function saveRdv() {
   if(!currentId) return;
   const c = cards.find(x => String(x.id) === String(currentId));
   if(!c) return;
+  // FICHE NON CONFIRMÉE : PAS DE RENDEZ-VOUS. L'événement agenda porte un
+  // `ficheId` que le serveur ne contrôle pas. Écrit pour une fiche que le
+  // serveur n'a jamais confirmée, il désigne un enregistrement qui n'existe
+  // pas : un orphelin, que le prochain load() ne rattachera à rien. Le
+  // registre porte exactement cette information, il suffit de le lire avant
+  // le POST.
+  //
+  // CE QU'ON REFUSE, ET NON CE QUI A ÉCHOUÉ. Rien n'a été tenté ici : le
+  // message parle donc de la fiche, pas du rendez-vous. L'abonné doit savoir
+  // que c'est la carte qui manque au serveur, sans quoi il reprendrait le
+  // rendez-vous à l'identique, avec le même refus.
+  if(cartesNonConfirmees.has(c.id)) {
+    mupAlert(
+      "Cette fiche n'est pas encore enregistrée",
+      "Le serveur ne l'a pas confirmée. Rechargez la page pour la reprendre, puis fixez le rendez-vous.",
+      'Fermer'
+    );
+    return;
+  }
   const typeSel = document.getElementById('rdv-type-select');
   const actionType = (typeSel && typeSel.value) || (c.col === 'visio' ? 'visio' : 'rdv');
   const advanceTarget = (actionType === 'rdv' || actionType === 'visio') ? actionType : null;

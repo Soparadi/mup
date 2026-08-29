@@ -1017,6 +1017,37 @@ async function load() {
     return false;
   }
 }
+// Écrit une carte au serveur. Rend 'ok' si le serveur a confirmé, 'plafond'
+// s'il a opposé le péage, 'echec' pour un réseau coupé ou un 5xx. Ce que vaut
+// une écriture ne dit rien de la population sur laquelle elle porte : le choix
+// des cartes, et le verdict d'ensemble, restent à l'appelant.
+async function enregistrerCarte(carte) {
+  try {
+    const res = await fetch(`/api/pipeline/${carte.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(carte)
+    });
+    if (res.status === 402) return 'plafond';
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    if (res.status === 404) {
+      const resPost = await fetch('/api/pipeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(carte)
+      });
+      if (resPost.status === 402) return 'plafond';
+      if (!resPost.ok) throw new Error(`POST failed: HTTP ${resPost.status}`);
+    }
+    return 'ok';
+  } catch (err) {
+    console.error('[save] Erreur pour carte', carte.id, err);
+    return 'echec';
+  }
+}
+
 // Rend true si le serveur a confirmé chaque fiche, false sinon. Le cache
 // localStorage n'est écrit que sur confirmation : un cache écrit après un
 // échec ferait croire à l'abonné que sa modification est enregistrée, et la
@@ -1026,29 +1057,9 @@ async function save() {
   let echec = false;
   for (const card of cards) {
     if (card.id) {
-      try {
-        const res = await fetch(`/api/pipeline/${card.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(card)
-        });
-        if (res.status === 402) { rejected402 = true; break; }
-        if (!res.ok && res.status !== 404) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        if (res.status === 404) {
-          const resPost = await fetch('/api/pipeline', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(card)
-          });
-          if (resPost.status === 402) { rejected402 = true; break; }
-          if (!resPost.ok) throw new Error(`POST failed: HTTP ${resPost.status}`);
-        }
-      } catch (err) {
-        console.error('[save] Erreur pour carte', card.id, err);
-        echec = true;
-      }
+      const verdict = await enregistrerCarte(card);
+      if (verdict === 'plafond') { rejected402 = true; break; }
+      if (verdict === 'echec') echec = true;
     }
   }
   if (rejected402) {

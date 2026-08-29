@@ -58,9 +58,10 @@ import { runMentionsLegalesJob, enrichirMentionsLegales } from './server/service
 import { hostBlacklisted } from './server/services/recherche-web.js'
 import { resoudrePositionMeteo } from './server/services/meteo-position.js'
 import { geocode, reverseGeocode } from './server/services/ban.js'
+import { rattraperPositionCarte } from './server/services/position-cartes.js'
 import { normText } from './server/services/overpass.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
-import { startCronJobs, startActualitesCron } from './server/services/cron.js'
+import { startCronJobs, startActualitesCron, startBalayagePositionCron } from './server/services/cron.js'
 import {
   getEffectivePlan,
   getLeadLimit,
@@ -3372,131 +3373,9 @@ async function ponterAdresseVersDevis({ userId, siret, rec, corps }) {
   }
 }
 
-// ── Rattrapage de position d'une carte pipeline ─────────────────────────────
-// DÉFAUT VISÉ : pipeline.html:1441 efface lat/lng dès qu'une adresse est
-// corrigée, en comptant sur la Carte pour les refaire au passage suivant. Une
-// carte que personne n'ouvre dans la Carte reste donc sans position, et
-// l'adresse rectifiée n'est jamais géocodée. Ce rattrapage rend la position au
-// moment même où l'adresse est écrite, sans rien attendre de la Carte.
-//
-// FIRE-AND-FORGET, NO-THROW : appelée sans await après l'UPDATE, même régime
-// que enrichReferentielActionnable et ponterCoordonneesSociete — tout échec
-// avalé et journalisé, jamais de remontée dans la réponse de la route.
-//
-// DÉCLENCHEMENT : adresse écrite non vide ET couple lat/lng non exploitable
-// dans le corps écrit. Volontairement PAS « l'adresse a changé » : les cartes
-// visées n'ont jamais été géocodées et leur adresse ne bouge pas. La condition
-// est auto-extinctive — une fois le couple écrit, la carte sort de la
-// population et aucune sauvegarde ultérieure ne rappelle quoi que ce soit.
-//
-// LIMITE, et elle est réelle : une carte portant une position FAUSSE mais
-// PRÉSENTE n'est pas réparée — la condition de déclenchement ne la voit pas.
-// Réparer une position fausse supposerait de savoir qu'elle l'est, ce que rien
-// n'établit au moment de l'écriture. Ce rattrapage traite l'absence, pas
-// l'erreur.
-async function rattraperPositionCarte({ userId, id, corps }) {
-  try {
-    if (!userId || !id) return
-    const adresse = String(corps?.address || '').trim()
-    if (!adresse) return
-    // Couple, jamais clé isolée : une seule des deux valeurs exploitable ne
-    // fait pas une position. (0,0) écarté — null island n'est pas un lieu.
-    const latEcrite = Number(corps?.lat)
-    const lngEcrite = Number(corps?.lng)
-    if (Number.isFinite(latEcrite) && Number.isFinite(lngEcrite) && (latEcrite !== 0 || lngEcrite !== 0)) return
-
-    const siret = String(corps?.siret || '').replace(/\s+/g, '')
-    if (!siret) return
-    const db = await getDb()
-    let lat = null
-    let lng = null
-
-    // ── Voie 1 — referentiel_societes par SIRET, SOUS CONCORDANCE D'ADRESSE.
-    // La garde de concordance n'est pas une précaution de style : sans elle,
-    // une adresse que l'abonnée vient de corriger recevrait la coordonnée de
-    // l'adresse qu'elle vient précisément de rejeter — soit l'annulation exacte
-    // de l'effacement de pipeline.html:1441 que ce rattrapage sert. On ne
-    // retient donc la coordonnée du référentiel que si l'adresse écrite est
-    // bien la sienne, comparée en forme normalisée (casse, accents,
-    // ponctuation, espaces) via normText.
-    const ref = (await db.query(
-      'SELECT adresse, lat, lng FROM referentiel_societes WHERE siret = $siret LIMIT 1',
-      { siret }
-    ))[0]?.[0]
-    const latRef = Number(ref?.lat)
-    const lngRef = Number(ref?.lng)
-    const adresseRefNorm = normText(ref?.adresse)
-    if (
-      adresseRefNorm && adresseRefNorm === normText(adresse) &&
-      Number.isFinite(latRef) && Number.isFinite(lngRef) && (latRef !== 0 || lngRef !== 0)
-    ) {
-      lat = latRef
-      lng = lngRef
-    }
-
-    // ── Voie 2 — géocodage BAN, à défaut. Le code postal et la ville viennent
-    // de `societes` (jointure userId + siret), l'adresse écrite servant de
-    // voie. SANS CP NI VILLE TROUVÉS, LA VOIE 2 NE PART PAS : c'est
-    // l'absence de ces deux-là qui a produit en production une position à
-    // 706 km de la bonne — interrogée sur une voie seule, la BAN sert la
-    // première homonyme de France. Rien n'est extrait par regex d'une saisie
-    // libre : le CP et la ville sont lus dans leurs champs ou ne sont pas lus.
-    //
-    // CE QUE LA GARDE `codePostal && ville` FAIT VRAIMENT — à lire avant d'y
-    // toucher. L'adresse portée par ces cartes est la forme AGRÉGÉE Etalab,
-    // code postal et ville COMPRIS. La requête part donc redondante :
-    // « 12 RUE DES FORGES 35270 COMBOURG 35270 COMBOURG ». Mesuré sur une
-    // adresse divergente, la BAN l'encaisse sans broncher — bonne commune,
-    // score 0,55, repli sur la voie la plus proche. La redondance n'est PAS
-    // corrigée, et c'est délibéré : dédupliquer supposerait d'extraire CP et
-    // ville d'une saisie libre, ce qu'on s'interdit précisément ici.
-    //
-    // D'où la lecture juste de la garde : elle ne vaut pas comme COMPLÉMENT
-    // D'INFORMATION — la requête porte déjà le CP et la ville dans l'agrégat —
-    // mais comme REFUS DE GÉOCODER UNE COMMUNE INCONNUE. Pas de ligne
-    // `societes` avec zip et ville, pas de géocodage : c'est ce refus, et lui
-    // seul, qui écarte le cas mesuré à 706 km, où l'adresse était TRONQUÉE et
-    // la commune donc introuvable dans la chaîne envoyée. Constater que le CP
-    // ajouté fait doublon et en conclure que la garde est superflue serait
-    // l'erreur exacte à ne pas commettre : la retirer rouvre le défaut.
-    if (lat === null) {
-      const soc = (await db.query(
-        'SELECT zip, ville FROM societes WHERE userId = $userId AND siret = $siret LIMIT 1',
-        { userId, siret }
-      ))[0]?.[0]
-      const codePostal = String(soc?.zip || '').trim()
-      const ville = String(soc?.ville || '').trim()
-      if (codePostal && ville) {
-        const pos = await geocode({ adresse, code_postal: codePostal, ville })
-        const latBan = Number(pos?.lat)
-        const lngBan = Number(pos?.lng)
-        if (Number.isFinite(latBan) && Number.isFinite(lngBan) && (latBan !== 0 || lngBan !== 0)) {
-          lat = latBan
-          lng = lngBan
-        }
-      }
-    }
-
-    // ── Rien de résolu → rien d'écrit. Aucun repli approximatif : ni centre de
-    // ville, ni centre de département. Même doctrine que la Carte, qui préfère
-    // l'absence de marqueur à un marqueur faux.
-    if (lat === null || lng === null) return
-
-    // SET, JAMAIS CONTENT : le PUT ci-dessus remplace le record entier, et
-    // 44 cartes sur 480 n'ont pas de created_at à réinjecter — un CONTENT
-    // ici les amputerait. Le WHERE porte son propre userId : la garde de la
-    // route protège le record de l'URL, pas celui qu'on va rejoindre (motif de
-    // ponterCoordonneesSociete). Les deux clés sont posées ensemble, jamais
-    // l'une sans l'autre. N'entraîne rien d'autre : ni enrichissement du
-    // référentiel, ni pont vers contacts, ni geoStatus.
-    await db.query(
-      'UPDATE type::record("pipeline", $id) SET lat = $lat, lng = $lng WHERE userId = $userId',
-      { id, lat, lng, userId }
-    )
-  } catch (e) {
-    console.warn('[rattrapage-position]', String(e?.message || e).slice(0, 80))
-  }
-}
+// Le rattrapage de position d'une carte vit désormais dans
+// server/services/position-cartes.js, avec le balayage quotidien qui emploie
+// LES MÊMES deux voies. Son appel ci-dessous n'a pas changé.
 
 app.put('/api/pipeline/:id', async (req, res) => {
   const userId = requireUserId(req, res)
@@ -3584,7 +3463,7 @@ app.put('/api/pipeline/:id', async (req, res) => {
     ponterAdresseVersDevis({ userId, siret: cleanBody.siret, rec, corps: cleanBody })
     // Rattrapage de position — la carte vient d'être écrite sans coordonnées
     // exploitables alors qu'elle porte une adresse. FIRE-AND-FORGET (sans
-    // await), no-throw : cf. rattraperPositionCarte ci-dessus.
+    // await), no-throw : cf. server/services/position-cartes.js.
     rattraperPositionCarte({ userId, id, corps: cleanBody })
     res.json(result[0]?.[0] || result[0] || {})
   } catch (err) {
@@ -9668,6 +9547,15 @@ app.use((req, res) => {
     startActualitesCron()
   } catch (e) {
     console.error('[boot] cron actualités startup failed:', e.message)
+  }
+  // Cron position — hors du garde NODE_ENV pour le même motif que les
+  // actualités : aucun courriel, aucun compte touché, deux flottants écrits sur
+  // des cartes qui n'en ont aucun. Seul CRON_ENABLED === 'false' l'arrête, et
+  // le skip est décidé dans startBalayagePositionCron.
+  try {
+    startBalayagePositionCron()
+  } catch (e) {
+    console.error('[boot] cron position startup failed:', e.message)
   }
 })()
 

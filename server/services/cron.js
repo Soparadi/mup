@@ -1,8 +1,10 @@
-// Cron in-process. Deux horloges indépendantes :
+// Cron in-process. Trois horloges indépendantes :
 //   • trial — emails de relance + auto-expire, démarré au boot de server.js si
 //     NODE_ENV=production et CRON_ENABLED !== 'false'. Défaut : 8h Europe/Paris.
 //   • actualités — ramassage du flux France 24, toutes les quinze minutes,
 //     démarré sous CRON_ENABLED seul (voir startActualitesCron plus bas).
+//   • position — balayage quotidien des cartes pipeline sans coordonnées,
+//     démarré sous CRON_ENABLED seul, pour le même motif que les actualités.
 //
 // Idempotence : garantie par les flags DB trial_email_j*_sent_at posés par
 // trial-emails.js après chaque envoi. Le cron peut tourner plusieurs fois
@@ -30,10 +32,17 @@ import { purgeExpiredUsers, purgeExpiredTrials, deleteUserCascade } from './purg
 import { agregerVisitesJour } from './visites.js'
 import { sendAccountDeletionConfirmed } from './email.js'
 import { ramasserActualites } from './actualites.js'
+import { balayerPositionsCartes } from './position-cartes.js'
 
 const SCHEDULE = process.env.CRON_TRIAL_SCHEDULE || '0 8 * * *'
 const TIMEZONE = process.env.CRON_TIMEZONE || 'Europe/Paris'
 const ACTUALITES_SCHEDULE = process.env.CRON_ACTUALITES_SCHEDULE || '*/15 * * * *'
+// Balayage de position — une fois par jour, et à une heure creuse. La
+// population est AUTO-EXTINCTIVE : une carte positionnée en sort
+// définitivement, et elle ne se regarnit qu'au rythme des corrections
+// d'adresse. Passer plus souvent ne rattraperait rien de plus, cela ne ferait
+// que relire la même population résiduelle.
+const POSITION_SCHEDULE = process.env.CRON_POSITION_SCHEDULE || '30 4 * * *'
 
 // Échéance de suppression de compte (art. 17) : la date d'action est
 // deletion_scheduled_at lui-même. Voir lib/echeances.js pour la réserve de
@@ -236,8 +245,36 @@ async function runActualitesJob() {
   await runStep('ramassage', ramasserActualites, 'cron:actualites:')
 }
 
+// Balayage de position. Une seule étape, même wrapper, préfixe propre : la
+// ligne 'cron:position:balayage' est donc à la fois l'audit de l'étape et la
+// LIGNE DE CLÔTURE du passage, comme pour le ramassage d'actualités. Son
+// absence est la seule chose qui dise que le balayage n'a pas tourné.
+//
+// NON-RÉENTRANCE. node-cron ne saute pas un tic parce que le précédent tourne
+// encore, et ce passage-ci peut durer : à 350 ms par carte, une population de
+// mille cartes tient six minutes, et rien ne borne sa taille par construction.
+// Deux passages superposés ne corrompraient rien — le balayage est idempotent,
+// il réécrirait les mêmes coordonnées — mais ils paieraient deux fois la
+// lecture et, sur la voie 2, deux fois la BAN. Le drapeau est remis à plat dans
+// un `finally` : une étape qui plante ne doit pas condamner toutes les
+// suivantes, or runStep rattrape déjà tout ce qui vient de dessous.
+let balayagePositionEnCours = false
+async function runBalayagePositionJob() {
+  if (balayagePositionEnCours) {
+    console.warn('[cron] balayage position déjà en cours, tic ignoré')
+    return
+  }
+  balayagePositionEnCours = true
+  try {
+    await runStep('balayage', balayerPositionsCartes, 'cron:position:')
+  } finally {
+    balayagePositionEnCours = false
+  }
+}
+
 let started = false
 let actualitesStarted = false
+let positionStarted = false
 
 // Démarre le cron quotidien. Idempotent : 2e appel = no-op (évite double
 // register en cas de hot reload). Skip si CRON_ENABLED === 'false'.
@@ -284,4 +321,36 @@ export function startActualitesCron() {
   cron.schedule(ACTUALITES_SCHEDULE, runActualitesJob, { timezone: TIMEZONE })
   actualitesStarted = true
   console.log(`[cron] Actualités cron démarré (schedule: ${ACTUALITES_SCHEDULE}, timezone: ${TIMEZONE})`)
+}
+
+// Démarre le balayage de position. Idempotent, comme les deux autres, et skip
+// sous CRON_ENABLED === 'false'.
+//
+// PAS DE GARDE NODE_ENV, sur le motif que startActualitesCron énonce déjà : ce
+// garde existe parce que le cron trial ENVOIE DES COURRIELS, et le lancer en
+// dev inonderait de vraies boîtes. Un balayage de position n'envoie rien, ne
+// touche à aucun compte, et n'écrit que deux flottants sur des cartes qui n'en
+// ont aucun. Il n'y a rien à protéger d'un lancement hors production.
+//
+// CE QU'IL NE FAIT PAS, et qui vient ailleurs : il ne touche pas à l'écriture
+// de la Carte, qui continue de persister ce qu'elle géocode, ni à
+// pipeline.html, qui continue d'effacer lat/lng à la correction d'une voie.
+// C'est précisément cet effacement que le balayage neutralise, en rendant la
+// position sans attendre que quiconque rouvre la Carte.
+export function startBalayagePositionCron() {
+  if (positionStarted) {
+    console.warn('[cron] startBalayagePositionCron déjà appelé, skip')
+    return
+  }
+  if (process.env.CRON_ENABLED === 'false') {
+    console.log('[cron] CRON_ENABLED=false, cron position désactivé')
+    return
+  }
+  if (!cron.validate(POSITION_SCHEDULE)) {
+    console.error('[cron] Schedule position invalide :', POSITION_SCHEDULE, '— cron NON démarré')
+    return
+  }
+  cron.schedule(POSITION_SCHEDULE, runBalayagePositionJob, { timezone: TIMEZONE })
+  positionStarted = true
+  console.log(`[cron] Balayage position démarré (schedule: ${POSITION_SCHEDULE}, timezone: ${TIMEZONE})`)
 }

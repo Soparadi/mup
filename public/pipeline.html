@@ -1113,12 +1113,12 @@ function migratePipelineFromContacts(){
   var contacts = [];
   try { contacts = JSON.parse(localStorage.getItem('mup_contacts') || '[]'); } catch(e){}
   if(!Array.isArray(contacts) || contacts.length === 0) return;
-  var changed = false;
+  var touchees = [];
   contacts.forEach(function(c){
     if(!c || !c.siret || c.source !== 'facture_import') return;
     var idx = cards.findIndex(function(p){ return p.siret === c.siret; });
     if(idx === -1){
-      cards.push(migrateCard({
+      var neuve = migrateCard({
         id: 'pipeline_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
         company: c.nom,
         contact: c.nom,
@@ -1136,8 +1136,9 @@ function migratePipelineFromContacts(){
         created_at: c.created_at || new Date().toISOString(),
         wonAt: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }));
-      changed = true;
+      });
+      cards.push(neuve);
+      touchees.push(neuve);
     } else {
       var f = cards[idx];
       if(f.col !== 'won' || (f.value || f.val || 0) !== (c.ca_total || 0) || f.source !== 'facture_import'){
@@ -1150,12 +1151,19 @@ function migratePipelineFromContacts(){
         f.entity_origine = f.entity_origine || c.entity_origine || 'ei';
         f.updated_at = new Date().toISOString();
         cards[idx] = f;
-        changed = true;
+        touchees.push(f);
       }
     }
   });
-  if(changed){
-    save();
+  if(touchees.length){
+    // LOT DE TAILLE INCONNUE, ET NON CADENCÉ. Avec importFromProspects, c'est
+    // la seule boucle du fichier dont la population ne vient pas d'un geste :
+    // elle vaut ce que vaut l'import, et rien ne la borne. Un lot assez gros
+    // franchit le plafond du compte, et les fiches qui suivent le premier 402
+    // ne sont pas écrites. On ne cadence pas aujourd'hui, le volume réel ne le
+    // demande pas ; c'est ici que le cadencement devra se poser le jour où il
+    // le demandera.
+    touchees.forEach(function(c){ save(c); });
     console.log('migratePipelineFromContacts : fiches won synchronisées');
   }
 }
@@ -3304,12 +3312,22 @@ function importFromProspects() {
   if(!raw) return;
   try {
     const prospects = JSON.parse(raw);
+    const touchees = [];
     prospects.forEach(p => {
       if(!cards.find(c=>String(c.id)===String(p.id))) {
-        cards.push({ id:String(p.id), name:p.name||p.contact_name||p.nom||'', co:p.company||p.co||p.partner_name||'', email:p.email||p.email_from||'', tel:p.phone||p.tel||p.mobile||'', address:p.location||p.address||p.city||p.ville||'', val:0, col:'prospects', notes:p.notes||p.description||'', created_at:new Date().toISOString(), src:p.source||'Prospects', linkedin:p.linkedin||'', facebook:p.facebook||'', instagram:p.instagram||'', activity:[] });
+        const neuve = { id:String(p.id), name:p.name||p.contact_name||p.nom||'', co:p.company||p.co||p.partner_name||'', email:p.email||p.email_from||'', tel:p.phone||p.tel||p.mobile||'', address:p.location||p.address||p.city||p.ville||'', val:0, col:'prospects', notes:p.notes||p.description||'', created_at:new Date().toISOString(), src:p.source||'Prospects', linkedin:p.linkedin||'', facebook:p.facebook||'', instagram:p.instagram||'', activity:[] };
+        cards.push(neuve);
+        touchees.push(neuve);
       }
     });
-    save(); renderKanban();
+    // LOT DE TAILLE INCONNUE, ET NON CADENCÉ. Comme celle de
+    // migratePipelineFromContacts, cette boucle vaut ce que vaut l'import, et
+    // rien ne la borne. Un lot assez gros franchit le plafond du compte, et
+    // les fiches qui suivent le premier 402 ne sont pas écrites. On ne cadence
+    // pas aujourd'hui, le volume réel ne le demande pas ; c'est ici que le
+    // cadencement devra se poser le jour où il le demandera.
+    touchees.forEach(c => save(c));
+    renderKanban();
   } catch(e) {}
 }
 

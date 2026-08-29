@@ -2982,13 +2982,27 @@ async function openCampaignDetail(rid){
   // routeur, à leur propre rythme ; les relire quatre fois plus souvent ne
   // les faisait pas venir plus tôt, cela relisait la même page. La sonde
   // reste bornée à la fenêtre ouverte : closeCampaignDetail l'arrête.
-  window.__cdTimer = setInterval(function(){ refreshCampaignDetail(rid); }, 20000);
+  //
+  // Et elle ne part pas quand l'onglet n'est pas visible : la fenêtre survit au
+  // changement d'onglet, rien ne l'arrêtait avant closeCampaignDetail, et une
+  // fenêtre de détail oubliée en arrière-plan interrogeait le serveur toutes
+  // les vingt secondes pour un écran que personne ne regardait.
+  window.__cdRid = rid;
+  window.__cdTimer = setInterval(function(){ if(document.hidden) return; refreshCampaignDetail(rid); }, 20000);
 }
 function closeCampaignDetail(){
   document.getElementById('campaign-detail-modal').classList.remove('open');
   if(window.__cdTimer){ clearInterval(window.__cdTimer); window.__cdTimer = null; }
+  window.__cdRid = null;
   loadCampaignsList();
 }
+// Le retour de l'onglet relit tout de suite, sans attendre le battement suivant :
+// les chiffres affichés sont justes dès la première seconde. Écouteur posé une
+// fois, et non à chaque ouverture de fenêtre. __cdTimer armé vaut fenêtre
+// ouverte : fermée, il est à null et il n'y a rien à relire.
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && window.__cdTimer && window.__cdRid) refreshCampaignDetail(window.__cdRid);
+});
 async function refreshCampaignDetail(rid){
   try { var r = await fetch('/api/v2/campaigns/' + encodeURIComponent(rid) + '/stats'); if(!r.ok) return;
     var d = await r.json(); var s = d.stats || {};

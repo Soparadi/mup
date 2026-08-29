@@ -209,10 +209,20 @@
   // POURQUOI ELLE. « limite cote » s'arrête au franchissement du zoom Leaflet
   // 11, sa donnée LIM_COTE n'existant pas au-delà, et le littoral retombe alors
   // sur le seul contour de l'eau. Or ce contour est le bord d'un polygone de
-  // marée, à 77 comme à 4 080 m de la côte selon l'endroit ; la laisse de haute
-  // mer, elle, suit ce qu'un habitant appelle la côte, à 12 à 108 m en médiane
-  // sur les trois sites de contrôle. Elle couvre 94 % du littoral au niveau n10
-  // et 100 % au niveau n0.
+  // marée : il cerne l'eau à sa pleine étendue modélisée, estran compris, et non
+  // la côte, si bien qu'il court au large de la laisse partout où l'estran
+  // découvre. Les 77 à 4 080 m relevés sur ce polygone valent pour le niveau n1,
+  // qui n'entre qu'au zoom Leaflet 14, là où la laisse peint déjà ; aux zooms où
+  // le contour prend seul le relais, c'est un niveau plus généralisé qui est
+  // servi et son écart à la côte n'a pas été mesuré. La laisse de haute mer,
+  // elle, suit ce qu'un habitant appelle la côte, à 12 à 108 m en médiane sur
+  // les trois sites de contrôle.
+  //
+  // CE QU'ELLE COUVRE VARIE FORTEMENT SELON LE SECTEUR. Les 94 % du littoral au
+  // niveau n10 et les 100 % au niveau n0 ont été relevés sur Saint-Malo seul ;
+  // sur Saint-Pair et Kairon, la même mesure donne 36 à 63 %. Il n'y a donc pas
+  // de taux de couverture à annoncer pour le littoral en général, seulement
+  // secteur par secteur.
   //
   // LE SYMBO CHANGE D'ORTHOGRAPHE AVEC LE NIVEAU, ET LE FILTRE PREND LES DEUX :
   // « LAISSES_HAUTES_MERS » au pluriel au niveau généralisé n10, qui est le seul
@@ -226,12 +236,24 @@
   // court au large, à la largeur de l'estran : dessinée, elle doublerait le trait
   // de côte sur tout le littoral.
   //
+  // AU NIVEAU n10, LA BASSE MER PASSE QUAND MÊME, ET C'EST ACCEPTÉ. L'IGN y verse
+  // la laisse de basse mer sous le symbo de la haute : entre 39 et 54 % du
+  // linéaire admis au zoom Leaflet 13 dessine donc la basse mer, à 1,5 km au
+  // large sur les côtes à estran. Aucun filtre ne peut les séparer, les trois
+  // attributs de la source-layer étant constants et aucune entité ne portant
+  // d'identifiant. C'est une limite de la source acceptée, pas un défaut à
+  // corriger : au zoom 14 le niveau n0 reprend, sous ses deux symbos distincts,
+  // et le trait revient sur la seule haute mer.
+  //
   // LA DONNÉE S'ARRÊTE AU ZOOM LEAFLET 18. Les tuiles du 19 sont bien servies et
   // ne portent pas la source-layer : il n'y a pas de sur-zoom à attendre, le
   // trait s'éteint sec au dernier cran, où le littoral revient au contour de
   // l'eau, trois points plus clair. Rien ne compense : le zoom 19 se vise sur une
-  // adresse, pas sur une côte. Aucun minzoom ni maxzoom n'est déclaré non plus,
-  // l'étendue de la donnée bornant la couche mieux qu'un chiffre recopié.
+  // adresse, pas sur une côte. Aucun minzoom ni maxzoom n'est déclaré non plus :
+  // l'étendue de la donnée décide seule des zooms où la couche peint. Ce n'est
+  // pas pour autant un meilleur bornage qu'un chiffre écrit, car au niveau n10
+  // cette étendue ne borne rien d'utile : elle y verse les deux laisses sous un
+  // symbo unique.
   //
   // LA COULEUR S'ÉCRIT À SA VALEUR FINALE, à l'inverse du contour de l'eau qui
   // s'écrit brut pour être relu : la couche est posée APRÈS les trois passes de

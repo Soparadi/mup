@@ -3073,14 +3073,17 @@ async function saveRdv() {
   });
 
   // Auto-advance colonne pipeline (RDV et Visio uniquement)
-  if(advanceTarget && advanceCardColumn(c, advanceTarget)) {
+  const avancee = advanceTarget ? advanceCardColumn(c, advanceTarget) : false;
+  if(avancee) {
     renderKanban();
   }
-  // Un seul enregistrement, pour l'heure retenue comme pour la colonne. Il
-  // était porté par la note synthétique, qui n'est plus sur la fiche : sans
-  // lui, l'heure choisie repartait à 14:00 à la réouverture dès que le type
-  // n'était ni RDV ni visio.
-  save(c);
+  // Un seul enregistrement, pour l'heure retenue comme pour la colonne. Quand
+  // l'avance a eu lieu, elle est passée par logActivity, qui enregistre la
+  // carte entière, et rdvTime est posé plus haut, avant elle : ce premier
+  // envoi emporte déjà l'heure. Le second reste indispensable quand l'avance
+  // n'a pas lieu, type mail ou devis, ou fiche déjà en colonne terminale ;
+  // sans lui l'heure choisie repartirait à 14:00 à la réouverture.
+  if(!avancee) save(c);
 
   // Notif cross-onglet (agenda écoutera côté V1.2)
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(e) {}

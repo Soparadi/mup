@@ -67,14 +67,21 @@
   }
 
   // ── Entrée Superadmin — CONFORT D'AFFICHAGE, PAS LA SÉCURITÉ ──
-  // Dessinée UNIQUEMENT si le compte connecté est dev@soparadi.com (comparaison
-  // normalisée lowercase+trim). Pour tout autre compte ou si __USER__ est absent,
-  // l'entrée n'est pas générée du tout (absente du DOM). La vraie barrière reste
-  // le 403 serveur sur /api/admin/comptes — ce lien ne fait qu'éviter d'exposer
-  // /superadmin aux abonnés.
+  // Dessinée UNIQUEMENT si le compte connecté figure dans la liste ci-dessous
+  // (comparaison normalisée lowercase+trim). Pour tout autre compte ou si
+  // __USER__ est absent, l'entrée n'est pas générée du tout (absente du DOM).
+  //
+  // Littéral MIROIR de SUPERADMIN_EMAILS dans
+  // server/middleware/requireSuperadmin.js, qui reste l'AUTORITÉ : ce script
+  // tourne dans le navigateur et ne peut pas importer la constante serveur.
+  // Toute modification de la liste serveur se répercute ici. L'affichage n'est
+  // pas la barrière : la vraie barrière reste le 403 serveur sur
+  // /api/admin/comptes, ce lien ne fait qu'éviter d'exposer /superadmin aux
+  // abonnés.
+  var SUPERADMIN_EMAILS = ['dev@soparadi.com', 'bonjour@movup.io'];
   var suEmail = window.__USER__ && window.__USER__.email
     ? String(window.__USER__.email).toLowerCase().trim() : '';
-  if (suEmail === 'dev@soparadi.com') {
+  if (SUPERADMIN_EMAILS.indexOf(suEmail) !== -1) {
     var suActive = (path === '/superadmin') ? ' active' : '';
     html += '<a class="sb-item' + suActive + '" href="/superadmin" title="Superadmin">'
       + '<div class="sb-icon" style="background:rgba(29,29,31,.08);color:#1D1D1F">'

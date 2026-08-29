@@ -1059,54 +1059,53 @@ async function enregistrerCarte(carte) {
   }
 }
 
-// Rend true si le serveur a confirmé l'écriture, false sinon. `carte` est la
-// fiche touchée, et elle seule part au serveur : un geste sur une fiche ne
-// dit rien des autres, les envoyer toutes revenait à réécrire le pipeline
-// entier à chaque déplacement.
-//
-// Sans argument, l'écriture reprend l'ancienne population, toutes les cartes.
-// Ce chemin ne sert plus qu'aux deux migrations et à deleteCard, qui ont
-// chacun leur commit.
-//
 // Le cache localStorage n'est écrit que sur confirmation : un cache écrit
 // après un échec ferait croire à l'abonné que sa modification est enregistrée,
 // et la lui rejouerait telle quelle au rechargement suivant.
 //
-// C'est le registre qui porte cette garantie, et non le verdict de l'écriture.
-// Le verdict ne parle que de la carte touchée ; le registre, lui, se souvient
+// C'est le registre qui porte cette garantie, et non le verdict d'une écriture.
+// Un verdict ne parle que de la carte touchée ; le registre, lui, se souvient
 // de toutes les fiches qu'un échec antérieur a laissées non confirmées. Un
 // cache écrit reste ainsi un cache dont chaque fiche a été confirmée, et pas
-// seulement la dernière touchée.
-async function save(carte) {
-  let rejected402 = false;
-  let echec = false;
-  for (const card of (carte ? [carte] : cards)) {
-    if (card.id) {
-      const verdict = await enregistrerCarte(card);
-      if (verdict === 'plafond') { rejected402 = true; break; }
-      if (verdict === 'echec') echec = true;
-    }
-  }
-  if (rejected402) {
-    // Fiche refusee par le peage : rollback a la verite serveur, sans ecrire le cache.
-    // Le toast/modal est deja affiche par l'intercepteur 402 global (trial-expired-modal.js).
-    await load();
-    renderKanban();
-    return false;
-  }
-  if (echec) {
-    // Réseau ou 5xx : le serveur n'a pas la modification. On le dit, et on
-    // n'écrit pas le cache.
-    toast('Modification non enregistrée — réessayez');
-    return false;
-  }
-  // Registre non vide sans échec dans cette passe : une fiche qu'une écriture
-  // antérieure n'a pas confirmée. Pas de second toast, le premier a déjà parlé.
+// seulement la dernière touchée. Registre non vide sans échec ici même : c'est
+// une fiche laissée derrière par une écriture antérieure, et il n'y a pas de
+// second toast à dire, le premier a déjà parlé.
+//
+// Écrit ici, et non dans save(), parce que la suppression d'une fiche écrit le
+// cache sans écrire de carte.
+function ecrireCacheSiConfirme() {
   if (cartesNonConfirmees.size > 0) return false;
   // localStorage = cache de lecture : ecrit sur confirmation serveur uniquement.
   localStorage.setItem('mup_pipeline', JSON.stringify(cards));
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch (_) {}
   return true;
+}
+
+// Rend true si le serveur a confirmé l'écriture, false sinon. `carte` est la
+// fiche touchée, et elle seule part au serveur : un geste sur une fiche ne dit
+// rien des autres, les envoyer toutes revenait à réécrire le pipeline entier à
+// chaque déplacement. L'argument est obligatoire, il n'y a plus de population
+// par défaut.
+async function save(carte) {
+  // Une carte sans id n'est pas encore au serveur : rien à lui envoyer, et le
+  // cache s'écrit comme avant.
+  if (carte && carte.id) {
+    const verdict = await enregistrerCarte(carte);
+    if (verdict === 'plafond') {
+      // Fiche refusee par le peage : rollback a la verite serveur, sans ecrire le cache.
+      // Le toast/modal est deja affiche par l'intercepteur 402 global (trial-expired-modal.js).
+      await load();
+      renderKanban();
+      return false;
+    }
+    if (verdict === 'echec') {
+      // Réseau ou 5xx : le serveur n'a pas la modification. On le dit, et on
+      // n'écrit pas le cache.
+      toast('Modification non enregistrée — réessayez');
+      return false;
+    }
+  }
+  return ecrireCacheSiConfirme();
 }
 
 function migratePipelineFromContacts(){
@@ -2080,8 +2079,15 @@ async function deleteCard(id) {
     mupAlert('Suppression non confirmée par le serveur', 'La fiche est conservée.', 'Fermer');
     return;
   }
+  // Aucune carte à enregistrer : le DELETE est parti et confirmé, cards est
+  // filtré, il ne reste que le cache à mettre à jour. La fiche sort aussi du
+  // registre — sans quoi un échec d'écriture antérieur sur elle interdirait le
+  // cache jusqu'au prochain load(), au nom d'une fiche que le serveur n'a plus.
+  const carte = cards.find(c=>String(c.id)===String(id));
   cards = cards.filter(c=>String(c.id)!==String(id));
-  save(); renderKanban(); closeDetail();
+  if (carte) cartesNonConfirmees.delete(carte.id);
+  ecrireCacheSiConfirme();
+  renderKanban(); closeDetail();
   // Notifie la page parente (MUPFiche overlay iframe depuis /contacts) pour
   // qu'elle rafraîchisse sa liste. No-op si pas en iframe.
   if (window.parent && window.parent !== window) {

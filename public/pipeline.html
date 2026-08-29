@@ -567,6 +567,24 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
           <input class="finput" id="m-ville" autocomplete="off" placeholder="Carpiquet">
         </div>
       </div>
+      <!-- LA PERSONNE, EN DEUX CASES, ET NI L'UNE NI L'AUTRE N'EST REQUISE :
+           seule la raison sociale l'est, et une fiche créée sans personne reste
+           une fiche valide. Elles prennent ici la place qu'elles tiennent dans
+           la fiche, juste après la ville : la société d'abord, son adresse
+           ensuite, la personne après. La fiche les pose contre Email et
+           Téléphone, qui sont les coordonnées de cette même personne ; cette
+           fenêtre n'en a aucune des deux, ses seules coordonnées étant celles de
+           la société, plus bas, dont il vaut mieux les tenir éloignées. -->
+      <div class="f2">
+        <div class="frow">
+          <div class="flabel">Prénom</div>
+          <input class="finput" id="m-prenom" autocomplete="off" placeholder="Jean">
+        </div>
+        <div class="frow">
+          <div class="flabel">Nom</div>
+          <input class="finput" id="m-nom" autocomplete="off" placeholder="Dupont">
+        </div>
+      </div>
       <div class="frow">
         <div class="flabel">LinkedIn</div>
         <input class="finput" id="m-linkedin" type="url" placeholder="https://linkedin.com/company/…">
@@ -1898,11 +1916,18 @@ function onDrop(e, colId) {
 }
 
 // ── MODAL ──
-// La fenêtre à dix-sept champs ne sert plus qu'à la CRÉATION, par le + en tête
+// La fenêtre à dix-neuf champs ne sert plus qu'à la CRÉATION, par le + en tête
 // de colonne. Le crayon de la carte, son unique autre appelant, est parti : une
 // fiche existante se modifie dans la fiche, champ par champ. Elle en comptait
-// seize : la ville est le dix-septième.
-const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-ville','m-linkedin','m-facebook','m-instagram','m-societe-email','m-societe-tel','m-notes'];
+// seize, la ville fut le dix-septième, et les deux cases de la personne font
+// les dix-huitième et dix-neuvième.
+//
+// LA LISTE EST CELLE DE LA REMISE À ZÉRO, et rien d'autre : openModal vide tout
+// ce qu'elle nomme. Un champ oublié ici garderait sa valeur d'une création à la
+// suivante, ce qui, sur un nom de personne, poserait la personne de la fiche
+// précédente sur la fiche suivante. Elle suit l'ordre de la fenêtre pour que
+// l'oubli se voie.
+const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-ville','m-prenom','m-nom','m-linkedin','m-facebook','m-instagram','m-societe-email','m-societe-tel','m-notes'];
 function openModal(colId) {
   MODAL_FIELDS.forEach(fid => document.getElementById(fid).value = '');
   document.getElementById('m-col').value = colId || 'prospects';
@@ -1936,6 +1961,25 @@ function saveCard() {
     adresse: document.getElementById('m-addr').value.trim(),
     zip: document.getElementById('m-zip').value.trim(),
     ville: document.getElementById('m-ville').value.trim(),
+    // LES DEUX CASES SONT LA SAISIE, telles que l'abonné les a remplies : rien
+    // n'est découpé ici. La découpe ne sert qu'à AMORCER une case vide depuis
+    // une chaîne ancienne, et une fiche qui naît n'en a pas. Deux cases remplies
+    // à la main se respectent, comme dans la fenêtre de Contacts. Une civilité
+    // tapée dans « Prénom » y reste donc : la détacher serait déplacer une
+    // saisie, et cette fenêtre n'a pas de case pour l'accueillir.
+    //
+    // LA CHAÎNE N'EST PAS ENVOYÉE, ET C'EST LA MÊME RÈGLE QUE POUR L'AGRÉGAT
+    // D'ADRESSE quatre lignes plus haut. POST /api/pipeline la compose des deux
+    // clés reçues, sous le nom qu'elle porte sur une carte, `contact` (à la
+    // création, l'état c'est le corps). Aucune recomposition ici : la fenêtre ne
+    // connaît pas la chaîne, elle ne la lit pas et ne la pose pas.
+    //
+    // NI L'UNE NI L'AUTRE N'EST REQUISE. Seule la raison sociale l'est, et le
+    // contrôle du dessus n'a pas bougé : une fiche créée sans personne part
+    // avec ses deux cases vides, la garde d'abstention du serveur s'en saisit,
+    // et aucun `contact` vide n'est posé sur l'enregistrement qui naît.
+    prenom: document.getElementById('m-prenom').value.trim(),
+    nom_personne: document.getElementById('m-nom').value.trim(),
     linkedin: document.getElementById('m-linkedin').value.trim(),
     facebook: document.getElementById('m-facebook').value.trim(),
     instagram: document.getElementById('m-instagram').value.trim(),

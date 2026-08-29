@@ -4,7 +4,8 @@
   {
     id, numero (NN-JJMMAA), numero_seq, date_emission (ISO), date_prestation,
     emetteur: { nom, adresse, siret, tva_intra },
-    client: { nom, adresse, siret, siren, adresse_livraison },
+    client: { nom, adresse, adresse_cases, siret, siren,
+              adresse_livraison, livraison_cases, personne_cases },
     nature_operation: 'prestation_services' | 'livraison_biens' | 'mixte',
     lignes: [{ designation, date, quantite, prix_unitaire, total }],
     total_ht, tva_applicable (false), taux_tva (0), montant_tva (0), total_ttc,
@@ -248,8 +249,20 @@
 
       <div class="edit-section">
         <div class="edit-section-title">Client</div>
+        <!-- LA SOCIÉTÉ, ET C'EST CE QUE CETTE CASE A TOUJOURS ÉCRIT. Elle
+             pose `client.nom`, la RAISON SOCIALE : celle qui ouvre le bloc
+             Client sur la feuille, celle que SIREN et SIRET accompagnent, celle
+             que la liste des clients gagnés propose, et celle que la
+             synchronisation pose sur la fiche du SIRET. Son libellé disait
+             « Nom du client » quand son gris d'attente disait « Nom de
+             l'entreprise » : deux choses en une, et la personne à qui l'on parle
+             ne se saisissait nulle part. Le libellé dit désormais ce que la case
+             écrit, et la personne a les siennes, plus bas. ELLE N'EST PAS
+             REMPLACÉE : une facture est adressée à une entité juridique, et
+             c'est ce qui sépare cette fenêtre du Devis, dont le champ scindé
+             portait déjà la personne à côté d'un champ « Société ». -->
         <div class="field">
-          <label>Nom du client</label>
+          <label>Société</label>
           <input type="text" id="new-client-nom" list="clients-datalist" placeholder="Nom de l'entreprise" />
           <datalist id="clients-datalist"></datalist>
         </div>
@@ -261,6 +274,33 @@
           <div class="field">
             <label>SIRET</label>
             <input type="text" id="new-client-siret" placeholder="000 000 000 00000" maxlength="17" />
+          </div>
+        </div>
+        <!-- LA PERSONNE, EN DEUX CASES, ET NI L'UNE NI L'AUTRE N'EST REQUISE :
+             seule la société l'est. Une facture sans personne reste une facture
+             valide, et le contrôle d'entrée ne porte que sur la raison sociale.
+
+             PLACEMENT. Cette fenêtre n'a AUCUNE coordonnée de personne, ni
+             courriel ni téléphone : rien n'attire les deux cases, à la
+             différence de la fiche Pipeline où Email et Téléphone sont ceux de
+             cette même personne. Seule la répulsion décide donc, et elle ne
+             laisse qu'une couture. Société, SIREN et SIRET sont l'identité d'une
+             même entité juridique et ne se coupent pas ; l'adresse et l'adresse
+             de livraison forment un bloc que la case à cocher gouverne et ne se
+             coupent pas davantage ; et la personne ne peut pas fermer une
+             section qui se termine sur un bloc conditionnel masqué, où elle
+             passerait pour une mention de la livraison. Reste l'entre-deux :
+             après les numéros, avant les adresses. Rangée à deux cases, comme
+             SIREN et SIRET juste au-dessus, comme Code postal et Ville juste en
+             dessous. -->
+        <div class="field-row">
+          <div class="field">
+            <label>Prénom</label>
+            <input type="text" id="new-client-prenom" autocomplete="off" placeholder="Jean" />
+          </div>
+          <div class="field">
+            <label>Nom</label>
+            <input type="text" id="new-client-nom-personne" autocomplete="off" placeholder="Dupont" />
           </div>
         </div>
         <!-- TROIS CASES, comme partout ailleurs dans l'application. Il n'y en
@@ -1048,6 +1088,40 @@
     };
   }
 
+  // ── LES DEUX CASES DE LA PERSONNE, SUR LE CLIENT D'UNE FACTURE ──
+  // `prenom` et `nom_personne` font autorité sur une personne dans tout le
+  // produit. Elles arrivent sur le client d'une facture dans un sous-objet,
+  // `personne_cases`, et non en deux clés à plat, pour la raison exacte
+  // d'`adresse_cases` au-dessus : la clé `nom` est DÉJÀ PRISE sur cet objet
+  // client, par la RAISON SOCIALE, et un nom de personne posé à côté d'un nom de
+  // société dans le même objet aurait fini par se lire l'un pour l'autre. C'est
+  // le piège de nommage que le produit contourne partout en appelant le
+  // patronyme `nom_personne`.
+  //
+  // LA FORME EST DÉFINIE ICI ET NULLE PART AILLEURS, comme blocAdresseFacture la
+  // définit pour les adresses : les trois clients que cette page fait naître
+  // passent par cette fonction, et portent donc le même sous-objet, à la clé
+  // près et au rognage près.
+  //
+  // AUCUNE CHAÎNE N'EST POSÉE À CÔTÉ, et c'est la différence avec l'adresse.
+  // `client.adresse` existait avant les cases, la feuille l'imprime, et les
+  // factures d'avant ne portent qu'elle : il fallait donc la garder et la
+  // dériver. Aucune clé de ce genre n'a jamais existé pour la personne sur un
+  // client de facture, et en fabriquer une ici, que rien ne lit ni n'imprime,
+  // poserait une seconde vérité pour l'ornement. La ligne « Prénom Nom » se
+  // composera des deux cases par composerNomComplet, le module partagé, le jour
+  // où une surface la demandera.
+  //
+  // AUCUNE DÉCOUPE NON PLUS, et pour une raison plus simple qu'ailleurs : il n'y
+  // a rien à amorcer. Une facture d'avant ne porte AUCUNE personne, ni en cases
+  // ni en chaîne, et la seule chaîne de nom qu'un client de facture ait jamais
+  // portée est sa raison sociale.
+  function personneCases(deux){
+    var d = deux || {};
+    var texte = function(v){ return String(v == null ? '' : v).trim(); };
+    return { prenom: texte(d.prenom), nom_personne: texte(d.nom_personne) };
+  }
+
   // LE CLIENT D'UNE FACTURE IMPORTÉE. Les deux imports, PDF et CSV, ne
   // connaissent de l'adresse qu'UNE LIGNE : celle qu'une extraction a relevée
   // dans le document, celle qu'une colonne du fichier porte. Ils la DÉCOUPENT
@@ -1057,6 +1131,15 @@
   // AUCUNE ADRESSE DE LIVRAISON N'EST IMPORTÉE, et c'était déjà le cas : ni
   // l'extraction ni le format du fichier n'en portent. Le sous-objet naît donc
   // vide, comme la ligne.
+  //
+  // AUCUNE PERSONNE NON PLUS, ET SURTOUT PAS DÉCOUPÉE DE `nom`. Les deux imports
+  // ne connaissent du client qu'une raison sociale, une adresse et deux numéros ;
+  // ni les colonnes du modèle CSV ni les champs relevés dans un PDF ne portent de
+  // personne. Les deux cases naissent donc VIDES. Les remplir en découpant `nom`
+  // serait le pire geste du lot : `nom` est la RAISON SOCIALE, et « LCS.COM » y
+  // rendrait « LCS » en prénom et « .COM » en nom sur toutes les factures
+  // importées. La découpe sert à AMORCER les cases d'un écran éditable depuis une
+  // chaîne qui portait DÉJÀ une personne, et il n'y en a aucune ici.
   function clientImporte(nom, ligne, siret, siren){
     var bloc = blocAdresseFacture(casesDepuisLigne(ligne || ''));
     var vide = blocAdresseFacture({ adresse: '', zip: '', ville: '' });
@@ -1067,7 +1150,8 @@
       siret: siret || '',
       siren: siren || '',
       adresse_livraison: vide.ligne,
-      livraison_cases: vide.cases
+      livraison_cases: vide.cases,
+      personne_cases: personneCases({ prenom: '', nom_personne: '' })
     };
   }
 
@@ -1577,8 +1661,13 @@
   });
 
   function openNewModal(prefill){
-    // Reset
+    // LA REMISE À ZÉRO, ET ELLE SUIT L'ORDRE DE LA FENÊTRE pour qu'un oubli se
+    // voie. C'est ce qu'openNewModal vide entre deux créations : un champ absent
+    // de cette liste garderait sa valeur d'une facture à la suivante, ce qui,
+    // sur un nom de personne, poserait la personne de la facture précédente à
+    // côté de la société d'une autre.
     ['new-client-nom','new-client-siren','new-client-siret',
+     'new-client-prenom','new-client-nom-personne',
      'new-client-adresse','new-client-zip','new-client-ville',
      'new-client-livraison','new-livraison-zip','new-livraison-ville'].forEach(function(id){ document.getElementById(id).value = ''; });
     document.getElementById('new-livraison-diff').checked = false;
@@ -1651,6 +1740,17 @@
   // n'y a pas d'adresse de livraison, et le sous-objet naît vide plutôt qu'à
   // demi rempli de ce qu'un champ caché porterait encore. C'est la règle qui
   // gouvernait déjà la ligne seule.
+  //
+  // LES DEUX CASES DE LA PERSONNE SONT LA SAISIE, telles que l'abonné les a
+  // remplies : RIEN N'EST DÉCOUPÉ ICI, comme dans la fenêtre « Nouvelle fiche »
+  // du Pipeline. Une facture qui naît n'a pas d'ancien à amorcer, deux cases
+  // remplies à la main se respectent, et une civilité tapée dans « Prénom » y
+  // reste : la détacher serait déplacer une saisie, et cette fenêtre n'a pas de
+  // case pour l'accueillir.
+  //
+  // NI L'UNE NI L'AUTRE N'EST REQUISE, et le contrôle d'entrée ne bouge pas :
+  // seule la société l'est, une facture étant adressée à une entité juridique.
+  // Une facture créée sans personne part avec ses deux cases vides.
   function clientNeuf(clientNom){
     var lu = function(id){ return document.getElementById(id).value.trim(); };
     var client = blocAdresseFacture({
@@ -1667,7 +1767,8 @@
       siret: document.getElementById('new-client-siret').value.trim(),
       siren: document.getElementById('new-client-siren').value.trim(),
       adresse_livraison: livraison.ligne,
-      livraison_cases: livraison.cases
+      livraison_cases: livraison.cases,
+      personne_cases: personneCases({ prenom: lu('new-client-prenom'), nom_personne: lu('new-client-nom-personne') })
     };
   }
 
@@ -1726,7 +1827,10 @@
 
   document.getElementById('new-save').addEventListener('click', async function(){
     var clientNom = document.getElementById('new-client-nom').value.trim();
-    if(!clientNom){ mupAlert('Nom du client requis', null, 'Fermer'); return; }
+    // LA SOCIÉTÉ SEULE EST REQUISE, et le message la nomme comme son libellé la
+    // nomme. Les deux cases de la personne ne sont pas contrôlées : une facture
+    // s'adresse à une entité juridique, pas à la personne qui la reçoit.
+    if(!clientNom){ mupAlert('Société du client requise', null, 'Fermer'); return; }
     var rows = document.querySelectorAll('#new-lignes-body tr');
     var lignes = [];
     rows.forEach(function(tr){

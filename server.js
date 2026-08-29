@@ -3,7 +3,7 @@ if(process.env.NODE_ENV !== 'production'){
 }
 import express from 'express'
 import helmet from 'helmet'
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
+import rateLimit from 'express-rate-limit'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { readFile } from 'fs/promises'
@@ -263,15 +263,15 @@ app.use('/api/sirene', sireneLimiter)
 app.use('/api/search', searchLimiter)
 
 // Rate-limit dédié opt-out — 3 req/24h/IP. Borne le flood de demandes
-// d'opposition (anti-abus + anti-énumération). keyGenerator par req.ip
-// (trust proxy = 1 → IP fiable). Message orienté tiers avec voie alternative
-// dpo@movup.io pour les IP partagées (coworking, cabinet).
+// d'opposition (anti-abus + anti-énumération). keyGenerator par défaut
+// (ipKeyGenerator v8 sur req.ip, trust proxy = 1 → IP fiable). Message
+// orienté tiers avec voie alternative dpo@movup.io pour les IP
+// partagées (coworking, cabinet).
 const optoutLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
   max: 3,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: ipKeyGenerator,
   message: {
     error: 'rate_limit_exceeded',
     detail: 'Trop de demandes depuis cette adresse. Veuillez réessayer dans quelques heures, ou contactez dpo@movup.io.'

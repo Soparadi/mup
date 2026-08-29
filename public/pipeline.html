@@ -2034,7 +2034,9 @@ function openModal(colId) {
   setTimeout(() => document.getElementById('m-raison').focus(), 100);
 }
 function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
-function saveCard() {
+// ASYNCHRONE, ET ATTENDUE. Son unique appelant est l'onclick du bouton
+// « Enregistrer » de la fenêtre, qui ne lit pas la valeur rendue.
+async function saveCard() {
   const raison = document.getElementById('m-raison').value.trim();
   if(!raison) { document.getElementById('m-raison').focus(); return; }
   const fields = {
@@ -2097,7 +2099,21 @@ function saveCard() {
   };
   if(nouvelle.col === 'won') nouvelle.wonAt = nouvelle.created_at;
   cards.push(nouvelle);
-  save(nouvelle); closeModal(); renderKanban();
+  // LE VERDICT AVANT L'ÉCRAN. save() n'était pas attendu : la fenêtre se
+  // fermait et la carte s'affichait pendant que l'écriture était encore en
+  // vol. Une fiche ainsi ouvrable, dont le serveur n'avait rien confirmé,
+  // recevait des rendez-vous et des activités qui la désignaient par un id
+  // qu'aucun enregistrement ne portait — les orphelins.
+  //
+  // LA CARTE N'EST PAS RETIRÉE SUR VERDICT NÉGATIF. Un échec réseau ou un 5xx
+  // ne dit pas que le serveur n'a rien écrit ; la retirer détruirait une
+  // saisie de dix-neuf champs que l'abonné ne peut pas reprendre. Elle reste
+  // dans cards, elle reste dans le registre — qui la marque, et interdit
+  // désormais le rendez-vous. Sur péage, la question ne se pose pas : save()
+  // passe par load(), qui remplace cards par la vérité serveur, et la carte
+  // s'en va d'elle-même.
+  await save(nouvelle);
+  closeModal(); renderKanban();
 }
 // La corbeille du Kanban enlève la fiche DU PIPELINE. Elle ne supprime pas le
 // contact : ce sont deux gestes distincts, et le second appartient à Contacts.

@@ -620,7 +620,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
     </div>
     <div class="modal-foot">
       <button class="btn-can" onclick="closeModal()">Annuler</button>
-      <button class="btn-save" onclick="saveCard()">Enregistrer</button>
+      <button class="btn-save" id="m-save" onclick="saveCard()">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -2047,8 +2047,19 @@ function onDrop(e, colId) {
 // précédente sur la fiche suivante. Elle suit l'ordre de la fenêtre pour que
 // l'oubli se voie.
 const MODAL_FIELDS = ['m-raison','m-forme','m-siren','m-siret','m-naf','m-sector','m-website','m-val','m-addr','m-zip','m-ville','m-prenom','m-nom','m-linkedin','m-facebook','m-instagram','m-societe-email','m-societe-tel','m-notes'];
+// Id de la carte qu'une création a posée sans la faire confirmer, ou null. Un
+// réessai depuis la même fenêtre REPREND cet id au lieu d'en forger un second :
+// sans lui, chaque clic sur « Enregistrer » créerait une carte de plus, et la
+// société apparaîtrait deux fois — une marquée, une propre — pour une seule
+// saisie. Remis à null par openModal : une autre fenêtre est une autre fiche.
+let ficheEnCreation = null;
 function openModal(colId) {
   MODAL_FIELDS.forEach(fid => document.getElementById(fid).value = '');
+  ficheEnCreation = null;
+  // Réarmé ici aussi : une fenêtre qui s'ouvre a toujours son bouton vivant,
+  // quoi qu'il soit arrivé à la précédente.
+  const btn = document.getElementById('m-save');
+  if(btn) btn.disabled = false;
   document.getElementById('m-col').value = colId || 'prospects';
   document.getElementById('modal-title').textContent = 'Nouvelle fiche';
   document.getElementById('modal-overlay').classList.add('open');
@@ -2058,8 +2069,14 @@ function closeModal() { document.getElementById('modal-overlay').classList.remov
 // ASYNCHRONE, ET ATTENDUE. Son unique appelant est l'onclick du bouton
 // « Enregistrer » de la fenêtre, qui ne lit pas la valeur rendue.
 async function saveCard() {
+  // DÉSARMÉ DÈS LE CLIC, RÉARMÉ AU VERDICT NÉGATIF. La fenêtre reste ouverte
+  // le temps de l'aller-retour depuis que la création est attendue : sans ce
+  // désarmement, deux clics rapides partaient en deux créations, avec deux id
+  // distincts pour une seule saisie.
+  const btn = document.getElementById('m-save');
+  if(btn) btn.disabled = true;
   const raison = document.getElementById('m-raison').value.trim();
-  if(!raison) { document.getElementById('m-raison').focus(); return; }
+  if(!raison) { if(btn) btn.disabled = false; document.getElementById('m-raison').focus(); return; }
   const fields = {
     co: raison,
     forme: document.getElementById('m-forme').value.trim(),
@@ -2110,7 +2127,7 @@ async function saveCard() {
     col: document.getElementById('m-col').value
   };
   const nouvelle = {
-    id: String('c'+Date.now()),
+    id: String(ficheEnCreation || ('c'+Date.now())),
     ...fields,
     created_at: new Date().toISOString(),
     src: 'Manuel',
@@ -2119,7 +2136,10 @@ async function saveCard() {
     noteEntries: []
   };
   if(nouvelle.col === 'won') nouvelle.wonAt = nouvelle.created_at;
-  cards.push(nouvelle);
+  // La carte d'un essai précédent est REMPLACÉE, pas doublée : même id, et la
+  // saisie telle qu'elle est au moment du réessai.
+  const rang = cards.findIndex(x => String(x.id) === String(nouvelle.id));
+  if(rang >= 0) cards[rang] = nouvelle; else cards.push(nouvelle);
   // LE VERDICT AVANT L'ÉCRAN. save() n'était pas attendu : la fenêtre se
   // fermait et la carte s'affichait pendant que l'écriture était encore en
   // vol. Une fiche ainsi ouvrable, dont le serveur n'avait rien confirmé,
@@ -2133,7 +2153,17 @@ async function saveCard() {
   // désormais le rendez-vous. Sur péage, la question ne se pose pas : save()
   // passe par load(), qui remplace cards par la vérité serveur, et la carte
   // s'en va d'elle-même.
-  await save(nouvelle);
+  const ok = await save(nouvelle);
+  if(!ok) {
+    // La fenêtre ne se ferme pas : la saisie reste sous les yeux de l'abonné,
+    // le bouton redevient cliquable, et le réessai repart du même id. La carte
+    // est déjà à l'écran derrière, marquée — save() a redessiné le Kanban en
+    // la portant au registre.
+    ficheEnCreation = nouvelle.id;
+    if(btn) btn.disabled = false;
+    return;
+  }
+  ficheEnCreation = null;
   closeModal(); renderKanban();
 }
 // La corbeille du Kanban enlève la fiche DU PIPELINE. Elle ne supprime pas le

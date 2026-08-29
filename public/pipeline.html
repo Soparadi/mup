@@ -986,10 +986,19 @@ async function loadAgendaForFiche(ficheId) {
   }
 }
 
+// Ids des cartes qu'une écriture a laissées non confirmées par le serveur.
+// Déclaré ici, au niveau du module : il existe avant le premier load(), qui le
+// purge sans rien avoir à trouver.
+const cartesNonConfirmees = new Set();
+
 // Rend true si les fiches viennent du serveur, false si elles viennent du
 // cache. Un repli sur le cache se dit : sans ça l'abonné lit un pipeline
 // peut-être périmé en le croyant à jour.
 async function load() {
+  // Les fiches en mémoire sont remplacées en entier, par le serveur ou par le
+  // cache : les échecs d'avant ne décrivent plus rien. Purger ici couvre aussi
+  // le rollback du 402, qui passe par load().
+  cartesNonConfirmees.clear();
   try {
     const res = await fetch('/api/pipeline');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1041,17 +1050,28 @@ async function enregistrerCarte(carte) {
       if (resPost.status === 402) return 'plafond';
       if (!resPost.ok) throw new Error(`POST failed: HTTP ${resPost.status}`);
     }
+    cartesNonConfirmees.delete(carte.id);
     return 'ok';
   } catch (err) {
     console.error('[save] Erreur pour carte', carte.id, err);
+    cartesNonConfirmees.add(carte.id);
     return 'echec';
   }
 }
 
-// Rend true si le serveur a confirmé chaque fiche, false sinon. Le cache
+// Rend true si le serveur a confirmé l'écriture, false sinon. Le cache
 // localStorage n'est écrit que sur confirmation : un cache écrit après un
 // échec ferait croire à l'abonné que sa modification est enregistrée, et la
 // lui rejouerait telle quelle au rechargement suivant.
+//
+// C'est le registre qui porte cette garantie, et non le verdict de la boucle.
+// La distinction ne se voit pas tant que la boucle passe sur toutes les
+// fiches : le verdict dit alors la même chose que le registre. Elle compte dès
+// que l'écriture ne portera plus que sur une carte, car le verdict ne parlera
+// que de celle-là, quand le registre, lui, se souvient de toutes les fiches
+// qu'un échec antérieur a laissées non confirmées. Un cache écrit reste ainsi
+// un cache dont chaque fiche a été confirmée, et pas seulement la dernière
+// touchée.
 async function save() {
   let rejected402 = false;
   let echec = false;
@@ -1075,6 +1095,9 @@ async function save() {
     toast('Modification non enregistrée — réessayez');
     return false;
   }
+  // Registre non vide sans échec dans cette passe : une fiche qu'une écriture
+  // antérieure n'a pas confirmée. Pas de second toast, le premier a déjà parlé.
+  if (cartesNonConfirmees.size > 0) return false;
   // localStorage = cache de lecture : ecrit sur confirmation serveur uniquement.
   localStorage.setItem('mup_pipeline', JSON.stringify(cards));
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch (_) {}

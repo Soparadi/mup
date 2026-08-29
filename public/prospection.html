@@ -2109,12 +2109,22 @@ async function _getExistingContacts() {
 }
 
 // KPI « Pipeline » : fiches EN COURS (ni gagnées ni perdues).
+// Elle lit /api/pipeline au chargement de la page, et _getExistingSirets relit
+// la MÊME route au premier « Ajouter » : deux fois la même collection, pour deux
+// lectures différentes de la même réponse. Le compteur alimente donc le cache de
+// déduplication au passage, sous la forme exacte qu'attend _getExistingSirets —
+// siren et siret, chacun posé quand il existe. L'invalidation après ajout ne
+// bouge pas : elle remet le cache à null, la lecture suivante repart du serveur.
 async function refreshKpiPipeline() {
   try {
     var resp = await fetch('/api/pipeline');
     if (!resp.ok) return;
     var cards = await resp.json();
     if (!Array.isArray(cards)) return;
+    var sirets = {};
+    cards.forEach(function (x) { if (x.siren) sirets[x.siren] = true; if (x.siret) sirets[x.siret] = true; });
+    _siretsCache = sirets;
+    _siretsCacheTime = Date.now();
     var n = cards.filter(function (c) { return c.col !== 'lost' && c.col !== 'won'; }).length;
     var el = document.getElementById('kpi-pipeline-count');
     if (el) el.textContent = n.toLocaleString('fr-FR');

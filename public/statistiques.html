@@ -723,20 +723,38 @@
   // COMPTEURS leadsConsumed* lus via /api/user-plan en LECTURE SEULE ici
   // (statistiques n'incrémente jamais — seul prospection.html écrit, via savePlan).
   // Plus de PUT init plan='gratuit' (supprime la faille initialisation legacy).
-  async function loadUserPlan(){
-    var planFromUser = (window.__USER__ && window.__USER__.plan) ? window.__USER__.plan : 'demarrage';
-    var counters = { leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null, quotaLimit: undefined };
-    try {
-      var r = await fetch('/api/user-plan');
-      if(r.ok){
-        var c = await r.json();
-        counters.leadsConsumed = c.leadsConsumed || 0;
-        counters.leadsConsumedThisMonth = c.leadsConsumedThisMonth || 0;
-        counters.lastResetDate = c.lastResetDate || null;
-        if('quotaLimit' in c) counters.quotaLimit = c.quotaLimit;
-      }
-    } catch(e){}
-    return { plan: planFromUser, leadsConsumed: counters.leadsConsumed, leadsConsumedThisMonth: counters.leadsConsumedThisMonth, lastResetDate: counters.lastResetDate, quotaLimit: counters.quotaLimit };
+  //
+  // UN SEUL GET /api/user-plan PAR PAGE, mémorisé sur la promesse et non sur son
+  // résultat, patron de loadEnrichedSirets du Pipeline : deux appelants partis
+  // au même instant se partagent le même appel au lieu d'en lancer deux. La page
+  // en émettait trois au minimum — l'init, puis renderLeadsCard par render() —
+  // et un de plus à chaque clic du sélecteur de période, qui rejoue render().
+  //
+  // CE QUI LA PURGE : l'écouteur storage sur mup_user_plan, seul chemin par
+  // lequel le plan ou ses compteurs changent sans rechargement, un autre onglet
+  // ayant consommé un lead. Cette page ne les écrit jamais, et window.__USER__
+  // est injecté au rendu serveur, donc figé pour la vie de la page. Le canal est
+  // dormant depuis la migration SurrealDB, cf. le commentaire de l'écouteur ;
+  // il est câblé pour ce qu'il vaut, non pour ce qu'il promet.
+  var userPlanReady = null;
+  function loadUserPlan(){
+    if(userPlanReady) return userPlanReady;
+    userPlanReady = (async function(){
+      var planFromUser = (window.__USER__ && window.__USER__.plan) ? window.__USER__.plan : 'demarrage';
+      var counters = { leadsConsumed: 0, leadsConsumedThisMonth: 0, lastResetDate: null, quotaLimit: undefined };
+      try {
+        var r = await fetch('/api/user-plan');
+        if(r.ok){
+          var c = await r.json();
+          counters.leadsConsumed = c.leadsConsumed || 0;
+          counters.leadsConsumedThisMonth = c.leadsConsumedThisMonth || 0;
+          counters.lastResetDate = c.lastResetDate || null;
+          if('quotaLimit' in c) counters.quotaLimit = c.quotaLimit;
+        }
+      } catch(e){}
+      return { plan: planFromUser, leadsConsumed: counters.leadsConsumed, leadsConsumedThisMonth: counters.leadsConsumedThisMonth, lastResetDate: counters.lastResetDate, quotaLimit: counters.quotaLimit };
+    })();
+    return userPlanReady;
   }
   async function renderPlanActuel(){
     if(!userPlan) userPlan = await loadUserPlan();
@@ -1398,6 +1416,9 @@
   // des clés non encore migrées (prospects, geocode_cache).
   window.addEventListener('storage', async function(e){
     if(['mup_pipeline','mup_agenda','mup_devis','mup_prospects','mup_frais','mup_user_settings','mup_user_plan','mup_geocode_cache'].indexOf(e.key) !== -1){
+      // Purger AVANT de recharger : loadUserPlan sert sa promesse mémorisée, et
+      // sans cette purge le signal de l'autre onglet relirait le plan d'avant.
+      userPlanReady = null;
       pipeline = await loadJSON('mup_pipeline', []);
       agenda = await loadJSON('mup_agenda', []);
       devis = await loadJSON('mup_devis', []);

@@ -1059,23 +1059,28 @@ async function enregistrerCarte(carte) {
   }
 }
 
-// Rend true si le serveur a confirmé l'écriture, false sinon. Le cache
-// localStorage n'est écrit que sur confirmation : un cache écrit après un
-// échec ferait croire à l'abonné que sa modification est enregistrée, et la
-// lui rejouerait telle quelle au rechargement suivant.
+// Rend true si le serveur a confirmé l'écriture, false sinon. `carte` est la
+// fiche touchée, et elle seule part au serveur : un geste sur une fiche ne
+// dit rien des autres, les envoyer toutes revenait à réécrire le pipeline
+// entier à chaque déplacement.
 //
-// C'est le registre qui porte cette garantie, et non le verdict de la boucle.
-// La distinction ne se voit pas tant que la boucle passe sur toutes les
-// fiches : le verdict dit alors la même chose que le registre. Elle compte dès
-// que l'écriture ne portera plus que sur une carte, car le verdict ne parlera
-// que de celle-là, quand le registre, lui, se souvient de toutes les fiches
-// qu'un échec antérieur a laissées non confirmées. Un cache écrit reste ainsi
-// un cache dont chaque fiche a été confirmée, et pas seulement la dernière
-// touchée.
-async function save() {
+// Sans argument, l'écriture reprend l'ancienne population, toutes les cartes.
+// Ce chemin ne sert plus qu'aux deux migrations et à deleteCard, qui ont
+// chacun leur commit.
+//
+// Le cache localStorage n'est écrit que sur confirmation : un cache écrit
+// après un échec ferait croire à l'abonné que sa modification est enregistrée,
+// et la lui rejouerait telle quelle au rechargement suivant.
+//
+// C'est le registre qui porte cette garantie, et non le verdict de l'écriture.
+// Le verdict ne parle que de la carte touchée ; le registre, lui, se souvient
+// de toutes les fiches qu'un échec antérieur a laissées non confirmées. Un
+// cache écrit reste ainsi un cache dont chaque fiche a été confirmée, et pas
+// seulement la dernière touchée.
+async function save(carte) {
   let rejected402 = false;
   let echec = false;
-  for (const card of cards) {
+  for (const card of (carte ? [carte] : cards)) {
     if (card.id) {
       const verdict = await enregistrerCarte(card);
       if (verdict === 'plafond') { rejected402 = true; break; }
@@ -1431,7 +1436,7 @@ function startEditSociete(ch){
     const v = (brut && ch.format) ? ch.format(brut) : brut;
     c[ch.prop] = v;
     grid.dataset[ch.cle] = v;
-    save(); // même chemin que les autres champs de la fiche (PUT /api/pipeline/:id)
+    save(c); // même chemin que les autres champs de la fiche (PUT /api/pipeline/:id)
     repeindre();
   }
   function cancel(){ cancelled = true; repeindre(); }
@@ -1473,7 +1478,7 @@ function startEditVal(){
   function commit(){
     const v = parseFloat(input.value.replace(',', '.'));
     c.val = (isNaN(v) || v < 0) ? 0 : v;
-    save();
+    save(c);
     renderKanban();
     openDetail(currentId);
   }
@@ -1695,8 +1700,8 @@ function startEditCarte(ch){
     // Rien n'a bougé → aucune écriture. Ici la garde ne tient PAS la frontière
     // entre valeur possédée et valeur restituée des cases société : ces huit
     // champs sont possédés par la carte, personne d'autre ne les peint. Elle
-    // épargne le réseau — save() boucle sur TOUTES les cartes et émet un PUT
-    // par carte, un commit à vide coûterait donc N requêtes pour rien.
+    // épargne le réseau — un commit à vide coûterait un PUT pour une carte
+    // dont rien n'a changé.
     if(v === original){ repeindre(); return; }
     // LA DÉDUCTION DEVIENT SAISIE, ET LES TROIS ENSEMBLE. Corriger une case
     // d'adresse pose aussi les DEUX autres sur la carte, avec la valeur qu'elles
@@ -1724,7 +1729,7 @@ function startEditCarte(ch){
     }
     c[ch.prop] = v;
     if(ch.apres) ch.apres(c, v);
-    save(); // même chemin que les autres champs de la fiche (PUT /api/pipeline/:id)
+    save(c); // même chemin que les autres champs de la fiche (PUT /api/pipeline/:id)
     repeindre();
   }
   function cancel(){ cancelled = true; repeindre(); }
@@ -2038,9 +2043,7 @@ function saveCard() {
   };
   if(nouvelle.col === 'won') nouvelle.wonAt = nouvelle.created_at;
   cards.push(nouvelle);
-  save(); closeModal(); renderKanban();
-  // Notifie les autres onglets (Contacts notamment) d'un changement
-  try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_pipeline' })); } catch(_){}
+  save(nouvelle); closeModal(); renderKanban();
 }
 // La corbeille du Kanban enlève la fiche DU PIPELINE. Elle ne supprime pas le
 // contact : ce sont deux gestes distincts, et le second appartient à Contacts.
@@ -2835,7 +2838,7 @@ async function proposerTelephoneDeLaNote(c, text){
   // l'écran les valeurs restituées des deux autres cases.
   c.societe_tel = numero;
   grid.dataset.tel = numero;
-  const ok = await save();
+  const ok = await save(c);
   peindreGrilleSociete(grid.dataset.site, grid.dataset.email, grid.dataset.tel);
   toast(ok ? 'Téléphone enregistré' : 'Téléphone non enregistré');
 }
@@ -3063,7 +3066,7 @@ async function saveRdv() {
   // était porté par la note synthétique, qui n'est plus sur la fiche : sans
   // lui, l'heure choisie repartait à 14:00 à la réouverture dès que le type
   // n'était ni RDV ni visio.
-  save();
+  save(c);
 
   // Notif cross-onglet (agenda écoutera côté V1.2)
   try { window.dispatchEvent(new StorageEvent('storage', { key: 'mup_agenda' })); } catch(e) {}
@@ -3113,7 +3116,7 @@ function saveSocials() {
   poserLienSocial('d-linkedin-link', c.linkedin);
   poserLienSocial('d-facebook-link', c.facebook);
   poserLienSocial('d-instagram-link', c.instagram);
-  save();
+  save(c);
   syncToProspects(c);
 }
 
@@ -3258,10 +3261,10 @@ function refletColonneFiche(c) {
   }
 }
 
-// L'enregistrement est celui de logActivity, qui se termine par save() :
+// L'enregistrement est celui de logActivity, qui se termine par le sien :
 // la colonne est posée avant l'appel, elle part donc dans le même envoi
-// que l'entrée d'activité. Un save() de plus ici rejouait un PUT par
-// fiche du pipeline pour rien.
+// que l'entrée d'activité. Un save() de plus ici rejouait la même carte
+// pour rien.
 function moveCard(colId) {
   if(!currentId) return;
   const c = cards.find(x=>x.id===currentId);
@@ -3292,7 +3295,7 @@ function logActivity(id, txt, type, toCol) {
     toCol: toCol || null,
     ts: now.toISOString()
   });
-  save();
+  save(c);
 }
 
 // ── IMPORT DEPUIS PROSPECTS ──

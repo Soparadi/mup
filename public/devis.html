@@ -1274,9 +1274,32 @@ body #mup-cookie-panel{z-index:60001}
           <div class="client-results" id="client-results" role="listbox" hidden
                onmousedown="event.preventDefault()" onclick="choisitClientDepuis(event)"></div>
         </div>
+        <!-- DEUX CASES, comme partout ailleurs dans l'application. `prenom` et
+             `nom_personne` font autorité sur une personne, et la ligne
+             « Prénom Nom » d'un seul tenant en découle. Il n'y en avait qu'une,
+             dont le gris d'attente disait « Laurent Morin » : elle DEMANDAIT les
+             deux mentions dans le même souffle, et le document ne savait de la
+             personne de son client que ce qu'un abonné avait bien voulu y mettre.
+
+             ELLES RESTENT ICI, EN TÊTE DU BLOC, et cette place ne se prend pas
+             par habitude. La fiche Pipeline pose les deux cases contre Email et
+             Téléphone parce que ce sont les coordonnées de cette même personne ;
+             la fenêtre « Nouvelle fiche » les en éloigne parce que ses seules
+             coordonnées sont celles de la société. Ce panneau, lui, ne décrit
+             qu'UN SEUL destinataire, du plus nommé au plus administratif : la
+             personne, sa société, son courriel, son adresse, son SIRET. Email
+             est bien celui de la personne, et aucune coordonnée rivale n'est à
+             tenir à distance : rien à déplacer, la découpe se fait sur place.
+
+             Le panneau empile ses rangées, comme les trois cases d'adresse plus
+             bas : les deux se suivent, sans rangée à deux colonnes. -->
         <div class="frow">
-          <div class="flabel">Prénom Nom</div>
-          <input class="finput" id="e-name" placeholder="Laurent Morin" oninput="liveUpdate()">
+          <div class="flabel">Prénom</div>
+          <input class="finput" id="e-prenom" placeholder="Laurent" oninput="liveUpdate()">
+        </div>
+        <div class="frow">
+          <div class="flabel">Nom</div>
+          <input class="finput" id="e-nom" placeholder="Morin" oninput="liveUpdate()">
         </div>
         <div class="frow">
           <div class="flabel">Société</div>
@@ -1591,6 +1614,7 @@ body #mup-cookie-panel{z-index:60001}
 <script src="/js/mup-confirm.js"></script>
 <script src="/js/mup-lecture.js"></script>
 <script src="/js/adresse-agregee.js"></script>
+<script src="/js/nom-personne.js"></script>
 <script>
 const MONTHS_FR = ['jan.','fév.','mar.','avr.','mai','jun.','jul.','aoû.','sep.','oct.','nov.','déc.'];
 // Les mois entiers, réservés au DOCUMENT. Une feuille qui sort de
@@ -3095,9 +3119,26 @@ function empreinteDevis(d, lignes){
   if(!d) return '';
   const src = lignes || d.lines || [];
   const casesClient = casesClientDevis(d);
+  const casesNom = casesNomDevis(d);
   return JSON.stringify({
     num: numeroDuDoc(d),
     name: String(d.name || ''),
+    // LES DEUX CASES DE LA PERSONNE ENTRENT DANS L'EMPREINTE, et il le faut,
+    // pour la raison exacte qui vaut aux trois cases d'adresse plus bas : `name`
+    // seul ne bouge pas quand c'est la DÉCOUPE qu'on corrige.
+    // « Jean de La Fontaine » repris en « Jean » plus « de La Fontaine »
+    // recompose la même ligne, et c'est exactement le geste que ce lot rend
+    // possible. Sans ces deux clés, la correction ne marquerait pas le devis
+    // comme modifié et se perdrait au premier changement de document.
+    //
+    // ELLES SONT LUES PAR LE LECTEUR, jamais sur les clés brutes : un devis
+    // d'avant n'en porte aucune, et le lecteur lui rend la découpe de son `name`,
+    // la même que celle qui sera matérialisée le jour où l'abonné corrigera une
+    // des deux cases. Sur les clés brutes, l'empreinte d'avant aurait porté deux
+    // chaînes vides et celle d'après la découpe, et tout devis ancien se serait
+    // déclaré modifié à la première frappe venue.
+    client_prenom: casesNom.prenom,
+    client_nom_personne: casesNom.nom_personne,
     co: String(d.co || ''),
     email: String(d.email || ''),
     addr: String(d.addr || ''),
@@ -3347,7 +3388,12 @@ window.addEventListener('beforeunload', function(e){
 // chemin resté ouvert. Elle s'éteint donc avec les champs qu'elle remplit,
 // et prend au passage l'aplat inerte de .finput[readonly] et la raison au
 // survol.
-const CHAMPS_EDITEUR = ['e-client-q','e-num','e-name','e-co','e-email','e-addr','e-zip','e-ville','e-siret','e-date','e-validity','e-tva','e-status','e-notes'];
+//
+// LES DEUX CASES DE LA PERSONNE Y SONT L'UNE ET L'AUTRE. La liste est parcourue
+// identifiant par identifiant : celui qui manquerait laisserait sa case
+// écrivable sur un devis signé, et le nom du client d'une pièce signée est
+// justement ce qui ne doit plus bouger.
+const CHAMPS_EDITEUR = ['e-client-q','e-num','e-prenom','e-nom','e-co','e-email','e-addr','e-zip','e-ville','e-siret','e-date','e-validity','e-tva','e-status','e-notes'];
 
 // LA RAISON, et non plus un booléen. Le title au survol dit POURQUOI le
 // champ ne se laisse pas écrire : il n'a donc lieu d'être que lorsqu'il y
@@ -3661,7 +3707,19 @@ function choisitClientDepuis(e){
 function choisitClient(i){
   const p = clientResultats[i];
   if(!p) return;
-  document.getElementById('e-name').value  = clientPersonne(p);
+  // LA PERSONNE ARRIVE EN DEUX MORCEAUX, ET PAR LA LECTURE PARTAGÉE :
+  // casesNomPersonne, la même fonction que la fiche société et la fiche Pipeline.
+  // La fiche choisie EST un record `contacts` : ses deux cases y portent déjà les
+  // noms que le module attend, et c'est sa chaîne `contact_nom` que la garde
+  // stricte découpe quand elles sont vides. Aucun changement de clé à faire ici,
+  // et surtout AUCUN REPLI SUR `contact` : sur un record `contacts`, cette clé
+  // porte la RAISON SOCIALE (migrateProspect l'y verse), et la verser dans
+  // « Prénom » poserait la société en personne sur le devis. clientPersonne, qui
+  // fait encore ce repli, ne sert plus qu'à la ligne de résultat, où rien ne
+  // s'écrit et où l'abonné voit ce qu'il choisit.
+  const casesNomClient = casesNomPersonne(p);
+  document.getElementById('e-prenom').value = casesNomClient.prenom;
+  document.getElementById('e-nom').value    = casesNomClient.nom_personne;
   document.getElementById('e-co').value    = clientSociete(p);
   document.getElementById('e-email').value = String(p.email || '');
   // L'ADRESSE ARRIVE EN TROIS MORCEAUX, ET PAR LA LECTURE PARTAGÉE :
@@ -3685,9 +3743,9 @@ function choisitClient(i){
   // société, d'où il vient. Une fiche sans SIRET laisse le champ vide, comme
   // elle laisse vide un courriel absent.
   document.getElementById('e-siret').value = siretFormat(String(p.siret || ''));
-  // liveUpdate reporte les cinq champs sur le document et refait l'aperçu,
-  // exactement comme une saisie à la main : le choix d'un client n'a pas de
-  // chemin d'enregistrement à lui.
+  // liveUpdate reporte les champs du bloc Client sur le document et refait
+  // l'aperçu, exactement comme une saisie à la main : le choix d'un client n'a
+  // pas de chemin d'enregistrement à lui.
   liveUpdate();
   const input = document.getElementById('e-client-q');
   if(input) input.value = '';
@@ -3695,7 +3753,7 @@ function choisitClient(i){
   fermeResultats();
   // La main revient au premier des champs remplis : ce qui vient de la fiche
   // se corrige là, pour ce devis et pour lui seul.
-  document.getElementById('e-name').focus();
+  document.getElementById('e-prenom').focus();
 }
 
 // ── FILTRE CLIENT (?client_siret=) ──
@@ -3761,6 +3819,87 @@ function poseAdresseClientDevis(d, trois) {
   d.client_ville = trois.ville;
   if (!trois.adresse && !base.adresse && agregatExistant) return;
   d.addr = [trois.adresse, trois.zip, trois.ville].filter(Boolean).join(' ');
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// LA PERSONNE DU CLIENT : DEUX CASES, LA LIGNE DÉRIVÉE
+// ----------------------------------------------------------------------
+// Frère du bloc d'adresse ci-dessus, et même partage. `prenom` et `nom_personne`
+// font autorité sur une personne dans tout le produit ; la chaîne
+// « Prénom Nom » d'un seul tenant en découle. Le document porte les deux cases
+// sous `client_prenom` et `client_nom_personne`, au voisinage de `client_siret`
+// et des trois cases d'adresse, par la même règle de préfixe : sur un devis,
+// tout ce qui n'est pas l'émetteur est le client. Le nom de la seconde clé n'est
+// pas une lourdeur : sur un record `contacts`, `nom` est la RAISON SOCIALE, et
+// le patronyme s'appelle `nom_personne` partout où il fait autorité.
+//
+// `name` RESTE, ET DEVIENT DÉRIVÉ, exactement comme `addr`. C'est lui que la
+// feuille imprime, sous la société du destinataire, lui que l'empreinte compare,
+// lui que les devis d'avant portent seuls. Le renommer aurait cassé chaque devis
+// déjà enregistré ; le doubler d'une seconde ligne imprimable en aurait fait
+// deux vérités.
+//
+// L'ADAPTATION DE LA CLÉ EST ICI, ET ELLE N'EST QU'ICI. casesNomPersonne amorce
+// depuis `contact_nom`, nom de la chaîne sur un record `contacts` ; sur un devis
+// la même chaîne s'appelle `name`. On lui présente donc `name` sous le nom
+// qu'elle attend. Aucun repli n'entre dans le module partagé et il n'y en
+// entrera pas : l'appelant sait de quelle table il parle, le module ne le sait
+// pas, et un repli `contact_nom || contact` y ferait paraître une société en
+// Prénom et Nom sur toute la table Contacts.
+//
+// LA GARDE STRICTE VIENT AVEC : la découpe de `name` n'amorce que si les DEUX
+// cases sont vides, c'est-à-dire sur les devis d'avant, et un document dont une
+// seule case est renseignée n'est JAMAIS redécoupé. LECTURE PURE : rien n'est
+// posé sur le document.
+function casesNomDevis(d) {
+  return casesNomPersonne({
+    prenom: d && d.client_prenom,
+    nom_personne: d && d.client_nom_personne,
+    contact_nom: d && d.name
+  });
+}
+
+// Écrit les deux cases sur le document et en DÉRIVE la ligne imprimable. Jumeau
+// de poseAdresseClientDevis, et LA COMPOSITION VIENT DU MODULE
+// (composerNomComplet), jamais d'une jonction écrite ici : une seule règle, la
+// même que celle dont le serveur se sert pour les fiches et les cartes.
+//
+// LA DÉCOUPE AMORCE, ELLE N'ÉCRIT PAS, et cette garde est ce qui le tient.
+// liveUpdate est appelée à chaque frappe de N'IMPORTE QUEL champ de l'éditeur.
+// Sans elle, une frappe dans les notes matérialiserait les deux cases et
+// RÉÉCRIRAIT `name` : « M. Jean Dupont » y perdrait sa civilité, la feuille
+// changerait, et un devis auquel personne n'a touché se déclarerait modifié. Ce
+// que la découpe propose ne devient une saisie que sur la correction d'une des
+// deux cases, c'est-à-dire sur un geste : on n'écrit que ce que l'on corrige.
+// C'est la règle du lot, et c'est mot pour mot la garde de poseAdresseClientDevis
+// juste au-dessus.
+//
+// LES DEUX CASES PARTENT ENSEMBLE, sans avoir à le dire ici : les deux champs
+// sont lus à chaque passage et posés du même coup. La fiche Pipeline devait,
+// elle, reposer la case voisine au commit, son éditeur n'en éditant qu'une à la
+// fois et la garde stricte masquant sinon l'autre.
+//
+// AUCUNE ABSTENTION, à la différence de l'adresse, et ce n'est pas un oubli :
+// la découpe postale ÉCARTE ce qu'elle ne reconnaît pas, si bien que recomposer
+// sans voie connue perdrait la voie ; celle-ci PARTITIONNE, tout mot atterrissant
+// dans l'une des deux cases, et recomposer une chaîne amorcée rend la chaîne
+// elle-même, aux espaces multiples près. Il n'y a donc rien à protéger.
+//
+// SAUF LA CIVILITÉ DE TÊTE, ET C'EST ASSUMÉ. Le module la détache quand la
+// chaîne ancienne en porte une, et le devis n'a pas de case où la loger : elle
+// est perdue si l'abonné corrige ensuite l'une des deux cases,
+// « M. Jean Dupont » repartant en « Jean Dupond ». C'est le choix déjà fait
+// sur la fiche Pipeline, une troisième case n'est pas de ce lot, et la fiche
+// société reste l'écran qui porte la civilité.
+//
+// LA BASE EST LUE AVANT L'ÉCRITURE, et l'ordre n'est pas indifférent :
+// casesNomDevis lit les clés que les deux lignes suivantes remplacent.
+function poseNomClientDevis(d, deux) {
+  const base = casesNomDevis(d);
+  if (deux.prenom === base.prenom && deux.nom_personne === base.nom_personne) return;
+  d.client_prenom = deux.prenom;
+  d.client_nom_personne = deux.nom_personne;
+  d.name = composerNomComplet(deux);
 }
 
 // LE REPLI NE JOUE QUE SUR UNE CLÉ ABSENTE, jamais sur une clé vide. Depuis
@@ -3928,7 +4067,13 @@ function loadDocToEditor(d) {
   const rech = document.getElementById('e-client-q');
   if(rech) rech.value = '';
   fermeResultats();
-  document.getElementById('e-name').value = d.name||'';
+  // LES DEUX CASES DE LA PERSONNE, par le lecteur du document : il connaît les
+  // deux clés et le repli sur `name` que les devis d'avant portent seuls, sous la
+  // garde stricte. Un devis déjà enregistré rouvre donc avec son nom découpé,
+  // sans que rien soit écrit tant que l'abonné ne touche à rien.
+  const casesNomDoc = casesNomDevis(d);
+  document.getElementById('e-prenom').value = casesNomDoc.prenom;
+  document.getElementById('e-nom').value = casesNomDoc.nom_personne;
   document.getElementById('e-co').value = d.co||'';
   document.getElementById('e-email').value = d.email||'';
   // LES TROIS CASES DU CLIENT, par le lecteur du document : il connaît les trois
@@ -4149,7 +4294,14 @@ function liveUpdate() {
   if(!currentId) return;
   const d = docCourant();
   if(!d) return;
-  d.name = document.getElementById('e-name').value;
+  // LES DEUX CASES SONT L'AUTORITÉ, `name` EN DÉCOULE. La ligne imprimable n'est
+  // plus saisie : elle est composée des deux par le module partagé, et la page
+  // n'en écrit jamais une à la main. Abstention comprise : sans correction des
+  // deux cases, rien n'est posé (cf. poseNomClientDevis).
+  poseNomClientDevis(d, {
+    prenom: document.getElementById('e-prenom').value.trim(),
+    nom_personne: document.getElementById('e-nom').value.trim()
+  });
   d.co = document.getElementById('e-co').value;
   d.email = document.getElementById('e-email').value;
   // LES TROIS CASES SONT L'AUTORITÉ, `addr` EN DÉCOULE. La ligne imprimable
@@ -4264,7 +4416,7 @@ function newDoc() {
   // LA FORME DU DEVIS NEUF EST DANS devisVierge : le clic sur « Nouveau »
   // et l'atterrissage sans devis font naître exactement le même document.
   poseDevisVierge();
-  document.getElementById('e-name').focus();
+  document.getElementById('e-prenom').focus();
 }
 
 async function saveDoc() {

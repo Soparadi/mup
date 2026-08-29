@@ -1733,15 +1733,35 @@ function normAgendaId(id){
   return s || null;
 }
 
+// Cache de trente secondes sur la lecture du pipeline, sur le patron de
+// _loadPipeline() de l'Agenda. La liste des rendez-vous se repeint à chaque
+// frappe dans la recherche, à chaque battement de la sonde et à chaque geste
+// de séance ; sans ce cache, chacun de ces repeints redemandait la collection
+// entière pour des fiches qui n'avaient pas bougé.
+//
+// CE QUI LE PURGE, et rien d'autre n'en a besoin : putPipelineCard, la seule
+// porte d'écriture de fiche de cette page, et l'écouteur storage, qui apprend
+// d'un autre onglet qu'une fiche a changé. L'agenda, lui, n'est pas mis en
+// cache : un rendez-vous créé, modifié ou supprimé ici se relit tel quel au
+// repeint qui suit le geste.
+let _pipelineCache = null;
+let _pipelineCacheTime = 0;
+function purgerCachePipeline(){ _pipelineCache = null; _pipelineCacheTime = 0; }
+
 const api = {
   // Pipeline / Agenda / Contacts (lecture seule, APIs déjà migrées)
   async getPipeline(){
+    if(_pipelineCache && (Date.now() - _pipelineCacheTime < 30000)){
+      return _pipelineCache;
+    }
     try {
       const r = await fetch('/api/pipeline');
       if(!r.ok) return [];
       const data = await r.json();
       if(!Array.isArray(data)) return [];
-      return data.map(p => { if(p && p.id) p.id = normFicheId(p.id); return p; });
+      _pipelineCache = data.map(p => { if(p && p.id) p.id = normFicheId(p.id); return p; });
+      _pipelineCacheTime = Date.now();
+      return _pipelineCache;
     } catch(e){ return []; }
   },
   async getAgenda(){
@@ -1755,10 +1775,10 @@ const api = {
     const rawId = String(card.id).replace(/^pipeline:/, '');
     try {
       const r = await fetch('/api/pipeline/' + encodeURIComponent(rawId), { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(card) });
-      if(r.ok) return await r.json();
+      if(r.ok){ purgerCachePipeline(); return await r.json(); }
       if(r.status === 404){
         const r2 = await fetch('/api/pipeline', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(card) });
-        if(r2.ok) return await r2.json();
+        if(r2.ok){ purgerCachePipeline(); return await r2.json(); }
       }
     } catch(e){ console.warn('[visio] putPipelineCard failed', e); }
     return null;
@@ -4360,12 +4380,24 @@ $('searchInput').addEventListener('input', renderRdvList);
 
 window.addEventListener('storage', e=>{
   if([LS.PIPELINE, LS.AGENDA, LS.CONTACTS, LS.DEVIS].includes(e.key) || e.key === 'mup_contact_sync' || e.key === 'mup_contact_deleted'){
+    // Purger AVANT de repeindre : sans cela, le signal de l'autre onglet
+    // servirait le cache et ne changerait rien à l'écran.
+    purgerCachePipeline();
     renderRdvList();
     if(rdvAffiche) renderBriefing(rdvAffiche);
   }
 });
 
-setInterval(renderRdvList, 30000); // 30s pour le bandeau T-5
+// La sonde de trente secondes tient le bandeau T-5 : sa cadence ne change pas.
+// Elle ne part plus quand l'onglet n'est pas visible — un onglet laissé ouvert
+// une nuit interrogeait le serveur toutes les trente secondes pour un écran que
+// personne ne regardait. Le retour de l'onglet repeint immédiatement, sans
+// attendre le battement suivant : l'écart affiché est juste dès la première
+// seconde.
+setInterval(() => { if(document.hidden) return; renderRdvList(); }, 30000);
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden) renderRdvList();
+});
 
 /* ————————————————————————————————————————————————
    INIT

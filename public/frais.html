@@ -1173,9 +1173,14 @@
     return {
       id: c.id,
       nom: c.co || c.nom || c.name || '',
-      // Écriture, pas affichage : ce nom est recopié sur le frais créé et y
-      // reste. Il se prend dans `contact`, le champ qui porte la personne,
-      // et non dans l'alias `name` que migrateCard écrase.
+      // LECTURE SEULE, ET RIEN D'AUTRE. Ce nom n'est PAS recopié sur le frais
+      // créé : le tiroir n'écrit que `cardId` (gestionnaire drawer-save), et la
+      // ligne affichée se recalcule à chaque lecture par prospectLigne depuis la
+      // fiche liée. Le commentaire qui tenait ici annonçait une écriture qui
+      // n'existe pas. Il se prend dans `contact`, le champ qui porte la personne
+      // sur une carte, et non dans l'alias `name` que migrateCard écrase ; c'est
+      // le même changement de nom de clé que fait la fiche Pipeline pour amorcer
+      // ses deux cases, et il appartient à l'appelant, jamais au module partagé.
       contact_nom: c.contact || c.title || '',
       email: c.email || '',
       // Les trois cases telles que la carte les porte, et l'agrégat à côté :

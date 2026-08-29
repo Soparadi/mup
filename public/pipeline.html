@@ -801,6 +801,7 @@ body{font-family:var(--font);font-size:14px;color:var(--text);-webkit-font-smoot
 </div>
 
 <script src="/js/adresse-agregee.js"></script>
+<script src="/js/nom-personne.js"></script>
 <script src="/_mup-nom.js"></script>
 <script src="/_mup-tel.js"></script>
 <script src="/_mup-fil.js"></script>
@@ -1432,12 +1433,19 @@ function startEditVal(){
   });
 }
 
-// ── LES SIX CHAMPS DE LA CARTE QUI S'ÉDITENT DANS LA FICHE ──
+// ── LES HUIT CHAMPS DE LA CARTE QUI S'ÉDITENT DANS LA FICHE ──
 // Raison sociale, secteur, voie, code postal, ville et notes société ne se
 // modifiaient que par la fenêtre de création, ouverte depuis le crayon de la
 // carte du Kanban. Ce crayon est parti : la fiche est désormais le seul chemin
-// d'édition du Pipeline, et ces six cases s'y éditent en ligne.
-// Éditeur GÉNÉRIQUE, partagé par les six, parce qu'ils n'ont ni la conversion
+// d'édition du Pipeline, et ces cases s'y éditent en ligne.
+//
+// PRÉNOM ET NOM SONT LES DEUX DERNIÈRES VENUES. La fiche était le seul écran du
+// produit où la personne d'une carte ne se saisissait nulle part, alors que 250
+// cartes sur 300 en portent une, d'un seul tenant, dans `contact`. Les deux
+// cases se posent JUSTE AVANT Email et Téléphone, qui sont les coordonnées de
+// cette même personne et non celles de la société : la grille dit donc la
+// société, puis son adresse, puis la personne d'un seul bloc.
+// Éditeur GÉNÉRIQUE, partagé par les huit, parce qu'ils n'ont ni la conversion
 // numérique de « Valeur estimée » (startEditVal) ni la frontière entre valeur
 // possédée et valeur restituée des coordonnées société (startEditSociete) :
 // aucun enrichissement ne les peint, leur graine vient donc de la CARTE et
@@ -1461,7 +1469,7 @@ const CHAMPS_CARTE = [
   // migrateCard réimpose `c.co = c.company` à chaque load() et save() PUT
   // l'objet entier — `co` seul serait perdu au premier rechargement. La
   // comparaison de la garde, elle, porte sur `co`, la valeur affichée.
-  // Seul champ des six qui ne se vide pas, même règle que partout ailleurs :
+  // Seul champ des huit qui ne se vide pas, même règle que partout ailleurs :
   // saveCard refuse une création sans raison sociale, et wireForm de
   // contact-societe.html sort sur `if (!nom) return;`. Les cinq autres
   // restent effaçables.
@@ -1493,6 +1501,23 @@ const CHAMPS_CARTE = [
   // pouvait la corriger, et la fiche société la montrait quand le Pipeline
   // l'ignorait. Elle prend sa place, entre le code postal et les notes.
   { cell:'d-ville-cell', libelle:'Ville', prop:'ville', mode:'text', attente:'Ville' },
+  // ── LES DEUX CASES DE LA PERSONNE ──
+  // `prenom` et `nom_personne` font autorité, exactement comme sur un record
+  // `contacts`. La chaîne d'un seul tenant s'appelle `contact` sur une carte et
+  // non `contact_nom` ; elle reste alimentée mais DÉRIVÉE, et c'est le serveur
+  // qui la pose (poserNomComplet, clé `contact`, e2107b4). Cet écran n'en décide
+  // pas : il envoie ses deux cases, comme il envoie ses trois cases d'adresse
+  // sans envoyer l'agrégat.
+  //
+  // AUCUNE CIVILITÉ, ET C'EST UN CHOIX. Le module en détache une de tête quand
+  // la chaîne ancienne en porte une, et la carte n'a pas de case où la loger :
+  // elle est donc perdue si l'abonné corrige ensuite l'une des deux cases. Une
+  // troisième case n'est pas de ce lot, et la fiche société reste l'écran qui
+  // porte la civilité.
+  { cell:'d-prenom-cell', libelle:'Prénom', prop:'prenom', mode:'text', attente:'Prénom',
+    apres: poserContactDerive },
+  { cell:'d-nom-cell', libelle:'Nom', prop:'nom_personne', mode:'text', attente:'Nom',
+    apres: poserContactDerive },
   // « Notes société », jamais « Notes » tout court. L'homonyme du bas de fiche
   // a disparu — le titre de section « Notes » y désignait en réalité le fil —
   // mais le nom reste juste et le restera : cette case porte une note SUR la
@@ -1516,13 +1541,55 @@ const CHAMPS_CARTE = [
 // devient une saisie qu'au commit d'une case, sur la seule carte éditée
 // (cf. startEditCarte).
 const CASES_ADRESSE_CARTE = ['adresse', 'zip', 'ville'];
-// Valeur d'une case : ce que porte la carte, sauf pour les trois cases
-// d'adresse, qui passent par la découpe ci-dessus. Un seul point de lecture,
-// pour l'affichage comme pour la graine de l'éditeur : les deux ne peuvent pas
-// diverger.
+
+// ── LA DÉCOUPE À LA LECTURE, QUI AMORCE LES DEUX CASES DE LA PERSONNE ──
+// Même geste que pour l'adresse au-dessus, même module partagé
+// (/js/nom-personne.js), même garde stricte : la découpe ne joue QUE si les deux
+// cases sont vides, et elle NE POSE RIEN sur la carte.
+//
+// L'ADAPTATION DE LA CLÉ EST ICI, ET ELLE N'EST QU'ICI. casesNomPersonne amorce
+// depuis `contact_nom`, nom de la chaîne sur un record `contacts` ; sur une carte
+// la même chaîne s'appelle `contact`. On lui passe donc un objet de lecture où
+// `contact` est présenté sous le nom qu'elle attend. Le repli
+// `contact_nom || contact` n'a RIEN à faire dans le module : sur un record
+// `contacts`, migrateProspect verse la RAISON SOCIALE dans `contact`, et ce repli
+// ferait paraître une société en Prénom et Nom sur toute la table Contacts.
+// L'appelant sait de quelle table il parle, le module ne le sait pas.
+//
+// LECTURE PURE, ET LE MOTIF DE L'ADRESSE VAUT MOT POUR MOT : save() sérialise la
+// carte ENTIÈRE et boucle sur TOUTES les cartes, une valeur déduite posée à la
+// lecture partirait en base au premier enregistrement venu, sur les 250 chaînes
+// à la fois, et deviendrait indiscernable d'une saisie. Ici la raison est même
+// plus forte, car cette découpe est une CONJECTURE SANS ANCRE, quand la découpe
+// postale s'appuie sur cinq chiffres en fin de chaîne : `LCS.COM` rendra « LCS »
+// en Prénom et « .COM » en Nom, et une dizaine de cartes sont dans ce cas. Elle
+// s'affiche, elle ne s'écrit pas. La déduction ne devient une saisie qu'au
+// commit d'une case, sur la seule carte éditée (cf. startEditCarte).
+const CASES_NOM_CARTE = ['prenom', 'nom_personne'];
+function casesNomCarte(c){
+  return casesNomPersonne({ prenom: c.prenom, nom_personne: c.nom_personne, contact_nom: c.contact });
+}
+
+// La chaîne dérivée, recopiée sur la carte APRÈS le commit de l'une des deux
+// cases (`apres` des deux entrées de CHAMPS_CARTE, appelé avant save()).
+//
+// LA PAGE NE DÉCIDE PAS CETTE VALEUR, ELLE LA REFLÈTE. Le serveur la recompose
+// de son côté, avec la même fonction et depuis les mêmes deux cases, à chaque
+// PUT qui les porte : ce qui atterrit en base vient de lui, pas d'ici. Sans ce
+// miroir, la copie en mémoire, le cache localStorage et le `contact` consigné
+// sur un RDV créé dans la foulée diraient le nom d'hier jusqu'au rechargement.
+function poserContactDerive(c){
+  c.contact = composerNomComplet(c);
+}
+
+// Valeur d'une case : ce que porte la carte, sauf pour les trois cases d'adresse
+// et les deux cases de la personne, qui passent par les découpes ci-dessus. Un
+// seul point de lecture, pour l'affichage comme pour la graine de l'éditeur :
+// les deux ne peuvent pas diverger.
 function valeurCarte(ch, c){
-  if(CASES_ADRESSE_CARTE.indexOf(ch.prop) === -1) return String(c[ch.prop] || '');
-  return casesAdresse(c)[ch.prop];
+  if(CASES_ADRESSE_CARTE.indexOf(ch.prop) !== -1) return casesAdresse(c)[ch.prop];
+  if(CASES_NOM_CARTE.indexOf(ch.prop) !== -1) return casesNomCarte(c)[ch.prop];
+  return String(c[ch.prop] || '');
 }
 
 // Le contenu d'une case, décrit à UN SEUL endroit : openDetail le pose, la
@@ -1571,7 +1638,7 @@ function startEditCarte(ch){
     // société, qui refusent l'une et l'autre une raison sociale vide.
     if(ch.oblig && !v){ repeindre(); return; }
     // Rien n'a bougé → aucune écriture. Ici la garde ne tient PAS la frontière
-    // entre valeur possédée et valeur restituée des cases société : ces six
+    // entre valeur possédée et valeur restituée des cases société : ces huit
     // champs sont possédés par la carte, personne d'autre ne les peint. Elle
     // épargne le réseau — save() boucle sur TOUTES les cartes et émet un PUT
     // par carte, un commit à vide coûterait donc N requêtes pour rien.
@@ -1588,6 +1655,17 @@ function startEditCarte(ch){
     if(CASES_ADRESSE_CARTE.indexOf(ch.prop) !== -1){
       const cases = casesAdresse(c);
       CASES_ADRESSE_CARTE.forEach(function(p){ c[p] = cases[p]; });
+    }
+    // LES DEUX CASES DE NOM ENSEMBLE, pour la même raison exactement. Corriger
+    // « Nom » sur une carte dont les deux cases sont amorcées depuis `contact`
+    // doit aussi poser « Prénom » : la garde stricte du module le verrait sinon
+    // masqué par la case de nom désormais renseignée, et il disparaîtrait de
+    // l'écran. Rien n'est fabriqué, ce sont les valeurs affichées ; rien n'est
+    // écrit sur les autres cartes. Les deux sont lues AVANT l'écriture de la
+    // case, faute de quoi la découpe verrait déjà la nouvelle valeur.
+    if(CASES_NOM_CARTE.indexOf(ch.prop) !== -1){
+      const cases = casesNomCarte(c);
+      CASES_NOM_CARTE.forEach(function(p){ c[p] = cases[p]; });
     }
     c[ch.prop] = v;
     if(ch.apres) ch.apres(c, v);
@@ -1608,7 +1686,7 @@ function startEditCarte(ch){
 }
 
 // Bandeau noir de la fiche, repeint seul après édition de la raison sociale ou
-// du secteur, les deux seuls des six champs qu'il affiche. Le bandeau reste en
+// du secteur, les deux seuls des huit champs qu'il affiche. Le bandeau reste en
 // LECTURE : MUPNom.compose y met `enseigne` dès qu'elle existe, une saisie prise
 // depuis le titre écrirait donc un autre champ que celui qu'on croit éditer.
 function repeindreBandeauFiche(c){
@@ -2128,7 +2206,7 @@ async function openDetail(id) {
   document.getElementById('d-focus-pills').innerHTML = _joursD === null ? '' : `<span class="pill pill-day">J+${_joursD}</span>`;
 
   // Info grid
-  // Les six cases éditables de la carte ouvrent la grille, sauf celle qui
+  // Les huit cases éditables de la carte ouvrent la grille, sauf celle qui
   // porte `large`, pleine largeur, qui la ferme après #d-societe-grid. Elles
   // sont TOUJOURS présentes, même vides : une case vide montre son libellé, son
   // gris d'attente et son crayon d'invite, ce qui est justement ce qui appelle
@@ -2165,7 +2243,7 @@ async function openDetail(id) {
     infoHtml + '<div id="d-societe-grid" style="display:contents"></div>' + queueHtml;
   const valCell = document.getElementById('d-val-cell');
   if(valCell) valCell.addEventListener('click', startEditVal);
-  // Écouteurs des six cases éditables de la carte : ici, au même endroit que
+  // Écouteurs des huit cases éditables de la carte : ici, au même endroit que
   // celui de #d-val-cell et pour la même raison — #d-info-grid n'a que cet
   // auteur, et peindreGrilleSociete ne réécrit que #d-societe-grid, donc rien
   // ne viendra plus tard emporter ces écouteurs.

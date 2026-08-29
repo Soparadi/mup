@@ -1229,7 +1229,11 @@ var ficheGroupe = L.markerClusterGroup({
 map.addLayer(ficheGroupe);
 
 function migrateCard(c){
-  if(c.co&&!c.company)c.company=c.co;if(c.name&&!c.contact)c.contact=c.name;
+  if(c.co&&!c.company)c.company=c.co;
+  // `contact` ne se prend plus sur `name`. C'était la jumelle de la ligne
+  // retirée en b1ad083, qui réalignait `name` sur `contact` : le lot précédent
+  // n'a regardé qu'un sens, et le retour restait ouvert. Une fiche dont
+  // `contact` est vide le reste, elle ne prend pas la valeur de `name`.
   // Le dirigeant ne devient pas le nom de société. Cette branche versait
   // `contact` dans `company`, et la ligne `c.co=c.company` plus bas le
   // portait jusque dans `co` : la seule colonne restée intacte, et le seul

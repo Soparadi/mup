@@ -2977,7 +2977,12 @@ async function openCampaignDetail(rid){
   document.getElementById('cd-body').innerHTML = '<div style="color:var(--muted);font-size:13px;">Chargement…</div>';
   await refreshCampaignDetail(rid);
   if(window.__cdTimer) clearInterval(window.__cdTimer);
-  window.__cdTimer = setInterval(function(){ refreshCampaignDetail(rid); }, 5000);
+  // Vingt secondes, et non cinq : ce sont des statistiques d'envoi, pas du
+  // temps réel. Livraisons, ouvertures et clics arrivent par le webhook du
+  // routeur, à leur propre rythme ; les relire quatre fois plus souvent ne
+  // les faisait pas venir plus tôt, cela relisait la même page. La sonde
+  // reste bornée à la fenêtre ouverte : closeCampaignDetail l'arrête.
+  window.__cdTimer = setInterval(function(){ refreshCampaignDetail(rid); }, 20000);
 }
 function closeCampaignDetail(){
   document.getElementById('campaign-detail-modal').classList.remove('open');

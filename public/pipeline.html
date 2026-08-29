@@ -1108,7 +1108,61 @@ async function save(carte) {
   return ecrireCacheSiConfirme();
 }
 
-function migratePipelineFromContacts(){
+// Écrit un lot de fiches, une à une, et rend la main au premier péage.
+//
+// LE VERDICT, ET NON LE BOOLÉEN. Un geste lit le booléen de save() ; le lot,
+// lui, lit le verdict de enregistrerCarte(). Ce booléen vaut false pour le
+// péage comme pour un réseau coupé, et le lot a besoin de les séparer : le 402
+// est une réponse sur le COMPTE, la fiche suivante serait refusée de la même
+// façon, on s'arrête ; l'échec réseau ne parle que de la fiche touchée, la
+// suivante peut passer, on continue. Un break sur `false` confondrait les deux
+// et arrêterait le lot sur un hoquet.
+//
+// LOT DE TAILLE INCONNUE, ET NON CADENCÉ. Sept choses à savoir avant d'y
+// toucher :
+//   1. La population ne vient pas d'un geste de l'abonné mais d'un import :
+//      elle vaut ce que vaut le fichier importé, et rien ici ne la borne.
+//   2. Le for...of attend chaque écriture : une fiche à la fois, jamais N
+//      requêtes en vol. C'est ce que le forEach précédent ne garantissait pas.
+//   3. Séquentiel n'est pas cadencé : il n'y a aucun délai entre deux
+//      écritures, le lot part aussi vite que le réseau l'accepte.
+//   4. Un lot assez gros franchit donc le plafond du compte. On s'arrête au
+//      premier 402 : les fiches qui suivent ne sont pas écrites, et le repli
+//      par load() les retire de l'écran plutôt que de les y laisser en fantôme.
+//   5. Le cache n'est écrit qu'une fois, à la fin, et seulement si le registre
+//      est vide. Un ecrireCacheSiConfirme() par fiche resérialisait le pipeline
+//      entier autant de fois qu'il y a de fiches.
+//   6. Le hoquet réseau se dit une fois pour le lot, pas une fois par fiche.
+//      Il doit se dire : le cache que ces fiches retiennent restera non écrit,
+//      et c'est à ce premier toast que les gestes suivants renvoient.
+//   7. RÉSIDUEL NON COUVERT : un geste de l'abonné pendant que le lot écrit.
+//      Sa carte part au serveur en parallèle du lot, et son save() peut écrire
+//      le cache avant que le lot ait fini de pousser les siennes. Le lot est
+//      détaché, il ne bloque pas la page : cette fenêtre est ouverte, et rien
+//      ici ne la ferme.
+// On ne cadence pas aujourd'hui, le volume réel ne le demande pas ; c'est ici,
+// et à un seul endroit désormais, que le cadencement devra se poser le jour où
+// il le demandera.
+async function ecrireLot(lot) {
+  // Un lot vide n'émet rien, pas même un cache.
+  if (!lot.length) return;
+  let echecs = 0;
+  for (const carte of lot) {
+    const verdict = await enregistrerCarte(carte);
+    if (verdict === 'plafond') {
+      // Même repli qu'un geste refusé : la vérité serveur, sans écrire le
+      // cache. Le toast/modal est déjà affiché par l'intercepteur 402 global.
+      await load();
+      renderKanban();
+      return;
+    }
+    if (verdict === 'echec') echecs++;
+  }
+  if (echecs) toast('Import non enregistré en entier, rechargez la page');
+  ecrireCacheSiConfirme();
+}
+
+async function migratePipelineFromContacts(){
   var contacts = [];
   try { contacts = JSON.parse(localStorage.getItem('mup_contacts') || '[]'); } catch(e){}
   if(!Array.isArray(contacts) || contacts.length === 0) return;
@@ -1155,14 +1209,7 @@ function migratePipelineFromContacts(){
     }
   });
   if(touchees.length){
-    // LOT DE TAILLE INCONNUE, ET NON CADENCÉ. Avec importFromProspects, c'est
-    // la seule boucle du fichier dont la population ne vient pas d'un geste :
-    // elle vaut ce que vaut l'import, et rien ne la borne. Un lot assez gros
-    // franchit le plafond du compte, et les fiches qui suivent le premier 402
-    // ne sont pas écrites. On ne cadence pas aujourd'hui, le volume réel ne le
-    // demande pas ; c'est ici que le cadencement devra se poser le jour où il
-    // le demandera.
-    touchees.forEach(function(c){ save(c); });
+    await ecrireLot(touchees);
     console.log('migratePipelineFromContacts : fiches won synchronisées');
   }
 }
@@ -3316,7 +3363,7 @@ function logActivity(id, txt, type, toCol) {
 }
 
 // ── IMPORT DEPUIS PROSPECTS ──
-function importFromProspects() {
+async function importFromProspects() {
   const raw = localStorage.getItem('mup_prospects');
   if(!raw) return;
   try {
@@ -3329,13 +3376,10 @@ function importFromProspects() {
         touchees.push(neuve);
       }
     });
-    // LOT DE TAILLE INCONNUE, ET NON CADENCÉ. Comme celle de
-    // migratePipelineFromContacts, cette boucle vaut ce que vaut l'import, et
-    // rien ne la borne. Un lot assez gros franchit le plafond du compte, et
-    // les fiches qui suivent le premier 402 ne sont pas écrites. On ne cadence
-    // pas aujourd'hui, le volume réel ne le demande pas ; c'est ici que le
-    // cadencement devra se poser le jour où il le demandera.
-    touchees.forEach(c => save(c));
+    await ecrireLot(touchees);
+    // Le renderKanban du démarrage a déjà eu lieu, et il est passé avant que
+    // ces cartes soient poussées : cette migration ne démarre qu'après la
+    // première. C'est celui-ci qui les met à l'écran.
     renderKanban();
   } catch(e) {}
 }
@@ -3359,8 +3403,19 @@ const pipelinePret = (async () => {
   }
   loadEnrichedSirets();   // un seul GET /api/user-plan, mémorisé pour la page
   await load();
-  migratePipelineFromContacts();
-  importFromProspects();
+  // Les deux migrations à la file, dans une séquence détachée.
+  // À LA FILE parce qu'elles écrivent le même cache et le même registre :
+  // lancées côte à côte, leurs deux lots s'entrelaçaient au serveur.
+  // DÉTACHÉE parce qu'un import n'est pas ce que la page attend pour
+  // s'afficher : pipelinePret ne l'attend pas, et ne doit pas l'attendre.
+  // Le renderKanban qui suit reste où il est. Il peint les cartes de
+  // migratePipelineFromContacts, poussées avant sa première écriture, donc
+  // avant qu'elle ne rende la main ; celles d'importFromProspects n'existent
+  // pas encore à cet instant, et c'est elle qui les peint quand son tour vient.
+  (async () => {
+    await migratePipelineFromContacts();
+    await importFromProspects();
+  })().catch(err => { console.error('[pipeline] migrations :', err); });
   renderKanban();
 })().catch(err => { console.error('[pipeline] démarrage :', err); });
 

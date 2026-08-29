@@ -1443,15 +1443,35 @@ function storedLatLng(c){
 // Le PUT remplace le contenu côté serveur → on renvoie la carte complète enrichie
 // de lat/lng/geoStatus (même contrat que pipeline.html / visio.html). Coordonnées
 // de base, non jittérées : le jitter n'est qu'un déstackage d'affichage.
+//
+// CE QUE LE .catch() NE VOYAIT PAS. fetch ne rejette que sur un échec de
+// transport : coupure réseau, requête avortée, CORS. Un 401, un 409, un 500
+// sont des réponses HTTP valides, la promesse tient, et le seul .catch() qui
+// couvrait l'appel ne se déclenchait jamais dessus. Un refus serveur repartait
+// donc en silence, et la fiche revenait sans coordonnées au chargement suivant,
+// géocodée à nouveau, réécrite à nouveau, indéfiniment.
+//
+// La trace ne répare rien et ne prétend pas le faire : elle nomme la fiche dont
+// l'écriture a été refusée et rend son code. Rien à l'écran, le marqueur est
+// posé et le reste de la carte ne dépend pas de cette écriture ; mais un refus
+// cesse d'être indistinguable d'un succès, ce sans quoi rien de ce qui suit ne
+// se mesure.
 function persistCoords(c, lat, lng){
   if(!c || c.id==null) return;
   var rawId=String(c.id).replace(/^pipeline:/, '');
   var payload=Object.assign({}, c, {lat:lat, lng:lng, geoStatus:'ok'});
+  var quelleFiche=(nomsCarte(c).titre||'sans nom')+' ['+rawId+']';
   fetch('/api/pipeline/'+encodeURIComponent(rawId), {
     method:'PUT',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(payload)
-  }).catch(function(){ /* silencieux : le marqueur est déjà posé */ });
+  }).then(function(r){
+    // Le marqueur est déjà posé : on ne fait que dire que la base, elle, n'a
+    // pas retenu la position.
+    if(!r.ok) console.warn('Coordonnées non enregistrées (HTTP '+r.status+') :', quelleFiche);
+  }).catch(function(e){
+    console.warn('Coordonnées non enregistrées (réseau) :', quelleFiche, e);
+  });
 }
 
 // Pose le marqueur d'une carte à des coordonnées déjà résolues (marqueur + popup).

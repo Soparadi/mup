@@ -1610,15 +1610,21 @@ async function revelerEnFlux(poses){
   // tort qu'elle n'est pas situable.
   //
   // LA CLÉ, vérifiée et non supposée. markers est indexé par String(c.id) tel
-  // que /api/pipeline le rend, préfixe compris — « pipeline:abc ». carte.html ne
+  // que /api/pipeline le rend, préfixe compris : « pipeline:abc ». carte.html ne
   // le retire nulle part, à la différence de pipeline.html qui le strippe au
-  // chargement (pipeline.html:903). Le Dashboard, lui, passe l'id brut de l'API :
+  // chargement (pipeline.html:1007). Le Dashboard, lui, passe l'id brut de l'API :
   // sur le chemin nominal la clé correspond donc telle quelle, sans rien faire.
   // Mais quand /api/pipeline est injoignable, le Dashboard se rabat sur le cache
-  // localStorage mup_pipeline (dashboard.html:726) — cache écrit par pipeline.html
-  // avec des ids DÉJÀ strippés (pipeline.html:973). Le lien émis porte alors
-  // « abc », sans préfixe. Les deux formes circulent réellement : on compare sur
-  // la forme nue, des deux côtés, ce qui couvre l'une comme l'autre.
+  // localStorage mup_pipeline (dashboard.html:725), et ce cache n'a qu'un auteur,
+  // pipeline.html (pipeline.html:1079), qui y met les ids qu'il a strippés au
+  // chargement. Le lien émis porte alors « abc », sans préfixe.
+  //
+  // Ce sont donc les deux seules formes en circulation, et non les deux plus
+  // courantes : ce qui est comparé ici a été écrit soit par l'API, soit par
+  // pipeline.html à partir de l'API. Comparer sur la forme nue, des deux côtés,
+  // les couvre l'une comme l'autre. Une troisième forme a existé : prospection.html
+  // écrivait dans ce même cache une carte d'id inventé, 'c' + Date.now(), qu'aucun
+  // marqueur ne pouvait apparier ; elle n'écrit plus rien.
   function ficheNue(id){ return String(id).replace(/^pipeline:/,''); }
 
   // Deux échecs, deux phrases, parce que deux gestes différents en sortent : une

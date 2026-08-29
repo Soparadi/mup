@@ -3776,32 +3776,21 @@ async function addToPipeline(leadId) {
     if(!apiResp.ok) throw new Error('HTTP ' + apiResp.status);
     var result = await apiResp.json();
 
-    // Dual-write localStorage — carte locale au format board (le serveur a déjà
-    // créé le record pipeline ; on reflète localement, le board se resynchronise
-    // au prochain fetch). name = raison sociale (aligné sur la carte serveur).
-    try {
-      var localCards = [];
-      var r = localStorage.getItem('mup_pipeline');
-      if(r) localCards = JSON.parse(r);
-      localCards.push({
-        id: 'c' + Date.now(),
-        name: lead.raison_sociale || lead.name || '',
-        co: lead.raison_sociale || lead.name || '',
-        company: lead.raison_sociale || lead.name || '',
-        contact: lead.director || '',
-        email: '', phone: '', website: '',
-        address: lead.address || '',
-        sector: lead.nafLabel || lead.sector || '',
-        siren: lead.siren || '',
-        siret: lead.siret || '',
-        source: 'prospection',
-        col: 'prospects', val: 0, days: 0, activity: [],
-        societe_id: result.societe_id || ''
-      });
-      localStorage.setItem('mup_pipeline', JSON.stringify(localCards));
-    } catch(e2) {
-      console.warn('[Leads] addToPipeline localStorage update failed', e2);
-    }
+    // Rien n'est écrit dans le cache mup_pipeline. La fiche existe côté serveur,
+    // et c'est là que les lecteurs la prendront : l'événement 'storage' émis plus
+    // bas leur dit de relire, et /api/pipeline la leur rend. Le cache, lui, est
+    // écrit par la page Pipeline, sur confirmation serveur (pipeline.html:1079),
+    // et à la première ouverture il portera cette fiche comme les autres.
+    //
+    // Écrire ici demanderait un identifiant, et cette page n'en a aucun à donner :
+    // from-lead ne renvoie pas l'id du record pipeline créé. La carte écrite
+    // portait donc un id inventé, 'c' + Date.now(), sans correspondance serveur.
+    // Un lecteur rabattu sur le cache affichait une carte fantôme, et un geste
+    // dessus repartait au serveur sous cet id : un second enregistrement pour la
+    // même société. Sur une clé encore absente, le cache écrit affirmait de plus
+    // une population d'une seule fiche, celle qui venait d'être ajoutée.
+    //
+    // L'ajout en bloc n'écrit pas davantage : même geste, même cache.
     _siretsCache = null;
     _siretsCacheTime = 0;
     _contactsCache = null;

@@ -1906,7 +1906,9 @@ function onDrop(e, colId) {
   if(card) {
     noterEtapeVie(card, colId);
     card.col = colId;
-    save();
+    // Pas de save() ici : logActivity, quelques lignes plus bas, se termine
+    // par le sien et emporte la colonne déjà posée. L'écran, lui, n'attend
+    // rien du serveur pour se redessiner.
     renderKanban();
     var now = new Date();
     var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -3222,10 +3224,14 @@ function refletColonneFiche(c) {
   }
 }
 
+// L'enregistrement est celui de logActivity, qui se termine par save() :
+// la colonne est posée avant l'appel, elle part donc dans le même envoi
+// que l'entrée d'activité. Un save() de plus ici rejouait un PUT par
+// fiche du pipeline pour rien.
 function moveCard(colId) {
   if(!currentId) return;
   const c = cards.find(x=>x.id===currentId);
-  if(c) { noterEtapeVie(c, colId); c.col=colId; var now = new Date(); var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); logActivity(currentId,'Déplacé vers '+COLS.find(x=>x.id===colId)?.name+' à '+timeStr, 'move', colId); save(); renderKanban(); refletColonneFiche(c); }
+  if(c) { noterEtapeVie(c, colId); c.col=colId; var now = new Date(); var timeStr = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); logActivity(currentId,'Déplacé vers '+COLS.find(x=>x.id===colId)?.name+' à '+timeStr, 'move', colId); renderKanban(); refletColonneFiche(c); }
 }
 // Même geste que la corbeille du Kanban, donc même libellé : « Supprimer cette
 // fiche ? » annonçait plus que ce qui se passe.

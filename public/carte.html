@@ -1438,6 +1438,46 @@ function storedLatLng(c){
   return null;
 }
 
+// CADENCE D'ÉCRITURE : 3 PUT PAR SECONDE, PAS UN DE PLUS.
+// Le géocodage rend ses réponses par grappes, et chaque réponse écrivait
+// aussitôt une fiche par carte partageant l'adresse. Sur un chargement où la
+// population sans coordonnées est nombreuse, cela part en rafale : autant de
+// PUT simultanés que de fiches résolues dans la même seconde, chacun renvoyant
+// l'objet carte entier. C'est le serveur qui paie, et c'est lui qui refuse.
+//
+// La file ne change ni l'ordre ni le contenu des écritures, elle n'espace que
+// leurs départs. L'AFFICHAGE N'EN DÉPEND PAS : placeCard a déjà posé le
+// marqueur quand persistCoords est appelée, la cadence ne porte que sur la
+// persistance. Une fiche vue à l'écran n'attend rien de cette file.
+//
+// Le débit se règle sur les départs, non sur les fins : on ne suspend pas la
+// file au temps de réponse du serveur, on garantit qu'elle ne lui envoie pas
+// plus de trois requêtes par seconde.
+var PUT_PAR_SECONDE=3;
+var INTERVALLE_PUT=Math.ceil(1000/PUT_PAR_SECONDE);
+var fileEcriture=[];
+var pompeEcriture=false;
+var dernierDepart=0;
+// Une seule pompe : le second appel voit le drapeau levé et rend la main, sa
+// tâche étant déjà dans la file que la pompe en cours finira de vider.
+//
+// L'attente se calcule depuis le dernier départ, et non par un sommeil posé
+// entre deux tâches : une file vidée puis regarnie une poignée de
+// millisecondes plus tard repartirait sinon aussitôt, et deux PUT tomberaient
+// dans le même souffle. Le plafond tient d'un bout à l'autre du chargement,
+// pas seulement à l'intérieur d'une rafale.
+async function pomperLesEcritures(){
+  if(pompeEcriture) return;
+  pompeEcriture=true;
+  while(fileEcriture.length){
+    var attente=INTERVALLE_PUT-(Date.now()-dernierDepart);
+    if(attente>0) await sommeil(attente);
+    dernierDepart=Date.now();
+    fileEcriture.shift()();
+  }
+  pompeEcriture=false;
+}
+
 // Écriture défensive des coordonnées géocodées sur l'enregistrement pipeline.
 // Fire-and-forget : un échec ne doit jamais empêcher l'affichage du marqueur.
 // Le PUT remplace le contenu côté serveur → on renvoie la carte complète enrichie
@@ -1461,17 +1501,23 @@ function persistCoords(c, lat, lng){
   var rawId=String(c.id).replace(/^pipeline:/, '');
   var payload=Object.assign({}, c, {lat:lat, lng:lng, geoStatus:'ok'});
   var quelleFiche=(nomsCarte(c).titre||'sans nom')+' ['+rawId+']';
-  fetch('/api/pipeline/'+encodeURIComponent(rawId), {
-    method:'PUT',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(payload)
-  }).then(function(r){
-    // Le marqueur est déjà posé : on ne fait que dire que la base, elle, n'a
-    // pas retenu la position.
-    if(!r.ok) console.warn('Coordonnées non enregistrées (HTTP '+r.status+') :', quelleFiche);
-  }).catch(function(e){
-    console.warn('Coordonnées non enregistrées (réseau) :', quelleFiche, e);
+  // Mise en file, non départ immédiat : la charge utile est figée ici, à
+  // l'instant où les coordonnées sont connues, et ne dépend plus de ce que
+  // devient c d'ici au départ de la requête.
+  fileEcriture.push(function(){
+    fetch('/api/pipeline/'+encodeURIComponent(rawId), {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    }).then(function(r){
+      // Le marqueur est déjà posé : on ne fait que dire que la base, elle, n'a
+      // pas retenu la position.
+      if(!r.ok) console.warn('Coordonnées non enregistrées (HTTP '+r.status+') :', quelleFiche);
+    }).catch(function(e){
+      console.warn('Coordonnées non enregistrées (réseau) :', quelleFiche, e);
+    });
   });
+  pomperLesEcritures();
 }
 
 // Pose le marqueur d'une carte à des coordonnées déjà résolues (marqueur + popup).
@@ -1708,9 +1754,27 @@ async function revelerEnFlux(poses){
   //    derrière quelques secondes de révélation les retarderait d'autant, et
   //    les fiches qu'ils rendent se posent au fil de leurs réponses — un flux
   //    de plus, qui se mêle au premier.
-  addrs.forEach(function(addr){
+  //
+  //    CONCURRENCE BORNÉE, SUR LE PATRON DE revelerEnFlux. Le forEach partait
+  //    en une seule salve : autant d'appels simultanés que d'adresses
+  //    distinctes à résoudre, sans plafond, et sur deux services dont aucun
+  //    n'est à nous seuls (/api/geocode côté BAN, Nominatim en repli, dont la
+  //    politique d'usage demande précisément de ne pas marteler). Même
+  //    découpage que la pose : des paquets, et une attente entre deux. La
+  //    différence tient à ce que l'on attend — la pose attend une durée fixe,
+  //    le réseau attend ses propres réponses, ce qui borne la concurrence à la
+  //    taille d'un paquet plutôt qu'à un délai deviné.
+  //
+  //    LE FLUX RESTE UN FLUX. La boucle n'est pas awaitée ici : les paquets se
+  //    succèdent pendant que revelerEnFlux pose les fiches déjà résolues, et
+  //    chaque adresse résolue pose ses marqueurs sans attendre les suivantes.
+  //    pending et tenterFinish gardent leur rôle, décomptés adresse par
+  //    adresse comme avant.
+  var PAQUET_GEO=5;
+
+  function geocoderUneAdresse(addr){
   // b. Try BAN first, fallback to Nominatim
-  fetch('/api/geocode?q='+encodeURIComponent(addr))
+  return fetch('/api/geocode?q='+encodeURIComponent(addr))
     .then(function(r){return r.json();})
     .then(function(banData){
       if(banData.features&&banData.features.length){
@@ -1731,9 +1795,13 @@ async function revelerEnFlux(poses){
         // sans décalage : elles se rassemblent en pastille à l'affichage, et le
         // registre porte enfin la position réellement géocodée — la même que
         // celle écrite par persistCoords.
+        //
+        // Le marqueur est posé AVANT la mise en file de l'écriture, et rien
+        // dans l'affichage n'attend cette écriture : la cadence des PUT ne
+        // retarde aucune pastille.
         addrMap[addr].forEach(function(c){
           placeCard(c, geo.lat, geo.lng);
-          persistCoords(c, geo.lat, geo.lng); // c. écriture
+          persistCoords(c, geo.lat, geo.lng); // c. écriture, mise en file
         });
       }
       // d. geo null → aucun marqueur, aucune écriture
@@ -1744,7 +1812,20 @@ async function revelerEnFlux(poses){
       pending--;
       tenterFinish();
     });
-  });
+  }
+
+  // Le paquet est attendu en entier avant le suivant : geocoderUneAdresse ne
+  // rejette jamais (son .catch() décompte et rend une promesse tenue), un
+  // échec ne peut donc pas interrompre la boucle ni laisser pending en l'air.
+  async function geocoderEnPaquets(liste){
+    for(var i=0;i<liste.length;i+=PAQUET_GEO){
+      var fin=Math.min(i+PAQUET_GEO,liste.length);
+      var lot=[];
+      for(var j=i;j<fin;j++) lot.push(geocoderUneAdresse(liste[j]));
+      await Promise.all(lot);
+    }
+  }
+  geocoderEnPaquets(addrs);
 
   // a. Puis la pose des cartes déjà résolues — AUCUN appel réseau. Chacune est
   //    posée à SA coordonnée, sans décalage : le déstackage des points confondus

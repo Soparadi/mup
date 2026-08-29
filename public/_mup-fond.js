@@ -201,6 +201,52 @@
   var PALEUR_TOPONYMES = 0.5;
   var PREFIXE_TOPONYME = 'toponyme';
 
+  // TRAIT DE CÔTE PAR LA LAISSE DE HAUTE MER. La source livre « hydro_laisse »
+  // dans ses tuiles, et le style gris ne porte aucune couche dessus. C'est donc
+  // la seule couche que ce module AJOUTE : partout ailleurs il n'éteint, ne
+  // pâlit ou ne repeint que de l'existant.
+  //
+  // POURQUOI ELLE. « limite cote » s'arrête au franchissement du zoom Leaflet
+  // 11, sa donnée LIM_COTE n'existant pas au-delà, et le littoral retombe alors
+  // sur le seul contour de l'eau. Or ce contour est le bord d'un polygone de
+  // marée, à 77 comme à 4 080 m de la côte selon l'endroit ; la laisse de haute
+  // mer, elle, suit ce qu'un habitant appelle la côte, à 12 à 108 m en médiane
+  // sur les trois sites de contrôle. Elle couvre 94 % du littoral au niveau n10
+  // et 100 % au niveau n0.
+  //
+  // LE SYMBO CHANGE D'ORTHOGRAPHE AVEC LE NIVEAU, ET LE FILTRE PREND LES DEUX :
+  // « LAISSES_HAUTES_MERS » au pluriel au niveau généralisé n10, qui est le seul
+  // servi au zoom Leaflet 13, « LAISSE_HAUTES_MERS » au singulier au niveau
+  // détaillé n0, servi des zooms 14 à 18. N'en inscrire qu'une éteindrait le
+  // trait sur une partie de la plage. Les deux étant prises, la même couche
+  // continue de peindre au passage de 13 à 14, sans clignotement : la géométrie
+  // se détaille sur place.
+  //
+  // « LAISSE_BASSES_MERS » RESTE DEHORS. Elle entre dans la donnée au zoom 14 et
+  // court au large, à la largeur de l'estran : dessinée, elle doublerait le trait
+  // de côte sur tout le littoral.
+  //
+  // LA DONNÉE S'ARRÊTE AU ZOOM LEAFLET 18. Les tuiles du 19 sont bien servies et
+  // ne portent pas la source-layer : il n'y a pas de sur-zoom à attendre, le
+  // trait s'éteint sec au dernier cran, où le littoral revient au contour de
+  // l'eau, trois points plus clair. Rien ne compense : le zoom 19 se vise sur une
+  // adresse, pas sur une côte. Aucun minzoom ni maxzoom n'est déclaré non plus,
+  // l'étendue de la donnée bornant la couche mieux qu'un chiffre recopié.
+  //
+  // LA COULEUR S'ÉCRIT À SA VALEUR FINALE, à l'inverse du contour de l'eau qui
+  // s'écrit brut pour être relu : la couche est posée APRÈS les trois passes de
+  // pâlissement, qui ne la voient donc pas, et aucun des trois périmètres ne
+  // porte « hydro_laisse ». #A0A0A0 est exactement le gris de « limite cote »,
+  // jamais pâlie elle non plus : le trait de côte garde ainsi une valeur unique
+  // sur toute sa vie, et le contour de l'eau qui assure le relais hors de la
+  // plage sort à #A3A3A3. Largeur 1, celle de « limite cote », et celle du filet
+  // que trace fill-outline-color.
+  var SOURCE_LAYER_LAISSE = 'hydro_laisse';
+  var COUCHE_LAISSE = 'mup - trait de cote';
+  var SYMBO_LAISSE_HAUTE = ['LAISSES_HAUTES_MERS', 'LAISSE_HAUTES_MERS'];
+  var COULEUR_LAISSE = '#A0A0A0';
+  var LARGEUR_LAISSE = 1;
+
   // DEUX FORMES DE VALEUR CIRCULENT DANS CE STYLE, et il faut savoir lire les
   // deux : la chaîne simple ('#RRGGBB' ou 'rgba(r, g, b, a)'), et la fonction de
   // zoom héritée ({stops:[[zoom, couleur], ...]}, parfois avec une clé base).
@@ -264,6 +310,10 @@
       var source = couche['source-layer'];
       return typeof source === 'string' && source.indexOf(PREFIXE_TOPONYME) === 0;
     }));
+
+    // EN DERNIER, ET C'EST VOULU : posée après les trois passes, la couche n'est
+    // relue par aucune d'elles et sa couleur reste celle qui est écrite.
+    poserTraitDeCote(glMap);
   }
 
   // LA TRANSPOSITION EST LA MÊME POUR LES TROIS PÉRIMÈTRES, elle n'est donc
@@ -317,6 +367,88 @@
     console.warn('Plan IGN : ' + releve.intactes + ' propriété(s) de couleur ' + famille
       + ' laissée(s) intacte(s) sur ' + (releve.chaines + releve.rampes + releve.intactes)
       + ', forme de valeur non reconnue.');
+  }
+
+  // ── POSE DU TRAIT DE CÔTE ──────────────────────────────────────
+  // AUCUN IDENTIFIANT IGN EN CLAIR NE SERT D'ANCRAGE ICI, ni pour la source ni
+  // pour le rang : un identifiant de style est un libellé que l'IGN renomme sans
+  // prévenir, un nom de source-layer tient. Les deux se retrouvent donc par leur
+  // source-layer, la forme que ce fichier préfère partout ailleurs.
+
+  // La source des tuiles se lit sur l'eau : le trait de côte doit venir des mêmes
+  // tuiles que le polygone qu'il borde, et l'eau a déjà son périmètre nommé.
+  function trouverSourceEau(glMap) {
+    var couches = glMap.getStyle().layers;
+    for (var i = 0; i < couches.length; i++) {
+      if (COUCHES_SURFACES_EAU.indexOf(couches[i]['source-layer']) >= 0) return couches[i].source;
+    }
+    return null;
+  }
+
+  // LE RANG SE PREND SOUS LE PREMIER TOPONYME. addLayer insère SOUS l'ancre :
+  // rendre l'identifiant du premier toponyme du style place donc le trait
+  // au-dessus de tous les aplats (l'eau pâlie comprise, sans quoi il s'y
+  // noierait), de toutes les routes, du ferré et du bâti surfacique, et sous tous
+  // les noms sans exception, sous les ponctuels et sous les sept lignes de
+  // bati_lin. Ce sont les seules choses qui passeront par-dessus lui aux zooms 13
+  // à 18 : lignes électriques et câbles. Rien de ce que MUP pose n'est en jeu,
+  // marqueurs, tracé et bulles vivant dans des panes Leaflet au-dessus du canvas
+  // GL entier.
+  function trouverAncreToponyme(glMap) {
+    var couches = glMap.getStyle().layers;
+    for (var i = 0; i < couches.length; i++) {
+      var source = couches[i]['source-layer'];
+      if (typeof source === 'string' && source.indexOf(PREFIXE_TOPONYME) === 0) return couches[i].id;
+    }
+    return null;
+  }
+
+  // TROIS REPLIS, ET AUCUNE POSE SILENCIEUSEMENT RATÉE : ce que l'IGN peut
+  // renommer se vérifie avant d'écrire, et se dit en console quand il manque.
+  function poserTraitDeCote(glMap) {
+    var source = trouverSourceEau(glMap);
+    if (!source) {
+      console.warn('Plan IGN : aucune couche en « ' + COUCHES_SURFACES_EAU.join(', ')
+        + ' » dans le style, source des tuiles introuvable, trait de côte non posé.');
+      return;
+    }
+
+    // vectorLayerIds vient de la metadata.json de la source, que MapLibre a déjà
+    // chargée quand « load » se déclenche. Absente ou vide, on n'en conclut rien
+    // et on pose quand même : une couche branchée sur une source-layer qui
+    // n'existe pas ne dessine rien et ne casse rien, cela vaut mieux qu'un faux
+    // négatif qui priverait le littoral de son trait sur un doute.
+    var sourceGL = glMap.getSource(source);
+    var couchesSource = sourceGL && sourceGL.vectorLayerIds;
+    if (Array.isArray(couchesSource) && couchesSource.length
+      && couchesSource.indexOf(SOURCE_LAYER_LAISSE) < 0) {
+      console.warn('Plan IGN : source-layer « ' + SOURCE_LAYER_LAISSE + ' » absente des tuiles, '
+        + 'trait de côte non posé, source-layer renommée côté IGN.');
+      return;
+    }
+
+    // Sans ancre, la couche part au sommet de la pile, donc par-dessus les noms :
+    // mal rangée mais visible, et signalée. Un trait de côte absent coûterait
+    // davantage à la lecture qu'un trait de côte trop haut.
+    var ancre = trouverAncreToponyme(glMap);
+    if (!ancre) {
+      console.warn('Plan IGN : aucune couche de toponyme dans le style, trait de côte posé au sommet '
+        + 'de la pile, donc par-dessus les noms.');
+    }
+
+    // Filtre à l'ancienne forme, celle qu'emploient les 425 couches du style.
+    var couche = {
+      id: COUCHE_LAISSE,
+      type: 'line',
+      source: source,
+      'source-layer': SOURCE_LAYER_LAISSE,
+      filter: ['in', 'symbo'].concat(SYMBO_LAISSE_HAUTE),
+      // La géométrie de la laisse est très dentelée : un raccord en onglet y
+      // produit des pointes, le raccord rond n'en produit pas.
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': COULEUR_LAISSE, 'line-width': LARGEUR_LAISSE }
+    };
+    if (ancre) glMap.addLayer(couche, ancre); else glMap.addLayer(couche);
   }
 
   // ── CHARGEMENT DES DEUX BIBLIOTHÈQUES ──────────────────────────────────

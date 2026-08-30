@@ -52,6 +52,7 @@ import { BYPASS_EMAIL, isOwner } from './lib/vip.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh } from './server/services/referentiel-read.js'
 import { projeterReferentiel, retirerProjection } from './server/services/projection-referentiel.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
+import { creerSalle } from './server/services/whereby.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
 import { rapprocherDepartementAtoutFrance } from './server/services/rapprochement-atout-france.js'
 import { runMentionsLegalesJob, enrichirMentionsLegales } from './server/services/mentions-legales.js'
@@ -6687,6 +6688,68 @@ async function visioSettingsUpsertHandler(req, res) {
 app.put('/api/visio/settings', visioSettingsUpsertHandler)
 // POST alias pour sendBeacon (beforeunload flush) — sendBeacon ne supporte que POST
 app.post('/api/visio/settings', visioSettingsUpsertHandler)
+
+// ── SALLE DE VISIOCONFÉRENCE, CRÉÉE CHEZ WHEREBY ──────────────────────
+// La seule route du bloc VISIO qui ne lise ni n'écrive la base : elle crée une
+// salle chez un tiers et rend ses coordonnées. Elle ne touche ni à l'agenda,
+// ni au pipeline, ni à aucune table — ce qu'on gardera de la salle se décide
+// chez l'appelante.
+//
+// L'IDENTITÉ VIENT DE req.userId, que seul requireAuth pose depuis la session
+// vérifiée, et JAMAIS de getUserId, dont la chaîne de repli lit l'en-tête
+// x-user-id, la query et le corps, et retombe en dernier ressort sur un
+// identifiant partagé. Chaque appel abouti consomme une réunion du quota
+// facturé du compte Whereby : l'identité doit se lire dans la route, sans
+// dépendre de l'ordre d'un middleware à des milliers de lignes d'ici. Les
+// routes voisines qui appellent encore getUserId n'engagent, elles, que des
+// enregistrements de l'abonné.
+//
+// La garde est explicite parce que String(undefined) vaut « undefined », qui
+// serait un identifiant d'enregistrement parfaitement valide : une requête
+// atteignant cette route hors du portillon dépenserait du quota sous une
+// identité qui n'est celle de personne. Absente, l'identité vaut 401, sans
+// qu'un seul appel réseau ait lieu.
+//
+// AUCUNE GARDE D'ABONNEMENT ÉCRITE ICI. Les deux portillons globaux la
+// couvrent, et un POST est mutatif : un essai expiré tombe en 402 avant
+// d'arriver, et le mur payant parle seul.
+//
+// LA DATE DE FIN VIENT DE L'APPELANTE. C'est elle qui gouverne la vie de la
+// salle : passée cette date, l'URL est morte. La route ne pose aucun défaut —
+// absente, illisible ou déjà passée, elle vaut 400, avant tout appel réseau.
+// Le choix de la durée appartient à qui fixe le rendez-vous.
+//
+// UN ÉCHEC WHEREBY REND 502, et non 500 : le fournisseur est en cause, pas
+// nous, et la base n'a pas été touchée. La clé absente rend 503 : c'est notre
+// configuration qui manque, pas le tiers qui flanche. Aucun de ces corps ne
+// porte la clé, qui n'a voyagé que dans l'en-tête Authorization du service.
+app.post('/api/visio/rooms', async (req, res) => {
+  if (!req.userId) return res.status(401).json({ error: 'Authentification requise' })
+  const brut = String(req.body?.endDate || '').trim()
+  const fin = brut ? new Date(brut) : null
+  if (!fin || Number.isNaN(fin.getTime())) {
+    return res.status(400).json({ error: 'Date de fin de salle requise' })
+  }
+  if (fin.getTime() <= Date.now()) {
+    return res.status(400).json({ error: 'Date de fin de salle déjà passée' })
+  }
+
+  const salle = await creerSalle({ endDate: fin.toISOString() })
+  if (salle.created) {
+    return res.status(201).json({
+      roomUrl: salle.roomUrl,
+      hostRoomUrl: salle.hostRoomUrl,
+      meetingId: salle.meetingId,
+      endDate: salle.endDate
+    })
+  }
+  if (salle.reason === 'config') {
+    console.error('[visio/rooms] WHEREBY_API_KEY absente')
+    return res.status(503).json({ error: 'Visioconférence non configurée' })
+  }
+  console.error('[visio/rooms] création échouée —', salle.reason, salle.status || '')
+  return res.status(502).json({ error: 'Salle de visioconférence indisponible', upstream_status: salle.status })
+})
 
 app.get('/api/visio/logs', async (req, res) => {
   try {

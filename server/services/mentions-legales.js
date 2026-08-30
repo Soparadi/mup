@@ -828,12 +828,30 @@ export async function enrichirMentionsLegales(siret, options = {}) {
   const sansRechercheWeb = options.sansRechercheWeb === true
   const s = String(siret || '').replace(/\s+/g, '')
   const result = { siret: s, source: null, confidence: null, signals: [], attestee: false, written: false, skipped: null }
-  // Frontière de passage, lue par le finally. analyserSite la porte déjà dans son
-  // type de retour : null = on n'a pas pu visiter (refus du portillon, délai
-  // dépassé, hôte mort) ; objet = le site a répondu, corroboration ou non. On
-  // compte donc les URL TENTÉES et les visites ABOUTIES, jamais les résultats.
+  // DEUX FRONTIÈRES DE PASSAGE, lues par le finally, et le passage vaut L'UNE OU
+  // L'AUTRE. analyserSite les alimente par son type de retour : null = on n'a pas pu
+  // visiter (refus du portillon, délai dépassé, hôte mort) ; objet = le site a
+  // répondu, corroboration ou non.
+  //   • visiteBaseAboutie    — l'adresse INSCRITE EN BASE a répondu. Le site est
+  //     celui que la fiche déclare : qu'il corrobore ou non, on a frappé à SA porte,
+  //     et l'absence de recoupement y est un vrai résultat négatif.
+  //   • corroborationAboutie — un site a corroboré, quel que soit le maillon qui a
+  //     fourni l'adresse. La corroboration EST la preuve qu'on était à la bonne
+  //     porte : elle vaut passage par elle-même, sans rien devoir à la provenance.
+  //
+  // Ce que ces deux frontières laissent dehors, et c'est tout leur objet : une
+  // adresse DEVINÉE — recherche web aujourd'hui, composition demain — qui répond
+  // sans rien corroborer. Le nom ressemble, l'hôte est vivant, et rien ne dit que la
+  // maison soit la bonne : le parking de domaine et l'homonyme étranger répondent
+  // aussi bien que le vrai site. Horodater là-dessus rendrait la fiche inerte trente
+  // jours sur une ressemblance. Voir porte_incertaine, dans le finally.
+  //
+  // visiteAboutie demeure mais ne décide plus du passage : elle ne sert qu'à séparer
+  // « personne n'a répondu » de « quelqu'un a répondu, mais qui ? ».
   let urlsTentees = 0
-  let visiteAboutie = false
+  let visiteAboutie = false          // une URL, quelle qu'elle soit, a répondu
+  let visiteBaseAboutie = false      // frontière 1
+  let corroborationAboutie = false   // frontière 2
   try {
     if (!s) { result.skipped = 'siret_vide'; return result }
 
@@ -866,9 +884,12 @@ export async function enrichirMentionsLegales(siret, options = {}) {
       const attestee = await estAttestee(faisceau.website)
       urlsTentees++
       const a = await analyserSite(faisceau.website, faisceau, { attestee })
-      if (a) visiteAboutie = true
+      // Frontière 1 : l'adresse venait de la base et elle a répondu. Le passage est
+      // acquis ici, avant même de savoir si le site recoupe quoi que ce soit.
+      if (a) { visiteAboutie = true; visiteBaseAboutie = true }
       if (a && a.confidence) {
         analyse = a
+        corroborationAboutie = true
         // L'adresse qui a répondu, pas la forme normalisée : le repli http l'a
         // peut-être dégradée, et c'est celle-là qui est joignable.
         sourceUrl = a.urlLue || normalizeUrl(faisceau.website)
@@ -894,11 +915,14 @@ export async function enrichirMentionsLegales(siret, options = {}) {
         const attestee = await estAttestee(url)
         urlsTentees++
         const a = await analyserSite(url, faisceau, { attestee })
-        // Un seul candidat qui répond suffit à établir le passage : on a bien visité
-        // le SIRET, même si aucun des cinq ne corrobore. Le TTL est alors mérité.
+        // Un candidat qui répond NE SUFFIT PAS à établir le passage : l'adresse a
+        // été devinée, et un hôte vivant ne dit pas qu'il est le bon. Seule la
+        // corroboration tranche ici — frontière 2. Sans elle, le compteur ci-dessous
+        // ne sert plus qu'à distinguer l'injoignable de la porte incertaine.
         if (a) visiteAboutie = true
         if (a && a.confidence) {
           analyse = a
+          corroborationAboutie = true
           sourceUrl = a.urlLue || normalizeUrl(url)
           result.source = 'web'
           result.attestee = attestee
@@ -924,13 +948,21 @@ export async function enrichirMentionsLegales(siret, options = {}) {
   } catch (e) {
     console.warn('[mentions-legales]', String(e?.message || e).slice(0, 100))
   } finally {
-    // Non-passage AVAL, symétrique des trois gardes amont : aucune visite n'a abouti.
-    //   • sans_url    — pas une seule URL à tenter (ni base, ni recherche web).
-    //   • injoignable — des URL tentées, aucune n'a répondu (refus du portillon,
-    //     délai dépassé, hôte mort). Un site joignable qui ne corrobore pas N'EST
-    //     PAS ici : c'est un vrai résultat négatif, il mérite ses 30 jours.
-    if (result.skipped == null && !visiteAboutie) {
-      result.skipped = urlsTentees > 0 ? 'injoignable' : 'sans_url'
+    // Non-passage AVAL, symétrique des trois gardes amont : ni visite de base, ni
+    // corroboration. Trois motifs, du plus vide au plus ambigu :
+    //   • sans_url         — pas une seule URL à tenter (ni base, ni recherche web).
+    //   • injoignable      — des URL tentées, aucune n'a répondu (refus du portillon,
+    //     délai dépassé, hôte mort).
+    //   • porte_incertaine — un hôte a répondu, mais l'adresse était devinée et rien
+    //     n'a corroboré. Ni sans_url ni injoignable : il y avait bien une porte et
+    //     elle s'est ouverte, rien ne dit que ce soit la bonne. Pas d'horodatage, la
+    //     fiche reste candidate — une adresse mieux composée la retrouvera.
+    // Un site DE LA BASE qui ne corrobore pas n'est dans aucun des trois : c'est un
+    // vrai résultat négatif, et il mérite ses 30 jours.
+    if (result.skipped == null && !visiteBaseAboutie && !corroborationAboutie) {
+      result.skipped = urlsTentees === 0
+        ? 'sans_url'
+        : (visiteAboutie ? 'porte_incertaine' : 'injoignable')
     }
     // Marqué à CHAQUE passage réel (trouvé ou non). Pas de marquage si skip amont
     // (siret vide / hors référentiel / déjà frais < TTL) ni si skip aval ci-dessus.

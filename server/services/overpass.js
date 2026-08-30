@@ -13,7 +13,7 @@ import { getDb } from '../../lib/surreal.js'
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter'
 
 // Overpass refuse (HTTP 406) les requêtes sans User-Agent explicite.
-const USER_AGENT = 'MovUP/1.0 (+https://movup.fr)'
+const USER_AGENT = 'MovUP/1.0 (+https://movup.io)'
 
 // Couple pilote unique NAF → sélecteur OSM.
 export const NAF_TO_OSM = {

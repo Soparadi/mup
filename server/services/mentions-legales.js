@@ -29,7 +29,7 @@ import { rechercherUrlSociete } from './recherche-web.js'
 import { parserRobots, evaluerRobots } from './robots-txt.js'
 
 // Overpass/serveurs tiers refusent souvent les requêtes sans User-Agent explicite.
-const USER_AGENT = 'MovUP/1.0 (+https://movup.fr)'
+const USER_AGENT = 'MovUP/1.0 (+https://movup.io)'
 
 // Bornes réseau. Le [timeout] Overpass QL ne s'applique PAS aux sites tiers :
 // c'est l'AbortController qui borne CHAQUE appel HTTP.

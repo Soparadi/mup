@@ -340,6 +340,7 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .badge-provider.zoom{background:rgba(45,140,255,.12);color:var(--zoom)}
 .badge-provider.teams{background:rgba(70,75,200,.12);color:var(--teams)}
 .badge-provider.meet{background:rgba(0,128,90,.12);color:var(--meet)}
+.badge-provider.whereby{background:var(--visio-light);color:var(--visio)}
 .badge-provider.custom{background:var(--surface2);color:var(--muted)}
 .rdv-card .name{font-weight:600;font-size:12px;color:var(--text);margin-bottom:1px}
 .rdv-card .societe{font-size:10.5px;color:var(--muted)}
@@ -1568,6 +1569,11 @@ body #mup-cookie-panel{z-index:60001}
 <script src="/sidebar.js"></script>
 <script src="/js/trial-expired-modal.js" defer></script>
 <script src="/js/auth-401-handler.js" defer></script>
+<!-- LE COMPOSANT DE LA SALLE MovUP. Chargé en module, il se défère de
+     lui-même : le script en ligne, plus bas, n'appelle rien de <whereby-embed>
+     à l'analyse, il ne fait que poser l'élément quand un rendez-vous se peint.
+     Le CDN de Whereby est la seule origine tierce de cette page. -->
+<script src="https://cdn.srv.whereby.com/embed/v3-embed.js" type="module"></script>
 <script src="/_fiche-client.js"></script>
 <script src="/js/mup-confirm.js"></script>
 <script>
@@ -1588,6 +1594,11 @@ const LS = {
 };
 
 const PROVIDERS = {
+  // LA SALLE MovUP, seul outil EMBARQUÉ du registre : elle vient de nous, elle
+  // se tient dans le cadre, et son motif reconnaît le sous-domaine que Whereby
+  // attribue au compte. Le violet est celui de la page — var(--visio) — parce
+  // que cette salle EST la page, et non un outil qu'on y branche.
+  whereby:{ embed:true,  label:'Visio MovUP', color:'#7C3AED', pattern:/\.whereby\.com/ },
   zoom:  { embed:false, label:'Zoom',  color:'#2D8CFF', pattern:/zoom\.us/ },
   teams: { embed:false, label:'Teams', color:'#464BC8', pattern:/teams\.microsoft|teams\.live/ },
   meet:  { embed:false, label:'Meet',  color:'#00805A', pattern:/meet\.google/ },
@@ -3030,11 +3041,13 @@ function engagerSeance(){
   startTimer();
   const barre = $('timerBar');
   if(barre) barre.classList.add('seance-engagee');
-  // Le cadre n'a aucune image à montrer : la place passe aux documents. Le
-  // tiroir s'ouvre du même geste — lui donner toute la hauteur pour n'afficher
-  // qu'un en-tête n'aurait aucun sens. L'abonné garde la main : le refermer
-  // rend la place au cadre.
-  setTiroirDocs(true);
+  // Le tiroir des documents s'ouvre quand le cadre n'a RIEN à montrer : la
+  // séance est ailleurs, dans une fenêtre externe, et donner toute la hauteur à
+  // un en-tête n'aurait aucun sens. Sur une salle embarquée le cadre porte la
+  // visio elle-même — le tiroir la recouvrirait à l'instant même où elle
+  // commence. L'abonné garde la main dans les deux cas : le bouton du tiroir
+  // reste à sa portée.
+  if(!PROVIDERS[activeRdv.provider]?.embed) setTiroirDocs(true);
   refletCadreReduit();
   renderRdvList();
 }
@@ -3179,9 +3192,31 @@ function renderVideoFrame(rdv){
   const frame = $('videoFrame');
   const provider = PROVIDERS[rdv.provider];
 
-  // Branche embarquée inatteignable tant qu'aucun provider n'a embed:true — en attente du prochain provider embarqué (Digital Samba).
-  if(provider && provider.embed && rdv.link){
-    frame.innerHTML = `<iframe src="${rdv.link}" allow="camera; microphone; display-capture; autoplay; clipboard-write" allowfullscreen></iframe>`;
+  // LA BRANCHE EMBARQUÉE — la salle MovUP, et pour l'instant elle seule.
+  // Le cadre porte le COMPOSANT de Whereby et non une <iframe> montée à la
+  // main : c'est le composant qui parle des évènements de la salle, et c'est de
+  // lui que vient le seul signal honnête d'entrée en séance.
+  //
+  // L'ABONNÉ ENTRE PAR SA PORTE. hostRoomUrl le fait hôte de sa propre salle,
+  // qui est verrouillée : sans lui il y frapperait, et personne ne serait
+  // derrière pour ouvrir. Le lien d'invitation, celui du prospect, ne passe
+  // jamais par ici — il ne sert qu'à partager.
+  //
+  // Le repli sur rdv.link couvre la salle rendue sans porte d'hôte : entrer en
+  // invité chez soi est inconfortable, ne pas entrer du tout ne l'est pas moins.
+  if(provider && provider.embed && (rdv.lienHote || rdv.link)){
+    frame.innerHTML = '';
+    const salle = document.createElement('whereby-embed');
+    salle.setAttribute('room', rdv.lienHote || rdv.link);
+    salle.setAttribute('minimal', 'on');
+    salle.setAttribute('logo', 'off');
+    salle.setAttribute('lang', 'fr');
+    // « join » — le participant local est CONNECTÉ à la salle. C'est ce que la
+    // fenêtre externe prétendait dire et ne disait pas : une fenêtre s'ouvre
+    // avant qu'on entre, et bien souvent sans qu'on entre jamais. Le
+    // chronomètre part d'ici, sur une entrée avérée.
+    salle.addEventListener('join', ()=>engagerSeance());
+    frame.appendChild(salle);
   } else {
     frame.innerHTML = `
       <div class="popup-launcher">

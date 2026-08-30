@@ -526,6 +526,14 @@ export async function runAuthMigration() {
     // N'ouvre JAMAIS le superadmin (verrou email seul, statut disjoint). Géré
     // depuis le tableau superadmin via POST /api/admin/comptes/bypass.
     'DEFINE FIELD IF NOT EXISTS bypass ON user TYPE option<bool> DEFAULT false',
+    // Approbation manuelle de l'inscription (lib/approbation.js). Horodate
+    // l'accord explicite donné depuis le tableau superadmin ; c'est CET
+    // instant qui fait démarrer l'essai, pas celui de l'inscription.
+    // option<datetime> SANS DEFAULT : les comptes antérieurs restent à NONE,
+    // et cette absence ne les bloque pas (estEnAttente écarte déjà tout compte
+    // dont trial_started_at est posé). Le champ survit au retrait de la
+    // variable INSCRIPTION_APPROBATION, inerte : plus personne ne le lit.
+    'DEFINE FIELD IF NOT EXISTS approved_at ON user TYPE option<datetime>',
     // Dernière venue du compte — posée par toucherLastSeen (pas d'une heure)
     // depuis les deux portillons de session. option<...> sans DEFAULT : les
     // comptes qui ne sont pas revenus depuis l'ajout restent à NONE, et cette

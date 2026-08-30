@@ -2001,6 +2001,14 @@ function direEchecLien(verdict){
   showToast('Enregistrement impossible : votre lien n\'a pas été enregistré');
 }
 
+// Le même dire pour les autres gestes qui passent par les réglages : étalonnage,
+// fonds, écartement du rappel. Même règle sur 402, pour la même raison, et une
+// suite de phrase qui dit dans quel état la valeur est restée.
+function direEchecReglage(verdict, suite){
+  if(verdict.raison === 'reponse' && verdict.status === 402) return;
+  showToast('L\'enregistrement a échoué. ' + suite);
+}
+
 /* ————————————————————————————————————————————————
    ACCUEIL PREMIÈRE VISIO
    ———————————————————————————————————————————————— */
@@ -2900,13 +2908,18 @@ function updateUrgentBanner(rdvs, now){
       banner.classList.remove('show');
       peindreRdv(imminent);
     };
-    $('urgentDismiss').onclick = ()=>{
+    $('urgentDismiss').onclick = async ()=>{
       if(!_state.settings.urgent_dismissed) _state.settings.urgent_dismissed = [];
-      if(!_state.settings.urgent_dismissed.includes(imminent.id)){
-        _state.settings.urgent_dismissed.push(imminent.id);
-        _schedulePutSettings();
-      }
+      const nouvel = !_state.settings.urgent_dismissed.includes(imminent.id);
+      if(nouvel) _state.settings.urgent_dismissed.push(imminent.id);
+      // Le bandeau se retire tout de suite : l'écartement vaut pour la session
+      // quel que soit le sort de l'écriture. C'est sa DURABILITÉ qui dépend du
+      // verdict, et l'abonné qui croit son rappel écarté pour de bon doit savoir
+      // qu'il le reverra au prochain chargement.
       banner.classList.remove('show');
+      if(!nouvel) return;
+      const verdict = await _schedulePutSettings();
+      if(!verdict.ok) direEchecReglage(verdict, 'Ce rappel revient au prochain chargement de la page.');
     };
     banner.classList.add('show');
   } else {
@@ -3252,35 +3265,46 @@ async function endCurrentRdv(){
   // visio à cet instant — jamais de la sélection, jamais de la durée prévue au
   // rendez-vous. Terminer sans avoir jamais lancé consigne donc ZÉRO : le
   // journal s'écrit quand même, c'est la durée qui est honnête.
+  // La durée part en SECONDES réelles : arrondie à la minute inférieure, toute
+  // séance de moins d'une minute se consignait à zéro, et le journal comptait
+  // une visio sans durée là où il y avait quarante secondes.
   const fin = Date.now();
   const debut = timerStart || fin;
-  const duree = Math.floor((fin - debut) / 60000);
+  const dureeSec = Math.max(0, Math.round((fin - debut) / 1000));
 
   // Le journal ne porte plus de texte : la zone de notes qui l'alimentait est
   // retirée, et la prise de notes passe au champ Note du bloc Activités de la
   // fiche. `notes` est simplement absent du corps — la route retombe sur sa
   // valeur par défaut, chaîne vide, et le champ reste en place en base pour
   // l'historique déjà écrit.
-  await api.addLog({
+  const journal = await api.addLog({
     rdvId: rdv.id,
     prospectId: rdv.prospectId,
     provider: rdv.provider,
     link: rdv.link || '',
     started_at: new Date(debut).toISOString(),
     ended_at: new Date(fin).toISOString(),
-    duration_seconds: duree * 60
+    duration_seconds: dureeSec
   });
 
+  let carteEcrite = true;
   if(rdv.prospectId){
     const pipeline = await api.getPipeline();
     const card = pipeline.find(p => p.id === normFicheId(rdv.prospectId));
     if(card && (card.stage || '').toLowerCase() === 'visio'){
       card.stage = 'rdv';
-      await api.putPipelineCard(card);
+      carteEcrite = !!await api.putPipelineCard(card);
     }
   }
 
-  showToast(`RDV enregistré · ${duree} min`);
+  // « RDV enregistré » annonce une écriture : il ne part que si le journal a
+  // été accepté. Les deux verdicts sont dits, en une phrase, et la fin de
+  // séance suit son cours dans tous les cas : le chronomètre s'arrête, l'écran
+  // se vide, c'est un geste qui appartient à l'abonné.
+  const minutes = Math.floor(dureeSec / 60);
+  if(!journal) showToast('La séance est close. Son enregistrement au journal a échoué.');
+  else if(!carteEcrite) showToast(`RDV enregistré · ${minutes} min. Sa fiche Pipeline garde son état précédent.`);
+  else showToast(`RDV enregistré · ${minutes} min`);
   resetTimer();
   activeRdv = null;
   rdvAffiche = null;
@@ -3357,9 +3381,10 @@ function updateCalLabels(){
 let calSaveTimer = null;
 function persistCalibrationDebounced(c){
   clearTimeout(calSaveTimer);
-  calSaveTimer = setTimeout(()=>{
+  calSaveTimer = setTimeout(async ()=>{
     _state.settings.calibration = c;
-    _schedulePutSettings();
+    const verdict = await _schedulePutSettings();
+    if(!verdict.ok) direEchecReglage(verdict, 'Votre étalonnage garde sa valeur enregistrée.');
   }, 500);
 }
 
@@ -3374,14 +3399,15 @@ function bindCalibrationControls(){
     };
   });
   const reset = $('calReset');
-  if(reset) reset.onclick = ()=>{
+  if(reset) reset.onclick = async ()=>{
     $('lum').value = 100; $('r').value = 0; $('g').value = 0; $('b').value = 0;
     updateCalLabels();
     const c = { lum:100, r:0, g:0, b:0 };
     applyCalibrationFilter(c);
     _state.settings.calibration = c;
-    _schedulePutSettings();
-    showToast('Étalonnage réinitialisé');
+    const verdict = await _schedulePutSettings();
+    if(verdict.ok) showToast('Étalonnage réinitialisé');
+    else direEchecReglage(verdict, 'Votre étalonnage garde sa valeur enregistrée.');
   };
 }
 
@@ -3441,8 +3467,18 @@ function bindBackgroundControls(){
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const dataUrl = ev.target.result;
+      // La mémoire est écrite d'abord, puis REMISE à sa valeur d'avant si
+      // l'écriture n'a pas abouti : sans ce retour en arrière, la vignette et le
+      // cadre montrent un fond que le serveur ignore, et qui disparaît au
+      // rechargement suivant.
+      const avant = _state.bgCustom;
       _state.bgCustom = dataUrl;
-      await api.setBgCustom(dataUrl, file.type, file.size);
+      const ecrit = await api.setBgCustom(dataUrl, file.type, file.size);
+      if(!ecrit){
+        _state.bgCustom = avant;
+        showToast('L\'enregistrement du fond a échoué. Votre fond précédent reste en place.');
+        return;
+      }
       renderCustomBgThumb();
       selectBackground('custom');
       showToast('Fond personnalisé appliqué');
@@ -3474,8 +3510,15 @@ function renderCustomBgThumb(){
 window.removeCustomBg = async function(btn){
   if(btn) btn.disabled = true;
   if(!await mupConfirm('Supprimer le fond personnalisé ?', null, 'Supprimer', 'Annuler')){ if(btn) btn.disabled = false; return; }
+  // Le serveur d'abord, son verdict lu : la vignette et l'état local ne
+  // disparaissent qu'après une suppression réelle.
+  const efface = await api.deleteBgCustom();
+  if(!(efface && efface.ok)){
+    if(btn) btn.disabled = false;
+    showToast('La suppression a échoué. Votre fond personnalisé reste en place.');
+    return;
+  }
   _state.bgCustom = null;
-  await api.deleteBgCustom();
   const active = _state.settings.bg_active || 'none';
   const slot = $('customBgSlot');
   if(slot){
@@ -3569,8 +3612,13 @@ $('saveDocBtn').addEventListener('click', async ()=>{
       pinned: pinnedCount < 3,
       addedAt: new Date().toISOString()
     };
+    // Sans verdict, un refus du serveur laissait la page pousser sa propre
+    // copie : le document s'affichait, s'ouvrait, et s'évanouissait au
+    // rechargement suivant. L'échec repasse par le rattrapage ci-dessous, qui
+    // retire le blob déjà écrit.
     const created = await api.addDoc(docMeta);
-    _state.docs.push(created || docMeta);
+    if(!created) throw new Error('le serveur a refusé l\'enregistrement du document');
+    _state.docs.push(created);
 
     showToast('Document ajouté');
     $('uploadDocModal').classList.remove('show');
@@ -3814,8 +3862,17 @@ async function togglePin(docId){
     showToast('Maximum 3 documents épinglés');
     return;
   }
+  const avant = doc.pinned;
   doc.pinned = !doc.pinned;
-  await api.updateDoc(docId, { ...doc });
+  const ecrit = await api.updateDoc(docId, { ...doc });
+  if(!ecrit){
+    // L'épingle commande les touches 1, 2 et 3 : affichée sur un état que le
+    // serveur ignore, elle promet un raccourci qui changera au rechargement.
+    doc.pinned = avant;
+    showToast('L\'enregistrement a échoué. Le document garde son état précédent.');
+    renderDocsList();
+    return;
+  }
   showToast(doc.pinned ? 'Épinglé' : 'Désépinglé');
   renderDocsList();
 }
@@ -3825,9 +3882,17 @@ async function deleteDoc(docId, btn){
   if(!doc) return;
   if(btn) btn.disabled = true;
   if(!await mupConfirm(`Supprimer "${doc.name}" ?`, null, 'Supprimer', 'Annuler')){ if(btn) btn.disabled = false; return; }
+  // Le serveur d'abord, son verdict lu. Le blob détruit d'avance sur un refus
+  // laissait une entrée sans fichier : un document toujours listé, que plus
+  // rien ne peut ouvrir.
+  const efface = await api.deleteDoc(docId);
+  if(!(efface && efface.ok)){
+    if(btn) btn.disabled = false;
+    showToast('La suppression a échoué. Le document reste dans votre liste.');
+    return;
+  }
   const blobKey = doc.indexedDb_local_id || doc.id;
   await dbDelete(blobKey);
-  await api.deleteDoc(docId);
   _state.docs = _state.docs.filter(m => m.id !== docId);
   showToast('Document supprimé');
   renderDocsList();
@@ -4016,20 +4081,6 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
   const prospectName = txt.split(' — ')[0] || 'Prospect';
   const societe = txt.split(' — ')[1] || '';
 
-  if(prospectId){
-    const pipeline = await api.getPipeline();
-    const card = pipeline.find(p => p.id === prospectId);
-    if(card){
-      card.stage = 'visio';
-      card.visio_link = link;
-      card.visio_provider = provider;
-      card.rdv_date = dateISO;
-      card.duree = +$('rdvDuration').value;
-      card.sujet = $('rdvSubject').value;
-      await api.putPipelineCard(card);
-    }
-  }
-
   // Agenda event via API existante — même forme que la fiche pipeline : date YYYY-MM-DD,
   // start/end HH:MM, ficheId. Le serveur stocke le corps tel quel, sans normalisation.
   const pad2 = n => String(n).padStart(2, '0');
@@ -4054,9 +4105,41 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
     provider, link, notes: $('rdvSubject').value,
     status: 'planned', createdAt: new Date().toISOString()
   };
+  // L'agenda EN PREMIER, et son verdict lu. C'est cette écriture qui fait
+  // exister le rendez-vous : la carte Pipeline, la ligne de fil et l'annonce de
+  // succès décrivent toutes un évènement qui doit être en base. Postée sans
+  // qu'on lise sa réponse, elle laissait la page annoncer « RDV créé » sur un
+  // agenda resté vide, avec une fiche déjà passée en étape visio et une ligne
+  // de fil qui date une visio qui n'existe pas.
+  let agendaOk = false, agendaStatus = 0;
   try {
-    await fetch('/api/agenda', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(agendaPayload) });
+    const r = await fetch('/api/agenda', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(agendaPayload) });
+    agendaOk = r.ok;
+    agendaStatus = r.status;
   } catch(e){ console.warn('[visio] POST agenda failed', e); }
+  if(!agendaOk){
+    // Sur 402 le mur payant de trial-expired-modal.js est déjà à l'écran : la
+    // page se tait plutôt que de doubler ce qu'il dit.
+    if(agendaStatus !== 402) showToast('La création a échoué. Votre agenda reste tel qu\'il était.');
+    return;
+  }
+
+  // La carte Pipeline vient APRÈS, et son échec se dit sans rien annuler : le
+  // rendez-vous existe, c'est son reflet sur la fiche qui manque.
+  let carteManquee = false;
+  if(prospectId){
+    const pipeline = await api.getPipeline();
+    const card = pipeline.find(p => p.id === prospectId);
+    if(card){
+      card.stage = 'visio';
+      card.visio_link = link;
+      card.visio_provider = provider;
+      card.rdv_date = dateISO;
+      card.duree = +$('rdvDuration').value;
+      card.sujet = $('rdvSubject').value;
+      carteManquee = !await api.putPipelineCard(card);
+    }
+  }
 
   // La visio planifiée entre dans le fil de l'entreprise, ancrée sur la fiche
   // choisie : elle se lira sur la fiche Pipeline comme sur la fiche contact.
@@ -4069,7 +4152,9 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
     });
   }
 
-  showToast('RDV créé');
+  showToast(carteManquee
+    ? 'Le rendez-vous est créé. Sa fiche Pipeline garde son état précédent.'
+    : 'RDV créé');
   $('newRdvModal').classList.remove('show');
   renderRdvList();
 

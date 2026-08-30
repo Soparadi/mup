@@ -49,10 +49,15 @@ if (!url || !ns || !dbName || !user || !pass) {
 console.log(`Connexion à ${url}`)
 console.log(`Namespace : ${ns} · Database : ${dbName}\n`)
 
+// Authentification au niveau BASE, `database` compris : c'est la forme de
+// lib/surreal.js, la seule qui passe contre movup-prod. La forme sans
+// `database`, héritée des anciens scripts de migration, se fait refuser en
+// InvalidAuth par le serveur cloud : l'utilisateur y est porté par la base,
+// pas par le namespace.
 await db.connect(url, {
   namespace: ns,
   database: dbName,
-  authentication: { namespace: ns, username: user, password: pass }
+  authentication: { namespace: ns, database: dbName, username: user, password: pass }
 })
 
 // 1. Les comptes concernés, nommés AVANT d'écrire. Un compte approuvé en bloc

@@ -948,12 +948,7 @@ body #mup-cookie-panel{z-index:60001}
 .btn-danger{padding:9px 14px;background:transparent;color:var(--red);border-radius:9px;font-size:12px;font-weight:600}
 .btn-danger:hover{background:rgba(163,45,45,.08)}
 .btn-danger:disabled{color:var(--muted2);cursor:not-allowed;pointer-events:none}
-.provider-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.provider-opt{padding:11px 8px;border:2px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;transition:all .12s}
-.provider-opt:hover{border-color:var(--border2)}
-.provider-opt.selected{border-color:var(--visio);background:var(--visio-soft)}
-.provider-opt .p-name{font-size:11px;font-weight:700;margin-top:4px}
-.provider-opt .p-mini{font-size:9px;color:var(--muted);margin-top:2px}
+.modal .aide{font-size:10.5px;line-height:1.45;color:var(--muted);margin-top:6px}
 .invite-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
 .invite-row input{flex:1}
 .invite-row button{flex-shrink:0;width:34px;height:34px;border-radius:8px;background:var(--surface)}
@@ -1404,19 +1399,16 @@ body #mup-cookie-panel{z-index:60001}
 <div class="overlay" id="newRdvModal">
   <div class="modal">
     <h2>Programmer un RDV visio</h2>
-    <div class="sub">Planifiez un appel avec un prospect et envoyez l'invitation.</div>
+    <div class="sub">La salle est créée par MovUP et s'ouvre dans cette page. Vous n'avez aucun outil à installer.</div>
+    <!-- LE LIEN TIERS, ET RIEN D'AUTRE. La grille des quatre fournisseurs est
+         partie : l'abonné ne choisit plus d'outil, la salle vient de nous. Ce
+         champ est la seule sortie, pour le rendez-vous qui se tient ailleurs —
+         chez le prospect, sur son Teams à lui. Rempli, aucune salle n'est
+         créée : rien ne justifie de payer une réunion qu'on ne tiendra pas. -->
     <div class="field">
-      <label>Provider</label>
-      <div class="provider-grid">
-        <div class="provider-opt" data-provider="zoom"><div style="font-size:18px;color:var(--zoom)">—</div><div class="p-name">Zoom</div><div class="p-mini">—</div></div>
-        <div class="provider-opt" data-provider="teams"><div style="font-size:18px;color:var(--teams)">—</div><div class="p-name">Teams</div><div class="p-mini">—</div></div>
-        <div class="provider-opt" data-provider="meet"><div style="font-size:18px;color:var(--meet)">—</div><div class="p-name">Meet</div><div class="p-mini">—</div></div>
-        <div class="provider-opt" data-provider="custom"><div style="font-size:18px;color:var(--muted)">—</div><div class="p-name">Autre</div><div class="p-mini">Lien custom</div></div>
-      </div>
-    </div>
-    <div class="field" id="customLinkField" style="display:none">
-      <label>Lien de la visio</label>
-      <input type="url" id="customLinkInput" placeholder="https://...">
+      <label>Lien de visio externe</label>
+      <input type="url" id="customLinkInput" placeholder="https://…">
+      <div class="aide">Laissez ce champ vide et MovUP crée la salle. Ne le remplissez que si le rendez-vous se tient sur le lien de quelqu'un d'autre.</div>
     </div>
     <div class="field">
       <label>Prospect</label>
@@ -1576,6 +1568,7 @@ body #mup-cookie-panel{z-index:60001}
 <script src="https://cdn.srv.whereby.com/embed/v3-embed.js" type="module"></script>
 <script src="/_fiche-client.js"></script>
 <script src="/js/mup-confirm.js"></script>
+<script src="/js/visio-salle.js"></script>
 <script>
 /* ————————————————————————————————————————————————
    MUP VISIO v4 — briefing, docs persistants, raccourcis, T-5
@@ -2451,8 +2444,17 @@ async function collectVisioRdvs(){
       adresse: p ? adresseComposee(p) : '',
       date: dateIso,
       duree: _dureeRdv(e, p),
-      provider: (p && p.visio_provider) || detectProvider((p && p.visio_link) || ''),
-      link: (p && p.visio_link) || '',
+      // Le fournisseur et le lien viennent de l'ÉVÈNEMENT : c'est lui que la
+      // porte de création écrit, et la carte Pipeline ne les porte plus. Le
+      // repli sur la fiche couvre les rendez-vous créés avant ce lot, dont
+      // l'évènement ne dit rien ; la déduction par le lien vient en dernier.
+      provider: e.provider || (p && p.visio_provider) || detectProvider(e.link || (p && p.visio_link) || ''),
+      link: e.link || (p && p.visio_link) || '',
+      // La porte de l'hôte et la date de mort de la salle. Sans repli : elles
+      // n'existent que sur une salle MovUP, et rien d'autre ne les écrit. Le
+      // cadre lit la première, la modification juge sur la seconde.
+      lienHote: e.lien_hote || '',
+      salleFin: e.salle_fin || '',
       status: (p && p.visio_status) || 'planned',
       // `notes` est le champ unique du sujet d'un rendez-vous : c'est celui que
       // l'Agenda saisit et affiche, et celui que la porte de création écrit
@@ -4037,43 +4039,13 @@ $('sendInviteBtn').addEventListener('click', ()=>{
 /* ————————————————————————————————————————————————
    MODALE NOUVEAU RDV
    ———————————————————————————————————————————————— */
-// La fenêtre s'ouvre sur le fournisseur de l'abonné, jamais sur un défaut posé
-// en dur : elle relit ses liens enregistrés à chaque ouverture. Si plusieurs le
-// sont, l'ordre zoom, teams, meet tranche — règle fixe, donc rien de nouveau à
-// stocker ; aucun lien, aucune tuile présélectionnée, et le refus tombe avant
-// que le formulaire soit rempli plutôt qu'au dernier clic.
-function refletProvidersRdv(){
-  const liens = _state.settings.links || {};
-  let choisi = '';
-  ['zoom','teams','meet'].forEach(p=>{
-    const tuile = document.querySelector(`.provider-opt[data-provider="${p}"]`);
-    if(!tuile) return;
-    const enregistre = !!String(liens[p] || '').trim();
-    tuile.querySelector('.p-mini').textContent = enregistre ? 'Lien enregistré' : 'À renseigner';
-    if(enregistre && !choisi) choisi = p;
-  });
-  document.querySelectorAll('.provider-opt').forEach(o=>o.classList.remove('selected'));
-  if(choisi) document.querySelector(`.provider-opt[data-provider="${choisi}"]`).classList.add('selected');
-  $('customLinkField').style.display = 'none';
-}
-
 $('openNewRdvBtn').addEventListener('click', async ()=>{
-  // Programmer un rendez-vous sans lien enregistré ne mène nulle part : la
-  // modale s'ouvrirait sans tuile présélectionnée et refuserait au dernier
-  // clic, formulaire déjà rempli. Le refus tombe ici, et il OUVRE la mise en
-  // service au lieu de laisser l'abonné devant un formulaire mort.
-  // Au temps du CHOIX, là où les trois outils de la barre ouvrent au temps de
-  // la saisie : ce bouton-ci ne dit aucun fournisseur. ouvrirPanneau porte ce
-  // temps par construction, il n'y a rien à lui répéter.
-  // Le report tombe, comme il tombe sur « Mettre en service » : il valait pour
-  // l'état où il a été pris, et ce clic dit le contraire. Aucune seconde chaîne
-  // d'écriture n'est ouverte : c'est le champ du panneau qui enregistre, par
-  // saveMyLink.
-  if(aucunLienEnregistre()){
-    effacerReport();
-    ouvrirPanneau();
-    return;
-  }
+  // AUCUN PORTILLON ICI. Il en tenait un : sans lien Zoom, Teams ou Meet
+  // enregistré, ce bouton renvoyait à la mise en service au lieu d'ouvrir la
+  // modale. Il avait sa raison — le formulaire aurait refusé au dernier clic,
+  // faute de fournisseur. Cette raison n'existe plus : la salle vient de nous,
+  // et un abonné qui n'a jamais rien enregistré programme son rendez-vous
+  // comme les autres. Le panneau de mise en service garde ses autres portes.
 
   // Une seule source : les cartes pipeline, comme la page agenda. L'id posé en
   // ficheId est de la forme nue, sans préfixe de table — c'est la seule que la
@@ -4097,17 +4069,7 @@ $('openNewRdvBtn').addEventListener('click', async ()=>{
   propose.setHours(propose.getHours() + 1);
   $('rdvDate').value = propose.getFullYear() + '-' + fmt2(propose.getMonth()+1) + '-' + fmt2(propose.getDate());
   $('rdvTime').value = fmt2(propose.getHours()) + ':00';
-  refletProvidersRdv();
   $('newRdvModal').classList.add('show');
-});
-
-document.querySelectorAll('.provider-opt').forEach(opt=>{
-  opt.addEventListener('click', ()=>{
-    document.querySelectorAll('.provider-opt').forEach(o=>o.classList.remove('selected'));
-    opt.classList.add('selected');
-    const p = opt.dataset.provider;
-    $('customLinkField').style.display = (p === 'custom') ? 'block' : 'none';
-  });
 });
 
 $('prospectSelect').addEventListener('change', async e=>{
@@ -4118,22 +4080,13 @@ $('prospectSelect').addEventListener('change', async e=>{
 });
 
 $('saveRdvBtn').addEventListener('click', async ()=>{
-  const provider = document.querySelector('.provider-opt.selected')?.dataset.provider;
-  if(!provider){ showToast("Choisissez l'outil de la visio"); return; }
   const date = $('rdvDate').value;
   const time = $('rdvTime').value;
   if(!date || !time){ showToast('Date et heure requises'); return; }
   const prospectId = $('prospectSelect').value;
-  const customLink = $('customLinkInput').value.trim();
-  const myLinks = _state.settings.links || {};
+  const lienTiers = $('customLinkInput').value.trim();
 
   const newId = 'rdv_' + uid();
-  let link = '';
-  if(['zoom','teams','meet'].includes(provider)){
-    link = myLinks[provider] || '';
-    if(!link){ deplierOutils(true); showToast(`Renseignez d'abord votre lien ${PROVIDERS[provider].label} en haut`); return; }
-  } else link = customLink;
-
   const dateISO = new Date(date + 'T' + time).toISOString();
   const txt = $('prospectSelect').selectedOptions[0]?.text || '';
   const prospectName = txt.split(' — ')[0] || 'Prospect';
@@ -4149,6 +4102,40 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
   const startStr = pad2(dStart.getHours()) + ':' + pad2(dStart.getMinutes());
   const endStr = pad2(dEnd.getHours()) + ':' + pad2(dEnd.getMinutes());
 
+  // —— LA SALLE, OU LE LIEN TIERS : JAMAIS LES DEUX ——
+  // Le champ rempli dit un rendez-vous tenu AILLEURS. Rien ne justifie alors de
+  // payer une réunion qu'on ne tiendra pas : aucune salle n'est demandée, et le
+  // fournisseur se déduit de l'adresse. Le champ vide dit l'inverse, et la
+  // salle vient de nous.
+  //
+  // ELLE VIENT AVANT L'AGENDA, parce que l'évènement doit partir avec son lien :
+  // l'écrire sans, puis le compléter, ferait deux écritures et laisserait un
+  // rendez-vous sans porte à la moindre coupure entre les deux. Le prix est
+  // qu'un agenda qui refuserait ensuite laisse une salle inutilisée derrière
+  // lui — elle meurt seule à sa date de fin, et le mur payant, lui, est déjà
+  // pris en amont : /api/visio/rooms est mutative, un essai expiré y tombe en
+  // 402 avant qu'aucune réunion soit consommée.
+  let provider, link, lienHote = '', salleFin = '';
+  if(lienTiers){
+    provider = detectProvider(lienTiers);
+    link = lienTiers;
+  } else {
+    const btnSalle = $('saveRdvBtn');
+    btnSalle.disabled = true;
+    const salle = await MUPSalle.demanderSalle({ debut: dStart, duree });
+    btnSalle.disabled = false;
+    // Sur refus, RIEN n'est écrit : ni agenda, ni fiche, ni fil. Le message est
+    // celui du module, et il se tait sur le mur payant, qui parle seul.
+    if(!salle.ok){
+      if(salle.message) showToast(salle.message);
+      return;
+    }
+    provider = 'whereby';
+    link = salle.roomUrl;
+    lienHote = salle.hostRoomUrl;
+    salleFin = salle.fin;
+  }
+
   const agendaPayload = {
     id: newId, type: 'visio',
     title: prospectName, societe,
@@ -4161,6 +4148,15 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
     // la création restait invisible alors qu'un sujet saisi à la modification
     // s'affichait, deux comportements pour un même champ dans un même écran.
     provider, link, notes: $('rdvSubject').value,
+    // `link` est le lien du PROSPECT — celui qu'on copie, qu'on envoie, qu'on
+    // partage. `lien_hote` est la porte de l'abonné, qui le fait hôte de sa
+    // propre salle verrouillée : elle ne quitte jamais cette page. Les
+    // confondre enverrait les pouvoirs d'hôte au prospect.
+    // `salle_fin` est la date à laquelle l'URL meurt, telle que Whereby l'a
+    // confirmée : c'est sur elle que la modification juge s'il faut une
+    // nouvelle salle. Les deux sont vides sur un lien tiers, qui n'a ni porte
+    // d'hôte ni date de mort.
+    lien_hote: lienHote, salle_fin: salleFin,
     status: 'planned', createdAt: new Date().toISOString()
   };
   // L'agenda EN PREMIER, et son verdict lu. C'est cette écriture qui fait
@@ -4184,16 +4180,21 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
 
   // La carte Pipeline vient APRÈS, et son échec se dit sans rien annuler : le
   // rendez-vous existe, c'est son reflet sur la fiche qui manque.
+  //
+  // DEUX CHAMPS, ET DEUX SEULEMENT. `visio_link`, `visio_provider`, `rdv_date`
+  // et `duree` sont partis : ils recopiaient sur la fiche ce que l'évènement
+  // d'agenda porte déjà, et deux copies d'une même donnée finissent par
+  // diverger. La liste relit l'évènement.
+  // `stage` reste : le compteur du Pipeline s'en alimente, et la redescente de
+  // fin de rendez-vous ne part que d'une fiche en 'visio' — sans cet aller, le
+  // retour serait un mouvement sans origine. L'avancement commercial ne doit
+  // rien au fournisseur de visio. `sujet` reste parce que la fiche l'affiche.
   let carteManquee = false;
   if(prospectId){
     const pipeline = await api.getPipeline();
     const card = pipeline.find(p => p.id === prospectId);
     if(card){
       card.stage = 'visio';
-      card.visio_link = link;
-      card.visio_provider = provider;
-      card.rdv_date = dateISO;
-      card.duree = +$('rdvDuration').value;
       card.sujet = $('rdvSubject').value;
       carteManquee = !await api.putPipelineCard(card);
     }

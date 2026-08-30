@@ -56,6 +56,12 @@ const MAX_RETRIES = 1                // un retry avec backoff sur 429/5xx/résea
 const ROBOTS_TIMEOUT_MS = FETCH_TIMEOUT_MS   // même délai que les pages, délibérément
 const ROBOTS_MAX_BYTES = 500_000     // 500 Ko, plafond RFC 9309 §2.5
 const ROBOTS_TTL_MS = 24 * 3600 * 1000   // TTL cache par hôte : 24 h
+// TTL propre à l'INJOIGNABLE. Un incident réseau ne mérite pas la mémoire d'une
+// décision : garder un hôte hors d'atteinte 24 h parce que son fichier d'exclusion
+// n'a pas répondu une fois, c'est faire dire à un délai dépassé ce que seul un
+// Disallow a le droit de dire. Quinze minutes suffisent à ne pas marteler un hôte
+// en panne, et la fiche redevient candidate dans la journée.
+const ROBOTS_INJOIGNABLE_TTL_MS = 15 * 60 * 1000
 const ROBOTS_CACHE_MAX = 500         // plafond d'entrées, éviction de la plus ancienne
 const ROBOTS_UA_TOKEN = 'MovUP'      // product token seul (jamais l'User-Agent réseau complet)
 // Plafond de crawl-delay honoré. La file est GLOBALE (une seule pour tout le sortant),
@@ -160,13 +166,28 @@ async function doFetch(url, accept, contentTypeRe) {
 
 // ---------------------------------------------------------------------------
 // Portillon robots.txt (RFC 9309). Cache par hôte, fetch dédié passant par la MÊME
-// file mono-verrou (jamais en dehors, sous peine de rafale). Un refus = return null,
-// signal identique aux échecs réseau existants — aucun throw, aucun marquage en base.
+// file mono-verrou (jamais en dehors, sous peine de rafale). Aucun throw, aucun
+// marquage en base.
+//
+// DEUX FAÇONS DE NE PAS PASSER, et elles ne disent pas la même chose :
+//   • REFUS       — l'éditeur a parlé. Un Disallow lu, ou un crawl-delay réclamé
+//     au-delà de ce que nous acceptons de payer. Décision, définitive, honorée sans
+//     réserve, gardée 24 h.
+//   • INJOIGNABLE — nous n'avons pas pu lire le fichier (délai dépassé, 5xx, DNS,
+//     réseau). Incident, qui ne dit RIEN de la volonté de l'éditeur, gardé 15 min.
+//
+// Les deux valent NON : `autorise` est faux dans les deux cas, et pas une requête de
+// page ne part. La distinction ne relâche aucune prudence, elle sépare seulement ce
+// qui est acquis de ce qui est à retenter. Un fichier d'exclusion en panne n'est
+// JAMAIS une autorisation : le seul état qui autorise sans lire est TOUT_PERMIS,
+// réservé au 4xx, où le serveur affirme que le fichier n'existe pas.
 // ---------------------------------------------------------------------------
 
 // Cache par hôte. Clé = origin (schéma://hôte:port). Valeur =
-//   { etat: 'REGLES' | 'TOUT_PERMIS' | 'REFUS', parsed, crawlDelaySec, expiresAt }.
+//   { etat: 'REGLES' | 'TOUT_PERMIS' | 'REFUS' | 'INJOIGNABLE', parsed, crawlDelaySec,
+//     expiresAt }.
 // Les échecs sont cachés eux aussi : sinon chaque URL d'un hôte re-taperait robots.txt.
+// Mais pas pour la même durée que les décisions (cf. ROBOTS_INJOIGNABLE_TTL_MS).
 const robotsCache = new Map()
 const robotsInflight = new Map()     // dédup des résolutions concurrentes d'un même hôte
 
@@ -212,9 +233,14 @@ async function fetchRobots(robotsUrl) {
   }
 }
 
-// Réponse HTTP → entrée de cache. Statuts (brief) :
-//   2xx → parserRobots ; 4xx (dont 404/410) → TOUT_PERMIS ; 5xx, timeout, réseau, DNS
-//   (status 0) → FAIL-CLOSED = REFUS. Crawl-delay réclamé au-delà du plafond → REFUS.
+// Réponse HTTP → entrée de cache. Statuts :
+//   • 2xx              → parserRobots, l'éditeur s'exprime (REGLES).
+//   • 4xx (404/410…)   → TOUT_PERMIS : le serveur affirme qu'il n'y a pas de fichier.
+//   • crawl-delay au-delà du plafond → REFUS. Le fichier a été LU et l'éditeur a posé
+//     une règle ; refuser de la payer est NOTRE décision sur la sienne, pas un
+//     incident. C'est donc un refus, avec la mémoire d'un refus.
+//   • 5xx, timeout, réseau, DNS (status 0) → INJOIGNABLE. Fail-closed comme avant :
+//     ne passe pas. Mais l'éditeur n'a rien dit, et c'est à retenter bientôt.
 function entryDepuisReponse(res) {
   const expiresAt = Date.now() + ROBOTS_TTL_MS
   const st = res.status
@@ -230,7 +256,12 @@ function entryDepuisReponse(res) {
   if (st >= 400 && st < 500) {
     return { etat: 'TOUT_PERMIS', parsed: null, crawlDelaySec: null, expiresAt }
   }
-  return { etat: 'REFUS', parsed: null, crawlDelaySec: null, expiresAt }
+  return {
+    etat: 'INJOIGNABLE',
+    parsed: null,
+    crawlDelaySec: null,
+    expiresAt: Date.now() + ROBOTS_INJOIGNABLE_TTL_MS
+  }
 }
 
 // Charge (ou récupère en vol) le robots d'un hôte, met en cache, journalise. Le fetch
@@ -260,20 +291,27 @@ function cheminDe(url) {
 }
 
 // Décision par état de cache. Product token seul (ROBOTS_UA_TOKEN).
+//
+// `injoignable` accompagne `autorise` sans jamais le contredire : il ne vaut vrai que
+// lorsque `autorise` est faux, et n'existe que pour dire POURQUOI on ne passe pas.
+// Quiconque lit cette sortie doit tester `autorise` et lui seul pour décider de partir.
 function deciderDepuisEntry(entry, chemin) {
-  if (entry.etat === 'TOUT_PERMIS') return { autorise: true, crawlDelaySec: null }
-  if (entry.etat === 'REFUS') return { autorise: false, crawlDelaySec: entry.crawlDelaySec }
+  if (entry.etat === 'TOUT_PERMIS') return { autorise: true, injoignable: false, crawlDelaySec: null }
+  if (entry.etat === 'INJOIGNABLE') return { autorise: false, injoignable: true, crawlDelaySec: null }
+  if (entry.etat === 'REFUS') return { autorise: false, injoignable: false, crawlDelaySec: entry.crawlDelaySec }
   const { autorise } = evaluerRobots(entry.parsed, chemin, ROBOTS_UA_TOKEN)
-  return { autorise, crawlDelaySec: entry.crawlDelaySec }
+  return { autorise, injoignable: false, crawlDelaySec: entry.crawlDelaySec }
 }
 
-// Portillon : { autorise, crawlDelaySec } pour une URL. Résout via cache/hôte.
+// Portillon : { autorise, injoignable, crawlDelaySec } pour une URL. Résout via cache/hôte.
 async function resolveRobots(url) {
   const origin = safeOrigin(url)
   // origin inexploitable → refus (fail-closed). Inatteignable en pratique (normalizeUrl
   // a déjà validé le schéma en amont) ; la garde existe pour que le code dise partout
-  // la même chose : ignorer les règles se résout toujours par le refus.
-  if (!origin) return { autorise: false, crawlDelaySec: null }
+  // la même chose : ignorer les règles se résout toujours par le refus. REFUS et non
+  // INJOIGNABLE : rien n'est à retenter sur une URL qui n'a pas d'origine, le défaut
+  // est dans l'adresse, pas sur le réseau.
+  if (!origin) return { autorise: false, injoignable: false, crawlDelaySec: null }
   const entry = robotsCacheGet(origin) || await chargerRobots(origin)
   return deciderDepuisEntry(entry, cheminDe(url))
 }
@@ -308,15 +346,22 @@ export async function politeFetchText(url, options = {}) {
 // mais le motif du non-résultat est conservé. Rend { res, motif } :
 //   • { res: {text, finalUrl}, motif: null }  — lecture faite.
 //   • { res: null, motif: 'url' }             — URL inexploitable, aucun appel émis.
-//   • { res: null, motif: 'portillon' }       — robots.txt a refusé (avant ou après
+//   • { res: null, motif: 'portillon' }       — robots.txt a REFUSÉ (avant ou après
 //     redirection). Une DÉCISION du site : rien ne doit permettre de la contourner.
+//   • { res: null, motif: 'portillon_injoignable' } — le robots.txt n'a pas pu être LU
+//     (délai dépassé, 5xx, DNS, réseau, ou levée pendant la résolution). L'éditeur n'a
+//     rien dit. Ne vaut pas autorisation, et n'a rien à honorer non plus.
 //   • { res: null, motif: 'fetch' }           — l'appel a eu lieu et n'a rien rendu
 //     (délai dépassé, hôte mort, statut d'erreur, content-type inattendu).
 //
+// LES QUATRE MOTIFS VALENT NON, sans exception : cette fonction ne rend un `res` que
+// lorsque le portillon a dit oui. 'portillon_injoignable' n'ouvre rien ; il permet
+// seulement à l'appelant de savoir qu'il y a lieu de retenter plus tard, là où le
+// refus, lui, est acquis.
+//
 // Cette distinction ne remonte PAS jusqu'aux appelants externes (actualites.js,
 // recherche-web.js, scripts de diagnostic) : politeFetchText garde son contrat, deux
-// sorties, { text, finalUrl } ou null. Séparer refus et injoignable jusqu'au portillon
-// lui-même — quatre causes aujourd'hui confondues en 'REFUS' — est un autre chantier.
+// sorties, { text, finalUrl } ou null.
 async function lireAvecMotif(url, options = {}) {
   const accept = options.accept || ACCEPT_DEFAUT
   const contentTypeRe = options.contentTypeRe || CONTENT_TYPE_RE_DEFAUT
@@ -330,10 +375,16 @@ async function lireAvecMotif(url, options = {}) {
   try {
     gate = await resolveRobots(u)
   } catch (e) {
-    console.log('[robots]', 'refus (exception résolution)', u, String(e?.message || e).slice(0, 80))
-    return { res: null, motif: 'portillon' }
+    // Une levée = nous n'avons pas su lire le fichier. C'est un incident, pas une
+    // parole de l'éditeur : injoignable, et toujours pas de passage.
+    console.log('[robots]', 'injoignable (exception résolution)', u, String(e?.message || e).slice(0, 80))
+    return { res: null, motif: 'portillon_injoignable' }
   }
-  if (!gate.autorise) { console.log('[robots]', 'refus', u); return { res: null, motif: 'portillon' } }
+  if (!gate.autorise) {
+    const motif = gate.injoignable ? 'portillon_injoignable' : 'portillon'
+    console.log('[robots]', gate.injoignable ? 'injoignable' : 'refus', u)
+    return { res: null, motif }
+  }
 
   // Fetch principal. Le complément de crawl-delay est dormi DANS la tâche schedulée,
   // donc SOUS le verrou : il espace réellement l'appel vers cet hôte, sans le sortir
@@ -358,12 +409,13 @@ async function lireAvecMotif(url, options = {}) {
     try {
       gate2 = await resolveRobots(res.finalUrl)
     } catch (e) {
-      console.log('[robots]', 'refus après redirection (exception résolution)', res.finalUrl, String(e?.message || e).slice(0, 80))
-      return { res: null, motif: 'portillon' }
+      console.log('[robots]', 'injoignable après redirection (exception résolution)', res.finalUrl, String(e?.message || e).slice(0, 80))
+      return { res: null, motif: 'portillon_injoignable' }
     }
     if (!gate2.autorise) {
-      console.log('[robots]', 'refus après redirection', res.finalUrl)
-      return { res: null, motif: 'portillon' }
+      const motif2 = gate2.injoignable ? 'portillon_injoignable' : 'portillon'
+      console.log('[robots]', gate2.injoignable ? 'injoignable après redirection' : 'refus après redirection', res.finalUrl)
+      return { res: null, motif: motif2 }
     }
   }
 
@@ -727,30 +779,46 @@ function recouper(faisceau, ex, attestee) {
 // options.attestee — l'URL est attestée par identifiant (cf. SEUIL_PRESUME_ATTESTE) :
 // un seul signal de page suffit alors pour « présumé ». ABSENTE PAR DÉFAUT : sans
 // options, le seuil reste à deux, à l'identique d'avant.
+//
+// options.trace — objet fourni par l'appelant, RENSEIGNÉ EN SORTIE : trace.motif reçoit
+// le motif du non-résultat de l'accueil ('url', 'portillon', 'portillon_injoignable',
+// 'fetch') ou null si la page a été lue. Le type de retour ne change pas : cette
+// fonction rend toujours un objet ou null, et l'appelant qui n'a que faire du motif ne
+// passe pas de trace. C'est le seul chemin par lequel la distinction refus/injoignable
+// sort du module sans toucher au contrat de politeFetchText ni à celui d'analyserSite.
 // ---------------------------------------------------------------------------
 
 export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
   const attestee = options.attestee === true
+  const trace = (options.trace && typeof options.trace === 'object') ? options.trace : null
+  const noter = (motif) => { if (trace) trace.motif = motif }
   const homeUrl = normalizeUrl(homeUrlRaw)
-  if (!homeUrl) return null
+  if (!homeUrl) { noter('url'); return null }
 
   // Accueil, avec repli sur le protocole non sécurisé. normalizeUrl ajoute https quand
   // le schéma manque ; une part des sites ne répond qu'en http et restait donc muette.
   // DEUX conditions, cumulatives :
   //   • c'est nous qui avons ajouté https — une URL qui portait https explicitement est
   //     lue telle qu'elle est écrite, jamais dégradée dans notre dos ;
-  //   • l'échec vient du FETCH, jamais du portillon — retenter en http un hôte dont le
-  //     robots.txt a refusé serait contourner ce refus par changement de schéma.
+  //   • l'échec ne vient JAMAIS d'un refus du portillon — retenter en http un hôte dont
+  //     le robots.txt a refusé serait contourner ce refus par changement de schéma.
+  // Le repli vaut donc pour 'fetch' ET pour 'portillon_injoignable' : quand le fichier
+  //     d'exclusion n'a pas pu être lu en https, aucune décision n'a été rendue, il n'y
+  //     a donc rien à contourner. Et ce n'est pas une porte dérobée : http:// et https://
+  //     sont deux origines distinctes au sens du portillon, le fichier de l'origine http
+  //     est re-demandé à neuf, et s'il refuse, le refus s'applique.
   // La seconde tentative passe par la même file mono-verrou et le même portillon : elle
   // est comptée dans les plafonds comme n'importe quel autre appel sortant.
+  const REPLI_HTTP_MOTIFS = new Set(['fetch', 'portillon_injoignable'])
   let lecture = await lireAvecMotif(homeUrl)
   let urlLue = homeUrl
-  if (!lecture.res && lecture.motif === 'fetch' && schemaAjoute(homeUrlRaw)) {
+  if (!lecture.res && REPLI_HTTP_MOTIFS.has(lecture.motif) && schemaAjoute(homeUrlRaw)) {
     urlLue = homeUrl.replace(/^https:\/\//i, 'http://')
     lecture = await lireAvecMotif(urlLue)
   }
   const home = lecture.res
-  if (!home) return null
+  if (!home) { noter(lecture.motif); return null }
+  noter(null)
 
   const base = home.finalUrl || urlLue
   const homeHtml = decodeEntities(home.text)
@@ -863,6 +931,11 @@ export async function enrichirMentionsLegales(siret, options = {}) {
   // « personne n'a répondu » de « quelqu'un a répondu, mais qui ? ».
   let urlsTentees = 0
   let visiteAboutie = false          // une URL, quelle qu'elle soit, a répondu
+  // Une URL au moins s'est vu opposer un REFUS EXPLICITE du fichier d'exclusion, par
+  // opposition à un fichier qu'on n'a pas pu lire. Ne change ni le passage ni
+  // l'horodatage : sert à nommer le non-passage dans l'audit, pour que l'exploitant
+  // distingue « l'éditeur nous ferme sa porte » de « le réseau a lâché ».
+  let refusExplicite = false
   let visiteBaseAboutie = false      // frontière 1
   let corroborationAboutie = false   // frontière 2
   try {
@@ -896,7 +969,9 @@ export async function enrichirMentionsLegales(siret, options = {}) {
     if (faisceau.website) {
       const attestee = await estAttestee(faisceau.website)
       urlsTentees++
-      const a = await analyserSite(faisceau.website, faisceau, { attestee })
+      const trace = {}
+      const a = await analyserSite(faisceau.website, faisceau, { attestee, trace })
+      if (trace.motif === 'portillon') refusExplicite = true
       // Frontière 1 : l'adresse venait de la base et elle a répondu. Le passage est
       // acquis ici, avant même de savoir si le site recoupe quoi que ce soit.
       if (a) { visiteAboutie = true; visiteBaseAboutie = true }
@@ -927,7 +1002,9 @@ export async function enrichirMentionsLegales(siret, options = {}) {
         // Une URL devinée ou composée ne la rencontre pas, et reste à deux signaux.
         const attestee = await estAttestee(url)
         urlsTentees++
-        const a = await analyserSite(url, faisceau, { attestee })
+        const trace = {}
+        const a = await analyserSite(url, faisceau, { attestee, trace })
+        if (trace.motif === 'portillon') refusExplicite = true
         // Un candidat qui répond NE SUFFIT PAS à établir le passage : l'adresse a
         // été devinée, et un hôte vivant ne dit pas qu'il est le bon. Seule la
         // corroboration tranche ici — frontière 2. Sans elle, le compteur ci-dessous
@@ -962,20 +1039,26 @@ export async function enrichirMentionsLegales(siret, options = {}) {
     console.warn('[mentions-legales]', String(e?.message || e).slice(0, 100))
   } finally {
     // Non-passage AVAL, symétrique des trois gardes amont : ni visite de base, ni
-    // corroboration. Trois motifs, du plus vide au plus ambigu :
+    // corroboration. Quatre motifs, du plus vide au plus ambigu :
     //   • sans_url         — pas une seule URL à tenter (ni base, ni recherche web).
-    //   • injoignable      — des URL tentées, aucune n'a répondu (refus du portillon,
-    //     délai dépassé, hôte mort).
+    //   • refus_robots     — des URL tentées, aucune n'a répondu, et l'une au moins
+    //     s'est vu opposer un Disallow lu. L'éditeur a parlé : le non-passage est
+    //     acquis tant que son fichier dit cela. Le refus explicite prime dans le
+    //     libellé, même si d'autres URL ont échoué autrement : c'est le seul fait
+    //     établi du lot, les autres ne sont que des absences.
+    //   • injoignable      — des URL tentées, aucune n'a répondu, sans qu'aucun refus
+    //     n'ait été lu (délai dépassé, hôte mort, fichier d'exclusion illisible). Rien
+    //     n'est acquis : à retenter.
     //   • porte_incertaine — un hôte a répondu, mais l'adresse était devinée et rien
     //     n'a corroboré. Ni sans_url ni injoignable : il y avait bien une porte et
     //     elle s'est ouverte, rien ne dit que ce soit la bonne. Pas d'horodatage, la
     //     fiche reste candidate — une adresse mieux composée la retrouvera.
-    // Un site DE LA BASE qui ne corrobore pas n'est dans aucun des trois : c'est un
+    // Un site DE LA BASE qui ne corrobore pas n'est dans aucun des quatre : c'est un
     // vrai résultat négatif, et il mérite ses 30 jours.
     if (result.skipped == null && !visiteBaseAboutie && !corroborationAboutie) {
       result.skipped = urlsTentees === 0
         ? 'sans_url'
-        : (visiteAboutie ? 'porte_incertaine' : 'injoignable')
+        : (visiteAboutie ? 'porte_incertaine' : (refusExplicite ? 'refus_robots' : 'injoignable'))
     }
     // Marqué à CHAQUE passage réel (trouvé ou non). Pas de marquage si skip amont
     // (siret vide / hors référentiel / déjà frais < TTL) ni si skip aval ci-dessus.

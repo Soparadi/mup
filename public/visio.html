@@ -337,17 +337,12 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .empty-state .empty-icone{color:var(--mes-surtitre);margin-bottom:14px}
 .empty-state .hint{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11.5px;color:var(--muted);margin-top:8px}
 .empty-state .hint strong{color:var(--text)}
-/* Deux faces, une seule à la fois, dans une seule carte. La page sans
-   rendez-vous devant elle appelle le premier ; la page opérante annonce ce
-   qu'elle sait faire. Elles se remplacent au même endroit et portent donc le
-   MÊME vêtement : en habiller une seule ferait sauter l'écran d'un habillage à
-   l'autre selon l'état de l'agenda.
-   Leur titre et leur texte ne sont plus habillés ici : ils prennent les règles
-   du vêtement, .mes-bloc h2 et .mes-bloc p. Ne reste que la gouttière, qui
-   espace titre, texte et bouton.
-   Elles sont posées dans une .mes-pile : `display` ne les départage plus — ce
-   serait rendre la carte à la hauteur de la face du moment — c'est `.actif` qui
-   le fait, et la carte garde la hauteur de la face la plus longue. */
+/* UNE SEULE FACE, dans une seule carte, et la carte ne paraît que dans le cas
+   qu'elle nomme : aucun rendez-vous devant soi. Il n'y a donc plus rien à
+   départager — ni pile, ni classe active, ni deux habillages à tenir d'accord.
+   Son titre et son texte ne sont pas habillés ici : ils prennent les règles du
+   vêtement, .mes-bloc h2 et .mes-bloc p. Ne reste que la gouttière, qui espace
+   titre, texte et bouton. */
 .empty-state .face{display:flex;flex-direction:column;align-items:center;gap:14px}
 
 /* —— BRIEFING + VISIO + DOCS LAYOUT —— */
@@ -693,15 +688,33 @@ body.outils-deplies .my-link-field.vide{display:flex}
    flux, pas une fenêtre. Rien ici ne se pose devant quoi que ce soit,
    et rien n'a donc à être traité dans l'échelle des couches.
    ══════════════════════════════════════════════════════════════════ */
-/* LA CARTE DE L'ÉTAT VIDE. Elle n'a ni hauteur maximale ni hauteur plancher :
-   rien ne la contraint, elle n'a rien à confiner, et elle n'a de vis-à-vis sur
-   aucune autre page. Ses deux faces sont égalisées entre elles par sa propre
-   .mes-pile, ce qui est tout ce qu'on lui demande. Le filet et le corps
-   réemploient les règles ci-dessous telles quelles dans le balisage. */
+/* LA CARTE DE L'ÉTAT VIDE. Pas de hauteur maximale : rien ne la contraint,
+   elle n'a rien à confiner, et elle vit dans une colonne qui défile. Le filet
+   et le corps réemploient les règles ci-dessous telles quelles dans le
+   balisage.
+   SA HAUTEUR PLANCHER N'EST QU'À ELLE. Elle tenait celle des encarts de mise en
+   service — 490 px, une valeur qui existait pour faire tomber au même niveau
+   les trois encarts de visio, devis et mail. Cet encart-là n'existe plus ici :
+   la valeur est partie avec lui et la carte s'est mise à flotter, sans hauteur
+   déclarée, au gré de son seul repli de texte.
+   Elle en reçoit donc une qui lui est propre, et qui ne regarde qu'elle : la
+   carte n'a de vis-à-vis nulle part, ni chez Devis ni chez Mail, qui n'ont pas
+   d'état vide de ce genre. Lui redonner 490 px lui donnerait du blanc pour
+   s'aligner sur rien.
+   D'OÙ VIENT LE NOMBRE. La carte a été mesurée au banc, dans les conditions de
+   l'écran : Chrome sans tête, fontes du dépôt servies, carte à 600 px, la seule
+   face en place. 266,28 px. 275 lui laisse neuf pixels de jeu, qui ne se voient
+   pas et absorbent la variation de rendu d'un poste à l'autre — caler au pixel
+   du jour poserait la carte pile sur son plancher, où la première ligne de
+   texte ajoutée rendrait la valeur fausse.
+   EN PLANCHER ET JAMAIS EN TAILLE : sous 640 px la carte perd sa largeur, son
+   texte se replie sur plus de lignes, et elle s'allonge au-delà. Un plancher
+   n'est pas un plafond, et rien n'est jamais coupé. */
 .mes-bloc{
   background:var(--mes-carte);border:1px solid var(--mes-bord);
   border-radius:var(--mes-rayon);overflow:hidden;
-  width:100%;max-width:600px;
+  width:100%;max-width:600px;min-height:275px;
+  display:flex;flex-direction:column;
 }
 /* Six bandes de 12 px dans leur ordre, écrites une seule fois : ce sont des
    arrêts de dégradé, pas six éléments à poser dans le balisage. */
@@ -712,23 +725,10 @@ body.outils-deplies .my-link-field.vide{display:flex}
     var(--mes-filet-3) 33.3333% 50%,      var(--mes-filet-4) 50% 66.6667%,
     var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
 }
-.mes-corps{padding:30px 34px 26px}
-
-/* —— LA PILE : LA CARTE NE RESPIRE PLUS AU RYTHME DE SON CONTENU ——
-   Les deux faces de l'état vide se remplacent AU MÊME ENDROIT. Chacune était
-   retirée du flux quand l'autre paraissait (display:none) : la carte prenait la
-   hauteur de ce qu'elle montrait, et sautait d'une face à l'autre.
-   Elles sont désormais empilées dans une seule cellule de grille. Toutes deux y
-   sont mesurées, et c'est la PLUS LONGUE qui donne sa hauteur à la pile. Aucune
-   valeur n'est posée ici : la hauteur est relevée par le navigateur à chaque
-   largeur de carte. Un nombre écrit à la main aurait été juste à 600 px et faux
-   partout où le texte se replie autrement.
-   Ce qui est caché l'est par VISIBILITÉ et non par affichage : c'est ce qui le
-   laisse occuper sa cellule — donc compter dans la mesure — tout en le retirant
-   de l'écran, de l'ordre de tabulation et des lecteurs d'écran. */
-.mes-pile{display:grid}
-.mes-pile > *{grid-area:1 / 1;visibility:hidden}
-.mes-pile > .actif{visibility:visible}
+/* Le corps prend le jeu que le plancher laisse, plutôt que de l'abandonner en
+   bande blanche sous lui : la face reste centrée dans la carte au lieu d'être
+   poussée vers son haut. */
+.mes-corps{padding:30px 34px 26px;flex:1;display:flex;flex-direction:column;justify-content:center}
 
 .mes-bloc h2{
   font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.15;
@@ -975,41 +975,33 @@ body.outils-deplies .my-link-field.vide{display:flex}
            dans le repli de la feuille. -->
       <div class="empty-state" id="emptyState" style="display:none">
         <!-- LA CARTE DE L'ÉTAT VIDE — le vêtement des courriels, en bloc de
-             page : ni voile, ni ombre, ni couche. Elle tient les DEUX faces
-             ensemble, parce qu'elles se remplacent au même endroit. Le filet et
-             le corps sont les règles de la feuille, réemployées telles quelles :
-             aucune de ces valeurs n'est retapée ici. -->
+             page : ni voile, ni ombre, ni couche. Elle ne porte qu'une face,
+             parce qu'elle ne paraît que dans un cas. Le filet et le corps sont
+             les règles de la feuille, réemployées telles quelles : aucune de
+             ces valeurs n'est retapée ici. -->
         <div class="mes-bloc">
           <div class="mes-filet" aria-hidden="true"></div>
           <div class="mes-corps">
             <div class="empty-icone" aria-hidden="true">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
             </div>
-            <!-- LA PILE DES DEUX FACES. Elles se remplacent au même endroit :
-                 elles y sont donc posées ensemble, toutes deux mesurées, et la
-                 carte garde la hauteur de la plus longue quelle que soit celle
-                 qui paraît. C'est `.actif` qui les départage, jamais `display`. -->
-            <div class="mes-pile">
-              <!-- La face de la page QUI A DU TRAVAIL DEVANT ELLE : un rendez-vous
-                   en visio est programmé. C'est aussi la face du doute — tant que
-                   les rendez-vous n'ont pas été lus, c'est elle qui paraît, parce
-                   qu'elle n'affirme rien de l'abonné : elle propose. -->
-              <div class="face" id="emptyOperant">
-                <h2>Prêt à lancer une visio</h2>
-                <p>Cliquez sur l'un de vos outils en haut pour démarrer, ou sélectionnez un rendez-vous programmé dans la liste.</p>
-              </div>
-              <!-- La face de la page SANS RENDEZ-VOUS DEVANT ELLE, et c'est le seul
-                   fait qu'elle affirme : elle ne dit rien des outils de l'abonné,
-                   qui n'a rien à installer pour tenir une visio ici. Au PRÉSENT :
-                   la capacité est en production, l'annoncer à venir la nierait.
-                   Le geste est PORTÉ, non désigné : nommer le bouton de la barre
-                   par sa place rendrait le texte faux au premier déplacement.
-                   Rien ne la voile : c'est une invitation, pas une prise en otage. -->
-              <div class="face" id="emptyPremierRdv">
-                <h2>Vos visios se tiennent ici.</h2>
-                <p>Programmez un rendez-vous et la salle se crée avec lui, dans cette page, à côté de la fiche du prospect.</p>
-                <button class="mes-btn" id="emptyProgrammerRdv">Programmer un rendez-vous</button>
-              </div>
+            <!-- LA SEULE FACE : la page SANS RENDEZ-VOUS DEVANT ELLE, et c'est le
+                 seul fait qu'elle affirme. Elle ne dit rien des outils de
+                 l'abonné, qui n'a rien à installer pour tenir une visio ici. Au
+                 PRÉSENT : la capacité est en production, l'annoncer à venir la
+                 nierait. Le geste est PORTÉ, non désigné : nommer le bouton de
+                 la barre par sa place rendrait le texte faux au premier
+                 déplacement. Rien ne la voile : c'est une invitation, pas une
+                 prise en otage.
+                 La face « Prêt à lancer une visio » qui l'accompagnait est
+                 partie : elle clignotait au chargement, avant que le compte des
+                 rendez-vous soit connu, et elle était hors sujet quand elle
+                 paraissait vraiment — qui vient de terminer une visio a sa fiche
+                 à remplir, pas un encart à lire. -->
+            <div class="face" id="emptyPremierRdv">
+              <h2>Vos visios se tiennent ici.</h2>
+              <p>Programmez un rendez-vous et la salle se crée avec lui, dans cette page, à côté de la fiche du prospect.</p>
+              <button class="mes-btn" id="emptyProgrammerRdv">Programmer un rendez-vous</button>
             </div>
           </div>
         </div>
@@ -1713,28 +1705,21 @@ function deplierOutils(ouvert){
   if(btn) btn.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
 }
 
-/* —— LES DEUX RÉGIMES DE L'ÉTAT VIDE ——
-   Un seul état vide, deux faces, et UN SEUL FAIT les départage : y a-t-il un
-   rendez-vous en visio devant soi ? S'il n'y en a aucun, la page appelle le
-   premier et nomme le bouton qui le pose ; dès qu'il y en a un, elle laisse la
-   page faire son travail.
+/* —— LE SEUL FAIT QUI COMMANDE L'ÉTAT VIDE ——
+   Y a-t-il un rendez-vous en visio devant soi ? S'il n'y en a AUCUN, la page
+   appelle le premier et porte le geste qui le pose. Dès qu'il y en a un, elle
+   ne dit plus rien : ni pendant la visio, ni entre deux.
    Rien d'autre n'entre dans ce jugement, et surtout pas les liens de l'abonné :
    la salle est fournie par MovUP, il n'a aucun outil à installer pour tenir une
    visio ici. Juger sur le lien rendrait creuse la carte qui suit un « Terminer »
    — elle inviterait à s'équiper une page qui vient de servir.
-   La face qui AFFIRME quelque chose exige une lecture aboutie : tant que les
-   rendez-vous n'ont pas été lus, on ignore s'il y en a. Dans le doute, c'est la
-   face opérante qui paraît — elle n'affirme rien, elle propose. */
+   La carte AFFIRME quelque chose et exige donc une lecture ABOUTIE : tant que
+   les rendez-vous n'ont pas été lus, on ignore s'il y en a, et null n'est pas
+   zéro. Dans le doute, la colonne ne montre rien.
+   Ce témoin n'a pas d'écrivain à lui : c'est refletColonneCentre qui le lit,
+   parce que la carte est l'un des trois cas de la colonne et non un affichage
+   à part. */
 let rdvsProgrammes = null;   // rendez-vous en visio devant soi ; null tant qu'aucune lecture n'a abouti
-
-function refletEtatVide(){
-  const sansRdvAvere = rdvsProgrammes === 0;
-  // Par CLASSE et non par `display` : les deux faces vivent dans une .mes-pile
-  // et celle qui ne paraît pas garde sa cellule, sans quoi la carte reprendrait
-  // la hauteur de la face du moment.
-  $('emptyPremierRdv').classList.toggle('actif', sansRdvAvere);
-  $('emptyOperant').classList.toggle('actif', !sansRdvAvere);
-}
 
 $('btnAjouterOutil').addEventListener('click', ()=>{
   deplierOutils(!document.body.classList.contains('outils-deplies'));
@@ -1949,7 +1934,7 @@ async function renderRdvList(){
   // Compté AVANT la recherche : chercher un nom absent ne vide pas l'agenda.
   const devant = rdvs.filter(estDevant);
   rdvsProgrammes = devant.length;
-  refletEtatVide();
+  refletColonneCentre();
 
   devant
     .filter(r => !search || (r.prospectName + ' ' + r.societe + ' ' + r.sujet).toLowerCase().includes(search))
@@ -2591,14 +2576,21 @@ function testEnCours(){
 // La règle était recopiée en six points ; elle n'est plus écrite qu'ici, et
 // chacun de ces points l'appelle.
 //
-// ELLE SE DÉDUIT, et d'un seul fait : quelque chose occupe le cadre — un
-// rendez-vous peint, ou un test caméra — ou rien ne l'occupe, et l'état vide
-// prend la place. Rien d'autre n'entre dans ce jugement : plus aucune surface
-// ne se pose devant la colonne, et les deux affichages sont exclusifs.
+// TROIS CAS, et non deux. Quelque chose occupe le cadre — un rendez-vous peint,
+// ou un test caméra — et c'est la visio qui paraît. Sinon la carte prend la
+// place, mais SEULEMENT si l'abonné n'a aucun rendez-vous devant lui : c'est le
+// seul état dont elle parle. Sinon encore, la colonne reste VIDE.
+//
+// CE VIDE EST VOULU. L'encart qui l'occupait annonçait à une page opérante ce
+// qu'elle savait faire : il clignotait au chargement tant que l'agenda n'était
+// pas lu, et il n'apprenait rien à qui vient de terminer une visio et a sa
+// fiche à remplir. Mieux vaut ne rien dire que meubler.
+// `rdvsProgrammes` vaut null tant qu'aucune lecture n'a abouti, et null n'est
+// pas zéro : dans le doute, la carte ne paraît pas.
 function refletColonneCentre(){
   const occupee = !!rdvAffiche || testEnCours();
   $('visioActive').style.display = occupee ? 'flex' : 'none';
-  $('emptyState').style.display  = occupee ? 'none' : 'flex';
+  $('emptyState').style.display  = (!occupee && rdvsProgrammes === 0) ? 'flex' : 'none';
 }
 
 async function renderBriefing(rdv){
@@ -4050,7 +4042,6 @@ document.addEventListener('visibilitychange', () => {
   await bootstrapVisio();
   loadMyLinks();
   refletBarreOutils();
-  refletEtatVide();
   // La clé du report de mise en service, effacée au passage. Le panneau qu'elle
   // retenait n'existe plus : elle ne gouverne rien, et laissée là elle resterait
   // indéfiniment dans le navigateur de tous ceux qui ont reporté.

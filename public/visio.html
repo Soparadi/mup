@@ -1440,10 +1440,13 @@ body #mup-cookie-panel{z-index:60001}
 </div>
 
 <!-- MODALE MODIFIER RDV
-     Quatre champs, et quatre seulement : ce que porte l'évènement d'agenda.
-     La fiche rattachée ne s'y change pas — elle déplacerait d'un coup le lien
-     de séance, le fournisseur, l'email, le téléphone, l'adresse et le briefing,
-     qui viennent tous de la carte Pipeline et non de l'évènement. -->
+     Cinq champs : ce que porte l'évènement d'agenda, lien de séance compris.
+     Le lien y entre parce que l'évènement le porte désormais — la carte
+     Pipeline ne le recopie plus — et parce que la règle de la création vaut
+     aussi ici : le lien tiers et la salle MovUP s'excluent.
+     La fiche rattachée, elle, ne s'y change toujours pas — elle déplacerait
+     d'un coup l'email, le téléphone, l'adresse et le briefing, qui viennent de
+     la carte Pipeline et non de l'évènement. -->
 <div class="overlay" id="editRdvModal">
   <div class="modal" style="max-width:460px">
     <h2>Modifier le rendez-vous</h2>
@@ -1455,6 +1458,11 @@ body #mup-cookie-panel{z-index:60001}
     <div class="row-2">
       <div class="field"><label>Durée</label><select id="editRdvDuration"></select></div>
       <div class="field"><label>Sujet</label><input type="text" id="editRdvSubject" placeholder="ex : Présentation offre"></div>
+    </div>
+    <div class="field">
+      <label>Lien de visio externe</label>
+      <input type="url" id="editRdvLink" placeholder="https://…">
+      <div class="aide">Vide, le rendez-vous se tient dans une salle MovUP.</div>
     </div>
     <div class="modal-actions">
       <button class="btn-danger" id="deleteRdvBtn" style="margin-right:auto">Annuler le RDV</button>
@@ -2783,6 +2791,12 @@ function ouvrirModifRdv(rdv){
   $('editRdvDuration').innerHTML = durees.map(m =>
     `<option value="${m}"${m === rdv.duree ? ' selected' : ''}>${m} min</option>`).join('');
   $('editRdvSubject').value = rdv.sujet || '';
+  // Le champ porte le lien TIERS, et lui seul : sur une salle MovUP il reste
+  // vide, parce que cette salle n'est pas une adresse qu'on saisit — elle vient
+  // de nous, et personne n'a à la retenir ni à la retaper. Le vider sur un
+  // rendez-vous qui tenait un lien tiers est donc un geste plein de sens :
+  // « tenons-le chez nous », et une salle sera demandée à l'enregistrement.
+  $('editRdvLink').value = rdv.provider === 'whereby' ? '' : (rdv.link || '');
   $('editRdvModal').classList.add('show');
 }
 
@@ -2792,16 +2806,29 @@ function ouvrirModifRdv(rdv){
 async function rafraichirApresGeste(rdv, patch){
   if(estRdvAffiche(rdv)){
     if(patch){
+      // Le patch ne porte le lien que quand la modification y a touché. Les
+      // champs qu'il ne nomme pas ne doivent pas être écrasés : un rendez-vous
+      // simplement déplacé garde sa salle, sa porte d'hôte et sa date de mort.
       rdvAffiche = Object.assign({}, rdvAffiche, {
         date: creneauEvt(patch.date, patch.start).toISOString(),
         duree: patch.duree,
         sujet: patch.notes
-      });
+      }, ('link' in patch) ? {
+        link: patch.link,
+        provider: patch.provider,
+        lienHote: patch.lien_hote,
+        salleFin: patch.salle_fin
+      } : {});
       // La séance engagée porte le même objet : elle suit, sans quoi le journal
       // s'écrirait sur la version d'avant la modification.
       if(estSeanceEnCours(rdv)) activeRdv = rdvAffiche;
       refletCadreReduit();
       renderBriefing(rdvAffiche);
+      // Le cadre ne se repeint QUE si la porte a changé : sur une salle
+      // embarquée, le repeindre reconstruit le composant et fait rentrer
+      // l'abonné dans sa salle. On ne le paie donc que quand ce que le cadre
+      // montre est devenu faux.
+      if('link' in patch) renderVideoFrame(rdvAffiche);
     } else {
       // Le rendez-vous annulé ne peut pas rester à l'écran. Le minuteur s'arrête
       // et la page revient à son état vide — rien n'est journalisé, ce
@@ -2847,6 +2874,48 @@ $('saveEditRdvBtn').addEventListener('click', async ()=>{
       `${rdv.prospectName} — ${libelleCreneau(new Date(rdv.date))} est la séance ouverte en ce moment. Son minuteur continue de tourner.`,
       'Modifier', 'Renoncer');
     if(!ok){ btn.disabled = false; return; }
+  }
+
+  // —— LE LIEN TIERS ET LA SALLE, ICI AUSSI, S'EXCLUENT ——
+  // Le champ dit la même chose qu'à la création : rempli, le rendez-vous se
+  // tient AILLEURS ; vide, il se tient dans une salle MovUP. Deux cas, et deux
+  // seulement, demandent alors une salle :
+  //
+  //   — LE CHAMP VIDÉ sur un rendez-vous qui tenait un lien tiers. Il vient de
+  //     changer de camp, et il lui faut une porte.
+  //   — LE CRÉNEAU DÉPLACÉ au-delà de la mort de la salle. Une salle meurt à sa
+  //     date de fin et l'URL avec elle : reporter un rendez-vous à la semaine
+  //     suivante sans rien faire laisserait un lien mort chez le prospect et
+  //     une porte close chez l'abonné.
+  //
+  // Aucun des deux ne dépense pour rien : un lien tiers n'appelle jamais de
+  // salle, et un déplacement qui reste dans la fenêtre de vie garde la sienne.
+  // Sur une salle dont on ignore la date de mort — un évènement écrit avant que
+  // ce champ existe — on ne juge pas, donc on ne dépense pas : le lien en place
+  // a toutes les chances de vivre encore.
+  const lienTiers = $('editRdvLink').value.trim();
+  const morteAvantLaFin = (()=>{
+    const mort = rdv.salleFin ? new Date(rdv.salleFin) : null;
+    if(!mort || isNaN(mort.getTime())) return false;
+    return dEnd > mort;
+  })();
+  if(lienTiers){
+    patch.link = lienTiers;
+    patch.provider = detectProvider(lienTiers);
+    patch.lien_hote = '';
+    patch.salle_fin = '';
+  } else if(rdv.provider !== 'whereby' || morteAvantLaFin){
+    const salle = await MUPSalle.demanderSalle({ debut: dStart, duree });
+    if(!salle.ok){
+      btn.disabled = false;
+      // Sur le mur payant le message est vide : il est déjà à l'écran, seul.
+      if(salle.message) mupAlert('Modification impossible', salle.message, 'Fermer');
+      return;
+    }
+    patch.provider = 'whereby';
+    patch.link = salle.roomUrl;
+    patch.lien_hote = salle.hostRoomUrl;
+    patch.salle_fin = salle.fin;
   }
 
   // L'agenda d'abord, le fil ensuite. Si le PUT échoue, rien n'est écrit dans

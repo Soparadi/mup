@@ -9,7 +9,8 @@
 //   1.b  URL par recherche web (module recherche-web.js) si rien en base.
 //   2.   Page légale : liens footer (mentions/legal/cgv/contact) puis chemins
 //        conventionnels (/mentions-legales, /mentions, /legal, /cgv, /contact).
-//   3.   Extraction : SIRET/SIREN, tél FR (hors surtaxés 08), email, adresse.
+//   3.   Extraction : SIRET/SIREN, tél FR (hors surtaxés 08), email, adresse, et
+//        liens de réseaux sociaux lus sur les pages déjà téléchargées (jamais visités).
 //   4.   Recoupement scoré contre le faisceau + écriture additive.
 //
 // Robustesse : jamais de throw remontant. Échec réseau/timeout → « rien ». Tous
@@ -646,6 +647,181 @@ function sortEmailsBySiteDomain(emails, siteHost) {
 }
 
 // ---------------------------------------------------------------------------
+// Maillon 3 bis — réseaux sociaux. Le pied de page est DÉJÀ téléchargé (accueil et
+// pages légales) ; il n'était simplement pas regardé : extractLegalLinks écarte tout
+// lien sortant, et stripTags efface ensuite les attributs href, si bien qu'aucune URL
+// de réseau n'existait passé la ligne du corpus.
+//
+// La doctrine place le réseau social AVANT le téléphone dans l'ordre des canaux, et
+// des fiches n'ont que cela : une page Facebook, un profil LinkedIn, aucun numéro.
+// Sans ce maillon, elles restent vides définitivement.
+//
+// DEUX INVARIANTS, tous deux structurels :
+//   • AUCUN APPEL SORTANT NOUVEAU. Ces fonctions sont pures, sans réseau ni base : on
+//     relit du HTML déjà en mémoire. Le budget MAX_LEGAL_PAGES ne bouge pas.
+//   • LE RÉSEAU N'EST JAMAIS VISITÉ. Leurs conditions d'utilisation l'interdisent. Les
+//     URL extraites ne rejoignent JAMAIS la liste des pages à lire d'analyserSite :
+//     elles vont de l'extraction au champ du référentiel, sans passer par la file.
+// ---------------------------------------------------------------------------
+
+// Réseaux reconnus, et le champ que chacun alimente. Rien d'autre n'est retenu : un
+// hôte hors de cette table est ignoré, y compris les services de partage tiers.
+const RESEAUX = [
+  {
+    champ: 'societe_facebook',
+    domaines: ['facebook.com', 'fb.com', 'fb.me'],
+    // /pages/<nom>/<id> et /p/<nom>-<id> sont des pages d'entreprise ; profile.php
+    // ne porte qu'un identifiant numérique, donc aucun fragment nommant l'entreprise.
+    fragment: (seg) => ((seg[0] === 'pages' || seg[0] === 'p') ? (seg[1] || '') : (/^profile\.php$/i.test(seg[0]) ? '' : seg[0]))
+  },
+  {
+    champ: 'societe_instagram',
+    domaines: ['instagram.com'],
+    fragment: (seg) => seg[0]
+  },
+  {
+    champ: 'societe_linkedin',
+    domaines: ['linkedin.com'],
+    fragment: (seg) => (['company', 'in', 'school', 'showcase', 'pub'].includes(seg[0]) ? (seg[1] || '') : seg[0])
+  }
+]
+
+// Chemins qui ne désignent le profil de personne : partage, connexion, greffons, pages
+// de service du réseau lui-même. Un bouton « partager sur Facebook » n'est pas un
+// compte d'entreprise.
+const RESEAU_CHEMIN_REJETE =
+  /^\/(?:sharer|share|dialog|plugin|plugins|intent|login|signup|help|policies|privacy|terms|explore|search|feed|sharearticle|sharing|home|hashtag|groups|events|watch|marketplace|accounts|directory)(?:[\/.]|$)/i
+
+// Formes d'attribution d'auteur, cherchées dans le HTML qui PRÉCÈDE le lien et dans
+// son libellé : le réseau d'un prestataire se signale presque toujours par elles.
+// Le mot « agence » en est VOLONTAIREMENT absent : la population visée compte des
+// agences de publicité, chez qui il désigne l'entreprise elle-même, pas son
+// prestataire. Comparaison sur texte passé à normText (accents et ponctuation retirés).
+const RESEAU_CREDIT_RE =
+  /\b(realis[a-z]* par|realisation du site|creation du site|creation site|cree par|creee par|concu par|conception du site|conception et realisation|propulse par|powered by|developpe par|developpement du site|design by|designed by|site by|made by|webmaster|credit|credits)\b/
+
+const RESEAU_FENETRE_CREDIT = 220    // caractères de HTML lus AVANT le <a> (contexte)
+const RESEAU_ZONE_BASSE = 0.75       // dernier quart du document : pied de page approché
+const RESEAU_MIN_CONCORDANCE = 5     // longueur minimale d'un fragment comparable
+
+// Normalisation de comparaison : normText puis espaces retirés. « ACTI'ANIM » et
+// « acti-anim » deviennent tous deux « actianim ».
+function normCollapse(s) {
+  return normText(s).replace(/ /g, '')
+}
+
+// Base d'un nom d'hôte : www retiré, tout ce qui précède le premier point.
+// « www.alveo-breizh.fr » → « alveo-breizh ».
+function baseDomaine(host) {
+  const h = String(host || '').toLowerCase().replace(/^www\./, '')
+  return h.split('.')[0] || ''
+}
+
+// Deux fragments concordent si l'un contient l'autre, les deux étant assez longs pour
+// que la rencontre veuille dire quelque chose.
+function fragmentsConcordent(a, b) {
+  if (a.length < RESEAU_MIN_CONCORDANCE || b.length < RESEAU_MIN_CONCORDANCE) return false
+  return a.includes(b) || b.includes(a)
+}
+
+// Un href est-il un profil de réseau reconnu ? Rend { champ, url, fragment } ou null.
+// L'URL rendue est débarrassée de sa requête et de son ancre (paramètres de suivi), à
+// LA seule exception de profile.php, dont l'identifiant vit dans la requête.
+function reseauCible(href, baseUrl) {
+  let u
+  try { u = new URL(href, baseUrl) } catch { return null }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+  const host = u.hostname.toLowerCase()
+  const reseau = RESEAUX.find(r => r.domaines.some(d => host === d || host.endsWith('.' + d)))
+  if (!reseau) return null
+
+  let chemin = u.pathname || '/'
+  try { chemin = decodeURIComponent(chemin) } catch { /* garde brut */ }
+  if (chemin === '' || chemin === '/') return null            // l'accueil du réseau
+  if (RESEAU_CHEMIN_REJETE.test(chemin)) return null
+
+  const seg = chemin.split('/').filter(Boolean)
+  if (seg.length === 0) return null
+  const profilPhp = /^profile\.php$/i.test(seg[0])
+  if (profilPhp && !u.searchParams.get('id')) return null      // ni nom ni identifiant
+  const url = u.origin + '/' + seg.join('/') + (profilPhp ? '?id=' + u.searchParams.get('id') : '')
+  return { champ: reseau.champ, url, fragment: reseau.fragment(seg) || '' }
+}
+
+// Liens de réseaux d'UNE page. Fonction PURE. Rend des candidats, jamais une décision :
+//   { champ, url, fragment, credit, basPage }
+// credit — le lien est entouré d'une formule d'attribution d'auteur.
+// basPage — le lien se trouve dans le dernier quart du document. Approximation assumée
+//   du pied de page : sans construction d'un DOM, c'est le meilleur signal disponible,
+//   et il écarte les liens cités en plein corps d'article.
+export function extractReseaux(html, baseUrl) {
+  const src = String(html || '')
+  const seuilBas = src.length * RESEAU_ZONE_BASSE
+  const out = []
+  const re = /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
+  for (const m of src.matchAll(re)) {
+    const cible = reseauCible(m[1], baseUrl)
+    if (!cible) continue
+    const avant = src.slice(Math.max(0, m.index - RESEAU_FENETRE_CREDIT), m.index)
+    const contexte = normText(avant + ' ' + stripTags(m[2]))
+    out.push({
+      champ: cible.champ,
+      url: cible.url,
+      fragment: cible.fragment,
+      credit: RESEAU_CREDIT_RE.test(contexte),
+      basPage: m.index >= seuilBas
+    })
+  }
+  return out
+}
+
+// Arbitrage : parmi les candidats de TOUTES les pages lues, lequel est le réseau DE
+// L'ENTREPRISE, et non celui d'un prestataire ou d'un partenaire ? Un par réseau, ou
+// aucun. Fonction PURE, exportée pour vérification hors-base comme repartirPages.
+//
+// Deux épreuves, dans cet ordre :
+//
+//   1. CONCORDANCE DU FRAGMENT — l'adresse du profil nomme l'entreprise, ou nomme le
+//      domaine de son propre site. C'est la même logique de corroboration que le reste
+//      du maillon 4, appliquée au lien. Un prestataire ne la passe pas : son profil
+//      porte SON nom.
+//
+//   2. REPLI, à défaut — le lien est le SEUL de son réseau sur tout ce qui a été lu, il
+//      se trouve en pied de page, et aucune de ses occurrences n'est entourée d'une
+//      formule d'attribution d'auteur. Sans ce repli on raterait les pages dont
+//      l'adresse est un identifiant numérique (profile.php?id=…), forme très fréquente
+//      chez les TPE — c'est-à-dire exactement la population qui n'a QUE ce canal.
+//      Le faux positif de partenaire qu'il laisse passer est borné par ce qui l'entoure :
+//      rien n'est écrit sans corroboration de la fiche, et rien n'écrase une valeur déjà
+//      présente.
+export function retenirReseaux(candidats, faisceau = {}, siteHost = '') {
+  const liste = Array.isArray(candidats) ? candidats : []
+  const out = {}
+  const attendus = [normCollapse(faisceau?.raison_sociale), normCollapse(baseDomaine(siteHost))]
+    .filter(x => x.length >= RESEAU_MIN_CONCORDANCE)
+
+  for (const { champ } of RESEAUX) {
+    const duReseau = liste.filter(c => c && c.champ === champ)
+    if (duReseau.length === 0) continue
+
+    // Épreuve 1.
+    const concordant = duReseau.find(c =>
+      attendus.some(a => fragmentsConcordent(normCollapse(c.fragment), a)))
+    if (concordant) { out[champ] = concordant.url; continue }
+
+    // Épreuve 2. Plusieurs profils distincts pour un même réseau = ambiguïté : on ne
+    // tranche pas au hasard, on n'écrit rien.
+    const urls = new Set(duReseau.map(c => c.url))
+    if (urls.size !== 1) continue
+    if (duReseau.some(c => c.credit)) continue
+    const enPied = duReseau.find(c => c.basPage)
+    if (!enPied) continue
+    out[champ] = enPied.url
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
 // Maillon 4 — recoupement scoré contre le faisceau.
 //   • SIRET/SIREN trouvé = certain (réutilise corroborerSiret d'overpass.js).
 //   • ≥ 2 signaux indépendants parmi {raison_sociale, adresse, dirigeant_nom} = présumé,
@@ -765,8 +941,11 @@ function recouper(faisceau, ex, attestee) {
 
 // ---------------------------------------------------------------------------
 // analyserSite(homeUrl, faisceau, options) — maillons 2→4 sur un site.
-// Rend { confidence, signals, emails, phones, urlLue } (confidence possiblement null
-// si le site est joignable mais ne recoupe pas), ou null si le home est injoignable.
+// Rend { confidence, signals, emails, phones, reseaux, urlLue } (confidence possiblement
+// null si le site est joignable mais ne recoupe pas), ou null si le home est injoignable.
+//
+// reseaux — objet { societe_facebook?, societe_instagram?, societe_linkedin? }, lu sur
+// les pages DÉJÀ téléchargées. Aucun appel sortant de plus, et aucune visite du réseau.
 //
 // urlLue — l'adresse qui a EFFECTIVEMENT répondu, http compris quand le repli a joué.
 // C'est elle que le référentiel doit enregistrer : inscrire une adresse sécurisée pour
@@ -833,11 +1012,17 @@ export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
   // Budget inchangé, répartition garantie : au moins une page de chaque nature.
   const pages = repartirPages(candidats, MAX_LEGAL_PAGES)
 
-  // Corpus = home + pages légales (texte strippé/décodé).
+  // Corpus = home + pages légales (texte strippé/décodé). Les liens de réseaux sont
+  // relevés sur le HTML AVANT strippage — stripTags efface les attributs href, et une
+  // fois le corpus constitué il n'y a plus une seule URL de réseau à lire.
   const texts = [stripTags(homeHtml)]
+  const reseauxCandidats = [...extractReseaux(homeHtml, base)]
   for (const p of pages) {
     const r = await politeFetchText(p)
-    if (r) texts.push(stripTags(decodeEntities(r.text)))
+    if (!r) continue
+    const pageHtml = decodeEntities(r.text)
+    texts.push(stripTags(pageHtml))
+    reseauxCandidats.push(...extractReseaux(pageHtml, r.finalUrl || p))
   }
   const corpusRaw = texts.join('  \n  ')
   const corpusNorm = normText(corpusRaw)
@@ -852,9 +1037,12 @@ export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
   const phones = extractPhones(corpusRaw)
   const emails = sortEmailsBySiteDomain(extractEmails(corpusRaw), safeHost(base))
 
+  // Maillon 3 bis — arbitrage des réseaux sur l'ensemble de ce qui a été lu.
+  const reseaux = retenirReseaux(reseauxCandidats, faisceau, safeHost(base))
+
   // Maillon 4 — recoupement.
   const { confidence, signals } = recouper(faisceau, ex, attestee)
-  return { confidence, signals, emails, phones, urlLue }
+  return { confidence, signals, emails, phones, reseaux, urlLue }
 }
 
 // ---------------------------------------------------------------------------
@@ -1021,8 +1209,11 @@ export async function enrichirMentionsLegales(siret, options = {}) {
       }
     }
 
-    // Écriture additive (fill-if-empty, liste blanche website/societe_email/societe_tel).
-    // Un seul champ corroboré suffit ; jamais societe_linkedin.
+    // Écriture additive (fill-if-empty, liste blanche des six champs actionnables :
+    // website, societe_email, societe_tel et les trois réseaux). Un seul champ
+    // corroboré suffit. La règle est la même pour tous : posé seulement si le champ
+    // est vide en base, seulement si la corroboration de la fiche est établie — d'où
+    // la garde analyse.confidence qui commande tout le bloc.
     if (analyse && analyse.confidence) {
       result.confidence = analyse.confidence
       result.signals = analyse.signals
@@ -1030,6 +1221,8 @@ export async function enrichirMentionsLegales(siret, options = {}) {
       if (sourceUrl) fields.website = sourceUrl
       if (analyse.emails.length) fields.societe_email = analyse.emails[0]
       if (analyse.phones.length) fields.societe_tel = analyse.phones[0]
+      // Réseaux déjà arbitrés par retenirReseaux : au plus un par réseau, ou aucun.
+      for (const [champ, url] of Object.entries(analyse.reseaux || {})) fields[champ] = url
       if (Object.keys(fields).length) {
         await enrichReferentielActionnable(s, fields)
         result.written = true

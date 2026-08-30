@@ -2640,12 +2640,23 @@ let rdvEnEdition = null;
 
 const DUREES_RDV = [15, 30, 45, 60, 90];
 
-// La propagation acquise : l'Agenda émet ce signal après chaque écriture, et
-// cette page comme les autres onglets l'écoutent déjà sous LS.AGENDA. Ces deux
-// gestes-ci ne s'en dispensent pas.
+// Vrai le temps du dispatch ci-dessous, et lu par l'écouteur `storage` de cette
+// page. dispatchEvent est synchrone : les écouteurs s'exécutent avant que le
+// témoin retombe.
+let signalAgendaEmisIci = false;
+
+// Le signal que le produit s'est donné après chaque écriture d'agenda, sous la
+// clé LS.AGENDA. Ce qu'il fait RÉELLEMENT : un StorageEvent construit à la main
+// et distribué sur `window` ne quitte pas son document, il n'est donc reçu que
+// par cette page. Les autres onglets, eux, apprennent l'écriture par le vrai
+// évènement `storage` du navigateur, que seule une écriture dans localStorage
+// produit. La propagation entre onglets est un chantier de tout le produit et
+// ne se décide pas ici : le signal reste émis, sous sa forme actuelle.
 function signalerAgendaModifie(){
+  signalAgendaEmisIci = true;
   try { window.dispatchEvent(new StorageEvent('storage', { key: LS.AGENDA })); }
   catch(e){ console.warn('[visio] signal agenda', e); }
+  finally { signalAgendaEmisIci = false; }
 }
 
 // « 12 mars à 14:00 » — le format que la porte de création écrit déjà dans le fil.
@@ -2657,6 +2668,17 @@ function libelleCreneau(d){
 // Le créneau tel que l'évènement le porte : date YYYY-MM-DD + start HH:MM.
 function creneauEvt(dateStr, startStr){
   return new Date(String(dateStr || '') + 'T' + (startStr || '00:00') + ':00');
+}
+
+// Le refus des deux écritures d'agenda, dit d'un seul endroit. « Le serveur a
+// répondu 402. Réessayez. » conseillait de refaire un geste qui échouera tant
+// que l'abonnement dort, et doublait le mur payant de trial-expired-modal.js
+// déjà à l'écran : sur 402 le verdict revient SANS message, et l'appelante se
+// tait. Sur tout autre statut, une seule phrase, qui dit l'état où le
+// rendez-vous est resté.
+function refusEcritureAgenda(status){
+  if(status === 402) return { ok:false, message:null };
+  return { ok:false, message:"L'enregistrement a échoué. Votre rendez-vous reste tel qu'il était." };
 }
 
 // L'unique porte d'écriture de cette page sur la table agenda : la modification
@@ -2694,7 +2716,7 @@ async function ecrireGesteRdv(idRdv, patch){
   if(patch === null){
     try {
       const r = await fetch('/api/agenda/' + encodeURIComponent(id), { method:'DELETE' });
-      if(!r.ok) return { ok:false, message:'Le serveur a répondu ' + r.status + '. Réessayez.' };
+      if(!r.ok) return refusEcritureAgenda(r.status);
     } catch(e){
       console.warn('[visio] DELETE agenda', e);
       return { ok:false, message:"Le réseau n'a pas répondu. Réessayez." };
@@ -2722,7 +2744,7 @@ async function ecrireGesteRdv(idRdv, patch){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(corps)
     });
-    if(!r.ok) return { ok:false, message:'Le serveur a répondu ' + r.status + '. Réessayez.' };
+    if(!r.ok) return refusEcritureAgenda(r.status);
   } catch(e){
     console.warn('[visio] PUT agenda', e);
     return { ok:false, message:"Le réseau n'a pas répondu. Réessayez." };
@@ -2841,7 +2863,7 @@ $('saveEditRdvBtn').addEventListener('click', async ()=>{
   // le fil et l'échec est dit à l'écran.
   const res = await ecrireGesteRdv(rdv.agendaId, patch);
   btn.disabled = false;
-  if(!res.ok){ mupAlert('Modification impossible', res.message, 'Fermer'); return; }
+  if(!res.ok){ if(res.message) mupAlert('Modification impossible', res.message, 'Fermer'); return; }
 
   // La ligne dit ce qui s'est réellement passé : « déplacé » quand le créneau a
   // bougé, « modifié » sinon. Un journal en ajout seul n'a pas de repentir : une
@@ -2874,7 +2896,7 @@ $('deleteRdvBtn').addEventListener('click', async ()=>{
 
   const res = await ecrireGesteRdv(rdv.agendaId, null);
   btn.disabled = false;
-  if(!res.ok){ mupAlert('Annulation impossible', res.message, 'Fermer'); return; }
+  if(!res.ok){ if(res.message) mupAlert('Annulation impossible', res.message, 'Fermer'); return; }
 
   await ecrireFilRdv(res.avant.ficheId,
     'RDV du ' + libelleCreneau(creneauEvt(res.avant.date, res.avant.start)) + ' annulé');
@@ -3672,10 +3694,20 @@ function getMimeLabel(mime){
   return { pdf:'PDF', video:'MP4', image:'IMG', doc:'DOC', other:'FILE' }[cat];
 }
 
+// Les trois épinglés que la liste NUMÉROTE, dans l'ordre où elle les affiche :
+// ceux du filtre en cours. Une seule définition pour les deux lecteurs, le rendu
+// des cartes et les touches 1, 2 et 3, sans quoi la touche 2 ouvre un document
+// que la carte 2 ne désigne pas.
+function docsEpinglesNumerotes(){
+  const meta = _state.docs || [];
+  const filtered = activeFilter === 'all' ? meta : meta.filter(m=>m.tag === activeFilter);
+  return filtered.filter(m=>m.pinned).slice(0,3);
+}
+
 function renderDocsList(){
   const meta = _state.docs || [];
   const filtered = activeFilter === 'all' ? meta : meta.filter(m=>m.tag === activeFilter);
-  const pinned = filtered.filter(m=>m.pinned).slice(0,3);
+  const pinned = docsEpinglesNumerotes();
   const others = filtered.filter(m=>!pinned.includes(m));
   const list = $('docsList');
   const logs = _state.docOpens || [];
@@ -3932,7 +3964,10 @@ $('copyLinkBtn').addEventListener('click', ()=>{
 });
 
 $('inviteBtn').addEventListener('click', ()=>{
-  if(!rdvAffiche) return;
+  // Son voisin dit son refus, celui-ci se taisait. Un test caméra ouvert sans
+  // rendez-vous peint est exactement le moment où ce bouton reste cliquable et
+  // sans effet.
+  if(!rdvAffiche){ showToast('Sélectionnez un rendez-vous pour envoyer une invitation.'); return; }
   $('inviteRdvLabel').textContent = `${rdvAffiche.prospectName} — ${new Date(rdvAffiche.date).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'})}`;
   $('inviteLinkCode').textContent = rdvAffiche.link || '—';
   inviteEmails = rdvAffiche.email ? [rdvAffiche.email] : [];
@@ -3944,7 +3979,7 @@ $('inviteBtn').addEventListener('click', ()=>{
 function generateInviteMessage(rdv){
   const settings = _state.settings;
   const dateStr = new Date(rdv.date).toLocaleString('fr-FR', { weekday:'long', day:'numeric', month:'long', hour:'2-digit', minute:'2-digit' });
-  return `Bonjour,\n\nJe vous propose un RDV en visioconférence le ${dateStr} (durée ~${rdv.duree} min).\n\nLien : ${rdv.link || '(à venir)'}\n${rdv.sujet ? '\nSujet : ' + rdv.sujet : ''}\n\n${settings.signature || 'àtrès bientôt'}`;
+  return `Bonjour,\n\nJe vous propose un RDV en visioconférence le ${dateStr} (durée ~${rdv.duree} min).\n\nLien : ${rdv.link || '(à venir)'}\n${rdv.sujet ? '\nSujet : ' + rdv.sujet : ''}\n\n${settings.signature || 'à très bientôt'}`;
 }
 
 function renderInviteEmails(){
@@ -4036,9 +4071,16 @@ $('openNewRdvBtn').addEventListener('click', async ()=>{
     sel.innerHTML += `<option value="${p.id}">${escapeHtml(name||'')}${p.societe ? ' — '+escapeHtml(p.societe) : ''}</option>`;
   });
 
-  const now = new Date();
-  $('rdvDate').value = now.toISOString().slice(0,10);
-  $('rdvTime').value = `${fmt2(now.getHours()+1)}:00`;
+  // L'heure ronde suivante, composée en heure LOCALE de bout en bout.
+  // toISOString rendait la veille entre minuit et le décalage horaire, et
+  // fmt2(getHours()+1) proposait « 24:00 » à partir de 23 h, valeur que le champ
+  // refuse en restant vide. Une Date qui porte l'heure proposée règle les deux :
+  // elle passe le minuit d'elle-même, et la date la suit.
+  const propose = new Date();
+  propose.setMinutes(0, 0, 0);
+  propose.setHours(propose.getHours() + 1);
+  $('rdvDate').value = propose.getFullYear() + '-' + fmt2(propose.getMonth()+1) + '-' + fmt2(propose.getDate());
+  $('rdvTime').value = fmt2(propose.getHours()) + ':00';
   refletProvidersRdv();
   $('newRdvModal').classList.add('show');
 });
@@ -4165,7 +4207,7 @@ $('saveRdvBtn').addEventListener('click', async ()=>{
       if(await mupConfirm("Envoyer l'invitation par email maintenant ?", null, 'Envoyer', 'Annuler')){
         const subject = encodeURIComponent(`Invitation visio — ${prospectName}`);
         const dateStr = new Date(dateISO).toLocaleString('fr-FR',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
-        const body = encodeURIComponent(`Bonjour,\n\nJe vous propose un RDV en visioconférence le ${dateStr}.\n\nLien : ${link}\n\n${_state.settings.signature || 'àtrès bientôt'}`);
+        const body = encodeURIComponent(`Bonjour,\n\nJe vous propose un RDV en visioconférence le ${dateStr}.\n\nLien : ${link}\n\n${_state.settings.signature || 'à très bientôt'}`);
         window.location.href = `mailto:${$('prospectEmail').value}?subject=${subject}&body=${body}`;
       }
     }, 400);
@@ -4406,27 +4448,27 @@ document.addEventListener('keydown', e=>{
 
   // 1, 2, 3 : ouvrir doc épinglé (marche AVEC ou SANS RDV actif)
   if(['1','2','3'].includes(e.key)){
-    const pinned = (_state.docs || []).filter(m=>m.pinned).slice(0,3);
-    const doc = pinned[parseInt(e.key)-1];
+    const doc = docsEpinglesNumerotes()[parseInt(e.key)-1];
     if(doc){ e.preventDefault(); openDoc(doc.id); }
     return;
   }
 
-  // C et I portent sur le rendez-vous AFFICHÉ. Échap, plus haut, reste sur la
-  // séance engagée : rien ne se termine si rien n'a commencé.
+  // I : inviter. La touche passe par le bouton, refus compris : sans rendez-vous
+  // affiché elle dit ce que dirait le clic, au lieu de sortir en silence.
+  if(e.key === 'i' || e.key === 'I'){
+    e.preventDefault();
+    $('inviteBtn').click();
+    return;
+  }
+
+  // C porte sur le rendez-vous AFFICHÉ. Échap, plus haut, reste sur la séance
+  // engagée : rien ne se termine si rien n'a commencé.
   if(!rdvAffiche) return;
 
   // C : copier lien
   if(e.key === 'c' || e.key === 'C'){
     e.preventDefault();
     $('copyLinkBtn').click();
-    return;
-  }
-
-  // I : inviter
-  if(e.key === 'i' || e.key === 'I'){
-    e.preventDefault();
-    $('inviteBtn').click();
     return;
   }
 });
@@ -4464,6 +4506,10 @@ $('docsToggle').addEventListener('click', ()=>{
 $('searchInput').addEventListener('input', renderRdvList);
 
 window.addEventListener('storage', e=>{
+  // Le signal émis par cette page même : le geste qui vient de l'émettre
+  // repeint déjà, par rafraichirApresGeste. Repeindre ici aussi refaisait la
+  // liste et le briefing deux fois pour une seule modification.
+  if(signalAgendaEmisIci) return;
   if([LS.PIPELINE, LS.AGENDA, LS.CONTACTS, LS.DEVIS].includes(e.key) || e.key === 'mup_contact_sync' || e.key === 'mup_contact_deleted'){
     // Purger AVANT de repeindre : sans cela, le signal de l'autre onglet
     // servirait le cache et ne changerait rien à l'écran.

@@ -39,9 +39,9 @@ export async function requireActiveSubscription(req, res, next) {
   // Source unique de vérité (H5a) : lib/derive-app-state.js. La fonction
   // pure retourne uniquement un label parmi 'trial_active' | 'trial_expired'
   // | 'grace_active' | 'grace_expired' | 'past_due_locked' | 'active'
-  // | 'pending_approval' (inscription non encore approuvée, lib/approbation.js
-  // — ce dernier n'apparaît QUE si la variable INSCRIPTION_APPROBATION est
-  // armée ; sans elle, la liste et ce dispatch sont ceux d'avant).
+  // | 'pending_approval' (inscription non encore approuvée, lib/approbation.js).
+  // Ce dernier n'apparaît QUE si la variable INSCRIPTION_APPROBATION est armée ;
+  // sans elle, la liste et ce dispatch sont ceux d'avant.
   const label = deriveAppState(user)
 
   // Bascule DB best-effort (effet de bord local conservé pré/post-H5a) :
@@ -100,7 +100,7 @@ export async function requireActiveSubscription(req, res, next) {
       })
     // Inscription en cours d'examen. Un case EXPLICITE, et non le défaut :
     // sans lui, 'pending_approval' tomberait sur next() et l'écriture passerait.
-    // Les droits RGPD ne sont pas concernés — /api/account/privacy/export et
+    // Les droits RGPD ne sont pas concernés : /api/account/privacy/export et
     // /api/account/delete sont exemptés de ce middleware en amont (server.js).
     case 'pending_approval':
       return res.status(402).json({

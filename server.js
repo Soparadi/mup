@@ -967,7 +967,7 @@ app.use((req, res, next) => {
   return requireAuthHtml(req, res, next)
 })
 
-// ── Portillon d'approbation — pages app ──
+// ── Portillon d'approbation des pages app ──
 // Tourne APRÈS requireAuthHtml (req.authUser disponible) et AVANT l'injection
 // window.__USER__ : une page dont l'accès n'est pas ouvert n'est jamais servie,
 // pas même vidée de sa substance.
@@ -1249,7 +1249,7 @@ app.get('/api/admin/comptes', requireSuperadmin, async (req, res) => {
         last_seen_at: u.last_seen_at || null,
         // Statut VIP — vit sur user (pas user_plan). Lu par le toggle superadmin.
         bypass: !!u.bypass,
-        // Approbation manuelle de l'inscription — vit sur user, comme bypass.
+        // Approbation manuelle de l'inscription : vit sur user, comme bypass.
         // `essai_demarre` accompagne la date parce que l'interrupteur ne se lit
         // pas sur approved_at seul : un compte antérieur à cette porte n'a pas
         // de date d'approbation mais son essai tourne, il est approuvé de fait
@@ -1294,7 +1294,7 @@ app.post('/api/admin/comptes/bypass', requireSuperadmin, async (req, res) => {
   }
 })
 
-// ── POST /api/admin/comptes/approbation — superadmin, ouverture de l'accès ──
+// ── POST /api/admin/comptes/approbation : superadmin, ouverture de l'accès ──
 // Jumelle de la route bypass ci-dessus : même verrou (requireSuperadmin,
 // dev@soparadi.com SEUL), même recherche par adresse, même invalidation du
 // cache de session après écriture. Écriture CHIRURGICALE : les champs sont

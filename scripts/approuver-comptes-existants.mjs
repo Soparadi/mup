@@ -1,26 +1,26 @@
-// One-shot — approuve retroactivement les comptes anterieurs a l'approbation
-// manuelle des inscriptions (lib/approbation.js). A executer une fois, AVANT
+// One-shot : approuve rétroactivement les comptes antérieurs à l'approbation
+// manuelle des inscriptions (lib/approbation.js). À exécuter une fois, AVANT
 // de poser INSCRIPTION_APPROBATION=1 dans Railway.
 //
-// FACULTATIF, et il faut le savoir avant de le lancer. estEnAttente ecarte
-// deja tout compte porteur d'un trial_started_at : les comptes existants sont
+// FACULTATIF, et il faut le savoir avant de le lancer. estEnAttente écarte
+// déjà tout compte porteur d'un trial_started_at : les comptes existants sont
 // hors d'atteinte de la porte, script ou pas, quel que soit l'ordre de
-// deploiement. Ce script ne change donc RIEN a leur acces. Il pose la date
-// d'approbation pour que la colonne « Acces approuve » du tableau superadmin
-// se lise, plutot que de rester remplie de tirets.
+// déploiement. Ce script ne change donc RIEN à leur accès. Il pose la date
+// d'approbation pour que la colonne « Accès approuvé » du tableau superadmin
+// se lise, plutôt que de rester remplie de tirets.
 //
 // Comportement :
 //   UPDATE user SET approved_at = created_at
 //   WHERE approved_at IS NONE AND trial_started_at IS NOT NONE
 //
-// approved_at = created_at, et non time::now() : la date dit quand l'acces a
-// ete ouvert, or il l'etait des l'inscription pour ces comptes-la. Affectation
-// de champ a champ, donc datetime natif des deux cotes — aucune chaine ISO
-// liee, aucune coercition a craindre.
+// approved_at = created_at, et non time::now() : la date dit quand l'accès a
+// été ouvert, or il l'était dès l'inscription pour ces comptes-là. Affectation
+// de champ à champ, donc datetime natif des deux côtés, aucune chaîne ISO
+// liée, aucune coercition à craindre.
 //
-// Ne touche AUCUN compte en attente : trial_started_at IS NOT NONE les ecarte.
-// Un compte cree apres l'armement de la variable attend une approbation
-// DECIDEE, jamais une approbation posee en bloc par un script.
+// Ne touche AUCUN compte en attente : trial_started_at IS NOT NONE les écarte.
+// Un compte créé après l'armement de la variable attend une approbation
+// DÉCIDÉE, jamais une approbation posée en bloc par un script.
 //
 // Idempotent : rejouer ne fait rien, la clause approved_at IS NONE ne rend
 // plus personne.
@@ -29,7 +29,7 @@
 //   node scripts/approuver-comptes-existants.mjs
 //
 // Cible la PROD (.env du repo pointe sur SurrealDB Cloud movup). Aucune
-// confirmation interactive. Lire le code avant d'executer.
+// confirmation interactive. Lire le code avant d'exécuter.
 
 import 'dotenv/config'
 import { Surreal } from 'surrealdb'

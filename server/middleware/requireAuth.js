@@ -4,6 +4,7 @@
 
 import { getSession, renewSessionIfNeeded } from '../auth/surreal-adapter.js'
 import { toucherLastSeen } from '../services/last-seen.js'
+import { rattraperEssai } from '../services/rattrapage-essai.js'
 
 export const SESSION_COOKIE = 'mup_session'
 
@@ -80,6 +81,12 @@ export async function requireAuth(req, res, next) {
     // et la carte de pas est partagée : les deux points d'appel ne produisent
     // pas deux écritures.
     toucherLastSeen(userIdStr)
+    // Cicatrisation de l'approbation manuelle, même motif de placement que la
+    // ligne au-dessus : posée dans les DEUX portillons parce que c'est le seul
+    // endroit que tout compte traverse, quoi qu'il fasse. Sans await, et sans
+    // rien coûter au compte ordinaire : la décision se prend sur des valeurs
+    // déjà en mémoire (server/services/rattrapage-essai.js).
+    rattraperEssai(userIdStr, req.authUser)
     next()
   } catch (e) {
     console.error('[requireAuth]', e.message)
@@ -112,6 +119,7 @@ export async function requireAuthHtml(req, res, next) {
     req.session = { userId: userIdStr }
     req.authUser = session.user || null
     toucherLastSeen(userIdStr)
+    rattraperEssai(userIdStr, req.authUser)
     next()
   } catch (e) {
     console.error('[requireAuthHtml]', e.message)

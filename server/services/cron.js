@@ -29,6 +29,7 @@ import {
   sendTrialDataDeletionWarningEmails
 } from './trial-emails.js'
 import { purgeExpiredUsers, purgeExpiredTrials, deleteUserCascade } from './purge-expired.js'
+import { rattraperEssaisDormants } from './rattrapage-essai.js'
 import { agregerVisitesJour } from './visites.js'
 import { sendAccountDeletionConfirmed } from './email.js'
 import { ramasserActualites } from './actualites.js'
@@ -128,10 +129,17 @@ async function runStep(name, fn, prefixe = 'cron:trial:') {
 // nombre d'étapes ATTENDUES, sans quoi la ligne de clôture ne saurait pas
 // distinguer un passage complet d'un passage interrompu.
 //
-// L'ordre est celui d'avant, inchangé. `visites` reste EN DERNIER : c'est la
-// seule étape qui n'envoie rien et ne touche aucun compte, elle ne doit pas
-// retarder les relances.
+// L'ordre des neuf étapes historiques est celui d'avant, inchangé. `visites`
+// reste EN DERNIER : c'est la seule étape qui n'envoie rien et ne touche aucun
+// compte, elle ne doit pas retarder les relances.
+//
+// `rattrapage_essai` est EN PREMIER, et c'est la seule raison de son rang : il
+// normalise la population avant les étapes qui la lisent. Un compte dormant
+// sans dates d'essai, resté d'une période où l'approbation manuelle était
+// armée, y reçoit les siennes et rejoint le circuit ordinaire. Sous
+// INSCRIPTION_APPROBATION, l'étape ne lit même pas la base et rend zéro.
 const ETAPES_TRIAL = [
+  ['rattrapage_essai', rattraperEssaisDormants],
   ['j2', sendTrialEndingSoonEmails],
   ['j0', sendTrialEndingTodayEmails],
   ['trial_purge_warn', sendTrialDataDeletionWarningEmails],

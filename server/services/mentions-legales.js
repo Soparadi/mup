@@ -700,8 +700,14 @@ function recouper(faisceau, ex, attestee) {
 
 // ---------------------------------------------------------------------------
 // analyserSite(homeUrl, faisceau, options) — maillons 2→4 sur un site.
-// Rend { confidence, signals, emails, phones } (confidence possiblement null si
-// le site est joignable mais ne recoupe pas), ou null si le home est injoignable.
+// Rend { confidence, signals, emails, phones, urlLue } (confidence possiblement null
+// si le site est joignable mais ne recoupe pas), ou null si le home est injoignable.
+//
+// urlLue — l'adresse qui a EFFECTIVEMENT répondu, http compris quand le repli a joué.
+// C'est elle que le référentiel doit enregistrer : inscrire une adresse sécurisée pour
+// un site qui ne répond qu'en clair, c'est inscrire une adresse qui ne répond pas.
+// Champ ajouté, jamais retiré : les appelants qui ne lisent que confidence, signals,
+// emails et phones ne voient aucune différence.
 // Exportée pour diagnostic : elle ne touche JAMAIS la base (crawl + extraction +
 // recoupement en mémoire), l'écriture reste le seul fait d'enrichirMentionsLegales.
 //
@@ -767,7 +773,7 @@ export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
 
   // Maillon 4 — recoupement.
   const { confidence, signals } = recouper(faisceau, ex, attestee)
-  return { confidence, signals, emails, phones }
+  return { confidence, signals, emails, phones, urlLue }
 }
 
 // ---------------------------------------------------------------------------
@@ -863,7 +869,9 @@ export async function enrichirMentionsLegales(siret, options = {}) {
       if (a) visiteAboutie = true
       if (a && a.confidence) {
         analyse = a
-        sourceUrl = normalizeUrl(faisceau.website)
+        // L'adresse qui a répondu, pas la forme normalisée : le repli http l'a
+        // peut-être dégradée, et c'est celle-là qui est joignable.
+        sourceUrl = a.urlLue || normalizeUrl(faisceau.website)
         result.source = 'base'
         result.attestee = attestee
       }
@@ -891,7 +899,7 @@ export async function enrichirMentionsLegales(siret, options = {}) {
         if (a) visiteAboutie = true
         if (a && a.confidence) {
           analyse = a
-          sourceUrl = normalizeUrl(url)
+          sourceUrl = a.urlLue || normalizeUrl(url)
           result.source = 'web'
           result.attestee = attestee
           break

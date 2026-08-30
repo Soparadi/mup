@@ -29,6 +29,7 @@ import {
 import { sendWelcomeVerify, sendWelcome, sendPasswordReset, sendEmailChangeVerify, sendEmailChangeNotice } from '../services/email.js'
 import { getLocationFromIp } from '../services/geolocation.js'
 import { readSessionToken, SESSION_COOKIE, setSessionCookie, requireAuth } from '../middleware/requireAuth.js'
+import { approbationRequise, estEnAttente } from '../../lib/approbation.js'
 
 export const router = express.Router()
 
@@ -345,9 +346,24 @@ router.post('/signup', async (req, res) => {
       plan: 'demarrage',                        // Décision 1.2 — essai = niveau Essentiel ; trial_status distingue essai/payant
       marketing_consent: marketingConsent,      // false par défaut (RGPD)
       cgu_accepted: cguAccepted,                 // toujours true ici (garde 400 ci-dessus)
-      cgu_version: CGU_VERSION,                   // version des conditions acceptées
-      trial_status: 'active'                    // datetimes (dont cgu_accepted_at) posées en 2ème temps (cf. ci-dessous)
+      cgu_version: CGU_VERSION                    // version des conditions acceptées
+      // trial_status et les datetimes d'essai sont posés plus bas, et SEULEMENT
+      // si l'approbation manuelle n'est pas armée (cf. ci-dessous).
     }
+    // Approbation manuelle des inscriptions (lib/approbation.js). Variable
+    // absente : `enAttente` vaut false, les deux blocs conditionnels ci-dessous
+    // s'exécutent, et le signup est mot pour mot celui d'avant.
+    //
+    // Armée : le compte se crée et l'adresse se vérifiera normalement, mais
+    // l'essai NE DÉMARRE PAS. Ne rien poser suffit à le tenir hors de TOUTES
+    // les boucles du cron : relances J-2 et J-0, bascule automatique en
+    // 'expired', avertissement de purge et purge sélectionnent toutes sur
+    // trial_status = 'active' ou sur trial_ends_at IS NOT NONE. Un compte sans
+    // ces champs n'entre dans aucune, y compris dans les compteurs
+    // d'échéances. C'est l'approbation qui posera ces dates, et le décompte
+    // des quatorze jours partira de cet instant-là.
+    const enAttente = approbationRequise()
+    if (!enAttente) userBody.trial_status = 'active'
     if (geoData && typeof geoData === 'object') userBody.geo_data = geoData
     if (intendedPlan) userBody.intended_plan = intendedPlan
 
@@ -363,6 +379,8 @@ router.post('/signup', async (req, res) => {
     // de consentement : l'instant de l'acceptation = l'instant de la création,
     // donc time::now() est exact.
     //   - cgu_accepted_at    : toujours posé (acceptation OBLIGATOIRE, garde 400)
+    //   - trial_started_at / trial_ends_at : seulement si l'approbation
+    //     manuelle n'est pas armée ; sinon l'essai attend l'approbation
     //   - marketing_consent_at : seulement si la case opt-in est cochée
     //   - intended_plan_at   : seulement si un ?plan=… valide a été capté
     // Échec silencieux : si l'UPDATE plante, l'utilisateur est créé sans ces
@@ -371,11 +389,11 @@ router.post('/signup', async (req, res) => {
     try {
       const { getDb } = await import('../../lib/surreal.js')
       const dbInst = await getDb()
-      const setClauses = [
-        'trial_started_at = time::now()',
-        'trial_ends_at = time::now() + 14d',
-        'cgu_accepted_at = time::now()'
-      ]
+      const setClauses = []
+      if (!enAttente) {
+        setClauses.push('trial_started_at = time::now()', 'trial_ends_at = time::now() + 14d')
+      }
+      setClauses.push('cgu_accepted_at = time::now()')
       if (marketingConsent) setClauses.push('marketing_consent_at = time::now()')
       if (intendedPlan) setClauses.push('intended_plan_at = time::now()')
       await dbInst.query(
@@ -507,6 +525,10 @@ router.get('/verify', async (req, res) => {
       const { token: sessionToken, expiresAt } = await createSession(userIdStr, meta)
       setSessionCookie(res, sessionToken, expiresAt)
       clearPendingCookie(res)   // marqueur d'attente devenu inutile
+      // Inscription pas encore approuvée : la session est posée quand même,
+      // c'est elle qui permet à l'écran d'attente de sonder /api/user/me et de
+      // s'ouvrir tout seul à l'approbation. Variable absente : /dashboard.
+      if (estEnAttente(user)) return res.redirect('/attente')
       return res.redirect('/dashboard')
     }
 
@@ -520,7 +542,14 @@ router.get('/verify', async (req, res) => {
     // Email 2 (bienvenue narratif 3 récits) — idempotent via flag DB.
     // Si l'envoi ou le UPDATE plante : log et continuer (l'accès n'est pas bloqué
     // par un échec d'email).
-    if (!user.welcome_email_sent_at) {
+    //
+    // PAS DE BIENVENUE À UN COMPTE EN ATTENTE : il n'a pas d'accès à souhaiter
+    // encore. C'est l'approbation qui l'enverra (POST /api/admin/comptes/
+    // approbation), et le drapeau welcome_email_sent_at garantit qu'un seul des
+    // deux chemins l'envoie. Variable absente : `enAttente` vaut false et ce
+    // bloc redevient celui d'avant.
+    const enAttente = estEnAttente(user)
+    if (!enAttente && !user.welcome_email_sent_at) {
       try {
         await sendWelcome(user)
         const { getDb } = await import('../../lib/surreal.js')
@@ -544,6 +573,9 @@ router.get('/verify', async (req, res) => {
     // Premier clic : entrée directe dans l'action (recherche). Le dashboard
     // est vide pour un nouveau compte — la doctrine 'valeur perçue d'abord'
     // impose l'écran d'action. Le re-clic (l.380), profil retour, garde /dashboard.
+    // En attente d'approbation, l'écran d'attente prend la place : l'adresse
+    // est bien vérifiée, c'est l'accès qui n'est pas encore ouvert.
+    if (enAttente) return res.redirect('/attente')
     res.redirect('/prospection')
   } catch (e) {
     console.error('[auth:verify]', e.message)

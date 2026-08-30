@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MovUP — Votre demande est examinée</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/styles/fonts.css">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--surface:#F5F5F7;--card:#FFFFFF;--border:#E8E8ED;--text:#1D1D1F;--muted:#6E6E73;--font:'Geist',-apple-system,'Helvetica Neue',sans-serif}
+  body{background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:48px 20px}
+  .auth{width:100%;max-width:460px;text-align:center}
+  .auth-brand{display:inline-flex;align-items:center;gap:10px;justify-content:center;margin-bottom:24px;text-decoration:none;color:var(--text);font-weight:800;font-size:18px;letter-spacing:-.4px}
+  .auth-brand-logo{height:48px;width:auto;display:block}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:32px 28px}
+  .icon-wrap{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;background:var(--text);color:#fff}
+  h1{font-size:20px;font-weight:800;letter-spacing:-.3px;margin-bottom:14px}
+  p.lead{font-size:13.5px;color:var(--text);margin-bottom:10px;line-height:1.65}
+  p.hint{font-size:12.5px;color:var(--muted);margin-top:20px;line-height:1.6}
+  .back{display:inline-block;margin-top:24px;font-size:12.5px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  .btn-enter{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:13.5px;font-weight:700;padding:11px 20px;border-radius:10px;border:1px solid var(--text);cursor:pointer;background:var(--text);color:#fff;text-decoration:none;margin-top:8px}
+  .btn-enter:hover{background:#000}
+</style>
+</head>
+<body>
+<main class="auth">
+  <a href="/" class="auth-brand" aria-label="Accueil MovUP">
+    <img src="/logo-v7-movup-court.svg" alt="MovUP" class="auth-brand-logo">
+  </a>
+  <div class="card" id="attente-card">
+    <div class="icon-wrap" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>
+    </div>
+    <h1>Votre demande est examinée</h1>
+    <p class="lead">Votre compte est créé et votre adresse est confirmée. MovUP est en cours de développement : chaque inscription est examinée une par une avant l’ouverture de l’accès.</p>
+    <p class="lead">Vous recevrez un courriel dès que votre accès sera ouvert. Votre essai de 14 jours ne commencera qu’à ce moment-là, pas avant : rien ne s’écoule pendant cette attente.</p>
+    <p class="hint">Cette page se met à jour toute seule tant que vous la laissez ouverte. Vous pouvez aussi la fermer et revenir plus tard.</p>
+  </div>
+  <a href="/" class="back">Retour à l’accueil</a>
+</main>
+<script>
+;(function(){
+  // ── Sondage : la page se réveille dès l'accès ouvert ──
+  // Toutes les 15 s, on redemande l'état du compte. /api/user/me est exempté
+  // de la gate d'abonnement (server.js), un compte en attente peut donc
+  // l'appeler. L'approbation invalide le cache de session côté serveur : la
+  // première lecture qui suit voit déjà le nouvel état, sans délai.
+  //
+  // Arrêt après 30 minutes, et pause quand l'onglet passe en arrière-plan :
+  // un onglet oublié une nuit ne doit pas avoir sondé des milliers de fois.
+  //
+  // Sans session (page ouverte directement, cookie expiré) la route rend 401 :
+  // on ne fait rien, la page reste ce qu'elle dit être. Elle ne révèle aucune
+  // donnée personnelle, elle n'a donc rien à protéger.
+  var card = document.getElementById('attente-card')
+  var DEADLINE = Date.now() + 30 * 60 * 1000
+  var timer = null
+
+  function montrerOuvert(){
+    if (!card) return
+    card.innerHTML =
+      '<div class="icon-wrap" aria-hidden="true">' +
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>' +
+      '</div>' +
+      '<h1>Votre accès est ouvert</h1>' +
+      '<p class="lead">Votre essai de 14 jours commence maintenant.</p>' +
+      '<a class="btn-enter" href="/prospection">Entrer</a>'
+  }
+
+  function sonder(){
+    if (Date.now() > DEADLINE) { if (timer) { clearInterval(timer); timer = null } return }
+    if (document.hidden) return
+    fetch('/api/user/me', { method: 'GET', credentials: 'same-origin' })
+      .then(function(r){ return r.ok ? r.json() : null })
+      .then(function(data){
+        if (!data || !data.app_state) return
+        if (data.app_state === 'pending_approval') return
+        if (timer) { clearInterval(timer); timer = null }
+        montrerOuvert()
+      })
+      .catch(function(){ /* réseau : nouvelle tentative au prochain tour */ })
+  }
+
+  timer = setInterval(sonder, 15000)
+})()
+</script>
+</body>
+</html>

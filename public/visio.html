@@ -52,9 +52,8 @@
      Relevé dans server/templates/ et posé ICI, une seule fois. Les 21 gabarits
      recopient chacun ces valeurs parce qu'un courriel n'a pas de feuille
      partagée ; la page en a une, et n'ajoute donc pas une 22e copie éparpillée.
-     Seul le panneau de mise en service s'en sert : c'est lui qui parle au nom
-     du produit, pas l'application. */
-  --mes-fond:#f4f1ea;
+     Seul l'état vide de la colonne du centre s'en sert : c'est lui qui parle
+     au nom du produit, pas l'application. */
   --mes-carte:#ffffff;
   --mes-bord:#d9d3c4;
   --mes-rayon:16px;
@@ -71,32 +70,6 @@
   --mes-filet-4:#0BBCD4;
   --mes-filet-5:#D97706;
   --mes-filet-6:#1D8348;
-  /* LA HAUTEUR COMMUNE DES TROIS ENCARTS DE MISE EN SERVICE.
-     Le seul nombre en dur du vêtement, et il est écrit ici parce qu'il ne peut
-     être nulle part ailleurs. La .mes-pile égalise les temps À L'INTÉRIEUR
-     d'une carte : le navigateur relève la hauteur du temps le plus long et la
-     donne aux autres, sans qu'aucune valeur soit posée à la main. Entre TROIS
-     PAGES, rien ne joue ce rôle. visio.html, devis.html et mail.html ne
-     connaissent chacune que la leur, et la doctrine du 21 août (taille
-     constante, 600 px de large, retrait de 34 px, toujours centré) tenait donc
-     dans chaque page sans tenir entre elles. Une hauteur commune DÉCLARÉE est
-     la seule façon de la tenir de l'une à l'autre.
-     D'OÙ VIENT LE NOMBRE. Les trois cartes ont été mesurées au banc, dans les
-     conditions de l'écran : Chrome sans tête, fontes du dépôt servies, encart
-     ouvert, carte à 600 px. Devis 481,39 px au temps des coordonnées, Visio
-     452,05 px au temps du conseil, Mail 318,67 px. Le maximum est celui de
-     Devis, et 490 lui laisse huit pixels de jeu : caler au pixel exact du
-     maximum du jour poserait Devis pile sur son plancher, où la première ligne
-     de texte ajoutée quelque part rendrait la valeur fausse. Huit pixels ne se
-     voient pas et absorbent la variation de rendu d'un poste à l'autre.
-     ELLE EST POSÉE EN PLANCHER ET NON EN TAILLE (min-height, cf. .mes-carte) :
-     une carte plus haute que 490 px continue de s'allonger.
-     ELLE NE GARANTIT RIEN SOUS 640 px. La carte y perd sa largeur, son texte se
-     replie sur plus de lignes, et le contenu peut passer au-dessus de ce
-     plancher : un plancher n'est pas un plafond, la carte s'allonge et rien
-     n'est perdu, mais personne ne doit lire cette valeur comme une hauteur
-     vraie à toutes les largeurs. */
-  --mes-hauteur-commune:490px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:var(--surface)}
@@ -364,14 +337,14 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .empty-state .empty-icone{color:var(--mes-surtitre);margin-bottom:14px}
 .empty-state .hint{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11.5px;color:var(--muted);margin-top:8px}
 .empty-state .hint strong{color:var(--text)}
-/* Trois faces, une seule à la fois, dans une seule carte. La page sans outil
-   offre sa mise en service ; la page équipée et encore sans rendez-vous appelle
-   le premier ; la page opérante annonce ce qu'elle sait faire. Elles se
-   remplacent au même endroit et portent donc le MÊME vêtement : en habiller une
-   seule ferait sauter l'écran d'un habillage à l'autre selon l'état du compte.
+/* Deux faces, une seule à la fois, dans une seule carte. La page sans
+   rendez-vous devant elle appelle le premier ; la page opérante annonce ce
+   qu'elle sait faire. Elles se remplacent au même endroit et portent donc le
+   MÊME vêtement : en habiller une seule ferait sauter l'écran d'un habillage à
+   l'autre selon l'état de l'agenda.
    Leur titre et leur texte ne sont plus habillés ici : ils prennent les règles
-   du panneau, .mes-carte h2 et .mes-carte p, étendues à .mes-bloc. Ne reste que
-   la gouttière, qui espace titre, texte et bouton. Rouvrir n'est pas fermer.
+   du vêtement, .mes-bloc h2 et .mes-bloc p. Ne reste que la gouttière, qui
+   espace titre, texte et bouton.
    Elles sont posées dans une .mes-pile : `display` ne les départage plus — ce
    serait rendre la carte à la hauteur de la face du moment — c'est `.actif` qui
    le fait, et la carte garde la hauteur de la face la plus longue. */
@@ -711,66 +684,20 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .docs-quota.critical .bar-fill{background:var(--red)}
 
 /* ══════════════════════════════════════════════════════════════════
-   MISE EN SERVICE — LE PANNEAU D'ACCUEIL
+   LE VÊTEMENT DES COURRIELS, EN BLOC DE PAGE
    ------------------------------------------------------------------
-   Le VÊTEMENT de mup-confirm — voile, flou, carte centrée — et rien de
-   sa mécanique : .overlay et .mupc-overlay se referment toutes deux
-   sur un clic au fond et sur Échap, exactement ce qu'on ne veut pas.
-   Ce panneau ne se ferme sur aucun geste ; il se retire quand sa raison
-   d'être disparaît.
-
-   COUCHE : --mupz-dialogue (50000), le palier des dialogues système,
-   au-dessus de toute modale de page (1000). Deux voisins sont traités
-   plus bas : l'infobulle du rail (99999), neutralisée, et le bandeau
-   de consentement, remonté DEVANT le panneau.
+   L'état vide de la colonne du centre est la seule surface de cette
+   page qui parle au nom du produit : il en porte donc l'habit, celui
+   des gabarits de courriel, et non la palette de l'application.
+   Aucun voile, aucune couche, aucune ombre : c'est un bloc dans le
+   flux, pas une fenêtre. Rien ici ne se pose devant quoi que ce soit,
+   et rien n'a donc à être traité dans l'échelle des couches.
    ══════════════════════════════════════════════════════════════════ */
-.mes-voile{
-  position:fixed;top:0;right:0;bottom:0;left:var(--sidebar-w);
-  z-index:var(--mupz-dialogue,50000);
-  background:rgba(13,13,11,.55);
-  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
-  display:flex;align-items:center;justify-content:center;
-  padding:24px;overflow-y:auto;
-}
-.mes-carte{
-  background:var(--mes-carte);border:1px solid var(--mes-bord);
-  border-radius:var(--mes-rayon);overflow:hidden;
-  width:100%;max-width:600px;max-height:calc(100vh - 48px);
-  /* LE PLANCHER COMMUN AUX TROIS PAGES (cf. --mes-hauteur-commune). En
-     min-height et JAMAIS en height : une carte plus haute que le plancher
-     continue de s'allonger, et le max-height ci-dessus la rogne comme avant.
-     LE PLANCHER NE PASSE JAMAIS AU-DESSUS DU PLAFOND, et c'est ce que min()
-     garantit. Posé nu, il l'emporterait sur le max-height dès que la fenêtre
-     descend sous 538 px de haut, la règle de CSS donnant le dernier mot au
-     minimum : la carte tiendrait 490 px dans un voile plus court, et comme le
-     voile CENTRE ce qu'il porte, le haut de la carte passerait au-dessus de
-     lui sans qu'aucun défilement puisse l'y ramener. Constaté au banc avant
-     min() : sur une fenêtre de 413 px, 38,5 px de filet et de titre hors
-     d'atteinte, que le défilement éloignait au lieu de les rendre.
-     Avec min(), le plancher s'abaisse au plafond quand la fenêtre est courte :
-     la carte y remplit la hauteur disponible, son corps défile en dedans comme
-     il l'a toujours fait, et rien n'est coupé. */
-  min-height:min(var(--mes-hauteur-commune), calc(100vh - 48px));
-  display:flex;flex-direction:column;
-  box-shadow:0 24px 60px rgba(13,13,11,.28);
-}
-/* LA MÊME CARTE, EN BLOC DE PAGE. L'état vide central porte le vêtement des
-   courriels comme le panneau, aux deux différences qui séparent un bloc d'une
-   fenêtre : aucun voile derrière lui, aucune ombre portée sous lui. Il n'a pas
-   de hauteur maximale non plus — rien ne le contraint, il n'a rien à confiner.
-   Tout le reste est celui de .mes-carte, et le filet comme le corps réemploient
-   ses règles telles quelles dans le balisage.
-   IL NE PREND PAS NON PLUS LA HAUTEUR COMMUNE, et pour la raison qui lui ôte
-   déjà la hauteur maximale : cette hauteur existe pour que les encarts de mise
-   en service des TROIS pages tombent au même niveau, et ce bloc n'a de
-   vis-à-vis nulle part, ni chez Devis ni chez Mail, qui n'ont pas d'état vide
-   de ce genre. Il n'est pas un encart : il ne s'ouvre ni ne se ferme, il vit
-   dans le flux de la page, et ses trois faces sont déjà égalisées entre elles
-   par sa propre .mes-pile, ce qui est tout ce qu'on lui demande. Lui poser
-   490 px de plancher lui donnerait du blanc pour s'aligner sur rien.
-   Le flex-grow que .mes-corps vient de recevoir ne l'atteint pas davantage :
-   le bloc n'est pas une colonne flexible, et une valeur de flex sur l'enfant
-   d'un bloc ordinaire ne veut rien dire. */
+/* LA CARTE DE L'ÉTAT VIDE. Elle n'a ni hauteur maximale ni hauteur plancher :
+   rien ne la contraint, elle n'a rien à confiner, et elle n'a de vis-à-vis sur
+   aucune autre page. Ses deux faces sont égalisées entre elles par sa propre
+   .mes-pile, ce qui est tout ce qu'on lui demande. Le filet et le corps
+   réemploient les règles ci-dessous telles quelles dans le balisage. */
 .mes-bloc{
   background:var(--mes-carte);border:1px solid var(--mes-bord);
   border-radius:var(--mes-rayon);overflow:hidden;
@@ -785,30 +712,17 @@ body.outils-deplies .my-link-field.vide{display:flex}
     var(--mes-filet-3) 33.3333% 50%,      var(--mes-filet-4) 50% 66.6667%,
     var(--mes-filet-5) 66.6667% 83.3333%, var(--mes-filet-6) 83.3333% 100%);
 }
-/* LE BLANC EN TROP VA AU CORPS.
-   Avec le plancher commun, une carte plus courte que 490 px a du blanc à
-   placer, et c'est le cas des trois à des degrés divers, Mail en tête. Sans
-   flex-grow ici, ce blanc tombait APRÈS le dernier élément de la colonne,
-   c'est-à-dire SOUS le pied, qui se retrouvait à flotter au milieu de la carte
-   (constaté au banc). Le corps prend cette place : le texte reste en haut, le
-   pied redescend au bas de la carte, et rien ne s'écarte ni ne se centre.
-   flex-grow SEUL, et non flex:1 : la base reste sur le contenu, la hauteur
-   naturelle de la carte est donc toujours celle de ce qu'elle porte, et seule
-   la place LIBRE est distribuée. */
-.mes-corps{padding:30px 34px 26px;overflow-y:auto;flex-grow:1}
+.mes-corps{padding:30px 34px 26px}
 
 /* —— LA PILE : LA CARTE NE RESPIRE PLUS AU RYTHME DE SON CONTENU ——
-   Les quatre temps du panneau, ses deux groupes d'actions de pied et les trois
-   faces de l'état vide se remplacent tous AU MÊME ENDROIT. Chacun était retiré
-   du flux quand un autre paraissait (display:none) : la carte prenait la hauteur
-   de ce qu'elle montrait, et sautait d'un temps à l'autre comme d'une face à
-   l'autre.
-   Ils sont désormais empilés dans une seule cellule de grille. Tous y sont
-   mesurés ensemble, et c'est le PLUS LONG qui donne sa hauteur à la pile.
-   Aucune valeur n'est posée ici : la hauteur est prise sur le temps le plus
-   long, relevée par le navigateur à chaque largeur de carte. Un nombre écrit à
-   la main aurait été juste à 600 px et faux partout où le texte se replie
-   autrement.
+   Les deux faces de l'état vide se remplacent AU MÊME ENDROIT. Chacune était
+   retirée du flux quand l'autre paraissait (display:none) : la carte prenait la
+   hauteur de ce qu'elle montrait, et sautait d'une face à l'autre.
+   Elles sont désormais empilées dans une seule cellule de grille. Toutes deux y
+   sont mesurées, et c'est la PLUS LONGUE qui donne sa hauteur à la pile. Aucune
+   valeur n'est posée ici : la hauteur est relevée par le navigateur à chaque
+   largeur de carte. Un nombre écrit à la main aurait été juste à 600 px et faux
+   partout où le texte se replie autrement.
    Ce qui est caché l'est par VISIBILITÉ et non par affichage : c'est ce qui le
    laisse occuper sa cellule — donc compter dans la mesure — tout en le retirant
    de l'écran, de l'ordre de tabulation et des lecteurs d'écran. */
@@ -816,118 +730,19 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .mes-pile > *{grid-area:1 / 1;visibility:hidden}
 .mes-pile > .actif{visibility:visible}
 
-.mes-carte h2,.mes-bloc h2{
+.mes-bloc h2{
   font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.15;
   color:var(--mes-titre);
 }
-/* La marge sous le titre appartient au panneau seul : dans le bloc, c'est la
-   gouttière de .face qui espace le titre du texte, et l'ajouter la doublerait. */
-.mes-carte h2{margin-bottom:16px}
-.mes-carte p,.mes-bloc p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
-.mes-carte p + p{margin-top:12px}
-.mes-carte strong{color:var(--mes-titre);font-weight:700}
-.mes-pied{
-  border-top:1px solid var(--mes-bord);background:var(--mes-fond);
-  padding:16px 34px;flex-shrink:0;
-  display:flex;align-items:center;justify-content:space-between;
-  gap:16px;flex-wrap:wrap;
-}
-.mes-note{font-size:12px;line-height:1.5;color:var(--mes-surtitre);flex:1;min-width:180px}
-/* Le pied porte les DEUX groupes d'actions en permanence, empilés : sa hauteur
-   est celle du plus haut — le groupe des documents, qui a un bouton — et ne
-   varie donc plus selon le temps affiché. Les temps qui n'ont pas d'action
-   gardent le même pied, vide. */
-.mes-pied-pile{flex-shrink:0}
-.mes-pied-actions{display:flex;align-items:center;gap:16px;flex-shrink:0}
+.mes-bloc p{font-size:14px;line-height:1.6;color:var(--mes-corps);max-width:54ch}
+/* Le bouton de la face, seul geste que l'état vide propose. */
 .mes-btn{
   background:var(--mes-bouton);color:#fff;
   padding:11px 20px;border-radius:var(--mes-bouton-rayon);
-  font-size:13px;font-weight:700;flex-shrink:0;
+  font-size:13px;font-weight:700;
 }
 .mes-btn:hover{background:#000}
-.mes-lien{
-  font-size:12.5px;font-weight:600;color:var(--mes-corps);
-  text-decoration:underline;text-underline-offset:3px;
-}
-.mes-lien:hover{color:var(--mes-titre)}
-.mes-btn:focus-visible,.mes-lien:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
-
-/* Les trois outils, les trois modes d'emploi et le champ miroir de la barre du
-   haut viennent de l'encart absorbé : mêmes classes, mêmes identifiants, mêmes
-   gestionnaires. Seul le vêtement change — celui des courriels. */
-.accueil-choix{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
-.accueil-outil{
-  display:flex;align-items:center;gap:8px;
-  padding:11px 18px;border:1px solid var(--mes-bord);border-radius:var(--mes-bouton-rayon);
-  background:var(--mes-fond);color:var(--mes-titre);
-  font-size:13px;font-weight:700;transition:border-color .12s,background .12s;
-}
-.accueil-outil:hover{border-color:var(--mes-titre);background:#fff}
-.accueil-outil:focus-visible{outline:2px solid var(--mes-titre);outline-offset:2px}
-.accueil-outil .ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-/* L'outil retenu, nommé en clair au-dessus du mode d'emploi : l'abonné lit
-   « Teams », il ne le déduit pas de l'exemple d'adresse du champ. Deux classes
-   pour passer devant `.mes-carte p`, qui tient tous les paragraphes du panneau. */
-.mes-carte .accueil-outil-choisi{
-  display:flex;align-items:center;gap:8px;margin:0 0 10px;
-  font-size:16px;font-weight:800;letter-spacing:-.3px;color:var(--mes-titre);
-}
-.mes-carte .accueil-outil-choisi .ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-.accueil-form{display:flex;gap:10px;align-items:center;margin-top:20px;flex-wrap:wrap}
-.accueil-form input{
-  flex:1;min-width:240px;
-  padding:11px 13px;border:1px solid var(--mes-bord);border-radius:var(--mes-bouton-rayon);
-  font-family:var(--mono);font-size:13px;outline:none;background:#fff;color:var(--mes-titre);
-  transition:border-color .15s;
-}
-.accueil-form input::placeholder{font-family:var(--font);color:var(--mes-surtitre)}
-.accueil-form input:focus{border-color:var(--mes-titre)}
-.accueil-retour{
-  display:inline-block;margin-top:18px;
-  font-size:12.5px;font-weight:600;color:var(--mes-corps);
-  text-decoration:underline;text-underline-offset:3px;
-}
-.accueil-retour:hover{color:var(--mes-titre)}
-.accueil-retour:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
-
-/* —— LA PAGE, DERRIÈRE ——
-   Le document ne défile déjà pas : html,body{overflow:hidden} est posé depuis
-   toujours et le défilement est confiné à quatre panneaux internes. Ce sont
-   EUX qu'on arrête. L'inertie du pointeur et du focus, elle, est posée en JS
-   sur <main> et le pied — pas sur le rail. */
-body.mise-en-service .col-left,
-body.mise-en-service .col-center,
-body.mise-en-service .docs-drawer-body,
-body.mise-en-service #docsList{overflow:hidden}
-
-/* —— LE RAIL, DEVANT, EN TIROIR SEULEMENT ——
-   Un panneau de mise en service tient une PAGE, jamais l'application : l'abonné
-   qui ouvre Visio par curiosité doit pouvoir en repartir. Le rail est donc laissé
-   hors de figerLaPage.
-   Au-dessus de 640 px, le voile part de --sidebar-w : il s'arrête au rail, qui
-   n'est donc jamais recouvert et n'a plus à être remonté. En dessous, --sidebar-w
-   vaut 0 : le voile reprend tout l'écran, et le bouton qui ouvre le tiroir — la
-   seule sortie à cette largeur — doit rester atteignable. C'est là, et là seule,
-   qu'on remonte la bande du rail au-dessus du voile, en conservant son ordre
-   interne (bouton < scrim < rail) et en restant sous l'infobulle (99999), le menu
-   compte (99999) et le consentement (60000).
-   Écrit ici, dans la seule page qui pose un panneau à cette hauteur — la feuille
-   partagée n'est pas touchée. */
-@media (max-width:640px){
-  body.mise-en-service #sb-drawer-toggle{z-index:50150}
-  body.mise-en-service #sb-drawer-scrim{z-index:50190}
-  body.mise-en-service aside#sidebar.sidebar{z-index:50200}
-}
-
-/* Le consentement passe DEVANT la mise en service. Le panneau ne se retire qu'à
-   l'enregistrement d'un lien : un bandeau enfoui derrière lui resterait
-   inatteignable aussi longtemps, ce qui ne se défend pas. Écrit ici, dans la
-   seule page qui pose un panneau à cette hauteur — la feuille partagée n'est
-   pas touchée. */
-/* Sélecteurs qualifiés par body : cookies-banner.css est chargée APRÈS ce
-   bloc et gagnerait l'égalité de spécificité par l'ordre. */
-body #mup-cookie-banner{z-index:60000}
-body #mup-cookie-panel{z-index:60001}
+.mes-btn:focus-visible{outline:2px solid var(--mes-titre);outline-offset:3px;border-radius:4px}
 
 /* —— MODALES —— */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
@@ -998,9 +813,10 @@ body #mup-cookie-panel{z-index:60001}
 }
 .kbd-row .desc{font-size:12px;color:var(--text);flex:1}
 
-/* Le toast montait à 2000, sous le panneau de mise en service (50000) : le
-   verdict d'enregistrement que le panneau attend s'y serait affiché DERRIÈRE
-   lui. Il prend le palier prévu pour lui par l'échelle des couches. */
+/* Le toast montait à 2000, où la moindre modale de page (1000) pouvait le
+   rejoindre : un verdict d'enregistrement affiché derrière la surface qui l'a
+   demandé n'est pas affiché. Il prend le palier que l'échelle des couches
+   réserve aux notifications, au-dessus de tout ce que la page pose. */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,.2);z-index:var(--mupz-toast,100000);transition:transform .25s;pointer-events:none}
 .toast.show{transform:translateX(-50%) translateY(0)}
 
@@ -1150,54 +966,49 @@ body #mup-cookie-panel{z-index:60001}
 
     <!-- COL CENTRE : BRIEFING + VISIO -->
     <div class="col-center">
-      <!-- Masqué en style EN LIGNE, comme #visioActive et comme le panneau, et
-           révélé par refletColonneCentre seul. La feuille de style le peignait
-           dès le premier rendu, avant que la lecture des réglages ait dit s'il
-           fallait ouvrir le panneau : on voyait passer sa carte — plus étroite,
-           parce que cadrée sur la colonne et non sur la page — puis le voile
-           tomber dessus. Le clignotement n'était pas dans le JS, il était dans
-           le repli de la feuille. -->
+      <!-- Masqué en style EN LIGNE, comme #visioActive, et révélé par
+           refletColonneCentre seul. La feuille de style le peignait dès le
+           premier rendu, avant que la règle ait dit ce que la colonne devait
+           montrer : chez l'abonné dont le prochain rendez-vous est peint
+           d'office au chargement, on voyait passer sa carte avant qu'elle cède
+           la place au cadre. Le clignotement n'était pas dans le JS, il était
+           dans le repli de la feuille. -->
       <div class="empty-state" id="emptyState" style="display:none">
-        <!-- LA CARTE DE L'ÉTAT VIDE — le vêtement du panneau, moins le voile et
-             moins l'ombre : un bloc de page, pas une fenêtre. Elle tient les
-             TROIS faces ensemble, parce qu'elles se remplacent au même endroit.
-             Le filet et le corps sont les règles du panneau, réemployées telles
-             quelles : aucune de ces valeurs n'est retapée ici. -->
+        <!-- LA CARTE DE L'ÉTAT VIDE — le vêtement des courriels, en bloc de
+             page : ni voile, ni ombre, ni couche. Elle tient les DEUX faces
+             ensemble, parce qu'elles se remplacent au même endroit. Le filet et
+             le corps sont les règles de la feuille, réemployées telles quelles :
+             aucune de ces valeurs n'est retapée ici. -->
         <div class="mes-bloc">
           <div class="mes-filet" aria-hidden="true"></div>
           <div class="mes-corps">
             <div class="empty-icone" aria-hidden="true">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
             </div>
-            <!-- LA PILE DES TROIS FACES. Elles se remplacent au même endroit :
-                 elles y sont donc posées ensemble, toutes mesurées, et la carte
-                 garde la hauteur de la plus longue quelle que soit celle qui
-                 paraît. C'est `.actif` qui les départage, jamais `display`. -->
+            <!-- LA PILE DES DEUX FACES. Elles se remplacent au même endroit :
+                 elles y sont donc posées ensemble, toutes deux mesurées, et la
+                 carte garde la hauteur de la plus longue quelle que soit celle
+                 qui paraît. C'est `.actif` qui les départage, jamais `display`. -->
             <div class="mes-pile">
-              <!-- La face de la page OPÉRANTE : un lien est enregistré ET un
-                   rendez-vous en visio est programmé. C'est aussi la face du doute —
-                   elle n'affirme rien de l'abonné, elle propose. -->
+              <!-- La face de la page QUI A DU TRAVAIL DEVANT ELLE : un rendez-vous
+                   en visio est programmé. C'est aussi la face du doute — tant que
+                   les rendez-vous n'ont pas été lus, c'est elle qui paraît, parce
+                   qu'elle n'affirme rien de l'abonné : elle propose. -->
               <div class="face" id="emptyOperant">
                 <h2>Prêt à lancer une visio</h2>
                 <p>Cliquez sur l'un de vos outils en haut pour démarrer, ou sélectionnez un rendez-vous programmé dans la liste.</p>
               </div>
-              <!-- La face de la page SANS OUTIL, d'un texte unique : elle dit ce que
-                   la page fera, que le report ait été pris ou pas, et l'offre de la
-                   mettre en service y tient sans conditionner la promesse. Le bouton
-                   ROUVRE le panneau — rouvrir n'est pas fermer. -->
-              <div class="face" id="emptyReport">
-                <h2>Vos visios partiront d’ici.</h2>
-                <p>Ajoutez l’adresse de votre salle quand vous voudrez : elle sera proposée à chaque rendez-vous, et la fiche du prospect restera à côté de l’appel.</p>
-                <button class="mes-btn" id="reprendreMiseEnService">Mettre en service</button>
-              </div>
-              <!-- La face de la page ÉQUIPÉE et encore sans rendez-vous : le lien est
-                   posé, la page ne demande plus rien de sa mise en service, il lui
-                   manque seulement de quoi travailler. Elle NOMME le bouton de la
-                   barre du haut au lieu d'en poser un second, et rien ne la voile :
-                   c'est une invitation, pas une prise en otage. -->
+              <!-- La face de la page SANS RENDEZ-VOUS DEVANT ELLE, et c'est le seul
+                   fait qu'elle affirme : elle ne dit rien des outils de l'abonné,
+                   qui n'a rien à installer pour tenir une visio ici. Au PRÉSENT :
+                   la capacité est en production, l'annoncer à venir la nierait.
+                   Le geste est PORTÉ, non désigné : nommer le bouton de la barre
+                   par sa place rendrait le texte faux au premier déplacement.
+                   Rien ne la voile : c'est une invitation, pas une prise en otage. -->
               <div class="face" id="emptyPremierRdv">
-                <h2>Votre salle est en service.</h2>
-                <p>Programmez votre premier rendez-vous avec le bouton « Programmer RDV », en haut de la page : il rejoindra la liste de gauche, et votre lien y sera proposé d’office.</p>
+                <h2>Vos visios se tiennent ici.</h2>
+                <p>Programmez un rendez-vous et la salle se crée avec lui, dans cette page, à côté de la fiche du prospect.</p>
+                <button class="mes-btn" id="emptyProgrammerRdv">Programmer un rendez-vous</button>
               </div>
             </div>
           </div>
@@ -1284,114 +1095,6 @@ body #mup-cookie-panel{z-index:60001}
     <div class="col-fiche" id="ficheHost"></div>
   </div>
 </main>
-
-<!-- ══════════════════════════════════════════════════════════════
-     MISE EN SERVICE DE LA PAGE VISIO
-     Ce n'est pas un encart qui explique un champ : la page n'est
-     pleinement opérante qu'après. Il ne se ferme sur AUCUN geste —
-     ni croix, ni clic au fond, ni Échap — et se retire parce que sa
-     raison d'être disparaît : un lien enregistré. Effacer son dernier
-     lien le fait revenir, et c'est juste.
-
-     Hors de <main> : c'est <main> et le pied que le panneau rend
-     inertes, et il ne peut pas se rendre inerte lui-même. Le rail,
-     lui, reste vivant — d'où role=dialog SANS aria-modal : la page
-     n'est pas modale, une sortie demeure, et l'annoncer inerte aux
-     lecteurs d'écran rétablirait pour eux l'enfermement qu'on retire.
-
-     Masqué en style EN LIGNE, comme #visioActive : il n'est révélé
-     qu'après bootstrapVisio(), sans quoi il clignoterait au
-     chargement chez l'abonné déjà équipé.
-     ══════════════════════════════════════════════════════════════ -->
-<div class="mes-voile" id="panneauMiseEnService" style="display:none" role="dialog" aria-labelledby="mesTitre">
-  <div class="mes-carte">
-    <div class="mes-filet" aria-hidden="true"></div>
-
-    <div class="mes-corps">
-      <h2 id="mesTitre">Votre visio dans MovUP</h2>
-
-      <!-- LA PILE DES QUATRE TEMPS. Ils se remplacent au même endroit : ils y
-           sont posés ensemble, tous mesurés, et la carte garde la hauteur du
-           temps le plus long quel que soit celui qui paraît. C'est `.actif` qui
-           les départage, jamais `display` — d'où l'absence de style en ligne sur
-           les trois qui ne paraissent pas d'abord : il gagnerait sur la règle.
-           Les trois derniers se terminent par le MÊME dernier rang, un
-           .accueil-retour, qui ramène au premier ; le premier, devenu une
-           annonce, se termine par sa sortie. Aucun temps n'est un cul-de-sac. -->
-      <div class="mes-pile">
-
-        <!-- PREMIER TEMPS — L'ANNONCE. Il ne demande plus rien : la visio est
-             fournie par MovUP, l'abonné n'a pas d'outil à désigner ni de lien à
-             coller. Il annonce la capacité et rend la page. Sa sortie est
-             unique, et c'est la seule que ce temps ait jamais à offrir : sans
-             elle, l'abonné sans lien tiers ne pouvait pas atteindre la page. -->
-        <div id="accueilIntro">
-          <p>MovUP intègre la visioconférence. Vous programmez un rendez-vous, la salle se crée toute seule, et son lien est prêt à envoyer.</p>
-          <p>Vos appels se tiennent là où sont déjà vos informations : la fiche du prospect à côté de l'image, vos documents à portée, vos notes rangées sur la fiche sans rien recopier.</p>
-          <div class="accueil-choix">
-            <button class="mes-btn" id="mesDecouvrir">Découvrir</button>
-          </div>
-        </div>
-
-        <div id="accueilSaisie">
-          <p class="accueil-outil-choisi"><span class="ld" id="accueilOutilPuce"></span><span id="accueilOutilNom">—</span></p>
-          <p id="accueilAide">—</p>
-          <div class="accueil-form">
-            <input type="url" id="accueilLien" placeholder="https://…">
-            <button class="mes-btn" id="accueilEnregistrer">Enregistrer</button>
-          </div>
-          <button class="accueil-retour" id="accueilRetour">Choisir un autre outil</button>
-        </div>
-
-        <!-- QUATRIÈME ISSUE — elle CONSEILLE au lieu de renvoyer à un champ
-             vide. Meet est le conseil honnête : un compte Google suffit. Mais
-             l'abonné doit tout de même aller créer son évènement et revenir
-             coller le lien — on ne peut pas le faire à sa place, et cette
-             branche le dit plutôt que de le laisser devant trois boutons. -->
-        <div id="mesConseil">
-          <p class="accueil-outil-choisi"><span class="ld" style="background:var(--meet)"></span>Notre conseil : Google Meet</p>
-          <p>Un compte Google suffit, la création prend une minute, et c'est l'outil le plus répandu chez les petites structures — vos interlocuteurs sauront s'en servir.</p>
-          <p>Ouvrez Google Agenda, créez un évènement récurrent en y ajoutant une visioconférence, puis revenez coller son lien ici : il restera le même pour toutes les occurrences. Nous ne pouvons pas le créer à votre place.</p>
-          <div class="accueil-choix">
-            <button class="accueil-outil" data-accueil-outil="meet"><span class="ld" style="background:var(--meet)"></span>J'ai mon lien Meet</button>
-          </div>
-          <button class="accueil-retour" id="mesConseilRetour">Revenir au choix de l'outil</button>
-        </div>
-
-        <!-- SECOND TEMPS — LES DOCUMENTS. Il ne bloque pas : une visio se tient
-             très bien sans document, et un abonné pressé passe outre. -->
-        <div id="mesDocuments">
-          <p><strong>Ce que vous montrez pendant l'appel.</strong> Plaquette, grille tarifaire, démonstration : déposez-les depuis le poste avec lequel vous animez vos visios. Les fichiers restent sur cet appareil, dans ce navigateur ; seule leur description est enregistrée à votre compte.</p>
-          <!-- Le chemin du retour, qui manquait ici seul. Un lien enregistré se
-               change et s'en ajoute d'autres : arriver aux documents ne doit pas
-               fermer la porte de l'outil. Il n'efface rien et n'écrit rien — le
-               lien déjà enregistré reste ce qu'il est, en mémoire comme en base. -->
-          <button class="accueil-retour" id="mesDocumentsRetour">Revenir au choix de l'outil</button>
-        </div>
-
-      </div><!-- .mes-pile -->
-    </div>
-
-    <div class="mes-pied">
-      <span class="mes-note" id="mesNote">—</span>
-      <!-- LA PILE DES DEUX GROUPES D'ACTIONS. Le pied gardait la hauteur du
-           groupe affiché, et n'en avait aucun aux deux premiers temps : il
-           maigrissait de la hauteur d'un bouton d'un temps à l'autre. Les deux
-           groupes y sont maintenant posés ensemble, le pied prend la hauteur du
-           plus haut — celui des documents — et les temps sans action gardent le
-           même pied, vide. -->
-      <div class="mes-pile mes-pied-pile">
-        <div class="mes-pied-actions" id="mesPiedConseil">
-          <button class="mes-lien" id="mesConseilPlusTard">Je verrai plus tard</button>
-        </div>
-        <div class="mes-pied-actions" id="mesPiedDocs">
-          <button class="mes-lien" id="mesPlusTard">Je le ferai plus tard</button>
-          <button class="mes-btn" id="mesAjouterDoc">Ajouter un document</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- MODALE NOUVEAU RDV -->
 <div class="overlay" id="newRdvModal">
@@ -1584,12 +1287,7 @@ body #mup-cookie-panel{z-index:60001}
 // métadonnées de documents et rappels écartés vivent en base depuis la migration
 // SurrealDB : leurs huit clés restaient déclarées ici sans que rien ne les lise.
 const LS = {
-  PIPELINE:'mup_pipeline', AGENDA:'mup_agenda', CONTACTS:'mup_contacts', DEVIS:'mup_devis',
-  // Le report de mise en service. LOCAL, et local pour deux raisons : rien de
-  // nouveau ne part en base — ni champ, ni route — et un report qui passerait
-  // par une écriture pourrait échouer, enfermant l'abonné derrière le panneau
-  // qu'il vient d'accepter de quitter. Celui-ci ne peut pas échouer.
-  ACCUEIL_DIFFERE:'mup_visio_accueil_differe'
+  PIPELINE:'mup_pipeline', AGENDA:'mup_agenda', CONTACTS:'mup_contacts', DEVIS:'mup_devis'
 };
 
 const PROVIDERS = {
@@ -1604,9 +1302,9 @@ const PROVIDERS = {
   custom:{ embed:false, label:'Lien',  color:'#6E6E73' }
 };
 
-// Le libellé d'un outil se lit au registre, jamais à la clé technique. Les deux
-// surfaces qui enregistrent un lien — l'encart d'accueil et la barre du haut —
-// appellent cette ligne : la divergence ne peut plus s'installer.
+// Le libellé d'un outil se lit au registre, jamais à la clé technique : la
+// barre du haut, seule surface qui enregistre un lien, appelle cette ligne pour
+// nommer ce qu'elle vient d'écrire. La divergence ne peut pas s'installer.
 const libelleOutil = p => PROVIDERS[p]?.label || p;
 
 const PLACEHOLDERS = [
@@ -1945,12 +1643,12 @@ function loadMyLinks(){
   });
 }
 
-// Rend le verdict de l'écriture : les deux surfaces de saisie l'attendent et
-// n'annoncent l'enregistrement qu'après lui. La mémoire est écrite d'avance —
-// elle doit l'être, c'est l'objet entier qui part — puis REMISE à sa valeur
-// d'avant si l'écriture n'a pas abouti : sans ce retour en arrière, le client
-// croirait équipé un abonné dont le lien n'est jamais parti, et l'encart
-// d'accueil s'éteindrait sur un enregistrement qui n'a pas eu lieu.
+// Rend le verdict de l'écriture : la barre du haut l'attend et n'annonce
+// l'enregistrement qu'après lui. La mémoire est écrite d'avance — elle doit
+// l'être, c'est l'objet entier qui part — puis REMISE à sa valeur d'avant si
+// l'écriture n'a pas abouti : sans ce retour en arrière, le client croirait
+// équipé un abonné dont le lien n'est jamais parti, et son bouton de lancement
+// s'allumerait sur un enregistrement qui n'a pas eu lieu.
 async function saveMyLink(provider, value){
   if(!_state.settings.links) _state.settings.links = {};
   const avant = _state.settings.links[provider];
@@ -1964,21 +1662,17 @@ async function saveMyLink(provider, value){
   const launchBtn = $(`launch${provider.charAt(0).toUpperCase() + provider.slice(1)}`);
   if(value.trim()) launchBtn.classList.add('has-link');
   else launchBtn.classList.remove('has-link');
-  // Un lien enregistré efface le report : il valait pour l'état où il a été
-  // pris. Sans cela, l'abonné qui reporte, s'équipe, puis efface son dernier
-  // lien ne reverrait jamais le panneau.
-  if(value.trim()) effacerReport();
-  // Seul écrivain des liens, donc seul endroit d'où la mise en service peut
-  // changer d'état en cours de session — dans les deux sens : effacer son
-  // dernier lien fait revenir le panneau, l'abonné n'a plus de quoi lancer une
-  // visio. Appelé sur l'écriture RÉELLE, jamais sur l'intention d'écrire.
-  refletMiseEnService();
+  // Seul écrivain des liens, donc seul endroit d'où la barre du haut peut
+  // changer d'état en cours de session, et dans les deux sens : un lien écrit
+  // sort son bouton de lancement, son effacement l'y remet. Appelé sur
+  // l'écriture RÉELLE, jamais sur l'intention d'écrire.
+  refletBarreOutils();
   return verdict;
 }
 
-// Un seul dire pour les deux surfaces de saisie. Sur 402 le mur payant est déjà
-// à l'écran (trial-expired-modal.js) : on ne double pas le message, mais on
-// n'annonce surtout pas un enregistrement qui n'a pas eu lieu.
+// Le dire de la barre du haut, seule surface de saisie. Sur 402 le mur payant
+// est déjà à l'écran (trial-expired-modal.js) : on ne double pas le message,
+// mais on n'annonce surtout pas un enregistrement qui n'a pas eu lieu.
 function direEchecLien(verdict){
   if(verdict.raison === 'reponse' && verdict.status === 402) return;
   if(verdict.raison === 'lecture'){
@@ -1994,165 +1688,6 @@ function direEchecLien(verdict){
 function direEchecReglage(verdict, suite){
   if(verdict.raison === 'reponse' && verdict.status === 402) return;
   showToast('L\'enregistrement a échoué. ' + suite);
-}
-
-/* ————————————————————————————————————————————————
-   ACCUEIL PREMIÈRE VISIO
-   ———————————————————————————————————————————————— */
-const ACCUEIL_AIDE = {
-  zoom:  "Votre salle personnelle Zoom convient telle quelle. Ouvrez Zoom, rubrique Réunions, section Salle personnelle, et copiez l'adresse d'invitation.",
-  teams: "Teams n'a pas de salle personnelle. Créez dans votre agenda Teams une réunion récurrente, à l'horaire de votre choix, et copiez son lien : il reste valable pour toutes ses occurrences.",
-  meet:  "Meet n'a pas de salle personnelle. Créez dans Google Agenda un événement récurrent avec visioconférence, et copiez son lien : il reste le même pour toutes les occurrences."
-};
-
-// Le seul juge de « pas encore équipé », et il juge sur la VALEUR : effacer un
-// champ écrit une chaîne vide et laisse la clé en base, compter les clés dirait
-// équipé un abonné qui ne l'est plus.
-function aucunLienEnregistre(){
-  const liens = _state.settings.links || {};
-  return !['zoom','teams','meet'].some(p => String(liens[p] || '').trim());
-}
-
-function accueilEtapeChoix(){ mesEtape('choix'); }
-
-// Un fournisseur à la fois : le mode d'emploi affiché est celui de l'outil
-// choisi, jamais les trois ensemble. Le repère de saisie est celui de la barre
-// du haut — une seule écriture de ces exemples d'adresse dans la page.
-function accueilEtapeSaisie(provider){
-  if(!ACCUEIL_AIDE[provider]) return;
-  $('accueilOutilNom').textContent = `Votre lien ${libelleOutil(provider)}`;
-  $('accueilOutilPuce').style.background = PROVIDERS[provider]?.color || 'var(--muted)';
-  $('accueilAide').textContent = ACCUEIL_AIDE[provider];
-  const champ = $('accueilLien');
-  champ.value = '';
-  champ.dataset.provider = provider;
-  const miroir = document.querySelector(`input[data-link="${provider}"]`);
-  champ.placeholder = miroir ? miroir.placeholder : 'https://…';
-  mesEtape('saisie');
-  champ.focus();
-}
-
-/* —— LE REPORT ——
-   « Je n'en utilise aucun » ne pose PAS un lien : il pose un report. Le report
-   est local (LS.ACCUEIL_DIFFERE) et ne gouverne QUE l'apparition du panneau.
-   aucunLienEnregistre() reste donc intact, et avec lui les refus de lancement
-   et de prise de rendez-vous : ils refusent par construction, pas par
-   précaution ajoutée.
-   Un report vaut pour l'ÉTAT où il a été pris, pas pour toujours, et il tombe
-   donc dès qu'un lien EXISTE — pas seulement à l'instant où l'on en écrit un.
-   Deux endroits l'effacent, et il en faut deux : l'écriture d'un lien, qui
-   prend le report en cours de session ; et la fermeture du panneau sur une page
-   déjà équipée, qui prend celui qu'un abonné équipé vient de poser en repassant
-   par « Découvrir les outils ». Sans le second, ce report survivait au panneau
-   et empêchait son retour le jour où l'abonné efface son dernier lien — alors
-   qu'il n'a de nouveau plus de quoi lancer une visio. */
-function reportPris(){ try{ return localStorage.getItem(LS.ACCUEIL_DIFFERE) === '1' }catch{ return false } }
-function poserReport(){ try{ localStorage.setItem(LS.ACCUEIL_DIFFERE, '1') }catch{} }
-function effacerReport(){ try{ localStorage.removeItem(LS.ACCUEIL_DIFFERE) }catch{} }
-
-/* —— LES QUATRE VISAGES DU PANNEAU ——
-   Un seul état : l'étape courante. Chaque visage dit le bloc qu'il montre, le
-   titre et ce que porte le pied. Rien d'autre n'en décide. */
-let mesEtapeCourante = 'choix';
-const MES_VISAGES = {
-  choix: {
-    bloc:'accueilIntro', titre:'Votre visio dans MovUP',
-    note:''
-  },
-  saisie: {
-    bloc:'accueilSaisie', titre:'Bienvenue dans votre espace visio',
-    note:"Collez l'adresse complète, telle que votre outil vous la donne."
-  },
-  conseil: {
-    bloc:'mesConseil', titre:'Aucun outil ? Commencez par là',
-    note:''
-  },
-  documents: {
-    bloc:'mesDocuments', titre:'Vos documents de visio',
-    note:"Ce temps ne bloque rien : une visio se tient très bien sans document."
-  }
-};
-/* Le visage se pose par CLASSE et non par `display` : les quatre temps et les
-   deux groupes d'actions du pied vivent dans des .mes-pile, où celui qui ne
-   paraît pas garde sa cellule pour que la carte se mesure sur le plus long.
-   Écrire `display` ici les retirerait du flux et rendrait la carte à la hauteur
-   de ce qu'elle montre — exactement ce dont on sort. */
-function mesEtape(nom){
-  const visage = MES_VISAGES[nom];
-  if(!visage) return;
-  mesEtapeCourante = nom;
-  Object.keys(MES_VISAGES).forEach(k=>{
-    $(MES_VISAGES[k].bloc).classList.toggle('actif', k === nom);
-  });
-  $('mesTitre').textContent = visage.titre;
-  $('mesNote').textContent = visage.note;
-  $('mesPiedConseil').classList.toggle('actif', nom === 'conseil');
-  $('mesPiedDocs').classList.toggle('actif', nom === 'documents');
-}
-
-function panneauTientLaPage(){ return $('panneauMiseEnService').style.display !== 'none'; }
-
-/* Trois conditions, toutes nécessaires. La lecture ABOUTIE d'abord : sur
-   'echec' on ne sait pas si l'abonné a des liens, et prendre la page en otage
-   pour un hoquet réseau est la pire des deux erreurs. */
-function panneauDoitParaitre(){
-  return lectureReglagesAboutie() && aucunLienEnregistre() && !reportPris();
-}
-
-// Inertie de la page derrière le voile : pointeur et focus. Le panneau vit hors
-// de <main> précisément pour pouvoir figer <main> sans se figer lui-même.
-// Le RAIL est délibérément absent de cette liste : un panneau de mise en service
-// tient une page, jamais l'application. Le figer condamnerait toute sortie à
-// l'abonné venu voir Visio par curiosité.
-function figerLaPage(fige){
-  [ document.querySelector('main'), document.querySelector('.mup-app-footer') ]
-    .forEach(el => { if(el) el.inert = fige; });
-}
-
-function ouvrirPanneau(){
-  if(panneauTientLaPage()) return;
-  mesEtape('choix');
-  $('panneauMiseEnService').style.display = 'flex';
-  document.body.classList.add('mise-en-service');
-  figerLaPage(true);
-  // La colonne du centre se tait : le panneau est LA carte. L'appel vient
-  // APRÈS l'affichage, parce que refletColonneCentre juge sur le panneau lui-même.
-  refletColonneCentre();
-}
-
-// Le panneau ne se ferme sur aucun GESTE ; il se retire quand sa raison d'être
-// disparaît. Les deux sorties du second temps l'appellent parce qu'à ce stade un
-// lien est déjà enregistré, et « je verrai plus tard » du conseil l'appelle sur
-// un report posé.
-function fermerPanneau(){
-  if(!panneauTientLaPage()) return;
-  $('panneauMiseEnService').style.display = 'none';
-  document.body.classList.remove('mise-en-service');
-  figerLaPage(false);
-  // Le report tombe si un lien EXISTE, et pas seulement quand on vient d'en
-  // écrire un : la page est équipée, le report n'a plus rien à retenir. C'est
-  // le cas de l'abonné déjà équipé qui repasse par « Découvrir les outils »
-  // depuis les documents — il en poserait un au passage, et ce report survivrait
-  // au panneau jusqu'à lui interdire de revenir le jour où il efface son dernier
-  // lien. Jugé sur la VALEUR des liens, par le juge unique de « pas équipé ».
-  if(!aucunLienEnregistre()) effacerReport();
-  // La colonne du centre lui est rendue, avec ses trois faces. L'appel est ICI
-  // et non dans les écouteurs : c'est le passage obligé des TROIS sorties — « je
-  // verrai plus tard », « je le ferai plus tard », « ajouter un document » — et
-  // une seule écriture les couvre toutes.
-  refletColonneCentre();
-}
-
-function refletPanneauAccueil(){
-  if(panneauDoitParaitre()){ ouvrirPanneau(); return; }
-  // Le panneau n'a plus à paraître, et cela pour DEUX raisons qui ne se valent
-  // pas : un lien enregistré, ou un report posé sans le moindre lien. Seule la
-  // première ouvre le second temps — le lien vient d'être enregistré DEPUIS le
-  // panneau, qui passe aux documents plutôt que de disparaître sous les doigts.
-  // Le report, lui, ne donne droit à rien : proposer « vos documents de visio » à
-  // qui n'a pas d'outil n'aurait aucun sens. La garde le dit désormais elle-même,
-  // au lieu de s'en remettre au graphe d'appel pour rester hors d'atteinte.
-  if(panneauTientLaPage() && !aucunLienEnregistre() && mesEtapeCourante !== 'documents') mesEtape('documents');
 }
 
 /* La barre du haut se déduit de la donnée, jamais d'un réglage : un champ
@@ -2178,122 +1713,31 @@ function deplierOutils(ouvert){
   if(btn) btn.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
 }
 
-/* —— LES TROIS RÉGIMES DE L'ÉTAT VIDE ——
-   Un seul état vide, trois faces, et ce qui les départage est le RENDEZ-VOUS,
-   jamais l'appel passé : sans outil, la page offre sa mise en service ; avec un
-   outil et aucun rendez-vous en visio, elle appelle le premier et nomme le
-   bouton qui le pose ; dès qu'un rendez-vous est programmé, elle laisse la page
-   faire son travail.
-
-   Les deux faces qui AFFIRMENT quelque chose de l'abonné exigent une
-   connaissance aboutie : sur 'echec' la mémoire des réglages est vide sans que
-   cela dise rien de ses liens, et tant que les rendez-vous n'ont pas été lus,
-   on ignore s'il en a. Dans le doute, c'est la face opérante qui paraît — elle
-   n'affirme rien, elle propose. */
+/* —— LES DEUX RÉGIMES DE L'ÉTAT VIDE ——
+   Un seul état vide, deux faces, et UN SEUL FAIT les départage : y a-t-il un
+   rendez-vous en visio devant soi ? S'il n'y en a aucun, la page appelle le
+   premier et nomme le bouton qui le pose ; dès qu'il y en a un, elle laisse la
+   page faire son travail.
+   Rien d'autre n'entre dans ce jugement, et surtout pas les liens de l'abonné :
+   la salle est fournie par MovUP, il n'a aucun outil à installer pour tenir une
+   visio ici. Juger sur le lien rendrait creuse la carte qui suit un « Terminer »
+   — elle inviterait à s'équiper une page qui vient de servir.
+   La face qui AFFIRME quelque chose exige une lecture aboutie : tant que les
+   rendez-vous n'ont pas été lus, on ignore s'il y en a. Dans le doute, c'est la
+   face opérante qui paraît — elle n'affirme rien, elle propose. */
 let rdvsProgrammes = null;   // rendez-vous en visio devant soi ; null tant qu'aucune lecture n'a abouti
 
 function refletEtatVide(){
-  const reglagesLus     = lectureReglagesAboutie();
-  const sansOutilAvere  = reglagesLus && aucunLienEnregistre();
-  const premierRdvAvere = reglagesLus && !aucunLienEnregistre() && rdvsProgrammes === 0;
-  // Par CLASSE, pour la même raison que les temps du panneau : les trois faces
-  // vivent dans une .mes-pile et celle qui ne paraît pas garde sa cellule, sans
-  // quoi la carte reprendrait la hauteur de la face du moment.
-  $('emptyReport').classList.toggle('actif', sansOutilAvere);
-  $('emptyPremierRdv').classList.toggle('actif', premierRdvAvere);
-  $('emptyOperant').classList.toggle('actif', !(sansOutilAvere || premierRdvAvere));
+  const sansRdvAvere = rdvsProgrammes === 0;
+  // Par CLASSE et non par `display` : les deux faces vivent dans une .mes-pile
+  // et celle qui ne paraît pas garde sa cellule, sans quoi la carte reprendrait
+  // la hauteur de la face du moment.
+  $('emptyPremierRdv').classList.toggle('actif', sansRdvAvere);
+  $('emptyOperant').classList.toggle('actif', !sansRdvAvere);
 }
-
-// Le seul reflet de la mise en service. Trois surfaces en dépendent, aucune ne
-// se peint seule, et le seul écrivain des liens l'appelle.
-function refletMiseEnService(){
-  refletBarreOutils();
-  refletEtatVide();
-  refletPanneauAccueil();
-}
-
-/* « J'ai mon lien Meet » du conseil, seul porteur restant de l'attribut : le
-   premier temps ne propose plus d'outil. Le chemin vers la saisie est inchangé,
-   et celui du CONSEIL efface le report au
-   passage, exactement comme « Revenir au choix de l'outil » — quitter le conseil
-   vers un champ de saisie, c'est revenir se mettre en service, et un report pris
-   pour « je n'ai aucun outil » n'a plus rien à retenir. Sans cela, qui passe par
-   le conseil, dit tenir son lien Meet et ferme l'onglet avant de le coller
-   quittait la mise en service sans lien ET sans jamais y revenir.
-   L'origine se lit sur le bouton — où il vit — et non sur mesEtapeCourante :
-   c'est une propriété du balisage, pas d'un état qui bouge. */
-document.querySelectorAll('[data-accueil-outil]').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    if(btn.closest('#mesConseil')) effacerReport();
-    accueilEtapeSaisie(btn.dataset.accueilOutil);
-  });
-});
-$('accueilRetour').addEventListener('click', accueilEtapeChoix);
-
-/* —— LA SORTIE DE L'ANNONCE ——
-   « Découvrir » ferme le panneau et rend la page. Il n'ouvre rien, ne demande
-   rien et n'écrit rien en base. Une annonce lue une fois est lue : elle pose le
-   report, le témoin qui gouverne déjà l'apparition du panneau, plutôt qu'un
-   second témoin qui dirait la même chose. Échap y vaut le bouton. */
-function quitterAnnonce(){ poserReport(); fermerPanneau(); refletEtatVide(); }
-$('mesDecouvrir').addEventListener('click', quitterAnnonce);
-$('mesConseilRetour').addEventListener('click', ()=>{ effacerReport(); mesEtape('choix'); });
-$('mesConseilPlusTard').addEventListener('click', ()=>{ fermerPanneau(); refletEtatVide(); });
-
-/* SECOND TEMPS : « je le ferai plus tard » n'écrit RIEN. Un lien est déjà
-   enregistré à ce stade — le panneau n'a plus de raison d'être et se retire de
-   lui-même. Poser un report ici n'aurait rien à retenir. */
-$('mesPlusTard').addEventListener('click', fermerPanneau);
-
-/* LE RETOUR DU TEMPS DES DOCUMENTS. Il n'efface rien et n'écrit rien : ni le
-   lien enregistré, ni le report — il ne fait que ramener au choix de l'outil,
-   d'où l'on peut en changer ou en ajouter un second. C'est le seul des quatre
-   temps qui n'avait pas de chemin de retour, et arriver aux documents fermait
-   donc la porte de l'outil jusqu'à la sortie du panneau. */
-$('mesDocumentsRetour').addEventListener('click', ()=>mesEtape('choix'));
-
-// La porte des documents est celle qui existe déjà — le tiroir et sa modale
-// d'ajout, qui fonctionnent sans rendez-vous sélectionné. Le panneau se retire
-// D'ABORD : la modale d'ajout vit à 1000 et s'ouvrirait derrière le voile.
-$('mesAjouterDoc').addEventListener('click', ()=>{
-  fermerPanneau();
-  setTiroirDocs(true);
-  openUploadModal();
-});
-
-// Rouvrir n'est pas fermer : le report est effacé et la mise en service reprend
-// là où elle s'était arrêtée, au choix de l'outil.
-$('reprendreMiseEnService').addEventListener('click', ()=>{
-  effacerReport();
-  refletMiseEnService();
-});
 
 $('btnAjouterOutil').addEventListener('click', ()=>{
   deplierOutils(!document.body.classList.contains('outils-deplies'));
-});
-
-$('accueilEnregistrer').addEventListener('click', async ()=>{
-  const champ = $('accueilLien');
-  const provider = champ.dataset.provider;
-  const valeur = champ.value.trim();
-  if(!provider) return;
-  if(!valeur){
-    champ.focus();
-    champ.style.borderColor = 'var(--red)';
-    setTimeout(()=>{ champ.style.borderColor = ''; }, 1500);
-    return;
-  }
-  // Même chemin d'écriture que la barre du haut, et la barre reprend la valeur :
-  // deux surfaces pour un seul lien, jamais deux vérités.
-  const miroir = document.querySelector(`input[data-link="${provider}"]`);
-  if(miroir) miroir.value = valeur;
-  const verdict = await saveMyLink(provider, valeur);
-  if(verdict.ok) showToast(`Lien ${libelleOutil(provider)} enregistré`);
-  else direEchecLien(verdict);
-});
-
-$('accueilLien').addEventListener('keydown', e=>{
-  if(e.key === 'Enter'){ e.preventDefault(); $('accueilEnregistrer').click(); }
 });
 
 document.querySelectorAll('input[data-link]').forEach(input=>{
@@ -2329,16 +1773,14 @@ function launchExternal(provider){
   const link = _state.settings.links?.[provider];
 
   if(!link){
-    // Cliquer un outil DIT l'outil : la mise en service s'ouvre au temps de la
-    // saisie, sur ce fournisseur, plutôt que de désigner un champ replié
-    // derrière « ajouter un outil » et de laisser l'abonné le trouver.
-    // Le report tombe, comme il tombe sur « Mettre en service » : il valait
-    // pour l'état où il a été pris, et ce clic dit le contraire.
-    // Aucune seconde chaîne d'écriture n'est ouverte : c'est le champ du
-    // panneau qui enregistre, par saveMyLink, exactement comme la barre.
-    effacerReport();
-    ouvrirPanneau();
-    accueilEtapeSaisie(provider);
+    // Cliquer un outil DIT l'outil : la barre se déplie et le curseur se pose
+    // dans SON champ, plutôt que de laisser l'abonné chercher lequel des champs
+    // repliés derrière « ajouter un outil » est le sien.
+    // Aucune seconde chaîne d'écriture n'est ouverte : c'est le champ de la
+    // barre qui enregistre, par saveMyLink, comme il l'a toujours fait.
+    deplierOutils(true);
+    const champ = document.querySelector(`input[data-link="${provider}"]`);
+    if(champ) champ.focus();
     return;
   }
 
@@ -3147,27 +2589,13 @@ function testEnCours(){
 
 // LA COLONNE DU CENTRE — SEUL ÉCRIVAIN DE #visioActive ET #emptyState.
 // La règle était recopiée en six points ; elle n'est plus écrite qu'ici, et
-// chacun de ces points l'appelle. Elle tient en deux temps.
+// chacun de ces points l'appelle.
 //
-// D'ABORD LE PANNEAU. Tant qu'il tient la page, les DEUX surfaces se taisent :
-// une seule carte paraît à l'écran, la sienne. Le voile ne couvre pas, il
-// floute — ce qui reste peint dessous se lit encore, et l'état vide porte
-// justement le vêtement du panneau (.mes-bloc est .mes-carte moins le voile et
-// moins l'ombre) : deux cartes s'y voyaient, décalées de la demi-largeur de la
-// colonne de gauche. Un rendez-vous peint d'office au chargement y montrait
-// pire — briefing, cadre et barre d'outils, la page de travail entière.
-// Le juge est le PANNEAU, jamais l'existence d'un lien : au quatrième temps un
-// lien est enregistré et le panneau tient encore la page. Juger sur le lien y
-// ferait reparaître la seconde carte, en plein second temps.
-//
-// ENSUITE L'OCCUPATION, qui se DÉDUIT : quelque chose occupe le cadre — un
-// rendez-vous peint, ou un test caméra — ou rien ne l'occupe.
+// ELLE SE DÉDUIT, et d'un seul fait : quelque chose occupe le cadre — un
+// rendez-vous peint, ou un test caméra — ou rien ne l'occupe, et l'état vide
+// prend la place. Rien d'autre n'entre dans ce jugement : plus aucune surface
+// ne se pose devant la colonne, et les deux affichages sont exclusifs.
 function refletColonneCentre(){
-  if(panneauTientLaPage()){
-    $('visioActive').style.display = 'none';
-    $('emptyState').style.display  = 'none';
-    return;
-  }
   const occupee = !!rdvAffiche || testEnCours();
   $('visioActive').style.display = occupee ? 'flex' : 'none';
   $('emptyState').style.display  = occupee ? 'none' : 'flex';
@@ -4114,7 +3542,7 @@ $('openNewRdvBtn').addEventListener('click', async ()=>{
   // modale. Il avait sa raison — le formulaire aurait refusé au dernier clic,
   // faute de fournisseur. Cette raison n'existe plus : la salle vient de nous,
   // et un abonné qui n'a jamais rien enregistré programme son rendez-vous
-  // comme les autres. Le panneau de mise en service garde ses autres portes.
+  // comme les autres.
 
   // Une seule source : les cartes pipeline, comme la page agenda. L'id posé en
   // ficheId est de la forme nue, sans préfixe de table — c'est la seule que la
@@ -4140,6 +3568,11 @@ $('openNewRdvBtn').addEventListener('click', async ()=>{
   $('rdvTime').value = fmt2(propose.getHours()) + ':00';
   $('newRdvModal').classList.add('show');
 });
+
+// Le bouton de l'état vide n'ouvre pas une seconde porte : il pousse celle de la
+// barre du haut. Le remplissage du formulaire, l'heure proposée et l'absence de
+// portillon restent écrits une seule fois.
+$('emptyProgrammerRdv').addEventListener('click', ()=> $('openNewRdvBtn').click());
 
 $('prospectSelect').addEventListener('change', async e=>{
   const id = e.target.value;
@@ -4505,16 +3938,6 @@ window.addEventListener('beforeunload', ()=>{
    RACCOURCIS CLAVIER
    ———————————————————————————————————————————————— */
 document.addEventListener('keydown', e=>{
-  // Le panneau de mise en service tient la page : aucun raccourci global ne
-  // traverse le voile. La garde d'origine ne couvre que INPUT/TEXTAREA/SELECT,
-  // si bien que `?`, 1/2/3, C, I agiraient sur une page inerte.
-  // Échap fait exception au SEUL temps de l'annonce, où il vaut « Découvrir ».
-  // Les autres temps gardent la règle : ils ne se ferment sur aucun geste.
-  if(panneauTientLaPage()){
-    if(e.key === 'Escape' && mesEtapeCourante === 'choix') quitterAnnonce();
-    return;
-  }
-
   // Ignorer si focus dans un input/textarea
   const tag = e.target.tagName;
   const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
@@ -4626,13 +4049,16 @@ document.addEventListener('visibilitychange', () => {
 (async () => {
   await bootstrapVisio();
   loadMyLinks();
-  refletMiseEnService();
+  refletBarreOutils();
+  refletEtatVide();
+  // La clé du report de mise en service, effacée au passage. Le panneau qu'elle
+  // retenait n'existe plus : elle ne gouverne rien, et laissée là elle resterait
+  // indéfiniment dans le navigateur de tous ceux qui ont reporté.
+  try{ localStorage.removeItem('mup_visio_accueil_differe') }catch{}
   // La colonne du centre est réglée par la RÈGLE, et non par le repli de la
   // feuille de style : sans cet appel, #emptyState paraissait au chargement par
   // le seul .empty-state{display:flex}, et refletColonneCentre ne parlait qu'au
-  // premier rendez-vous peint ou au premier test caméra. C'est-à-dire jamais au
-  // moment qui compte — celui où le panneau vient de prendre la page.
-  // APRÈS refletMiseEnService, qui est ce qui décide d'ouvrir le panneau.
+  // premier rendez-vous peint ou au premier test caméra.
   refletColonneCentre();
   // Note : sliders/fonds/customBgSlot/bgUpload sont injectés dynamiquement par
   // openTestCamera() — leurs handlers sont attachés via bindCalibration/Background

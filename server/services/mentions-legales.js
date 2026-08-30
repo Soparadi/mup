@@ -278,11 +278,29 @@ function complementCrawl(crawlDelaySec) {
 // mono-file, le portillon robots, le timeout, le plafond de taille et les reprises.
 // Un appelant ne peut ni doubler la file ni s'exonérer du robots.txt.
 export async function politeFetchText(url, options = {}) {
+  const { res } = await lireAvecMotif(url, options)
+  return res
+}
+
+// Voie interne de politeFetchText, INTERNE AU MODULE (jamais exportée) : même travail,
+// mais le motif du non-résultat est conservé. Rend { res, motif } :
+//   • { res: {text, finalUrl}, motif: null }  — lecture faite.
+//   • { res: null, motif: 'url' }             — URL inexploitable, aucun appel émis.
+//   • { res: null, motif: 'portillon' }       — robots.txt a refusé (avant ou après
+//     redirection). Une DÉCISION du site : rien ne doit permettre de la contourner.
+//   • { res: null, motif: 'fetch' }           — l'appel a eu lieu et n'a rien rendu
+//     (délai dépassé, hôte mort, statut d'erreur, content-type inattendu).
+//
+// Cette distinction ne remonte PAS jusqu'aux appelants externes (actualites.js,
+// recherche-web.js, scripts de diagnostic) : politeFetchText garde son contrat, deux
+// sorties, { text, finalUrl } ou null. Séparer refus et injoignable jusqu'au portillon
+// lui-même — quatre causes aujourd'hui confondues en 'REFUS' — est un autre chantier.
+async function lireAvecMotif(url, options = {}) {
   const accept = options.accept || ACCEPT_DEFAUT
   const contentTypeRe = options.contentTypeRe || CONTENT_TYPE_RE_DEFAUT
 
   const u = normalizeUrl(url)
-  if (!u) return null
+  if (!u) return { res: null, motif: 'url' }
 
   // Ceinture : la garantie « aucun throw » doit être structurelle. Une levée interne
   // = on ignore ce que dit le robots.txt → même issue qu'un 5xx/timeout : fail-closed.
@@ -291,9 +309,9 @@ export async function politeFetchText(url, options = {}) {
     gate = await resolveRobots(u)
   } catch (e) {
     console.log('[robots]', 'refus (exception résolution)', u, String(e?.message || e).slice(0, 80))
-    return null
+    return { res: null, motif: 'portillon' }
   }
-  if (!gate.autorise) { console.log('[robots]', 'refus', u); return null }
+  if (!gate.autorise) { console.log('[robots]', 'refus', u); return { res: null, motif: 'portillon' } }
 
   // Fetch principal. Le complément de crawl-delay est dormi DANS la tâche schedulée,
   // donc SOUS le verrou : il espace réellement l'appel vers cet hôte, sans le sortir
@@ -303,7 +321,7 @@ export async function politeFetchText(url, options = {}) {
     if (complement > 0) await sleep(complement)
     return doFetch(u, accept, contentTypeRe)
   })
-  if (!res) return null
+  if (!res) return { res: null, motif: 'fetch' }
 
   // Point (b) — redirection inter-hôtes. redirect:'follow' a pu mener vers un autre
   // hôte (example.com et www.example.com sont deux hôtes distincts au sens robots.txt,
@@ -319,15 +337,15 @@ export async function politeFetchText(url, options = {}) {
       gate2 = await resolveRobots(res.finalUrl)
     } catch (e) {
       console.log('[robots]', 'refus après redirection (exception résolution)', res.finalUrl, String(e?.message || e).slice(0, 80))
-      return null
+      return { res: null, motif: 'portillon' }
     }
     if (!gate2.autorise) {
       console.log('[robots]', 'refus après redirection', res.finalUrl)
-      return null
+      return { res: null, motif: 'portillon' }
     }
   }
 
-  return res
+  return { res, motif: null }
 }
 
 // ---------------------------------------------------------------------------
@@ -344,6 +362,16 @@ function normalizeUrl(raw) {
     if (x.protocol !== 'http:' && x.protocol !== 'https:') return null
     return x.toString()
   } catch { return null }
+}
+
+// Le schéma manquait-il ? Prédicat pur, jumeau de la première ligne de normalizeUrl :
+// vrai quand c'est NOUS qui avons ajouté https, faux quand la donnée le portait déjà.
+// Volontairement à côté de normalizeUrl et non dans son retour : celle-ci sert aussi à
+// COMPARER des URL (candidats vs accueil, URL écrite au référentiel) — changer son type
+// de retour toucherait ces trois usages sans rien leur apporter.
+function schemaAjoute(raw) {
+  const u = String(raw || '').trim()
+  return u !== '' && !/^https?:\/\//i.test(u)
 }
 
 function safeHost(url) {
@@ -673,10 +701,25 @@ export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
   const homeUrl = normalizeUrl(homeUrlRaw)
   if (!homeUrl) return null
 
-  const home = await politeFetchText(homeUrl)
+  // Accueil, avec repli sur le protocole non sécurisé. normalizeUrl ajoute https quand
+  // le schéma manque ; une part des sites ne répond qu'en http et restait donc muette.
+  // DEUX conditions, cumulatives :
+  //   • c'est nous qui avons ajouté https — une URL qui portait https explicitement est
+  //     lue telle qu'elle est écrite, jamais dégradée dans notre dos ;
+  //   • l'échec vient du FETCH, jamais du portillon — retenter en http un hôte dont le
+  //     robots.txt a refusé serait contourner ce refus par changement de schéma.
+  // La seconde tentative passe par la même file mono-verrou et le même portillon : elle
+  // est comptée dans les plafonds comme n'importe quel autre appel sortant.
+  let lecture = await lireAvecMotif(homeUrl)
+  let urlLue = homeUrl
+  if (!lecture.res && lecture.motif === 'fetch' && schemaAjoute(homeUrlRaw)) {
+    urlLue = homeUrl.replace(/^https:\/\//i, 'http://')
+    lecture = await lireAvecMotif(urlLue)
+  }
+  const home = lecture.res
   if (!home) return null
 
-  const base = home.finalUrl || homeUrl
+  const base = home.finalUrl || urlLue
   const homeHtml = decodeEntities(home.text)
 
   // Maillon 2 — pages légales : liens footer d'abord, puis chemins conventionnels.

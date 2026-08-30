@@ -61,7 +61,7 @@ import { resoudrePositionMeteo } from './server/services/meteo-position.js'
 import { geocode, reverseGeocode } from './server/services/ban.js'
 import { rattraperPositionCarte } from './server/services/position-cartes.js'
 import { normText } from './server/services/overpass.js'
-import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled } from './server/services/email.js'
+import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled, sendWelcome } from './server/services/email.js'
 import { startCronJobs, startActualitesCron, startBalayagePositionCron } from './server/services/cron.js'
 import {
   getEffectivePlan,
@@ -1211,7 +1211,14 @@ app.get('/api/admin/comptes', requireSuperadmin, async (req, res) => {
         // ce qui se lit « jamais vu », et non « vu il y a longtemps ».
         last_seen_at: u.last_seen_at || null,
         // Statut VIP — vit sur user (pas user_plan). Lu par le toggle superadmin.
-        bypass: !!u.bypass
+        bypass: !!u.bypass,
+        // Approbation manuelle de l'inscription — vit sur user, comme bypass.
+        // `essai_demarre` accompagne la date parce que l'interrupteur ne se lit
+        // pas sur approved_at seul : un compte antérieur à cette porte n'a pas
+        // de date d'approbation mais son essai tourne, il est approuvé de fait
+        // (même règle que estEnAttente, lib/approbation.js).
+        approved_at: u.approved_at || null,
+        essai_demarre: !!u.trial_started_at
       }
     })
     res.json(rows)
@@ -1247,6 +1254,88 @@ app.post('/api/admin/comptes/bypass', requireSuperadmin, async (req, res) => {
   } catch (err) {
     console.error('[admin/comptes/bypass]', err.message)
     res.status(500).json({ error: 'Mise à jour bypass impossible' })
+  }
+})
+
+// ── POST /api/admin/comptes/approbation — superadmin, ouverture de l'accès ──
+// Jumelle de la route bypass ci-dessus : même verrou (requireSuperadmin,
+// dev@soparadi.com SEUL), même recherche par adresse, même invalidation du
+// cache de session après écriture. Écriture CHIRURGICALE : les champs sont
+// ÉNUMÉRÉS, jamais un MERGE d'objet reçu du client, et password_hash, email,
+// plan, subscription_status ne sont jamais touchés.
+//
+// SET et non MERGE, à la différence de bypass : l'approbation pose quatre
+// champs d'un coup et trois sont des datetime, que l'API binding ne coerce PAS
+// depuis une chaîne ISO. Elles se calculent donc côté SurrealQL avec
+// time::now(), exactement comme au signup (server/auth/routes.js).
+//
+// CE QUE FAIT L'APPROBATION. Elle horodate l'accord, PUIS démarre l'essai :
+// le décompte des quatorze jours part de cet instant, pas de l'inscription.
+// Le courriel de bienvenue suit, si l'adresse est déjà vérifiée et s'il n'est
+// pas déjà parti. Adresse non encore vérifiée : on ne l'envoie pas ici, c'est
+// la route de vérification qui le fera à son tour, le compte n'étant plus en
+// attente d'ici là. Le drapeau welcome_email_sent_at garantit l'unicité dans
+// les deux sens.
+//
+// CE QUE NE FAIT PAS LA FERMETURE. Elle efface approved_at, rien d'autre. Un
+// compte dont l'essai a démarré ne redevient PAS en attente (estEnAttente
+// écarte tout porteur de trial_started_at) : un essai démarré ne se rembobine
+// pas. La fermeture n'annule qu'une approbation donnée par erreur, avant tout
+// démarrage.
+//
+// Variable INSCRIPTION_APPROBATION absente : cette route reste appelable et
+// fait exactement ce qu'elle dit, mais plus rien ne bloque personne, donc elle
+// n'a plus d'objet. Rien à défaire.
+app.post('/api/admin/comptes/approbation', requireSuperadmin, async (req, res) => {
+  const email = String(req.body?.email ?? '').toLowerCase().trim()
+  const approuve = req.body?.approuve
+  // Booléen STRICT, comme la route bypass : rejette "true", 1, null, undefined.
+  if (!email) return res.status(400).json({ error: 'email requis' })
+  if (typeof approuve !== 'boolean') return res.status(400).json({ error: 'approuve doit être un booléen' })
+  try {
+    const db = await getDb()
+    const found = await db.query('SELECT * FROM user WHERE email = $email LIMIT 1', { email })
+    const u = found[0]?.[0]
+    if (!u) return res.status(404).json({ error: 'compte introuvable' })
+    const id = String(u.id ?? '').replace(/^user:/, '').replace(/^⟨+|⟩+$/g, '')
+
+    if (!approuve) {
+      await db.query('UPDATE type::record("user", $id) SET approved_at = NONE', { id })
+      invalidateSessionCacheByUserId(id)
+      return res.json({ email, approuve: false, essai_demarre: !!u.trial_started_at })
+    }
+
+    // Les dates d'essai ne sont posées QUE si elles manquent. Réapprouver un
+    // compte dont l'essai tourne déjà ne le rallonge pas de quatorze jours.
+    const champs = ['approved_at = time::now()']
+    if (!u.trial_started_at) {
+      champs.push(
+        'trial_started_at = time::now()',
+        'trial_ends_at = time::now() + 14d',
+        "trial_status = 'active'"
+      )
+    }
+    await db.query(`UPDATE type::record("user", $id) SET ${champs.join(', ')}`, { id })
+    invalidateSessionCacheByUserId(id)
+
+    // Échec silencieux du courriel : l'accès est ouvert quoi qu'il arrive, un
+    // envoi raté ne doit pas refermer la porte. Le drapeau n'est posé qu'après
+    // un envoi réussi, donc un échec laisse la route de vérification le rejouer.
+    let bienvenue = 'ignoree'
+    if (u.email_verified === true && !u.welcome_email_sent_at) {
+      try {
+        await sendWelcome(u)
+        await db.query('UPDATE type::record("user", $id) SET welcome_email_sent_at = time::now()', { id })
+        bienvenue = 'envoyee'
+      } catch (e) {
+        console.error('[admin/comptes/approbation] email bienvenue échoué', e.message)
+        bienvenue = 'echec'
+      }
+    }
+    res.json({ email, approuve: true, essai_demarre: true, bienvenue })
+  } catch (err) {
+    console.error('[admin/comptes/approbation]', err.message)
+    res.status(500).json({ error: 'Approbation impossible' })
   }
 })
 
@@ -1299,7 +1388,7 @@ const CHAMPS_USER = [
   // Abonnement
   'plan', 'intended_plan', 'intended_plan_at', 'trial_started_at', 'trial_ends_at', 'trial_status',
   'subscription_status', 'current_period_end', 'plan_billing_cycle', 'cancel_at_period_end',
-  'past_due_since', 'stripe_customer_id', 'stripe_subscription_id', 'bypass',
+  'past_due_since', 'stripe_customer_id', 'stripe_subscription_id', 'bypass', 'approved_at',
   // Cycle de vie
   'welcome_email_sent_at', 'trial_email_j0_sent_at', 'trial_email_j2_sent_at',
   'trial_email_j12_sent_at', 'grace_j_minus_1_sent_at', 'trial_purge_warning_sent_at',

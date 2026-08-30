@@ -120,25 +120,27 @@ td.muted{color:var(--muted)}
 }
 .dash{color:var(--muted2)}
 
-/* ── TOGGLE VIP ── */
-/* Interrupteur ON = orange MovUP. Le statut VIP libère le compte du mur
-   d'abonnement ; il n'ouvre PAS le superadmin (statuts disjoints). */
-.vip-toggle{
+/* ── TOGGLES VIP ET ACCÈS ── */
+/* Interrupteur ON = orange MovUP. Deux statuts DISJOINTS partagent la forme :
+   le statut VIP libère le compte du mur d'abonnement ; l'accès approuvé
+   autorise le démarrage de l'essai. Ni l'un ni l'autre n'ouvre le superadmin
+   (verrou email seul, aucune lecture croisée). */
+.vip-toggle,.acces-toggle{
   position:relative;display:inline-flex;align-items:center;
   width:38px;height:22px;border-radius:11px;
   border:1px solid var(--border2);background:var(--surface2);
   padding:0;cursor:pointer;vertical-align:middle;
   transition:background .15s,border-color .15s;
 }
-.vip-toggle .vip-knob{
+.vip-toggle .vip-knob,.acces-toggle .vip-knob{
   position:absolute;left:2px;top:50%;transform:translateY(-50%);
   width:16px;height:16px;border-radius:50%;background:#FFFFFF;
   box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s;
 }
-.vip-toggle[aria-checked="true"]{background:var(--orange);border-color:var(--orange)}
-.vip-toggle[aria-checked="true"] .vip-knob{left:18px}
-.vip-toggle:disabled{opacity:.5;cursor:default}
-.vip-toggle:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.vip-toggle[aria-checked="true"],.acces-toggle[aria-checked="true"]{background:var(--orange);border-color:var(--orange)}
+.vip-toggle[aria-checked="true"] .vip-knob,.acces-toggle[aria-checked="true"] .vip-knob{left:18px}
+.vip-toggle:disabled,.acces-toggle:disabled{opacity:.5;cursor:default}
+.vip-toggle:focus-visible,.acces-toggle:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
 
 /* ── TOAST (retour discret après action) ── */
 .vip-toast{
@@ -639,6 +641,18 @@ table.accounts tbody tr[data-email]{cursor:pointer;}
       + '</div>';
   }
 
+  // Approuvé de fait ou par décision : les deux se valent à l'affichage.
+  function approuve(r) {
+    return !!(r && (r.approved_at || r.essai_demarre));
+  }
+
+  // Le survol dit ce que chaque sens fait, et surtout ce que le sens « fermé »
+  // ne fait pas : un essai démarré ne se rembobine pas.
+  function titreAcces(estApprouve) {
+    if (!estApprouve) return 'En attente. Ouvrir démarre l’essai de 14 jours et envoie le courriel de bienvenue.';
+    return 'Accès approuvé. Fermer n’annule qu’une approbation donnée par erreur, avant démarrage de l’essai.';
+  }
+
   // ── TABLEAU DES COMPTES ────────────────────────────────────────────────
   // Chargé UNE fois : le rafraîchissement du direct ne le rappelle pas. Chaque
   // ligne porte son adresse et s'ouvre au clic sur la fiche complète.
@@ -655,6 +669,7 @@ table.accounts tbody tr[data-email]{cursor:pointer;}
       + '<th>Créé le</th>'
       + '<th>Vu le</th>'
       + '<th>VIP</th>'
+      + '<th>Accès approuvé</th>'
       + '</tr></thead>';
 
     var body = '<tbody>';
@@ -675,6 +690,11 @@ table.accounts tbody tr[data-email]{cursor:pointer;}
         // posée rétroactivement.
         + '<td class="muted">' + (fmtDate(r.last_seen_at) ? esc(fmtDate(r.last_seen_at)) : '<span class="dash">—</span>') + '</td>'
         + '<td><button type="button" class="vip-toggle" role="switch" aria-checked="' + (r.bypass ? 'true' : 'false') + '" data-email="' + esc(r.email || '') + '" aria-label="Statut VIP"><span class="vip-knob"></span></button></td>'
+        // Accès approuvé. L'interrupteur ne se lit PAS sur approved_at seul :
+        // un compte antérieur à cette porte n'a pas de date d'approbation mais
+        // son essai tourne, il est approuvé de fait. Même règle que
+        // estEnAttente côté serveur (lib/approbation.js).
+        + '<td><button type="button" class="acces-toggle" role="switch" aria-checked="' + (approuve(r) ? 'true' : 'false') + '" data-email="' + esc(r.email || '') + '" aria-label="Accès approuvé" title="' + esc(titreAcces(approuve(r))) + '"><span class="vip-knob"></span></button></td>'
         + '</tr>';
     }
     body += '</tbody>';
@@ -739,7 +759,8 @@ table.accounts tbody tr[data-email]{cursor:pointer;}
       ['past_due_since', 'Impayé depuis le', 'horodatage'],
       ['stripe_customer_id', 'Client Stripe'],
       ['stripe_subscription_id', 'Abonnement Stripe'],
-      ['bypass', 'Statut VIP', 'ouinon']
+      ['bypass', 'Statut VIP', 'ouinon'],
+      ['approved_at', 'Accès approuvé le', 'horodatage']
     ]],
     ['cycle_de_vie', 'Cycle de vie', [
       ['welcome_email_sent_at', 'Bienvenue envoyée le', 'horodatage'],
@@ -957,16 +978,62 @@ table.accounts tbody tr[data-email]{cursor:pointer;}
     toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
   }
 
+  // Bascule de l'accès. POST { email, approuve: !état } ; on ne bascule
+  // l'affichage qu'au succès, comme le bouton VIP. L'ouverture démarre l'essai
+  // et déclenche le courriel de bienvenue côté serveur : le retour dit si ce
+  // courriel est parti, parce qu'un échec d'envoi n'annule pas l'approbation
+  // et ne doit donc pas passer inaperçu.
+  function basculerAcces(btn) {
+    var email = btn.getAttribute('data-email');
+    if (!email) return;
+    var next = btn.getAttribute('aria-checked') !== 'true';
+    btn.disabled = true;
+    fetch('/api/admin/comptes/approbation', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, approuve: next })
+    })
+      .then(function (res) {
+        if (res.status === 403) { toast('Action non autorisée.'); return null; }
+        if (!res.ok) { toast('Mise à jour impossible. Veuillez réessayer.'); return null; }
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || typeof data.approuve !== 'boolean') return;
+        // L'affichage suit LA MÊME RÈGLE que la ligne du tableau, pas le seul
+        // retour de la route : un compte dont l'essai a démarré reste approuvé
+        // de fait, l'interrupteur revient donc à « ouvert » et le retour dit
+        // pourquoi. Montrer « fermé » sur un accès resté ouvert serait mentir.
+        var etat = data.approuve || data.essai_demarre === true;
+        btn.setAttribute('aria-checked', etat ? 'true' : 'false');
+        btn.setAttribute('title', titreAcces(etat));
+        if (!data.approuve) {
+          toast(data.essai_demarre
+            ? 'Approbation retirée, mais l’essai a démarré : l’accès reste ouvert.'
+            : 'Approbation retirée.');
+          return;
+        }
+        if (data.bienvenue === 'echec') { toast('Accès approuvé, mais le courriel de bienvenue n’est pas parti.'); return; }
+        toast('Accès approuvé, l’essai démarre.');
+      })
+      .catch(function () { toast('Mise à jour impossible. Veuillez réessayer.'); })
+      .finally(function () { btn.disabled = false; });
+  }
+
   // Délégation : le tableau est injecté via innerHTML, mais l'écouteur posé sur
   // le conteneur persistant capte les clics quel qu'en soit le moment.
   //
-  // DEUX GESTES SUR LA MÊME LIGNE, et le premier a la priorité. Le bouton VIP
-  // bascule un statut et n'ouvre PAS la fiche : sans cette sortie anticipée,
-  // chaque bascule ferait surgir un panneau que personne n'a demandé.
+  // TROIS GESTES SUR LA MÊME LIGNE, et les deux interrupteurs ont la priorité.
+  // Ils basculent un statut et n'ouvrent PAS la fiche : sans ces sorties
+  // anticipées, chaque bascule ferait surgir un panneau que personne n'a
+  // demandé.
   //
   // POST { email, bypass: !état } ; on ne bascule l'affichage qu'au succès.
   // Sur 403 / échec : message neutre, l'état visuel reste inchangé.
   content.addEventListener('click', function (e) {
+    var acces = e.target.closest ? e.target.closest('.acces-toggle') : null;
+    if (acces) { basculerAcces(acces); return; }
     var btn = e.target.closest ? e.target.closest('.vip-toggle') : null;
     if (!btn) {
       var ligne = e.target.closest ? e.target.closest('tr[data-email]') : null;

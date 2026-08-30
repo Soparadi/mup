@@ -1,6 +1,7 @@
 // Middleware requireActiveSubscription — bloque les écritures pour les
 // utilisateurs dont l'essai 14 jours a expiré OU la grâce 7j post-
-// résiliation est terminée.
+// résiliation est terminée OU dont l'inscription n'est pas encore approuvée
+// (lib/approbation.js, seulement sous INSCRIPTION_APPROBATION).
 //
 // Logique de dérivation d'état : factorisée dans lib/derive-app-state.js
 // (deriveAppState) — source unique partagée avec /api/user/me et
@@ -37,7 +38,10 @@ export async function requireActiveSubscription(req, res, next) {
 
   // Source unique de vérité (H5a) : lib/derive-app-state.js. La fonction
   // pure retourne uniquement un label parmi 'trial_active' | 'trial_expired'
-  // | 'grace_active' | 'grace_expired' | 'past_due_locked' | 'active'.
+  // | 'grace_active' | 'grace_expired' | 'past_due_locked' | 'active'
+  // | 'pending_approval' (inscription non encore approuvée, lib/approbation.js
+  // — ce dernier n'apparaît QUE si la variable INSCRIPTION_APPROBATION est
+  // armée ; sans elle, la liste et ce dispatch sont ceux d'avant).
   const label = deriveAppState(user)
 
   // Bascule DB best-effort (effet de bord local conservé pré/post-H5a) :
@@ -93,6 +97,15 @@ export async function requireActiveSubscription(req, res, next) {
         error: 'trial_expired',
         message: 'Votre essai gratuit est terminé. Choisissez un abonnement pour continuer.',
         trial_ends_at: user.trial_ends_at || null
+      })
+    // Inscription en cours d'examen. Un case EXPLICITE, et non le défaut :
+    // sans lui, 'pending_approval' tomberait sur next() et l'écriture passerait.
+    // Les droits RGPD ne sont pas concernés — /api/account/privacy/export et
+    // /api/account/delete sont exemptés de ce middleware en amont (server.js).
+    case 'pending_approval':
+      return res.status(402).json({
+        error: 'pending_approval',
+        message: 'Votre inscription est en cours d\'examen. Votre accès sera ouvert dès validation.'
       })
     case 'active':
     case 'trial_active':

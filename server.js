@@ -27,6 +27,7 @@ import { requireAuth, requireAuthHtml, readSessionToken } from './server/middlew
 import { requireActiveSubscription } from './server/middleware/subscription.js'
 import { requireSuperadmin } from './server/middleware/requireSuperadmin.js'
 import { deriveAppState } from './lib/derive-app-state.js'
+import { estEnAttente } from './lib/approbation.js'
 import { runAuthMigration, invalidateSessionCacheByUserId, getSession, getSchemaFailureCount } from './server/auth/surreal-adapter.js'
 import { runLeadSearchMigration, trackLeadSearch, getSearchHistory, trackContactEdit, trackEnrichAttempt, nettoyerSearchId, grouperRecherches, compterUsageParRecherche } from './server/services/search-tracker.js'
 import { getInseeToken } from './server/services/insee.js'
@@ -966,11 +967,47 @@ app.use((req, res, next) => {
   return requireAuthHtml(req, res, next)
 })
 
+// ── Portillon d'approbation — pages app ──
+// Tourne APRÈS requireAuthHtml (req.authUser disponible) et AVANT l'injection
+// window.__USER__ : une page dont l'accès n'est pas ouvert n'est jamais servie,
+// pas même vidée de sa substance.
+//
+// Variable INSCRIPTION_APPROBATION absente : estEnAttente rend false, cette
+// fonction est un next() sur sa deuxième ligne, et plus rien n'en dépend.
+//
+// CE QU'IL NE GARDE PAS, et ce n'est pas un oubli :
+//   - /account/privacy : l'export (art. 20) et la suppression (art. 17) sont
+//     des DROITS. Ils ne dépendent d'aucune approbation, et un compte laissé
+//     en attente doit pouvoir partir avec ses données. Leurs routes d'API sont
+//     exemptées du même geste en amont (gate subscription).
+//   - /attente, /login, /optout et les pages publiques : ce portillon ne voit
+//     que les routes app (isProtectedHtmlRoute), le même prédicat que le
+//     portillon d'authentification. Rediriger /attente vers elle-même y ferait
+//     une boucle ; elle n'y entre pas.
+function portillonApprobation(req, res, next) {
+  if (!req.authUser) return next()
+  if (!estEnAttente(req.authUser)) return next()
+  // Même normalisation que isProtectedHtmlRoute : /account/privacy.html et
+  // /account/privacy/ désignent la même page, l'exemption doit les couvrir.
+  const p = String(req.path || '/').replace(/\/+$/, '').replace(/\.html$/i, '')
+  if (p === '/account/privacy') return next()
+  return res.redirect(302, '/attente')
+}
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+  if (req.path.startsWith('/api/')) return next()
+  if (!isProtectedHtmlRoute(req.path)) return next()
+  return portillonApprobation(req, res, next)
+})
+
 // ── Route fiche société pleine page (Sprint 3) ──
 // /contacts/:id sert public/contact-societe.html. Frontend lit l'id depuis
 // window.location.pathname puis fetch /api/contacts pour charger le record.
 // requireAuthHtml en route-level car isProtectedHtmlRoute ne matche que /contacts (sans /:id).
-app.get('/contacts/:id', requireAuthHtml, (req, res) => {
+// portillonApprobation pour le MÊME motif : hors du prédicat, cette route
+// serait la seule page app qu'un compte en attente pourrait encore ouvrir.
+app.get('/contacts/:id', requireAuthHtml, portillonApprobation, (req, res) => {
   res.sendFile(join(__dirname, 'public', 'contact-societe.html'))
 })
 

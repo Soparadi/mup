@@ -152,9 +152,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .header .meta .dot{width:6px;height:6px;border-radius:50%;background:var(--visio);box-shadow:0 0 8px var(--visio)}
 .header .meta strong{color:#fff;font-weight:600}
 .header .actions{margin-left:auto;display:flex;gap:8px;align-items:center}
-.btn-tools-toggle{background:rgba(255,255,255,.1);color:#fff;padding:7px 12px;border-radius:7px;font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:6px}
-.btn-tools-toggle:hover{background:rgba(255,255,255,.18)}
-.btn-tools-toggle.active{background:var(--visio)}
 .btn-help{background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:var(--mono)}
 .btn-help:hover{background:rgba(255,255,255,.18);color:#fff}
 
@@ -168,9 +165,6 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:calc(100vh - v
 .launch-btn.zoom .dot{background:var(--zoom);box-shadow:0 0 0 3px rgba(45,140,255,.15)}
 .launch-btn.teams .dot{background:var(--teams);box-shadow:0 0 0 3px rgba(70,75,200,.15)}
 .launch-btn.meet .dot{background:var(--meet);box-shadow:0 0 0 3px rgba(0,128,90,.15)}
-.launch-btn.primary{background:var(--text);color:#fff}
-.launch-btn.primary:hover{background:#000;transform:translateY(-1px)}
-.launch-btn.primary .dot{background:var(--visio);box-shadow:0 0 0 3px rgba(124,58,237,.3)}
 .launch-btn .check{position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:var(--green);color:#fff;display:none;align-items:center;justify-content:center;font-size:9px;font-weight:bold}
 .launch-btn.has-link .check{display:flex}
 .launch-divider{width:1px;height:28px;background:var(--border);margin:0 6px}
@@ -218,8 +212,6 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .launch-btn.test-cam.active-test:hover{background:#8a2424}
 
 /* —— MODE PRÉPARATION (test caméra inline) —— */
-.test-cam-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:rgba(255,255,255,.7);gap:8px;text-align:center;padding:20px;font-size:12px;z-index:2}
-.test-cam-placeholder svg{width:36px;height:36px;color:rgba(255,255,255,.4)}
 .audio-meter-wrap{position:relative;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;margin-top:4px}
 .audio-meter-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,var(--green) 0%,#FFD60A 60%,var(--red) 95%);transition:width .05s linear}
 .audio-meter-label{font-size:10px;color:var(--muted2);margin-top:4px;text-align:center;font-style:italic}
@@ -501,9 +493,6 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .btn-end:hover{background:#8a2424}
 
 /* —— RÉGLAGES (sliders + fond) — utilisés dans la modale Test caméra —— */
-.tool-section{background:var(--surface);border-radius:12px;padding:14px;margin-bottom:12px}
-.tool-section h3{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:7px}
-.tool-section h3 svg{color:var(--visio)}
 .cal-row{margin-bottom:11px}
 .cal-row:last-child{margin-bottom:0}
 .cal-row label{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600;color:var(--text);margin-bottom:5px}
@@ -519,11 +508,6 @@ body.outils-deplies .my-link-field.vide{display:flex}
 .cal-row.r input[type=range]{background:linear-gradient(90deg,rgba(255,59,48,.15),rgba(255,59,48,.5))}
 .cal-row.g input[type=range]{background:linear-gradient(90deg,rgba(52,199,89,.15),rgba(52,199,89,.5))}
 .cal-row.b input[type=range]{background:linear-gradient(90deg,rgba(0,122,255,.15),rgba(0,122,255,.5))}
-.tool-actions{display:flex;gap:6px;margin-top:12px;border-top:1px solid var(--border);padding-top:10px}
-.tool-actions button{flex:1;padding:7px 10px;border-radius:7px;background:var(--card);font-size:11px;font-weight:600}
-.tool-actions button:hover{background:var(--border)}
-.tool-actions button.primary{background:var(--visio);color:#fff}
-.tool-actions button.primary:hover{background:#6028d3}
 .bg-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .bg-thumb{aspect-ratio:16/10;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:border-color .15s;position:relative;overflow:hidden;background:var(--card)}
 .bg-thumb:hover{border-color:var(--border2)}
@@ -1591,14 +1575,11 @@ body #mup-cookie-panel{z-index:60001}
    MUP VISIO v4 — briefing, docs persistants, raccourcis, T-5
    ———————————————————————————————————————————————— */
 
+// Les clés encore lues, et elles seules. Journaux, réglages, étalonnage, fonds,
+// métadonnées de documents et rappels écartés vivent en base depuis la migration
+// SurrealDB : leurs huit clés restaient déclarées ici sans que rien ne les lise.
 const LS = {
   PIPELINE:'mup_pipeline', AGENDA:'mup_agenda', CONTACTS:'mup_contacts', DEVIS:'mup_devis',
-  VISIO_LOGS:'mup_visio_logs', VISIO_SETTINGS:'mup_settings_visio',
-  VISIO_CALIBRATION:'mup_visio_calibration',
-  VISIO_BG_CUSTOM:'mup_visio_bg_custom', VISIO_BG_ACTIVE:'mup_visio_bg_active',
-  DOCS_META:'mup_visio_docs_meta',          // [{id, name, tag, mime, size, pinned, addedAt}]
-  DOCS_OPEN_LOG:'mup_visio_docs_open_log',  // [{docId, prospectId, societe, openedAt}]
-  URGENT_DISMISSED:'mup_visio_urgent_dismissed', // [rdvId, ...]
   // Le report de mise en service. LOCAL, et local pour deux raisons : rien de
   // nouveau ne part en base — ni champ, ni route — et un report qui passerait
   // par une écriture pourrait échouer, enfermant l'abonné derrière le panneau
@@ -1625,10 +1606,6 @@ const PLACEHOLDERS = [
 ];
 
 const $ = id => document.getElementById(id);
-const ls = {
-  get(k, fb){ try{ return JSON.parse(localStorage.getItem(k)) ?? fb }catch{ return fb } },
-  set(k, v){ localStorage.setItem(k, JSON.stringify(v)) }
-};
 
 /* ————————————————————————————————————————————————
    API SurrealDB (V1 mono-utilisateur, userId via env serveur)
@@ -3362,8 +3339,12 @@ function ensureSvgFilter(){
   return svgFilterEl;
 }
 
+// Le cadre à filtrer, en liste : ses deux lecteurs itèrent dessus, et l'un des
+// deux compte ses éléments. `testCamPreview` en faisait partie, identifiant
+// qu'aucun balisage de la page ne porte.
 function getFrameTargets(){
-  return [$('videoFrame'), $('testCamPreview')].filter(Boolean);
+  const frame = $('videoFrame');
+  return frame ? [frame] : [];
 }
 
 function applyCalibrationFilter(c){
@@ -3456,7 +3437,7 @@ function applyBackground(){
   } else if(active === 'custom' && customData){
     const s = document.createElement('style');
     s.id = 'mupCustomBgStyle';
-    s.textContent = `.video-frame-wrap.bg-custom-active::before, .test-cam-preview-wrap.bg-custom-active::before{background-image:url("${customData}") !important;background-size:cover !important;background-position:center !important;opacity:.30 !important}`;
+    s.textContent = `.video-frame-wrap.bg-custom-active::before{background-image:url("${customData}") !important;background-size:cover !important;background-position:center !important;opacity:.30 !important}`;
     document.head.appendChild(s);
     frames.forEach(frame => frame.classList.add('bg-custom-active'));
   }
@@ -4487,9 +4468,9 @@ document.querySelectorAll('.overlay').forEach(ov=>{
   });
 });
 
-// Le tiroir de documents. Aucune commande existante ne le pilotait :
-// .btn-tools-toggle n'est porté par aucun élément de la page — trois règles CSS
-// sans propriétaire. Elle n'est donc pas détournée, la commande vit ici.
+// Le tiroir de documents. Aucune commande existante ne le pilotait : la seule
+// candidate, .btn-tools-toggle, n'était portée par aucun élément de la page, et
+// ses règles CSS sont retirées. La commande vit donc ici.
 // Le geste est nommé : le clic le retourne, engagerSeance l'ouvre, et l'état
 // annoncé aux technologies d'assistance suit le même chemin dans les deux cas.
 function setTiroirDocs(ouvert){

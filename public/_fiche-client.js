@@ -17,6 +17,11 @@
   // L'élément d'accueil en mode ancré, null en mode calque. C'est la seule
   // variable qui distingue les deux modes : tout le reste en découle.
   var hote = null;
+  // Ce que la source PORTE en ce moment : la fiche chargée, et l'élément qui la
+  // tient. Lus par open pour savoir si une réassignation de src a lieu d'être,
+  // remis à zéro par hide, qui repasse la source à about:blank.
+  var ficheChargee = null;
+  var hoteCharge = null;
 
   function ensureBackdrop(){
     if(backdrop) return;
@@ -71,6 +76,8 @@
 
   function hide(){
     if(!iframe) return;
+    ficheChargee = null;
+    hoteCharge = null;
     if(hote){
       // Rien à attendre : sans animation, le délai de 250 ms n'aurait plus
       // d'objet que de laisser une iframe morte dans la colonne.
@@ -169,7 +176,18 @@
         if(iframe.parentNode !== document.body) document.body.appendChild(iframe);
       }
       lastTrigger = (opts && opts.trigger) || null;
-      iframe.src = '/pipeline?fiche=' + encodeURIComponent(id) + '&embed=panel';
+      // Réassigner src RECHARGE la fiche, et ce qui s'y écrit part avec : une
+      // note en cours de frappe disparaissait au deuxième clic sur la carte déjà
+      // sélectionnée. La garde vit ici et non chez les appelants, le défaut
+      // étant le même depuis /agenda et depuis /visio.
+      // Le changement d'hôte, lui, est un vrai changement : /visio franchit son
+      // seuil en cours de séance et passe du calque à la colonne ancrée, la
+      // fiche doit alors recharger dans son nouveau cadre.
+      if(ficheChargee !== String(id) || hoteCharge !== hote){
+        ficheChargee = String(id);
+        hoteCharge = hote;
+        iframe.src = '/pipeline?fiche=' + encodeURIComponent(id) + '&embed=panel';
+      }
       show();
     },
     close: function(){

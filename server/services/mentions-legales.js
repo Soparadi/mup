@@ -60,12 +60,21 @@ const MAX_CANDIDATS = 5             // candidats web vérifiés par SIRET (maill
 // Idempotence : TTL 30 j (aligné referentiel-read REFERENTIEL_TTL_DAYS).
 const TTL_DAYS = 30
 
-// Maillon 2 — mots-clés d'un lien vers une page légale + chemins conventionnels.
+// Maillon 2 — mots-clés d'un lien vers une page utile + chemins conventionnels.
+// Les zones lues sont l'accueil (pied de page compris : stripTags prend la page
+// entière), la page de contact, la page « à propos » et les pages légales. Le
+// courriel se lit plus souvent sur la page de contact que sur les mentions légales,
+// d'où l'ordre : /contact vient en tête des chemins devinés.
 const LEGAL_KEYWORDS = [
+  'contact', 'nous contacter', 'contactez nous',
+  'a propos', 'about', 'qui sommes nous',
   'mentions legales', 'mentions-legales', 'mentions', 'legal', 'cgv', 'cgu',
-  'contact', 'qui sommes nous', 'informations legales'
+  'informations legales'
 ]
-const CONVENTIONAL_PATHS = ['/mentions-legales', '/mentions', '/legal', '/cgv', '/contact']
+const CONVENTIONAL_PATHS = [
+  '/contact', '/nous-contacter', '/a-propos',
+  '/mentions-legales', '/mentions', '/legal', '/cgv'
+]
 
 // ---------------------------------------------------------------------------
 // File séquentielle mono-verrou (patron overpass.js). Un seul verrou (chaîne de
@@ -436,8 +445,10 @@ function extractLegalLinks(html, baseUrl) {
 
 // Nature d'une page candidate : 'contact' ou 'mentions'. Décidée sur le CHEMIN
 // (le libellé du lien n'est plus disponible ici) : « contact », « nous-contacter »,
-// « contactez-nous » → contact ; tout le reste → mentions. normText réduit à
-// [a-z0-9 ], donc la recherche de « contact » capte les trois formes.
+// « contactez-nous » → contact ; tout le reste, page « à propos » comprise →
+// mentions. normText réduit à [a-z0-9 ], donc la recherche de « contact » capte
+// les trois formes. Deux natures suffisent : une troisième prendrait une place de
+// plus dans un budget qui n'augmente pas.
 function naturePage(url) {
   let chemin = ''
   try {
@@ -456,17 +467,20 @@ function naturePage(url) {
 // sur la page de contact — écarter l'une des deux natures, c'est rater la moitié
 // des sites.
 //
-// Maintenant : une place est RÉSERVÉE par nature — au moins une page de mentions
-// légales et au moins une page de contact —, le reste au premier arrivé dans
-// l'ordre d'origine. La réserve décide QUI est retenu, jamais dans quel ordre :
-// le parcours reste celui d'origine (liens du site d'abord, chemins devinés ensuite).
-// Exportée (pure, sans effet de bord) pour vérification hors-base.
+// Maintenant : une place est RÉSERVÉE par nature — au moins une page de contact et
+// au moins une page de mentions légales —, le reste au premier arrivé dans l'ordre
+// d'origine. La réserve décide QUI est retenu, jamais dans quel ordre : le parcours
+// reste celui d'origine (liens du site d'abord, chemins devinés ensuite).
+//
+// Le contact est servi AVANT les mentions légales : à budget saturé, c'est lui qui
+// rend le plus de courriels. Exportée (pure, sans effet de bord) pour vérification
+// hors-base.
 export function repartirPages(candidats, budget) {
   const liste = Array.isArray(candidats) ? candidats : []
   if (budget <= 0) return []
   if (liste.length <= budget) return [...liste]
   const retenus = new Set()
-  for (const nature of ['mentions', 'contact']) {
+  for (const nature of ['contact', 'mentions']) {
     if (retenus.size >= budget) break
     const premier = liste.find(u => !retenus.has(u) && naturePage(u) === nature)
     if (premier) retenus.add(premier)
@@ -722,7 +736,8 @@ export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
   const base = home.finalUrl || urlLue
   const homeHtml = decodeEntities(home.text)
 
-  // Maillon 2 — pages légales : liens footer d'abord, puis chemins conventionnels.
+  // Maillon 2 — pages à lire au-delà de l'accueil : liens du site d'abord, puis
+  // chemins conventionnels. Contact, à propos et pages légales, plafond inchangé.
   const legalLinks = extractLegalLinks(homeHtml, base)
   const origin = safeOrigin(base)
   const conventional = origin ? CONVENTIONAL_PATHS.map(p => origin + p) : []

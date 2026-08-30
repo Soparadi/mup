@@ -38,9 +38,22 @@ const MAX_BYTES = 1_500_000          // cap taille réponse (évite les pages g�
 const MIN_INTERVAL_MS = 1500         // délai minimal entre deux appels sortants
 const MAX_RETRIES = 1                // un retry avec backoff sur 429/5xx/réseau
 
-// Bornes robots.txt (RFC 9309). Fetch DÉDIÉ, distinct de doFetch : court, plafonné,
-// sans retry — un robots.txt injoignable ne doit pas monopoliser la file.
-const ROBOTS_TIMEOUT_MS = 3000       // timeout court propre au robots.txt
+// Bornes robots.txt (RFC 9309). Fetch DÉDIÉ, distinct de doFetch : même délai que les
+// pages, plafond de taille propre, AUCUNE reprise.
+//
+// Le délai fut plus court (3 s contre 8 s) au nom de la file unique : un hôte lent ne
+// devait pas pénaliser les autres. Cette raison ne tient plus — le moteur travaille en
+// passe de fond, aucun abonné n'attend devant l'écran, et le délai plus court refusait
+// des hôtes qui résolvaient (deux pistes perdues sur neuf à l'essai inversé). Un site
+// qui répond en 5 s mérite d'être lu, pas d'être écarté pour la lenteur de son seul
+// fichier d'exclusion. Le coût est borné : un hôte entièrement mort passe de 3 s + 8 s
+// à 8 s + 8 s dans la file, une fois, le résultat étant ensuite en cache.
+//
+// Ce qui reste PROPRE au robots.txt, et pour d'autres raisons que la file : aucune
+// reprise (reprendre un fichier d'exclusion doublerait le coût d'un hôte mort sans
+// rien apprendre), le plafond de 500 Ko (imposé par la RFC) et l'en-tête Accept
+// text/plain (c'est le type du fichier).
+const ROBOTS_TIMEOUT_MS = FETCH_TIMEOUT_MS   // même délai que les pages, délibérément
 const ROBOTS_MAX_BYTES = 500_000     // 500 Ko, plafond RFC 9309 §2.5
 const ROBOTS_TTL_MS = 24 * 3600 * 1000   // TTL cache par hôte : 24 h
 const ROBOTS_CACHE_MAX = 500         // plafond d'entrées, éviction de la plus ancienne
@@ -174,8 +187,8 @@ function robotsCacheSet(origin, entry) {
   robotsCache.set(origin, entry)
 }
 
-// Fetch robots.txt DÉDIÉ, distinct de doFetch : timeout court, plafond de taille propre,
-// AUCUN retry, même USER_AGENT. Rend { status, text } ; status 0 = réseau/timeout/DNS.
+// Fetch robots.txt DÉDIÉ, distinct de doFetch : même timeout que les pages, plafond de
+// taille propre, AUCUN retry, même USER_AGENT. Rend { status, text } ; status 0 = réseau/timeout/DNS.
 async function fetchRobots(robotsUrl) {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), ROBOTS_TIMEOUT_MS)

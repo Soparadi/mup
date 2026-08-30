@@ -1308,31 +1308,29 @@ body #mup-cookie-panel{z-index:60001}
     <div class="mes-filet" aria-hidden="true"></div>
 
     <div class="mes-corps">
-      <h2 id="mesTitre">Vos visios, prêtes à l'emploi.</h2>
+      <h2 id="mesTitre">Votre visio dans MovUP</h2>
 
       <!-- LA PILE DES QUATRE TEMPS. Ils se remplacent au même endroit : ils y
            sont posés ensemble, tous mesurés, et la carte garde la hauteur du
            temps le plus long quel que soit celui qui paraît. C'est `.actif` qui
            les départage, jamais `display` — d'où l'absence de style en ligne sur
            les trois qui ne paraissent pas d'abord : il gagnerait sur la règle.
-           Chacun se termine par le MÊME dernier rang, un .accueil-retour, qui
-           ramène au choix de l'outil (au premier temps, qui EST ce choix, il
-           ouvre le conseil). Aucun temps n'est un cul-de-sac. -->
+           Les trois derniers se terminent par le MÊME dernier rang, un
+           .accueil-retour, qui ramène au premier ; le premier, devenu une
+           annonce, se termine par sa sortie. Aucun temps n'est un cul-de-sac. -->
       <div class="mes-pile">
 
-        <!-- PREMIER TEMPS — L'OUTIL. Un seul lien suffit à rendre la page
-             opérante et à retirer le panneau : un abonné ne choisit pas son
-             outil, il subit celui de son client, et n'en propose qu'un quand
-             c'est lui qui invite. -->
+        <!-- PREMIER TEMPS — L'ANNONCE. Il ne demande plus rien : la visio est
+             fournie par MovUP, l'abonné n'a pas d'outil à désigner ni de lien à
+             coller. Il annonce la capacité et rend la page. Sa sortie est
+             unique, et c'est la seule que ce temps ait jamais à offrir : sans
+             elle, l'abonné sans lien tiers ne pouvait pas atteindre la page. -->
         <div id="accueilIntro">
-          <p>Collez l'adresse de votre salle de visioconférence : elle sera proposée à chaque rendez-vous, et reste modifiable en un instant. Le reste suit tout seul : la fiche du prospect à côté de l'appel, vos documents à portée, et vos notes rangées sur la fiche.</p>
-          <p>Avec quel outil appelez-vous ?</p>
+          <p>MovUP intègre la visioconférence. Vous programmez un rendez-vous, la salle se crée toute seule, et son lien est prêt à envoyer.</p>
+          <p>Vos appels se tiennent là où sont déjà vos informations : la fiche du prospect à côté de l'image, vos documents à portée, vos notes rangées sur la fiche sans rien recopier.</p>
           <div class="accueil-choix">
-            <button class="accueil-outil" data-accueil-outil="zoom"><span class="ld" style="background:var(--zoom)"></span>Zoom</button>
-            <button class="accueil-outil" data-accueil-outil="teams"><span class="ld" style="background:var(--teams)"></span>Teams</button>
-            <button class="accueil-outil" data-accueil-outil="meet"><span class="ld" style="background:var(--meet)"></span>Meet</button>
+            <button class="mes-btn" id="mesDecouvrir">Découvrir</button>
           </div>
-          <button class="accueil-retour" id="mesAucunOutil">Découvrir les outils</button>
         </div>
 
         <div id="accueilSaisie">
@@ -2058,8 +2056,8 @@ function effacerReport(){ try{ localStorage.removeItem(LS.ACCUEIL_DIFFERE) }catc
 let mesEtapeCourante = 'choix';
 const MES_VISAGES = {
   choix: {
-    bloc:'accueilIntro', titre:"Vos visios, prêtes à l'emploi.",
-    note:"Un seul lien suffit. Les autres s'ajoutent depuis la barre du haut."
+    bloc:'accueilIntro', titre:'Votre visio dans MovUP',
+    note:''
   },
   saisie: {
     bloc:'accueilSaisie', titre:'Bienvenue dans votre espace visio',
@@ -2214,8 +2212,9 @@ function refletMiseEnService(){
   refletPanneauAccueil();
 }
 
-/* Les boutons d'outil du premier temps ET « J'ai mon lien Meet » du conseil :
-   un seul chemin vers la saisie, pour tous. Celui du CONSEIL efface le report au
+/* « J'ai mon lien Meet » du conseil, seul porteur restant de l'attribut : le
+   premier temps ne propose plus d'outil. Le chemin vers la saisie est inchangé,
+   et celui du CONSEIL efface le report au
    passage, exactement comme « Revenir au choix de l'outil » — quitter le conseil
    vers un champ de saisie, c'est revenir se mettre en service, et un report pris
    pour « je n'ai aucun outil » n'a plus rien à retenir. Sans cela, qui passe par
@@ -2231,12 +2230,13 @@ document.querySelectorAll('[data-accueil-outil]').forEach(btn=>{
 });
 $('accueilRetour').addEventListener('click', accueilEtapeChoix);
 
-/* —— LES DEUX SORTIES, QUI NE SONT PAS LE MÊME MÉCANISME ——
-   PREMIER TEMPS : « je n'en utilise aucun » POSE le report, au moment du clic.
-   L'abonné vient de dire qu'il n'a pas d'outil ; la page n'a plus à le retenir,
-   même s'il ferme l'onglet devant le conseil. Rien n'est écrit en base, et
-   revenir au choix de l'outil efface ce report — il n'aura pas été pris. */
-$('mesAucunOutil').addEventListener('click', ()=>{ poserReport(); mesEtape('conseil'); });
+/* —— LA SORTIE DE L'ANNONCE ——
+   « Découvrir » ferme le panneau et rend la page. Il n'ouvre rien, ne demande
+   rien et n'écrit rien en base. Une annonce lue une fois est lue : elle pose le
+   report, le témoin qui gouverne déjà l'apparition du panneau, plutôt qu'un
+   second témoin qui dirait la même chose. Échap y vaut le bouton. */
+function quitterAnnonce(){ poserReport(); fermerPanneau(); refletEtatVide(); }
+$('mesDecouvrir').addEventListener('click', quitterAnnonce);
 $('mesConseilRetour').addEventListener('click', ()=>{ effacerReport(); mesEtape('choix'); });
 $('mesConseilPlusTard').addEventListener('click', ()=>{ fermerPanneau(); refletEtatVide(); });
 
@@ -4507,9 +4507,13 @@ window.addEventListener('beforeunload', ()=>{
 document.addEventListener('keydown', e=>{
   // Le panneau de mise en service tient la page : aucun raccourci global ne
   // traverse le voile. La garde d'origine ne couvre que INPUT/TEXTAREA/SELECT,
-  // si bien que `?`, 1/2/3, C, I et Échap agiraient sur une page inerte. Échap
-  // surtout : le panneau ne se ferme sur aucun geste.
-  if(panneauTientLaPage()) return;
+  // si bien que `?`, 1/2/3, C, I agiraient sur une page inerte.
+  // Échap fait exception au SEUL temps de l'annonce, où il vaut « Découvrir ».
+  // Les autres temps gardent la règle : ils ne se ferment sur aucun geste.
+  if(panneauTientLaPage()){
+    if(e.key === 'Escape' && mesEtapeCourante === 'choix') quitterAnnonce();
+    return;
+  }
 
   // Ignorer si focus dans un input/textarea
   const tag = e.target.tagName;

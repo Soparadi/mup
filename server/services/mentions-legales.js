@@ -726,6 +726,10 @@ function isFresh(ts, days) {
 // UPDATE ciblé (jamais UPSERT) : mentions_legales_checked_at = time::now(). Record
 // absent → 0 ligne, no-op. Datetime calculé en SurrealQL (jamais en $body, cf.
 // b219bf7). Fire-and-forget, ne throw pas.
+//
+// Poser cet horodatage rend la fiche inerte trente jours : il ne se pose donc QUE
+// si une visite a réellement eu lieu. L'appelant décide (cf. le finally de
+// enrichirMentionsLegales) ; cette fonction, elle, ne connaît rien du résultat.
 async function markChecked(siret) {
   try {
     const id = cleanRecordId('referentiel_societes', String(siret || '').replace(/\s+/g, ''))
@@ -760,6 +764,12 @@ export async function enrichirMentionsLegales(siret, options = {}) {
   const sansRechercheWeb = options.sansRechercheWeb === true
   const s = String(siret || '').replace(/\s+/g, '')
   const result = { siret: s, source: null, confidence: null, signals: [], attestee: false, written: false, skipped: null }
+  // Frontière de passage, lue par le finally. analyserSite la porte déjà dans son
+  // type de retour : null = on n'a pas pu visiter (refus du portillon, délai
+  // dépassé, hôte mort) ; objet = le site a répondu, corroboration ou non. On
+  // compte donc les URL TENTÉES et les visites ABOUTIES, jamais les résultats.
+  let urlsTentees = 0
+  let visiteAboutie = false
   try {
     if (!s) { result.skipped = 'siret_vide'; return result }
 
@@ -790,7 +800,9 @@ export async function enrichirMentionsLegales(siret, options = {}) {
     // Maillon 1.a — URL déjà en base.
     if (faisceau.website) {
       const attestee = await estAttestee(faisceau.website)
+      urlsTentees++
       const a = await analyserSite(faisceau.website, faisceau, { attestee })
+      if (a) visiteAboutie = true
       if (a && a.confidence) {
         analyse = a
         sourceUrl = normalizeUrl(faisceau.website)
@@ -814,7 +826,11 @@ export async function enrichirMentionsLegales(siret, options = {}) {
         // une entité OSM du même SIRET, jamais le maillon par lequel l'URL est venue.
         // Une URL devinée ou composée ne la rencontre pas, et reste à deux signaux.
         const attestee = await estAttestee(url)
+        urlsTentees++
         const a = await analyserSite(url, faisceau, { attestee })
+        // Un seul candidat qui répond suffit à établir le passage : on a bien visité
+        // le SIRET, même si aucun des cinq ne corrobore. Le TTL est alors mérité.
+        if (a) visiteAboutie = true
         if (a && a.confidence) {
           analyse = a
           sourceUrl = normalizeUrl(url)
@@ -842,8 +858,16 @@ export async function enrichirMentionsLegales(siret, options = {}) {
   } catch (e) {
     console.warn('[mentions-legales]', String(e?.message || e).slice(0, 100))
   } finally {
+    // Non-passage AVAL, symétrique des trois gardes amont : aucune visite n'a abouti.
+    //   • sans_url    — pas une seule URL à tenter (ni base, ni recherche web).
+    //   • injoignable — des URL tentées, aucune n'a répondu (refus du portillon,
+    //     délai dépassé, hôte mort). Un site joignable qui ne corrobore pas N'EST
+    //     PAS ici : c'est un vrai résultat négatif, il mérite ses 30 jours.
+    if (result.skipped == null && !visiteAboutie) {
+      result.skipped = urlsTentees > 0 ? 'injoignable' : 'sans_url'
+    }
     // Marqué à CHAQUE passage réel (trouvé ou non). Pas de marquage si skip amont
-    // (siret vide / hors référentiel / déjà frais < TTL).
+    // (siret vide / hors référentiel / déjà frais < TTL) ni si skip aval ci-dessus.
     if (result.skipped == null) await markChecked(s)
   }
 

@@ -13,12 +13,25 @@
 
 import { getDb } from '../../lib/surreal.js'
 import { normaliserTel } from '../../lib/import.js'
-import { normaliserSociete, normaliserVoie, comparerNumero, parserAdresseAgregee } from '../../lib/societes.js'
+import { normaliserSociete, normaliserVoie, comparerNumero, parserAdresseAgregee, distKm } from '../../lib/societes.js'
 import { corroborerSiret, normText, DEPT_BBOX } from './overpass.js'
 import { enrichReferentielActionnable } from './referentiel.js'
+// Liste noire d'hôtes (annuaires, plateformes) du moteur de recherche web, appliquée
+// au site du pont NOM. Cet import ferme un CYCLE ESM (recherche-web -> mentions-legales
+// -> rapprochement-osm pour normaliserDomaine) : inoffensif ici, normaliserDomaine est
+// une déclaration de fonction (hissée) et n'est appelée qu'à l'exécution, jamais au
+// chargement du module.
+import { hostBlacklisted } from './recherche-web.js'
 
 // Coercition string sûre (calque referentiel.js / referentiel-read.js).
 const str = v => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v).trim()))
+// Coercition numérique STRICTE : tout ce qui n'est pas un nombre fini devient null.
+// Indispensable avant distKm, dont la garde ne teste que null (cf. lib/societes.js).
+const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+// Rayon du pont NOM, en kilomètres (unité de distKm) : 100 m, la valeur mesurée le
+// 31 août sur 200 fiches (7 appariements, pureté 100 %, aucun faux appariement).
+const RAYON_NOM_KM = 0.1
 
 // URL → domaine normalisé pour le pont « site web ». URL() (schéma posé par
 // défaut si absent) → hostname → www. retiré → minuscules. Repli regex si l'URL
@@ -54,12 +67,13 @@ export async function chargerOsmIndexe(dept, bbox) {
   _idxByDept.set(dept, promise)
   const idx = await promise
   const vide = !(idx.bySiret.size || idx.bySiren.size || idx.byTel.size ||
-                 idx.byEmail.size || idx.byDomaine.size || idx.byNomVille.size)
+                 idx.byEmail.size || idx.byDomaine.size || idx.byNomVille.size ||
+                 idx.byNom.size)
   if (vide) _idxByDept.delete(dept)
   return idx
 }
 
-// Lit referentiel_osm en UNE passe et construit 6 index JS (Map) pour un
+// Lit referentiel_osm en UNE passe et construit 7 index JS (Map) pour un
 // rapprochement O(1) par signal. Valeur de chaque Map = LISTE de lignes OSM
 // partageant la clé (plusieurs objets OSM peuvent porter le même téléphone,
 // domaine, etc.). Clés vides ignorées (jamais d'entrée '').
@@ -69,14 +83,15 @@ export async function chargerOsmIndexe(dept, bbox) {
 //   byEmail   : email lower/trim
 //   byDomaine : normaliserDomaine(website)
 //   byNomVille: `${normaliserSociete(nom)}|${normText(city)}` — pont nom+adresse
+//   byNom     : normaliserSociete(nom) SEUL, pont nom + proximité (100 m)
 // BORNÉ PAR BBOX [latMin, lonMin, latMax, lonMax] : range scan sur lat (index
 // idx_osm_lat), lng filtré en base sur le sous-ensemble — le chargement se limite
 // à la tranche départementale (mémoire) au lieu des ~685 k lignes nationales.
-// LECTURE SEULE, FAIL-SAFE : toute erreur → 6 Map vides, ne throw JAMAIS.
+// LECTURE SEULE, FAIL-SAFE : toute erreur → 7 Map vides, ne throw JAMAIS.
 async function chargerOsmDepuisDb(bbox) {
   const vide = () => ({
     bySiret: new Map(), bySiren: new Map(), byTel: new Map(),
-    byEmail: new Map(), byDomaine: new Map(), byNomVille: new Map()
+    byEmail: new Map(), byDomaine: new Map(), byNomVille: new Map(), byNom: new Map()
   })
   const push = (map, key, row) => {
     if (!key) return
@@ -89,7 +104,10 @@ async function chargerOsmDepuisDb(bbox) {
     const db = await getDb()
     const r = await db.query(
       'SELECT osm_id, nom, siret, siren, phone, email, website, ' +
-      'facebook, instagram, linkedin, city, housenumber, street, postcode ' +
+      // lat/lng : DÉJÀ filtrés par le WHERE bbox, seulement jamais ramenés jusqu'ici.
+      // Les ajouter aux colonnes ne coûte AUCUNE lecture de plus, c'est la même
+      // requête sur la même tranche ; le pont NOM en a besoin pour sa distance.
+      'facebook, instagram, linkedin, city, housenumber, street, postcode, lat, lng ' +
       'FROM referentiel_osm ' +
       'WHERE lat >= $latMin AND lat <= $latMax AND lng >= $lonMin AND lng <= $lonMax',
       { latMin, latMax, lonMin, lonMax }
@@ -112,6 +130,12 @@ async function chargerOsmDepuisDb(bbox) {
       const nomN = normaliserSociete(row.nom)
       const cityN = normText(row.city)
       push(idx.byNomVille, nomN && cityN ? `${nomN}|${cityN}` : '', row)
+      // nom SEUL : clé du pont NOM. Distinct de byNomVille, qui exige en plus la
+      // ville et sert au pont adresse : la règle mesurée ne demande pas la ville,
+      // elle demande la proximité. Borné à la tranche départementale DÉJÀ en
+      // mémoire, donc sans commune mesure avec l'indexation des ~685 k noms
+      // nationaux écartée plus bas (trouverMatch). Clé vide ignorée par push.
+      push(idx.byNom, nomN, row)
     }
     return idx
   } catch (e) {
@@ -249,6 +273,51 @@ function sonderAdresse(soc, idx) {
   return l2 ? { niveau: 'L2', osm: l2 } : null
 }
 
+// Pont NOM : DERNIÈRE tentative, sur les seules fiches que le SIRET, le SIREN,
+// l'adresse L3 et le faisceau ont toutes rejetées. Rend la ligne OSM retenue, ou
+// null. N'écrit rien, ne vote nulle part : il ne peut ni contredire ni affaiblir
+// le pont SIRET, qui a déjà rendu sa réponse quand on arrive ici.
+//
+// LA RÈGLE, mesurée le 31 août sur 200 fiches (7 appariements, pureté 100 %,
+// aucun faux appariement). Toutes les pistes hors nom ont été mesurées et
+// écartées : voie 4,3 % de pureté, numéro 15 %, code postal 1 %, voie+numéro 20 %.
+//   1. Nom normalisé de la fiche : cle_nom persisté, repli normaliserSociete sur
+//      enseigne à défaut raison sociale. Exactement la clé de sonderAdresse, et
+//      exactement celle du banc de mesure.
+//   2. Égalité STRICTE avec la clé byNom. Aucune approximation, aucun score.
+//   3. Distance au plus RAYON_NOM_KM (100 m).
+//   4. COMPTAGE STRICT : un seul candidat survivant à 2 et 3, sinon abstention.
+//      Deux candidats, fussent-ils identiques, valent rejet. L'abstention par
+//      empreinte de contacts de sonderAdresse est plus PERMISSIVE (deux lignes aux
+//      contacts égaux y passent pour une) : elle n'est délibérément pas reprise ici.
+//   5. Le candidat porte un website non vide qui SURVIT à hostBlacklisted. Ce
+//      dernier point ne figurait pas dans la règle mesurée : le banc distinguait
+//      site et siteOk sans que le moteur n'ait jamais appliqué ce filtre. Sans
+//      lui, ce pont écrirait l'adresse d'un annuaire à la place d'un site
+//      d'entreprise, et le crawl mentions légales irait la lire.
+//
+// Coordonnées coercées par num() AVANT distKm : sa garde ne teste que null, un NaN
+// la traverserait et rendrait NaN, or `NaN > seuil` est FAUX, donc le candidat
+// serait ACCEPTÉ au lieu d'être écarté. Une fiche sans coordonnées finies n'a
+// aucun candidat (distKm rend Infinity). PUR (lecture des Map, aucun I/O).
+function sonderNom(soc, idx) {
+  const cle = str(soc.cle_nom) || normaliserSociete(soc.enseigne || soc.raison_sociale)
+  if (!cle) return null
+  const rows = idx.byNom.get(cle)
+  if (!rows || !rows.length) return null
+
+  const lat = num(soc.lat)
+  const lng = num(soc.lng)
+  const proches = rows.filter(o => distKm(lat, lng, num(o.lat), num(o.lng)) <= RAYON_NOM_KM)
+  if (proches.length !== 1) return null   // zéro candidat, ou ambiguïté : abstention
+
+  const osm = proches[0]
+  const site = str(osm.website)
+  if (!site) return null
+  if (hostBlacklisted(normaliserDomaine(site))) return null
+  return osm
+}
+
 // Rapproche toutes les sociétés d'un département avec la réserve OSM et enrichit
 // referentiel_societes en fill-if-empty (jamais d'écrasement). LECTURE SEULE de
 // referentiel_osm. Enrichissement SÉQUENTIEL : on ATTEND chaque écriture avant de
@@ -259,7 +328,7 @@ function sonderAdresse(soc, idx) {
 // + log de synthèse. NON BRANCHÉ au boot : piloté à la main sur un département d'abord.
 export async function rapprocherDepartement(dept) {
   const d = str(dept)
-  const compteurs = { traitees: 0, certain: 0, presume: 0, rejet: 0, champs_ecrits: 0, certain_adresse: 0, presume_adresse: 0 }
+  const compteurs = { traitees: 0, certain: 0, presume: 0, rejet: 0, champs_ecrits: 0, certain_adresse: 0, presume_adresse: 0, site_nom: 0 }
   if (!d) {
     console.warn('[rapprochement-osm] département vide — rien à faire')
     return compteurs
@@ -280,7 +349,10 @@ export async function rapprocherDepartement(dept) {
     const db = await getDb()
     const r = await db.query(
       'SELECT siret, siren, raison_sociale, ville, website, societe_email, societe_tel, ' +
-      'cle_nom, code_postal, enseigne, numero_voie, type_voie, libelle_voie, adresse ' +
+      // lat/lng : au schéma depuis toujours (option<number>, alimentés par Etalab),
+      // simplement jamais demandés ici. Même requête, même passe, aucune lecture
+      // supplémentaire ; le pont NOM en a besoin pour sa distance.
+      'cle_nom, code_postal, enseigne, numero_voie, type_voie, libelle_voie, adresse, lat, lng ' +
       'FROM referentiel_societes WHERE departement = $d',
       { d }
     )
@@ -306,7 +378,22 @@ export async function rapprocherDepartement(dept) {
       const graine = adr && adr.niveau === 'L2' ? adr.osm : null
       if (graine) compteurs.presume_adresse++
       const match = trouverMatch(soc, idx, graine)
-      if (!match) { compteurs.rejet++; continue }
+      if (!match) {
+        // DERNIÈRE tentative, et seulement ici : le SIRET, l'adresse L3 et le
+        // faisceau ont tous rejeté cette fiche. Le pont NOM pose UNE piste, le
+        // site SEUL, que le crawl mentions légales ira vérifier. Il ne recopie
+        // aucun contact : mapperOsmVersContrat n'est PAS appelée, et le pont
+        // SIRET, qui s'en sert plus haut, reste inchangé.
+        const osmNom = sonderNom(soc, idx)
+        if (!osmNom) { compteurs.rejet++; continue }
+        compteurs.site_nom++
+        compteurs.champs_ecrits++   // un seul champ, website, non vide par construction
+        await enrichReferentielActionnable(
+          str(soc.siret).replace(/\s+/g, ''),
+          { website: str(osmNom.website) }
+        )
+        continue
+      }
       if (match.certitude === 'certain') compteurs.certain++
       else compteurs.presume++
       const champs = mapperOsmVersContrat(match.osm)
@@ -326,7 +413,8 @@ export async function rapprocherDepartement(dept) {
     `[rapprochement-osm] dept ${d} — ${compteurs.traitees} sociétés · ` +
     `${compteurs.certain} certain · ${compteurs.presume} présumé · ` +
     `${compteurs.rejet} rejet · ${compteurs.champs_ecrits} champs dispatchés · ` +
-    `${compteurs.certain_adresse} certain(adr) · ${compteurs.presume_adresse} présumé(adr)`
+    `${compteurs.certain_adresse} certain(adr) · ${compteurs.presume_adresse} présumé(adr) · ` +
+    `${compteurs.site_nom} site(nom)`
   )
   return compteurs
 }

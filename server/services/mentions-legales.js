@@ -75,7 +75,12 @@ const ROBOTS_CRAWL_DELAY_MAX_MS = 5000
 
 // Bornes crawl.
 const MAX_LEGAL_PAGES = 4            // pages légales fetchées par site (au-delà du home)
-const MAX_CANDIDATS = 5             // candidats web vérifiés par SIRET (maillon 1.b)
+// Candidats web vérifiés par SIRET (maillon 1.b). Dix, et non cinq : la mesure du
+// 31 août a trouvé le site propre au rang 6 de la liste retenue sur une fiche où
+// cinq ne rendaient rien. Chaque candidat coûte de la file, mais aucun n'est
+// visité sans raison : la boucle s'arrête au PREMIER qui recoupe, et la liste est
+// déjà purgée des annuaires par BLACKLIST_HOSTS avant d'arriver ici.
+const MAX_CANDIDATS = 10
 
 // Idempotence : TTL 30 j (aligné referentiel-read REFERENTIEL_TTL_DAYS).
 const TTL_DAYS = 30
@@ -455,6 +460,25 @@ function safeHost(url) {
 
 function safeOrigin(url) {
   try { return new URL(url).origin } catch { return '' }
+}
+
+// Clé de déduplication d'une page à lire : origine + chemin, sans chaîne de requête
+// ni fragment, slash final ignoré. Quatre variantes d'une même page de contact
+// (?utm=, #ancre, slash final) sont UNE page, et n'ont à consommer qu'un créneau
+// du budget.
+//
+// Elle sert à ÉCARTER un doublon, JAMAIS à remplacer l'URL retenue : celle-ci reste
+// l'URL entière de la première occurrence, query comprise, parce que naturePage lit
+// la query (pathname + search) pour classer contact / mentions. Réduire l'URL à sa
+// clé déclasserait en mentions une page servie par ?page=contact.
+//
+// URL illisible : rendue telle quelle. Deux illisibles identiques se dédupliquent,
+// une illisible n'écarte jamais une URL valide.
+function clePage(url) {
+  try {
+    const u = new URL(url)
+    return u.origin + u.pathname.replace(/\/+$/, '')
+  } catch { return String(url || '') }
 }
 
 // Absolutise un href relatif contre baseUrl. Restreint AU MÊME HÔTE (évite de
@@ -1007,8 +1031,19 @@ export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
   const legalLinks = extractLegalLinks(homeHtml, base)
   const origin = safeOrigin(base)
   const conventional = origin ? CONVENTIONAL_PATHS.map(p => origin + p) : []
-  const candidats = [...new Set([...legalLinks, ...conventional])]
-    .filter(u => normalizeUrl(u) !== normalizeUrl(base))
+  // Déduplication sur origine + chemin (clePage), et non sur l'URL entière : la
+  // chaîne de requête et le fragment ne distinguent pas deux pages à lire. L'accueil
+  // est écarté par la MÊME clé, sinon https://site.fr/?utm=x survit face à
+  // https://site.fr/ et prend un créneau pour une page déjà lue. Ordre d'origine
+  // préservé (liens du site, puis chemins devinés) : repartirPages en dépend.
+  const vus = new Set([clePage(base)])
+  const candidats = []
+  for (const u of [...legalLinks, ...conventional]) {
+    const c = clePage(u)
+    if (vus.has(c)) continue
+    vus.add(c)
+    candidats.push(u)
+  }
   // Budget inchangé, répartition garantie : au moins une page de chaque nature.
   const pages = repartirPages(candidats, MAX_LEGAL_PAGES)
 

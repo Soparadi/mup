@@ -61,7 +61,18 @@ export const BLACKLIST_HOSTS = [
   'espaces-atypiques.com', 'blot-immobilier.fr', 'lamotte.fr',
   // divers — grande distribution, énergie, franchises
   'carrefour.fr', 'totalenergies.com', 'brunoflaujac.com', 'renoval-veranda.com',
-  'diloys.fr', 'laprocure.com', 'methode-busquet.com'
+  'diloys.fr', 'laprocure.com', 'methode-busquet.com',
+  // annuaires et places de marché relevés par la mesure du 31 août sur dix fiches.
+  // infogreffe.fr n'est pas repris ici : il figure déjà plus haut.
+  //
+  // Les deux premiers sont des SOUS-DOMAINES, et c'est voulu, la convention de la
+  // liste étant partout ailleurs le domaine enregistrable : lefigaro.fr et
+  // data.gouv.fr doivent rester crawlables, seules leurs sections annuaire sont
+  // écartées. hostBlacklisted les prend par égalité stricte et couvre leurs propres
+  // sous-domaines, sans jamais toucher au domaine parent.
+  'entreprises.lefigaro.fr', 'annuaire-entreprises.data.gouv.fr',
+  'contract-factory.com', 'annuaire-france-gratuit.fr', 'leguichetdesformalites.fr',
+  'agences-comm.fr', 'societeinfo.com', 'le-site-de.com', 'french-business-law.com'
 ]
 
 // ---------------------------------------------------------------------------

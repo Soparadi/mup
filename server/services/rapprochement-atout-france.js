@@ -13,8 +13,11 @@
 // par enrichReferentielActionnable et par elle seule (garde d'opposition,
 // remplissage-si-vide, no-throw : tout est déjà là, rien n'est réécrit ici).
 //
-// NON BRANCHÉ : ni /api/amorce, ni cron, ni route. Piloté à la main, département
-// par département, et en mode À BLANC d'abord.
+// BRANCHÉ dans /api/amorce (server.js), deuxième maillon de la chaîne différée :
+// derrière le rapprochement OSM, devant le crawl mentions légales. L'appel y est
+// GARDÉ SUR LE NAF CHERCHÉ, la table ne portant que de l'hébergement classé (voir
+// NAFS_HEBERGEMENT ci-dessous). Ni cron, ni route propre. Reste pilotable à la
+// main, département par département, et le mode À BLANC reste le défaut.
 //
 // ---------------------------------------------------------------------------
 // LES TROIS TIERS ÉCRIVABLES — ce que la mesure à blanc sur les 134 fiches
@@ -91,7 +94,10 @@ const str = v => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v)
 
 // Les trois NAF d'hébergement, au format NN.NNL de referentiel_societes — ceux-là
 // mêmes que nafDepuisTypologie (atout-france.js) déduit des typologies du fichier.
-const NAFS_HEBERGEMENT = ['55.10Z', '55.20Z', '55.30Z']
+// EXPORTÉ : la garde NAF de /api/amorce s'appuie sur CETTE liste, jamais sur une
+// copie. Deux listes divergentes laisseraient passer un NAF que le module ne
+// sélectionne pas, ou en écarteraient un qu'il traite.
+export const NAFS_HEBERGEMENT = ['55.10Z', '55.20Z', '55.30Z']
 
 // ---------------------------------------------------------------------------
 // DOMAINES MUTUALISÉS — table calculée sur l'ENSEMBLE NATIONAL, une fois par

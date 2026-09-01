@@ -5076,9 +5076,12 @@ app.post('/api/amorce', async (req, res) => {
   //      websites sur les seules fiches des trois NAF d'hébergement. GARDÉ sur le
   //      NAF cherché (voir la garde au maillon lui-même) : ce maillon ne tourne
   //      pas sur les recherches des autres secteurs.
-  //   3. reprendreFileMentionsLegales(dept, N) : la file du département, par lots de
-  //      N (env CRAWL_ML_BATCH, défaut 50). Chaque lot sélectionne les SIRET du dept
-  //      ayant gagné un website mais sans contact complet (2e source lit ces websites
+  //   3. reprendreFileMentionsLegales(dept, N, naf) : la file du département POUR LE
+  //      SEUL NAF CHERCHÉ, par lots de N (env CRAWL_ML_BATCH, défaut 50). Chaque lot
+  //      sélectionne les SIRET du couple dept + NAF (garde du sélecteur, même
+  //      doctrine que celle d'Atout France ci-dessous : sans code cherché, on ne
+  //      crawle rien) ayant gagné un website mais sans contact complet (2e source lit
+  //      ces websites
   //      fraîchement écrits), puis crawle les mentions légales et extrait tél/email en
   //      fill-if-empty. Les lots s'enchaînent jusqu'à épuisement ou jusqu'à une borne,
   //      et le module tient lui-même sa garde de non-réentrance : un second /api/amorce
@@ -5134,7 +5137,7 @@ app.post('/api/amorce', async (req, res) => {
         console.log(`[amorce] dept ${dept} : rapprochement OK`)
         // La reprise journalise elle-même son propre bilan (lots, tentées, horodatées,
         // sautées, motif d'arrêt) : rien à compter ici. Elle ne throw pas.
-        await reprendreFileMentionsLegales(dept, parseInt(process.env.CRAWL_ML_BATCH || '50', 10))
+        await reprendreFileMentionsLegales(dept, parseInt(process.env.CRAWL_ML_BATCH || '50', 10), naf)
       })
       .catch(e => console.warn('[amorce]', String(e?.message || e).slice(0, 80)))
   }, 30000)

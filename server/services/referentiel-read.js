@@ -413,27 +413,38 @@ export async function getReferentielFaisceauBySiret(siret) {
   }
 }
 
-// ── F. selectSiretsACrawler(dept, limit) — async, fail-safe ──
-// Sélectionne les SIRET d'un département À CRAWLER par le moteur mentions légales
-// (2e source) : fiches qui ONT un website (écrit par le rapprochement OSM) mais
-// PAS encore de contact société (tél OU email manquant), et dont l'idempotence
-// mentions_legales_checked_at est absente ou périmée (> 30 j). Colonne `departement`
-// (jamais `dept`). Params bindés. Rend un tableau de SIRET (strings) ou [] (aucun
-// candidat / tout échec — fail-safe, ne casse jamais l'enchaînement /api/amorce).
-export async function selectSiretsACrawler(dept, limit) {
+// ── F. selectSiretsACrawler(dept, limit, naf), async, fail-safe ──
+// Sélectionne les SIRET d'un département ET D'UN CODE NAF À CRAWLER par le moteur
+// mentions légales (2e source) : fiches qui ONT un website (écrit par le
+// rapprochement OSM) mais PAS encore de contact société (tél OU email manquant), et
+// dont l'idempotence mentions_legales_checked_at est absente ou périmée (> 30 j).
+// Colonne `departement` (jamais `dept`). Params bindés. Rend un tableau de SIRET
+// (strings) ou [] (aucun candidat / tout échec, fail-safe, ne casse jamais
+// l'enchaînement /api/amorce).
+//
+// LE NAF EST NORMALISÉ, ET CE N'EST PAS FACULTATIF : la page envoie le code SANS
+// POINT (`7311Z`, les option value de prospection.html), referentiel_societes le
+// stocke POINTÉ (`73.11Z`). Comparés tels quels, l'égalité ne matcherait jamais et
+// le crawl s'éteindrait en silence. Le couple (departement, naf) est servi par
+// idx_ref_dept_naf (referentiel.js).
+export async function selectSiretsACrawler(dept, limit, naf) {
   try {
     const d = str(dept)
     if (!d) return []
+    // NAF absent : on rend vide, jamais une requête tous azimuts. Même doctrine que
+    // buildWhere, isGisementComplete et la garde Atout France de /api/amorce.
+    const codeNaf = normalizeNaf(naf)
+    if (!codeNaf) return []
     const n = Math.max(1, Math.floor(Number(limit) || 50))
     const sql =
       'SELECT siret FROM referentiel_societes ' +
-      'WHERE departement = $dept ' +
+      'WHERE departement = $dept AND naf = $naf ' +
       "AND website != NONE AND website != '' " +
       "AND (societe_tel = NONE OR societe_tel = '' OR societe_email = NONE OR societe_email = '') " +
       'AND (mentions_legales_checked_at = NONE OR mentions_legales_checked_at < time::now() - 30d) ' +
       `LIMIT ${n}`
     const db = await getDb()
-    const r = await db.query(sql, { dept: d })
+    const r = await db.query(sql, { dept: d, naf: codeNaf })
     const rows = r[0] || []
     return rows.map(row => str(row?.siret)).filter(Boolean)
   } catch (e) {

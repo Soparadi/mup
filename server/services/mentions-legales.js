@@ -1563,7 +1563,7 @@ export async function runMentionsLegalesJob(sirets) {
 }
 
 // ---------------------------------------------------------------------------
-// reprendreFileMentionsLegales(dept, lotMax) : enchaîne des lots jusqu'à
+// reprendreFileMentionsLegales(dept, lotMax, naf) : enchaîne des lots jusqu'à
 // épuisement de la file du département, ou jusqu'à une borne.
 //
 // LE DÉFAUT QUE CETTE FONCTION FERME. runMentionsLegalesJob traite le lot qu'on lui
@@ -1619,7 +1619,7 @@ const REPRISE_DUREE_MAX_MS = 20 * 60 * 1000
 // jamais être refusée au motif qu'une passe de fond tourne en fond.
 let repriseEnCours = false
 
-export async function reprendreFileMentionsLegales(dept, lotMax) {
+export async function reprendreFileMentionsLegales(dept, lotMax, naf) {
   const d = String(dept || '').trim()
   if (!d) return
   if (repriseEnCours) {
@@ -1639,7 +1639,7 @@ export async function reprendreFileMentionsLegales(dept, lotMax) {
       if (lots >= REPRISE_LOTS_MAX) { motif = 'borne_lots'; break }
       if (Date.now() - debut >= REPRISE_DUREE_MAX_MS) { motif = 'borne_duree'; break }
 
-      const candidats = await selectSiretsACrawler(d, N + dejaVus.size)
+      const candidats = await selectSiretsACrawler(d, N + dejaVus.size, naf)
       const inedits = candidats.filter(s => !dejaVus.has(s)).slice(0, N)
       if (inedits.length === 0) { motif = 'epuisement'; break }
 

@@ -51,7 +51,7 @@ import { runReferentielRgeMigration } from './server/services/referentiel-rge.js
 import { chargerRge } from './server/services/rge.js'
 import { runVisitesMigration, creerMesureAudience, visiteursALInstant, etatVivant, jourParis, decalerJour } from './server/services/visites.js'
 import { BYPASS_EMAIL, isOwner } from './lib/vip.js'
-import { getReferentielContactBySiret, getOsmContactBySiret, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh, normalizeNaf } from './server/services/referentiel-read.js'
+import { getReferentielContactBySiret, getOsmContactBySiret, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh, countGisementPagine, normalizeNaf } from './server/services/referentiel-read.js'
 import { projeterReferentiel, retirerProjection } from './server/services/projection-referentiel.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { creerSalle } from './server/services/whereby.js'
@@ -4788,7 +4788,12 @@ app.get('/api/search', async (req, res) => {
     if (cDept && !cDept.includes(',') && String(cNaf).trim()) {
       const gisement = await isGisementComplete(cNaf, cDept)
       if (gisement) {
-        const total = await countReferentielFresh({ departement: cDept, naf: cNaf, commune: cCommune, codePostal: cCp })
+        // Total du gisement : etabli a la premiere page du deroulement et repris
+        // tel quel aux suivantes (countGisementPagine, referentiel-read.js). Le
+        // gisement est invariant le temps d'une recherche ; le recompter a chaque
+        // page balayait les milliers de lignes du gisement pour rendre le meme
+        // nombre. Meme valeur rendue, meme role de porte HIT/MISS (total > 0).
+        const total = await countGisementPagine({ departement: cDept, naf: cNaf, commune: cCommune, codePostal: cCp, page: cPage })
         if (total > 0) {
           const lecture = await readReferentiel({ departement: cDept, naf: cNaf, commune: cCommune, codePostal: cCp, page: cPage, perPage: cPerPage })
           const pageNum = Number(cPage) || 1

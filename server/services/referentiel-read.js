@@ -230,6 +230,64 @@ export async function countReferentielFresh({ departement, naf, commune, codePos
   }
 }
 
+// ── C-bis. countGisementPagine(...) ── async, fail-safe ──
+// Le MEME total que countReferentielFresh, mais calcule UNE FOIS PAR RECHERCHE
+// au lieu d'une fois par page. Le gisement est invariant le temps d'un
+// deroulement : recompter 2 387 lignes a chaque page pour rendre le meme nombre
+// est le poste de depense principal de la lecture en cache.
+//
+// LE SIGNAL, ET POURQUOI IL EST FIABLE. Ce qui arrive au serveur porte deja de
+// quoi separer la premiere page des suivantes : le parametre `page` de
+// /api/search. Le front l'envoie sur CHAQUE appel (prospection.html, fetchLeads,
+// '&page=' + page). Il vaut 1 au lancement (startSearch appelle loadPage(1)) et
+// REPART A 1 quand le walker multi-CP enchaine sur la tranche suivante
+// (S.upstreamPage remis a 0, loadMore). C'est donc la premiere page DE CE
+// GISEMENT-LA, pas la premiere page de la session : exactement la borne
+// cherchee, et elle vaut aussi pour le walker, dont chaque tranche a son propre
+// total (code postal different, donc filtre different).
+//
+// LA CLE DU MEMO, C'EST LE FILTRE LUI-MEME, PAS LA RECHERCHE. search_id
+// identifie le deroulement, mais un meme search_id change de code postal en
+// cours de route (walker multi-CP) : memoriser sous search_id rendrait le total
+// de la tranche precedente. On memorise donc sous la clause WHERE et ses
+// parametres bindes, c'est-a-dire sous le gisement effectivement interroge. Deux
+// abonnees sur le meme gisement partagent le meme compte, ce qui est exact
+// puisque le compte ne depend pas d'elles.
+//
+// LE TOTAL RESTE EXACT. Page 1 compte toujours, et rafraichit le memo. Page > 1
+// ne se sert du memo que s'il est present et non perime ; sinon elle recompte,
+// exactement comme avant. Un redemarrage, une entree expiree ou une page profonde
+// demandee a froid retombent donc sur le comportement d'origine, jamais sur un
+// total approche. La fenetre de 10 minutes borne la derive theorique : le chemin
+// cache n'ecrit rien, et le gisement est marque complet et frais, donc rien ne
+// modifie le compte pendant un deroulement, qui dure des secondes.
+const COMPTE_TTL_MS = 10 * 60 * 1000
+// Bornes memoire du memo : entrees minuscules (une chaine, un nombre), purge des
+// expirees a l'ecriture, et plafond dur en jetant les plus anciennes inserees
+// (Map conserve l'ordre d'insertion). Aucune croissance non bornee possible.
+const COMPTE_MAX = 500
+const comptesGisement = new Map()
+
+export async function countGisementPagine({ departement, naf, commune, codePostal, page } = {}) {
+  const { clause, params } = buildWhere({ departement, naf, commune, codePostal })
+  if (!clause) return 0
+  const cle = clause + '|' + JSON.stringify(params)
+  const maintenant = Date.now()
+
+  // Page > 1 : le total a deja ete etabli au debut de ce deroulement.
+  if ((Math.floor(Number(page)) || 1) > 1) {
+    const garde = comptesGisement.get(cle)
+    if (garde && garde.expire > maintenant) return garde.total
+  }
+
+  const total = await countReferentielFresh({ departement, naf, commune, codePostal })
+  for (const [k, v] of comptesGisement) if (v.expire <= maintenant) comptesGisement.delete(k)
+  comptesGisement.delete(cle)
+  comptesGisement.set(cle, { total, expire: maintenant + COMPTE_TTL_MS })
+  while (comptesGisement.size > COMPTE_MAX) comptesGisement.delete(comptesGisement.keys().next().value)
+  return total
+}
+
 // ── D. getReferentielContactBySiret(siret) — async, fail-safe ──
 // Lecture unitaire des champs contact société (website / societe_email /
 // societe_tel) pour un SIRET donné, tels qu'alimentés par l'amorçage Overpass.

@@ -8,6 +8,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { readFile } from 'fs/promises'
 import { createHash } from 'crypto'
+import v8 from 'v8'
 import nodemailer from 'nodemailer'
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
@@ -431,6 +432,10 @@ app.get('/api/health', async (req, res) => {
     heap_used_mo: Math.round(mem.heapUsed / 1048576),
     heap_total_mo: Math.round(mem.heapTotal / 1048576),
     rss_mo: Math.round(mem.rss / 1048576),
+    // Plafond du tas tel que V8 le rapporte, posé par --max-old-space-size dans le
+    // script de démarrage. Sans lui, les trois champs au-dessus ne se situent par
+    // rapport à rien : un tas de 167 Mo ne dit pas s'il est à l'aise ou à la limite.
+    heap_limite_mo: Math.round(v8.getHeapStatistics().heap_size_limit / 1048576),
     surreal: 'unknown'
   }
   try {

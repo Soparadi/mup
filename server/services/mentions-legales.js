@@ -1088,6 +1088,13 @@ function voieCitee(f, ex) {
 
 // adresse concorde si (ville ET code postal présents) OU (voie de la fiche citée).
 // Exportée (pure, sans I/O ni base) pour vérification hors-base, comme repartirPages.
+//
+// CE N'EST PLUS LA REGLE DU RECOUPEMENT. recouper ne l'appelle plus : il exige la
+// voie citee (cf. son commentaire). Cette fonction demeure telle quelle parce que
+// les scripts de diagnostic s'en servent comme etat de reference, l'un d'eux
+// appelant chacune de ses deux branches pour les opposer. Elle repond donc a la
+// question « l'adresse figure-t-elle sur la page », qui est plus large que celle
+// que le recoupement se pose.
 export function adresseConcorde(f, ex) {
   const villeN = normText(f.ville)
   const villeOk = villeN.length >= 3 && ex.corpusNorm.includes(villeN)
@@ -1105,8 +1112,29 @@ function recouper(faisceau, ex, attestee) {
   const sig = {
     siret: siretTrouve,
     raison_sociale: presentNorm(ex.corpusNorm, faisceau.raison_sociale, 4),
-    adresse: adresseConcorde(faisceau, ex),
-    dirigeant_nom: presentNorm(ex.corpusNorm, faisceau.dirigeant_nom, 3)
+    // DURCISSEMENT AU POINT D'USAGE, et non dans adresseConcorde. Ce que le
+    // recoupement accepte de compter comme signal d'adresse, c'est la VOIE CITEE,
+    // jamais la conjonction ville plus code postal : sur la page d'enseigne qui
+    // liste neuf cents salons, « BORDEAUX 33200 » ne dit rien de CET
+    // etablissement, il dit que l'enseigne couvre la ville.
+    //
+    // adresseConcorde garde ses DEUX branches et n'est pas touchee. Elle est
+    // exportee, neuf scripts de diagnostic l'importent, et deux d'entre eux
+    // appellent chaque branche separement pour les comparer : durcir la fonction
+    // leur retirerait leur terme de comparaison. Ce qui se resserre ici est la
+    // regle du recoupement, pas ce que la fonction sait dire.
+    //
+    // Corollaire, et c'est pourquoi la paire adresse plus dirigeant_nom reste
+    // suffisante : une fois l'adresse reduite a la voie citee, cette paire n'est
+    // plus un signal faible. Un etablissement nomme a une rue citee avec son
+    // numero, dirigeant nomme sur la meme page, c'est le meilleur faisceau que ce
+    // module produise hors SIRET.
+    adresse: voieCitee(faisceau, ex),
+    // Plancher du patronyme a 5 caracteres. Celui de la raison sociale reste a 4 :
+    // ce sont deux aiguilles de nature differente, un nom de famille court happe
+    // des pages entieres sans rien prouver, et le dirigeant n'est ici qu'un
+    // VALIDATEUR de concordance, jamais une donnee ecrite.
+    dirigeant_nom: presentNorm(ex.corpusNorm, faisceau.dirigeant_nom, 5)
   }
 
   let confidence = null

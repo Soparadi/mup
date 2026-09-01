@@ -52,6 +52,56 @@ export function normaliserDomaine(url) {
   }
 }
 
+// Délai de garde des DEUX lectures non bornées du rapprochement : le chargement
+// OSM par bbox et la lecture des sociétés du département. Sans lui, une requête qui
+// ne se règle JAMAIS, mode de défaillance constaté en juillet, laisse vivante à vie
+// la promesse mémorisée dans _idxByDept : toute amorce ultérieure sur ce département
+// attend une promesse morte jusqu'au redémarrage, et la chaîne en aval est perdue en
+// silence. Le watchdog ne voit rien, la socket restant vivante, et la réponse HTTP
+// est déjà partie : l'abonné ne sait pas.
+//
+// Défaut GÉNÉREUX, et c'est délibéré : ces lectures prennent aujourd'hui quelques
+// centaines de millisecondes, mais un département dense sur un index imparfait peut
+// légitimement demander plusieurs secondes. Le délai n'est pas là pour presser une
+// requête lente, il est là pour qu'une requête MORTE finisse par rendre la main.
+const DELAI_DEFAUT_MS = 30000
+const DELAI_MS = (() => {
+  const n = parseInt(process.env.RAPPROCHEMENT_TIMEOUT_MS || String(DELAI_DEFAUT_MS), 10)
+  if (!Number.isFinite(n) || n < 1) return DELAI_DEFAUT_MS
+  return n
+})()
+
+// Promise.race avec minuteur, patron déjà posé deux fois dans le dépôt (healthcheck
+// /api/health et lib/watchdog.js), clearTimeout compris : sans lui le minuteur retient
+// la boucle d'événements jusqu'à son terme même quand la requête a répondu tout de
+// suite. Ici le clearTimeout est en .finally, donc sur les DEUX branches gagnantes.
+//
+// Le déclenchement est journalisé ICI, avec le département, la requête concernée et la
+// durée écoulée : sans cette ligne une panne rattrapée resterait invisible, ce qui
+// reproduirait exactement le défaut qu'on corrige.
+//
+// Le .catch posé sur la requête elle-même ne la remplace pas dans la course (il rend
+// une AUTRE promesse) : il n'existe que pour qu'un rejet arrivant APRÈS le délai, la
+// course étant déjà tranchée, ne devienne pas un unhandledRejection.
+// Rejette sur délai : l'appelant retombe sur son fail-safe existant.
+function avecDelai(requeteEnVol, libelle, dept) {
+  const debut = Date.now()
+  requeteEnVol.catch(() => {})
+  let to
+  return Promise.race([
+    requeteEnVol,
+    new Promise((_, rej) => {
+      to = setTimeout(() => {
+        console.warn(
+          `[rapprochement-osm] délai de garde dépassé · dept ${dept || '?'} · ` +
+          `${libelle} · ${Date.now() - debut} ms`
+        )
+        rej(new Error(`timeout ${libelle}`))
+      }, DELAI_MS)
+    })
+  ]).finally(() => clearTimeout(to))
+}
+
 // Cache module-level PAR DÉPARTEMENT : chaque dept ne charge sa bbox qu'UNE fois
 // par process (Map<dept, promise>), la promesse mémorisée est partagée par les
 // appels concurrents. Chargement borné par bbox départementale (mémoire) — plus
@@ -63,14 +113,24 @@ const _idxByDept = new Map()
 export async function chargerOsmIndexe(dept, bbox) {
   const cache = _idxByDept.get(dept)
   if (cache) return cache
-  const promise = chargerOsmDepuisDb(bbox)
+  const promise = chargerOsmDepuisDb(bbox, dept)
   _idxByDept.set(dept, promise)
-  const idx = await promise
-  const vide = !(idx.bySiret.size || idx.bySiren.size || idx.byTel.size ||
-                 idx.byEmail.size || idx.byDomaine.size || idx.byNomVille.size ||
-                 idx.byNom.size)
-  if (vide) _idxByDept.delete(dept)
-  return idx
+  // Purge en FINALLY, pas après l'await. Le délai de garde ci-dessus garantit qu'on
+  // arrive toujours ici, mais la purge doit couvrir les DEUX sorties : l'index vide
+  // (échec transitoire ou tranche pas encore peuplée) et le rejet, qui sinon laisserait
+  // une promesse rejetée mémorisée à vie et resservie à chaque amorce suivante.
+  // videOuRejet part à true : si l'await lève, on tombe dans le finally sans l'avoir
+  // réévalué, et la clé doit partir.
+  let videOuRejet = true
+  try {
+    const idx = await promise
+    videOuRejet = !(idx.bySiret.size || idx.bySiren.size || idx.byTel.size ||
+                    idx.byEmail.size || idx.byDomaine.size || idx.byNomVille.size ||
+                    idx.byNom.size)
+    return idx
+  } finally {
+    if (videOuRejet) _idxByDept.delete(dept)
+  }
 }
 
 // Lit referentiel_osm en UNE passe et construit 7 index JS (Map) pour un
@@ -88,7 +148,7 @@ export async function chargerOsmIndexe(dept, bbox) {
 // idx_osm_lat), lng filtré en base sur le sous-ensemble — le chargement se limite
 // à la tranche départementale (mémoire) au lieu des ~685 k lignes nationales.
 // LECTURE SEULE, FAIL-SAFE : toute erreur → 7 Map vides, ne throw JAMAIS.
-async function chargerOsmDepuisDb(bbox) {
+async function chargerOsmDepuisDb(bbox, dept) {
   const vide = () => ({
     bySiret: new Map(), bySiren: new Map(), byTel: new Map(),
     byEmail: new Map(), byDomaine: new Map(), byNomVille: new Map(), byNom: new Map()
@@ -102,7 +162,7 @@ async function chargerOsmDepuisDb(bbox) {
   try {
     const [latMin, lonMin, latMax, lonMax] = bbox
     const db = await getDb()
-    const r = await db.query(
+    const r = await avecDelai(db.query(
       'SELECT osm_id, nom, siret, siren, phone, email, website, ' +
       // lat/lng : DÉJÀ filtrés par le WHERE bbox, seulement jamais ramenés jusqu'ici.
       // Les ajouter aux colonnes ne coûte AUCUNE lecture de plus, c'est la même
@@ -111,7 +171,7 @@ async function chargerOsmDepuisDb(bbox) {
       'FROM referentiel_osm ' +
       'WHERE lat >= $latMin AND lat <= $latMax AND lng >= $lonMin AND lng <= $lonMax',
       { latMin, latMax, lonMin, lonMax }
-    )
+    ), 'osm bbox', dept)
     const rows = r[0] || []
     const idx = vide()
     for (const row of rows) {
@@ -347,7 +407,7 @@ export async function rapprocherDepartement(dept) {
   let societes = []
   try {
     const db = await getDb()
-    const r = await db.query(
+    const r = await avecDelai(db.query(
       'SELECT siret, siren, raison_sociale, ville, website, societe_email, societe_tel, ' +
       // lat/lng : au schéma depuis toujours (option<number>, alimentés par Etalab),
       // simplement jamais demandés ici. Même requête, même passe, aucune lecture
@@ -355,7 +415,7 @@ export async function rapprocherDepartement(dept) {
       'cle_nom, code_postal, enseigne, numero_voie, type_voie, libelle_voie, adresse, lat, lng ' +
       'FROM referentiel_societes WHERE departement = $d',
       { d }
-    )
+    ), 'sociétés dept', d)
     societes = r[0] || []
   } catch (e) {
     console.warn('[rapprochement-osm]', String(e?.message || e).slice(0, 80))

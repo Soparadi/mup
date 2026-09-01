@@ -25,7 +25,7 @@
 import { getDb } from '../../lib/surreal.js'
 import { cleanRecordId } from '../../lib/db.js'
 import { enrichReferentielActionnable } from './referentiel.js'
-import { getReferentielFaisceauBySiret, getOsmSitesBySiret } from './referentiel-read.js'
+import { getReferentielFaisceauBySiret, getOsmSitesBySiret, selectSiretsACrawler } from './referentiel-read.js'
 import { normaliserDomaine } from './rapprochement-osm.js'
 import { normText, corroborerSiret } from './overpass.js'
 import { normaliserVoie, parserAdresseAgregee, canoniserTexteVoie } from '../../lib/societes.js'
@@ -1523,34 +1523,142 @@ export async function enrichirMentionsLegales(siret, options = {}) {
 // ---------------------------------------------------------------------------
 
 export async function runMentionsLegalesJob(sirets) {
+  // Compteurs déclarés HORS du try, et incrémentés PAR LES OUVRIERS eux-mêmes : ce
+  // qui a été fait avant un catch à mi-lot reste compté. La reprise de file en a
+  // besoin pour séparer les fiches horodatées des fiches restées sautées ; un
+  // appelant qui ignore le retour ne voit aucune différence.
+  const compteurs = { lot: 0, traites: 0, sautes: 0, certains: 0, presumes: 0, ecrits: 0 }
   try {
     const list = Array.isArray(sirets)
       ? sirets.map(x => String(x || '').replace(/\s+/g, '')).filter(Boolean)
       : []
-    if (list.length === 0) return
+    if (list.length === 0) return compteurs
+    compteurs.lot = list.length
 
-    let traites = 0, sautes = 0, certains = 0, presumes = 0, ecrits = 0
     let curseur = 0
     const ouvrier = async () => {
       for (;;) {
         const i = curseur++
         if (i >= list.length) return
         const r = await enrichirMentionsLegales(list[i])
-        if (r?.skipped != null) { sautes++; continue }
-        traites++
-        if (r?.confidence === 'certain') certains++
-        else if (r?.confidence === 'presume') presumes++
-        if (r?.written) ecrits++
+        if (r?.skipped != null) { compteurs.sautes++; continue }
+        compteurs.traites++
+        if (r?.confidence === 'certain') compteurs.certains++
+        else if (r?.confidence === 'presume') compteurs.presumes++
+        if (r?.written) compteurs.ecrits++
       }
     }
     const enVol = Math.min(PARALLELISME, list.length)
     await Promise.all(Array.from({ length: enVol }, () => ouvrier()))
 
     console.log(
-      `[mentions-legales] lot=${list.length} en_vol=${enVol} traités=${traites} ` +
-      `sautés=${sautes} certains=${certains} présumés=${presumes} écrits=${ecrits}`
+      `[mentions-legales] lot=${list.length} en_vol=${enVol} traités=${compteurs.traites} ` +
+      `sautés=${compteurs.sautes} certains=${compteurs.certains} ` +
+      `présumés=${compteurs.presumes} écrits=${compteurs.ecrits}`
     )
   } catch (e) {
     console.error('[mentions-legales]', String(e?.message || e).slice(0, 120))
+  }
+  return compteurs
+}
+
+// ---------------------------------------------------------------------------
+// reprendreFileMentionsLegales(dept, lotMax) : enchaîne des lots jusqu'à
+// épuisement de la file du département, ou jusqu'à une borne.
+//
+// LE DÉFAUT QUE CETTE FONCTION FERME. runMentionsLegalesJob traite le lot qu'on lui
+// donne et s'arrête. Rien ne relançait le lot suivant : ni curseur, ni reprise, ni
+// cron. Mesure du 33 : vivier de 77 fiches, un lot de 50, 31 horodatées, 46 restées
+// en plan indéfiniment, faute de quiconque pour reprendre.
+//
+// POURQUOI UN ENSEMBLE DES DÉJÀ TENTÉS, ET PAS SIMPLEMENT « TANT QU'IL RESTE DES
+// CANDIDATS ». C'est le point qui décide de tout. selectSiretsACrawler ne fait
+// avancer sa fenêtre que par mentions_legales_checked_at, or markChecked n'est posé
+// qu'aux fiches ABOUTIES : une fiche sautée (refus_robots, injoignable,
+// porte_incertaine) n'est pas horodatée, délibérément, et ressort donc à l'identique
+// à la sélection suivante. Ces motifs sont déterministes à l'échelle d'une reprise :
+// un Disallow sera relu tel quel, un hôte mort restera mort, une ressemblance ne se
+// corroborera pas davantage dix minutes plus tard. Une reprise fondée sur le seul
+// épuisement du vivier les re-crawlerait sans fin, à 8 s de délai réseau par URL.
+// L'ensemble en mémoire est ce qui garantit la terminaison : chaque tour ne traite
+// que de l'inédit, et la reprise s'arrête quand la sélection n'en rend plus.
+//
+// DEMANDER N + LA TAILLE DE L'ENSEMBLE, PUIS FILTRER. Sans cela le résidu des fiches
+// déjà tentées remplit à lui seul la fenêtre LIMIT N, le filtre rend une liste vide,
+// et la reprise s'arrêterait à faux en laissant des candidats jamais vus derrière le
+// résidu. La demande grandit d'un tour à l'autre, bornée par REPRISE_LOTS_MAX.
+//
+// RIEN N'EST PERSISTÉ, et c'est délibéré : la granularité de reprise est déjà la
+// fiche, markChecked étant posé fiche par fiche par enrichirMentionsLegales. Un
+// redéploiement Railway perd le travail EN VOL, jamais le travail FAIT, et l'amorce
+// suivante sur le même département reprendra là où celle-ci s'est arrêtée.
+// ---------------------------------------------------------------------------
+
+// Borne 1 : lots enchaînés. Cinq lots de CRAWL_ML_BATCH couvrent 250 fiches, très au
+// large du vivier départemental observé. Ce n'est pas le CPU que cette borne protège,
+// c'est le sémaphore : pendant une reprise, une amorce sur un AUTRE département
+// partage les mêmes CRAWL_PARALLELISME jetons et avance au ralenti.
+const REPRISE_LOTS_MAX = 5
+
+// Borne 2 : durée. Lue AU SEUIL DE CHAQUE TOUR seulement, jamais au milieu d'un lot :
+// le plafond réel est donc cette valeur plus la durée du lot en cours. Elle existe
+// pour le redéploiement Railway, qui coupe le processus sans préavis : plus une
+// reprise est longue, plus elle a de chances d'être tranchée en vol, et le travail
+// en vol au moment de la coupure est le seul qui se perde.
+const REPRISE_DUREE_MAX_MS = 20 * 60 * 1000
+
+// Non-réentrance, sur le patron de runBalayagePositionJob (cron.js) : un drapeau de
+// module, remis à plat dans un finally pour qu'une reprise qui plante ne condamne pas
+// toutes les suivantes. Deux amorces simultanées sur des départements différents
+// lanceraient sinon deux reprises qui se voleraient les fiches : chacune a son propre
+// ensemble de déjà-vus, et la base ne les départage qu'une fois l'horodatage posé,
+// c'est-à-dire trop tard.
+//
+// LA GARDE NE PORTE QUE SUR LA REPRISE. runMentionsLegalesJob reste libre : un lot
+// explicite passé par /api/mentions-legales est une demande nommée, elle ne doit
+// jamais être refusée au motif qu'une passe de fond tourne en fond.
+let repriseEnCours = false
+
+export async function reprendreFileMentionsLegales(dept, lotMax) {
+  const d = String(dept || '').trim()
+  if (!d) return
+  if (repriseEnCours) {
+    console.warn(`[mentions-legales] reprise déjà en cours, dept ${d} ignoré`)
+    return
+  }
+  repriseEnCours = true
+
+  const debut = Date.now()
+  const N = Math.max(1, Math.floor(Number(lotMax) || 50))
+  const dejaVus = new Set()
+  let lots = 0, tentees = 0, horodatees = 0, sautees = 0
+  let motif = 'epuisement'
+
+  try {
+    for (;;) {
+      if (lots >= REPRISE_LOTS_MAX) { motif = 'borne_lots'; break }
+      if (Date.now() - debut >= REPRISE_DUREE_MAX_MS) { motif = 'borne_duree'; break }
+
+      const candidats = await selectSiretsACrawler(d, N + dejaVus.size)
+      const inedits = candidats.filter(s => !dejaVus.has(s)).slice(0, N)
+      if (inedits.length === 0) { motif = 'epuisement'; break }
+
+      for (const s of inedits) dejaVus.add(s)
+      const c = await runMentionsLegalesJob(inedits)
+      lots++
+      tentees += inedits.length
+      horodatees += c?.traites || 0
+      sautees += c?.sautes || 0
+    }
+  } catch (e) {
+    motif = 'erreur'
+    console.error('[mentions-legales]', String(e?.message || e).slice(0, 120))
+  } finally {
+    repriseEnCours = false
+    console.log(
+      `[mentions-legales] reprise dept=${d} lots=${lots} tentées=${tentees} ` +
+      `horodatées=${horodatees} sautées=${sautees} arrêt=${motif} ` +
+      `${Math.round((Date.now() - debut) / 1000)}s`
+    )
   }
 }

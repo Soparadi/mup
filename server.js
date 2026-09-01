@@ -50,13 +50,13 @@ import { runReferentielRgeMigration } from './server/services/referentiel-rge.js
 import { chargerRge } from './server/services/rge.js'
 import { runVisitesMigration, creerMesureAudience, visiteursALInstant, etatVivant, jourParis, decalerJour } from './server/services/visites.js'
 import { BYPASS_EMAIL, isOwner } from './lib/vip.js'
-import { getReferentielContactBySiret, getOsmContactBySiret, selectSiretsACrawler, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh, normalizeNaf } from './server/services/referentiel-read.js'
+import { getReferentielContactBySiret, getOsmContactBySiret, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh, normalizeNaf } from './server/services/referentiel-read.js'
 import { projeterReferentiel, retirerProjection } from './server/services/projection-referentiel.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { creerSalle } from './server/services/whereby.js'
 import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
 import { rapprocherDepartementAtoutFrance, NAFS_HEBERGEMENT } from './server/services/rapprochement-atout-france.js'
-import { runMentionsLegalesJob, enrichirMentionsLegales } from './server/services/mentions-legales.js'
+import { runMentionsLegalesJob, enrichirMentionsLegales, reprendreFileMentionsLegales } from './server/services/mentions-legales.js'
 import { hostBlacklisted } from './server/services/recherche-web.js'
 import { resoudrePositionMeteo } from './server/services/meteo-position.js'
 import { geocode, reverseGeocode } from './server/services/ban.js'
@@ -2194,7 +2194,7 @@ app.post('/api/admin/rge/charger', requireSuperadmin, async (req, res) => {
 // pont adresse (certain_adresse/presume_adresse). Même verrou que /api/admin/comptes
 // et /api/debug/overpass (requireSuperadmin, dev@soparadi.com SEUL, req.authUser posé
 // par le gate global). SYNCHRONE à la requête — contrairement à /api/amorce, PAS de
-// setTimeout et PAS d'enchaînement selectSiretsACrawler/runMentionsLegalesJob : aucun
+// setTimeout et PAS d'enchaînement reprendreFileMentionsLegales : aucun
 // effet de bord crawl. Renvoie l'objet compteurs complet pour comparaison au point de
 // référence. rapprocherDepartement est fill-if-empty (jamais d'écrasement) → relançable
 // sans dégât sur le même dept.
@@ -5076,10 +5076,13 @@ app.post('/api/amorce', async (req, res) => {
   //      websites sur les seules fiches des trois NAF d'hébergement. GARDÉ sur le
   //      NAF cherché (voir la garde au maillon lui-même) : ce maillon ne tourne
   //      pas sur les recherches des autres secteurs.
-  //   3. selectSiretsACrawler(dept, N) : SIRET du dept ayant gagné un website
-  //      mais sans contact complet (2e source lit ces websites fraîchement écrits).
-  //   4. runMentionsLegalesJob(sirets) : crawl mentions légales, extrait tél/email
-  //      en fill-if-empty. Plafond N (env CRAWL_ML_BATCH, défaut 50) borne le crawl.
+  //   3. reprendreFileMentionsLegales(dept, N) : la file du département, par lots de
+  //      N (env CRAWL_ML_BATCH, défaut 50). Chaque lot sélectionne les SIRET du dept
+  //      ayant gagné un website mais sans contact complet (2e source lit ces websites
+  //      fraîchement écrits), puis crawle les mentions légales et extrait tél/email en
+  //      fill-if-empty. Les lots s'enchaînent jusqu'à épuisement ou jusqu'à une borne,
+  //      et le module tient lui-même sa garde de non-réentrance : un second /api/amorce
+  //      pendant une reprise se voit refuser la sienne, pas sa recherche.
   //
   // L'ORDRE DES DEUX RAPPROCHEMENTS N'EST PAS INTERCHANGEABLE, deux fois :
   //   · Atout France AVANT selectSiretsACrawler, parce que cette sélection ne
@@ -5128,10 +5131,10 @@ app.post('/api/amorce', async (req, res) => {
             `A=${af.a} A2=${af.a2} B=${af.b} · ${af.ecrits} écrits · ${af.duree_ms}ms`
           )
         }
-        const N = parseInt(process.env.CRAWL_ML_BATCH || '50', 10)
-        const sirets = await selectSiretsACrawler(dept, N)
-        if (sirets.length) await runMentionsLegalesJob(sirets)
-        console.log(`[amorce] dept ${dept} — rapprochement OK, ${sirets.length} crawlés`)
+        console.log(`[amorce] dept ${dept} : rapprochement OK`)
+        // La reprise journalise elle-même son propre bilan (lots, tentées, horodatées,
+        // sautées, motif d'arrêt) : rien à compter ici. Elle ne throw pas.
+        await reprendreFileMentionsLegales(dept, parseInt(process.env.CRAWL_ML_BATCH || '50', 10))
       })
       .catch(e => console.warn('[amorce]', String(e?.message || e).slice(0, 80)))
   }, 30000)

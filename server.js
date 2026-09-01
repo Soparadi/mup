@@ -5093,8 +5093,11 @@ app.post('/api/amorce', async (req, res) => {
   //      ces websites
   //      fraîchement écrits), puis crawle les mentions légales et extrait tél/email en
   //      fill-if-empty. Les lots s'enchaînent jusqu'à épuisement ou jusqu'à une borne,
-  //      et le module tient lui-même sa garde de non-réentrance : un second /api/amorce
-  //      pendant une reprise se voit refuser la sienne, pas sa recherche.
+  //      et le module tient lui-même sa garde de non-réentrance, PAR COUPLE (NAF pointé,
+  //      département) : deux amorces sur des couples différents reprennent en parallèle,
+  //      leurs viviers étant disjoints ; seule une seconde amorce sur LE MÊME couple se
+  //      voit refuser sa reprise, parce qu'elle referait le travail en cours. Une
+  //      reprise refusée ne refuse jamais la recherche.
   //
   // L'ORDRE DES DEUX RAPPROCHEMENTS N'EST PAS INTERCHANGEABLE, deux fois :
   //   · Atout France AVANT selectSiretsACrawler, parce que cette sélection ne

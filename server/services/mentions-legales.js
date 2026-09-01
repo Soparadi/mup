@@ -25,7 +25,7 @@
 import { getDb } from '../../lib/surreal.js'
 import { cleanRecordId } from '../../lib/db.js'
 import { enrichReferentielActionnable } from './referentiel.js'
-import { getReferentielFaisceauBySiret, getOsmSitesBySiret, selectSiretsACrawler } from './referentiel-read.js'
+import { getReferentielFaisceauBySiret, getOsmSitesBySiret, selectSiretsACrawler, normalizeNaf } from './referentiel-read.js'
 import { normaliserDomaine } from './rapprochement-osm.js'
 import { normText, corroborerSiret } from './overpass.js'
 import { normaliserVoie, parserAdresseAgregee, canoniserTexteVoie } from '../../lib/societes.js'
@@ -140,8 +140,24 @@ const CONVENTIONAL_PATHS = [
 // Hôtes traités de front. Lu comme CRAWL_ML_BATCH l'est déjà (server.js). Valeur non
 // finie, ou inférieure à 1, ramenée au défaut ; plafond dur, pour qu'une faute de
 // frappe dans le tableau de bord ne mette pas trois cents hôtes en vol.
+//
+// LE PLAFOND EST UNE BORNE TECHNIQUE, PAS UN RÉGLAGE. Le réglage courant reste
+// CRAWL_PARALLELISME, défaut 3, INCHANGÉ : relever le plafond ne met pas un appel de
+// plus en vol tant que la variable ne bouge pas. Ce qui change, c'est jusqu'où elle
+// peut aller sans être rabotée en silence.
+//
+// 10 ÉTAIT UNE PRUDENCE, posée quand la mémoire du processus n'était pas mesurée. Elle
+// l'est depuis : runMentionsLegalesJob journalise tas, tas_total, rss et pic à chaque
+// lot, et /api/health les expose. Le relevé donne 164 Mo de RSS pour 8 Go alloués au
+// service, et 81 Mo de tas pour une borne Node de 512 Mo. Deux ordres de grandeur
+// d'écart des deux côtés : ce n'est pas la mémoire qui borne le parallélisme.
+//
+// 30 est donc une borne technique haute, pas une cible. Ce qui régule reste dessous et
+// ne bouge pas : un appel par hôte à la fois, MIN_INTERVAL_MS entre deux, crawl-delay
+// honoré. Le parallélisme ne borne QUE le nombre d'hôtes DIFFÉRENTS servis de front,
+// jamais le rythme vu par un serveur donné.
 const PARALLELISME_DEFAUT = 3
-const PARALLELISME_MAX = 10
+const PARALLELISME_MAX = 30
 const PARALLELISME = (() => {
   const n = parseInt(process.env.CRAWL_PARALLELISME || String(PARALLELISME_DEFAUT), 10)
   if (!Number.isFinite(n) || n < 1) return PARALLELISME_DEFAUT
@@ -1610,42 +1626,101 @@ export async function runMentionsLegalesJob(sirets) {
 // RIEN N'EST PERSISTÉ, et c'est délibéré : la granularité de reprise est déjà la
 // fiche, markChecked étant posé fiche par fiche par enrichirMentionsLegales. Un
 // redéploiement Railway perd le travail EN VOL, jamais le travail FAIT, et l'amorce
-// suivante sur le même département reprendra là où celle-ci s'est arrêtée.
+// suivante sur le même COUPLE reprendra là où celle-ci s'est arrêtée.
 // ---------------------------------------------------------------------------
 
 // Borne 1 : lots enchaînés. Cinq lots de CRAWL_ML_BATCH couvrent 250 fiches, très au
-// large du vivier départemental observé. Ce n'est pas le CPU que cette borne protège,
-// c'est le sémaphore : pendant une reprise, une amorce sur un AUTRE département
-// partage les mêmes CRAWL_PARALLELISME jetons et avance au ralenti.
+// large du vivier d'un couple : 77 fiches mesurées sur le 33, et cette mesure est
+// ANTÉRIEURE à la garde NAF du sélecteur, qui n'en rend plus qu'une fraction. Cette
+// borne ne mord donc quasiment jamais.
+//
+// SA JUSTIFICATION D'ORIGINE EST TOMBÉE AVEC LE DRAPEAU UNIQUE. Elle protégeait le
+// sémaphore : abréger la reprise en cours au bénéfice d'une amorce sur un AUTRE
+// département. Or cette amorce-là n'avait pas le droit de démarrer, le drapeau la
+// refusait ; et maintenant qu'elle démarre, l'abréger ne lui donne rien de plus que les
+// jetons que le sémaphore lui distribue déjà. Ce qui reste à cette borne est d'être une
+// ceinture de terminaison, doublant l'ensemble des déjà-vus, qui la garantit à lui seul.
+// La valeur ne bouge pas parce que son coût est nul, non parce que son motif tient.
 const REPRISE_LOTS_MAX = 5
 
 // Borne 2 : durée. Lue AU SEUIL DE CHAQUE TOUR seulement, jamais au milieu d'un lot :
 // le plafond réel est donc cette valeur plus la durée du lot en cours. Elle existe
 // pour le redéploiement Railway, qui coupe le processus sans préavis : plus une
 // reprise est longue, plus elle a de chances d'être tranchée en vol, et le travail
-// en vol au moment de la coupure est le seul qui se perde.
+// en vol au moment de la coupure est le seul qui se perde. Ce motif ne doit rien à la
+// concurrence et ne change pas.
+//
+// CE QUI CHANGE, C'EST QUAND ELLE MORD. Plusieurs reprises se partagent les mêmes
+// CRAWL_PARALLELISME jetons : chacune avance d'autant moins vite en horloge murale, et
+// les mêmes vingt minutes couvrent d'autant moins de fiches. arrêt=borne_duree cesse
+// d'être le signe d'un vivier anormal pour devenir un motif d'arrêt NORMAL dès que
+// plusieurs couples tournent ensemble.
+//
+// Le résidu n'est pas perdu, et c'est ce qui rend cette borne acceptable : markChecked
+// est posé fiche par fiche par enrichirMentionsLegales, donc l'amorce suivante sur LE
+// MÊME COUPLE reprend là où celle-ci s'est arrêtée, sans recrawler ce qui a abouti. Une
+// reprise coupée par la durée ne coûte que le travail en vol à l'instant de la coupure.
 const REPRISE_DUREE_MAX_MS = 20 * 60 * 1000
 
-// Non-réentrance, sur le patron de runBalayagePositionJob (cron.js) : un drapeau de
-// module, remis à plat dans un finally pour qu'une reprise qui plante ne condamne pas
-// toutes les suivantes. Deux amorces simultanées sur des départements différents
-// lanceraient sinon deux reprises qui se voleraient les fiches : chacune a son propre
-// ensemble de déjà-vus, et la base ne les départage qu'une fois l'horodatage posé,
-// c'est-à-dire trop tard.
+// Non-réentrance PAR COUPLE (code NAF, département), et non plus par processus.
+//
+// LE DÉFAUT QUE CETTE GARDE FERME. C'était un drapeau de module unique, sur le patron
+// de runBalayagePositionJob (cron.js) : la première reprise le prenait, et TOUTE autre
+// sortait par un return nu, quels que soient son département et son code NAF. Une
+// abonnée servie, les suivantes refusées, et rien au journal pour distinguer un refus
+// d'un épuisement. Le drapeau se tenait tant que la reprise était une passe de fond
+// départementale ; il ne se tient plus depuis que le sélecteur est gardé sur le couple.
+//
+// CE QUE LA CLÉ DOIT ÊTRE, ET C'EST LE POINT QUI DÉCIDE DE LA JUSTESSE.
+// `${naf pointé}:${dept}`, le NAF passé par normalizeNaf, exactement comme les clés de
+// markGisementComplete et comme la garde Atout France de /api/amorce. La page envoie le
+// code SANS POINT (`7311Z`, les option value de prospection.html), referentiel_societes
+// le stocke POINTÉ (`73.11Z`), et selectSiretsACrawler normalise pour interroger.
+// Clétée sur la forme brute, la garde rendrait DEUX clés pour UN vivier : deux reprises
+// tourneraient de front sur les mêmes fiches, chacune avec son propre ensemble de
+// déjà-vus, à se voler le travail sans que rien ne le signale. La base ne les
+// départagerait qu'une fois l'horodatage posé, c'est-à-dire trop tard.
+//
+// CE QUE LA GARDE AUTORISE. Deux reprises sur des couples DIFFÉRENTS tournent ensemble.
+// Leurs viviers sont disjoints par construction, une fiche de referentiel_societes ne
+// portant qu'un département et qu'un NAF : les ensembles de déjà-vus, locaux à un
+// appel, restent donc exacts sans rien partager. Deux reprises sur le MÊME couple
+// restent exclusives : la seconde referait à l'identique le travail de la première.
+//
+// AUCUN PLAFOND SUR LE NOMBRE DE REPRISES SIMULTANÉES, délibérément. Le gouverneur du
+// trafic sortant existe déjà, et il est en dessous : quel que soit ce nombre, jamais
+// plus de CRAWL_PARALLELISME appels en vol, jamais plus d'un appel par hôte, jamais
+// moins de MIN_INTERVAL_MS entre deux. La contention sur les jetons ralentit, elle ne
+// perd rien, l'horodatage étant posé fiche par fiche. Et plafonner serait un rejet de
+// plus, c'est-à-dire exactement ce que cette passe supprime.
 //
 // LA GARDE NE PORTE QUE SUR LA REPRISE. runMentionsLegalesJob reste libre : un lot
 // explicite passé par /api/mentions-legales est une demande nommée, elle ne doit
 // jamais être refusée au motif qu'une passe de fond tourne en fond.
-let repriseEnCours = false
+const reprisesEnCours = new Set()
 
 export async function reprendreFileMentionsLegales(dept, lotMax, naf) {
   const d = String(dept || '').trim()
   if (!d) return
-  if (repriseEnCours) {
-    console.warn(`[mentions-legales] reprise déjà en cours, dept ${d} ignoré`)
+
+  // Les deux cas où la sélection ne peut RIEN rendre, écartés AVANT de poser la clé :
+  // réserver un couple pour une reprise sans travail possible ne ferait qu'occuper une
+  // place. Journalisés, parce qu'un silence ici se lirait comme un épuisement.
+  //   · NAF absent : selectSiretsACrawler rend [] sans code, même doctrine que
+  //     buildWhere, isGisementComplete et la garde Atout France. Le verrou
+  //     d'autocomplétion peut être relâché avant la convergence, et sans code cherché
+  //     rien ne désigne un vivier.
+  //   · Département en liste : /api/amorce accepte un dept à virgules, or le sélecteur
+  //     compare par ÉGALITÉ (departement = $dept) et ne matcherait aucune ligne.
+  const nafPointe = normalizeNaf(naf)
+  if (!nafPointe) { console.warn(`[mentions-legales] reprise sans NAF, dept ${d} ignorée`); return }
+  if (d.indexOf(',') !== -1) { console.warn(`[mentions-legales] reprise dept en liste ${d} ignorée`); return }
+
+  const cle = `${nafPointe}:${d}`
+  if (reprisesEnCours.has(cle)) {
+    console.warn(`[mentions-legales] reprise déjà en cours pour ${cle}, ignorée`)
     return
   }
-  repriseEnCours = true
 
   const debut = Date.now()
   const N = Math.max(1, Math.floor(Number(lotMax) || 50))
@@ -1653,6 +1728,10 @@ export async function reprendreFileMentionsLegales(dept, lotMax, naf) {
   let lots = 0, tentees = 0, horodatees = 0, sautees = 0
   let motif = 'epuisement'
 
+  // Posée en DERNIER, juste avant le try qui la rendra : rien ne s'exécute entre la
+  // prise de la clé et le finally qui la retire, donc aucun chemin ne peut la laisser
+  // derrière lui.
+  reprisesEnCours.add(cle)
   try {
     for (;;) {
       if (lots >= REPRISE_LOTS_MAX) { motif = 'borne_lots'; break }
@@ -1673,9 +1752,11 @@ export async function reprendreFileMentionsLegales(dept, lotMax, naf) {
     motif = 'erreur'
     console.error('[mentions-legales]', String(e?.message || e).slice(0, 120))
   } finally {
-    repriseEnCours = false
+    // Dans le finally, comme le drapeau qu'elle remplace : une reprise qui plante rend
+    // sa clé, et ne condamne pas toutes les suivantes sur le même couple.
+    reprisesEnCours.delete(cle)
     console.log(
-      `[mentions-legales] reprise dept=${d} lots=${lots} tentées=${tentees} ` +
+      `[mentions-legales] reprise ${cle} lots=${lots} tentées=${tentees} ` +
       `horodatées=${horodatees} sautées=${sautees} arrêt=${motif} ` +
       `${Math.round((Date.now() - debut) / 1000)}s`
     )

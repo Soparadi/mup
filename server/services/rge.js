@@ -4,7 +4,7 @@
 //
 // CE N'EST PAS UN CRAWL. Des GET sur l'API publique d'un producteur public, qui
 // la documente et en publie les quotas. Comme atout-france.js, il ne passe NI par
-// politeFetchText, NI par le portillon robots.txt, NI par la file mono-verrou :
+// politeFetchText, NI par le portillon robots.txt, NI par les files de politesse :
 // ces trois-là bornent le démarchage de sites tiers qui ne nous ont rien demandé.
 //
 // ── POURQUOI UNE PAGINATION, ET PAS UN FICHIER ──────────────────────────────

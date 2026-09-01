@@ -16,9 +16,11 @@
 // │ complet et opérationnel.                                                  │
 // └─────────────────────────────────────────────────────────────────────────┘
 //
-// Contrainte politesse : quand un backend sera câblé, TOUT appel sortant devra
-// passer par politeFetchText (mentions-legales.js) — le MÊME verrou mono-file que
-// les crawls de sites tiers. Une seule IP, une seule file, jamais de rafale.
+// Contrainte politesse : quand un backend sera câblé, TOUT appel sortant devra passer
+// par politeFetchText (mentions-legales.js), donc par le MÊME dispositif que les crawls
+// de sites tiers. Les files y sont par hôte : les hôtes de SERP auront la leur, séparée
+// de celle des sites visités, espacée comme eux et bornée par le même sémaphore. Une
+// seule IP, jamais de rafale vers un serveur.
 
 import { normText } from './overpass.js'
 import { politeFetchText } from './mentions-legales.js'
@@ -142,9 +144,10 @@ export function filtrerCandidats(urls) {
 //   entrée : query (string)         sortie : Promise<string[]> (URLs organiques)
 // Registre de backends : chaque entrée est un async (query) => string[]. Tous sont
 // aujourd'hui des STUBS (rendent [] via stubNonBranche) ; brancher un moteur =
-// remplacer le stub correspondant par l'appel réel — impérativement à travers
-// politeFetchText (verrou mono-file partagé). SERP_BACKEND absente / inconnue /
-// non implémentée → [] : aucun appel sortant, maillon 1.b inerte mais présent.
+// remplacer le stub correspondant par l'appel réel, impérativement à travers
+// politeFetchText (file de l'hôte et sémaphore partagés). SERP_BACKEND absente,
+// inconnue ou non implémentée → [] : aucun appel sortant, maillon 1.b inerte mais
+// présent.
 // ---------------------------------------------------------------------------
 
 const SERP_BACKENDS = {

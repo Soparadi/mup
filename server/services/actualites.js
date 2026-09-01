@@ -7,9 +7,13 @@
 // est ramassé une fois toutes les quinze minutes par le serveur, rangé en base,
 // et servi depuis chez nous : le navigateur ne sort plus.
 //
-// Sortie réseau : politeFetchText (mentions-legales.js) — MÊME file mono-verrou,
-// MÊME portillon robots.txt, MÊME timeout que tout le reste du sortant. Le flux
-// est servi en text/xml, d'où les deux options (accept, contentTypeRe).
+// Sortie réseau : politeFetchText (mentions-legales.js) : MÊME dispositif de politesse,
+// MÊME portillon robots.txt, MÊME timeout que tout le reste du sortant. Le flux est
+// servi en text/xml, d'où les deux options (accept, contentTypeRe).
+//
+// Les files y étant PAR HÔTE, ce flux ne prend plus rang derrière le crawl : il ne
+// visite qu'un seul hôte, que personne d'autre ne visite, donc sa file lui est propre
+// et vide. Il part dès qu'un jeton du sémaphore se libère, et non plus au bout d'un lot.
 //
 // Analyse SANS dépendance : le flux est du RSS 2.0 plat, on découpe les blocs
 // <item> et on lit cinq champs. Ce n'est pas un analyseur XML — c'est un lecteur

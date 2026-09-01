@@ -5,7 +5,7 @@
 // CE N'EST PAS UN CRAWL. Un seul GET, sur un fichier d'open data publié pour
 // être téléchargé en bloc, chez un producteur public qui l'annonce et le
 // versionne. Il ne passe donc NI par politeFetchText, NI par le portillon
-// robots.txt, NI par la file mono-verrou : ces trois-là bornent le démarchage de
+// robots.txt, NI par les files de politesse : ces trois-là bornent le démarchage de
 // sites tiers qui ne nous ont rien demandé, et n'ont rien à faire ici. Un fetch
 // direct, un timeout généreux (3,7 Mo à rapatrier), et c'est tout.
 //

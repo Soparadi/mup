@@ -14,10 +14,13 @@
 //   4.   Recoupement scoré contre le faisceau + écriture additive.
 //
 // Robustesse : jamais de throw remontant. Échec réseau/timeout → « rien ». Tous
-// les appels sortants passent par une file séquentielle mono-verrou (patron
-// overpass.js) + AbortController : un appel à la fois, délai entre chaque, une
-// seule IP → politesse stricte. politeFetchText est exportée : le module de
-// recherche web réutilise LE MÊME verrou (une seule file pour tout le sortant).
+// les appels sortants passent par une file PAR HÔTE (patron overpass.js décliné par
+// serveur) + AbortController : un appel à la fois vers un hôte donné, délai entre
+// chaque, et un sémaphore global qui borne le nombre d'hôtes avançant de front
+// (CRAWL_PARALLELISME, défaut 3). Chaque serveur visité voit exactement le rythme
+// d'avant : c'est le plafond global qui a disparu, jamais l'espacement.
+// politeFetchText est exportée : le module de recherche web et le flux d'actualités
+// passent par le MÊME dispositif, chacun sur la file de son hôte.
 
 import { getDb } from '../../lib/surreal.js'
 import { cleanRecordId } from '../../lib/db.js'
@@ -65,12 +68,18 @@ const ROBOTS_TTL_MS = 24 * 3600 * 1000   // TTL cache par hôte : 24 h
 const ROBOTS_INJOIGNABLE_TTL_MS = 15 * 60 * 1000
 const ROBOTS_CACHE_MAX = 500         // plafond d'entrées, éviction de la plus ancienne
 const ROBOTS_UA_TOKEN = 'MovUP'      // product token seul (jamais l'User-Agent réseau complet)
-// Plafond de crawl-delay honoré. La file est GLOBALE (une seule pour tout le sortant),
-// pas par hôte : honorer un délai ralentit TOUT le sortant, pas seulement l'hôte qui le
-// réclame. Donc — délai ≤ MIN_INTERVAL_MS : sans effet (l'espacement courant suffit) ;
+// Plafond de crawl-delay honoré. La file est PAR HÔTE : honorer un délai ne ralentit
+// plus que l'hôte qui le réclame, jamais le reste du sortant, et le complément est dormi
+// HORS du sémaphore, si bien qu'un site lent n'occupe pas non plus un jeton à ne rien
+// faire. Donc, délai ≤ MIN_INTERVAL_MS : sans effet (l'espacement courant suffit) ;
 // entre MIN_INTERVAL_MS et ce plafond : honoré, en dormant le complément avant l'appel
 // vers cet hôte ; au-delà : l'hôte est REFUSÉ (pas ralenti), refus mis en cache comme
-// les autres. On ne paie jamais plus de ce plafond au nom d'un seul site.
+// les autres.
+//
+// La valeur reste à 5 s. L'argument qui la bornait a changé de nature (ce n'est plus
+// tout le sortant qui paie, c'est le seul hôte concerné), mais la relever serait une
+// décision de politesse à prendre pour elle-même, pas un effet de bord du passage par
+// hôte.
 const ROBOTS_CRAWL_DELAY_MAX_MS = 5000
 
 // Bornes crawl.
@@ -102,25 +111,164 @@ const CONVENTIONAL_PATHS = [
 ]
 
 // ---------------------------------------------------------------------------
-// File séquentielle mono-verrou (patron overpass.js). Un seul verrou (chaîne de
-// promesses) + espacement minimal entre deux appels réseau. Partagée avec le
-// module de recherche web via l'export de politeFetchText : jamais de rafale,
-// une seule IP sortante.
+// Files PAR HÔTE + sémaphore global (patron overpass.js, décliné par serveur).
+//
+// UNE FILE PAR HÔTE. Chaque serveur visité a sa propre chaîne de promesses et son
+// propre horodatage de dernier départ : ses pages se suivent une à une, espacées de
+// MIN_INTERVAL_MS, exactement comme du temps de la file unique. De SON point de vue,
+// rien n'a changé. Ce qui a disparu, c'est le plafond global : deux hôtes DIFFÉRENTS
+// n'ont plus à s'attendre, et un hôte muet n'immobilise plus que lui-même.
+//
+// UN SÉMAPHORE GLOBAL borne le nombre d'hôtes avançant de front (CRAWL_PARALLELISME).
+// Il n'est pris QUE pour l'appel réseau lui-même : l'espacement et le complément de
+// crawl-delay sont dormis AVANT, hors jeton, pour qu'un site lent n'occupe pas une
+// part du parallélisme à ne rien faire.
+//
+// LA CLÉ EST L'HÔTE, PAS L'ORIGINE. Le cache robots, lui, est par origine (RFC 9309,
+// et c'est correct) : ce sont deux choses différentes. La politesse s'adresse à un
+// serveur, et http://exemple.fr comme https://exemple.fr sont la même machine. Cléter
+// par origine ferait partir le repli http sans le moindre espacement, juste après
+// l'échec https, sur ce même serveur.
+//
+// LE PARALLÉLISME 1 EST LE REPLI EXACT vers le comportement d'avant : à cette valeur,
+// et à elle seule, l'espacement redevient GLOBAL (cf. referenceEspacement), donc une
+// seule sortie toutes les MIN_INTERVAL_MS pour tout le processus, une seule IP, un
+// seul appel en vol. C'est ce qui en fait un vrai levier de repli, et non une
+// approximation qui y ressemblerait.
 // ---------------------------------------------------------------------------
 
-let queueTail = Promise.resolve()
-let lastCallAt = 0
+// Hôtes traités de front. Lu comme CRAWL_ML_BATCH l'est déjà (server.js). Valeur non
+// finie, ou inférieure à 1, ramenée au défaut ; plafond dur, pour qu'une faute de
+// frappe dans le tableau de bord ne mette pas trois cents hôtes en vol.
+const PARALLELISME_DEFAUT = 3
+const PARALLELISME_MAX = 10
+const PARALLELISME = (() => {
+  const n = parseInt(process.env.CRAWL_PARALLELISME || String(PARALLELISME_DEFAUT), 10)
+  if (!Number.isFinite(n) || n < 1) return PARALLELISME_DEFAUT
+  return Math.min(n, PARALLELISME_MAX)
+})()
+
+// Plafond d'entrées de la Map, en CEINTURE seulement : l'élagage au point de sortie de
+// chaque tâche suffit en régime normal, et ce plafond ne devrait jamais mordre. Patron
+// de ROBOTS_CACHE_MAX, avec une règle de plus, qui n'est pas négociable : jamais
+// d'éviction d'une entrée dont enCours est supérieur à zéro. Évincer une file active
+// ferait repartir la tâche suivante du même hôte sur une file neuve, et deux appels
+// vers le même serveur pourraient être en vol ensemble : c'est exactement la garantie
+// que tout ce dispositif existe pour tenir.
+const FILES_MAX = 500
+
+// host -> { tail, lastCallAt, enCours }
+//   • tail       : chaîne de promesses de CET hôte (sérialisation de ses appels).
+//   • lastCallAt : dernier départ réseau vers CET hôte (espacement).
+//   • enCours    : ses tâches en file ou en vol (élagage et éviction).
+const files = new Map()
+// Dernier départ, tous hôtes confondus. N'est LU qu'au parallélisme 1 (cf. l'en-tête) ;
+// écrit toujours, pour n'avoir qu'un seul chemin d'écriture à relire.
+let dernierDepartGlobal = 0
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-function schedule(task) {
-  const run = async () => {
-    const wait = MIN_INTERVAL_MS - (Date.now() - lastCallAt)
-    if (wait > 0) await sleep(wait)
-    lastCallAt = Date.now()
-    return task()
+// Jetons du sémaphore. File d'attente FIFO de résolveurs : rendre un jeton réveille le
+// premier en attente plutôt que d'incrémenter le compteur, sinon un dormeur pourrait
+// être doublé indéfiniment par des arrivants.
+let jetonsLibres = PARALLELISME
+const attenteJetons = []
+
+function prendreJeton() {
+  if (jetonsLibres > 0) { jetonsLibres--; return Promise.resolve() }
+  return new Promise((r) => attenteJetons.push(r))
+}
+
+function rendreJeton() {
+  const suivant = attenteJetons.shift()
+  if (suivant) suivant()
+  else jetonsLibres++
+}
+
+// Instant de référence pour l'espacement. Par hôte, sauf au parallélisme 1 où il
+// redevient global : c'est ce qui fait de la valeur 1 le repli exact vers le verrou
+// unique d'avant.
+function referenceEspacement(f) {
+  return PARALLELISME === 1 ? Math.max(f.lastCallAt, dernierDepartGlobal) : f.lastCallAt
+}
+
+// Ceinture d'entrées : n'évince QUE des files inactives (enCours à zéro) et refroidies
+// (plus rien à espacer). Si aucune ne l'est, la Map dépasse le plafond, et c'est le bon
+// choix : la sérialisation par serveur passe avant la borne.
+function elaguerFiles() {
+  if (files.size < FILES_MAX) return
+  const now = Date.now()
+  for (const [host, f] of files) {
+    if (f.enCours > 0) continue
+    if (now - f.lastCallAt < MIN_INTERVAL_MS) continue
+    files.delete(host)
+    if (files.size < FILES_MAX) return
   }
-  const p = queueTail.then(run, run)
-  queueTail = p.then(() => {}, () => {})
+}
+
+function fileDe(host) {
+  const existante = files.get(host)
+  if (existante) return existante
+  elaguerFiles()
+  const f = { tail: Promise.resolve(), lastCallAt: 0, enCours: 0 }
+  files.set(host, f)
+  return f
+}
+
+// Une file vide et refroidie ne retient plus rien : son lastCallAt ne peut plus
+// retarder personne (le plancher est passé) et sa tail est déjà résolue. La supprimer
+// ne change RIEN à la politesse, et c'est ce qui empêche la Map de croître sans fin.
+// Tant que le plancher n'est pas écoulé, l'entrée est encore utile : on repasse à
+// l'échéance, et on recontrôle, l'entrée ayant pu resservir entre-temps.
+function libererSiInactive(host) {
+  const f = files.get(host)
+  if (!f || f.enCours > 0) return
+  const restant = MIN_INTERVAL_MS - (Date.now() - f.lastCallAt)
+  if (restant > 0) {
+    const t = setTimeout(() => libererSiInactive(host), restant)
+    if (typeof t.unref === 'function') t.unref()
+    return
+  }
+  if (files.get(host) === f) files.delete(host)
+}
+
+// Sérialise `task` derrière la file de `host`, espacée de MIN_INTERVAL_MS, sous le
+// sémaphore global. `attente` est le complément de crawl-delay, dormi HORS jeton.
+//
+// L'ORDRE EST DÉLIBÉRÉ : file de l'hôte, puis espacement, puis crawl-delay, puis le
+// jeton, puis l'appel, puis le jeton rendu. Un sommeil ne consomme jamais de jeton.
+function schedule(host, task, attente = 0) {
+  const f = fileDe(host)
+  f.enCours++
+  const run = async () => {
+    try {
+      const wait = MIN_INTERVAL_MS - (Date.now() - referenceEspacement(f))
+      if (wait > 0) await sleep(wait)
+      if (attente > 0) await sleep(attente)
+      await prendreJeton()
+      try {
+        // Recontrôle, jeton en main. L'attente d'un jeton ne peut qu'ALLONGER le
+        // délai, sauf à un seul jeton, où deux hôtes réveillés ensemble se suivent
+        // sur lui : le second partirait alors sans espacement. Le résidu est dormi
+        // jeton en main, ce qui est sans conséquence puisque, à un seul jeton, rien
+        // d'autre ne pouvait avancer de toute façon.
+        const reste = MIN_INTERVAL_MS - (Date.now() - referenceEspacement(f))
+        if (reste > 0) await sleep(reste)
+        f.lastCallAt = Date.now()
+        dernierDepartGlobal = f.lastCallAt
+        return await task()
+      } finally {
+        rendreJeton()
+      }
+    } finally {
+      f.enCours--
+      libererSiInactive(host)
+    }
+  }
+  // .then(run, run) : l'échec d'une tâche ne casse pas la chaîne de son hôte. La
+  // dérivée est neutralisée en rejet, aucune promesse dérivée ne devant pouvoir
+  // rejeter sans gestionnaire.
+  const p = f.tail.then(run, run)
+  f.tail = p.then(() => {}, () => {})
   return p
 }
 
@@ -171,9 +319,9 @@ async function doFetch(url, accept, contentTypeRe) {
 }
 
 // ---------------------------------------------------------------------------
-// Portillon robots.txt (RFC 9309). Cache par hôte, fetch dédié passant par la MÊME
-// file mono-verrou (jamais en dehors, sous peine de rafale). Aucun throw, aucun
-// marquage en base.
+// Portillon robots.txt (RFC 9309). Cache par hôte, fetch dédié passant par la file de
+// CET hôte (jamais en dehors, sous peine de rafale). Aucun throw, aucun marquage en
+// base.
 //
 // DEUX FAÇONS DE NE PAS PASSER, et elles ne disent pas la même chose :
 //   • REFUS       — l'éditeur a parlé. Un Disallow lu, ou un crawl-delay réclamé
@@ -271,12 +419,17 @@ function entryDepuisReponse(res) {
 }
 
 // Charge (ou récupère en vol) le robots d'un hôte, met en cache, journalise. Le fetch
-// passe OBLIGATOIREMENT par schedule(...) : même verrou mono-file que tout le sortant.
+// passe OBLIGATOIREMENT par schedule(...), sur la FILE DE SON HÔTE : le fichier
+// d'exclusion est une requête vers ce serveur comme une autre, il est espacé comme les
+// pages et compte dans le sémaphore. Jamais en dehors, sous peine de rafale.
+//
+// La clé de cache reste l'origine (RFC 9309), la clé de file est l'hôte : le même
+// serveur peut porter deux origines, il n'a pas à être visité deux fois de front.
 function chargerRobots(origin) {
   const enCours = robotsInflight.get(origin)
   if (enCours) return enCours
   const p = (async () => {
-    const res = await schedule(() => fetchRobots(origin + '/robots.txt'))
+    const res = await schedule(safeHost(origin) || origin, () => fetchRobots(origin + '/robots.txt'))
     const entry = entryDepuisReponse(res)
     robotsCacheSet(origin, entry)
     console.log('[robots]', 'hôte résolu', origin, entry.etat,
@@ -284,8 +437,8 @@ function chargerRobots(origin) {
     return entry
   })()
   robotsInflight.set(origin, p)
-  // Dérivée du finally neutralisée en rejet (patron de queueTail ligne ~87) : aucune
-  // promesse dérivée ne doit pouvoir rejeter sans gestionnaire.
+  // Dérivée du finally neutralisée en rejet (même patron que la tail des files par
+  // hôte) : aucune promesse dérivée ne doit pouvoir rejeter sans gestionnaire.
   p.finally(() => { if (robotsInflight.get(origin) === p) robotsInflight.delete(origin) })
     .then(() => {}, () => {})
   return p
@@ -323,16 +476,27 @@ async function resolveRobots(url) {
 }
 
 // Complément de crawl-delay à dormir AVANT l'appel vers l'hôte, en sus de l'espacement
-// mono-file déjà garanti (MIN_INTERVAL_MS). En deçà du plancher : 0 (sans effet). Le
-// dépassement du plafond est déjà traité en amont (REFUS), donc borné ici de fait.
+// déjà garanti sur la file de CET hôte (MIN_INTERVAL_MS). En deçà du plancher : 0 (sans
+// effet). Le dépassement du plafond est déjà traité en amont (REFUS), donc borné ici de
+// fait.
+//
+// Il est remis à schedule, qui le dort dans la file de l'hôte mais HORS du sémaphore.
+// Deux conséquences, et ce sont les deux qu'on voulait : le site lent est réellement
+// espacé comme il le demande, et il ne retient ni les autres hôtes ni un jeton pendant
+// qu'il attend.
 function complementCrawl(crawlDelaySec) {
   const cdMs = (crawlDelaySec != null) ? crawlDelaySec * 1000 : 0
   return cdMs > MIN_INTERVAL_MS ? cdMs - MIN_INTERVAL_MS : 0
 }
 
-// Sérialise l'appel derrière la file mono-verrou. Exportée pour recherche-web.js et
-// actualites.js. Passe d'abord le portillon robots.txt de l'hôte (résolution + cache
-// par hôte). Refus robots → null, exactement comme un échec réseau.
+// Sérialise l'appel derrière la file de SON HÔTE, sous le sémaphore global. Exportée
+// pour recherche-web.js et actualites.js. Passe d'abord le portillon robots.txt de
+// l'hôte (résolution + cache par hôte). Refus robots → null, exactement comme un échec
+// réseau.
+//
+// Ce que le passage par hôte change pour un appelant qui ne visite qu'un seul hôte, le
+// flux d'actualités notamment : il ne prend plus rang derrière le crawl. Sa file lui
+// est propre et vide, il part dès qu'un jeton se libère.
 //
 // options (toutes facultatives, défauts = comportement historique à l'identique) :
 //   • accept        — valeur de l'en-tête Accept (défaut : ACCEPT_DEFAUT).
@@ -340,9 +504,10 @@ function complementCrawl(crawlDelaySec) {
 //     CONTENT_TYPE_RE_DEFAUT). RegExp SANS drapeau /g : .test sur une regex globale
 //     est apatride entre appels seulement si lastIndex n'est jamais avancé.
 //
-// Ce qui n'est PAS paramétrable, et reste donc commun à tous les appelants : le verrou
-// mono-file, le portillon robots, le timeout, le plafond de taille et les reprises.
-// Un appelant ne peut ni doubler la file ni s'exonérer du robots.txt.
+// Ce qui n'est PAS paramétrable, et reste donc commun à tous les appelants : la file de
+// l'hôte, le sémaphore, le portillon robots, le timeout, le plafond de taille et les
+// reprises. Un appelant ne peut ni doubler la file de l'hôte qu'il vise, ni s'exonérer
+// du robots.txt.
 export async function politeFetchText(url, options = {}) {
   const { res } = await lireAvecMotif(url, options)
   return res
@@ -392,14 +557,10 @@ async function lireAvecMotif(url, options = {}) {
     return { res: null, motif }
   }
 
-  // Fetch principal. Le complément de crawl-delay est dormi DANS la tâche schedulée,
-  // donc SOUS le verrou : il espace réellement l'appel vers cet hôte, sans le sortir
-  // de la file mono-verrou.
+  // Fetch principal, sur la file de SON hôte. Le complément de crawl-delay est remis à
+  // schedule, qui le dort dans cette file et hors du sémaphore (cf. complementCrawl).
   const complement = complementCrawl(gate.crawlDelaySec)
-  const res = await schedule(async () => {
-    if (complement > 0) await sleep(complement)
-    return doFetch(u, accept, contentTypeRe)
-  })
+  const res = await schedule(safeHost(u) || u, () => doFetch(u, accept, contentTypeRe), complement)
   if (!res) return { res: null, motif: 'fetch' }
 
   // Point (b) — redirection inter-hôtes. redirect:'follow' a pu mener vers un autre
@@ -1010,8 +1171,10 @@ export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
   //     a donc rien à contourner. Et ce n'est pas une porte dérobée : http:// et https://
   //     sont deux origines distinctes au sens du portillon, le fichier de l'origine http
   //     est re-demandé à neuf, et s'il refuse, le refus s'applique.
-  // La seconde tentative passe par la même file mono-verrou et le même portillon : elle
-  // est comptée dans les plafonds comme n'importe quel autre appel sortant.
+  // La seconde tentative passe par le même portillon et par la MÊME FILE, l'hôte étant
+  // le même des deux côtés (c'est pourquoi les files sont clétées par hôte et non par
+  // origine) : elle est donc espacée de l'échec https comme n'importe quel autre appel
+  // vers ce serveur, et comptée dans les plafonds comme lui.
   const REPLI_HTTP_MOTIFS = new Set(['fetch', 'portillon_injoignable'])
   let lecture = await lireAvecMotif(homeUrl)
   let urlLue = homeUrl
@@ -1311,8 +1474,24 @@ export async function enrichirMentionsLegales(siret, options = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// runMentionsLegalesJob(sirets) — traitement d'un lot, séquentiel (la file
-// mono-verrou sérialise déjà le réseau). Aucun throw remontant.
+// runMentionsLegalesJob(sirets) : traitement d'un lot, CRAWL_PARALLELISME SIRET en vol.
+//
+// POURQUOI CE N'EST PLUS SÉQUENTIEL. La file étant désormais par hôte, un lot qui
+// avance fiche à fiche n'a jamais qu'UN hôte en vol : le sémaphore ne se remplirait
+// pas, et le débit resterait celui de la file unique. Le verrou par hôte ne rend rien
+// sans quelqu'un pour lui donner plusieurs hôtes à la fois. C'est ici.
+//
+// LE TRAITEMENT D'UN SITE, LUI, RESTE SÉQUENTIEL : les pages d'un même serveur se
+// suivent dans sa propre file, à son rythme, et deux appels vers lui ne peuvent pas
+// être en vol ensemble. C'est entre SIRET, donc entre hôtes, que le lot avance de
+// front. Aucun serveur ne voit une rafale.
+//
+// Ouvriers tirant d'un curseur partagé, plutôt qu'un découpage en tranches : les fiches
+// n'ont pas le même coût (une fiche sautée au TTL ne coûte rien, un hôte muet coûte des
+// secondes), et une tranche lente ferait attendre les autres pour rien. L'incrément du
+// curseur n'a pas à être protégé : rien ne préempte entre la lecture et l'écriture.
+//
+// Aucun throw remontant.
 // ---------------------------------------------------------------------------
 
 export async function runMentionsLegalesJob(sirets) {
@@ -1323,18 +1502,25 @@ export async function runMentionsLegalesJob(sirets) {
     if (list.length === 0) return
 
     let traites = 0, sautes = 0, certains = 0, presumes = 0, ecrits = 0
-    for (const siret of list) {
-      const r = await enrichirMentionsLegales(siret)
-      if (r?.skipped != null) { sautes++; continue }
-      traites++
-      if (r?.confidence === 'certain') certains++
-      else if (r?.confidence === 'presume') presumes++
-      if (r?.written) ecrits++
+    let curseur = 0
+    const ouvrier = async () => {
+      for (;;) {
+        const i = curseur++
+        if (i >= list.length) return
+        const r = await enrichirMentionsLegales(list[i])
+        if (r?.skipped != null) { sautes++; continue }
+        traites++
+        if (r?.confidence === 'certain') certains++
+        else if (r?.confidence === 'presume') presumes++
+        if (r?.written) ecrits++
+      }
     }
+    const enVol = Math.min(PARALLELISME, list.length)
+    await Promise.all(Array.from({ length: enVol }, () => ouvrier()))
 
     console.log(
-      `[mentions-legales] lot=${list.length} traités=${traites} sautés=${sautes} ` +
-      `certains=${certains} présumés=${presumes} écrits=${ecrits}`
+      `[mentions-legales] lot=${list.length} en_vol=${enVol} traités=${traites} ` +
+      `sautés=${sautes} certains=${certains} présumés=${presumes} écrits=${ecrits}`
     )
   } catch (e) {
     console.error('[mentions-legales]', String(e?.message || e).slice(0, 120))

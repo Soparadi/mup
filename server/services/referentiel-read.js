@@ -173,8 +173,11 @@ export async function readReferentiel({ departement, naf, commune, codePostal, p
     const p = Math.max(1, Math.floor(Number(page) || 1))
     const offset = (p - 1) * size
 
-    // index idx_ref_dept_naf (departement, naf) ; ORDER BY siret → pagination stable.
-    const sql = `SELECT * FROM referentiel_societes WHERE ${clause} ORDER BY siret LIMIT ${size} START ${offset}`
+    // WITH INDEX N'EST PAS UNE PRECAUTION GRATUITE, NE PAS LE RETIRER : laisse libre,
+    // le planificateur retient idx_ref_naf (le NAF SEUL) et materialise 8 539 lignes de
+    // tous les departements pour n'en garder que 2 387, mesure a 711 ms contre 190 ms
+    // en forcant (departement, naf). ORDER BY siret → pagination stable (tri a 4 ms).
+    const sql = `SELECT * FROM referentiel_societes WITH INDEX idx_ref_dept_naf WHERE ${clause} ORDER BY siret LIMIT ${size} START ${offset}`
     const db = await getDb()
     const r = await db.query(sql, params)
     const rows = r[0] || []

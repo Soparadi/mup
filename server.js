@@ -412,6 +412,9 @@ async function queryOrEmpty(db, sql, params) {
 }
 
 app.get('/api/health', async (req, res) => {
+  // Un seul relevé pour les trois champs : trois appels rendraient trois instants
+  // différents, et le tas peut bouger entre deux.
+  const mem = process.memoryUsage()
   const status = {
     server: 'ok',
     timestamp: new Date().toISOString(),
@@ -422,6 +425,12 @@ app.get('/api/health', async (req, res) => {
     // Nombre de définitions de schéma ayant échoué au démarrage (runAuthMigration).
     // Le boot ne casse pas dessus : on rend visible, on ne fait pas échouer.
     schema_failures: getSchemaFailureCount(),
+    // Mémoire du processus, en mégaoctets entiers. La route reste publique : un tas
+    // et un RSS ne disent rien de l'abonné ni de la base, ils disent seulement où en
+    // est le conteneur. On mesure ici, on ne règle rien ailleurs.
+    heap_used_mo: Math.round(mem.heapUsed / 1048576),
+    heap_total_mo: Math.round(mem.heapTotal / 1048576),
+    rss_mo: Math.round(mem.rss / 1048576),
     surreal: 'unknown'
   }
   try {

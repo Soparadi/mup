@@ -1501,6 +1501,10 @@ export async function enrichirMentionsLegales(siret, options = {}) {
   return result
 }
 
+// Octets vers mégaoctets entiers, pour le journal. Aucune dépendance : process.memoryUsage()
+// rend des octets, personne n'a besoin de les lire ainsi.
+const moctets = o => Math.round(Number(o || 0) / 1048576)
+
 // ---------------------------------------------------------------------------
 // runMentionsLegalesJob(sirets) : traitement d'un lot, CRAWL_PARALLELISME SIRET en vol.
 //
@@ -1535,12 +1539,21 @@ export async function runMentionsLegalesJob(sirets) {
     if (list.length === 0) return compteurs
     compteurs.lot = list.length
 
+    // Pic du tas pendant le lot, relevé AU TERME DE CHAQUE FICHE et non en continu.
+    // process.memoryUsage() est un appel synchrone de l'ordre de la microseconde, là
+    // où une fiche coûte des secondes de réseau : le relevé ne se voit pas dans le
+    // coût du lot, et aucune boucle serrée ne l'appelle. Partagé par les ouvriers,
+    // sans protection : rien ne préempte entre la lecture et l'écriture.
+    let tasPicOctets = 0
+
     let curseur = 0
     const ouvrier = async () => {
       for (;;) {
         const i = curseur++
         if (i >= list.length) return
         const r = await enrichirMentionsLegales(list[i])
+        const tas = process.memoryUsage().heapUsed
+        if (tas > tasPicOctets) tasPicOctets = tas
         if (r?.skipped != null) { compteurs.sautes++; continue }
         compteurs.traites++
         if (r?.confidence === 'certain') compteurs.certains++
@@ -1551,10 +1564,16 @@ export async function runMentionsLegalesJob(sirets) {
     const enVol = Math.min(PARALLELISME, list.length)
     await Promise.all(Array.from({ length: enVol }, () => ouvrier()))
 
+    // Mémoire du processus en fin de passe. On mesure, on ne règle rien : ces chiffres
+    // sont là pour décider du parallélisme et de la borne de Node sur du relevé plutôt
+    // que sur une supposition.
+    const mem = process.memoryUsage()
     console.log(
       `[mentions-legales] lot=${list.length} en_vol=${enVol} traités=${compteurs.traites} ` +
       `sautés=${compteurs.sautes} certains=${compteurs.certains} ` +
-      `présumés=${compteurs.presumes} écrits=${compteurs.ecrits}`
+      `présumés=${compteurs.presumes} écrits=${compteurs.ecrits} ` +
+      `tas=${moctets(mem.heapUsed)}Mo tas_total=${moctets(mem.heapTotal)}Mo ` +
+      `rss=${moctets(mem.rss)}Mo tas_pic=${moctets(tasPicOctets)}Mo`
     )
   } catch (e) {
     console.error('[mentions-legales]', String(e?.message || e).slice(0, 120))

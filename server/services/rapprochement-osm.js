@@ -52,8 +52,11 @@ export function normaliserDomaine(url) {
   }
 }
 
-// Délai de garde des DEUX lectures non bornées du rapprochement : le chargement
-// OSM par bbox et la lecture des sociétés du département. Sans lui, une requête qui
+// Délai de garde des lectures du rapprochement : CHAQUE SOUS-BANDE du chargement
+// OSM et la lecture des sociétés du département. Posé sur chaque sous-bande et non
+// sur le chargement entier : c'est chaque requête qui doit pouvoir rendre la main,
+// une garde globale laisserait une sous-bande morte consommer le délai des autres.
+// Sans lui, une requête qui
 // ne se règle JAMAIS, mode de défaillance constaté en juillet, laisse vivante à vie
 // la promesse mémorisée dans _idxByDept : toute amorce ultérieure sur ce département
 // attend une promesse morte jusqu'au redémarrage, et la chaîne en aval est perdue en
@@ -133,6 +136,48 @@ export async function chargerOsmIndexe(dept, bbox) {
   }
 }
 
+// Hauteur des sous-bandes de latitude du chargement OSM, en degrés. La lecture
+// bornée par la bbox départementale reste trop grosse en UNE fois : sur le 06,
+// 63 352 lignes balayées pour 10 741 retenues et ~1,9 Mo rendus d'un coup, le
+// régime dans lequel la mémoire de l'instance est passée de 700 Mo à 1,25 Go.
+// La latitude est la seule colonne indexée et déjà celle du filtre : c'est la
+// clé de découpage. 0,1 degré est le calibre de la bbox de Paris : un département
+// court fait une à trois requêtes, le 06 en fait neuf.
+// Plancher à 0,001 degré : plus fin, le découpage ferait des milliers de requêtes
+// par département et coûterait plus cher que le mal qu'il soigne.
+const HAUTEUR_BANDE_DEFAUT_DEG = 0.1
+const HAUTEUR_BANDE_DEG = (() => {
+  const n = parseFloat(process.env.RAPPROCHEMENT_BANDE_LAT_DEG || String(HAUTEUR_BANDE_DEFAUT_DEG))
+  if (!Number.isFinite(n) || n < 0.001) return HAUTEUR_BANDE_DEFAUT_DEG
+  return n
+})()
+
+// Découpe [latMin, latMax] en sous-bandes contiguës de HAUTEUR_BANDE_DEG.
+// SANS TROU NI RECOUVREMENT, seule chose qui compte ici :
+//   • les bornes se calculent depuis latMin (latMin + i * h), jamais par
+//     accumulation : le haut de la bande i et le bas de la bande i+1 sont la MÊME
+//     expression, donc le même flottant, sans dérive d'additions répétées ;
+//   • chaque haut est écrêté à latMax : la dernière bande s'arrête exactement sur
+//     la bbox et aucune bande ne déborde au-dessus d'elle ;
+//   • la borne basse n'est incluse que sur la PREMIÈRE bande (opérateur choisi
+//     côté requête) : une ligne posée pile sur une frontière appartient à la bande
+//     du dessus et à elle seule, jamais perdue, jamais comptée deux fois.
+// Bbox dégénérée ou non finie → une seule bande, soit la requête d'avant.
+function decouperBandesLat(latMin, latMax) {
+  if (!Number.isFinite(latMin) || !Number.isFinite(latMax) || !(latMax > latMin)) {
+    return [{ bas: latMin, haut: latMax }]
+  }
+  const n = Math.ceil((latMax - latMin) / HAUTEUR_BANDE_DEG)
+  const bandes = []
+  for (let i = 0; i < n; i++) {
+    bandes.push({
+      bas: latMin + i * HAUTEUR_BANDE_DEG,
+      haut: Math.min(latMin + (i + 1) * HAUTEUR_BANDE_DEG, latMax)
+    })
+  }
+  return bandes
+}
+
 // Lit referentiel_osm en UNE passe et construit 7 index JS (Map) pour un
 // rapprochement O(1) par signal. Valeur de chaque Map = LISTE de lignes OSM
 // partageant la clé (plusieurs objets OSM peuvent porter le même téléphone,
@@ -147,6 +192,9 @@ export async function chargerOsmIndexe(dept, bbox) {
 // BORNÉ PAR BBOX [latMin, lonMin, latMax, lonMax] : range scan sur lat (index
 // idx_osm_lat), lng filtré en base sur le sous-ensemble — le chargement se limite
 // à la tranche départementale (mémoire) au lieu des ~685 k lignes nationales.
+// Cette tranche est elle-même lue en SOUS-BANDES de latitude, une requête chacune :
+// les 7 index se construisent par accumulation, donc N requêtes sur N sous-bandes
+// les alimentent à l'identique et l'appariement ne voit aucune différence.
 // LECTURE SEULE, FAIL-SAFE : toute erreur → 7 Map vides, ne throw JAMAIS.
 async function chargerOsmDepuisDb(bbox, dept) {
   const vide = () => ({
@@ -162,44 +210,74 @@ async function chargerOsmDepuisDb(bbox, dept) {
   try {
     const [latMin, lonMin, latMax, lonMax] = bbox
     const db = await getDb()
-    const r = await avecDelai(db.query(
-      'SELECT osm_id, nom, siret, siren, phone, email, website, ' +
-      // lat/lng : DÉJÀ filtrés par le WHERE bbox, seulement jamais ramenés jusqu'ici.
-      // Les ajouter aux colonnes ne coûte AUCUNE lecture de plus, c'est la même
-      // requête sur la même tranche ; le pont NOM en a besoin pour sa distance.
-      'facebook, instagram, linkedin, city, housenumber, street, postcode, lat, lng ' +
-      'FROM referentiel_osm ' +
-      'WHERE lat >= $latMin AND lat <= $latMax AND lng >= $lonMin AND lng <= $lonMax',
-      { latMin, latMax, lonMin, lonMax }
-    ), 'osm bbox', dept)
-    const rows = r[0] || []
+    const bandes = decouperBandesLat(latMin, latMax)
+    const debut = Date.now()
     const idx = vide()
-    for (const row of rows) {
-      if (!row || typeof row !== 'object') continue
-      const siret = str(row.siret).replace(/\s+/g, '')
-      const siren = (str(row.siren).replace(/\s+/g, '')) || (siret ? siret.slice(0, 9) : '')
-      push(idx.bySiret, siret, row)
-      push(idx.bySiren, siren, row)
-      push(idx.byTel, normaliserTel(row.phone), row)
-      push(idx.byEmail, str(row.email).toLowerCase(), row)
-      push(idx.byDomaine, normaliserDomaine(row.website), row)
-      // nom+ville : clé `${enseigne normalisée}|${ville normalisée}`. Symétrie
-      // voulue avec cle_nom côté société (normaliserSociete(enseigne||raison)) —
-      // row.nom OSM = tag `name` = enseigne. Clé construite SEULEMENT si nom ET
-      // ville présents ('' sinon → push l'ignore : "a|" ou "|b" seraient truthy).
-      const nomN = normaliserSociete(row.nom)
-      const cityN = normText(row.city)
-      push(idx.byNomVille, nomN && cityN ? `${nomN}|${cityN}` : '', row)
-      // nom SEUL : clé du pont NOM. Distinct de byNomVille, qui exige en plus la
-      // ville et sert au pont adresse : la règle mesurée ne demande pas la ville,
-      // elle demande la proximité. Borné à la tranche départementale DÉJÀ en
-      // mémoire, donc sans commune mesure avec l'indexation des ~685 k noms
-      // nationaux écartée plus bas (trouverMatch). Clé vide ignorée par push.
-      push(idx.byNom, nomN, row)
+    let retenues = 0
+    for (let i = 0; i < bandes.length; i++) {
+      const { bas, haut } = bandes[i]
+      // Borne basse INCLUSE sur la première bande, STRICTE sur les suivantes. La
+      // requête d'origine était inclusive des deux côtés et le haut d'une bande
+      // est le bas exact de la suivante : sans ce >, une ligne assise sur une
+      // frontière serait lue et indexée deux fois.
+      const cmpBas = i === 0 ? '>=' : '>'
+      const r = await avecDelai(db.query(
+        'SELECT osm_id, nom, siret, siren, phone, email, website, ' +
+        // lat/lng : DÉJÀ filtrés par le WHERE bbox, seulement jamais ramenés jusqu'ici.
+        // Les ajouter aux colonnes ne coûte AUCUNE lecture de plus, c'est la même
+        // requête sur la même tranche ; le pont NOM en a besoin pour sa distance.
+        'facebook, instagram, linkedin, city, housenumber, street, postcode, lat, lng ' +
+        'FROM referentiel_osm ' +
+        `WHERE lat ${cmpBas} $latMin AND lat <= $latMax AND lng >= $lonMin AND lng <= $lonMax`,
+        { latMin: bas, latMax: haut, lonMin, lonMax }
+      ), `osm bande ${i + 1}/${bandes.length}`, dept)
+      const rows = r[0] || []
+      retenues += rows.length
+      // Indexation immédiate de la sous-bande : `rows` sort de portée au tour
+      // suivant, donc une seule sous-bande de lignes brutes vit à la fois, ce qui
+      // est tout l'objet du découpage. L'accumulation dans `idx` est celle d'avant.
+      for (const row of rows) {
+        if (!row || typeof row !== 'object') continue
+        const siret = str(row.siret).replace(/\s+/g, '')
+        const siren = (str(row.siren).replace(/\s+/g, '')) || (siret ? siret.slice(0, 9) : '')
+        push(idx.bySiret, siret, row)
+        push(idx.bySiren, siren, row)
+        push(idx.byTel, normaliserTel(row.phone), row)
+        push(idx.byEmail, str(row.email).toLowerCase(), row)
+        push(idx.byDomaine, normaliserDomaine(row.website), row)
+        // nom+ville : clé `${enseigne normalisée}|${ville normalisée}`. Symétrie
+        // voulue avec cle_nom côté société (normaliserSociete(enseigne||raison)) :
+        // row.nom OSM = tag `name` = enseigne. Clé construite SEULEMENT si nom ET
+        // ville présents ('' sinon → push l'ignore : "a|" ou "|b" seraient truthy).
+        const nomN = normaliserSociete(row.nom)
+        const cityN = normText(row.city)
+        push(idx.byNomVille, nomN && cityN ? `${nomN}|${cityN}` : '', row)
+        // nom SEUL : clé du pont NOM. Distinct de byNomVille, qui exige en plus la
+        // ville et sert au pont adresse : la règle mesurée ne demande pas la ville,
+        // elle demande la proximité. Borné à la tranche départementale DÉJÀ en
+        // mémoire, donc sans commune mesure avec l'indexation des ~685 k noms
+        // nationaux écartée plus bas (trouverMatch). Clé vide ignorée par push.
+        push(idx.byNom, nomN, row)
+      }
     }
+    console.log(
+      `[rapprochement-osm] chargement osm · dept ${dept || '?'} · ` +
+      `${bandes.length} sous-bandes · ${retenues} lignes retenues · ${Date.now() - debut} ms`
+    )
     return idx
   } catch (e) {
-    console.warn('[rapprochement-osm]', String(e?.message || e).slice(0, 80))
+    // ABANDON DU CHARGEMENT ENTIER dès qu'une sous-bande échoue ou dépasse son
+    // délai : ce catch englobe la boucle, donc on rend les 7 Map vides, exactement
+    // comme avant le découpage. Un index PARTIEL serait silencieusement dangereux :
+    // non vide, donc mémorisé par chargerOsmIndexe pour toute la vie du process, il
+    // apparierait moins sans que rien ne le dise, et le manque passerait pour une
+    // absence de données. Vide, il n'est PAS mémorisé : le prochain appel réessaie.
+    // Le libellé de la sous-bande fautive voyage dans le message (`osm bande 3/9`),
+    // posé par avecDelai, qui journalise déjà le dépassement de son côté.
+    console.warn(
+      `[rapprochement-osm] chargement osm abandonné · dept ${dept || '?'} · ` +
+      String(e?.message || e).slice(0, 80)
+    )
     return vide()
   }
 }

@@ -118,6 +118,10 @@
 import { Resolver } from 'node:dns/promises'
 import { getDb } from '../../lib/surreal.js'
 import { normaliserDomaine } from './rapprochement-osm.js'
+// Le découpage des parenthèses d'une raison sociale vit dans lib/societes.js,
+// son adresse unique : mentions-legales.js le lit de là lui aussi, sans avoir à
+// charger ce module-ci et, avec lui, le résolveur DNS et la base.
+import { horsParentheses, parentheses } from '../../lib/societes.js'
 
 // Extensions tentées, dans cet ordre : le .com d'abord. La mesure du 2 septembre
 // a trouvé SEPT succès sur vingt au RANG 2, c'est-à-dire au .com d'un nom déjà
@@ -226,8 +230,7 @@ function mots(s) {
 const colle = (m) => m.join('')
 const tirets = (m) => m.join('-')
 const cle = (s) => mots(s).join(' ')
-const horsParentheses = (s) => String(s || '').replace(/\([^)]*\)/g, ' ')
-const parentheses = (s) => [...String(s || '').matchAll(/\(([^)]*)\)/g)].map(m => m[1])
+// horsParentheses / parentheses : importés de lib/societes.js (cf. l'import).
 
 // Les formes sous lesquelles le nom du dirigeant peut apparaître dans la raison
 // sociale : le champ tel quel, sa part hors parenthèses, et chaque parenthèse.

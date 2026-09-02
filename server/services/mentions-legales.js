@@ -28,7 +28,11 @@ import { enrichReferentielActionnable } from './referentiel.js'
 import { getReferentielFaisceauBySiret, getOsmSitesBySiret, selectSiretsACrawler, normalizeNaf } from './referentiel-read.js'
 import { normaliserDomaine } from './rapprochement-osm.js'
 import { normText, corroborerSiret } from './overpass.js'
-import { normaliserVoie, parserAdresseAgregee, canoniserTexteVoie } from '../../lib/societes.js'
+import { normaliserVoie, parserAdresseAgregee, canoniserTexteVoie, parentheses } from '../../lib/societes.js'
+// Le jugement patronymique du module de composition, réutilisé TEL QUEL par le
+// signal de raison sociale : deux règles tirées de la MÊME preuve (le nom du
+// dirigeant) ne doivent compter que pour un signal, cf. nomCite plus bas.
+import { contextePatronyme, estOriginePatronymique } from './composition-domaines.js'
 import { rechercherUrlSociete } from './recherche-web.js'
 import { parserRobots, evaluerRobots } from './robots-txt.js'
 
@@ -1062,6 +1066,98 @@ function presentNorm(corpusNorm, needle, minLen) {
   return corpusNorm.includes(n)
 }
 
+// ---------------------------------------------------------------------------
+// LE NOM DE LA SOCIÉTÉ, CITÉ SOUS L'UNE DE SES FORMES.
+//
+// Le signal ne cherchait que la raison sociale entière. Or la composition de
+// domaines, elle, tient depuis toujours TROIS origines : l'enseigne, chaque
+// parenthèse de la raison sociale, et le corps hors parenthèses. Elle envoie
+// donc à la recherche web des pistes composées sur une enseigne ou sur une
+// parenthèse, et le recoupement qui les reçoit ne regardait jamais que le corps.
+// « NOUR BEAUTY RIVIERA (NOUR BEAUTY) » compose nourbeauty.fr, arrive sur une
+// page qui écrit « Nour Beauty » partout et nulle part la raison sociale
+// complète : la page est la bonne, le signal restait à zéro.
+//
+// Le signal devient DISJONCTIF : le corps OU l'une de ses variantes.
+//
+// LES VARIANTES, et rien d'autre : l'enseigne et les parenthèses. Ce sont les
+// deux origines que la composition tient et que le recoupement ignorait ; les
+// séparer aurait fait deux commits pour une seule incohérence.
+//
+// LE PLANCHER DE LA VARIANTE, plus haut que celui du corps : au moins TROIS MOTS
+// OU au moins DIX CARACTÈRES. Le corps, lui, garde ses quatre caractères,
+// INCHANGÉS. Le motif : « beauty » fait six caractères et un mot, et happerait
+// n'importe quel institut de la région ; « nour beauty riviera » en fait trois,
+// et ne se trouve que chez elle. CE N'EST PAS UNE VALEUR MESURÉE. C'est un cran
+// de prudence posé sur un signal rendu disjonctif pour la première fois, et il
+// est RÉVISABLE SUR MESURE : le jour où l'on comptera ce que chaque borne
+// laisse passer et ce qu'elle retient, ces deux nombres se corrigeront.
+//
+// LES VARIANTES PATRONYMIQUES SONT ÉCARTÉES, par le jugement du module de
+// composition lui-même. « DUPONT MARIE (DUPONT) » chez Marie Dupont : la
+// parenthèse est le nom du dirigeant, pas une marque. Sans ce retrait, une page
+// qui nomme la dirigeante donnerait DEUX signaux (dirigeant_nom et
+// raison_sociale) tirés d'une seule et même preuve, et le seuil de deux serait
+// vidé de son sens.
+//
+// NORMALISATION : normText, comme presentNorm et comme le reste du recoupement,
+// et JAMAIS mots() du module de composition. mots() retire les articles de tête
+// et les formes juridiques, ce qui RACCOURCIRAIT l'aiguille cherchée dans le
+// corpus et rendrait le test plus permissif ; ce commit ne doit rien assouplir
+// d'autre que ce qu'il vise. La question de la variante lue sans sa forme
+// juridique se mesurera à part.
+//   Conséquence assumée, à connaître : le tableau de mots passé à
+//   estOriginePatronymique vient donc de normText et non de mots(), alors que le
+//   contexte, lui, est bâti avec mots(). L'écart ne porte que sur une variante
+//   qui garderait un article ou une forme juridique (« (LE MAELLE) ») : elle
+//   échapperait à la seconde règle patronymique. La première, celle du prénom du
+//   dirigeant, n'en dépend pas et joue dans les deux cas.
+//
+// VOIE NOTÉE, HORS DE CE COMMIT : passer la variante au levier SEUIL_UNICITE de
+// composition-domaines.js, pour n'accepter que celle qu'un seul SIREN porte.
+// Rendre recouper impur et dépendant de la base est une décision à part entière,
+// et elle mérite son propre commit. Ce n'est pas une dette : le plancher
+// ci-dessus tient sans elle.
+// ---------------------------------------------------------------------------
+const VARIANTE_MOTS_MIN = 3
+const VARIANTE_CAR_MIN = 10
+
+// Les variantes du nom, normalisées et dédoublonnées, dans l'ordre où la
+// composition les tient : l'enseigne d'abord, puis chaque parenthèse. PURE.
+function variantesNom(faisceau) {
+  const out = []
+  const ajoute = (v) => { const n = normText(v); if (n && !out.includes(n)) out.push(n) }
+  ajoute(faisceau?.enseigne)
+  for (const p of parentheses(faisceau?.raison_sociale)) ajoute(p)
+  return out
+}
+
+// Une variante est assez longue pour servir d'aiguille : trois mots OU dix
+// caractères. La longueur comptée est celle de la forme NORMALISÉE, espaces
+// compris, parce que c'est exactement la chaîne cherchée dans le corpus, donc
+// celle dont dépend le risque de collision. PURE.
+function varianteAssezLongue(v) {
+  return v.split(' ').length >= VARIANTE_MOTS_MIN || v.length >= VARIANTE_CAR_MIN
+}
+
+// Le nom de la société est-il cité ? Le corps au plancher de quatre caractères,
+// OU une variante non patronymique au plancher ci-dessus. Le contexte
+// patronymique n'est bâti que si une variante y arrive : sur la fiche sans
+// enseigne ni parenthèse, cette fonction fait exactement ce que faisait le
+// presentNorm d'avant, et rien de plus. PURE, sans I/O.
+function nomCite(faisceau, ex) {
+  if (presentNorm(ex.corpusNorm, faisceau?.raison_sociale, 4)) return true
+  const variantes = variantesNom(faisceau)
+  if (!variantes.length) return false
+  const ctx = contextePatronyme(faisceau)
+  for (const v of variantes) {
+    if (!varianteAssezLongue(v)) continue
+    if (estOriginePatronymique(v.split(' '), ctx)) continue
+    if (ex.corpusNorm.includes(v)) return true
+  }
+  return false
+}
+
 // Voie ATTENDUE d'une fiche : { numero, voie } sous forme canonique. D'abord les
 // champs éclatés (numero_voie / type_voie / libelle_voie) ; s'ils sont vides — cas
 // SYSTÉMATIQUE côté Etalab, qui ne les peuple jamais —, repli sur l'agrégat
@@ -1127,7 +1223,10 @@ function recouper(faisceau, ex, attestee) {
 
   const sig = {
     siret: siretTrouve,
-    raison_sociale: presentNorm(ex.corpusNorm, faisceau.raison_sociale, 4),
+    // Le corps de la raison sociale OU l'une de ses variantes (enseigne,
+    // parenthèse). Un seul signal, jamais deux : c'est le même nom, lu sous une
+    // autre forme. Doctrine et bornes : cf. nomCite.
+    raison_sociale: nomCite(faisceau, ex),
     // DURCISSEMENT AU POINT D'USAGE, et non dans adresseConcorde. Ce que le
     // recoupement accepte de compter comme signal d'adresse, c'est la VOIE CITEE,
     // jamais la conjonction ville plus code postal : sur la page d'enseigne qui

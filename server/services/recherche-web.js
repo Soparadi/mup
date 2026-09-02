@@ -16,6 +16,15 @@
 // │ complet et opérationnel.                                                  │
 // └─────────────────────────────────────────────────────────────────────────┘
 //
+// LE MAILLON N'EST PLUS INERTE POUR AUTANT. Le bandeau ci-dessus ne vaut que pour
+// fetchSerp, c'est-à-dire pour les MOTEURS. Une source réelle existe désormais, en
+// amont d'eux : la COMPOSITION DE DOMAINES (composition-domaines.js), qui ne
+// consulte personne et ne fait que résoudre des noms formés à partir du faisceau.
+// Ses pistes passent EN TÊTE des candidats, avant ce que rendrait un moteur, et
+// subissent exactement le même sort qu'eux : filtrage, liste noire, puis
+// vérification une par une au maillon 4. Le rang ne vaut toujours rien, seul le
+// recoupement accepte.
+//
 // Contrainte politesse : quand un backend sera câblé, TOUT appel sortant devra passer
 // par politeFetchText (mentions-legales.js), donc par le MÊME dispositif que les crawls
 // de sites tiers. Les files y sont par hôte : les hôtes de SERP auront la leur, séparée
@@ -34,6 +43,14 @@ import { politeFetchText } from './mentions-legales.js'
 // pas une ligne.
 import { hostBlacklisted } from './hotes-exclus.js'
 export { BLACKLIST_HOSTS, hostBlacklisted } from './hotes-exclus.js'
+
+// La composition de domaines. L'import ferme un cycle (celui-ci → composition-domaines
+// → rapprochement-osm → celui-ci, pour hostBlacklisted), et c'est sans conséquence :
+// le seul nom que rapprochement-osm prend ici est un RÉEXPORT de hotes-exclus.js,
+// module feuille, donc une liaison résolue au lien et non à l'évaluation ; et aucun
+// des trois modules ne s'en sert au niveau supérieur, seulement dans des corps de
+// fonction. Rien de plus ne doit être ajouté à ce cycle sans le revérifier.
+import { chargerIndexUnicite, composerPistes } from './composition-domaines.js'
 
 // ---------------------------------------------------------------------------
 // Détection patronyme : la raison sociale est-elle (essentiellement) le nom du
@@ -134,20 +151,67 @@ async function fetchSerp(query) {
 }
 
 // ---------------------------------------------------------------------------
-// rechercherUrlSociete(faisceau) — API publique du module.
-// Rend une liste ORDONNÉE de candidats (origines) à vérifier au maillon 4.
-// Aucun throw remontant (fail-safe → [] en cas de pépin).
+// pistesComposees(fiche) : les domaines composés, prêts à être filtrés.
+//
+// L'INDEX D'UNICITÉ EST DEMANDÉ À chargerIndexUnicite, qui le mémoïse depuis le
+// commit précédent : il n'est PAS reconstruit ici, et deux fiches du même lot ne le
+// paient pas deux fois. Index indisponible : aucune piste, jamais de composition
+// sans son garde-fou.
+//
+// LE SCHÉMA EST AJOUTÉ ICI. composerPistes rend des domaines nus, à dessein, pour
+// que le repli en clair reste possible plus loin ; mais filtrerCandidats parse ses
+// entrées avec `new URL`, qui lève sur un domaine nu et les jetterait toutes en
+// silence. On pose donc https, et le repli en clair est perdu : il l'est DÉJÀ pour
+// tout le maillon 1.b, dont les candidats sortent tous de filtrerCandidats en
+// origines schémées. Ce commit ne dégrade rien sur ce point ; le restaurer est un
+// geste à part, à prendre après la première mesure.
+//
+// FAIL-SAFE INTÉGRAL. Aucune exception ne remonte : une composition qui échoue rend
+// une liste vide, et la chaîne continue exactement comme avant ce commit.
 // ---------------------------------------------------------------------------
 
-export async function rechercherUrlSociete({ raison_sociale, ville, dirigeant_nom } = {}) {
+async function pistesComposees({ raison_sociale, enseigne, dirigeant_nom } = {}) {
   try {
+    // Rien à composer : ni raison sociale ni enseigne, on n'ouvre même pas l'index.
+    if (!String(raison_sociale || '').trim() && !String(enseigne || '').trim()) return []
+    const index = await chargerIndexUnicite()
+    if (!index) return []
+    const pistes = await composerPistes({ raison_sociale, enseigne, dirigeant_nom }, index)
+    return (Array.isArray(pistes) ? pistes : [])
+      .map(p => String(p?.url || '').trim())
+      .filter(Boolean)
+      .map(d => `https://${d}`)
+  } catch (e) {
+    console.warn('[recherche-web] composition', String(e?.message || e).slice(0, 80))
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
+// rechercherUrlSociete(faisceau) : API publique du module.
+// Rend une liste ORDONNÉE de candidats (origines) à vérifier au maillon 4.
+// Aucun throw remontant (fail-safe, [] en cas de pépin).
+//
+// `enseigne` s'ajoute au faisceau attendu : c'est la PREMIÈRE origine de la
+// composition, donc la meilleure, et elle ne figure dans aucune des requêtes
+// envoyées aux moteurs. L'appelant qui ne la passe pas ne perd que ces pistes-là.
+//
+// ORDRE : les pistes composées d'abord, les résultats de moteurs ensuite. La
+// composition part d'un nom que la société porte, le moteur d'un classement qui ne
+// nous appartient pas ; à candidat égal, filtrerCandidats déduplique en préservant
+// l'ordre et c'est donc la piste composée qui est tentée. Ni l'une ni l'autre n'est
+// crue : chacune se vérifie au maillon 4.
+// ---------------------------------------------------------------------------
+
+export async function rechercherUrlSociete({ raison_sociale, ville, dirigeant_nom, enseigne } = {}) {
+  try {
+    const brut = await pistesComposees({ raison_sociale, enseigne, dirigeant_nom })
     const queries = buildQueries({ raison_sociale, ville, dirigeant_nom })
-    if (queries.length === 0) return []
-    const brut = []
     for (const q of queries) {
       const urls = await fetchSerp(q)
       if (Array.isArray(urls)) brut.push(...urls)
     }
+    if (!brut.length) return []
     return filtrerCandidats(brut)
   } catch (e) {
     console.warn('[recherche-web]', String(e?.message || e).slice(0, 80))

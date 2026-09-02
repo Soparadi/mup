@@ -1433,10 +1433,14 @@ export async function enrichirMentionsLegales(siret, options = {}) {
     // candidat au maillon 4 (jamais confiance au rang) ; 1er qui recoupe = retenu.
     // sansRechercheWeb saute le maillon entier : l'appelant sait déjà quel site lire.
     if (!analyse && !sansRechercheWeb) {
+      // `enseigne` est passée pour la composition de domaines, qui en fait sa
+      // première origine ; les requêtes envoyées aux moteurs, elles, ne s'en
+      // servent pas et ne changent pas d'un caractère.
       const candidats = await rechercherUrlSociete({
         raison_sociale: faisceau.raison_sociale,
         ville: faisceau.ville,
-        dirigeant_nom: faisceau.dirigeant_nom
+        dirigeant_nom: faisceau.dirigeant_nom,
+        enseigne: faisceau.enseigne
       })
       const liste = Array.isArray(candidats) ? candidats.slice(0, MAX_CANDIDATS) : []
       for (const url of liste) {

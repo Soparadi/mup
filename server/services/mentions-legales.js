@@ -1772,7 +1772,7 @@ export async function runMentionsLegalesJob(sirets) {
 
 // ---------------------------------------------------------------------------
 // reprendreFileMentionsLegales(dept, lotMax, naf) : enchaîne des lots jusqu'à
-// épuisement de la file du département, ou jusqu'à une borne.
+// épuisement de la file du département, ou jusqu'à la borne de durée.
 //
 // LE DÉFAUT QUE CETTE FONCTION FERME. runMentionsLegalesJob traite le lot qu'on lui
 // donne et s'arrête. Rien ne relançait le lot suivant : ni curseur, ni reprise, ni
@@ -1801,7 +1801,8 @@ export async function runMentionsLegalesJob(sirets) {
 // DEMANDER N + LA TAILLE DE L'ENSEMBLE, PUIS FILTRER. Sans cela le résidu des fiches
 // déjà tentées remplit à lui seul la fenêtre LIMIT N, le filtre rend une liste vide,
 // et la reprise s'arrêterait à faux en laissant des candidats jamais vus derrière le
-// résidu. La demande grandit d'un tour à l'autre, bornée par REPRISE_LOTS_MAX.
+// résidu. La demande grandit d'un tour à l'autre, aussi longtemps que le budget de
+// durée laisse un tour de plus se faire.
 //
 // RIEN N'EST PERSISTÉ, et c'est délibéré : la granularité de reprise est déjà la
 // fiche, markChecked étant posé fiche par fiche par enrichirMentionsLegales. Un
@@ -1809,34 +1810,42 @@ export async function runMentionsLegalesJob(sirets) {
 // suivante sur le même COUPLE reprendra là où celle-ci s'est arrêtée.
 // ---------------------------------------------------------------------------
 
-// Borne 1 : lots enchaînés. Cinq lots de CRAWL_ML_BATCH couvrent 250 fiches, très au
-// large du vivier d'un couple : 77 fiches mesurées sur le 33, et cette mesure est
-// ANTÉRIEURE à la garde NAF du sélecteur, qui n'en rend plus qu'une fraction. Cette
-// borne ne mord donc quasiment jamais.
+// LA SEULE BORNE DE LA REPRISE, ET C'EST LA DURÉE. Lue AU SEUIL DE CHAQUE TOUR
+// seulement, jamais au milieu d'un lot : le plafond réel est donc cette valeur plus la
+// durée du lot en cours.
 //
-// SA JUSTIFICATION D'ORIGINE EST TOMBÉE AVEC LE DRAPEAU UNIQUE. Elle protégeait le
-// sémaphore : abréger la reprise en cours au bénéfice d'une amorce sur un AUTRE
-// département. Or cette amorce-là n'avait pas le droit de démarrer, le drapeau la
-// refusait ; et maintenant qu'elle démarre, l'abréger ne lui donne rien de plus que les
-// jetons que le sémaphore lui distribue déjà. Ce qui reste à cette borne est d'être une
-// ceinture de terminaison, doublant l'ensemble des déjà-vus, qui la garantit à lui seul.
-// La valeur ne bouge pas parce que son coût est nul, non parce que son motif tient.
-const REPRISE_LOTS_MAX = 5
-
-// Borne 2 : durée. Lue AU SEUIL DE CHAQUE TOUR seulement, jamais au milieu d'un lot :
-// le plafond réel est donc cette valeur plus la durée du lot en cours. Elle existe
-// pour le redéploiement Railway, qui coupe le processus sans préavis : plus une
-// reprise est longue, plus elle a de chances d'être tranchée en vol, et le travail
-// en vol au moment de la coupure est le seul qui se perde. Ce motif ne doit rien à la
-// concurrence et ne change pas.
+// CE QU'ELLE A REMPLACÉ. Une borne de lots la doublait, à cinq lots de CRAWL_ML_BATCH,
+// soit 250 fiches. Elle avait été posée quand le vivier d'un couple tenait dans un seul
+// lot, 77 fiches mesurées sur le 33, pour qu'une reprise ne monopolise pas les places
+// sortantes ; elle ne mordait alors jamais. L'OUVERTURE DU VIVIER AUX FICHES SANS SITE
+// L'A RENDUE FAUSSE : le vivier d'un couple se compte désormais en milliers, le
+// parallélisme est à 30, et cinq lots sont consommés en trois minutes. Mesure du
+// 2 septembre sur 96.02A / 30 : arrêt sur la borne de lots à 750 fiches en 183 s, sur un
+// vivier d'environ 1 338 et un budget de vingt minutes ; 620 fiches laissées derrière,
+// qui exigeaient une seconde recherche, alors que le travail avait encore dix-sept
+// minutes devant lui. Cadence mur mesurée : 0,244 s par fiche à parallélisme 30. Le
+// compteur `lots` reste, pour le journal seul : il ne décide plus d'aucun arrêt, et le
+// motif borne_lots ne fait plus partie des sorties possibles.
+//
+// CE QUI GARANTIT LA TERMINAISON N'ÉTAIT DÉJÀ PAS ELLE, mais l'ensemble des déjà-vus :
+// chaque tour ne traite que de l'inédit, et la sélection finit par ne plus rien rendre.
+// La borne de lots n'était qu'une ceinture par-dessus cette garantie-là.
+//
+// POURQUOI CELLE-CI, ELLE, RESTE. Deux motifs, tous deux intacts. Le redéploiement
+// Railway coupe le processus sans préavis : plus une reprise est longue, plus elle a de
+// chances d'être tranchée en vol, et le travail en vol au moment de la coupure est le
+// seul qui se perde. Et une reprise ne doit pas tourner indéfiniment pendant qu'un autre
+// abonné attend les places sortantes. Ni l'un ni l'autre ne doit rien à la concurrence
+// sur les jetons, et la valeur ne change pas.
 //
 // CE QUI CHANGE, C'EST QUAND ELLE MORD. Plusieurs reprises se partagent les mêmes
 // CRAWL_PARALLELISME jetons : chacune avance d'autant moins vite en horloge murale, et
 // les mêmes vingt minutes couvrent d'autant moins de fiches. arrêt=borne_duree cesse
 // d'être le signe d'un vivier anormal pour devenir un motif d'arrêt NORMAL dès que
-// plusieurs couples tournent ensemble.
+// plusieurs couples tournent ensemble, et c'est désormais le seul arrêt possible qui ne
+// soit pas un épuisement.
 //
-// Le résidu n'est pas perdu, et c'est ce qui rend cette borne acceptable : markChecked
+// LE RÉSIDU N'EST PAS PERDU, et c'est ce qui rend cette borne acceptable : markChecked
 // est posé fiche par fiche par enrichirMentionsLegales, donc l'amorce suivante sur LE
 // MÊME COUPLE reprend là où celle-ci s'est arrêtée, sans recrawler ce qui a abouti. Une
 // reprise coupée par la durée ne coûte que le travail en vol à l'instant de la coupure.
@@ -1934,7 +1943,6 @@ export async function reprendreFileMentionsLegales(dept, lotMax, naf) {
   reprisesEnCours.add(cle)
   try {
     for (;;) {
-      if (lots >= REPRISE_LOTS_MAX) { motif = 'borne_lots'; break }
       if (Date.now() - debut >= REPRISE_DUREE_MAX_MS) { motif = 'borne_duree'; break }
 
       // DEUX SÉLECTIONS, UNE SEULE FENÊTRE. Les fiches à site connu se servent les

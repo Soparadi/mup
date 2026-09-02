@@ -419,7 +419,7 @@ export function indexerUnicite(lignes) {
 }
 
 // ---------------------------------------------------------------------------
-// chargerIndexUnicite() : balayage du référentiel entier, département par
+// construireIndexUnicite() : balayage du référentiel entier, département par
 // département. Rend l'index, ou NULL si la lecture a échoué (fail-safe : aucun
 // throw remontant, et un null que l'appelant doit traiter comme un refus de
 // composer, jamais comme une absence de filtre).
@@ -428,9 +428,13 @@ export function indexerUnicite(lignes) {
 // à l'instance en dehors du dénombrement par département, qui est le seul moyen de
 // connaître la liste des tranches. Les lignes ne sont pas accumulées, chacune est
 // indexée puis relâchée.
+//
+// N'EST PAS APPELÉE DIRECTEMENT par le reste du code : elle passe par
+// chargerIndexUnicite, qui la mémoïse (plus bas). C'est ce balayage-là, et lui
+// seul, qui coûte.
 // ---------------------------------------------------------------------------
 
-export async function chargerIndexUnicite() {
+async function construireIndexUnicite() {
   try {
     const db = await getDb()
     const r = await db.query('SELECT departement, count() AS n FROM referentiel_societes GROUP BY departement')
@@ -453,6 +457,62 @@ export async function chargerIndexUnicite() {
     console.warn('[composition-domaines]', String(e?.message || e).slice(0, 100))
     return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// chargerIndexUnicite() : L'INDEX MÉMOÏSÉ. Interface inchangée, même valeur de
+// retour, même null en cas d'échec.
+//
+// POURQUOI. Le balayage ci-dessus lit la table entière : un dénombrement groupé
+// plus une requête par département. C'est la forme d'agrégat qui a saturé
+// l'instance en juillet, et elle n'a jamais tourné dans le processus serveur. La
+// rappeler à chaque fiche la ferait tourner autant de fois qu'il y a de fiches.
+//
+// UNE HEURE DE RETARD EST SANS CONSÉQUENCE. Le seuil d'unicité est une
+// statistique lente : une base portée par un seul SIREN ne se met pas à en
+// compter deux dans l'heure, et si cela arrive, la composition tentera une piste
+// de plus jusqu'au prochain balayage. Rien n'est écrit sur cette foi : `website`
+// n'est posé qu'après visite et recoupement.
+//
+// UNE SEULE CONSTRUCTION EN VOL. L'appel concurrent n'en lance pas une seconde,
+// il attend la promesse en cours : c'est le point qui protège l'instance quand
+// dix fiches arrivent ensemble sur un index froid.
+//
+// UN ÉCHEC N'EFFACE PAS CE QUI EST EN MAIN. Le balayage qui rate rend null à SON
+// appelant, sans toucher au dernier index construit ni à sa date : la mémoire
+// garde ce qu'elle avait, et la construction sera retentée au prochain appel.
+// ---------------------------------------------------------------------------
+
+// Durée de fraîcheur, en millisecondes. Valeur non finie ou négative : défaut.
+// Zéro est admis et signifie « reconstruire à chaque appel », ce qui n'a de sens
+// qu'en mesure.
+const FRAICHEUR_DEFAUT_MS = 3600000
+const FRAICHEUR_MS = (() => {
+  const n = parseInt(process.env.COMPOSITION_INDEX_FRAICHEUR_MS || String(FRAICHEUR_DEFAUT_MS), 10)
+  if (!Number.isFinite(n) || n < 0) return FRAICHEUR_DEFAUT_MS
+  return n
+})()
+
+let indexMemo = null        // dernier index construit, ou null tant qu'il n'y en a pas
+let indexMemoDate = 0       // date de CETTE construction, pas de la dernière tentative
+let indexEnVol = null       // promesse de la construction en cours, s'il y en a une
+
+export async function chargerIndexUnicite() {
+  if (indexMemo && (Date.now() - indexMemoDate) < FRAICHEUR_MS) return indexMemo
+  if (indexEnVol) return indexEnVol
+
+  indexEnVol = (async () => {
+    const index = await construireIndexUnicite()
+    if (index) {
+      indexMemo = index
+      indexMemoDate = Date.now()
+    }
+    return index
+  })()
+  // Le drapeau tombe dans tous les cas, succès comme échec : sans cela un
+  // balayage raté bloquerait toutes les constructions suivantes.
+  indexEnVol.finally(() => { indexEnVol = null })
+  return indexEnVol
 }
 
 // ---------------------------------------------------------------------------

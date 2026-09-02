@@ -1746,7 +1746,27 @@ export async function reprendreFileMentionsLegales(dept, lotMax, naf) {
   const N = Math.max(1, Math.floor(Number(lotMax) || 50))
   const dejaVus = new Set()
   let lots = 0, tentees = 0, horodatees = 0, sautees = 0
+  // Comptage SÉPARÉ des deux provenances. C'est le motif du découpage : dire ce que
+  // les pistes composées rapportent en propre, et non noyé dans le total des fiches
+  // qui avaient déjà leur adresse.
+  const bilan = {
+    site: { tentees: 0, horodatees: 0, sautees: 0, ecrits: 0 },
+    muet: { tentees: 0, horodatees: 0, sautees: 0, ecrits: 0 }
+  }
   let motif = 'epuisement'
+
+  // Une sélection, filtrée des déjà tentés et tronquée à ce qui est demandé.
+  //
+  // L'INFLATION PAR LES DÉJÀ VUS S'APPLIQUE À CHAQUE APPEL, pas au tour. Sans elle,
+  // le résidu des fiches déjà tentées remplit à lui seul la fenêtre LIMIT, le filtre
+  // rend une liste vide, et la reprise s'arrête à faux en laissant derrière ce résidu
+  // des candidats jamais vus. C'était déjà vrai d'une sélection unique ; avec deux
+  // branches, l'oublier sur la seconde ferait taire les muettes dès le second tour.
+  const selectionner = async (provenance, combien) => {
+    if (combien <= 0) return []
+    const candidats = await selectSiretsACrawler(d, combien + dejaVus.size, naf, provenance)
+    return candidats.filter(s => !dejaVus.has(s)).slice(0, combien)
+  }
 
   // Posée en DERNIER, juste avant le try qui la rendra : rien ne s'exécute entre la
   // prise de la clé et le finally qui la retire, donc aucun chemin ne peut la laisser
@@ -1757,16 +1777,44 @@ export async function reprendreFileMentionsLegales(dept, lotMax, naf) {
       if (lots >= REPRISE_LOTS_MAX) { motif = 'borne_lots'; break }
       if (Date.now() - debut >= REPRISE_DUREE_MAX_MS) { motif = 'borne_duree'; break }
 
-      const candidats = await selectSiretsACrawler(d, N + dejaVus.size, naf)
-      const inedits = candidats.filter(s => !dejaVus.has(s)).slice(0, N)
-      if (inedits.length === 0) { motif = 'epuisement'; break }
+      // DEUX SÉLECTIONS, UNE SEULE FENÊTRE. Les fiches à site connu se servent les
+      // premières et à concurrence de la fenêtre entière ; les muettes ne prennent
+      // que le RELIQUAT. Le tour vaut donc toujours N fiches au plus, exactement comme
+      // du temps de la sélection unique : ni le sortant, ni le budget de durée, ni le
+      // sémaphore ne changent de dimensionnement.
+      //
+      // LA PRIORITÉ EST STRICTE, et elle ne prive de rien en pratique : le vivier à
+      // site connu d'un couple se compte en unités là où le vivier muet se compte en
+      // milliers (relevé du 2 septembre : 10 contre 2 337 sur le 06 / 96.02A, 0 contre
+      // 6 165 sur le 75 / 73.11Z). La fenêtre ne sera donc quasiment jamais pleine
+      // avant les muettes.
+      //
+      // AUCUN RECOUVREMENT À CRAINDRE entre les deux listes : une fiche a un website
+      // ou n'en a pas, les deux branches sont disjointes (referentiel-read.js). Les
+      // déjà-vus ne sont donc marqués qu'une fois les deux sélections faites.
+      const avecSite = await selectionner('site', N)
+      const muettes = await selectionner('muet', N - avecSite.length)
+      if (avecSite.length === 0 && muettes.length === 0) { motif = 'epuisement'; break }
 
-      for (const s of inedits) dejaVus.add(s)
-      const c = await runMentionsLegalesJob(inedits)
+      for (const s of avecSite) dejaVus.add(s)
+      for (const s of muettes) dejaVus.add(s)
+
+      // DEUX LOTS, DEUX PASSES, DEUX COMPTEURS. La seconde passe attend la première :
+      // quelques secondes de couture par tour, le temps que les derniers hôtes du lot
+      // à site connu répondent. C'est le prix du comptage séparé, et il est payé
+      // volontairement. Un lot vide ne lance aucune passe.
+      const cSite = avecSite.length ? await runMentionsLegalesJob(avecSite) : null
+      const cMuet = muettes.length ? await runMentionsLegalesJob(muettes) : null
       lots++
-      tentees += inedits.length
-      horodatees += c?.traites || 0
-      sautees += c?.sautes || 0
+      for (const [cle, c, liste] of [['site', cSite, avecSite], ['muet', cMuet, muettes]]) {
+        bilan[cle].tentees += liste.length
+        bilan[cle].horodatees += c?.traites || 0
+        bilan[cle].sautees += c?.sautes || 0
+        bilan[cle].ecrits += c?.ecrits || 0
+        tentees += liste.length
+        horodatees += c?.traites || 0
+        sautees += c?.sautes || 0
+      }
     }
   } catch (e) {
     motif = 'erreur'
@@ -1775,10 +1823,13 @@ export async function reprendreFileMentionsLegales(dept, lotMax, naf) {
     // Dans le finally, comme le drapeau qu'elle remplace : une reprise qui plante rend
     // sa clé, et ne condamne pas toutes les suivantes sur le même couple.
     reprisesEnCours.delete(cle)
+    const detail = (b) => `${b.tentees}/${b.horodatees}/${b.sautees}/${b.ecrits}`
     console.log(
       `[mentions-legales] reprise ${cle} lots=${lots} tentées=${tentees} ` +
-      `horodatées=${horodatees} sautées=${sautees} arrêt=${motif} ` +
-      `${Math.round((Date.now() - debut) / 1000)}s`
+      `horodatées=${horodatees} sautées=${sautees} ` +
+      // tentées/horodatées/sautées/écrites, par provenance de l'adresse visitée.
+      `site=${detail(bilan.site)} muet=${detail(bilan.muet)} ` +
+      `arrêt=${motif} ${Math.round((Date.now() - debut) / 1000)}s`
     )
   }
 }

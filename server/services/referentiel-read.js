@@ -492,6 +492,19 @@ export async function getReferentielFaisceauBySiret(siret) {
 // tombée par décision ou par accident. Écrite, elle dit les deux populations que le
 // vivier réunit, et l'ordre dans lequel l'appelant les traite (mentions-legales.js).
 //
+// `provenance` RESSERRE LA DISJONCTION SUR UNE BRANCHE, et ne fait que cela :
+//   · 'site' : les fiches déjà dotées d'un website, celles que le rapprochement OSM
+//     ou Atout France ont trouvées. Elles se vérifient sur une adresse affirmée.
+//   · 'muet' : les fiches sans website, celles que la composition de domaines doit
+//     doter d'une piste avant que quoi que ce soit soit visité.
+//   · absente, ou toute autre valeur : les deux, la disjonction entière. C'est le
+//     comportement d'avant ce paramètre, et un appelant qui l'ignore ne voit aucune
+//     différence.
+// LES DEUX BRANCHES SONT DISJOINTES par construction : une fiche a un website ou
+// n'en a pas. Deux sélections successives ne peuvent donc pas se rendre le même
+// SIRET, ce sur quoi l'appelant s'appuie pour composer son lot (mentions-legales.js).
+// La signature de retour ne change pas : un tableau de SIRET, dans les deux cas.
+//
 // L'ÉTAT ADMINISTRATIF EST POSÉ, comme à la lecture de gisement (ACTIVE_CLAUSE, plus
 // haut dans ce fichier). Aucune fiche non active n'a été trouvée dans le vivier
 // ouvert du 06 au 2 septembre, donc aucun effet mesurable aujourd'hui ; mais le
@@ -522,7 +535,7 @@ export async function getReferentielFaisceauBySiret(siret) {
 // géographie, pas du hasard : un code NAF compte autant de fois qu'il y a de
 // départements chargés, et la fenêtre LIMIT ne se remplissant presque jamais, le
 // balayage va jusqu'au bout de l'index.
-export async function selectSiretsACrawler(dept, limit, naf) {
+export async function selectSiretsACrawler(dept, limit, naf, provenance) {
   try {
     const d = str(dept)
     if (!d) return []
@@ -531,11 +544,19 @@ export async function selectSiretsACrawler(dept, limit, naf) {
     const codeNaf = normalizeNaf(naf)
     if (!codeNaf) return []
     const n = Math.max(1, Math.floor(Number(limit) || 50))
+    // La branche demandée, ou les deux. Les trois formes portent la MÊME colonne et
+    // le même prédicat, découpé ou non : rien ici ne dépend d'un index de plus.
+    const AVEC_SITE = "website != NONE AND website != ''"
+    const SANS_SITE = "(website = NONE OR website = '')"
+    const clauseSite =
+      provenance === 'site' ? AVEC_SITE
+      : provenance === 'muet' ? SANS_SITE
+      : `((${AVEC_SITE}) OR website = NONE OR website = '')`
     const sql =
       'SELECT siret FROM referentiel_societes WITH INDEX idx_ref_dept_naf ' +
       'WHERE departement = $dept AND naf = $naf ' +
       "AND etat_administratif = 'A' " +
-      "AND ((website != NONE AND website != '') OR website = NONE OR website = '') " +
+      `AND ${clauseSite} ` +
       "AND (societe_tel = NONE OR societe_tel = '' OR societe_email = NONE OR societe_email = '') " +
       'AND (mentions_legales_checked_at = NONE OR mentions_legales_checked_at < time::now() - 30d) ' +
       `LIMIT ${n}`

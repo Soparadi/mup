@@ -32,6 +32,11 @@
 //    retirant le lieu mais laissant la préposition qui le portait (LA TERRASSE DE
 //    PARIS donnait `terrassede`).
 //
+//    UNE ORIGINE DE PLUS DE SIX MOTS NE COMPOSE RIEN. La borne de 63 caractères
+//    est celle du label DNS, elle ne dit rien du nom : soixante caractères de
+//    raison sociale recopiée y tiennent. La borne de mots (MOTS_MAX) la double,
+//    sur le découpage de mots() et avant toute concaténation.
+//
 //    LE PATRONYME SE JUGE ORIGINE PAR ORIGINE, ET NON FICHE PAR FICHE. Une origine
 //    qui porte le nom du dirigeant est écartée ; les autres origines de la même
 //    fiche restent composables. La mesure du 2 septembre a établi ce qu'a coûté la
@@ -115,6 +120,15 @@ export const EXTENSIONS = ['com', 'fr']
 // est la limite d'un label DNS (RFC 1035), au-delà la forme n'est même pas un nom.
 const FORME_MIN = 3
 const FORME_MAX = 63
+
+// La borne de MOTS, qui s'ajoute à FORME_MAX sans la remplacer. Compter les
+// caractères ne suffit pas : O.R.C. COMMUNICATION CORPORATE ET METIERS -
+// MEDIAS@WORK - WAT-WE ARE TOGETHER compose une forme de soixante caractères,
+// donc sous la limite du label DNS, et personne n'a jamais déposé
+// orccommunicationcorporateetmetiersmediasworkwatwearetogether. Au-delà de
+// MOTS_MAX mots, la suite n'est plus un nom qu'on tape, c'est une raison sociale
+// recopiée : elle n'est pas tentée. Six mots passent, sept non.
+const MOTS_MAX = 6
 
 // Bornes du geste 2. BASE_MIN vaut cinq et non trois : entre les deux se logent
 // les sigles (« pms », « ams », « efe ») dont le domaine appartient toujours à
@@ -282,6 +296,10 @@ function composer(fiche, ecarterPatronymes) {
 
   const pousse = (m, origine) => {
     if (!m.length) return
+    // Le comptage porte sur le découpage de mots(), celui-là même qui servira à
+    // la concaténation : un second découpage dirait autre chose que ce qui est
+    // composé. La borne joue AVANT que la forme soit fabriquée.
+    if (m.length > MOTS_MAX) return
     if (ecarterPatronymes && estOriginePatronymique(m, ctx)) return
     const base = colle(m)
     // La variante à tirets n'a de sens qu'à partir de deux mots : sur un mot

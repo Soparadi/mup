@@ -65,6 +65,22 @@
 //    vrais génériques (« studio », « atelier », « salon », « france » restent
 //    écartés, aucun d'eux n'étant le site déclaré d'un de ses porteurs).
 //
+//    LA RÈGLE DES ORIGINES DÉRIVÉES A ÉTÉ ÉCRITE, MESURÉE, PUIS ABANDONNÉE. Elle
+//    faisait tomber toute origine de la fiche qui CONTENAIT une base écartée pour
+//    non-unicité : coiffureuntempspoursoi tombait avec untempspoursoi, écartée à
+//    quatre SIREN. La mesure du 2 septembre sur les 300 fiches, index d'unicité
+//    réel et DNS seul, a compté quatre fiches touchées et seize candidats
+//    supprimés. Quatorze ne résolvaient rien : gain nul, ces trois fiches
+//    échouaient déjà. Deux résolvaient : LE CHALET SAINT GEORGES perdait
+//    chaletsaintgeorges.com et .fr, et ne résolvait plus rien. Solde : zéro gain,
+//    une perte. Le motif visé n'était d'ailleurs pas celui-là, les quinze fiches
+//    du relevé du 2 septembre relevant d'une autre population.
+//
+//    LE SORT D'UNE ORIGINE JUSTE NE DOIT PAS DÉPENDRE DE QUEL AUTRE MOT DE LA
+//    FICHE A ÉCHOUÉ AU FILTRE D'UNICITÉ. La corroboration d'appartenance se fait
+//    au CRAWL, qui lit la page et voit à qui elle est, et non au filtre, qui ne
+//    sait que compter des porteurs.
+//
 // 3. RÉSOLUTION. Une forme qui ne résout pas n'est pas une adresse. Le geste est
 //    DNS SEUL : aucune requête HTTP, aucun octet demandé au site, rien qui
 //    ressemble à une visite. Il divise par dix le nombre d'adresses présentées au

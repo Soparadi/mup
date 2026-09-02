@@ -486,8 +486,17 @@ export async function getReferentielFaisceauBySiret(siret) {
 // LE NAF EST NORMALISÉ, ET CE N'EST PAS FACULTATIF : la page envoie le code SANS
 // POINT (`7311Z`, les option value de prospection.html), referentiel_societes le
 // stocke POINTÉ (`73.11Z`). Comparés tels quels, l'égalité ne matcherait jamais et
-// le crawl s'éteindrait en silence. Le couple (departement, naf) est servi par
-// idx_ref_dept_naf (referentiel.js).
+// le crawl s'éteindrait en silence.
+//
+// L'INDEX DU COUPLE EST FORCÉ, ET CE N'EST PAS UNE PRÉCAUTION DÉCORATIVE.
+// idx_ref_dept_naf (referentiel.js) existe et couvre (departement, naf), mais le
+// planificateur ne le choisit PAS de lui-même : laissé libre, il prend idx_ref_naf,
+// le code NAF seul, donc le gisement NATIONAL, et post-filtre le département.
+// Mesure du 2 septembre sur movup-prod, couple (06, 96.02A) : 8 539 lignes lues en
+// 774 ms sans WITH INDEX, 2 387 lignes en 180 ms avec. Le rapport tient de la
+// géographie, pas du hasard : un code NAF compte autant de fois qu'il y a de
+// départements chargés, et la fenêtre LIMIT ne se remplissant presque jamais, le
+// balayage va jusqu'au bout de l'index.
 export async function selectSiretsACrawler(dept, limit, naf) {
   try {
     const d = str(dept)
@@ -498,7 +507,7 @@ export async function selectSiretsACrawler(dept, limit, naf) {
     if (!codeNaf) return []
     const n = Math.max(1, Math.floor(Number(limit) || 50))
     const sql =
-      'SELECT siret FROM referentiel_societes ' +
+      'SELECT siret FROM referentiel_societes WITH INDEX idx_ref_dept_naf ' +
       'WHERE departement = $dept AND naf = $naf ' +
       "AND website != NONE AND website != '' " +
       "AND (societe_tel = NONE OR societe_tel = '' OR societe_email = NONE OR societe_email = '') " +

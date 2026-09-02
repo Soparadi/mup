@@ -23,10 +23,14 @@
 //    (`atelierdupont`) puis la variante à TIRETS (`atelier-du-pont`), au second
 //    rang, jamais à la place de la première. Mesuré sur le 22 · 73.11Z : la
 //    variante fait gagner une piste à des fiches qui n'en avaient aucune, et n'en
-//    retire à personne, elle n'est qu'un ajout. Quand la suite de mots se termine
-//    par un NOM DE LIEU, les deux mêmes formes sont composées une seconde fois sur
-//    la suite amputée (`vangardparis` puis `vangard`), toujours en plus, jamais à
-//    la place.
+//    retire à personne, elle n'est qu'un ajout.
+//
+//    IL N'Y A PLUS D'AMPUTATION DU SUFFIXE GÉOGRAPHIQUE. La suite de mots se
+//    compose entière, et elle seule. La mesure du 2 septembre sur 300 fiches, plus
+//    son témoin de soixante, a compté quatre candidats amputés et ZÉRO succès sur
+//    360 fiches : la variante ne gagnait rien et composait faux, l'amputation
+//    retirant le lieu mais laissant la préposition qui le portait (LA TERRASSE DE
+//    PARIS donnait `terrassede`).
 //
 //    LE PATRONYME SE JUGE ORIGINE PAR ORIGINE, ET NON FICHE PAR FICHE. Une origine
 //    qui porte le nom du dirigeant est écartée ; les autres origines de la même
@@ -158,7 +162,8 @@ const ARTICLES = new Set(['le', 'la', 'les', 'l'])
 // LA LISTE EST ÉCRITE ICI, et nulle part ailleurs : c'est l'union des trois
 // relevés de juillet, à deux retraits près.
 //   • lib/societes.js, SUFFIXES_FIN : sarl sasu eurl sas sci sa sl paris.
-//     « paris » n'est pas une forme juridique, il rejoint SUFFIXES_LIEU.
+//     « paris » n'est pas une forme juridique et n'est pas repris : le nom de
+//     lieu reste dans la suite de mots, qui se compose entière.
 //   • scripts/diag-staan-formulation-choix.mjs, FORMES.
 //   • scripts/diag-staan-formulation-cinq.mjs, FORMES.
 // Deux entrées de ces relevés ne sont PAS reprises : « association », qui est un
@@ -193,72 +198,6 @@ const tirets = (m) => m.join('-')
 const cle = (s) => mots(s).join(' ')
 const horsParentheses = (s) => String(s || '').replace(/\([^)]*\)/g, ' ')
 const parentheses = (s) => [...String(s || '').matchAll(/\(([^)]*)\)/g)].map(m => m[1])
-
-// ---------------------------------------------------------------------------
-// LE SUFFIXE GÉOGRAPHIQUE.
-//
-// VAN GARD & CO, enseigne « VAN GARD PARIS », ne composait que vangardparis ;
-// vangard n'était jamais formé. Quand la suite de mots se termine par un nom de
-// lieu, la suite amputée est composée EN PLUS, jamais à la place : la forme
-// entière garde son rang, l'amputée vient après elle.
-//
-// CE QUI EST RETENU, et la liste est écrite ici :
-//   • deux lieux hors nomenclature : paris, france ;
-//   • les 18 RÉGIONS françaises actuelles (les cinq régions d'outre-mer figurent
-//     une seule fois, elles sont aussi des départements) ;
-//   • les 101 noms de DÉPARTEMENTS, sous leur forme normalisée par mots().
-// Les régions et départements historiques (Aquitaine seule, Picardie, Limousin,
-// Seine-et-Oise) ne sont PAS repris : la liste suit la nomenclature en vigueur.
-//
-// Une amputation de trop ne coûte qu'un candidat de plus, jamais un candidat en
-// moins : c'est ce qui rend acceptables les noms de département qui sont aussi
-// des noms communs (« nord », « somme », « manche », « landes », « var »). Le
-// candidat entier reste devant, et le geste 2 puis le geste 3 filtrent la suite.
-// ---------------------------------------------------------------------------
-
-const LIEUX = new Set([
-  // Hors nomenclature.
-  'paris', 'france',
-  // Régions.
-  'auvergne rhone alpes', 'bourgogne franche comte', 'bretagne',
-  'centre val de loire', 'corse', 'grand est', 'hauts de france',
-  'ile de france', 'normandie', 'nouvelle aquitaine', 'occitanie',
-  'pays de la loire', 'provence alpes cote d azur',
-  // Départements 01 à 95.
-  'ain', 'aisne', 'allier', 'alpes de haute provence', 'hautes alpes',
-  'alpes maritimes', 'ardeche', 'ardennes', 'ariege', 'aube', 'aude',
-  'aveyron', 'bouches du rhone', 'calvados', 'cantal', 'charente',
-  'charente maritime', 'cher', 'correze', 'corse du sud', 'haute corse',
-  'cote d or', 'cotes d armor', 'creuse', 'dordogne', 'doubs', 'drome',
-  'eure', 'eure et loir', 'finistere', 'gard', 'haute garonne', 'gers',
-  'gironde', 'herault', 'ille et vilaine', 'indre', 'indre et loire',
-  'isere', 'jura', 'landes', 'loir et cher', 'loire', 'haute loire',
-  'loire atlantique', 'loiret', 'lot', 'lot et garonne', 'lozere',
-  'maine et loire', 'manche', 'marne', 'haute marne', 'mayenne',
-  'meurthe et moselle', 'meuse', 'morbihan', 'moselle', 'nievre', 'nord',
-  'oise', 'orne', 'pas de calais', 'puy de dome', 'pyrenees atlantiques',
-  'hautes pyrenees', 'pyrenees orientales', 'bas rhin', 'haut rhin', 'rhone',
-  'haute saone', 'saone et loire', 'sarthe', 'savoie', 'haute savoie',
-  'seine maritime', 'seine et marne', 'yvelines', 'deux sevres', 'somme',
-  'tarn', 'tarn et garonne', 'var', 'vaucluse', 'vendee', 'vienne',
-  'haute vienne', 'vosges', 'yonne', 'territoire de belfort', 'essonne',
-  'hauts de seine', 'seine saint denis', 'val de marne', 'val d oise',
-  // Outre-mer, à la fois régions et départements.
-  'guadeloupe', 'martinique', 'guyane', 'la reunion', 'reunion', 'mayotte'
-])
-
-// Le plus long libellé de la liste, « provence alpes cote d azur », fait cinq mots.
-const LIEU_MAX_MOTS = 5
-
-// Rend la suite amputée de son suffixe de lieu, ou null s'il n'y en a pas. Le
-// plus long suffixe l'emporte, et il reste toujours au moins un mot : une origine
-// qui n'est QUE son lieu (« FRANCE ») ne s'ampute pas, elle disparaîtrait.
-function sansSuffixeLieu(m) {
-  for (let n = Math.min(LIEU_MAX_MOTS, m.length - 1); n >= 1; n--) {
-    if (LIEUX.has(m.slice(m.length - n).join(' '))) return m.slice(0, m.length - n)
-  }
-  return null
-}
 
 // Les formes sous lesquelles le nom du dirigeant peut apparaître dans la raison
 // sociale : le champ tel quel, sa part hors parenthèses, et chaque parenthèse.
@@ -319,11 +258,9 @@ export function estOriginePatronymique(m, ctx) {
 //   • forme    : le label DNS, sans extension (« atelier-du-pont »)
 //   • base     : la forme COLLÉE de la même suite de mots (« atelierdupont »).
 //                C'est elle, et jamais la forme, que le geste 2 interroge : la
-//                variante à tirets ne change pas qui porte le nom. La suite
-//                amputée de son lieu a sa PROPRE base, qui n'est pas celle de la
-//                suite entière, et le geste 2 la pèse pour elle-même.
+//                variante à tirets ne change pas qui porte le nom.
 //   • origine  : 'enseigne' | 'parenthèse' | 'raison sociale'
-//   • variante : 'collée' | 'tirets' | 'collée sans lieu' | 'tirets sans lieu'
+//   • variante : 'collée' | 'tirets'
 //
 // Deux parenthèses sont écartées : celle qui répète le nom du dirigeant (la
 // règle 1 du patronyme s'en charge) et celle qui répète la raison sociale hors
@@ -346,26 +283,18 @@ function composer(fiche, ecarterPatronymes) {
   const pousse = (m, origine) => {
     if (!m.length) return
     if (ecarterPatronymes && estOriginePatronymique(m, ctx)) return
-    // La suite entière d'abord, la suite amputée de son lieu ensuite. La seconde
-    // est un AJOUT : elle ne remplace jamais la première, qui garde son rang.
-    const suites = [m]
-    const ampute = sansSuffixeLieu(m)
-    if (ampute && ampute.length) suites.push(ampute)
-    for (const suite of suites) {
-      const base = colle(suite)
-      const marque = suite === m ? '' : ' sans lieu'
-      // La variante à tirets n'a de sens qu'à partir de deux mots : sur un mot
-      // unique elle est la forme collée, et le dédoublonnage l'écarterait de toute
-      // façon, autant ne pas la fabriquer.
-      const formes = suite.length > 1
-        ? [[base, 'collée'], [tirets(suite), 'tirets']]
-        : [[base, 'collée']]
-      for (const [forme, variante] of formes) {
-        if (!forme || forme.length < FORME_MIN || forme.length > FORME_MAX) continue
-        if (vus.has(forme)) continue
-        vus.add(forme)
-        out.push({ forme, base, origine, variante: variante + marque })
-      }
+    const base = colle(m)
+    // La variante à tirets n'a de sens qu'à partir de deux mots : sur un mot
+    // unique elle est la forme collée, et le dédoublonnage l'écarterait de toute
+    // façon, autant ne pas la fabriquer.
+    const formes = m.length > 1
+      ? [[base, 'collée'], [tirets(m), 'tirets']]
+      : [[base, 'collée']]
+    for (const [forme, variante] of formes) {
+      if (!forme || forme.length < FORME_MIN || forme.length > FORME_MAX) continue
+      if (vus.has(forme)) continue
+      vus.add(forme)
+      out.push({ forme, base, origine, variante })
     }
   }
 
@@ -577,8 +506,7 @@ async function enParallele(taches, largeur = LARGEUR_DNS) {
 // composerPistes(fiche, index) : les trois gestes sur une fiche.
 //
 // Rend `[{ url, origine }]`, dans l'ordre à tenter : enseigne avant parenthèse
-// avant raison sociale, forme entière avant forme amputée de son lieu, forme
-// collée avant variante à tirets, .com avant .fr.
+// avant raison sociale, forme collée avant variante à tirets, .com avant .fr.
 //
 // `url` EST UN DOMAINE NU, sans schéma, et c'est voulu : normalizeUrl y ajoutera
 // https, et analyserSite ne s'autorise le repli sur http QUE si c'est nous qui

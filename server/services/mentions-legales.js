@@ -1368,6 +1368,14 @@ export async function enrichirMentionsLegales(siret, options = {}) {
   let refusExplicite = false
   let visiteBaseAboutie = false      // frontière 1
   let corroborationAboutie = false   // frontière 2
+  // TÉMOIN D'EXCEPTION. Le catch de cette fonction avale tout, et le finally classe
+  // ensuite la fiche sur les seuls compteurs de passage : une base indisponible
+  // produit urlsTentees === 0, donc « sans_url », indiscernable d'une fiche qui n'a
+  // rien à composer. Sans ce témoin, une panne de quelques minutes horodaterait pour
+  // trente jours toutes les fiches en vol, en silence, et le vivier se viderait de
+  // fiches jamais réellement traitées. C'est le mode de défaillance à ne pas
+  // installer : une exception interdit l'horodatage, quel que soit le motif classé.
+  let exceptionAttrapee = false
   try {
     if (!s) { result.skipped = 'siret_vide'; return result }
 
@@ -1491,23 +1499,27 @@ export async function enrichirMentionsLegales(siret, options = {}) {
       }
     }
   } catch (e) {
+    exceptionAttrapee = true
     console.warn('[mentions-legales]', String(e?.message || e).slice(0, 100))
   } finally {
     // Non-passage AVAL, symétrique des trois gardes amont : ni visite de base, ni
     // corroboration. Quatre motifs, du plus vide au plus ambigu :
-    //   • sans_url         — pas une seule URL à tenter (ni base, ni recherche web).
-    //   • refus_robots     — des URL tentées, aucune n'a répondu, et l'une au moins
+    //   · sans_url         : pas une seule URL à tenter (ni base, ni recherche web).
+    //     Depuis que la composition alimente le maillon 1.b, ce motif recouvre DEUX
+    //     cas indiscernables ici, et c'est sans conséquence : la fiche ne compose
+    //     aucune piste, ou aucune de ses pistes ne résout. composerPistes ne rend que
+    //     ce qui résout déjà, les deux se présentent donc à l'identique.
+    //   · refus_robots     : des URL tentées, aucune n'a répondu, et l'une au moins
     //     s'est vu opposer un Disallow lu. L'éditeur a parlé : le non-passage est
     //     acquis tant que son fichier dit cela. Le refus explicite prime dans le
     //     libellé, même si d'autres URL ont échoué autrement : c'est le seul fait
     //     établi du lot, les autres ne sont que des absences.
-    //   • injoignable      — des URL tentées, aucune n'a répondu, sans qu'aucun refus
+    //   · injoignable      : des URL tentées, aucune n'a répondu, sans qu'aucun refus
     //     n'ait été lu (délai dépassé, hôte mort, fichier d'exclusion illisible). Rien
     //     n'est acquis : à retenter.
-    //   • porte_incertaine — un hôte a répondu, mais l'adresse était devinée et rien
+    //   · porte_incertaine : un hôte a répondu, mais l'adresse était devinée et rien
     //     n'a corroboré. Ni sans_url ni injoignable : il y avait bien une porte et
-    //     elle s'est ouverte, rien ne dit que ce soit la bonne. Pas d'horodatage, la
-    //     fiche reste candidate — une adresse mieux composée la retrouvera.
+    //     elle s'est ouverte, rien ne dit que ce soit la bonne.
     // Un site DE LA BASE qui ne corrobore pas n'est dans aucun des quatre : c'est un
     // vrai résultat négatif, et il mérite ses 30 jours.
     if (result.skipped == null && !visiteBaseAboutie && !corroborationAboutie) {
@@ -1515,9 +1527,51 @@ export async function enrichirMentionsLegales(siret, options = {}) {
         ? 'sans_url'
         : (visiteAboutie ? 'porte_incertaine' : (refusExplicite ? 'refus_robots' : 'injoignable'))
     }
-    // Marqué à CHAQUE passage réel (trouvé ou non). Pas de marquage si skip amont
-    // (siret vide / hors référentiel / déjà frais < TTL) ni si skip aval ci-dessus.
-    if (result.skipped == null) await markChecked(s)
+    // Marqué à chaque passage RÉELLEMENT TENTÉ, abouti ou non, et c'est le critère :
+    // ce qui a été tenté et rendrait le même résultat demain prend ses trente jours.
+    //
+    // POURQUOI CE N'EST PLUS LE SEUL PASSAGE ABOUTI. Le sélecteur ne fait avancer sa
+    // fenêtre que par mentions_legales_checked_at, et l'ordre de son IndexScan est
+    // stable : une fiche tentée sans succès et non horodatée ressort en tête à
+    // CHAQUE amorce, indéfiniment. Tant que le vivier tenait en dix fiches, cela ne
+    // se voyait pas ; ouvert, il en compte plus de deux mille par couple, et sans
+    // horodatage des tentatives infructueuses la file ne draine rien : les mêmes
+    // fiches de tête seraient rejouées et la suivante jamais atteinte.
+    //
+    // CE QUI HORODATE, et pourquoi :
+    //   · sans_url         : la fiche a été passée au moteur, ses noms ont été
+    //     composés et résolus. Le verdict tient à sa raison sociale, à son enseigne
+    //     et au seuil d'unicité, qui ne bougent pas d'un jour à l'autre. C'est le cas
+    //     de masse du vivier ouvert, et le laisser dehors reviendrait à ne rien faire.
+    //   · refus_robots     : l'éditeur a dit non, il le redira demain.
+    //   · porte_incertaine : le plus cher de tous, jusqu'à dix sites lus et quatre
+    //     pages légales chacun, pour un verdict qui se reproduira à l'identique tant
+    //     que ni la fiche ni la composition ne changent. L'ancien motif de refus,
+    //     « une adresse mieux composée la retrouvera », valait quand le maillon 1.b
+    //     était inerte et que ses candidats allaient changer ; il ne vaut plus. LE
+    //     PRIX EST ASSUMÉ : le jour où le module de composition gagnera une origine,
+    //     les fiches déjà horodatées attendront jusqu'à trente jours avant d'être
+    //     reprises. Prix borné, accepté.
+    //
+    // CE QUI N'HORODATE PAS :
+    //   · siret_vide, hors_referentiel : rien n'a été tenté, et il n'y a même pas de
+    //     ligne à marquer.
+    //   · ttl : la fiche est déjà horodatée et fraîche, c'est le motif du saut.
+    //   · injoignable : l'échec est transitoire, et L'ASYMÉTRIE TRANCHE. Ne pas
+    //     horodater coûte une répétition de travail, qui se voit dans les compteurs
+    //     et se corrige. Horodater à tort coûte trente jours d'aveuglement sur une
+    //     fiche peut-être bonne, sans que rien ne le signale. Le second est
+    //     silencieux, le premier non. PISTE POUR PLUS TARD, ni promesse ni dette : un
+    //     horodatage à délai court propre à ce motif ; il demande une convention de
+    //     plus, et sa valeur ne se saura qu'après la première mesure du vivier ouvert.
+    //   · une fiche jamais sélectionnée, la reprise s'étant arrêtée sur sa borne de
+    //     durée ou de lots : elle n'est pas passée par ici, il n'y a rien à écrire.
+    //   · TOUTE fiche dont le traitement a levé, via le témoin d'exception : voir sa
+    //     déclaration, plus haut.
+    const MOTIFS_HORODATES = new Set(['sans_url', 'refus_robots', 'porte_incertaine'])
+    if (!exceptionAttrapee && (result.skipped == null || MOTIFS_HORODATES.has(result.skipped))) {
+      await markChecked(s)
+    }
   }
 
   // Audit RGPD par SIRET : source, confidence, signaux (clés, jamais de valeur PII), horodatage.
@@ -1628,15 +1682,22 @@ export async function runMentionsLegalesJob(sirets) {
 //
 // POURQUOI UN ENSEMBLE DES DÉJÀ TENTÉS, ET PAS SIMPLEMENT « TANT QU'IL RESTE DES
 // CANDIDATS ». C'est le point qui décide de tout. selectSiretsACrawler ne fait
-// avancer sa fenêtre que par mentions_legales_checked_at, or markChecked n'est posé
-// qu'aux fiches ABOUTIES : une fiche sautée (refus_robots, injoignable,
-// porte_incertaine) n'est pas horodatée, délibérément, et ressort donc à l'identique
-// à la sélection suivante. Ces motifs sont déterministes à l'échelle d'une reprise :
-// un Disallow sera relu tel quel, un hôte mort restera mort, une ressemblance ne se
-// corroborera pas davantage dix minutes plus tard. Une reprise fondée sur le seul
-// épuisement du vivier les re-crawlerait sans fin, à 8 s de délai réseau par URL.
-// L'ensemble en mémoire est ce qui garantit la terminaison : chaque tour ne traite
-// que de l'inédit, et la reprise s'arrête quand la sélection n'en rend plus.
+// avancer sa fenêtre que par mentions_legales_checked_at, et toutes les fiches
+// tentées ne l'obtiennent pas : `injoignable` ne prend pas ses trente jours, son
+// échec étant transitoire (voir le finally d'enrichirMentionsLegales). Une telle
+// fiche ressort à l'identique à la sélection suivante, dans le même tour. Or son
+// motif est déterministe à l'échelle d'une reprise : un hôte mort restera mort dix
+// minutes plus tard. Une reprise fondée sur le seul épuisement du vivier le
+// re-crawlerait sans fin, à 8 s de délai réseau par URL. L'ensemble en mémoire est
+// ce qui garantit la terminaison : chaque tour ne traite que de l'inédit, et la
+// reprise s'arrête quand la sélection n'en rend plus.
+//
+// CE QUE L'HORODATAGE DES TENTATIVES INFRUCTUEUSES A CHANGÉ, ET CE QU'IL N'A PAS
+// CHANGÉ. `sans_url`, `refus_robots` et `porte_incertaine` prennent désormais leurs
+// trente jours : ils ne reviennent plus d'une amorce à l'autre, ce sans quoi le
+// vivier ouvert ne drainerait rien. L'ensemble en mémoire reste nécessaire, pour
+// `injoignable` et pour les fiches dont le traitement a levé, qui ne sont pas
+// horodatées et reviendraient donc à la sélection du tour suivant.
 //
 // DEMANDER N + LA TAILLE DE L'ENSEMBLE, PUIS FILTRER. Sans cela le résidu des fiches
 // déjà tentées remplit à lui seul la fenêtre LIMIT N, le filtre rend une liste vide,
@@ -1826,7 +1887,10 @@ export async function reprendreFileMentionsLegales(dept, lotMax, naf) {
     const detail = (b) => `${b.tentees}/${b.horodatees}/${b.sautees}/${b.ecrits}`
     console.log(
       `[mentions-legales] reprise ${cle} lots=${lots} tentées=${tentees} ` +
-      `horodatées=${horodatees} sautées=${sautees} ` +
+      // ABOUTIES, et non « horodatées » : depuis que les tentatives infructueuses
+      // prennent elles aussi leurs trente jours, une partie des sautées est horodatée.
+      // Ce compteur-ci ne dit que les fiches qui ont abouti.
+      `abouties=${horodatees} sautées=${sautees} ` +
       // tentées/horodatées/sautées/écrites, par provenance de l'adresse visitée.
       `site=${detail(bilan.site)} muet=${detail(bilan.muet)} ` +
       `arrêt=${motif} ${Math.round((Date.now() - debut) / 1000)}s`

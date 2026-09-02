@@ -5110,10 +5110,15 @@ app.post('/api/amorce', async (req, res) => {
   //      reprise refusée ne refuse jamais la recherche.
   //
   // L'ORDRE DES DEUX RAPPROCHEMENTS N'EST PAS INTERCHANGEABLE, deux fois :
-  //   · Atout France AVANT selectSiretsACrawler, parce que cette sélection ne
-  //     retient que les fiches ayant DÉJÀ un website (referentiel-read.js). Placé
-  //     après, il écrirait des sites que le crawl ne lirait qu'à la recherche
-  //     SUIVANTE sur le même département.
+  //   · Atout France AVANT selectSiretsACrawler. LE MOTIF A CHANGÉ le 2 septembre :
+  //     la sélection n'exige plus qu'une fiche ait DÉJÀ un website, le vivier accueille
+  //     les fiches muettes que la composition de domaines dote d'une piste
+  //     (referentiel-read.js). Une fiche vue après le passage d'Atout France ne serait
+  //     donc plus ignorée, elle serait crawlée sur une piste composée. L'ordre reste
+  //     néanmoins celui-là, et pour une raison qui ne dépend pas du sélecteur : les
+  //     deux sources écrivent en remplissage-si-vide, un website affirmé par Atout
+  //     France vaut mieux qu'un nom composé, et il faut donc qu'il soit posé avant que
+  //     le crawl choisisse sur quoi travailler.
   //   · Atout France APRÈS l'OSM, parce que les deux écrivent en
   //     remplissage-si-vide — le premier arrivé gagne — et que l'OSM apparie par
   //     identifiant dans l'écrasante majorité de ses cas, là où Atout France

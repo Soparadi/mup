@@ -25,57 +25,15 @@
 import { normText } from './overpass.js'
 import { politeFetchText } from './mentions-legales.js'
 
-// Hôtes qui ne peuvent PAS corroborer une entreprise donnée : un candidat (ou un
-// website déjà en base) porté par l'un d'eux est écarté. Suffixe strict sur le
-// domaine enregistrable, insensible au www.
-//
-// Deux familles, même conséquence :
-//   • agrégateurs / annuaires / réseaux sociaux / moteurs — la page décrit
-//     l'entreprise mais les coordonnées publiées sont celles du portail ;
-//   • plateformes de réservation, franchises et enseignes nationales — la page
-//     de l'établissement porte le SIRET du réseau, son standard, son courriel
-//     générique. Crawler ces domaines ne peut RIEN corroborer sur l'établissement
-//     visé, et ne coûte que de la file.
-//
-// Exportée (avec le prédicat hostBlacklisted, pour qu'aucun appelant n'ait à
-// réimplémenter la correspondance par suffixe) : le chemin d'enrichissement à la
-// demande s'en sert pour ne pas lancer le moteur sur un site qui ne peut pas
-// corroborer. La passe de fond, elle, n'appelle rien de tout cela : son maillon
-// 1.a (website déjà en base) reste inchangé.
-export const BLACKLIST_HOSTS = [
-  'societe.com', 'pappers.fr', 'pappers.com', 'verif.com', 'kompass.com',
-  'pagesjaunes.fr', 'facebook.com', 'instagram.com', 'linkedin.com',
-  'google.com', 'google.fr', 'wikipedia.org', 'mappy.com',
-  // apparentés fréquents (mêmes familles) — écartés par prudence
-  'infogreffe.fr', 'manageo.fr', 'bodacc.fr', 'score3.fr', 'dnb.com',
-  'twitter.com', 'x.com', 'youtube.com', 'tiktok.com', 'yelp.fr', 'yelp.com',
-  // plateformes de réservation / prise de rendez-vous
-  'planity.com', 'doctolib.fr', 'app.kiute.com', 'kalendes.com', 'business.site',
-  // coiffure — enseignes et réseaux
-  'tchip.fr', 'pascalcoste.com', 'franckprovost.com', 'jeanlouisdavid.com',
-  'dessange.com', 'saint-algue.com', 'coiffirst.com', 'davidlucas.fr',
-  'labarbieredeparis.com', 'lorealprofessionnel.com',
-  // optique — enseignes
-  'krys.com', 'optical-center.fr', 'optic2000.com', 'generale-optique.com',
-  'monopticien.com', 'opticiensparconviction.fr', 'jimmyfairly.com', 'visual.fr',
-  // immobilier — réseaux
-  'orpi.com', 'squarehabitat.fr', 'cimm.com', 'msimond.fr',
-  'espaces-atypiques.com', 'blot-immobilier.fr', 'lamotte.fr',
-  // divers — grande distribution, énergie, franchises
-  'carrefour.fr', 'totalenergies.com', 'brunoflaujac.com', 'renoval-veranda.com',
-  'diloys.fr', 'laprocure.com', 'methode-busquet.com',
-  // annuaires et places de marché relevés par la mesure du 31 août sur dix fiches.
-  // infogreffe.fr n'est pas repris ici : il figure déjà plus haut.
-  //
-  // Les deux premiers sont des SOUS-DOMAINES, et c'est voulu, la convention de la
-  // liste étant partout ailleurs le domaine enregistrable : lefigaro.fr et
-  // data.gouv.fr doivent rester crawlables, seules leurs sections annuaire sont
-  // écartées. hostBlacklisted les prend par égalité stricte et couvre leurs propres
-  // sous-domaines, sans jamais toucher au domaine parent.
-  'entreprises.lefigaro.fr', 'annuaire-entreprises.data.gouv.fr',
-  'contract-factory.com', 'annuaire-france-gratuit.fr', 'leguichetdesformalites.fr',
-  'agences-comm.fr', 'societeinfo.com', 'le-site-de.com', 'french-business-law.com'
-]
+// La liste noire des hôtes et son prédicat vivent désormais dans hotes-exclus.js,
+// module feuille sans aucune dépendance. Motif : le filtre d'écriture du référentiel
+// (enrichReferentielActionnable) doit les lire, or ce module-ci importe
+// mentions-legales.js, qui importe referentiel.js ; les laisser ici aurait fermé un
+// cycle d'import. Ils restent RÉEXPORTÉS depuis cette adresse : les appelants
+// historiques (server.js, rapprochement-osm.js, les bancs de scripts/) ne changent
+// pas une ligne.
+import { hostBlacklisted } from './hotes-exclus.js'
+export { BLACKLIST_HOSTS, hostBlacklisted } from './hotes-exclus.js'
 
 // ---------------------------------------------------------------------------
 // Détection patronyme : la raison sociale est-elle (essentiellement) le nom du
@@ -114,14 +72,6 @@ export function buildQueries({ raison_sociale, ville, dirigeant_nom } = {}) {
 // Filtrage des candidats : http(s) only, hors blacklist, réduits à l'origine
 // (on crawle la home au maillon 2), dédupliqués en préservant l'ordre.
 // ---------------------------------------------------------------------------
-
-// Hôte inexploitable (vide, illisible) → true : fail-closed. L'appelant qui ne sait
-// pas lire l'hôte d'une URL n'a rien à crawler.
-export function hostBlacklisted(host) {
-  const h = String(host || '').replace(/^www\./, '').toLowerCase()
-  if (!h) return true
-  return BLACKLIST_HOSTS.some(b => h === b || h.endsWith('.' + b))
-}
 
 export function filtrerCandidats(urls) {
   const out = []

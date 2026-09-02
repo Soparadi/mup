@@ -24,6 +24,10 @@ import { cleanRecordId } from '../../lib/db.js'
 // clé ; countReferentielFresh fournit le compteur informatif.
 import { countReferentielFresh, normalizeNaf } from './referentiel-read.js'
 import { checkBlocklistOne, checkBlocklistBatch } from './optout.js'
+// Liste noire des hôtes : module FEUILLE, sans aucune dépendance. C'est la raison
+// même de son existence, cf. hotes-exclus.js. La lire depuis recherche-web.js,
+// son adresse historique, refermerait un cycle par mentions-legales.js.
+import { hostBlacklisted, hoteDeSite, champReseauPourHote } from './hotes-exclus.js'
 
 // ── migration idempotente ──
 export async function runReferentielMigration() {
@@ -307,6 +311,20 @@ async function upsertRecordRef(db, table, cleanId, body, fillIfEmpty = []) {
 // champ existant reste tel quel (on n'écrase jamais avec du vide).
 //
 // FIRE-AND-FORGET : appelée sans await, ne doit JAMAIS throw. Échec avalé + loggé.
+//
+// FILTRE D'HÔTE SUR LE SITE, posé ici et nulle part ailleurs. Les huit portes par
+// lesquelles un `website` entre au référentiel (Étalab n'en est pas : son socle ne
+// porte pas ce champ) passent TOUTES par cette fonction : rapprochement OSM en trois
+// points, Atout France, les deux amorces Overpass, le crawl mentions légales, la
+// saisie abonné et l'import. Un seul test ici les couvre toutes, et aucune porte
+// future ne pourra le contourner sans contourner l'écriture elle-même.
+//
+// Ce qu'il ferme : une page Facebook, un profil Planity ou une fiche Tchip stockée
+// comme site d'entreprise. Ces hôtes passent le sélecteur du crawl
+// (selectSiretsACrawler, referentiel-read.js), occupent une place dans le lot, se
+// font refuser par le fichier d'exclusion des robots, et ne sont PAS horodatés
+// (mentions-legales.js ne pose markChecked qu'aux fiches abouties) : ils reviennent
+// donc à chaque passage. Mesuré avant ce commit : 32 fiches sur les 65 du vivier.
 export async function enrichReferentielActionnable(siret, fields = {}) {
   try {
     // SIRET normalisé (espaces retirés) avant cleanRecordId — aligne la clé sur les
@@ -318,10 +336,40 @@ export async function enrichReferentielActionnable(siret, fields = {}) {
       console.log(`[optout] enrich ignoré ${cleanSiret}`)
       return
     }
+    // ── Filtre d'hôte, AVANT la boucle des champs ──
+    // Copie locale : l'objet de l'appelant n'est jamais muté (plusieurs appelants
+    // le construisent à la volée, mais rapprochement-osm.js passe le résultat de
+    // mapperOsmVersContrat, qu'il compte par ailleurs).
+    const entrants = { ...(fields || {}) }
+    const siteEntrant = str(entrants.website)
+    if (siteEntrant) {
+      const hote = hoteDeSite(siteEntrant)
+      // hostBlacklisted('') vaut true : un website illisible (schéma cassé, valeur
+      // qui n'est pas une URL) tombe par la même porte, fail-closed. Mesuré : aucun
+      // des 833 websites en base n'est dans ce cas, la branche est une garde.
+      if (hostBlacklisted(hote)) {
+        delete entrants.website   // le champ site n'est PAS écrit, dans les deux cas
+        const champ = champReseauPourHote(hote)
+        if (champ) {
+          // Réorientation vers le champ de réseau social correspondant. Si l'appelant
+          // fournit DÉJÀ ce champ, le sien prime : il l'a lu à la source (OSM, page
+          // de mentions légales), là où l'URL de site n'est qu'un rabattement.
+          // Champ déjà rempli EN BASE : abandon silencieux, tranché par le
+          // remplissage-si-vide SurrealQL ci-dessous, comme partout ailleurs.
+          if (!str(entrants[champ])) entrants[champ] = siteEntrant
+          console.log(`[referentiel-enrich] site réorienté ${cleanSiret} ${hote} -> ${champ}`)
+        } else {
+          // Pas de champ d'accueil, et c'est un arbitrage : planity, tchip, orpi,
+          // business.site décrivent un réseau, pas l'établissement. Rien n'est créé
+          // pour les recueillir.
+          console.log(`[referentiel-enrich] site écarté ${cleanSiret} ${hote || '(illisible)'}`)
+        }
+      }
+    }
     const params = { id }
     const assigns = []
     for (const k of ['website', 'societe_email', 'societe_tel', 'societe_linkedin', 'societe_facebook', 'societe_instagram']) {
-      const v = str(fields?.[k])
+      const v = str(entrants[k])
       if (!v) continue   // champ vide en entrée → non posé (jamais d'écrasement par du vide)
       // Additif par champ : n'écrit que si l'existant est vide (NONE ou '').
       assigns.push(`${k} = IF ${k} = NONE OR ${k} = '' THEN $${k} ELSE ${k} END`)

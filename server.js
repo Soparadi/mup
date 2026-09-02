@@ -49,6 +49,7 @@ import { runReferentielAtoutFranceMigration } from './server/services/referentie
 import { chargerAtoutFrance } from './server/services/atout-france.js'
 import { runReferentielRgeMigration } from './server/services/referentiel-rge.js'
 import { chargerRge } from './server/services/rge.js'
+import { runReferentielOvertureMigration } from './server/services/referentiel-overture.js'
 import { runVisitesMigration, creerMesureAudience, visiteursALInstant, etatVivant, jourParis, decalerJour } from './server/services/visites.js'
 import { BYPASS_EMAIL, isOwner } from './lib/vip.js'
 import { getReferentielContactBySiret, getOsmContactBySiret, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh, countGisementPagine, normalizeNaf } from './server/services/referentiel-read.js'
@@ -9766,6 +9767,18 @@ app.use((req, res) => {
     console.log('[boot] referentiel_rge table ready (+ 4 indexes)')
   } catch (e) {
     console.error('[boot] referentiel_rge migration failed:', e.message)
+  }
+  // Référentiel Overture Places : table referentiel_overture (clé = identifiant
+  // GERS de la source), lieux de la base Overture Maps. Séparée de
+  // referentiel_osm, et pour une raison de licence avant tout : OSM est sous
+  // ODbL, Overture ne porte aucune ligne ODbL sur la France. Vide au boot :
+  // alimentation hors serveur, par scripts/charger-overture-tranche.mjs, la
+  // source étant un fichier Parquet que le conteneur ne sait pas lire.
+  try {
+    await runReferentielOvertureMigration()
+    console.log('[boot] referentiel_overture table ready (+ 3 indexes)')
+  } catch (e) {
+    console.error('[boot] referentiel_overture migration failed:', e.message)
   }
   // Audience du site public — tables visite (détail, 90 jours) et visite_jour
   // (agrégat, conservé). Aucun userId, aucun lien avec la table user : ce sont

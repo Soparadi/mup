@@ -476,9 +476,34 @@ export async function getReferentielFaisceauBySiret(siret) {
 
 // ── F. selectSiretsACrawler(dept, limit, naf), async, fail-safe ──
 // Sélectionne les SIRET d'un département ET D'UN CODE NAF À CRAWLER par le moteur
-// mentions légales (2e source) : fiches qui ONT un website (écrit par le
-// rapprochement OSM) mais PAS encore de contact société (tél OU email manquant), et
-// dont l'idempotence mentions_legales_checked_at est absente ou périmée (> 30 j).
+// mentions légales (2e source) : fiches ACTIVES sans contact société complet (tél OU
+// email manquant), dont l'idempotence mentions_legales_checked_at est absente ou
+// périmée (> 30 j), QU'ELLES AIENT OU NON UN WEBSITE.
+//
+// LE VIVIER ACCUEILLE LES FICHES SANS SITE, et c'est le sens de ce sélecteur depuis
+// que la composition de domaines alimente la recherche de site. Une fiche muette
+// n'est plus une fiche sans matière : le maillon 1.b lui compose des noms, les
+// résout, et le maillon 4 vérifie ce qui répond. L'exiger dotée d'un website revenait
+// à ne servir que ce que le rapprochement OSM avait déjà trouvé.
+//
+// LA DISJONCTION EST ÉCRITE, ELLE N'EST PAS ABSENTE. `(website != NONE AND
+// website != '') OR website = NONE OR website = ''` est une tautologie, et c'est
+// voulu : une clause simplement retirée laisserait le lecteur se demander si elle est
+// tombée par décision ou par accident. Écrite, elle dit les deux populations que le
+// vivier réunit, et l'ordre dans lequel l'appelant les traite (mentions-legales.js).
+//
+// L'ÉTAT ADMINISTRATIF EST POSÉ, comme à la lecture de gisement (ACTIVE_CLAUSE, plus
+// haut dans ce fichier). Aucune fiche non active n'a été trouvée dans le vivier
+// ouvert du 06 au 2 septembre, donc aucun effet mesurable aujourd'hui ; mais le
+// vivier passe de dix fiches à plus de deux mille, et une population de cette taille
+// n'a pas les propriétés d'une poignée. Le sélecteur dit désormais la même chose que
+// la lecture, ce qui est la seule façon de ne pas avoir à se demander laquelle ment.
+//
+// OUVRIR LE VIVIER ACCÉLÈRE LA REQUÊTE, ce qui surprend et s'explique. Fermée, elle
+// ne remplit presque jamais sa fenêtre LIMIT : dix candidats sur le couple (06,
+// 96.02A), donc le balayage va jusqu'au bout de l'index, 8 539 lignes et 774 ms.
+// Ouverte et servie par l'index du couple, la fenêtre est pleine au bout de 200
+// lignes lues, en 7,8 ms. Mesures du 2 septembre sur movup-prod.
 // Colonne `departement` (jamais `dept`). Params bindés. Rend un tableau de SIRET
 // (strings) ou [] (aucun candidat / tout échec, fail-safe, ne casse jamais
 // l'enchaînement /api/amorce).
@@ -509,7 +534,8 @@ export async function selectSiretsACrawler(dept, limit, naf) {
     const sql =
       'SELECT siret FROM referentiel_societes WITH INDEX idx_ref_dept_naf ' +
       'WHERE departement = $dept AND naf = $naf ' +
-      "AND website != NONE AND website != '' " +
+      "AND etat_administratif = 'A' " +
+      "AND ((website != NONE AND website != '') OR website = NONE OR website = '') " +
       "AND (societe_tel = NONE OR societe_tel = '' OR societe_email = NONE OR societe_email = '') " +
       'AND (mentions_legales_checked_at = NONE OR mentions_legales_checked_at < time::now() - 30d) ' +
       `LIMIT ${n}`

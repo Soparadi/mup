@@ -1381,11 +1381,24 @@ export async function enrichirMentionsLegales(siret, options = {}) {
     let analyse = null
     let sourceUrl = null
 
-    // Attestation par identifiant — UNE requête indexée par SIRET, et seulement si
+    // Attestation par identifiant : UNE requête indexée par SIRET, et seulement si
     // une URL est effectivement visitée (mémoïsée : le Set, même vide, est vérité).
     // Le résultat vaut pour toutes les URL du SIRET : c'est le DOMAINE qui décide.
+    //
+    // L'ATTESTATION EST RÉSERVÉE À LA PROVENANCE RÉFÉRENTIEL, et ce refus est
+    // appliqué ICI, pas par les sites d'appel. Une URL du maillon 1.b est composée
+    // ou cherchée : elle n'a été affirmée par personne, et le fait qu'elle tombe
+    // sur un domaine connu d'OSM ne l'affirme pas davantage, il dit seulement que
+    // la forme composée est celle d'un domaine qu'une entité du SIRET porte
+    // peut-être. Elle ne peut donc jamais faire tomber le seuil de corroboration.
+    //
+    // LE REFUS PASSE AVANT TOUT le reste : avant la normalisation du domaine et
+    // avant la lecture OSM, qui n'est même pas déclenchée pour une piste composée.
+    // La règle DÉFAILLE DU BON CÔTÉ : un maillon futur qui oublierait l'argument
+    // se voit refuser l'attestation, jamais accorder.
     let domainesOsm = null
-    const estAttestee = async (url) => {
+    const estAttestee = async (url, provenance) => {
+      if (provenance !== 'base') return false
       const d = normaliserDomaine(url)
       if (!d) return false
       if (!domainesOsm) {
@@ -1397,7 +1410,7 @@ export async function enrichirMentionsLegales(siret, options = {}) {
 
     // Maillon 1.a — URL déjà en base.
     if (faisceau.website) {
-      const attestee = await estAttestee(faisceau.website)
+      const attestee = await estAttestee(faisceau.website, 'base')
       urlsTentees++
       const trace = {}
       const a = await analyserSite(faisceau.website, faisceau, { attestee, trace })
@@ -1427,10 +1440,13 @@ export async function enrichirMentionsLegales(siret, options = {}) {
       })
       const liste = Array.isArray(candidats) ? candidats.slice(0, MAX_CANDIDATS) : []
       for (const url of liste) {
-        // Même test qu'en 1.a : ce qui atteste, c'est la CONCORDANCE DE DOMAINE avec
-        // une entité OSM du même SIRET, jamais le maillon par lequel l'URL est venue.
-        // Une URL devinée ou composée ne la rencontre pas, et reste à deux signaux.
-        const attestee = await estAttestee(url)
+        // PAS le même test qu'en 1.a : l'attestation est réservée à la provenance
+        // référentiel, et la provenance est passée ici. Une URL du maillon 1.b,
+        // composée ou cherchée, rend false quel que soit le domaine sur lequel elle
+        // tombe, et reste donc à SEUIL_PRESUME signaux. Ce n'est plus une propriété
+        // de fait constatée sur les formes composées, c'est la règle qu'applique
+        // estAttestee.
+        const attestee = await estAttestee(url, 'web')
         urlsTentees++
         const trace = {}
         const a = await analyserSite(url, faisceau, { attestee, trace })

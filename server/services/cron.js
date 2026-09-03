@@ -1,10 +1,9 @@
-// Cron in-process. Trois horloges indépendantes :
+// Cron in-process. Deux horloges indépendantes :
 //   • trial — emails de relance + auto-expire, démarré au boot de server.js si
 //     NODE_ENV=production et CRON_ENABLED !== 'false'. Défaut : 8h Europe/Paris.
-//   • actualités — ramassage du flux France 24, toutes les quinze minutes,
-//     démarré sous CRON_ENABLED seul (voir startActualitesCron plus bas).
-//   • position — balayage quotidien des cartes pipeline sans coordonnées,
-//     démarré sous CRON_ENABLED seul, pour le même motif que les actualités.
+//   • position : balayage quotidien des cartes pipeline sans coordonnées,
+//     démarré sous CRON_ENABLED seul, sans garde NODE_ENV, ce cron n'envoyant
+//     aucun courriel (voir startBalayagePositionCron plus bas).
 //
 // Idempotence : garantie par les flags DB trial_email_j*_sent_at posés par
 // trial-emails.js après chaque envoi. Le cron peut tourner plusieurs fois
@@ -32,12 +31,10 @@ import { purgeExpiredUsers, purgeExpiredTrials, deleteUserCascade } from './purg
 import { rattraperEssaisDormants } from './rattrapage-essai.js'
 import { agregerVisitesJour } from './visites.js'
 import { sendAccountDeletionConfirmed } from './email.js'
-import { ramasserActualites } from './actualites.js'
 import { balayerPositionsCartes } from './position-cartes.js'
 
 const SCHEDULE = process.env.CRON_TRIAL_SCHEDULE || '0 8 * * *'
 const TIMEZONE = process.env.CRON_TIMEZONE || 'Europe/Paris'
-const ACTUALITES_SCHEDULE = process.env.CRON_ACTUALITES_SCHEDULE || '*/15 * * * *'
 // Balayage de position — une fois par jour, et à une heure creuse. La
 // population est AUTO-EXTINCTIVE : une carte positionnée en sort
 // définitivement, et elle ne se regarnit qu'au rythme des corrections
@@ -86,9 +83,9 @@ async function logCronAudit(event, metadata) {
 //   2. la clé `error` (chemin de l'exception, et retours en bande qui la
 //      portent) ;
 //   3. `errors[]` non vide — la forme des huit étapes trial ;
-//   4. `erreurs` > 0 — la forme du ramassage d'actualités, qui compte ses
-//      erreurs sans les lister. Sans cette branche, un flux à moitié en échec
-//      passerait pour un ramassage sans faute.
+//   4. `erreurs` > 0 : la forme du balayage de position, qui compte ses erreurs
+//      sans les lister. Sans cette branche, un balayage à moitié en échec
+//      passerait pour un passage sans faute.
 function estOk(result) {
   if (!result || typeof result !== 'object') return false
   if (result.error) return false
@@ -101,8 +98,8 @@ function estOk(result) {
 // Retourne le résumé pour log audit.
 //
 // prefixe — préfixe de l'event d'audit. Défaut 'cron:trial:' : les huit étapes
-// existantes gardent mot pour mot l'event qu'elles écrivaient déjà. Le ramassage
-// d'actualités, lui, passe 'cron:actualites:' — deux horloges, deux familles
+// existantes gardent mot pour mot l'event qu'elles écrivaient déjà. Le balayage
+// de position, lui, passe 'cron:position:' : deux horloges, deux familles
 // d'events, aucun mélange à la relecture de l'audit.
 async function runStep(name, fn, prefixe = 'cron:trial:') {
   const startedAt = Date.now()
@@ -247,16 +244,11 @@ async function runAccountDeletions() {
   return { processed, total: users.length, echeances_7j, errors }
 }
 
-// Ramassage du flux d'actualités. Une seule étape, sous le même wrapper que les
-// huit autres (audit + durée), mais sous son propre préfixe d'event.
-async function runActualitesJob() {
-  await runStep('ramassage', ramasserActualites, 'cron:actualites:')
-}
-
 // Balayage de position. Une seule étape, même wrapper, préfixe propre : la
 // ligne 'cron:position:balayage' est donc à la fois l'audit de l'étape et la
-// LIGNE DE CLÔTURE du passage, comme pour le ramassage d'actualités. Son
-// absence est la seule chose qui dise que le balayage n'a pas tourné.
+// LIGNE DE CLÔTURE du passage, à la façon dont 'cron:trial:passage' clôt le
+// passage quotidien. Son absence est la seule chose qui dise que le balayage
+// n'a pas tourné.
 //
 // NON-RÉENTRANCE. node-cron ne saute pas un tic parce que le précédent tourne
 // encore, et ce passage-ci peut durer : à 350 ms par carte, une population de
@@ -281,7 +273,6 @@ async function runBalayagePositionJob() {
 }
 
 let started = false
-let actualitesStarted = false
 let positionStarted = false
 
 // Démarre le cron quotidien. Idempotent : 2e appel = no-op (évite double
@@ -304,39 +295,12 @@ export function startCronJobs() {
   console.log(`[cron] Trial cron jobs démarrés (schedule: ${SCHEDULE}, timezone: ${TIMEZONE})`)
 }
 
-// Démarre le cron d'actualités. Idempotent, comme startCronJobs, et skip sous
-// CRON_ENABLED === 'false'.
-//
-// DIFFÉRENCE ASSUMÉE avec le cron trial : PAS de garde NODE_ENV. Le garde de
-// production existe parce que le cron trial ENVOIE DES COURRIELS — le lancer en
-// dev inonderait de vraies boîtes de vrais abonnés. Un ramassage d'actualités
-// n'envoie rien, ne touche à aucun compte, n'écrit que dans sa propre table :
-// il n'y a rien à protéger d'un lancement hors production, et le faire tourner
-// en dev est même la seule façon d'y voir un bandeau garni.
-export function startActualitesCron() {
-  if (actualitesStarted) {
-    console.warn('[cron] startActualitesCron déjà appelé, skip')
-    return
-  }
-  if (process.env.CRON_ENABLED === 'false') {
-    console.log('[cron] CRON_ENABLED=false, cron actualités désactivé')
-    return
-  }
-  if (!cron.validate(ACTUALITES_SCHEDULE)) {
-    console.error('[cron] Schedule actualités invalide :', ACTUALITES_SCHEDULE, '— cron NON démarré')
-    return
-  }
-  cron.schedule(ACTUALITES_SCHEDULE, runActualitesJob, { timezone: TIMEZONE })
-  actualitesStarted = true
-  console.log(`[cron] Actualités cron démarré (schedule: ${ACTUALITES_SCHEDULE}, timezone: ${TIMEZONE})`)
-}
-
-// Démarre le balayage de position. Idempotent, comme les deux autres, et skip
+// Démarre le balayage de position. Idempotent, comme startCronJobs, et skip
 // sous CRON_ENABLED === 'false'.
 //
-// PAS DE GARDE NODE_ENV, sur le motif que startActualitesCron énonce déjà : ce
-// garde existe parce que le cron trial ENVOIE DES COURRIELS, et le lancer en
-// dev inonderait de vraies boîtes. Un balayage de position n'envoie rien, ne
+// PAS DE GARDE NODE_ENV, à la différence du cron trial : ce garde existe parce
+// que le cron trial ENVOIE DES COURRIELS, et le lancer en dev inonderait de
+// vraies boîtes de vrais abonnés. Un balayage de position n'envoie rien, ne
 // touche à aucun compte, et n'écrit que deux flottants sur des cartes qui n'en
 // ont aucun. Il n'y a rien à protéger d'un lancement hors production.
 //

@@ -20,8 +20,8 @@
 // autre. Un analyseur qui traiterait tout guillemet comme un délimiteur
 // avalerait la fin du fichier sur la ligne dépareillée.
 //
-// JAMAIS DE THROW : le service avale et journalise, comme actualites.js. Un
-// chargement raté rend un compte à zéro ; la table garde ce qu'elle avait.
+// JAMAIS DE THROW : le service avale et journalise. Un chargement raté rend un
+// compte à zéro ; la table garde ce qu'elle avait.
 //
 // CHARGEMENT BORNÉ. Un appel n'écrit qu'un nombre borné de lignes (défaut 2 000,
 // maximum 5 000) et rend un `restant` : l'appelant relance jusqu'à zéro, comme
@@ -430,13 +430,15 @@ export function analyserCsv(texte, sourceMaj = '') {
 
 // UPSERT … SET par clé naturelle. Le record id EST la clé : recharger le fichier
 // réécrit les mêmes records, jamais des doublons (l'index UNIQUE le garantit en
-// plus). Idiome type::record identique à actualites.js et au reste du serveur.
+// plus). Idiome type::record identique au reste du serveur.
 //
 // `suffixe` distingue les paramètres des instructions groupées dans un même
 // aller-retour ($nom_0, $nom_1, …).
 //
 // cached_at : première apparition, préservée d'un rechargement à l'autre par
-// l'idiome IF … = NONE (mêmes raisons que published_at dans actualites.js).
+// l'idiome IF … = NONE. Sans cette garde, chaque rechargement du fichier
+// réécrirait la date de première apparition de toutes les lignes, et la table
+// entière paraîtrait découverte du jour.
 // refreshed_at : date du dernier passage, réécrite à chaque fois.
 function construireUpsert(h, suffixe) {
   const params = { [`id${suffixe}`]: h.cle }

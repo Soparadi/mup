@@ -70,9 +70,8 @@
 // dernier curseur sûr ; l'appelant reprendra — sur la nouvelle édition, ce qui
 // est le comportement voulu.
 //
-// JAMAIS DE THROW : le service avale et journalise, comme atout-france.js et
-// actualites.js. Un chargement raté rend un compte à zéro ; la table garde ce
-// qu'elle avait.
+// JAMAIS DE THROW : le service avale et journalise, comme atout-france.js. Un
+// chargement raté rend un compte à zéro ; la table garde ce qu'elle avait.
 //
 // Ce module NE RAPPROCHE RIEN. Il ne lit ni n'écrit referentiel_societes.
 

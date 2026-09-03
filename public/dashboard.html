@@ -26,7 +26,6 @@
   @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
   @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   @keyframes ping{0%{transform:scale(1);opacity:1}100%{transform:scale(2.4);opacity:0}}
-  #news-ticker:hover #news-track{animation-play-state:paused;}
   @keyframes shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
 
   .pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--green);position:relative;flex-shrink:0;}
@@ -552,14 +551,6 @@
             <span id="weather-city" style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">…</span>
           </div>
         </div>
-        <div id="news-ticker" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;flex:1;overflow:hidden;min-width:0;">
-          <span style="font-size:8px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;background:#CC0000;color:#fff;padding:2px 6px;border-radius:4px;flex-shrink:0;">FRANCE 24</span>
-          <div style="overflow:hidden;flex:1;">
-            <div id="news-track" style="display:inline-block;white-space:nowrap;">
-              <span style="font-size:11px;color:var(--muted);">Chargement…</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -950,91 +941,6 @@ map.on('click',function(){
         if(pending<=0) finish();
       });
   });
-})();
-</script>
-
-<script>
-(async () => {
-  // Le bandeau lit /api/public/actualites : le flux est ramassé par notre serveur
-  // (cron, toutes les quinze minutes) et servi depuis chez nous. Le navigateur ne
-  // sort plus vers un flux tiers ni vers un relais CORS public.
-  const track = document.getElementById('news-track');
-  // Le bandeau a-t-il déjà porté au moins une manchette ? Tant qu'il n'a jamais
-  // rien eu, l'échec pose un libellé muet à la place de « Chargement… » (patron
-  // de « Météo indisponible »). Une fois garni, l'échec ne touche à rien : des
-  // manchettes d'il y a une heure valent mieux qu'un bandeau vide.
-  let garni = false;
-  const failNews = () => {
-    if (garni || !track) return;
-    const s = document.createElement('span');
-    s.style.cssText = 'font-size:11px;color:var(--muted);';
-    s.textContent = 'Actualités indisponibles';
-    track.replaceChildren(s);
-  };
-  try {
-    const res = await fetch('/api/public/actualites');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    const items = (Array.isArray(data.items) ? data.items : [])
-      .map(it => ({
-        titre: String(it.titre || '').replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}]/gu, '').trim(),
-        lien: String(it.lien || '')
-      }))
-      .filter(it => it.titre && it.lien);
-    if (items.length && track) {
-      // Titres posés en textContent, JAMAIS en innerHTML : ce texte vient d'un
-      // flux de presse, il n'a pas à pouvoir écrire du balisage dans la page.
-      // Un jeu de manchettes, dupliqué : le défilement repart à zéro à la
-      // moitié, la boucle ne se voit pas.
-      const makeSet = () => {
-        const frag = document.createDocumentFragment();
-        items.forEach(it => {
-          const a = document.createElement('a');
-          a.href = it.lien;
-          a.target = '_blank';
-          a.rel = 'noopener';
-          // Mêmes taille, couleur, graisse et espacement qu'avant ; le
-          // text-decoration:none est là pour que le passage du span au lien ne
-          // se voie pas à l'écran.
-          a.style.cssText = 'display:inline-block;font-size:11px;color:var(--text);font-weight:500;padding-right:48px;text-decoration:none;';
-          const puce = document.createElement('span');
-          puce.style.cssText = 'color:var(--muted2);margin-right:8px;';
-          puce.textContent = '◆';
-          a.appendChild(puce);
-          a.appendChild(document.createTextNode(it.titre));
-          frag.appendChild(a);
-        });
-        return frag;
-      };
-      track.replaceChildren();
-      track.appendChild(makeSet());
-      track.appendChild(makeSet());
-      garni = true;
-      track.style.whiteSpace = 'nowrap';
-      track.style.display = 'inline-block';
-
-      // Défilement en JS : remise à zéro à la moitié parcourue.
-      let x = 0;
-      const speed = 0.5; // px par frame (~7s)
-      let pause = false;
-      track.parentElement.addEventListener('mouseenter', () => { pause = true; });
-      track.parentElement.addEventListener('mouseleave', () => { pause = false; });
-      function scrollLoop() {
-        if (!pause) {
-          x += speed;
-          const half = track.scrollWidth / 2;
-          if (x >= half) x = 0;
-          track.style.transform = `translateX(${-x}px)`;
-        }
-        requestAnimationFrame(scrollLoop);
-      }
-      requestAnimationFrame(scrollLoop);
-    } else {
-      // Pas d'exception mais aucune manchette exploitable : sans ce repli le bloc
-      // resterait sur « Chargement… », le catch n'étant jamais franchi.
-      failNews();
-    }
-  } catch(e) { console.log('news error', e); failNews(); }
 })();
 </script>
 

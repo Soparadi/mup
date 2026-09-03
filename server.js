@@ -44,7 +44,6 @@ import {
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable, markGisementComplete } from './server/services/referentiel.js'
 import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
-import { runActualitesMigration, lireActualites } from './server/services/actualites.js'
 import { runReferentielAtoutFranceMigration } from './server/services/referentiel-atout-france.js'
 import { chargerAtoutFrance } from './server/services/atout-france.js'
 import { runReferentielRgeMigration } from './server/services/referentiel-rge.js'
@@ -65,7 +64,7 @@ import { geocode, reverseGeocode } from './server/services/ban.js'
 import { rattraperPositionCarte } from './server/services/position-cartes.js'
 import { normText } from './server/services/overpass.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled, sendWelcome } from './server/services/email.js'
-import { startCronJobs, startActualitesCron, startBalayagePositionCron } from './server/services/cron.js'
+import { startCronJobs, startBalayagePositionCron } from './server/services/cron.js'
 import {
   getEffectivePlan,
   getLeadLimit,
@@ -877,39 +876,6 @@ app.get('/api/public/search-demo', async (req, res) => {
     res.json({ total: totalEstimated, totalCapped, preview, markers })
   } catch (e) {
     console.error('[public:search-demo]', e.message)
-    res.status(502).json({ error: 'Service temporairement indisponible' })
-  }
-})
-
-// Bandeau d'actualités du tableau de bord. Publique et déclarée ICI, AVANT le
-// portillon d'authentification, sur le modèle de /api/public/search-demo : le
-// bandeau s'affiche aussi sur des pages non authentifiées, et une manchette de
-// presse n'est le secret de personne.
-//
-// Ne rend que ce que le bandeau affiche : titre, lien, date, source. Jamais la
-// description — elle est stockée, elle n'a pas d'usage à l'écran aujourd'hui, et
-// on n'expose pas un champ « au cas où ».
-const ACTUALITES_AFFICHEES = 12
-
-app.get('/api/public/actualites', async (req, res) => {
-  try {
-    const rows = await lireActualites(ACTUALITES_AFFICHEES)
-    const items = rows.map(r => {
-      // published_at revient en datetime natif : rendu en ISO, jamais l'objet brut.
-      // Passage par getTime() plutôt que toISOString() direct — celui-ci lève sur
-      // une date invalide, et une ligne douteuse ne doit pas coûter 502 aux onze
-      // autres manchettes.
-      const t = r.published_at ? new Date(r.published_at).getTime() : NaN
-      return {
-        titre: String(r.title || ''),
-        lien: String(r.link || ''),
-        date: Number.isFinite(t) ? new Date(t).toISOString() : null,
-        source: String(r.source || '')
-      }
-    })
-    res.json({ items })
-  } catch (e) {
-    console.error('[public:actualites]', e.message)
     res.status(502).json({ error: 'Service temporairement indisponible' })
   }
 })
@@ -9739,14 +9705,6 @@ app.use((req, res) => {
   } catch (e) {
     console.error('[boot] referentiel_osm migration failed:', e.message)
   }
-  // Actualités — table actualites (clé guid), alimentée par le cron toutes les
-  // quinze minutes et lue par /api/public/actualites. Vide au boot.
-  try {
-    await runActualitesMigration()
-    console.log('[boot] actualites table ready (+ 2 indexes)')
-  } catch (e) {
-    console.error('[boot] actualites migration failed:', e.message)
-  }
   // Référentiel Atout France — table referentiel_atout_france (clé naturelle
   // composée nom+CP+adresse), hébergements touristiques classés. Séparée de
   // referentiel_societes, bornée par département faute de coordonnées dans la
@@ -9802,19 +9760,11 @@ app.use((req, res) => {
   } else {
     console.log('[boot] cron skipped (NODE_ENV !== production)')
   }
-  // Cron actualités — HORS du garde NODE_ENV ci-dessus, volontairement : ce
-  // garde protège des envois de courriels en dev, or un ramassage de flux
-  // n'envoie rien. Seul CRON_ENABLED === 'false' l'arrête (le skip est décidé
-  // dans startActualitesCron, comme pour le cron trial).
-  try {
-    startActualitesCron()
-  } catch (e) {
-    console.error('[boot] cron actualités startup failed:', e.message)
-  }
-  // Cron position — hors du garde NODE_ENV pour le même motif que les
-  // actualités : aucun courriel, aucun compte touché, deux flottants écrits sur
-  // des cartes qui n'en ont aucun. Seul CRON_ENABLED === 'false' l'arrête, et
-  // le skip est décidé dans startBalayagePositionCron.
+  // Cron position, hors du garde NODE_ENV ci-dessus, volontairement : ce garde
+  // protège des envois de courriels en dev, or un balayage de position n'envoie
+  // rien, ne touche à aucun compte, et n'écrit que deux flottants sur des cartes
+  // qui n'en ont aucun. Seul CRON_ENABLED === 'false' l'arrête, et le skip est
+  // décidé dans startBalayagePositionCron.
   try {
     startBalayagePositionCron()
   } catch (e) {

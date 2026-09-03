@@ -19,8 +19,8 @@
 // chaque, et un sémaphore global qui borne le nombre d'hôtes avançant de front
 // (CRAWL_PARALLELISME, défaut 3). Chaque serveur visité voit exactement le rythme
 // d'avant : c'est le plafond global qui a disparu, jamais l'espacement.
-// politeFetchText est exportée : le module de recherche web et le flux d'actualités
-// passent par le MÊME dispositif, chacun sur la file de son hôte.
+// politeFetchText est exportée : tout appelant extérieur au module passe par le
+// MÊME dispositif, chacun sur la file de son hôte.
 
 import { getDb } from '../../lib/surreal.js'
 import { cleanRecordId } from '../../lib/db.js'
@@ -292,16 +292,19 @@ function schedule(host, task, attente = 0) {
   return p
 }
 
-// Valeurs par défaut du GET poli — CELLES DE TOUJOURS. Tout appelant qui ne passe
-// pas d'option retrouve exactement le comportement d'avant l'ajout des options :
-// en-tête Accept orienté page web, et filtre de content-type qui n'accepte que du
-// HTML/texte. Un appelant qui vise un autre type (flux XML) les remplace toutes deux.
+// Le GET poli ne lit qu'une chose : des pages web. En-tête Accept orienté page,
+// et filtre de content-type qui n'accepte que du HTML ou du texte. Constantes
+// INTERNES, les mêmes pour tous les appelants : aucun ne choisit ce qu'il accepte
+// de lire, pas plus qu'il ne choisit son timeout ou son portillon robots.
+//
+// La regex ne porte PAS le drapeau /g : .test n'est apatride d'un appel à l'autre
+// que si lastIndex n'est jamais avancé.
 const ACCEPT_DEFAUT = 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5'
 const CONTENT_TYPE_RE_DEFAUT = /text\/html|application\/xhtml|text\/plain/i
 
 // Un GET poli et borné. Rend { text, finalUrl } ou null (jamais de throw).
 // finalUrl = URL après redirections (pour host / bonus même-domaine).
-async function doFetch(url, accept, contentTypeRe) {
+async function doFetch(url) {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
@@ -312,7 +315,7 @@ async function doFetch(url, accept, contentTypeRe) {
         signal: ctrl.signal,
         headers: {
           'User-Agent': USER_AGENT,
-          'Accept': accept
+          'Accept': ACCEPT_DEFAUT
         }
       })
       clearTimeout(timer)
@@ -324,7 +327,7 @@ async function doFetch(url, accept, contentTypeRe) {
         return null
       }
       const ct = r.headers.get('content-type') || ''
-      if (ct && !contentTypeRe.test(ct)) return null
+      if (ct && !CONTENT_TYPE_RE_DEFAUT.test(ct)) return null
       let text = await r.text()
       if (text.length > MAX_BYTES) text = text.slice(0, MAX_BYTES)
       return { text, finalUrl: r.url || url }
@@ -510,26 +513,21 @@ function complementCrawl(crawlDelaySec) {
 }
 
 // Sérialise l'appel derrière la file de SON HÔTE, sous le sémaphore global. Exportée
-// pour recherche-web.js et actualites.js. Passe d'abord le portillon robots.txt de
-// l'hôte (résolution + cache par hôte). Refus robots → null, exactement comme un échec
-// réseau.
+// pour recherche-web.js et les scripts de diagnostic. Passe d'abord le portillon
+// robots.txt de l'hôte (résolution + cache par hôte). Refus robots → null, exactement
+// comme un échec réseau.
 //
-// Ce que le passage par hôte change pour un appelant qui ne visite qu'un seul hôte, le
-// flux d'actualités notamment : il ne prend plus rang derrière le crawl. Sa file lui
-// est propre et vide, il part dès qu'un jeton se libère.
+// Ce que le passage par hôte change pour un appelant qui ne visite qu'un seul hôte :
+// il ne prend pas rang derrière le crawl. Sa file lui est propre et vide, il part dès
+// qu'un jeton se libère.
 //
-// options (toutes facultatives, défauts = comportement historique à l'identique) :
-//   • accept        — valeur de l'en-tête Accept (défaut : ACCEPT_DEFAUT).
-//   • contentTypeRe — filtre appliqué au content-type de la réponse (défaut :
-//     CONTENT_TYPE_RE_DEFAUT). RegExp SANS drapeau /g : .test sur une regex globale
-//     est apatride entre appels seulement si lastIndex n'est jamais avancé.
-//
-// Ce qui n'est PAS paramétrable, et reste donc commun à tous les appelants : la file de
-// l'hôte, le sémaphore, le portillon robots, le timeout, le plafond de taille et les
-// reprises. Un appelant ne peut ni doubler la file de l'hôte qu'il vise, ni s'exonérer
-// du robots.txt.
-export async function politeFetchText(url, options = {}) {
-  const { res } = await lireAvecMotif(url, options)
+// RIEN N'EST PARAMÉTRABLE, l'URL exceptée, et c'est le point : la file de l'hôte, le
+// sémaphore, le portillon robots, le timeout, le plafond de taille, les reprises,
+// l'en-tête Accept et le filtre de content-type sont communs à tous les appelants. Un
+// appelant ne peut ni doubler la file de l'hôte qu'il vise, ni s'exonérer du
+// robots.txt, ni élargir ce qu'il accepte de lire.
+export async function politeFetchText(url) {
+  const { res } = await lireAvecMotif(url)
   return res
 }
 
@@ -550,13 +548,10 @@ export async function politeFetchText(url, options = {}) {
 // seulement à l'appelant de savoir qu'il y a lieu de retenter plus tard, là où le
 // refus, lui, est acquis.
 //
-// Cette distinction ne remonte PAS jusqu'aux appelants externes (actualites.js,
-// recherche-web.js, scripts de diagnostic) : politeFetchText garde son contrat, deux
-// sorties, { text, finalUrl } ou null.
-async function lireAvecMotif(url, options = {}) {
-  const accept = options.accept || ACCEPT_DEFAUT
-  const contentTypeRe = options.contentTypeRe || CONTENT_TYPE_RE_DEFAUT
-
+// Cette distinction ne remonte PAS jusqu'aux appelants externes (recherche-web.js,
+// scripts de diagnostic) : politeFetchText garde son contrat, deux sorties,
+// { text, finalUrl } ou null.
+async function lireAvecMotif(url) {
   const u = normalizeUrl(url)
   if (!u) return { res: null, motif: 'url' }
 
@@ -580,7 +575,7 @@ async function lireAvecMotif(url, options = {}) {
   // Fetch principal, sur la file de SON hôte. Le complément de crawl-delay est remis à
   // schedule, qui le dort dans cette file et hors du sémaphore (cf. complementCrawl).
   const complement = complementCrawl(gate.crawlDelaySec)
-  const res = await schedule(safeHost(u) || u, () => doFetch(u, accept, contentTypeRe), complement)
+  const res = await schedule(safeHost(u) || u, () => doFetch(u), complement)
   if (!res) return { res: null, motif: 'fetch' }
 
   // Point (b) — redirection inter-hôtes. redirect:'follow' a pu mener vers un autre

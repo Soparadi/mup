@@ -292,16 +292,23 @@ export async function countGisementPagine({ departement, naf, commune, codePosta
 }
 
 // ── D. getReferentielContactBySiret(siret) — async, fail-safe ──
-// Lecture unitaire des champs contact société (website / societe_email /
-// societe_tel) pour un SIRET donné, tels qu'alimentés par l'amorçage Overpass.
-// Clé SIRET UNIQUE (idx_ref_siret) → LIMIT 1. SIRET normalisé (espaces retirés)
-// comme partout ailleurs. Rend { website, societe_email, societe_tel } ou null
-// si absent. Tout échec → null (fail-safe, jamais de throw remontant).
+// Lecture unitaire des SIX champs de contact société (website, societe_email,
+// societe_tel, et les trois réseaux) pour un SIRET donné. Clé SIRET UNIQUE
+// (idx_ref_siret) → LIMIT 1. SIRET normalisé (espaces retirés) comme partout
+// ailleurs. Rend les six champs ou null si absent. Tout échec → null (fail-safe,
+// jamais de throw remontant).
+//
+// LES TROIS RÉSEAUX SONT ENTRÉS DANS CETTE PROJECTION LE 4 SEPTEMBRE, et c'est une
+// réparation, pas un confort. /api/enrich les prenait de la réserve OpenStreetMap,
+// que le retrait de cette source a fermée. referentiel_societes les porte pourtant
+// depuis toujours : le crawl mentions légales, la saisie d'abonné et l'import les y
+// écrivent. Sans cette projection, la restitution aurait cessé de servir des réseaux
+// que la base connaît.
 export async function getReferentielContactBySiret(siret) {
   try {
     const s = str(siret).replace(/\s+/g, '')
     if (!s) return null
-    const sql = 'SELECT website, societe_email, societe_tel FROM referentiel_societes WHERE siret = $siret LIMIT 1'
+    const sql = 'SELECT website, societe_email, societe_tel, societe_facebook, societe_instagram, societe_linkedin FROM referentiel_societes WHERE siret = $siret LIMIT 1'
     const db = await getDb()
     const r = await db.query(sql, { siret: s })
     const row = (r[0] || [])[0]
@@ -309,7 +316,10 @@ export async function getReferentielContactBySiret(siret) {
     return {
       website: str(row.website),
       societe_email: str(row.societe_email),
-      societe_tel: str(row.societe_tel)
+      societe_tel: str(row.societe_tel),
+      societe_facebook: str(row.societe_facebook),
+      societe_instagram: str(row.societe_instagram),
+      societe_linkedin: str(row.societe_linkedin)
     }
   } catch (e) {
     console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
@@ -363,72 +373,6 @@ export async function getReferentielContactsBySirets(sirets) {
     console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
   }
   return out
-}
-
-// ── D-bis. getOsmContactBySiret(siret) — async, fail-safe ──
-// Lecture unitaire des contacts OSM (réserve nationale referentiel_osm) pour un
-// SIRET donné. Index idx_osm_siret NON unique → PLUSIEURS lignes possibles pour un
-// même SIRET (un même établissement peut porter plusieurs objets OSM). On NE fait
-// donc PAS de LIMIT 1 : on fusionne champ par champ en retenant la PREMIÈRE VALEUR
-// NON VIDE inter-lignes. REMAP vers le contrat societe_* (phone→societe_tel,
-// email→societe_email, website→website, facebook→societe_facebook,
-// instagram→societe_instagram, linkedin→societe_linkedin). Rend l'objet fusionné
-// ou null si aucune ligne. Tout échec → null (fail-safe, jamais de throw remontant).
-export async function getOsmContactBySiret(siret) {
-  try {
-    const s = str(siret).replace(/\s+/g, '')
-    if (!s) return null
-    const sql = 'SELECT phone, email, website, facebook, instagram, linkedin FROM referentiel_osm WHERE siret = $siret'
-    const db = await getDb()
-    const r = await db.query(sql, { siret: s })
-    const rows = r[0] || []
-    if (!rows.length) return null
-    // Première valeur non vide inter-lignes pour un champ source donné.
-    const firstNonEmpty = key => {
-      for (const row of rows) {
-        const v = str(row?.[key])
-        if (v) return v
-      }
-      return ''
-    }
-    return {
-      website: firstNonEmpty('website'),
-      societe_email: firstNonEmpty('email'),
-      societe_tel: firstNonEmpty('phone'),
-      societe_facebook: firstNonEmpty('facebook'),
-      societe_instagram: firstNonEmpty('instagram'),
-      societe_linkedin: firstNonEmpty('linkedin')
-    }
-  } catch (e) {
-    console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
-    return null
-  }
-}
-
-// ── D-ter. getOsmSitesBySiret(siret) — async, fail-safe ──
-// Les URL que la réserve OSM porte POUR CE SIRET, brutes et TOUTES (pas de fusion :
-// l'appelant compare un domaine, il lui faut l'ensemble des candidats, pas seulement
-// le premier non vide). Sert au moteur mentions légales à savoir si l'URL qu'il
-// s'apprête à lire est ATTESTÉE PAR IDENTIFIANT — même SIRET des deux côtés — ou
-// simplement supposée.
-//
-// UNE requête, sur l'index idx_osm_siret (égalité stricte, jamais de scan) : un
-// point-lookup rendant en pratique 0 à 2 lignes, un seul champ projeté. La jointure
-// par SIREN n'est PAS tentée : referentiel_osm n'a pas d'index sur siren, un
-// `OR siren = $siren` dégraderait la requête en scan des ~685 k lignes de la réserve.
-// Rend [] si rien / tout échec (fail-safe, jamais de throw remontant).
-export async function getOsmSitesBySiret(siret) {
-  try {
-    const s = str(siret).replace(/\s+/g, '')
-    if (!s) return []
-    const sql = 'SELECT website FROM referentiel_osm WHERE siret = $siret'
-    const db = await getDb()
-    const r = await db.query(sql, { siret: s })
-    return (r[0] || []).map(row => str(row?.website)).filter(Boolean)
-  } catch (e) {
-    console.warn('[referentiel-read]', String(e?.message || e).slice(0, 80))
-    return []
-  }
 }
 
 // ── E. getReferentielFaisceauBySiret(siret) — async, fail-safe ──

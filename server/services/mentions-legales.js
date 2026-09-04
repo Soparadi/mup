@@ -25,7 +25,7 @@
 import { getDb } from '../../lib/surreal.js'
 import { cleanRecordId } from '../../lib/db.js'
 import { enrichReferentielActionnable } from './referentiel.js'
-import { getReferentielFaisceauBySiret, getOsmSitesBySiret, selectSiretsACrawler, normalizeNaf } from './referentiel-read.js'
+import { getReferentielFaisceauBySiret, selectSiretsACrawler, normalizeNaf } from './referentiel-read.js'
 import { normaliserDomaine, normText, corroborerSiret } from '../../lib/appariement.js'
 import { normaliserVoie, parserAdresseAgregee, canoniserTexteVoie, parentheses } from '../../lib/societes.js'
 // Le jugement patronymique du module de composition, réutilisé TEL QUEL par le
@@ -1024,33 +1024,37 @@ export function retenirReseaux(candidats, faisceau = {}, siteHost = '') {
 // Maillon 4 — recoupement scoré contre le faisceau.
 //   • SIRET/SIREN trouvé = certain (réutilise corroborerSiret d'overpass.js).
 //   • ≥ 2 signaux indépendants parmi {raison_sociale, adresse, dirigeant_nom} = présumé,
-//     ramenés à 1 seul quand l'URL visitée est ATTESTÉE PAR IDENTIFIANT (cf. infra).
 //   • en deçà du seuil = insuffisant → confidence null (silence, on n'écrit rien).
 //   • dirigeant_nom = VALIDATEUR de concordance uniquement (jamais écrit ni exposé).
 // ---------------------------------------------------------------------------
 
-// Seuils de signaux de PAGE requis pour « présumé », selon la provenance de l'URL.
+// Seuil de signaux de PAGE requis pour « présumé » : DEUX, quelle que soit la
+// provenance de l'URL.
 //
-// URL SUPPOSÉE (composée, cherchée sur le web, ou héritée d'une étiquette dont rien
-// ne garantit qu'elle vise CET établissement) : deux signaux, comme toujours.
+// UNE VARIANTE A EXISTÉ ET ELLE A ÉTÉ RETIRÉE, PAS OUBLIÉE. Une URL ATTESTÉE PAR
+// IDENTIFIANT, celle dont une entité referentiel_osm portait le MÊME SIRET que la
+// fiche ET le même domaine, se contentait d'un seul signal. Le raisonnement était
+// celui-ci : la PRÉSOMPTION D'ARRIVÉE n'est pas la même selon que l'adresse a été
+// DEVINÉE ou ATTESTÉE PAR DEUX SOURCES INDÉPENDANTES sur le même identifiant, et
+// le doute résiduel ne portait plus sur « est-ce le bon site ? » mais sur « la
+// page dit-elle quelque chose de l'entreprise ? ». Il tenait, et ce n'est pas lui
+// qui est tombé : c'est sa source. OpenStreetMap a été retiré du référentiel le
+// 4 septembre, seule source sous ODbL et sa clause de partage à l'identique. Plus
+// rien ne lit referentiel_osm, donc plus rien ne peut attester une URL par
+// identifiant.
 //
-// URL ATTESTÉE PAR IDENTIFIANT — une entité referentiel_osm portant le MÊME SIRET que
-// la fiche ET le même domaine que l'URL visitée : un seul signal suffit. Ce n'est PAS
-// compter le SIRET d'OpenStreetMap comme un signal de plus, ce qui serait circulaire
-// puisque c'est lui qui a fait venir jusqu'à cette page. C'est reconnaître que la
-// PRÉSOMPTION D'ARRIVÉE n'est pas la même selon que l'adresse a été DEVINÉE ou
-// ATTESTÉE PAR DEUX SOURCES INDÉPENDANTES sur le même identifiant — OpenStreetMap et
-// Etalab, appariées par le SIRET. Le doute résiduel ne porte plus sur « est-ce le bon
-// site ? » mais sur « la page dit-elle quelque chose de l'entreprise ? ».
+// LA PERTE EST ARBITRÉE, ET ELLE A UN PRIX : le crawl conclura moins souvent. Une
+// page qui ne porte qu'un seul signal reste désormais sans verdict, là où elle
+// écrivait quand l'URL était attestée. Rétablir la variante suppose une source
+// d'attestation qui ne soit pas sous ODbL, jamais de rebrancher celle-là.
 //
 // LE PLANCHER EST FERME : JAMAIS ZÉRO. Zéro signal ne veut pas dire « lu et accepté »,
-// il veut dire « rien n'a été lu » — page vide, page inatteignable, page qui ne parle
+// il veut dire « rien n'a été lu » : page vide, page inatteignable, page qui ne parle
 // de personne. Et il protège du site de GROUPE hérité d'une étiquette approximative
 // (vincentcoiffure.fr, loeilenscene.fr) : le domaine y est bien celui de l'étiquette,
-// mais la page ne nomme ni l'établissement, ni son adresse, ni son dirigeant — elle
+// mais la page ne nomme ni l'établissement, ni son adresse, ni son dirigeant, elle
 // reste donc sans verdict.
 const SEUIL_PRESUME = 2
-const SEUIL_PRESUME_ATTESTE = 1
 
 // Présence d'un libellé (normalisé) dans le corpus normalisé, longueur minimale
 // pour éviter les collisions sur des jetons trop courts/communs.
@@ -1209,7 +1213,7 @@ export function adresseConcorde(f, ex) {
   return (villeOk && cpOk) || voieCitee(f, ex)
 }
 
-function recouper(faisceau, ex, attestee) {
+function recouper(faisceau, ex) {
   const sirenCible = faisceau.siren || (faisceau.siret ? faisceau.siret.slice(0, 9) : '')
   const siretTrouve =
     (!!sirenCible && ex.sirets.some(s => corroborerSiret({ siret: s }, sirenCible))) ||
@@ -1253,7 +1257,7 @@ function recouper(faisceau, ex, attestee) {
     const n = ['raison_sociale', 'adresse', 'dirigeant_nom'].filter(k => sig[k]).length
     // Math.max(1, …) : le plancher est écrit ici, structurellement, et non déduit de
     // la valeur des constantes. Aucune provenance, jamais, ne descend à zéro signal.
-    const seuil = Math.max(1, attestee ? SEUIL_PRESUME_ATTESTE : SEUIL_PRESUME)
+    const seuil = Math.max(1, SEUIL_PRESUME)
     if (n >= seuil) confidence = 'presume'
   }
   // signals : liste des CLÉS concordantes (jamais la valeur du dirigeant → RGPD).
@@ -1277,10 +1281,6 @@ function recouper(faisceau, ex, attestee) {
 // Exportée pour diagnostic : elle ne touche JAMAIS la base (crawl + extraction +
 // recoupement en mémoire), l'écriture reste le seul fait d'enrichirMentionsLegales.
 //
-// options.attestee — l'URL est attestée par identifiant (cf. SEUIL_PRESUME_ATTESTE) :
-// un seul signal de page suffit alors pour « présumé ». ABSENTE PAR DÉFAUT : sans
-// options, le seuil reste à deux, à l'identique d'avant.
-//
 // options.trace — objet fourni par l'appelant, RENSEIGNÉ EN SORTIE : trace.motif reçoit
 // le motif du non-résultat de l'accueil ('url', 'portillon', 'portillon_injoignable',
 // 'fetch') ou null si la page a été lue. Le type de retour ne change pas : cette
@@ -1290,7 +1290,6 @@ function recouper(faisceau, ex, attestee) {
 // ---------------------------------------------------------------------------
 
 export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
-  const attestee = options.attestee === true
   const trace = (options.trace && typeof options.trace === 'object') ? options.trace : null
   const noter = (motif) => { if (trace) trace.motif = motif }
   const homeUrl = normalizeUrl(homeUrlRaw)
@@ -1376,7 +1375,7 @@ export async function analyserSite(homeUrlRaw, faisceau, options = {}) {
   const reseaux = retenirReseaux(reseauxCandidats, faisceau, safeHost(base))
 
   // Maillon 4 — recoupement.
-  const { confidence, signals } = recouper(faisceau, ex, attestee)
+  const { confidence, signals } = recouper(faisceau, ex)
   return { confidence, signals, emails, phones, reseaux, urlLue }
 }
 
@@ -1431,7 +1430,7 @@ export async function enrichirMentionsLegales(siret, options = {}) {
   const forcerTtl = options.forcerTtl === true
   const sansRechercheWeb = options.sansRechercheWeb === true
   const s = String(siret || '').replace(/\s+/g, '')
-  const result = { siret: s, source: null, confidence: null, signals: [], attestee: false, written: false, skipped: null }
+  const result = { siret: s, source: null, confidence: null, signals: [], written: false, skipped: null }
   // DEUX FRONTIÈRES DE PASSAGE, lues par le finally, et le passage vaut L'UNE OU
   // L'AUTRE. analyserSite les alimente par son type de retour : null = on n'a pas pu
   // visiter (refus du portillon, délai dépassé, hôte mort) ; objet = le site a
@@ -1482,39 +1481,11 @@ export async function enrichirMentionsLegales(siret, options = {}) {
     let analyse = null
     let sourceUrl = null
 
-    // Attestation par identifiant : UNE requête indexée par SIRET, et seulement si
-    // une URL est effectivement visitée (mémoïsée : le Set, même vide, est vérité).
-    // Le résultat vaut pour toutes les URL du SIRET : c'est le DOMAINE qui décide.
-    //
-    // L'ATTESTATION EST RÉSERVÉE À LA PROVENANCE RÉFÉRENTIEL, et ce refus est
-    // appliqué ICI, pas par les sites d'appel. Une URL du maillon 1.b est composée
-    // ou cherchée : elle n'a été affirmée par personne, et le fait qu'elle tombe
-    // sur un domaine connu d'OSM ne l'affirme pas davantage, il dit seulement que
-    // la forme composée est celle d'un domaine qu'une entité du SIRET porte
-    // peut-être. Elle ne peut donc jamais faire tomber le seuil de corroboration.
-    //
-    // LE REFUS PASSE AVANT TOUT le reste : avant la normalisation du domaine et
-    // avant la lecture OSM, qui n'est même pas déclenchée pour une piste composée.
-    // La règle DÉFAILLE DU BON CÔTÉ : un maillon futur qui oublierait l'argument
-    // se voit refuser l'attestation, jamais accorder.
-    let domainesOsm = null
-    const estAttestee = async (url, provenance) => {
-      if (provenance !== 'base') return false
-      const d = normaliserDomaine(url)
-      if (!d) return false
-      if (!domainesOsm) {
-        const sites = await getOsmSitesBySiret(faisceau.siret)
-        domainesOsm = new Set(sites.map(normaliserDomaine).filter(Boolean))
-      }
-      return domainesOsm.has(d)
-    }
-
     // Maillon 1.a — URL déjà en base.
     if (faisceau.website) {
-      const attestee = await estAttestee(faisceau.website, 'base')
       urlsTentees++
       const trace = {}
-      const a = await analyserSite(faisceau.website, faisceau, { attestee, trace })
+      const a = await analyserSite(faisceau.website, faisceau, { trace })
       if (trace.motif === 'portillon') refusExplicite = true
       // Frontière 1 : l'adresse venait de la base et elle a répondu. Le passage est
       // acquis ici, avant même de savoir si le site recoupe quoi que ce soit.
@@ -1526,7 +1497,6 @@ export async function enrichirMentionsLegales(siret, options = {}) {
         // peut-être dégradée, et c'est celle-là qui est joignable.
         sourceUrl = a.urlLue || normalizeUrl(faisceau.website)
         result.source = 'base'
-        result.attestee = attestee
       }
     }
 
@@ -1545,16 +1515,9 @@ export async function enrichirMentionsLegales(siret, options = {}) {
       })
       const liste = Array.isArray(candidats) ? candidats.slice(0, MAX_CANDIDATS) : []
       for (const url of liste) {
-        // PAS le même test qu'en 1.a : l'attestation est réservée à la provenance
-        // référentiel, et la provenance est passée ici. Une URL du maillon 1.b,
-        // composée ou cherchée, rend false quel que soit le domaine sur lequel elle
-        // tombe, et reste donc à SEUIL_PRESUME signaux. Ce n'est plus une propriété
-        // de fait constatée sur les formes composées, c'est la règle qu'applique
-        // estAttestee.
-        const attestee = await estAttestee(url, 'web')
         urlsTentees++
         const trace = {}
-        const a = await analyserSite(url, faisceau, { attestee, trace })
+        const a = await analyserSite(url, faisceau, { trace })
         if (trace.motif === 'portillon') refusExplicite = true
         // Un candidat qui répond NE SUFFIT PAS à établir le passage : l'adresse a
         // été devinée, et un hôte vivant ne dit pas qu'il est le bon. Seule la
@@ -1566,7 +1529,6 @@ export async function enrichirMentionsLegales(siret, options = {}) {
           corroborationAboutie = true
           sourceUrl = a.urlLue || normalizeUrl(url)
           result.source = 'web'
-          result.attestee = attestee
           break
         }
       }
@@ -1679,9 +1641,6 @@ export async function enrichirMentionsLegales(siret, options = {}) {
     source: result.source,
     confidence: result.confidence,
     signals: result.signals,
-    // Provenance de l'URL retenue : le seuil appliqué se relit dans l'audit (un seul
-    // signal + attestee:false serait une anomalie, pas un verdict).
-    attestee: result.attestee,
     written: result.written,
     skipped: result.skipped,
     at: new Date().toISOString()

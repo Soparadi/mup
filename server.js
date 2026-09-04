@@ -51,7 +51,7 @@ import { chargerRge } from './server/services/rge.js'
 import { runReferentielOvertureMigration } from './server/services/referentiel-overture.js'
 import { runVisitesMigration, creerMesureAudience, visiteursALInstant, etatVivant, jourParis, decalerJour } from './server/services/visites.js'
 import { BYPASS_EMAIL, isOwner } from './lib/vip.js'
-import { getReferentielContactBySiret, getOsmContactBySiret, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh, countGisementPagine, normalizeNaf } from './server/services/referentiel-read.js'
+import { getReferentielContactBySiret, getReferentielFaisceauBySiret, isGisementComplete, readReferentiel, countReferentielFresh, countGisementPagine, normalizeNaf } from './server/services/referentiel-read.js'
 import { projeterReferentiel, retirerProjection } from './server/services/projection-referentiel.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { creerSalle } from './server/services/whereby.js'
@@ -5760,22 +5760,19 @@ app.get('/api/enrich/:siret', async (req, res) => {
       })
     }
 
-    const [soc, osm] = await Promise.all([
-      getReferentielContactBySiret(siret),
-      getOsmContactBySiret(siret)
-    ])
+    const soc = await getReferentielContactBySiret(siret)
     const s = soc || {}
-    const o = osm || {}
-    // Société prioritaire, OSM en fill-if-empty. Fusion champ par champ, à
-    // l'identique du POST : valeur société si non vide, sinon valeur OSM.
-    const pick = (a, b) => (String(a || '').trim() || String(b || '').trim())
+    // Les six champs du référentiel, et rien d'autre : la réserve OpenStreetMap qui
+    // les complétait ici est retirée (ODbL). Forme de réponse inchangée, à
+    // l'identique du POST.
+    const val = v => String(v || '').trim()
     const merged = {
-      website: pick(s.website, o.website),
-      societe_email: pick(s.societe_email, o.societe_email),
-      societe_tel: pick(s.societe_tel, o.societe_tel),
-      societe_facebook: pick(s.societe_facebook, o.societe_facebook),
-      societe_instagram: pick(s.societe_instagram, o.societe_instagram),
-      societe_linkedin: pick(s.societe_linkedin, o.societe_linkedin)
+      website: val(s.website),
+      societe_email: val(s.societe_email),
+      societe_tel: val(s.societe_tel),
+      societe_facebook: val(s.societe_facebook),
+      societe_instagram: val(s.societe_instagram),
+      societe_linkedin: val(s.societe_linkedin)
     }
 
     // Second filtre opt-out — par ADRESSE. La fiche révèle un societe_email qui
@@ -5817,10 +5814,10 @@ function hostDeSite(raw) {
   try { return new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s).host } catch { return '' }
 }
 
-// POST /api/enrich/:siret — restitution des champs contact société depuis DEUX
-// sources : referentiel_societes (amorçage Overpass, PRIORITAIRE) et referentiel_osm
-// (réserve nationale OSM, fill-if-empty). Fusion champ par champ : valeur société si
-// non vide, sinon valeur OSM.
+// POST /api/enrich/:siret : restitution des six champs de contact société depuis
+// referentiel_societes, SEULE source. La réserve nationale OpenStreetMap les
+// complétait ici en remplissage-si-vide ; elle a été retirée le 4 septembre, ODbL
+// et sa clause de partage à l'identique.
 //
 // GATE QUOTA en tête de route : un utilisateur au plafond n'obtient plus de
 // restitution. L'idempotence SIRET passe AVANT le gate — un SIRET déjà enrichi
@@ -5873,22 +5870,22 @@ app.post('/api/enrich/:siret', async (req, res) => {
       }
     }
 
-    const [soc, osm] = await Promise.all([
-      getReferentielContactBySiret(siret),
-      getOsmContactBySiret(siret)
-    ])
+    const soc = await getReferentielContactBySiret(siret)
     const s = soc || {}
-    const o = osm || {}
-    // Société prioritaire, OSM en fill-if-empty. Société ne porte que website /
-    // societe_email / societe_tel ; facebook / instagram / linkedin viennent d'OSM.
-    const pick = (a, b) => (String(a || '').trim() || String(b || '').trim())
+    // LES SIX CHAMPS VIENNENT DU SEUL RÉFÉRENTIEL. La réserve OpenStreetMap les
+    // complétait ici en remplissage-si-vide, les trois réseaux sociaux venant même
+    // d'elle seule ; elle a été retirée le 4 septembre, ODbL et sa clause de partage
+    // à l'identique. getReferentielContactBySiret projette désormais les six champs,
+    // les réseaux compris : ce que la base sait, la route le sert.
+    const val = v => String(v || '').trim()
+    const pick = (a, b) => (val(a) || val(b))
     const merged = {
-      website: pick(s.website, o.website),
-      societe_email: pick(s.societe_email, o.societe_email),
-      societe_tel: pick(s.societe_tel, o.societe_tel),
-      societe_facebook: pick(s.societe_facebook, o.societe_facebook),
-      societe_instagram: pick(s.societe_instagram, o.societe_instagram),
-      societe_linkedin: pick(s.societe_linkedin, o.societe_linkedin)
+      website: val(s.website),
+      societe_email: val(s.societe_email),
+      societe_tel: val(s.societe_tel),
+      societe_facebook: val(s.societe_facebook),
+      societe_instagram: val(s.societe_instagram),
+      societe_linkedin: val(s.societe_linkedin)
     }
 
     // Second filtre opt-out — par ADRESSE (cf. GET). Placé APRÈS la lecture du

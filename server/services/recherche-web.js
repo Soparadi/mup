@@ -39,17 +39,14 @@ import { politeFetchText } from './mentions-legales.js'
 // (enrichReferentielActionnable) doit les lire, or ce module-ci importe
 // mentions-legales.js, qui importe referentiel.js ; les laisser ici aurait fermé un
 // cycle d'import. Ils restent RÉEXPORTÉS depuis cette adresse : les appelants
-// historiques (server.js, rapprochement-osm.js, les bancs de scripts/) ne changent
-// pas une ligne.
+// historiques (server.js, les bancs de scripts/) ne changent pas une ligne.
 import { hostBlacklisted } from './hotes-exclus.js'
 export { BLACKLIST_HOSTS, hostBlacklisted } from './hotes-exclus.js'
 
-// La composition de domaines. L'import ferme un cycle (celui-ci → composition-domaines
-// → rapprochement-osm → celui-ci, pour hostBlacklisted), et c'est sans conséquence :
-// le seul nom que rapprochement-osm prend ici est un RÉEXPORT de hotes-exclus.js,
-// module feuille, donc une liaison résolue au lien et non à l'évaluation ; et aucun
-// des trois modules ne s'en sert au niveau supérieur, seulement dans des corps de
-// fonction. Rien de plus ne doit être ajouté à ce cycle sans le revérifier.
+// La composition de domaines. L'import ne ferme plus de cycle : depuis que
+// normaliserDomaine vit dans lib/appariement.js, module feuille sans aucune
+// dépendance, composition-domaines ne repasse plus par ce module-ci. Rien ne doit
+// être ajouté à cette chaîne sans la revérifier.
 import { chargerIndexUnicite, composerPistes } from './composition-domaines.js'
 
 // ---------------------------------------------------------------------------

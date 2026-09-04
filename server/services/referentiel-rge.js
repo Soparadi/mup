@@ -1,6 +1,6 @@
 // Référentiel RGE — entreprises « Reconnu Garant de l'Environnement » (162 259
 // lignes). Table SÉPARÉE de referentiel_societes, en LECTURE SEULE une fois
-// chargée, sur le modèle de referentiel_atout_france et referentiel_osm.
+// chargée, sur le modèle de referentiel_atout_france.
 //
 // Source : ADEME, jeu data-fair `liste-des-entreprises-rge-2`, Licence Ouverte,
 // finalisé chaque nuit (~03 h 01). Le jeu est VIRTUEL — une vue de

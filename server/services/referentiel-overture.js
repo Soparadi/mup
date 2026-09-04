@@ -3,16 +3,18 @@
 // patron de referentiel_rge et referentiel_atout_france : elle stocke, elle ne
 // rapproche rien, et elle n'écrit JAMAIS dans referentiel_societes.
 //
-// ── POURQUOI UNE TABLE À PART, ET PAS UN AJOUT À referentiel_osm ────────────
-// Les deux sources décrivent le même genre d'objet (un lieu, un nom, une
-// position), et c'est précisément pourquoi il ne faut pas les confondre. Elles
-// n'ont pas la même licence : referentiel_osm vient d'OpenStreetMap, sous ODbL,
-// qui impose le partage à l'identique de toute base dérivée. Overture Places,
-// lui, ne porte AUCUNE ligne ODbL sur la France : le relevé des 4 329 198
-// enregistrements source de la métropole donne CDLA-Permissive-2.0 3 961 461,
-// Apache-2.0 288 681, CC0-1.0 79 056, et zéro ODbL. Verser Overture dans la
-// table OSM ferait de l'ensemble une base dérivée d'une base ODbL. Deux tables
-// distinctes maintiennent la séparation que la licence suppose ; c'est un choix
+// ── POURQUOI CETTE TABLE N'A JAMAIS ÉTÉ UN AJOUT À LA RÉSERVE OSM ──────────
+// Les deux sources décrivaient le même genre d'objet (un lieu, un nom, une
+// position), et c'est précisément pourquoi il ne fallait pas les confondre. Elles
+// n'ont pas la même licence : la réserve OpenStreetMap venait d'une source sous
+// ODbL, qui impose le partage à l'identique de toute base dérivée. C'est ce motif,
+// et lui seul, qui a fait retirer OpenStreetMap des sources le 4 septembre.
+// Overture Places, lui, ne porte AUCUNE ligne ODbL sur la France : le relevé des
+// 4 329 198 enregistrements source de la métropole donne CDLA-Permissive-2.0
+// 3 961 461, Apache-2.0 288 681, CC0-1.0 79 056, et zéro ODbL. Verser Overture
+// dans la table OSM aurait fait de l'ensemble une base dérivée d'une base ODbL.
+// Deux tables distinctes ont maintenu la séparation que la licence suppose, et
+// c'est ce qui a permis de retirer l'une sans toucher à l'autre : un choix
 // juridique avant d'être un choix technique.
 //
 // ── LA PROVENANCE EST UN CHAMP, PAS UN COMMENTAIRE ──────────────────────────
@@ -33,21 +35,20 @@
 //    de l'instance (socket lâché, sortie sans donnée). Le champ vaut '' quand le
 //    code postal n'est pas fait de cinq chiffres : la ligne est conservée,
 //    seule la borne est perdue.
-//  · `lat` est INDEXÉ seul, comme sur referentiel_osm : c'est ce qui permet de
-//    lire une bande de latitude sans balayer la table. `lng` ne l'est pas, la
+//  · `lat` est INDEXÉ seul : c'est ce qui permet de lire une bande de latitude
+//    sans balayer la table. `lng` ne l'est pas, la
 //    bande de longitude se filtre après.
 //  · `domaine` est l'hôte de `site`, par normaliserSite. Reparser 2,16 M URL à
 //    chaque lecture n'aurait pas de sens.
 //  · `numero_voie` et `libelle_voie` viennent de l'adresse libre par
 //    parserAdresseAgregee, la fonction déjà en service. `libelle_voie` garde la
-//    forme BRUTE du libellé, comme referentiel_osm.street et comme
-//    referentiel_societes.libelle_voie : c'est normaliserVoie qui canonise, au
-//    moment de la comparaison, jamais le stockage. L'adresse libre d'origine
+//    forme BRUTE du libellé, comme referentiel_societes.libelle_voie : c'est
+//    normaliserVoie qui canonise, au moment de la comparaison, jamais le
+//    stockage. L'adresse libre d'origine
 //    reste dans `adresse` : une découpe se rejoue, une source perdue non.
 //  · les réseaux sociaux sont éclatés par hôte en facebook / instagram /
-//    linkedin / social_autre, calqué sur referentiel_osm. Le gisement est massif
-//    mais monocorde : 1 842 533 Facebook contre 39 502 lignes portant autre
-//    chose.
+//    linkedin / social_autre. Le gisement est massif mais monocorde :
+//    1 842 533 Facebook contre 39 502 lignes portant autre chose.
 //  · téléphone, courriel et site gardent la forme de la source. 350 lignes
 //    portent deux téléphones et 1 260 deux sites : on prend la première valeur,
 //    la seconde n'a jamais désigné un autre établissement sur l'échantillon.
@@ -124,7 +125,7 @@ export async function runReferentielOvertureMigration() {
     'DEFINE FIELD IF NOT EXISTS domaine ON referentiel_overture TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS telephone ON referentiel_overture TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS email ON referentiel_overture TYPE option<string>',
-    // Réseaux sociaux éclatés par hôte, patron referentiel_osm.
+    // Réseaux sociaux éclatés par hôte.
     'DEFINE FIELD IF NOT EXISTS facebook ON referentiel_overture TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS instagram ON referentiel_overture TYPE option<string>',
     'DEFINE FIELD IF NOT EXISTS linkedin ON referentiel_overture TYPE option<string>',
@@ -190,7 +191,7 @@ export async function runReferentielOvertureMigration() {
     'DEFINE INDEX IF NOT EXISTS idx_overture_cle ON referentiel_overture FIELDS cle UNIQUE',
     // departement : la borne de lecture par territoire.
     'DEFINE INDEX IF NOT EXISTS idx_overture_departement ON referentiel_overture FIELDS departement',
-    // lat : la borne de lecture par bande géographique, patron referentiel_osm.
+    // lat : la borne de lecture par bande géographique.
     'DEFINE INDEX IF NOT EXISTS idx_overture_lat ON referentiel_overture FIELDS lat'
   ]
   for (const q of queries) {

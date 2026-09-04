@@ -61,7 +61,7 @@
 // ---------------------------------------------------------------------------
 // CE QUI EST RÉUTILISÉ TEL QUEL, sans variante ni assouplissement :
 //   parserAdresseAgregee, normaliserVoie, normaliserSociete, comparerNumero
-//   (lib/societes.js), normaliserDomaine (rapprochement-osm.js),
+//   (lib/societes.js), normaliserDomaine (lib/appariement.js),
 //   enrichReferentielActionnable (referentiel.js).
 // La comparaison de voie est l'ÉGALITÉ STRICTE des clés canoniques — celle que
 // la mesure a chiffrée. Elle n'est pas assouplie ici.
@@ -89,7 +89,7 @@ import { normaliserSociete, normaliserVoie, comparerNumero, parserAdresseAgregee
 import { normaliserDomaine } from '../../lib/appariement.js'
 import { enrichReferentielActionnable } from './referentiel.js'
 
-// Coercition string sûre (calque rapprochement-osm.js / referentiel.js).
+// Coercition string sûre (calque referentiel.js / referentiel-read.js).
 const str = v => (typeof v === 'string' ? v.trim() : (v == null ? '' : String(v).trim()))
 
 // Les trois NAF d'hébergement, au format NN.NNL de referentiel_societes — ceux-là
@@ -101,7 +101,7 @@ export const NAFS_HEBERGEMENT = ['55.10Z', '55.20Z', '55.30Z']
 
 // ---------------------------------------------------------------------------
 // DOMAINES MUTUALISÉS — table calculée sur l'ENSEMBLE NATIONAL, une fois par
-// processus, en cache module (patron _idxByDept de rapprochement-osm.js).
+// processus, en cache module.
 //
 // Un domaine est MUTUALISÉ dès qu'il est porté par ≥ 2 établissements DISTINCTS.
 // « Distinct » se lit sur la clé naturelle `cle`, pas sur le nombre de lignes :
@@ -342,8 +342,8 @@ function rangCandidat(niveau, tier) {
 // Voie + numéro d'une fiche société. D'abord les champs éclatés ; s'ils sont
 // vides — cas SYSTÉMATIQUE côté Etalab, qui ne peuple jamais type_voie /
 // libelle_voie —, repli sur l'agrégat `adresse` parsé. Sans ce repli, voieSoc
-// reste vide et l'entonnoir ne dépasse jamais le code postal. Calque exact de
-// sonderAdresse (rapprochement-osm.js:224). PURE.
+// reste vide et l'entonnoir ne dépasse jamais le code postal. Même repli, même
+// parseur que voieAttendue (mentions-legales.js). PURE.
 function voieEtNumero(soc) {
   let voie = normaliserVoie(soc?.type_voie, soc?.libelle_voie)
   let numero = soc?.numero_voie

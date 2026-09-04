@@ -43,7 +43,6 @@ import {
   verifyOptoutToken
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable, markGisementComplete } from './server/services/referentiel.js'
-import { runReferentielOsmMigration } from './server/services/referentiel-osm.js'
 import { runReferentielAtoutFranceMigration } from './server/services/referentiel-atout-france.js'
 import { chargerAtoutFrance } from './server/services/atout-france.js'
 import { runReferentielRgeMigration } from './server/services/referentiel-rge.js'
@@ -1869,157 +1868,15 @@ app.get('/api/admin/kpi', requireSuperadmin, async (req, res) => {
   }
 })
 
-// ── GET /api/debug/overpass — DIAGNOSTIC DÉVELOPPEMENT, À RETIRER AVANT LANCEMENT.
-// Route de diagnostic LECTURE SEULE du remplissage Overpass dans
-// referentiel_societes. Même verrou que les routes /api/admin/comptes
-// (requireSuperadmin, dev@soparadi.com SEUL, req.authUser posé par le gate
-// global requireAuth). GET → passe le gate abonnement (lecture seule).
-// N'exécute QUE des SELECT (aucun UPDATE/CREATE, aucun appel réseau externe) et
-// ne touche NI /api/search, NI overpass.js, NI /api/enrich.
-//
-// Paramètres optionnels ?naf=47.78A&dept=22 : quand les DEUX sont fournis,
-// ajoute un bloc `couple` (total / avec_website / avec_societe_tel /
-// avec_au_moins_un) mesurant le remplissage sur ce couple précis — le seul
-// terrain où le connecteur Overpass a pu s'exécuter. Le NAF est normalisé
-// comme l'appariement d'overpass.js:319-325 : insensible au point (la base
-// stocke en pointé « 47.78A », les deux formes d'entrée sont acceptées).
-app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
-  // Prédicat « champ non vide » (les 3 champs sont option<string> : NONE ou '').
-  const nonVide = (f) => `${f} != NONE AND ${f} != ''`
-  const vide = (f) => `(${f} = NONE OR ${f} = '')`
-  const auMoinsUn =
-    `(${nonVide('website')}) OR (${nonVide('societe_tel')}) OR (${nonVide('societe_email')})`
-  const lesTrois =
-    `(${nonVide('website')}) AND (${nonVide('societe_tel')}) AND (${nonVide('societe_email')})`
-  const cnt = (rows) => (Array.isArray(rows) && rows[0] && typeof rows[0].count === 'number') ? rows[0].count : 0
-  try {
-    const db = await getDb()
-    const [totalR, webR, telR, mailR, unR, deptTotR, deptUnR, gisWebR, gisSansContactR, gisSansMailR, gisSansTelR] = await Promise.all([
-      db.query('SELECT count() FROM referentiel_societes GROUP ALL'),
-      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} GROUP ALL`),
-      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('societe_tel')} GROUP ALL`),
-      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('societe_email')} GROUP ALL`),
-      db.query(`SELECT count() FROM referentiel_societes WHERE ${auMoinsUn} GROUP ALL`),
-      db.query('SELECT departement, count() AS n FROM referentiel_societes GROUP BY departement'),
-      db.query(`SELECT departement, count() AS n FROM referentiel_societes WHERE ${auMoinsUn} GROUP BY departement`),
-      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} GROUP ALL`),
-      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} AND ${vide('societe_email')} AND ${vide('societe_tel')} GROUP ALL`),
-      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} AND ${vide('societe_email')} GROUP ALL`),
-      db.query(`SELECT count() FROM referentiel_societes WHERE ${nonVide('website')} AND ${vide('societe_tel')} GROUP ALL`)
-    ])
-    // Fusion des deux ventilations par département (total vs. au moins un contact).
-    const avecContactParDept = new Map()
-    for (const row of (deptUnR[0] || [])) avecContactParDept.set(String(row.departement ?? ''), row.n || 0)
-    const parDepartement = (deptTotR[0] || [])
-      .map((row) => {
-        const dept = String(row.departement ?? '')
-        return { departement: dept, total: row.n || 0, avec_contact: avecContactParDept.get(dept) || 0 }
-      })
-      .sort((a, b) => b.avec_contact - a.avec_contact || b.total - a.total)
-      .slice(0, 20)
-
-    // Bloc couple naf+dept (optionnel) — remplissage réel sur ce seul couple.
-    // « au moins un » = website OU societe_tel (les deux champs qu'Overpass
-    // écrit ; l'email n'entre pas dans cette mesure, conformément à la demande).
-    //
-    // Méthode : SELECT sur le DÉPARTEMENT seul (indexé), puis filtre NAF +
-    // comptage en JS post-SELECT. On n'utilise PAS string::replace en SQL :
-    // son support n'est pas garanti sous SurrealDB 2.6.5 (c'est ce qui avait
-    // cassé Overpass en juillet). On reproduit exactement la doctrine
-    // insensible-au-point d'overpass.js:319-325 (base pointée « 47.78A »,
-    // entrée acceptée dans les deux formes via strip JS).
-    let couple = null
-    const nafRaw = String(req.query.naf || '').trim()
-    const deptRaw = String(req.query.dept || '').trim()
-    if (nafRaw && deptRaw) {
-      const nafStrip = nafRaw.replace(/\./g, '')
-      const rowsR = await db.query(
-        'SELECT naf, website, societe_tel FROM referentiel_societes WHERE departement = $dept',
-        { dept: deptRaw }
-      )
-      const rows = (Array.isArray(rowsR?.[0]) ? rowsR[0] : [])
-        .filter((r) => String(r?.naf || '').replace(/\./g, '') === nafStrip)
-      const rempli = (v) => v !== undefined && v !== null && String(v) !== ''
-      let avecWeb = 0, avecTel = 0, avecUn = 0
-      for (const r of rows) {
-        const w = rempli(r?.website)
-        const t = rempli(r?.societe_tel)
-        if (w) avecWeb++
-        if (t) avecTel++
-        if (w || t) avecUn++
-      }
-      couple = {
-        naf: nafRaw,
-        dept: deptRaw,
-        total: rows.length,
-        avec_website: avecWeb,
-        avec_societe_tel: avecTel,
-        avec_au_moins_un: avecUn
-      }
-    }
-
-    // Échantillon cle_nom — contrôle de visu AVANT backfill des restantes.
-    // Projection légère (siret, enseigne, raison_sociale, cle_nom) sur les 10
-    // premières fiches traitées, pour vérifier à l'œil que
-    // cle_nom = normaliserSociete(enseigne || raison_sociale) : enseigne
-    // prioritaire, repli raison sociale. Prédicat STRICT `!= NONE` (pas nonVide)
-    // exprès : on veut VOIR les cle_nom = '' (raison sociale réduite à vide après
-    // strip des suffixes) — les masquer cacherait un éventuel problème sur ces cas.
-    const echClenomR = await db.query(
-      `SELECT siret, enseigne, raison_sociale, cle_nom FROM referentiel_societes WHERE cle_nom != NONE LIMIT 10`
-    )
-    const echantillonClenom = Array.isArray(echClenomR?.[0]) ? echClenomR[0] : []
-
-    // Comptage de complétude — LECTURE SEULE, requête count() filtrée isolée
-    // (pas dans le Promise.all ci-dessus, pour ne pas le fragiliser). Les autres
-    // agrégats de complétude (total, par canal, au moins un) sont déjà calculés
-    // plus haut ; seul « les TROIS champs remplis » manque, on l'ajoute ici.
-    const completR = await db.query(
-      `SELECT count() FROM referentiel_societes WHERE ${lesTrois} GROUP ALL`
-    )
-    const completude = {
-      total: cnt(totalR[0]),
-      avec_au_moins_un: cnt(unR[0]),
-      complete: cnt(completR[0]),
-      detail: {
-        avec_website: cnt(webR[0]),
-        avec_tel: cnt(telR[0]),
-        avec_email: cnt(mailR[0])
-      }
-    }
-
-    res.json({
-      total: cnt(totalR[0]),
-      avec_website: cnt(webR[0]),
-      avec_societe_tel: cnt(telR[0]),
-      avec_societe_email: cnt(mailR[0]),
-      avec_au_moins_un: cnt(unR[0]),
-      par_departement_top20: parDepartement,
-      gisement: {
-        avec_website: cnt(gisWebR[0]),
-        website_sans_contact: cnt(gisSansContactR[0]),
-        website_sans_email: cnt(gisSansMailR[0]),
-        website_sans_tel: cnt(gisSansTelR[0])
-      },
-      echantillon_clenom: echantillonClenom,
-      completude,
-      ...(couple ? { couple } : {})
-    })
-  } catch (err) {
-    console.error('[debug/overpass]', err.message)
-    res.status(500).json({ error: 'Diagnostic overpass impossible' })
-  }
-})
-
 // ── POST /api/admin/referentiel/backfill-clenom — À RETIRER AVANT LANCEMENT.
 // Backfill one-shot de cle_nom sur le stock referentiel_societes existant
-// (étape 2/3). Même verrou que /api/admin/comptes et /api/debug/overpass
+// (étape 2/3). Même verrou que /api/admin/comptes
 // (requireSuperadmin, dev@soparadi.com SEUL, req.authUser posé par le gate
 // global). Déclenché À LA MAIN après merge (Railway), JAMAIS au boot (bloquerait
 // le démarrage + rejeu à chaque redéploiement).
 //
 // normaliserSociete est du JS pur (NFD + strip suffixes) inexprimable en SurrealQL
-// (et string::replace non fiable sous 2.6.5, cf. overpass) → lire→normaliser→réécrire
+// (et string::replace non fiable sous 2.6.5) → lire→normaliser→réécrire
 // par lots. Contrainte mémoire movup-prod (1 GB) : projection LÉGÈRE (id, enseigne,
 // raison_sociale — JAMAIS etablissements[]/dirigeants[]), lot 500, cadence inter-lots.
 //
@@ -2031,8 +1888,8 @@ app.get('/api/debug/overpass', requireSuperadmin, async (req, res) => {
 app.post('/api/admin/referentiel/backfill-clenom', requireSuperadmin, async (req, res) => {
   const BATCH = 500
   const maxBatches = Math.min(50, Math.max(1, Number(req.query.batches) || 20))
-  // count final optionnel : count() filtré GROUP ALL est sûr (même classe que
-  // /api/debug/overpass), mais ?count=0 permet de le sauter par prudence.
+  // count final optionnel : count() filtré GROUP ALL est sûr sur cette table,
+  // mais ?count=0 permet de le sauter par prudence.
   const withCount = String(req.query.count ?? '1') !== '0'
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
   try {
@@ -9682,16 +9539,6 @@ app.use((req, res) => {
   } catch (e) {
     console.error('[boot] referentiel migration failed:', e.message)
   }
-  // Référentiel OSM — réserve nationale de contacts issus du gisement
-  // OpenStreetMap, table referentiel_osm (clé osm_id). Séparée de
-  // referentiel_societes, SIRET en index secondaire pour la jointure.
-  // Vide au boot : alimentation par UPSERT dans une passe ultérieure.
-  try {
-    await runReferentielOsmMigration()
-    console.log('[boot] referentiel_osm table ready (+ 2 indexes)')
-  } catch (e) {
-    console.error('[boot] referentiel_osm migration failed:', e.message)
-  }
   // Référentiel Atout France — table referentiel_atout_france (clé naturelle
   // composée nom+CP+adresse), hébergements touristiques classés. Séparée de
   // referentiel_societes, bornée par département faute de coordonnées dans la
@@ -9715,8 +9562,9 @@ app.use((req, res) => {
   }
   // Référentiel Overture Places : table referentiel_overture (clé = identifiant
   // GERS de la source), lieux de la base Overture Maps. Séparée de
-  // referentiel_osm, et pour une raison de licence avant tout : OSM est sous
-  // ODbL, Overture ne porte aucune ligne ODbL sur la France. Vide au boot :
+  // referentiel_societes, et pour une raison de licence avant tout : Overture ne
+  // porte aucune ligne ODbL sur la France, quand OpenStreetMap est sous cette
+  // licence, motif de son retrait des sources le 4 septembre. Vide au boot :
   // alimentation hors serveur, par scripts/charger-overture-tranche.mjs, la
   // source étant un fichier Parquet que le conteneur ne sait pas lire.
   try {

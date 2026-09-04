@@ -287,9 +287,10 @@ export async function consumeLead(db, userId) {
 //
 // « Présent » = chaîne non vide après trim, rien de plus — même règle que le tri
 // de service (server.js:2351-2352). AUCUNE validation de forme : pas de regex
-// email, pas de normalisation téléphone. Un societe_email issu d'OSM n'est pas
-// filtré à l'écriture (overpass.js:376) et peut être mal formé ou nominatif ;
-// arbitrage assumé, on ne durcit pas ici sans décision doctrinale séparée.
+// email, pas de normalisation téléphone. AUCUNE source n'est filtrée sur la FORME
+// à l'écriture : un societe_email venu du crawl mentions légales ou d'un import
+// peut être mal formé ou nominatif ; arbitrage assumé, on ne durcit pas ici sans
+// décision doctrinale séparée.
 //
 // Fonction PURE : pas de req, pas de db, pas d'await. Reçoit l'objet des champs
 // fusionnés (contrat societe_*), rend un booléen.

@@ -1,6 +1,6 @@
 // Référentiel Atout France — hébergements touristiques classés (21 368 lignes,
 // dont 21 183 avec un site : 99,1 %). Table SÉPARÉE de referentiel_societes,
-// en LECTURE SEULE une fois chargée, sur le modèle de referentiel_osm.
+// en LECTURE SEULE une fois chargée, comme les autres tables de gisement.
 //
 // Source : data.classement.atout-france.fr, Licence Ouverte, mise à jour
 // quotidienne, téléchargeable en bloc. Le fichier n'a NI SIRET, NI téléphone,
@@ -8,7 +8,7 @@
 // rapproché par NAF + adresse + nom dans une passe ULTÉRIEURE. Cette table ne
 // fait que le stockage — aucun rapprochement ici.
 //
-// Trois écarts assumés au patron referentiel_osm :
+// Trois écarts assumés au patron des tables de gisement :
 //
 //  1. AUCUNE COORDONNÉE dans le fichier. Le patron « index sur lat seul, borné
 //     par bbox » ne se transpose donc pas : la borne de chargement est le
@@ -20,16 +20,16 @@
 //     composerCle). C'est la seule idempotence possible : deux téléchargements
 //     du même établissement produisent la même clé, donc le même record.
 //
-//  3. ADRESSE ÉCLATÉE DÈS LA NAISSANCE. sonderAdresse (rapprochement-osm.js:213)
-//     compare sur QUATRE champs séparés — postcode, street, housenumber, city —
-//     jamais sur un agrégat. Une table jumelle qui naîtrait avec l'adresse en
+//  3. ADRESSE ÉCLATÉE DÈS LA NAISSANCE. L'appariement par adresse compare QUATRE
+//     champs séparés, postcode, street, housenumber, city, jamais un agrégat.
+//     Une table jumelle qui naîtrait avec l'adresse en
 //     une chaîne obligerait à la ré-éclater à chaque lecture. `adresse_brute`
 //     conserve tout de même la chaîne d'origine : un éclatement amélioré pourra
 //     être rejoué sans retélécharger.
 //
 // Schéma défini ci-dessous (runReferentielAtoutFranceMigration), joué au boot du
-// serveur de manière idempotente (DEFINE … IF NOT EXISTS). Calque strict du
-// patron runReferentielOsmMigration (server/services/referentiel-osm.js).
+// serveur de manière idempotente (DEFINE … IF NOT EXISTS), comme les autres
+// migrations de gisement.
 
 import { getDb } from '../../lib/surreal.js'
 

@@ -121,15 +121,15 @@ export async function runReferentielMigration() {
     // il a eu lieu. Ils disent D'OÙ vient une coordonnée et à quel prix, ce qu'aucun
     // des six champs actionnables ne porte.
     //
-    // ILS NE REMONTENT JAMAIS À L'ÉCRAN, et c'est vérifiable route par route. Les six
+    // ILS NE REMONTENT JAMAIS À L'ÉCRAN, et c'est vérifiable route par route. Les cinq
     // chemins par lesquels le référentiel atteint le navigateur projettent tous une
     // liste blanche : referentielRowToFiche (referentiel-read.js) reconstruit un
     // objet littéral champ par champ, projeterReferentiel n'expose que ses six champs,
     // getReferentielContactBySiret et sa forme en lot sélectionnent leurs colonnes,
-    // /api/debug/overpass compte et projette quatre colonnes, le tri de service de
-    // /api/search en lit cinq sans rien sérialiser. Le seul SELECT * de la table
-    // (referentiel-read.js) passe par ce constructeur littéral. Aucun de ces chemins
-    // ne nomme ces quatre champs, et aucun ne peut les ramasser par élargissement.
+    // le tri de service de /api/search en lit cinq sans rien sérialiser. Le seul
+    // SELECT * de la table (referentiel-read.js) passe par ce constructeur littéral.
+    // Aucun de ces chemins ne nomme ces quatre champs, et aucun ne peut les ramasser
+    // par élargissement.
     //
     // contact_origine nomme LA SOURCE ET LE CHEMIN QUI A TRANCHÉ, en un seul jeton
     // `source` ou `source_chemin` : deux appariements de la même source n'ont pas
@@ -385,11 +385,11 @@ const CHAMPS_TRACE = {
 // aucune route ne les sert, cf. runReferentielMigration. Les huit appelants
 // existants ne le passent pas et leur UPDATE ne change pas d'un caractère.
 //
-// FILTRE D'HÔTE SUR LE SITE, posé ici et nulle part ailleurs. Les huit portes par
+// FILTRE D'HÔTE SUR LE SITE, posé ici et nulle part ailleurs. Les six portes par
 // lesquelles un `website` entre au référentiel (Étalab n'en est pas : son socle ne
-// porte pas ce champ) passent TOUTES par cette fonction : rapprochement OSM en trois
-// points, Atout France, les deux amorces Overpass, le crawl mentions légales, la
-// saisie abonné et l'import. Un seul test ici les couvre toutes, et aucune porte
+// porte pas ce champ) passent TOUTES par cette fonction : Atout France, le crawl
+// mentions légales, DataForSEO sous corroboration d'adresse, les deux saisies
+// d'abonné et l'import. Un seul test ici les couvre toutes, et aucune porte
 // future ne pourra le contourner sans contourner l'écriture elle-même.
 //
 // Ce qu'il ferme : une page Facebook, un profil Planity ou une fiche Tchip stockée
@@ -410,9 +410,9 @@ export async function enrichReferentielActionnable(siret, fields = {}, trace = n
       return
     }
     // ── Filtre d'hôte, AVANT la boucle des champs ──
-    // Copie locale : l'objet de l'appelant n'est jamais muté (plusieurs appelants
-    // le construisent à la volée, mais rapprochement-osm.js passe le résultat de
-    // mapperOsmVersContrat, qu'il compte par ailleurs).
+    // Copie locale : l'objet de l'appelant n'est jamais muté. Plusieurs le
+    // construisent à la volée, d'autres passent un objet qu'ils gardent sous la main
+    // pour leurs propres comptes.
     const entrants = { ...(fields || {}) }
     const siteEntrant = str(entrants.website)
     if (siteEntrant) {

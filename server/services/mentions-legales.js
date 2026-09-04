@@ -14,8 +14,8 @@
 //   4.   Recoupement scoré contre le faisceau + écriture additive.
 //
 // Robustesse : jamais de throw remontant. Échec réseau/timeout → « rien ». Tous
-// les appels sortants passent par une file PAR HÔTE (patron overpass.js décliné par
-// serveur) + AbortController : un appel à la fois vers un hôte donné, délai entre
+// les appels sortants passent par une file PAR HÔTE, déclinée par serveur, et par
+// un AbortController : un appel à la fois vers un hôte donné, délai entre
 // chaque, et un sémaphore global qui borne le nombre d'hôtes avançant de front
 // (CRAWL_PARALLELISME, défaut 3). Chaque serveur visité voit exactement le rythme
 // d'avant : c'est le plafond global qui a disparu, jamais l'espacement.
@@ -35,10 +35,10 @@ import { contextePatronyme, estOriginePatronymique } from './composition-domaine
 import { rechercherUrlSociete } from './recherche-web.js'
 import { parserRobots, evaluerRobots } from './robots-txt.js'
 
-// Overpass/serveurs tiers refusent souvent les requêtes sans User-Agent explicite.
+// Beaucoup de serveurs tiers refusent les requêtes sans User-Agent explicite.
 const USER_AGENT = 'MovUP/1.0 (+https://movup.io)'
 
-// Bornes réseau. Le [timeout] Overpass QL ne s'applique PAS aux sites tiers :
+// Bornes réseau. Aucun délai de garde n'est porté par le protocole lui-même :
 // c'est l'AbortController qui borne CHAQUE appel HTTP.
 const FETCH_TIMEOUT_MS = 8000
 const MAX_BYTES = 1_500_000          // cap taille réponse (évite les pages géantes)
@@ -114,7 +114,7 @@ const CONVENTIONAL_PATHS = [
 ]
 
 // ---------------------------------------------------------------------------
-// Files PAR HÔTE + sémaphore global (patron overpass.js, décliné par serveur).
+// Files PAR HÔTE + sémaphore global, déclinés par serveur.
 //
 // UNE FILE PAR HÔTE. Chaque serveur visité a sa propre chaîne de promesses et son
 // propre horodatage de dernier départ : ses pages se suivent une à une, espacées de
@@ -1022,7 +1022,7 @@ export function retenirReseaux(candidats, faisceau = {}, siteHost = '') {
 
 // ---------------------------------------------------------------------------
 // Maillon 4 — recoupement scoré contre le faisceau.
-//   • SIRET/SIREN trouvé = certain (réutilise corroborerSiret d'overpass.js).
+//   • SIRET/SIREN trouvé = certain (réutilise corroborerSiret de lib/appariement.js).
 //   • ≥ 2 signaux indépendants parmi {raison_sociale, adresse, dirigeant_nom} = présumé,
 //   • en deçà du seuil = insuffisant → confidence null (silence, on n'écrit rien).
 //   • dirigeant_nom = VALIDATEUR de concordance uniquement (jamais écrit ni exposé).
@@ -1161,7 +1161,7 @@ function nomCite(faisceau, ex) {
 // SYSTÉMATIQUE côté Etalab, qui ne les peuple jamais —, repli sur l'agrégat
 // `adresse` parsé. Sans ce repli, la voie attendue restait vide et la branche
 // « libellé de voie » d'adresseConcorde était MORTE : elle ne pouvait jamais
-// concorder. Même repli, même parseur que sonderAdresse (rapprochement-osm.js).
+// concorder. Même repli, même parseur que voieEtNumero (rapprochement-atout-france.js).
 function voieAttendue(f) {
   const voie = normaliserVoie(f.type_voie, f.libelle_voie)
   if (voie) return { numero: (String(f.numero_voie || '').match(/\d+/) || [''])[0], voie }

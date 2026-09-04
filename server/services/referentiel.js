@@ -131,6 +131,23 @@ export async function runReferentielMigration() {
     // (referentiel-read.js) passe par ce constructeur littéral. Aucun de ces chemins
     // ne nomme ces quatre champs, et aucun ne peut les ramasser par élargissement.
     //
+    // contact_origine nomme LA SOURCE ET LE CHEMIN QUI A TRANCHÉ, en un seul jeton
+    // `source` ou `source_chemin` : deux appariements de la même source n'ont pas
+    // le même prix, et c'est le chemin qui le dit. Vocabulaire fermé, un producteur
+    // par valeur :
+    //   overture                                   passe-overture-*.mjs
+    //   atout_france_a | _a2 | _b                  rapprochement-atout-france.js
+    //   osm_identifiant | osm_faisceau             rapprochement-osm.js, faisceau
+    //   osm_adresse                                rapprochement-osm.js, CP+voie+numéro
+    //   osm_nom                                    rapprochement-osm.js, pont nom
+    //   overpass_siret | overpass_nom_ville        overpass.js
+    //   mentions_legales_certain | _presume        mentions-legales.js
+    //   saisie_carte | saisie_fiche                server.js, saisie abonné
+    //   import_abonne                              server.js, import de fichier
+    //   dataforseo_adresse                         server.js, sous corroboration
+    // Le préfixe avant le premier `_` reste la source, si bien qu'un comptage par
+    // source se fait sans énumérer les chemins.
+    //
     // contact_site_recoupe est une TRACE, jamais une condition d'écriture : le
     // remplissage-si-vide ne la lit pas. Valeurs : 'tel_et_nom', 'tel_seul',
     // 'nom_seul', 'aucun', 'muet' ; NONE quand la visite n'a pas eu lieu.
@@ -427,8 +444,10 @@ export async function enrichReferentielActionnable(siret, fields = {}, trace = n
     // est déjà pourvu ne reçoit pas de provenance, il n'y aurait rien à tracer. SET
     // direct et non remplissage-si-vide, parce que ces champs décrivent la passe qui
     // écrit, pas une valeur qu'un autre aurait pu poser avant elle.
-    // Les huit appelants existants ne passent RIEN : trace vaut null, la boucle ne
-    // tourne pas, l'UPDATE est mot pour mot celui d'avant.
+    // Un appelant qui ne passe RIEN laisse trace à null : la boucle ne tourne pas et
+    // l'UPDATE est celui d'avant. Ce n'est plus le cas d'aucun chemin d'écriture du
+    // serveur ni des passes, tous instrumentés ; seuls les scripts d'essai s'en
+    // dispensent encore.
     if (trace && typeof trace === 'object') {
       for (const [k, type] of Object.entries(CHAMPS_TRACE)) {
         const v = trace[k]

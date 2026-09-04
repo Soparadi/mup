@@ -1588,7 +1588,13 @@ export async function enrichirMentionsLegales(siret, options = {}) {
       // Réseaux déjà arbitrés par retenirReseaux : au plus un par réseau, ou aucun.
       for (const [champ, url] of Object.entries(analyse.reseaux || {})) fields[champ] = url
       if (Object.keys(fields).length) {
-        await enrichReferentielActionnable(s, fields)
+        // Provenance : le crawl, et le niveau de corroboration qui a ouvert
+        // l'écriture. analyse.confidence vaut 'certain' ou 'presume' et rien
+        // d'autre (recouper ne rend que ces deux valeurs ou null, et null ne
+        // passe pas la garde ci-dessus).
+        await enrichReferentielActionnable(s, fields, {
+          contact_origine: `mentions_legales_${analyse.confidence}`
+        })
         result.written = true
       }
     }

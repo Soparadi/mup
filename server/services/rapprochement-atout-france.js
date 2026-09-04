@@ -605,7 +605,16 @@ export async function rapprocherDepartementAtoutFrance(dept, { blanc = true } = 
       // ecrits compte les enrichissements DISPATCHÉS. L'écriture réelle est
       // tranchée en remplissage-si-vide côté base : ce compteur ne la mesure pas.
       compte.ecrits++
-      await enrichReferentielActionnable(str(soc.siret).replace(/\s+/g, ''), { website: site })
+      // Provenance : la source ET le tier qui a tranché. Le tier dit à quel prix
+      // l'appariement a été obtenu (A nom concordant, A2 adresse exacte sans nom,
+      // B nom concordant sans le numéro de voie), et rien d'autre en base ne le
+      // porte : la fiche enrichie ne garde que le site. meilleurTier vaut
+      // forcément 'A', 'A2' ou 'B' ici, les rangs 1 et 2 ayant déjà continué.
+      await enrichReferentielActionnable(
+        str(soc.siret).replace(/\s+/g, ''),
+        { website: site },
+        { contact_origine: `atout_france_${meilleurTier.toLowerCase()}` }
+      )
     } catch (e) {
       console.warn('[rapprochement-atout-france]', String(e?.message || e).slice(0, 100))
     }

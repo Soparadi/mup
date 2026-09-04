@@ -3540,12 +3540,15 @@ app.put('/api/pipeline/:id', async (req, res) => {
     // `societe_linkedin`, que seule la fiche société écrit. On lisait donc une
     // clé toujours absente, et aucun LinkedIn saisi depuis une carte ne
     // remontait au référentiel. L'ancienne clé reste en repli.
+    // Provenance : saisie d'abonné depuis une CARTE. Ce que l'abonné tape n'est
+    // apparié à rien, il n'y a donc ni score ni distance à tracer, seulement la
+    // porte par laquelle la valeur est entrée.
     enrichReferentielActionnable(cleanBody.siret, {
       website: cleanBody.website,
       societe_email: cleanBody.societe_email,
       societe_tel: cleanBody.societe_tel,
       societe_linkedin: cleanBody.linkedin || cleanBody.societe_linkedin
-    })
+    }, { contact_origine: 'saisie_carte' })
     // Pont coordonnées société — la carte vient d'être écrite, le jumeau à
     // rejoindre est donc du côté `contacts`. FIRE-AND-FORGET (sans await).
     ponterCoordonneesSociete({
@@ -3903,12 +3906,15 @@ app.put('/api/contacts/:id', async (req, res) => {
     // enregistrement mais à la SEULE saisie qui les concerne. L'enrichissement
     // n'écrivant que sur les champs vides, le résultat en base est le même —
     // c'est le bruit qui disparaît, pas un apport.
+    // Provenance : saisie d'abonné depuis la FICHE société ou contact. Distincte
+    // de la carte : même main, autre écran, et le corps partiel de cette route ne
+    // porte que le champ réellement saisi.
     enrichReferentielActionnable(siretEcriture, {
       website: cleanBody.website,
       societe_email: cleanBody.societe_email,
       societe_tel: cleanBody.societe_tel,
       societe_linkedin: cleanBody.societe_linkedin
-    })
+    }, { contact_origine: 'saisie_fiche' })
     // Pont coordonnées société — cette route est polymorphe : elle vient
     // d'écrire l'une OU l'autre table selon le préfixe de l'id. Le jumeau à
     // rejoindre est donc dans L'AUTRE, déterminée par celle qu'on vient
@@ -4462,12 +4468,14 @@ async function ecrireImport(db, userId, plan) {
   // dérivent toutes deux de plan.societes. FIRE-AND-FORGET (sans await) : ne bloque
   // pas la réponse d'import, no-op silencieux pour tout SIRET absent du référentiel.
   for (const s of plan.societes) {
+    // Provenance : import de fichier, jamais une frappe ni un appariement. La
+    // valeur vient du fichier de l'abonné telle quelle.
     enrichReferentielActionnable(s.siret, {
       website: s.site,
       societe_email: s.email,
       societe_tel: s.tel,
       societe_linkedin: s.linkedin
-    })
+    }, { contact_origine: 'import_abonne' })
   }
 
   return {
@@ -6044,7 +6052,12 @@ app.post('/api/enrich/:siret', async (req, res) => {
               if (!merged.societe_tel && info.phone) patch.societe_tel = info.phone
               // Re-lecture ciblée UNIQUEMENT si une écriture est tentée.
               if (Object.keys(patch).length) {
-                await enrichReferentielActionnable(siret, patch)
+                // Provenance : DataForSEO, sous corroboration d'adresse. On
+                // n'arrive ici que si CP, voie et numéro concordent tous les
+                // trois, ce que le nom du chemin ne dit pas à lui seul.
+                await enrichReferentielActionnable(siret, patch, {
+                  contact_origine: 'dataforseo_adresse'
+                })
                 const soc2 = await getReferentielContactBySiret(siret)
                 if (soc2) {
                   merged.website = pick(soc2.website, merged.website)

@@ -319,6 +319,19 @@ async function upsertRecordRef(db, table, cleanId, body, fillIfEmpty = []) {
   }
 }
 
+// Les quatre champs de traçabilité, avec le type que le schéma leur donne. LISTE
+// BLANCHE : un appelant ne peut poser ni un champ hors de cette liste, ni une
+// valeur d'un autre type. La table est SCHEMAFULL et cette fonction avale ses
+// échecs, donc un champ inconnu ou mal typé ferait échouer l'UPDATE ENTIER, en
+// silence, emportant l'enrichissement avec lui. Le filtre est ici pour que ce
+// mode de défaillance ne dépende pas de la rigueur de l'appelant.
+const CHAMPS_TRACE = {
+  contact_origine: 'string',
+  contact_nom_score: 'number',
+  contact_distance_m: 'number',
+  contact_site_recoupe: 'string'
+}
+
 // ── enrichissement additif du référentiel depuis la saisie abonné ──
 // ENRICHIR-SI-EXISTE : remplit les 6 champs actionnables personne morale du
 // référentiel mutualisé (website / societe_email / societe_tel / societe_linkedin
@@ -339,6 +352,12 @@ async function upsertRecordRef(db, table, cleanId, body, fillIfEmpty = []) {
 //
 // FIRE-AND-FORGET : appelée sans await, ne doit JAMAIS throw. Échec avalé + loggé.
 //
+// TROISIÈME PARAMÈTRE, OPTIONNEL : la traçabilité de la passe qui écrit (origine,
+// score de nom, distance, recoupement par le site). Posée en SET direct dans le
+// MÊME UPDATE, et seulement si au moins un canal est dispatché. Champs INTERNES :
+// aucune route ne les sert, cf. runReferentielMigration. Les huit appelants
+// existants ne le passent pas et leur UPDATE ne change pas d'un caractère.
+//
 // FILTRE D'HÔTE SUR LE SITE, posé ici et nulle part ailleurs. Les huit portes par
 // lesquelles un `website` entre au référentiel (Étalab n'en est pas : son socle ne
 // porte pas ce champ) passent TOUTES par cette fonction : rapprochement OSM en trois
@@ -352,7 +371,7 @@ async function upsertRecordRef(db, table, cleanId, body, fillIfEmpty = []) {
 // font refuser par le fichier d'exclusion des robots, et ne sont PAS horodatés
 // (mentions-legales.js ne pose markChecked qu'aux fiches abouties) : ils reviennent
 // donc à chaque passage. Mesuré avant ce commit : 32 fiches sur les 65 du vivier.
-export async function enrichReferentielActionnable(siret, fields = {}) {
+export async function enrichReferentielActionnable(siret, fields = {}, trace = null) {
   try {
     // SIRET normalisé (espaces retirés) avant cleanRecordId — aligne la clé sur les
     // SIRET du référentiel, déjà 14 chiffres sans espace (cf. server.js:962/1343).
@@ -403,6 +422,22 @@ export async function enrichReferentielActionnable(siret, fields = {}) {
       params[k] = v
     }
     if (assigns.length === 0) return   // rien à enrichir
+    // ── Traçabilité, SET direct, APRÈS le garde ci-dessus ──
+    // Posée seulement quand au moins un canal est dispatché : une fiche dont tout
+    // est déjà pourvu ne reçoit pas de provenance, il n'y aurait rien à tracer. SET
+    // direct et non remplissage-si-vide, parce que ces champs décrivent la passe qui
+    // écrit, pas une valeur qu'un autre aurait pu poser avant elle.
+    // Les huit appelants existants ne passent RIEN : trace vaut null, la boucle ne
+    // tourne pas, l'UPDATE est mot pour mot celui d'avant.
+    if (trace && typeof trace === 'object') {
+      for (const [k, type] of Object.entries(CHAMPS_TRACE)) {
+        const v = trace[k]
+        if (v === undefined || v === null || v === '') continue
+        if (typeof v !== type) continue
+        assigns.push(`${k} = $${k}`)
+        params[k] = v
+      }
+    }
     const db = await getDb()
     // UPDATE ciblé (jamais UPSERT) : record absent → 0 ligne modifiée, no-op.
     await db.query(

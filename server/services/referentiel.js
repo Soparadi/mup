@@ -137,16 +137,26 @@ export async function runReferentielMigration() {
     // par valeur :
     //   overture                                   passe-overture-*.mjs
     //   atout_france_a | _a2 | _b                  rapprochement-atout-france.js
-    //   osm_identifiant | osm_faisceau             rapprochement-osm.js, faisceau
-    //   osm_adresse                                rapprochement-osm.js, CP+voie+numéro
-    //   osm_nom                                    rapprochement-osm.js, pont nom
-    //   overpass_siret | overpass_nom_ville        overpass.js
     //   mentions_legales_certain | _presume        mentions-legales.js
     //   saisie_carte | saisie_fiche                server.js, saisie abonné
     //   import_abonne                              server.js, import de fichier
     //   dataforseo_adresse                         server.js, sous corroboration
     // Le préfixe avant le premier `_` reste la source, si bien qu'un comptage par
     // source se fait sans énumérer les chemins.
+    //
+    // AUCUNE VALEUR osm_* NI overpass_*, ET IL NE FAUT PAS EN RÉINTRODUIRE.
+    // OpenStreetMap a été retiré des sources du référentiel le 4 septembre :
+    // c'était la seule source sous ODbL, dont la clause de partage à l'identique
+    // se propage à toute base qui incorpore ses données. Le moteur de
+    // rapprochement OSM et le connecteur Overpass ne sont plus appelés, donc plus
+    // aucune de ces valeurs n'est produite. Aucune fiche n'en portait : zéro sur
+    // les 66 446 fiches au comptage du 4 septembre, la traçabilité n'ayant été
+    // posée qu'après le dernier passage du moteur.
+    //
+    // Ce que le retrait ne dit PAS : les coordonnées qu'OSM avait écrites avant
+    // la traçabilité sont toujours en base, sans contact_origine, indiscernables
+    // de celles des autres sources. Débrancher une source n'efface pas ce qu'elle
+    // a écrit ; ce stock est une question de licence à trancher à part.
     //
     // contact_site_recoupe est une TRACE, jamais une condition d'écriture : le
     // remplissage-si-vide ne la lit pas. Valeurs : 'tel_et_nom', 'tel_seul',

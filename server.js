@@ -55,7 +55,6 @@ import { getReferentielContactBySiret, getOsmContactBySiret, getReferentielFaisc
 import { projeterReferentiel, retirerProjection } from './server/services/projection-referentiel.js'
 import { lookupBusinessInfo } from './server/services/dataforseo.js'
 import { creerSalle } from './server/services/whereby.js'
-import { rapprocherDepartement } from './server/services/rapprochement-osm.js'
 import { rapprocherDepartementAtoutFrance, NAFS_HEBERGEMENT } from './server/services/rapprochement-atout-france.js'
 import { runMentionsLegalesJob, enrichirMentionsLegales, reprendreFileMentionsLegales } from './server/services/mentions-legales.js'
 import { hostBlacklisted } from './server/services/recherche-web.js'
@@ -2167,27 +2166,6 @@ app.post('/api/admin/rge/charger', requireSuperadmin, async (req, res) => {
   } catch (err) {
     console.error('[rge/charger]', err.message)
     res.status(500).json({ error: 'Chargement RGE impossible' })
-  }
-})
-
-// ── POST /api/admin/rapprochement/dept — À RETIRER AVANT LANCEMENT.
-// Déclenche rapprocherDepartement sur UN département, à la main, pour valider le
-// pont adresse (certain_adresse/presume_adresse). Même verrou que /api/admin/comptes
-// et /api/debug/overpass (requireSuperadmin, dev@soparadi.com SEUL, req.authUser posé
-// par le gate global). SYNCHRONE à la requête — contrairement à /api/amorce, PAS de
-// setTimeout et PAS d'enchaînement reprendreFileMentionsLegales : aucun
-// effet de bord crawl. Renvoie l'objet compteurs complet pour comparaison au point de
-// référence. rapprocherDepartement est fill-if-empty (jamais d'écrasement) → relançable
-// sans dégât sur le même dept.
-app.post('/api/admin/rapprochement/dept', requireSuperadmin, async (req, res) => {
-  const dept = String(req.query?.dept ?? req.body?.dept ?? '').trim()
-  if (!dept) return res.status(400).json({ error: 'dept requis' })
-  try {
-    const compteurs = await rapprocherDepartement(dept)
-    res.json(compteurs)
-  } catch (err) {
-    console.error('[admin/rapprochement/dept]', err.message)
-    res.status(500).json({ error: 'Rapprochement département impossible' })
   }
 })
 
@@ -5045,32 +5023,39 @@ app.get('/api/search', async (req, res) => {
   }
 })
 
-// ── Rapprochement OSM à la demande (département de la recherche) ──
+// ── Amorce d'enrichissement à la demande (département de la recherche) ──
 // Auto-gated par la gate auth /api/* (req.userId rempli). Reçoit le département
-// cherché par le front en fin de recherche. Répond immédiatement, puis lance le
-// rapprochement en différé : le setTimeout 30s laisse les upsertReferentiel
+// cherché par le front en fin de recherche. Répond immédiatement, puis lance
+// l'enrichissement en différé : le setTimeout 30s laisse les upsertReferentiel
 // page-par-page (fire-and-forget de /api/search) flusher le socle Etalab en base
-// avant l'appariement OSM. rapprocherDepartement borne le chargement OSM à la
-// bbox du dept (mémoire) et est no-throw (try/catch interne), .catch de ceinture
-// sur l'appel différé.
+// avant que les maillons ne choisissent sur quoi travailler. Les deux maillons
+// sont no-throw (try/catch interne), .catch de ceinture sur l'appel différé.
+//
+// OPENSTREETMAP A QUITTÉ CETTE CHAÎNE, et c'est une décision de licence, de
+// licence seule. Le rapprochement OSM en occupait la tête et enrichissait tout
+// le département, websites et contacts, en remplissage-si-vide. OpenStreetMap
+// est sous ODbL, dont la clause de partage à l'identique se propage à toute base
+// qui incorpore ses données : c'est la SEULE source du référentiel dans ce cas.
+// Etalab, Atout France, l'ADEME et Overture n'imposent rien de tel. Le moteur
+// n'était ni en panne ni imprécis, il appariait par identifiant dans l'écrasante
+// majorité de ses cas ; ce n'est pas sa qualité qui le fait partir.
 app.post('/api/amorce', async (req, res) => {
   const dept = String(req.body?.dept || '').trim()
   const naf = String(req.body?.naf || '').trim()
   const geoFin = req.body?.geoFin === true
   // fromCache : la recherche a été servie depuis le cache référentiel (from_cache).
-  // Un gisement LU ne doit pas se re-marquer complet (ni rajeunir son marqueur) —
+  // Un gisement LU ne doit pas se re-marquer complet (ni rajeunir son marqueur) :
   // on n'écrit le marqueur qu'au terme d'un vrai déroulement Etalab.
   const fromCache = req.body?.fromCache === true
   res.json({ ok: true })
   // Fire-and-forget différé : lancé APRÈS res.json, sans await.
-  // Enchaînement CHAÎNÉ (pas parallèle — le crawl mentions légales et le
-  // rapprochement OSM partagent le trafic sortant, jamais simultané) :
-  //   1. rapprocherDepartement(dept) : moteur OSM, écrit websites + contacts.
-  //   2. rapprocherDepartementAtoutFrance(dept) : moteur Atout France, écrit des
+  // Enchaînement CHAÎNÉ (pas parallèle : les visites d'Atout France et celles du
+  // crawl mentions légales partagent le trafic sortant, jamais simultané) :
+  //   1. rapprocherDepartementAtoutFrance(dept) : moteur Atout France, écrit des
   //      websites sur les seules fiches des trois NAF d'hébergement. GARDÉ sur le
   //      NAF cherché (voir la garde au maillon lui-même) : ce maillon ne tourne
   //      pas sur les recherches des autres secteurs.
-  //   3. reprendreFileMentionsLegales(dept, N, naf) : la file du département POUR LE
+  //   2. reprendreFileMentionsLegales(dept, N, naf) : la file du département POUR LE
   //      SEUL NAF CHERCHÉ, par lots de N (env CRAWL_ML_BATCH, défaut 50). Chaque lot
   //      sélectionne les SIRET du couple dept + NAF (garde du sélecteur, même
   //      doctrine que celle d'Atout France ci-dessous : sans code cherché, on ne
@@ -5084,63 +5069,55 @@ app.post('/api/amorce', async (req, res) => {
   //      voit refuser sa reprise, parce qu'elle referait le travail en cours. Une
   //      reprise refusée ne refuse jamais la recherche.
   //
-  // L'ORDRE DES DEUX RAPPROCHEMENTS N'EST PAS INTERCHANGEABLE, deux fois :
-  //   · Atout France AVANT selectSiretsACrawler. LE MOTIF A CHANGÉ le 2 septembre :
-  //     la sélection n'exige plus qu'une fiche ait DÉJÀ un website, le vivier accueille
-  //     les fiches muettes que la composition de domaines dote d'une piste
-  //     (referentiel-read.js). Une fiche vue après le passage d'Atout France ne serait
-  //     donc plus ignorée, elle serait crawlée sur une piste composée. L'ordre reste
-  //     néanmoins celui-là, et pour une raison qui ne dépend pas du sélecteur : les
-  //     deux sources écrivent en remplissage-si-vide, un website affirmé par Atout
-  //     France vaut mieux qu'un nom composé, et il faut donc qu'il soit posé avant que
-  //     le crawl choisisse sur quoi travailler.
-  //   · Atout France APRÈS l'OSM, parce que les deux écrivent en
-  //     remplissage-si-vide — le premier arrivé gagne — et que l'OSM apparie par
-  //     identifiant dans l'écrasante majorité de ses cas, là où Atout France
-  //     apparie sur l'adresse et le nom. La source la plus sûre passe d'abord.
+  // ATOUT FRANCE AVANT selectSiretsACrawler, ET L'ORDRE N'EST PAS INTERCHANGEABLE.
+  // LE MOTIF A CHANGÉ le 2 septembre : la sélection n'exige plus qu'une fiche ait
+  // DÉJÀ un website, le vivier accueille les fiches muettes que la composition de
+  // domaines dote d'une piste (referentiel-read.js). Une fiche vue après le passage
+  // d'Atout France ne serait donc plus ignorée, elle serait crawlée sur une piste
+  // composée. L'ordre reste néanmoins celui-là, et pour une raison qui ne dépend
+  // pas du sélecteur : les deux sources écrivent en remplissage-si-vide, un website
+  // affirmé par Atout France vaut mieux qu'un nom composé, et il faut donc qu'il
+  // soit posé avant que le crawl choisisse sur quoi travailler.
   setTimeout(() => {
     if (naf && !geoFin && !fromCache && !dept.includes(',')) markGisementComplete(naf, dept)
-    rapprocherDepartement(dept)
-      .then(async () => {
-        // GARDE NAF. referentiel_atout_france ne contient QUE de l'hébergement
-        // classé : 21 360 lignes, trois codes (55.10Z 13 276, 55.20Z 2 221,
-        // 55.30Z 5 863), aucun autre, aucune ligne sans code. Hors de ces trois
-        // NAF, la passe lisait la tranche départementale Atout France puis les
-        // fiches d'hébergement du département pour rendre zéro : 2,0 s de base
-        // sur le 75, 240 ms sur le 22, à CHAQUE recherche d'abonné, quel que soit
-        // le secteur demandé. Mesures movup-prod, mode à blanc.
-        //
-        // normalizeNaf N'EST PAS FACULTATIF, et c'est le seul endroit où cette
-        // garde peut se tromper en silence. La page envoie le code SANS POINT
-        // (`5510Z`, les option value de prospection.html), la constante porte la
-        // forme pointée de referentiel_societes (`55.10Z`). Comparer les deux tels
-        // quels ne matcherait JAMAIS : Atout France s'éteindrait entièrement, la
-        // chaîne continuerait sans erreur, et rien ne le signalerait. normalizeNaf
-        // (referentiel-read.js) est l'unique implémentation de cette normalisation,
-        // celle-là même dont markGisementComplete compose ses clés de gisement.
-        //
-        // NAF VIDE : on saute. Le verrou d'autocomplétion peut être relâché avant
-        // la convergence, et sans code cherché rien ne désigne l'hébergement.
-        //
-        // Le maillon OSM au-dessus reste, LUI, agnostique au NAF : il enrichit tout
-        // le département. La divergence est assumée. Conséquence à connaître : une
-        // fiche d'hébergement n'est plus rapprochée qu'à une recherche 5510Z, 5520Z
-        // ou 5530Z.
-        if (NAFS_HEBERGEMENT.includes(normalizeNaf(naf))) {
-          // `{ blanc: false }` OBLIGATOIRE et EXPLICITE : le défaut du module est le
-          // mode à blanc, et l'omettre ne ferait rien, en silence. Le module ne
-          // throw jamais et rend son compte rendu, rien à garder ici.
-          const af = await rapprocherDepartementAtoutFrance(dept, { blanc: false })
-          console.log(
-            `[amorce] dept ${dept} · Atout France : ${af.fiches} fiches · ` +
-            `A=${af.a} A2=${af.a2} B=${af.b} · ${af.ecrits} écrits · ${af.duree_ms}ms`
-          )
-        }
-        console.log(`[amorce] dept ${dept} : rapprochement OK`)
-        // La reprise journalise elle-même son propre bilan (lots, tentées, horodatées,
-        // sautées, motif d'arrêt) : rien à compter ici. Elle ne throw pas.
-        await reprendreFileMentionsLegales(dept, parseInt(process.env.CRAWL_ML_BATCH || '50', 10), naf)
-      })
+    ;(async () => {
+      // GARDE NAF. referentiel_atout_france ne contient QUE de l'hébergement
+      // classé : 21 360 lignes, trois codes (55.10Z 13 276, 55.20Z 2 221,
+      // 55.30Z 5 863), aucun autre, aucune ligne sans code. Hors de ces trois
+      // NAF, la passe lisait la tranche départementale Atout France puis les
+      // fiches d'hébergement du département pour rendre zéro : 2,0 s de base
+      // sur le 75, 240 ms sur le 22, à CHAQUE recherche d'abonné, quel que soit
+      // le secteur demandé. Mesures movup-prod, mode à blanc.
+      //
+      // normalizeNaf N'EST PAS FACULTATIF, et c'est le seul endroit où cette
+      // garde peut se tromper en silence. La page envoie le code SANS POINT
+      // (`5510Z`, les option value de prospection.html), la constante porte la
+      // forme pointée de referentiel_societes (`55.10Z`). Comparer les deux tels
+      // quels ne matcherait JAMAIS : Atout France s'éteindrait entièrement, la
+      // chaîne continuerait sans erreur, et rien ne le signalerait. normalizeNaf
+      // (referentiel-read.js) est l'unique implémentation de cette normalisation,
+      // celle-là même dont markGisementComplete compose ses clés de gisement.
+      //
+      // NAF VIDE : on saute. Le verrou d'autocomplétion peut être relâché avant
+      // la convergence, et sans code cherché rien ne désigne l'hébergement.
+      //
+      // Depuis le retrait d'OpenStreetMap, ce maillon est le SEUL rapprochement
+      // de la chaîne, et il est gardé sur le NAF : une recherche hors des trois
+      // codes d'hébergement n'apparie plus rien et va droit au crawl.
+      if (NAFS_HEBERGEMENT.includes(normalizeNaf(naf))) {
+        // `{ blanc: false }` OBLIGATOIRE et EXPLICITE : le défaut du module est le
+        // mode à blanc, et l'omettre ne ferait rien, en silence. Le module ne
+        // throw jamais et rend son compte rendu, rien à garder ici.
+        const af = await rapprocherDepartementAtoutFrance(dept, { blanc: false })
+        console.log(
+          `[amorce] dept ${dept} · Atout France : ${af.fiches} fiches · ` +
+          `A=${af.a} A2=${af.a2} B=${af.b} · ${af.ecrits} écrits · ${af.duree_ms}ms`
+        )
+      }
+      // La reprise journalise elle-même son propre bilan (lots, tentées, horodatées,
+      // sautées, motif d'arrêt) : rien à compter ici. Elle ne throw pas.
+      await reprendreFileMentionsLegales(dept, parseInt(process.env.CRAWL_ML_BATCH || '50', 10), naf)
+    })()
       .catch(e => console.warn('[amorce]', String(e?.message || e).slice(0, 80)))
   }, 30000)
 })

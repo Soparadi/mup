@@ -114,6 +114,33 @@ export async function runReferentielMigration() {
     // 30 j (TTL). option<datetime> sans DEFAULT : NONE tant qu'aucun passage. Jamais
     // alimenté par l'abonné ni par le socle Etalab (bookkeeping interne du job).
     'DEFINE FIELD IF NOT EXISTS mentions_legales_checked_at ON referentiel_societes TYPE option<datetime>',
+    // ── Traçabilité de l'appariement Overture, INTERNE ──
+    // Quatre champs posés par la passe d'appariement Overture, et par elle seule :
+    // l'origine du contact, le score de nom retenu, la distance en mètres entre la
+    // fiche et la ligne appariée, et le résultat du recoupement par le site quand
+    // il a eu lieu. Ils disent D'OÙ vient une coordonnée et à quel prix, ce qu'aucun
+    // des six champs actionnables ne porte.
+    //
+    // ILS NE REMONTENT JAMAIS À L'ÉCRAN, et c'est vérifiable route par route. Les six
+    // chemins par lesquels le référentiel atteint le navigateur projettent tous une
+    // liste blanche : referentielRowToFiche (referentiel-read.js) reconstruit un
+    // objet littéral champ par champ, projeterReferentiel n'expose que ses six champs,
+    // getReferentielContactBySiret et sa forme en lot sélectionnent leurs colonnes,
+    // /api/debug/overpass compte et projette quatre colonnes, le tri de service de
+    // /api/search en lit cinq sans rien sérialiser. Le seul SELECT * de la table
+    // (referentiel-read.js) passe par ce constructeur littéral. Aucun de ces chemins
+    // ne nomme ces quatre champs, et aucun ne peut les ramasser par élargissement.
+    //
+    // contact_site_recoupe est une TRACE, jamais une condition d'écriture : le
+    // remplissage-si-vide ne la lit pas. Valeurs : 'tel_et_nom', 'tel_seul',
+    // 'nom_seul', 'aucun', 'muet' ; NONE quand la visite n'a pas eu lieu.
+    //
+    // option<…> sans DEFAULT : NONE sur tout le stock existant, la migration ne
+    // réécrit aucune ligne. Additifs, jamais existé → IF NOT EXISTS.
+    'DEFINE FIELD IF NOT EXISTS contact_origine ON referentiel_societes TYPE option<string>',
+    'DEFINE FIELD IF NOT EXISTS contact_nom_score ON referentiel_societes TYPE option<number>',
+    'DEFINE FIELD IF NOT EXISTS contact_distance_m ON referentiel_societes TYPE option<number>',
+    'DEFINE FIELD IF NOT EXISTS contact_site_recoupe ON referentiel_societes TYPE option<string>',
     // SIRET clé naturelle → UNIQUE : garantit l'idempotence de l'UPSERT (un établissement = un record).
     'DEFINE INDEX IF NOT EXISTS idx_ref_siret ON referentiel_societes FIELDS siret UNIQUE',
     'DEFINE INDEX IF NOT EXISTS idx_ref_siren ON referentiel_societes FIELDS siren',

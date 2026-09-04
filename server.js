@@ -62,7 +62,7 @@ import { hostBlacklisted } from './server/services/recherche-web.js'
 import { resoudrePositionMeteo } from './server/services/meteo-position.js'
 import { geocode, reverseGeocode } from './server/services/ban.js'
 import { rattraperPositionCarte } from './server/services/position-cartes.js'
-import { normText } from './server/services/overpass.js'
+import { normText } from './lib/appariement.js'
 import { sendOptoutVerify, sendOptoutAcknowledged, sendOptoutInternalNotification, sendAccountDeletionScheduled, sendWelcome } from './server/services/email.js'
 import { startCronJobs, startBalayagePositionCron } from './server/services/cron.js'
 import {

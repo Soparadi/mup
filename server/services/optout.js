@@ -21,7 +21,7 @@
 
 import { getDb } from '../../lib/surreal.js'
 import { createHash, randomBytes } from 'crypto'
-import { normaliserDomaine } from './rapprochement-osm.js'
+import { normaliserDomaine } from '../../lib/appariement.js'
 import { DOMAINES_PERSO } from '../../lib/import.js'
 
 // ── migration idempotente ──

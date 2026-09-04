@@ -86,7 +86,7 @@
 
 import { getDb } from '../../lib/surreal.js'
 import { normaliserSociete, normaliserVoie, comparerNumero, parserAdresseAgregee } from '../../lib/societes.js'
-import { normaliserDomaine } from './rapprochement-osm.js'
+import { normaliserDomaine } from '../../lib/appariement.js'
 import { enrichReferentielActionnable } from './referentiel.js'
 
 // Coercition string sûre (calque rapprochement-osm.js / referentiel.js).

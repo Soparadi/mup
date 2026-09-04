@@ -31,7 +31,7 @@
 // de celle des sites visités, espacée comme eux et bornée par le même sémaphore. Une
 // seule IP, jamais de rafale vers un serveur.
 
-import { normText } from './overpass.js'
+import { normText } from '../../lib/appariement.js'
 import { politeFetchText } from './mentions-legales.js'
 
 // La liste noire des hôtes et son prédicat vivent désormais dans hotes-exclus.js,

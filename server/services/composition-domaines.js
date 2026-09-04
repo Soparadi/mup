@@ -117,7 +117,7 @@
 
 import { Resolver } from 'node:dns/promises'
 import { getDb } from '../../lib/surreal.js'
-import { normaliserDomaine } from './rapprochement-osm.js'
+import { normaliserDomaine } from '../../lib/appariement.js'
 // Le découpage des parenthèses d'une raison sociale vit dans lib/societes.js,
 // son adresse unique : mentions-legales.js le lit de là lui aussi, sans avoir à
 // charger ce module-ci et, avec lui, le résolveur DNS et la base.

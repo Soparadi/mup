@@ -14,7 +14,7 @@
 import { getDb } from '../../lib/surreal.js'
 import { cleanRecordId } from '../../lib/db.js'
 import { geocode } from './ban.js'
-import { normText } from './overpass.js'
+import { normText } from '../../lib/appariement.js'
 
 // ── Rattrapage de position d'une carte pipeline ─────────────────────────────
 // DÉFAUT VISÉ : pipeline.html:1627 efface lat/lng dès qu'une adresse est

@@ -14,13 +14,11 @@
 import { getDb } from '../../lib/surreal.js'
 import { normaliserTel } from '../../lib/import.js'
 import { normaliserSociete, normaliserVoie, comparerNumero, parserAdresseAgregee, distKm } from '../../lib/societes.js'
-import { corroborerSiret, normText, DEPT_BBOX } from './overpass.js'
+import { corroborerSiret, normText, DEPT_BBOX, normaliserDomaine } from '../../lib/appariement.js'
 import { enrichReferentielActionnable } from './referentiel.js'
 // Liste noire d'hôtes (annuaires, plateformes) du moteur de recherche web, appliquée
-// au site du pont NOM. Cet import ferme un CYCLE ESM (recherche-web -> mentions-legales
-// -> rapprochement-osm pour normaliserDomaine) : inoffensif ici, normaliserDomaine est
-// une déclaration de fonction (hissée) et n'est appelée qu'à l'exécution, jamais au
-// chargement du module.
+// au site du pont NOM. Aucun cycle ESM : recherche-web ne dépend plus de ce module,
+// normaliserDomaine ayant rejoint lib/appariement.js.
 import { hostBlacklisted } from './recherche-web.js'
 
 // Coercition string sûre (calque referentiel.js / referentiel-read.js).
@@ -32,25 +30,6 @@ const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 // Rayon du pont NOM, en kilomètres (unité de distKm) : 100 m, la valeur mesurée le
 // 31 août sur 200 fiches (7 appariements, pureté 100 %, aucun faux appariement).
 const RAYON_NOM_KM = 0.1
-
-// URL → domaine normalisé pour le pont « site web ». URL() (schéma posé par
-// défaut si absent) → hostname → www. retiré → minuscules. Repli regex si l'URL
-// ne parse pas (host isolé du schéma, du www. et du chemin). Helper PUR.
-export function normaliserDomaine(url) {
-  const raw = str(url)
-  if (!raw) return ''
-  const aSchema = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw)
-  try {
-    const u = new URL(aSchema ? raw : 'http://' + raw)
-    return u.hostname.replace(/^www\./i, '').toLowerCase()
-  } catch {
-    const host = raw
-      .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '') // schéma
-      .replace(/^www\./i, '')
-      .match(/^[^/?#]+/)
-    return (host ? host[0] : '').toLowerCase()
-  }
-}
 
 // Délai de garde des lectures du rapprochement : CHAQUE SOUS-BANDE du chargement
 // OSM et la lecture des sociétés du département. Posé sur chaque sous-bande et non

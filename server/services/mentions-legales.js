@@ -26,8 +26,7 @@ import { getDb } from '../../lib/surreal.js'
 import { cleanRecordId } from '../../lib/db.js'
 import { enrichReferentielActionnable } from './referentiel.js'
 import { getReferentielFaisceauBySiret, getOsmSitesBySiret, selectSiretsACrawler, normalizeNaf } from './referentiel-read.js'
-import { normaliserDomaine } from './rapprochement-osm.js'
-import { normText, corroborerSiret } from './overpass.js'
+import { normaliserDomaine, normText, corroborerSiret } from '../../lib/appariement.js'
 import { normaliserVoie, parserAdresseAgregee, canoniserTexteVoie, parentheses } from '../../lib/societes.js'
 // Le jugement patronymique du module de composition, réutilisé TEL QUEL par le
 // signal de raison sociale : deux règles tirées de la MÊME preuve (le nom du

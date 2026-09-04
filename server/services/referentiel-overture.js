@@ -159,6 +159,32 @@ export async function runReferentielOvertureMigration() {
     'DEFINE FIELD IF NOT EXISTS source_version ON referentiel_overture TYPE option<number>',
     'DEFINE FIELD IF NOT EXISTS cached_at ON referentiel_overture TYPE datetime DEFAULT time::now()',
     'DEFINE FIELD IF NOT EXISTS refreshed_at ON referentiel_overture TYPE datetime DEFAULT time::now()',
+    // ── Marquage des lignes consommées par l'appariement, INTERNE ──
+    // Une ligne qui a pourvu une fiche du référentiel est DATÉE et rattachée au
+    // SIRET qu'elle a pourvu. Elle n'est pas supprimée : une erreur d'appariement
+    // doit pouvoir se reprendre, et c'est consomme_siret qui dit laquelle reprendre.
+    //
+    // CE QU'IL ÉVITE : la livraison mensuelle relance la passe sur le même couple.
+    // Sans marque, elle réapparie des lignes qui ont déjà donné ce qu'elles avaient,
+    // pour un remplissage-si-vide qui n'écrira rien. Le tirage ajoute donc
+    // `AND consomme_le = NONE` à sa clause de bande, et ces lignes ne montent plus
+    // sur le fil.
+    //
+    // LA LIVRAISON MENSUELLE NE LES EFFACE PAS, et c'est ce qui rend le marquage
+    // durable : le chargeur écrit en UPSERT … SET à liste énumérée (cle, nom,
+    // departement, les champs optionnels, source, cached_at, refreshed_at). Un champ
+    // hors de cette liste n'est pas touché par le SET, donc la marque survit au
+    // rechargement d'une édition.
+    //
+    // AUCUN INDEX, conformément à la règle de cette table : le filtre se paie sur des
+    // lignes déjà matérialisées par idx_overture_lat, là où un index sur un champ NONE
+    // presque partout se paierait à chaque ligne rechargée.
+    //
+    // consomme_siret est SINGULIER, et il le peut : la passe exige le survivant unique
+    // des DEUX côtés, une ligne réclamée par plusieurs fiches est écartée pour toutes.
+    // Sans cette symétrie, la marque ne porterait que la dernière des fiches servies.
+    'DEFINE FIELD IF NOT EXISTS consomme_le ON referentiel_overture TYPE option<datetime>',
+    'DEFINE FIELD IF NOT EXISTS consomme_siret ON referentiel_overture TYPE option<string>',
     // ── trois index, pas un de plus ──
     // cle UNIQUE : un lieu = un record, quel que soit le nombre de rechargements.
     'DEFINE INDEX IF NOT EXISTS idx_overture_cle ON referentiel_overture FIELDS cle UNIQUE',

@@ -43,8 +43,6 @@ import {
   verifyOptoutToken
 } from './server/services/optout.js'
 import { runReferentielMigration, upsertReferentiel, enrichReferentielActionnable, markGisementComplete } from './server/services/referentiel.js'
-import { runReferentielAtoutFranceMigration } from './server/services/referentiel-atout-france.js'
-import { chargerAtoutFrance } from './server/services/atout-france.js'
 import { runReferentielRgeMigration } from './server/services/referentiel-rge.js'
 import { chargerRge } from './server/services/rge.js'
 import { runReferentielOvertureMigration } from './server/services/referentiel-overture.js'
@@ -1935,54 +1933,10 @@ app.post('/api/admin/referentiel/backfill-clenom', requireSuperadmin, async (req
   }
 })
 
-// ── POST /api/admin/atout-france/charger — déclencheur MANUEL du chargement du
-// fichier Atout France dans referentiel_atout_france. Même verrou que
-// /api/admin/referentiel/backfill-clenom (requireSuperadmin, dev@soparadi.com
-// SEUL, req.authUser posé par le gate global).
-//
-// PAS DE CRON dans ce lot, délibérément : le fichier est mis à jour tous les
-// jours, mais on regarde d'abord ce qui atterrit avant d'automatiser le
-// rechargement. Déclenché à la main après merge (Railway), JAMAIS au boot.
-//
-// BORNÉ par ?lots=N — lots de 100 lignes, défaut 20 (2 000 lignes), maximum 50
-// (5 000), mêmes bornes que ?batches= du backfill cle_nom et pour la même raison :
-// tenir sous le timeout Railway. Le bornage est appliqué DANS le service, seul
-// endroit qui connaisse la taille d'un lot. L'appelant relance jusqu'à
-// `restant: 0` ; ~11 appels pour le fichier entier au défaut.
-//
-// Le fichier n'est PAS retéléchargé à chaque appel : le service le garde analysé
-// en mémoire avec un curseur, une demi-heure durant (cf. section CACHE de
-// atout-france.js). Un redémarrage du serveur en cours de chargement perd cache et
-// curseur ensemble : le chargement RECOMMENCE de la ligne 1, sans jamais sauter de
-// ligne, l'UPSERT sur clé naturelle rendant le rejeu anodin.
-//
-// Compte rendu à trois échelles, détaillé au-dessus de chargerAtoutFrance :
-// `lus`/`ignores`/`retenus` portent sur le FICHIER, `traites`/`ecrits`/`erreurs`
-// sur CET APPEL, `curseur`/`restant` sur le chargement en cours. `restant: null`
-// = inconnu (échec), à ne pas lire comme un chargement terminé.
-//
-// chargerAtoutFrance n'écrit QUE referentiel_atout_france — aucune écriture dans
-// referentiel_societes, aucun rapprochement — et ne throw jamais : elle rend son
-// compte rendu même en échec. Le 500 ci-dessous ne couvre que l'imprévu.
-app.post('/api/admin/atout-france/charger', requireSuperadmin, async (req, res) => {
-  try {
-    const compte = await chargerAtoutFrance({ lots: req.query.lots })
-    // 409 : verrou mono-appel du service. Un second chargement concurrent
-    // doublerait la charge d'écriture sur movup-prod sans rien avancer — le cas
-    // visé est le curl relancé après un timeout de proxy, alors que le serveur
-    // travaille toujours. Rien n'a été fait, le compte rendu est à zéro.
-    if (compte.occupe) return res.status(409).json(compte)
-    res.json(compte)
-  } catch (err) {
-    console.error('[atout-france/charger]', err.message)
-    res.status(500).json({ error: 'Chargement Atout France impossible' })
-  }
-})
-
 // ── POST /api/admin/rge/charger — déclencheur MANUEL du chargement des
-// qualifications RGE de l'ADEME dans referentiel_rge. Même verrou que
-// /api/admin/atout-france/charger (requireSuperadmin, dev@soparadi.com SEUL,
-// req.authUser posé par le gate global).
+// qualifications RGE de l'ADEME dans referentiel_rge. Gardé par
+// requireSuperadmin : dev@soparadi.com SEUL, req.authUser posé par le gate
+// global. Même garde que /api/admin/referentiel/backfill-clenom.
 //
 // PAS DE CRON dans ce lot, délibérément : la source est refinalisée chaque nuit,
 // mais on regarde d'abord ce qui atterrit — et surtout si `_id` est stable d'une
@@ -9496,16 +9450,6 @@ app.use((req, res) => {
     console.log('[boot] referentiel_societes table ready (+ 6 indexes)')
   } catch (e) {
     console.error('[boot] referentiel migration failed:', e.message)
-  }
-  // Référentiel Atout France — table referentiel_atout_france (clé naturelle
-  // composée nom+CP+adresse), hébergements touristiques classés. Séparée de
-  // referentiel_societes, bornée par département faute de coordonnées dans la
-  // source. Vide au boot : alimentation par POST /api/admin/atout-france/charger.
-  try {
-    await runReferentielAtoutFranceMigration()
-    console.log('[boot] referentiel_atout_france table ready (+ 3 indexes)')
-  } catch (e) {
-    console.error('[boot] referentiel_atout_france migration failed:', e.message)
   }
   // Référentiel RGE — table referentiel_rge (clé = `_id` de la source ADEME),
   // qualifications « Reconnu Garant de l'Environnement ». Séparée de

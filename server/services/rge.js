@@ -76,7 +76,7 @@
 // Ce module NE RAPPROCHE RIEN. Il ne lit ni n'écrit referentiel_societes.
 
 import { getDb } from '../../lib/surreal.js'
-import { departementDepuisCp, normaliserSite } from './atout-france.js'
+import { departementDepuisCp, normaliserSite } from '../../lib/societes.js'
 
 const TABLE = 'referentiel_rge'
 

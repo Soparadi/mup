@@ -51,7 +51,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getDb, close } from '../lib/surreal.js'
-import { departementDepuisCp, normaliserSite } from '../server/services/atout-france.js'
+import { departementDepuisCp, normaliserSite } from '../lib/societes.js'
 import { decouperAdresseAgregee } from '../lib/societes.js'
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..')

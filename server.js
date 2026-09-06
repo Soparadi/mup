@@ -1947,15 +1947,14 @@ app.post('/api/admin/referentiel/backfill-clenom', requireSuperadmin, async (req
 // défaut 4 (40 000 lignes), maximum 17 (le jeu entier, 162 259 lignes). Le
 // bornage est appliqué DANS le service.
 //
-// REPRISE PAR ?curseur=… — et c'est toute la différence avec Atout France. Là-bas
-// le fichier se télécharge d'un bloc et le service garde son curseur en mémoire
-// une demi-heure ; ici la source EST paginée et fournit elle-même le point de
-// reprise, que le service rend dans `curseur_suivant`. L'appelant le repasse tel
-// quel à l'appel suivant, jusqu'à `termine: true`. Aucun état côté serveur : un
-// redémarrage en cours de chargement ne perd rien, à condition d'avoir gardé le
-// dernier curseur rendu. Le service le journalise page par page pour cette
-// raison — si CETTE réponse HTTP se perd (timeout de proxy sur un appel long),
-// le curseur se relit dans les logs Railway.
+// REPRISE PAR ?curseur=… La source ADEME est paginée et fournit elle-même le
+// point de reprise, que le service rend dans `curseur_suivant`. L'appelant le
+// repasse tel quel à l'appel suivant, jusqu'à `termine: true`. AUCUN ÉTAT CÔTÉ
+// SERVEUR, et c'est la propriété qui compte : un redémarrage en cours de
+// chargement ne perd rien, à condition d'avoir gardé le dernier curseur rendu.
+// Le service le journalise page par page pour cette raison : si CETTE réponse
+// HTTP se perd (timeout de proxy sur un appel long), le curseur se relit dans
+// les logs Railway.
 //
 // Le curseur est refusé s'il n'a pas la forme « <entier>,<entier> » : il n'est
 // jamais interprété comme une URL, l'adresse de l'API étant en dur dans le

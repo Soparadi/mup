@@ -161,10 +161,33 @@ const ORDRE = {
   site: ['atout_france', 'museofile', 'overture', 'rna_waldec', 'rge']
 }
 
-// Les hotes d annuaire de certificateur RGE. Meme famille que le premier bloc de
+// Les hotes d annuaire de certificateur. Meme famille que le premier bloc de
 // BLACKLIST_HOSTS, agregateurs et annuaires : la page decrit l entreprise mais l
 // adresse publiee est celle du portail de la marque de qualification.
+//
+// LA REGLE N EST PLUS ATTACHEE A LA SOURCE QUI L A MOTIVEE. Elle est nee du RGE,
+// ou le phenomene est massif, et n a longtemps porte que sur lui ; Overture en
+// livrait pourtant, et le master les gardait. Elle s applique desormais a toutes
+// les origines presentes et a toutes celles qui viendront. La liste, elle, reste
+// celle du manifeste : elle ne s etend pas d elle-meme.
 const ANNUAIRES_CERTIFICATEUR = ['qualit-enr.org', 'qualibat.com', 'qualibat.fr', 'qualibaies.fr']
+
+// Une adresse de courriel bien formee, portee dans la colonne site : un local, une
+// arobase, un domaine a point, et aucun schema en tete. hoteDeSite lit la part
+// avant l arobase comme un userinfo et rend le domaine, si bien que ces valeurs
+// passent le test d hote sans effort : sans ce test elles restent au canal site.
+// Le test refuse ce qui porte un schema, pour ne pas prendre une URL dont le
+// chemin contient une arobase. Symetrique de courriel_forme, qui ecarte du canal
+// courriel les valeurs qui sont des URL.
+const COURRIEL_EN_SITE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
+const SCHEMA_EN_TETE = /^[a-z][a-z0-9+.-]*:\/\//i
+
+// Un hote dont toutes les etiquettes sont numeriques ne designe aucun site. Le
+// test du point est fail-open sur ces valeurs : l analyseur d URL lit l entier
+// comme une adresse IPv4 et fabrique les points qui manquaient. http://0 rend
+// 0.0.0.0, http://419499579 rend 25.1.14.59, et 419499579 est le SIREN de l
+// etablissement lui-meme ; 0143061756 rend 1.140.99.238 et c est un telephone.
+const hoteNumerique = (hote) => hote !== '' && hote.split('.').every((e) => /^[0-9]+$/.test(e))
 
 const duck = (sql) => execFileSync('duckdb', [BASE], { input: sql, encoding: 'utf8', maxBuffer: 1 << 28 })
 const p = (f) => join(SRC, f)
@@ -395,6 +418,7 @@ for await (const l of rl) {
   if (!l.trim()) continue
   const { valeur } = JSON.parse(l)
   nSites++
+  const brut = String(valeur).trim()
   const hote = hoteDeSite(valeur)
   const nu = hote.replace(/^www\./, '').toLowerCase()
   lignes.push(JSON.stringify({
@@ -404,11 +428,20 @@ for await (const l of rl) {
     // hostBlacklisted('') vaut true. Le point manquant vaut la meme chose. Sans
     // point il n y a pas de domaine enregistrable, et ces valeurs sont des
     // artefacts d analyse ou des non-reponses : http, https, htt, htpp, http;,
-    // www, aucun, non, neant. Elles ne designent aucun site.
-    illisible: hote === '' || !hote.includes('.'),
+    // www, aucun, non, neant. Elles ne designent aucun site. L hote tout en
+    // chiffres est illisible au meme titre : le point y est fabrique par l
+    // analyseur d URL, non porte par la valeur.
+    illisible: hote === '' || !hote.includes('.') || hoteNumerique(hote),
     liste_noire: hostBlacklisted(hote),
     reseau: RESEAU[champReseauPourHote(hote)] || null,
-    annuaire_certificateur: ANNUAIRES_CERTIFICATEUR.some((a) => nu === a || nu.endsWith('.' + a))
+    annuaire_certificateur: ANNUAIRES_CERTIFICATEUR.some((a) => nu === a || nu.endsWith('.' + a)),
+    courriel_en_site: COURRIEL_EN_SITE.test(brut) && !SCHEMA_EN_TETE.test(brut),
+    // Mesure seule, aucun ecart. Le prefixe www. pose devant un schema donne l
+    // hote www.http ou www.https, qui porte un point et passe. Certaines de ces
+    // valeurs sont recuperables par retrait du prefixe, d autres ne designent
+    // rien : recuperer et rejeter ne sont pas le meme geste, et le second lot
+    // n est pas arbitre. Declare au manifeste, non applique.
+    prefixe_www_schema: /^www\.https?:\/\//i.test(brut)
   }))
 }
 writeFileSync(join(TRAVAIL, 'verdict.ndjson'), lignes.join('\n') + '\n')
@@ -417,6 +450,8 @@ console.log(`  hote illisible             : ${lignes.filter((l) => JSON.parse(l)
 console.log(`  hote en liste noire        : ${lignes.filter((l) => JSON.parse(l).liste_noire).length}`)
 console.log(`  hote avec champ de reseau  : ${lignes.filter((l) => JSON.parse(l).reseau).length}`)
 console.log(`  annuaire de certificateur  : ${lignes.filter((l) => JSON.parse(l).annuaire_certificateur).length}`)
+console.log(`  courriel dans la colonne   : ${lignes.filter((l) => JSON.parse(l).courriel_en_site).length}`)
+console.log(`  prefixe www. devant schema : ${lignes.filter((l) => JSON.parse(l).prefixe_www_schema).length}  (mesure seule, aucun ecart)`)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 3. CE QUI N EST PAS UN SITE, PUIS LE REMPLISSAGE SI VIDE
@@ -431,14 +466,25 @@ SET preserve_insertion_order = false;
 
 CREATE OR REPLACE TABLE verdict AS SELECT * FROM read_json('${join(TRAVAIL, 'verdict.ndjson')}');
 
--- Le tri du canal site. Trois motifs d ecart, et rien d autre :
---   hote_illisible          la valeur ne se lit pas comme une URL, fail-closed ;
---   annuaire_certificateur  RGE, la page est celle du portail de la marque ;
+-- Le tri du canal site. Quatre motifs d ecart, et rien d autre :
+--   hote_illisible          la valeur ne se lit pas comme une URL, fail-closed,
+--                           hote vide, hote sans point, hote tout en chiffres ;
+--   courriel_en_site        la valeur est une adresse de courriel, non un site ;
+--   annuaire_certificateur  la page est celle du portail de la marque ;
 --   renvoi_facebook         RNA et Overture, la valeur va au canal social.
+--
+-- LES TROIS PREMIERS NE REGARDENT PLUS LA SOURCE. Ils portent sur la valeur seule
+-- et valent pour toute origine, presente ou a venir. Seul renvoi_facebook reste
+-- nomme par source, parce qu il ne dit pas qu une valeur est mauvaise : il dit
+-- qu elle change de canal, et le canal social a son propre ordre arrete.
+--
+-- L ecart se fait ICI, avant le classement. Une valeur ecartee laisse la place a
+-- la suivante de son canal : c est un ecart, non une annulation en fin de fonte.
 CREATE OR REPLACE TABLE apport_site AS
 SELECT a.*, v.hote, v.reseau, v.liste_noire, v.annuaire_certificateur,
   CASE WHEN v.illisible THEN 'hote_illisible'
-       WHEN a.source = 'rge' AND v.annuaire_certificateur THEN 'annuaire_certificateur'
+       WHEN v.courriel_en_site THEN 'courriel_en_site'
+       WHEN v.annuaire_certificateur THEN 'annuaire_certificateur'
        WHEN a.source IN ('rna_waldec', 'overture') AND v.reseau = 'facebook' THEN 'renvoi_facebook'
   END AS ecarte
 FROM apport a JOIN verdict v USING (valeur)

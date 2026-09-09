@@ -70,6 +70,27 @@ const MASTER = join(SORTIE, `master-movup-${DATE}.parquet`)
 const MANIFESTE = join(SORTIE, `master-movup-${DATE}.manifeste.json`)
 const BASE = join(TRAVAIL, 'fusion.duckdb')
 
+// ── Les bornes de plausibilite des dates de creation ────────────────────────
+// date_creation_etablissement et date_creation_unite_legale arrivent du socle en
+// VARCHAR et le master les typait en VARCHAR. Elles passent en DATE, et ce qui ne
+// se lit pas comme une date plausible vaut NULL : l absence ne prend jamais de
+// valeur par defaut.
+//
+// LA BORNE HAUTE SE LIT SUR DATE, JAMAIS SUR L HORLOGE. Deux passages du meme
+// master doivent rendre le meme sha1 : une borne prise a l heure de fabrication
+// ferait deriver le fichier d un jour a l autre, a entrees identiques.
+//
+// Cinq ans au-dela de la date du master, non la date elle-meme. Sirene admet la
+// creation declaree a venir, et l essentiel des dates futures sont de celles-la :
+// 2026-10-01, 2027-01-01. Couper a la date de fabrication annulerait plus de
+// quatre mille dates plausibles pour en attraper deux franchement fausses. Le
+// calcul passe par Date.UTC, qui normalise le 29 fevrier au lieu de rendre une
+// date que SQL refuserait.
+const BORNE_BASSE = '1800-01-01'
+const BORNE_HAUTE = new Date(Date.UTC(
+  Number(DATE.slice(0, 4)) + 5, Number(DATE.slice(4, 6)) - 1, Number(DATE.slice(6, 8))
+)).toISOString().slice(0, 10)
+
 mkdirSync(TRAVAIL, { recursive: true })
 mkdirSync(SORTIE, { recursive: true })
 
@@ -571,8 +592,21 @@ const bloc = (canal, t) => `
 const sqlMaster = `
 SET preserve_insertion_order = false;
 
+-- Une date de creation plausible, ou rien. try_cast rend NULL sur ce qui ne se lit
+-- pas comme une date, BETWEEN sur ce qui sort des bornes, et le CASE sans ELSE
+-- rend NULL des deux cotes.
+CREATE OR REPLACE MACRO date_plausible(raw) AS
+  CASE WHEN try_cast(raw AS DATE) BETWEEN DATE '${BORNE_BASSE}' AND DATE '${BORNE_HAUTE}'
+       THEN try_cast(raw AS DATE) END;
+
+-- Les deux colonnes de date sont nommees et remplacees en place. REPLACE, non
+-- EXCLUDE suivi d un rajout : la position des colonnes du socle ne bouge pas, seul
+-- leur type change. LE SOCLE N EST PAS TOUCHE, il continue de livrer du VARCHAR.
 CREATE OR REPLACE TABLE master AS
-SELECT s.*,
+SELECT s.* REPLACE (
+    date_plausible(s.date_creation_etablissement) AS date_creation_etablissement,
+    date_plausible(s.date_creation_unite_legale)  AS date_creation_unite_legale
+  ),
 ${bloc('tel', 't')},
 ${bloc('courriel', 'c')},
 ${bloc('site', 'w')},
@@ -593,10 +627,39 @@ LEFT JOIN (SELECT * FROM gagnant WHERE canal = 'site')     w  USING (siret)
 LEFT JOIN social so USING (siret)
 LEFT JOIN page pg ON pg.cle = so.cle;
 
+-- Ce que les bornes annulent, compte sur le socle, avant le typage. Trois motifs
+-- separes : la valeur ne se lit pas comme une date, elle precede la borne basse,
+-- elle depasse la borne haute.
+COPY (SELECT 'date_creation_etablissement' AS colonne,
+        count(date_creation_etablissement) AS servies,
+        count(*) FILTER (WHERE date_creation_etablissement IS NOT NULL
+          AND try_cast(date_creation_etablissement AS DATE) IS NULL) AS illisible,
+        count(*) FILTER (WHERE try_cast(date_creation_etablissement AS DATE) < DATE '${BORNE_BASSE}') AS avant_borne_basse,
+        count(*) FILTER (WHERE try_cast(date_creation_etablissement AS DATE) > DATE '${BORNE_HAUTE}') AS apres_borne_haute
+      FROM socle
+      UNION ALL
+      SELECT 'date_creation_unite_legale',
+        count(date_creation_unite_legale),
+        count(*) FILTER (WHERE date_creation_unite_legale IS NOT NULL
+          AND try_cast(date_creation_unite_legale AS DATE) IS NULL),
+        count(*) FILTER (WHERE try_cast(date_creation_unite_legale AS DATE) < DATE '${BORNE_BASSE}'),
+        count(*) FILTER (WHERE try_cast(date_creation_unite_legale AS DATE) > DATE '${BORNE_HAUTE}')
+      FROM socle
+      ORDER BY 1)
+  TO '${join(TRAVAIL, 'dates-annulees.json')}' (FORMAT JSON, ARRAY true);
+
 COPY (SELECT * FROM master ORDER BY siret)
   TO '${MASTER}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 200000);
 `
 duck(sqlMaster)
+
+const datesAnnulees = litJson('dates-annulees.json')
+console.log(`  dates de creation typees en DATE, bornes ${BORNE_BASSE} a ${BORNE_HAUTE}`)
+console.log('    colonne                       servies   illisible   avant borne   apres borne   annulees')
+for (const d of datesAnnulees) {
+  const n = d.illisible + d.avant_borne_basse + d.apres_borne_haute
+  console.log(`    ${d.colonne.padEnd(28)} ${String(d.servies).padStart(8)}   ${String(d.illisible).padStart(9)}   ${String(d.avant_borne_basse).padStart(11)}   ${String(d.apres_borne_haute).padStart(11)}   ${String(n).padStart(8)}`)
+}
 const octets = statSync(MASTER).size
 const sha1 = createHash('sha1').update(readFileSync(MASTER)).digest('hex')
 console.log(`  ecrit : ${MASTER}`)

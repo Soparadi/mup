@@ -567,6 +567,11 @@ COPY (SELECT source, count(*) AS avant, count(*) FILTER (WHERE ecarte IS NULL) A
 COPY (SELECT source, count(*) AS n FROM apport_site
       WHERE ecarte IS NULL AND liste_noire GROUP BY 1 ORDER BY 2 DESC)
   TO '${join(TRAVAIL, 'liste-noire-restante.json')}' (FORMAT JSON, ARRAY true);
+-- Le lot laisse hors perimetre : prefixe www. pose devant un schema. Mesure seule.
+COPY (SELECT source, count(*) AS n FROM apport_site a
+      JOIN verdict v USING (valeur)
+      WHERE a.ecarte IS NULL AND v.prefixe_www_schema GROUP BY 1 ORDER BY 2 DESC)
+  TO '${join(TRAVAIL, 'prefixe-www-restant.json')}' (FORMAT JSON, ARRAY true);
 `
 duck(sqlFusion)
 for (const r of litJson('ecarts-site.json')) console.log(`  ${r.source.padEnd(14)} ${r.ecarte.padEnd(24)} ${String(r.n).padStart(7)}`)
@@ -840,6 +845,7 @@ const soc = litJson('social.json')[0]
 const ecartsSite = litJson('ecarts-site.json')
 const siteAvantApres = litJson('site-avant-apres.json')
 const listeNoireRestante = litJson('liste-noire-restante.json')
+const prefixeWwwRestant = litJson('prefixe-www-restant.json')
 const avServis = litJson('avocats-servis.json')[0]
 const avEffet = litJson('avocats-effet.json')
 const avNaf = litJson('avocats-naf-6910z.json')[0]
@@ -954,7 +960,7 @@ const manifeste = {
     millesime: 'quand la ligne a pris sa forme, jamais quand on l a regardee.',
     absence: 'l absence de valeur ne prend jamais de valeur par defaut, et vaut absence de trace.',
     distance_et_score: 'portes par les seuls canaux issus d un appariement calcule : Overture, Atout France, Museofile.',
-    valeur: 'la valeur est portee telle que la source la livre. Aucun reformatage : contact_<canal>_origine dit sous quelle forme la lire.'
+    valeur: 'la valeur est portee telle que la source la livre. Aucun reformatage : contact_<canal>_origine dit sous quelle forme la lire. La regle porte sur les colonnes de contact ; les deux dates de creation, qui viennent du socle et non d une source de contact, sont typees et bornees, voir dates_de_creation.'
   },
   ordre_par_canal: {
     ...ORDRE,
@@ -970,9 +976,28 @@ const manifeste = {
   },
   ce_qui_n_est_pas_un_site: {
     regle: 'application de la regle deja en production (commit 1e1825f, backfill 2a35235). hoteDeSite, hostBlacklisted et champReseauPourHote sont importes de server/services/hotes-exclus.js, jamais recopies.',
-    hote_illisible: 'fail-closed, comme en production : hoteDeSite rend la chaine vide et hostBlacklisted("") vaut true. Un hote sans point est illisible au meme titre, faute de domaine enregistrable : http, https, htt, htpp, www, aucun, non, neant.',
+    portee: 'hote_illisible, courriel_en_site et annuaire_certificateur portent sur la valeur seule et valent pour toute origine, presente ou a venir. Aucun des trois ne regarde la source. Seul renvoi_facebook reste nomme par source, parce qu il ne dit pas qu une valeur est mauvaise mais qu elle change de canal, et le canal social a son propre ordre arrete.',
+    moment: 'l ecart se fait avant le classement. Une valeur ecartee laisse la place a la suivante de son canal : c est un ecart, non une annulation de la cellule en fin de fonte.',
+    hote_illisible: 'fail-closed, comme en production : hoteDeSite rend la chaine vide et hostBlacklisted("") vaut true. Un hote sans point est illisible au meme titre, faute de domaine enregistrable : http, https, htt, htpp, www, aucun, non, neant. Un hote dont toutes les etiquettes sont numeriques l est aussi : le point y est fabrique par l analyseur d URL, qui lit l entier comme une adresse IPv4, non porte par la valeur. http://0 rend 0.0.0.0, http://419499579 rend 25.1.14.59 alors que 419499579 est le SIREN de l etablissement lui-meme, 0143061756 rend 1.140.99.238 alors que c est un telephone. Une seule etiquette non numerique suffit a rendre l hote lisible : 123.fr passe.',
+    courriel_en_site: 'une adresse de courriel bien formee portee dans la colonne site n est pas un site. hoteDeSite lit la part avant l arobase comme un userinfo et rend le domaine, si bien que ces valeurs passaient le test d hote sans effort. Le test refuse ce qui porte un schema, pour ne pas prendre une URL dont le chemin contient une arobase. La valeur n est pas versee au canal courriel : ce serait y ajouter une source, non une valeur, et l ordre arrete du canal courriel ne la nomme pas.',
     annuaires_de_certificateur: ANNUAIRES_CERTIFICATEUR,
+    annuaires_de_certificateur_portee: 'toutes origines. La regle est nee du RGE, ou le phenomene est massif, et n a longtemps porte que sur lui ; Overture en livrait pourtant. La liste, elle, reste close : elle ne s etend pas d elle-meme.',
     ecarts: Object.fromEntries(ecartsSite.map((e) => [`${e.source} ${e.ecarte}`, e.n]))
+  },
+  dates_de_creation: {
+    colonnes: ['date_creation_etablissement', 'date_creation_unite_legale'],
+    type: 'DATE. Le socle les livre en VARCHAR et n est pas touche ; la fonte les nomme et les remplace en place, la position des colonnes ne bouge pas.',
+    bornes: { basse: BORNE_BASSE, haute: BORNE_HAUTE },
+    regle: 'hors bornes ou illisible : NULL. L absence ne prend jamais de valeur par defaut.',
+    borne_haute: 'la date qui nomme le master plus cinq ans, jamais l horloge de fabrication : deux passages du meme master rendent le meme sha1. Cinq ans et non la date elle-meme parce que Sirene admet la creation declaree a venir et que l essentiel des dates futures sont de celles-la.',
+    aucune_colonne_de_conservation: 'la valeur brute n est conservee nulle part. Deux colonnes VARCHAR pleines sur tout le socle pour quelques milliers de valeurs annulees ne se justifiaient pas.',
+    annulees: Object.fromEntries(datesAnnulees.map((d) => [d.colonne, {
+      servies_au_socle: d.servies,
+      illisible: d.illisible,
+      avant_borne_basse: d.avant_borne_basse,
+      apres_borne_haute: d.apres_borne_haute,
+      total: d.illisible + d.avant_borne_basse + d.apres_borne_haute
+    }]))
   },
   corrections_avant_fusion: {
     museofile_barre_oblique: 'deux lignes ecrivent le site avec une barre oblique de tete, retiree, l hote est recuperable.',
@@ -1036,8 +1061,14 @@ const manifeste = {
     corroboration_de_voie_overture: 'decroissante avec la distance. Les couples proches du seuil de 50 m corroborent moins souvent la voie que les couples a quelques metres. contact_site_distance_m et contact_site_score sont portes au master pour que l aval puisse resserrer.',
     une_seule_url_par_plateforme_sociale: 'limite d import : Overture ne retient qu une URL par plateforme. Un etablissement a plusieurs pages Facebook n en montre qu une.',
     liste_noire_de_production_non_etendue: {
-      constat: 'l arbitrage a nomme trois ecarts et trois seulement. Les 86 hotes de BLACKLIST_HOSTS ne sont PAS retires du canal site du master.',
+      constat: 'les 86 hotes de BLACKLIST_HOSTS ne sont PAS retires du canal site du master. Les quatre motifs d ecart nommes sont les seuls appliques.',
+      portee: 'la reserve ne porte plus que sur BLACKLIST_HOSTS. Les hotes d annuaire de certificateur en sortent : ils etaient ecartes du seul RGE, ils le sont desormais de toute origine.',
       volume_restant: Object.fromEntries(listeNoireRestante.map((r) => [r.source, r.n]))
+    },
+    prefixe_www_devant_un_schema: {
+      constat: 'des valeurs de la forme www.http://... et www.https://... restent au canal site. Leur hote se lit www.http ou www.https, qui porte un point et passe le test d illisibilite.',
+      pourquoi_non_traite: 'recuperer et rejeter ne sont pas le meme geste. Une part est recuperable par retrait du prefixe parasite, www.https://atelier-central.fr designant un site reel ; une autre ne designe rien. Le lot n est pas arbitre, il est mesure et declare.',
+      volume_restant: Object.fromEntries(prefixeWwwRestant.map((r) => [r.source, r.n]))
     },
     canal_social_alimente_par_overture_seule: {
       constat: 'les renvois Facebook du RNA et d Overture sortent du canal site. Ils ne sont pas reverses dans les colonnes sociales, l ordre arrete du canal social etant Overture seule.',

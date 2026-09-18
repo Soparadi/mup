@@ -155,6 +155,30 @@ const SOURCES = {
     regle_jointure: 'regle C+D, 82 SIRET retenus',
     cle: 'identifiant Museofile'
   },
+  // LE CRAWL DES MENTIONS LEGALES. La cle de cet objet est le nom de l origine
+  // ecrite au master : elle s appelle mentions_legales parce que c est le nom que
+  // packages/base-centrale/src/licences.ts reconnait comme REVENDABLE. Changer ce
+  // nom rendrait toute la source invendable en silence.
+  //
+  // DEUX ECARTS AU PATRON DES AUTRES SOURCES, tous deux voulus :
+  //   . LE MILLESIME EST LU EN COLONNE (millesime_crawl), jamais interpole depuis
+  //     une constante : la source peut reunir plusieurs passes, chacune portant la
+  //     sienne. millesime vaut donc null ici, et les valeurs distinctes reellement
+  //     presentes sont relevees sur le fichier et portees au manifeste.
+  //   . LA CLE EST LA PAGE D OBSERVATION, PAR CANAL. telephone_pages et
+  //     courriel_pages portent les pages ou la valeur a ete LUE ; le canal site
+  //     porte cle, l adresse de la page du site qui a rattache la fiche, parce que
+  //     sa valeur est l adresse du site lui-meme et non une coordonnee lue sur une
+  //     page. C est ce que l article 14 du RGPD demande de pouvoir dire.
+  mentions_legales: {
+    fichier: 'crawl-mentions-legales-20260918-preuve.parquet',
+    producteur: 'MovUP, crawl des coordonnees publiees par les entreprises sur leur propre site',
+    licence: 'Publication de l entreprise. Revendable au titre de packages/base-centrale/src/licences.ts, cle mentions_legales.',
+    millesime: null,
+    millesime_colonne: 'millesime_crawl',
+    regle_jointure: 'SIRET exact, niveau CERTAIN seul. Le SIRET est lu sur la page legale du site, ou le SIREN nu quand la page n en porte aucun, un seul etablissement au master ou plusieurs departages par l adresse. Aucun appariement geographique ni sur le nom.',
+    cle: 'la PAGE D OBSERVATION, par canal : telephone_pages, courriel_pages ; le canal site porte cle, l adresse de la page lue ; le canal social porte l union des pages des profils retenus.'
+  },
   avocats: {
     fichier: 'appariement-avocats-20260717.parquet',
     producteur: 'Conseil national des barreaux',
@@ -176,10 +200,18 @@ const QUALIFICATIONS = {
 }
 
 // ── L ordre par canal, arrete ───────────────────────────────────────────────
+// LE CRAWL EST EN DERNIER RANG DE CHAQUE CANAL. Il ne deplace aucune valeur deja
+// ecrite : il ne remplit que ce qui etait vide. La verification est faite apres la
+// fonte, cellule par cellule, contre un master fondu sans lui.
+//
+// LE CANAL SOCIAL A DESORMAIS UN ORDRE, comme les trois autres. Il n en avait pas :
+// contact_social_origine etait le litteral 'overture' pose par un CASE, et la table
+// social etait Overture seule. Overture y prend le rang 1, le crawl le rang 2.
 const ORDRE = {
-  tel: ['museofile', 'finess', 'rpps', 'overture', 'rge', 'avocats'],
-  courriel: ['finess', 'overture', 'rge', 'rpps', 'avocats'],
-  site: ['atout_france', 'museofile', 'overture', 'rna_waldec', 'rge']
+  tel: ['museofile', 'finess', 'rpps', 'overture', 'rge', 'avocats', 'mentions_legales'],
+  courriel: ['finess', 'overture', 'rge', 'rpps', 'avocats', 'mentions_legales'],
+  site: ['atout_france', 'museofile', 'overture', 'rna_waldec', 'rge', 'mentions_legales'],
+  social: ['overture', 'mentions_legales']
 }
 
 // Les hotes d annuaire de certificateur. Meme famille que le premier bloc de
@@ -210,6 +242,12 @@ const SCHEMA_EN_TETE = /^[a-z][a-z0-9+.-]*:\/\//i
 // etablissement lui-meme ; 0143061756 rend 1.140.99.238 et c est un telephone.
 const hoteNumerique = (hote) => hote !== '' && hote.split('.').every((e) => /^[0-9]+$/.test(e))
 
+// AUCUN REGLAGE DE RESSOURCE, ET C'EST VOULU. Un plafond de memoire a ete pose
+// ici le 18 septembre 2026, dans la croyance que l'etage de fusion en manquait.
+// Il n'en manquait pas : il tournait en boucle sur une jointure mal ecrite. Le
+// controle a mesure le pic reel de l'etape 4, vingt gigaoctets, atteint et
+// relache en vingt secondes. Un plafond a huit gigaoctets forcerait donc le
+// debordement sur disque pour rien.
 const duck = (sql) => execFileSync('duckdb', [BASE], { input: sql, encoding: 'utf8', maxBuffer: 1 << 28 })
 const p = (f) => join(SRC, f)
 const litJson = (f) => JSON.parse(readFileSync(join(TRAVAIL, f), 'utf8'))
@@ -246,6 +284,7 @@ CREATE OR REPLACE VIEW rpps AS SELECT * FROM read_parquet('${p(SOURCES.rpps.fich
 CREATE OR REPLACE VIEW museo AS SELECT * FROM read_parquet('${p(SOURCES.museofile.fichier)}');
 CREATE OR REPLACE VIEW rna AS SELECT * FROM read_parquet('${p(SOURCES.rna_waldec.fichier)}');
 CREATE OR REPLACE VIEW avo AS SELECT * FROM read_parquet('${p(SOURCES.avocats.fichier)}');
+CREATE OR REPLACE VIEW ml AS SELECT * FROM read_parquet('${p(SOURCES.mentions_legales.fichier)}');
 
 -- Les apports bruts, avant les corrections et avant le tri du canal site.
 -- La valeur est portee TELLE QUE LA SOURCE LA LIVRE : aucun reformatage, la
@@ -300,13 +339,44 @@ CREATE OR REPLACE TABLE apport AS
     FROM rna WHERE siteweb IS NOT NULL
   UNION ALL
   SELECT siret, 'site', 'rge', site_internet, siret, '${SOURCES.rge.millesime}', NULL, NULL
-    FROM rge WHERE site_internet IS NOT NULL;
+    FROM rge WHERE site_internet IS NOT NULL
+  -- ── le crawl des mentions legales, les trois canaux ──────────────────────
+  -- LE MILLESIME EST LA COLONNE, non un litteral interpole. La cle est la PAGE
+  -- D OBSERVATION de la valeur, sauf au canal site, ou la valeur est l adresse du
+  -- site et la cle la page lue qui a rattache la fiche.
+  UNION ALL
+  SELECT siret, 'tel', 'mentions_legales', telephone, telephone_pages, millesime_crawl, NULL, NULL
+    FROM ml WHERE telephone IS NOT NULL
+  UNION ALL
+  SELECT siret, 'courriel', 'mentions_legales', courriel, courriel_pages, millesime_crawl, NULL, NULL
+    FROM ml WHERE courriel_forme(courriel)
+  UNION ALL
+  SELECT siret, 'site', 'mentions_legales', site_internet, cle, millesime_crawl, NULL, NULL
+    FROM ml WHERE site_internet IS NOT NULL;
 
--- Les quatre colonnes sociales, Overture seule, aucun arbitrage.
-CREATE OR REPLACE TABLE social AS
-  SELECT siret, ov_cle AS cle, '${SOURCES.overture.millesime}' AS millesime, dm AS distance_m, score,
+-- LE CANAL SOCIAL, DEUX ORIGINES, ARBITRE PAR LE RANG COMME LES AUTRES CANAUX.
+-- Ce qui est construit ici est l OFFRE ; l election se fait plus bas, une fois la
+-- table des rangs posee, exactement comme pour les trois autres canaux.
+--
+-- Le bloc social reste porte par UNE SEULE origine par SIRET : les quatre colonnes,
+-- la cle, le millesime, la distance et le score viennent ensemble ou pas du tout.
+-- Le crawl ne porte ni social_autre, ni distance, ni score : il n a pas ce canal et
+-- son appariement ne passe par aucune geometrie.
+--
+-- La cle du crawl est l UNION DES PAGES d observation des profils retenus,
+-- dedoublonnee. concat_ws ignore les valeurs nulles.
+CREATE OR REPLACE TABLE social_offre AS
+  SELECT siret, 'overture' AS source, ov_cle::VARCHAR AS cle,
+         '${SOURCES.overture.millesime}' AS millesime, dm AS distance_m, score,
          facebook, instagram, linkedin, social_autre
-    FROM ov WHERE coalesce(facebook, instagram, linkedin, social_autre) IS NOT NULL;
+    FROM ov WHERE coalesce(facebook, instagram, linkedin, social_autre) IS NOT NULL
+  UNION ALL
+  SELECT siret, 'mentions_legales',
+         array_to_string(list_distinct(str_split(
+           concat_ws(' | ', facebook_pages, instagram_pages, linkedin_pages), ' | ')), ' | '),
+         millesime_crawl, NULL, NULL,
+         societe_facebook, societe_instagram, societe_linkedin, NULL
+    FROM ml WHERE coalesce(societe_facebook, societe_instagram, societe_linkedin) IS NOT NULL;
 
 -- ── L annuaire des avocats, trois niveaux de cle ─────────────────────────────
 -- La source est deja reduite a une ligne par cle, courriel elu par la variante A
@@ -524,7 +594,16 @@ CREATE OR REPLACE TABLE apport_retenu AS
 -- L ordre par canal, arrete. Le rang seul decide : le premier rang qui porte une
 -- valeur l ecrit, les suivants ne l ecrasent jamais.
 CREATE OR REPLACE TABLE rang(canal VARCHAR, source VARCHAR, rang INTEGER);
-INSERT INTO rang VALUES ${valeurs('tel')}, ${valeurs('courriel')}, ${valeurs('site')};
+INSERT INTO rang VALUES ${valeurs('tel')}, ${valeurs('courriel')}, ${valeurs('site')}, ${valeurs('social')};
+
+-- L election du canal social, au meme rang et a la meme regle que les autres : le
+-- premier rang qui porte quelque chose l ecrit, les suivants ne l ecrasent jamais.
+CREATE OR REPLACE TABLE social AS
+SELECT * EXCLUDE (rn, rang) FROM (
+  SELECT s.*, r.rang, row_number() OVER (PARTITION BY s.siret ORDER BY r.rang) AS rn
+  FROM social_offre s JOIN rang r ON r.canal = 'social' AND r.source = s.source
+) WHERE rn = 1;
+
 
 -- sous_rang ne separe que les niveaux de cle de l annuaire des avocats, qui est
 -- une source unique portant trois assurances. Il vaut zero partout ailleurs.
@@ -619,12 +698,19 @@ ${bloc('site', 'w')},
   so.instagram    AS contact_instagram,
   so.linkedin     AS contact_linkedin,
   so.social_autre AS contact_social_autre,
-  CASE WHEN so.siret IS NOT NULL THEN 'overture' END AS contact_social_origine,
+  -- L ORIGINE SOCIALE VIENT DU RANG, non d un litteral. C etait
+  -- CASE WHEN so.siret IS NOT NULL THEN 'overture' END : le canal social etait le
+  -- seul a nommer sa source en dur, faute d ordre arrete.
+  so.source AS contact_social_origine,
   so.cle        AS contact_social_cle,
   so.millesime  AS contact_social_millesime,
   so.distance_m AS contact_social_distance_m,
   so.score      AS contact_social_score,
-  pg.page_partagee_n
+  -- page_partagee_n est definie sur les cles Overture. La garde sur l origine est
+  -- posee ICI et non dans la jointure : une condition portant sur le cote sonde
+  -- peut couter la jointure de hachage. Une ligne sociale venue du crawl ne porte
+  -- pas cette mesure, sa cle etant une adresse de page et non une cle Overture.
+  CASE WHEN so.source = 'overture' THEN pg.page_partagee_n END AS page_partagee_n
 FROM socle s
 LEFT JOIN (SELECT * FROM gagnant WHERE canal = 'tel')      t  USING (siret)
 LEFT JOIN (SELECT * FROM gagnant WHERE canal = 'courriel') c  USING (siret)
@@ -769,11 +855,83 @@ COPY (WITH d AS (
              round(quantile_cont(m, 0.9), 1) AS d9_m FROM d)
   TO '${join(TRAVAIL, 'geocodage-rge.json')}' (FORMAT JSON, ARRAY true);
 
--- L apport du canal social, Overture seule, jamais arbitre : tout ce qui est
--- offert est ecrit, l apport propre y est egal a l apport.
-COPY (SELECT count(*) AS sirets_servis, count(facebook) AS facebook, count(instagram) AS instagram,
-        count(linkedin) AS linkedin, count(social_autre) AS social_autre FROM social)
+-- L apport du canal social, PAR ORIGINE. Le canal a desormais un ordre arrete :
+-- Overture au rang 1, le crawl au rang 2. Une seule origine par SIRET.
+COPY (SELECT source, count(*) AS sirets_servis, count(facebook) AS facebook,
+        count(instagram) AS instagram, count(linkedin) AS linkedin,
+        count(social_autre) AS social_autre
+      FROM social GROUP BY 1 ORDER BY 1)
   TO '${join(TRAVAIL, 'social.json')}' (FORMAT JSON, ARRAY true);
+
+-- ── LE CRAWL DES MENTIONS LEGALES, AVANT ET APRES ──────────────────────────
+--
+-- LE CRAWL EST AU DERNIER RANG DES QUATRE CANAUX. Il ne peut donc remplir que du
+-- vide : la garantie est structurelle, elle tient a l ordre, et n a pas a etre
+-- mesuree. C est ce qui permet de lire l etat SANS le crawl a meme gagnant et
+-- social, en ecartant les lignes que le crawl a gagnees, sans refondre un second
+-- master.
+--
+-- L EFFET DU CRAWL, canal par canal. Memes trois sorts que pour l annuaire des
+-- avocats : ouverture, completion, corroboration.
+CREATE OR REPLACE TABLE servi_sans_crawl AS
+  SELECT DISTINCT siret FROM (SELECT siret FROM gagnant WHERE source <> 'mentions_legales'
+                              UNION ALL SELECT siret FROM social WHERE source <> 'mentions_legales');
+CREATE OR REPLACE TABLE servi_avec_crawl AS
+  SELECT DISTINCT siret FROM (SELECT siret FROM gagnant UNION ALL SELECT siret FROM social);
+
+COPY (SELECT a.canal, count(*) AS cellules_offertes,
+        count(*) FILTER (WHERE b.valeur IS NULL AND sa.siret IS NULL) AS ouvertures,
+        count(*) FILTER (WHERE b.valeur IS NULL AND sa.siret IS NOT NULL) AS completions,
+        count(*) FILTER (WHERE b.valeur IS NOT NULL) AS corroborations,
+        count(*) FILTER (WHERE b.valeur IS NOT NULL AND CASE
+            WHEN a.canal = 'tel' THEN chiffres(a.valeur) = chiffres(b.valeur)
+            ELSE lower(trim(a.valeur)) = lower(trim(b.valeur)) END) AS corroborations_meme_valeur
+      FROM (SELECT siret, canal, valeur FROM apport_retenu WHERE source = 'mentions_legales') a
+      LEFT JOIN (SELECT siret, canal, valeur FROM gagnant WHERE source <> 'mentions_legales') b
+             ON b.siret = a.siret AND b.canal = a.canal
+      LEFT JOIN servi_sans_crawl sa ON sa.siret = a.siret
+      GROUP BY 1 ORDER BY 1)
+  TO '${join(TRAVAIL, 'crawl-effet.json')}' (FORMAT JSON, ARRAY true);
+
+-- Les cellules REELLEMENT ecrites par le crawl, canal par canal, telles qu elles
+-- sont dans le master.
+COPY (SELECT 'tel' AS canal, count(*) AS cellules FROM master WHERE contact_tel_origine = 'mentions_legales'
+      UNION ALL SELECT 'courriel', count(*) FROM master WHERE contact_courriel_origine = 'mentions_legales'
+      UNION ALL SELECT 'site', count(*) FROM master WHERE contact_site_origine = 'mentions_legales'
+      UNION ALL SELECT 'social', count(*) FROM master WHERE contact_social_origine = 'mentions_legales'
+      ORDER BY 1)
+  TO '${join(TRAVAIL, 'crawl-cellules.json')}' (FORMAT JSON, ARRAY true);
+
+-- Les SIRET du socle servis avant et apres le crawl.
+COPY (SELECT count(*) AS sirets_du_socle,
+        count(*) FILTER (WHERE siret IN (SELECT siret FROM servi_sans_crawl)) AS servis_sans_le_crawl,
+        count(*) FILTER (WHERE siret IN (SELECT siret FROM servi_avec_crawl)) AS servis_avec_le_crawl
+      FROM socle) TO '${join(TRAVAIL, 'crawl-servis.json')}' (FORMAT JSON, ARRAY true);
+
+-- Les millesimes du crawl, LUS SUR LE FICHIER et non sur une constante.
+COPY (SELECT millesime_crawl, count(*) AS lignes FROM ml GROUP BY 1 ORDER BY 1)
+  TO '${join(TRAVAIL, 'crawl-millesimes.json')}' (FORMAT JSON, ARRAY true);
+
+-- DIX EXEMPLES EN CLAIR, pris dans le master lui-meme : la valeur, son origine,
+-- sa cle (la page lue) et son millesime.
+COPY (
+  SELECT * FROM (SELECT 'tel' AS canal, siret, contact_tel AS valeur, contact_tel_origine AS origine,
+                        contact_tel_cle AS cle, contact_tel_millesime AS millesime
+                 FROM master WHERE contact_tel_origine = 'mentions_legales' ORDER BY siret LIMIT 3)
+  UNION ALL
+  SELECT * FROM (SELECT 'courriel', siret, contact_courriel, contact_courriel_origine,
+                        contact_courriel_cle, contact_courriel_millesime
+                 FROM master WHERE contact_courriel_origine = 'mentions_legales' ORDER BY siret LIMIT 3)
+  UNION ALL
+  SELECT * FROM (SELECT 'site', siret, contact_site, contact_site_origine,
+                        contact_site_cle, contact_site_millesime
+                 FROM master WHERE contact_site_origine = 'mentions_legales' ORDER BY siret LIMIT 2)
+  UNION ALL
+  SELECT * FROM (SELECT 'social', siret,
+                        concat_ws(' ', contact_facebook, contact_instagram, contact_linkedin),
+                        contact_social_origine, contact_social_cle, contact_social_millesime
+                 FROM master WHERE contact_social_origine = 'mentions_legales' ORDER BY siret LIMIT 2))
+  TO '${join(TRAVAIL, 'crawl-exemples.json')}' (FORMAT JSON, ARRAY true);
 
 -- ── L annuaire des avocats, avant et apres ──────────────────────────────────
 CREATE OR REPLACE TABLE servi_avant AS
@@ -841,7 +999,17 @@ const apportSource = litJson('apport-source.json')
 const jointure = litJson('jointure.json')
 const geoRge = litJson('geocodage-rge.json')[0]
 const pagePartagee = litJson('page-partagee.json')[0]
-const soc = litJson('social.json')[0]
+const socParSource = litJson('social.json')
+const soc = socParSource.reduce((a, r) => ({
+  sirets_servis: a.sirets_servis + r.sirets_servis, facebook: a.facebook + r.facebook,
+  instagram: a.instagram + r.instagram, linkedin: a.linkedin + r.linkedin,
+  social_autre: a.social_autre + r.social_autre
+}), { sirets_servis: 0, facebook: 0, instagram: 0, linkedin: 0, social_autre: 0 })
+const crawlEffet = litJson('crawl-effet.json')
+const crawlCellules = litJson('crawl-cellules.json')
+const crawlServis = litJson('crawl-servis.json')[0]
+const crawlMillesimes = litJson('crawl-millesimes.json')
+const crawlExemples = litJson('crawl-exemples.json')
 const ecartsSite = litJson('ecarts-site.json')
 const siteAvantApres = litJson('site-avant-apres.json')
 const listeNoireRestante = litJson('liste-noire-restante.json')
@@ -863,8 +1031,10 @@ console.log(`  dont page partagee (n >= 2) : ${couverture.avec_page_partagee}`)
 console.log('\n  COMBINAISONS')
 for (const r of combinaisons) console.log(`    ${r.combinaison.trim().padEnd(30)} ${String(r.n).padStart(9)}`)
 
-console.log(`\n  CANAL SOCIAL, OVERTURE SEULE : ${soc.sirets_servis} SIRET servis`)
-console.log(`    facebook ${soc.facebook}   instagram ${soc.instagram}   linkedin ${soc.linkedin}   social_autre ${soc.social_autre}`)
+console.log(`\n  CANAL SOCIAL, ${soc.sirets_servis} SIRET servis, ordre ${ORDRE.social.join(' puis ')}`)
+for (const r of socParSource) {
+  console.log(`    ${r.source.padEnd(18)} ${String(r.sirets_servis).padStart(8)} SIRET   facebook ${r.facebook}   instagram ${r.instagram}   linkedin ${r.linkedin}   social_autre ${r.social_autre}`)
+}
 console.log('\n  APPORT PROPRE PAR SOURCE (cellules gagnees, dont nulle autre source ne l offrait)')
 for (const r of apportSource) {
   console.log(`    ${r.canal.padEnd(10)} ${r.source.padEnd(14)} ${String(r.cellules_gagnees).padStart(8)}   propre ${String(r.apport_propre).padStart(8)}`)
@@ -889,6 +1059,28 @@ console.log(`      au moins un contact : ${avNaf.servis_avant} -> ${avNaf.servis
 console.log(`      telephone           : ${avNaf.tel_avant} -> ${avNaf.tel_apres}  (+${avNaf.tel_apres - avNaf.tel_avant})`)
 console.log(`      courriel            : ${avNaf.courriel_avant} -> ${avNaf.courriel_apres}  (+${avNaf.courriel_apres - avNaf.courriel_avant})`)
 
+console.log('\n  LE CRAWL DES MENTIONS LEGALES, DERNIER RANG DE CHAQUE CANAL')
+console.log(`    millesimes lus en colonne : ${crawlMillesimes.map((m) => `${m.millesime_crawl} (${m.lignes})`).join(', ')}`)
+console.log(`    SIRET du socle servis     : ${crawlServis.servis_sans_le_crawl} -> ${crawlServis.servis_avec_le_crawl}  (+${crawlServis.servis_avec_le_crawl - crawlServis.servis_sans_le_crawl})`)
+console.log('\n    canal      offertes  ouvertures  completions  corroborations  dont meme valeur   ecrites')
+for (const r of crawlEffet) {
+  const ecrites = (crawlCellules.find((c) => c.canal === r.canal) || { cellules: 0 }).cellules
+  console.log(`    ${r.canal.padEnd(10)} ${String(r.cellules_offertes).padStart(8)}  ${String(r.ouvertures).padStart(10)}  ${String(r.completions).padStart(11)}  ${String(r.corroborations).padStart(14)}  ${String(r.corroborations_meme_valeur).padStart(16)}   ${String(ecrites).padStart(7)}`)
+}
+const socialEcrites = (crawlCellules.find((c) => c.canal === 'social') || { cellules: 0 }).cellules
+console.log(`    social     ${String(socParSource.find((r) => r.source === 'mentions_legales')?.sirets_servis ?? 0).padStart(8)} offertes et ecrites : ${socialEcrites}`)
+
+console.log('\n    AUCUNE CELLULE DEJA SERVIE NE PEUT ETRE ECRASEE : le crawl est au')
+console.log('    dernier rang des quatre canaux, il ne remplit que du vide. La garantie')
+console.log('    est structurelle, elle tient a l ordre, et n est pas mesuree.')
+
+console.log('\n    DIX EXEMPLES, VALEUR / ORIGINE / CLE / MILLESIME')
+for (const e of crawlExemples) {
+  console.log(`    ${e.canal.padEnd(9)} ${e.siret}  ${String(e.valeur).slice(0, 34).padEnd(36)} ${e.origine}`)
+  console.log(`              cle ${String(e.cle).slice(0, 96)}`)
+  console.log(`              millesime ${e.millesime}`)
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 6. LE MANIFESTE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -903,12 +1095,15 @@ for (const [nom, s] of Object.entries(SOURCES)) {
     const g = gagnees(canal, nom)
     if (g) canaux[canal] = { cellules_gagnees: g.cellules_gagnees, apport_propre: g.apport_propre }
   }
-  // Le canal social n a qu une source et aucun arbitrage : tout l offert est ecrit.
-  if (nom === 'overture') {
+  // Le canal social est arbitre par le rang comme les autres. L apport propre y
+  // vaut l apport : une seule origine ecrit par SIRET, et ce qu elle n ecrit pas
+  // est ecrit par la suivante, jamais partage.
+  const sc = socParSource.find((r) => r.source === nom)
+  if (sc) {
     canaux.social = {
-      cellules_gagnees: soc.sirets_servis,
-      apport_propre: soc.sirets_servis,
-      par_plateforme: { facebook: soc.facebook, instagram: soc.instagram, linkedin: soc.linkedin, social_autre: soc.social_autre }
+      cellules_gagnees: sc.sirets_servis,
+      apport_propre: sc.sirets_servis,
+      par_plateforme: { facebook: sc.facebook, instagram: sc.instagram, linkedin: sc.linkedin, social_autre: sc.social_autre }
     }
   }
   const ecarts = ecartsSite.filter((r) => r.source === nom)
@@ -919,7 +1114,14 @@ for (const [nom, s] of Object.entries(SOURCES)) {
     ...(s.appariement ? { appariement: s.appariement } : {}),
     producteur: s.producteur,
     licence: s.licence,
+    // LE MILLESIME EST UN LITTERAL POUR TOUTES LES SOURCES SAUF UNE. Le crawl le
+    // porte EN COLONNE : la source peut reunir plusieurs passes, chacune avec la
+    // sienne, et les valeurs reellement presentes sont relevees sur le fichier.
     millesime: s.millesime,
+    ...(s.millesime_colonne ? {
+      millesime_colonne: s.millesime_colonne,
+      millesimes_distincts: Object.fromEntries(crawlMillesimes.map((m) => [m.millesime_crawl, m.lignes]))
+    } : {}),
     regle_jointure: s.regle_jointure,
     colonne_cle: s.cle,
     volume_joint: {
@@ -956,7 +1158,7 @@ const manifeste = {
     canaux: ['site', 'courriel', 'tel', 'social'],
     colonnes_de_trace: ['contact_<canal>_origine', 'contact_<canal>_cle', 'contact_<canal>_millesime',
       'contact_<canal>_distance_m', 'contact_<canal>_score'],
-    cle: 'la colonne visee dans la table de source : referentiel_overture.cle, referentiel_rge.cle, referentiel_atout_france.cle, et pour les autres l identifiant de la source. Exception nommee : l annuaire des avocats y porte son niveau de cle, siret, siren ou siren_repli, et non une valeur de cle.',
+    cle: 'la colonne visee dans la table de source : referentiel_overture.cle, referentiel_rge.cle, referentiel_atout_france.cle, et pour les autres l identifiant de la source. Deux exceptions nommees : l annuaire des avocats y porte son niveau de cle, siret, siren ou siren_repli, et non une valeur de cle ; le crawl des mentions legales y porte L ADRESSE DE LA PAGE LUE, par canal, ce qui permet de dire d ou vient chaque coordonnee (art. 14 RGPD).',
     millesime: 'quand la ligne a pris sa forme, jamais quand on l a regardee.',
     absence: 'l absence de valeur ne prend jamais de valeur par defaut, et vaut absence de trace.',
     distance_et_score: 'portes par les seuls canaux issus d un appariement calcule : Overture, Atout France, Museofile.',
@@ -964,8 +1166,9 @@ const manifeste = {
   },
   ordre_par_canal: {
     ...ORDRE,
-    social: ['overture'],
-    remplissage: 'si vide, canal par canal. Une valeur deja ecrite n est jamais ecrasee.'
+    remplissage: 'si vide, canal par canal. Une valeur deja ecrite n est jamais ecrasee.',
+    social: ORDRE.social,
+    social_remarque: 'le canal social avait un ordre DECLARE ici et aucun ordre APPLIQUE : contact_social_origine etait le litteral overture, pose par un CASE, et la table social etait Overture seule. Il a desormais une table de rangs comme les trois autres canaux, et l origine est lue sur le rang. Le bloc social reste porte par une seule origine par SIRET : les quatre colonnes, la cle, le millesime, la distance et le score viennent ensemble ou pas du tout.'
   },
   page_partagee_n: {
     definition: 'pour un SIRET, le plus grand nombre de lignes Overture portant l une de ses pages sociales. Defini sur Overture ENTIER, non sur les seuls apparies.',
@@ -1043,6 +1246,42 @@ const manifeste = {
       naf_6910z: avNaf
     }
   },
+  crawl_des_mentions_legales: {
+    entree: 'data/appariement-local/' + SOURCES.mentions_legales.fichier,
+    nom_de_l_origine: 'mentions_legales. Ce nom n est pas libre : c est la cle que packages/base-centrale/src/licences.ts reconnait comme REVENDABLE. Le changer rendrait la source invendable en silence.',
+    licence: 'Publication de l entreprise. Revendable : l entreprise publie elle-meme ses coordonnees sur son propre site. L information des personnes (art. 14 RGPD) reste due, et c est a cela que sert la cle.',
+    rang: 'DERNIER de chaque canal : tel, courriel, site, social. Le crawl ne deplace aucune valeur deja ecrite ; il ne remplit que ce qui etait vide.',
+    millesime: {
+      regle: 'lu EN COLONNE, millesime_crawl, jamais interpole depuis une constante.',
+      valeurs: Object.fromEntries(crawlMillesimes.map((m) => [m.millesime_crawl, m.lignes]))
+    },
+    cle_par_canal: {
+      tel: 'telephone_pages, la ou les pages ou le numero a ete LU.',
+      courriel: 'courriel_pages, la ou les pages ou l adresse a ete LUE.',
+      site: 'cle, l adresse de la page du site qui a rattache la fiche. La valeur du canal site est l adresse du site lui-meme, non une coordonnee lue sur une page : il n y a pas de page d observation a produire.',
+      social: 'l union, dedoublonnee, des pages d observation des profils retenus.',
+      forme: 'plusieurs pages sont jointes par barre verticale entouree d espaces, comme les numeros RPPS le sont par barre verticale.'
+    },
+    ecart_applique_en_amont: 'la source ne porte que des valeurs dont au moins une page d observation n est PAS une page legale. L ecart a ete fait a la fabrication de la source, non ici : voir crawl-mentions-legales-20260918-preuve.manifeste.json.',
+    effet_par_canal: crawlEffet,
+    cellules_ecrites_au_master: Object.fromEntries(crawlCellules.map((c) => [c.canal, c.cellules])),
+    sirets_servis: {
+      sans_le_crawl: crawlServis.servis_sans_le_crawl,
+      avec_le_crawl: crawlServis.servis_avec_le_crawl,
+      ecart: crawlServis.servis_avec_le_crawl - crawlServis.servis_sans_le_crawl
+    },
+    aucun_ecrasement: {
+      regle: 'le crawl est au DERNIER rang des quatre canaux, tel, courriel, site et social. Le rang seul decide et le premier rang qui porte une valeur l ecrit : le crawl ne peut donc remplir que du vide. La garantie est STRUCTURELLE, elle tient a l ordre, et n est pas mesuree.',
+      non_mesure: 'la preuve cellule par cellule contre un master fondu SANS le crawl a ete retiree le 18 septembre 2026 : elle refondait un second master sur treize millions de lignes et ne pouvait rien dire d autre que ce que l ordre garantit deja.'
+    },
+    dix_exemples: crawlExemples,
+    definitions: {
+      ouverture: 'la cellule etait vide et le SIRET ne portait aucun contact, sur aucun canal.',
+      completion: 'la cellule etait vide, le SIRET portait deja un contact sur un autre canal.',
+      corroboration: 'la cellule etait deja servie. Rien n est ecrit.',
+      corroborations_meme_valeur: 'mesure seule, sur chiffres du telephone et sur courriel en minuscules. Le master ne reformate aucune valeur.'
+    }
+  },
   par_source: parSource,
   qualifications: { ...QUALIFICATIONS, apport_au_master: 'aucun. Le fichier ne porte aucun canal de contact ; il est declare comme source du chantier.' },
   apres_fusion: {
@@ -1070,9 +1309,10 @@ const manifeste = {
       pourquoi_non_traite: 'recuperer et rejeter ne sont pas le meme geste. Une part est recuperable par retrait du prefixe parasite, www.https://atelier-central.fr designant un site reel ; une autre ne designe rien. Le lot n est pas arbitre, il est mesure et declare.',
       volume_restant: Object.fromEntries(prefixeWwwRestant.map((r) => [r.source, r.n]))
     },
-    canal_social_alimente_par_overture_seule: {
-      constat: 'les renvois Facebook du RNA et d Overture sortent du canal site. Ils ne sont pas reverses dans les colonnes sociales, l ordre arrete du canal social etant Overture seule.',
-      lecture: 'lecture retenue de "vont au canal social" : la valeur cesse d etre un site. La lecture inverse, un remplissage si vide des colonnes sociales par ces renvois, ferait porter contact_social_origine par une autre source qu Overture.'
+    renvois_facebook_non_reverses_au_canal_social: {
+      constat: 'les renvois Facebook du RNA et d Overture sortent du canal site. Ils ne sont toujours pas reverses dans les colonnes sociales.',
+      lecture: 'lecture retenue de "vont au canal social" : la valeur cesse d etre un site. La lecture inverse, un remplissage si vide des colonnes sociales par ces renvois, reste a arbitrer ; elle n est pas faite ici.',
+      ce_qui_a_change: 'le canal social n est plus alimente par Overture seule : il a un ordre arrete, Overture puis le crawl des mentions legales, et contact_social_origine est lu sur le rang. L objection qui fermait la lecture inverse (elle ferait porter contact_social_origine par une autre source qu Overture) ne tient donc plus ; ce qui reste est un arbitrage a rendre, non un obstacle de structure.'
     }
   }
 }

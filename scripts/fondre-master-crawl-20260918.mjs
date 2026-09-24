@@ -241,9 +241,9 @@ const SCHEMA_EN_TETE = /^[a-z][a-z0-9+.-]*:\/\//i
 // etablissement lui-meme ; 0143061756 rend 1.140.99.238 et c est un telephone.
 const hoteNumerique = (hote) => hote !== '' && hote.split('.').every((e) => /^[0-9]+$/.test(e))
 
-// AUCUN REGLAGE DE RESSOURCE, ET C'EST VOULU. Un plafond de memoire a ete pose
-// ici le 18 septembre 2026, dans la croyance que l'etage de fusion en manquait.
-// Il n'en manquait pas : il tournait en boucle sur une jointure mal ecrite. Le
+// AUCUN REGLAGE DE RESSOURCE, comme le script de septembre. J'en avais pose le
+// 18 septembre 2026 en croyant que l'etage de fusion manquait de memoire : il
+// n'en manquait pas, il tournait en boucle sur une jointure mal ecrite. Le
 // controle a mesure le pic reel de l'etape 4, vingt gigaoctets, atteint et
 // relache en vingt secondes. Un plafond a huit gigaoctets forcerait donc le
 // debordement sur disque pour rien.
